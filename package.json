@@ -1,0 +1,29 @@
+{
+  "name": "@workos/authkit-wizard-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WorkOS AuthKit Wizard monorepo - CLI wizard and LLM gateway",
+  "packageManager": "pnpm@10.23.0+sha512.21c4e5698002ade97e4efe8b8b4a89a8de3c85a37919f957e7a0f30f38fbc5bbdd05980ffe29179b2fb6e6e691242e098d945d1601772cad0fef5fb6411e2a4b",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm -r --parallel dev",
+    "clean": "pnpm -r clean && rm -rf node_modules",
+    "lint": "pnpm --filter @workos/authkit-wizard lint",
+    "fix": "pnpm --filter @workos/authkit-wizard fix",
+    "wizard:build": "pnpm --filter @workos/authkit-wizard build",
+    "wizard:dev": "pnpm --filter @workos/authkit-wizard dev",
+    "gateway:dev": "pnpm --filter @workos/authkit-llm-gateway dev",
+    "gateway:build": "pnpm --filter @workos/authkit-llm-gateway build",
+    "gateway:start": "pnpm --filter @workos/authkit-llm-gateway start"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.4"
+  },
+  "volta": {
+    "node": "20.18.2",
+    "pnpm": "10.23.0"
+  }
+}

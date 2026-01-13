@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    // Target and output
+    "target": "ES2022",
+    "lib": ["ES2022"],
+
+    // Type checking
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // Emit
+    "declaration": true,
+    "sourceMap": true,
+    "inlineSources": true,
+    "stripInternal": true,
+
+    // Interop
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true
+  },
+  "exclude": ["node_modules", "dist", "**/dist", "**/node_modules"]
+}

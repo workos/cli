@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    // Node.js module system
+    "module": "node16",
+    "moduleResolution": "node16",
+
+    // Output
+    "outDir": "./dist",
+
+    // Decorators for legacy compatibility
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
+    // Node types
+    "types": ["node"],
+    "typeRoots": ["./node_modules/@types", "./types"]
+  },
+  "include": [
+    "bin.ts",
+    "src/**/*",
+    "types/**/*"
+  ],
+  "exclude": ["node_modules", "dist"]
+}
