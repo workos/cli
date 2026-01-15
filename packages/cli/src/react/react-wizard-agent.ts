@@ -36,7 +36,6 @@ const REACT_AGENT_CONFIG: FrameworkConfig = {
 
   ui: {
     successMessage: 'WorkOS AuthKit integration complete',
-    estimatedDurationMinutes: 8,
     getOutroChanges: () => [
       'Analyzed your React project structure',
       'Created and configured WorkOS AuthKit',

@@ -67,7 +67,6 @@ const NEXTJS_AGENT_CONFIG = {
 
   ui: {
     successMessage: 'WorkOS AuthKit integration complete',
-    estimatedDurationMinutes: 8,
     getOutroChanges: (context: any) => {
       const router = context.router as NextJsRouter;
       const routerName = getNextJsRouterName(router);

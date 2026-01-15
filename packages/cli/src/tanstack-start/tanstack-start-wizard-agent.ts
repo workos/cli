@@ -39,7 +39,6 @@ const TANSTACK_START_AGENT_CONFIG: FrameworkConfig = {
 
   ui: {
     successMessage: 'WorkOS AuthKit integration complete',
-    estimatedDurationMinutes: 8,
     getOutroChanges: () => [
       'Analyzed your TanStack Start project structure',
       'Created and configured WorkOS AuthKit',

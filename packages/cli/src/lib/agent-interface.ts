@@ -320,14 +320,12 @@ export async function runAgent(
   options: WizardOptions,
   spinner: ReturnType<typeof clack.spinner>,
   config?: {
-    estimatedDurationMinutes?: number;
     spinnerMessage?: string;
     successMessage?: string;
     errorMessage?: string;
   },
 ): Promise<{ error?: AgentErrorType }> {
   const {
-    estimatedDurationMinutes = 8,
     spinnerMessage = 'Setting up WorkOS AuthKit...',
     successMessage = 'WorkOS AuthKit integration complete',
     errorMessage = 'Integration failed',
@@ -335,9 +333,7 @@ export async function runAgent(
 
   const { query } = await getSDKModule();
 
-  clack.log.step(
-    `This whole process should take about ${estimatedDurationMinutes} minutes including error checking and fixes.\n\nGrab some coffee!`,
-  );
+  clack.log.step(`This may take a few minutes. Grab some coffee!`);
 
   spinner.start(spinnerMessage);
 

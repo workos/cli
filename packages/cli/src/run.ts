@@ -32,6 +32,8 @@ type Args = {
   ci?: boolean;
   apiKey?: string;
   clientId?: string;
+  homepageUrl?: string;
+  redirectUri?: string;
 };
 
 export async function runWizard(argv: Args) {
@@ -60,6 +62,8 @@ export async function runWizard(argv: Args) {
     ci: finalArgs.ci ?? false,
     apiKey: finalArgs.apiKey,
     clientId: finalArgs.clientId,
+    homepageUrl: finalArgs.homepageUrl,
+    redirectUri: finalArgs.redirectUri,
   };
 
   clack.intro(`Welcome to the WorkOS AuthKit setup wizard ✨`);

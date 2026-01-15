@@ -10,6 +10,7 @@ npx @workos/authkit-wizard
 
 The wizard will:
 - ✅ Auto-detect your framework (Next.js, React, React Router, TanStack Start, Vanilla JS)
+- ✅ Auto-configure WorkOS dashboard (redirect URI, CORS, homepage URL)
 - ✅ Install the appropriate AuthKit SDK
 - ✅ Create authentication routes and middleware
 - ✅ Set up environment variables
@@ -60,6 +61,8 @@ npx @workos/authkit-wizard \
 | `--integration` | Framework to set up (nextjs, react, etc.) | `WORKOS_WIZARD_INTEGRATION` |
 | `--api-key` | WorkOS API key (sk_xxx) | `WORKOS_WIZARD_API_KEY` |
 | `--client-id` | WorkOS Client ID (client_xxx) | `WORKOS_WIZARD_CLIENT_ID` |
+| `--redirect-uri` | Custom redirect URI for OAuth callback | `WORKOS_WIZARD_REDIRECT_URI` |
+| `--homepage-url` | Custom homepage URL for WorkOS | `WORKOS_WIZARD_HOMEPAGE_URL` |
 | `--ci` | Non-interactive mode for CI/CD | `WORKOS_WIZARD_CI` |
 | `--install-dir` | Directory to install in | `WORKOS_WIZARD_INSTALL_DIR` |
 | `--debug` | Enable verbose logging | `WORKOS_WIZARD_DEBUG` |

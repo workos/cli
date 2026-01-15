@@ -51,6 +51,8 @@ Options:
   --integration <name>    Framework: nextjs, react, react-router, tanstack-start, vanilla-js
   --api-key <key>         WorkOS API key (masked in terminal)
   --client-id <id>        WorkOS Client ID
+  --redirect-uri <uri>    Custom redirect URI (defaults to framework convention)
+  --homepage-url <url>    Custom homepage URL (defaults to http://localhost:{port})
   --ci                    Non-interactive CI mode
   --install-dir <path>    Installation directory
   --debug                 Verbose logging to /tmp/authkit-wizard.log
@@ -77,11 +79,12 @@ npx @workos/authkit-wizard --ci \
 
 1. **Detects** your framework and project structure
 2. **Prompts** for WorkOS credentials (API key masked)
-3. **Fetches** latest SDK documentation from workos.com
-4. **Uses AI** (Claude) to generate integration code
-5. **Installs** SDK with detected package manager
-6. **Creates** auth routes, middleware, and UI
-7. **Configures** environment variables securely
+3. **Auto-configures** WorkOS dashboard (redirect URI, CORS, homepage URL)
+4. **Fetches** latest SDK documentation from workos.com
+5. **Uses AI** (Claude) to generate integration code
+6. **Installs** SDK with detected package manager
+7. **Creates** auth routes, middleware, and UI
+8. **Configures** environment variables securely
 
 ## Logs
 

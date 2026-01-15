@@ -87,7 +87,6 @@ const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
 
   ui: {
     successMessage: 'WorkOS AuthKit integration complete',
-    estimatedDurationMinutes: 8,
     getOutroChanges: (context: any) => {
       const routerMode = context.routerMode as ReactRouterMode;
       const modeName = routerMode

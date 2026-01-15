@@ -51,6 +51,18 @@ export type WizardOptions = {
    * WorkOS Client ID (client_xxx)
    */
   clientId?: string;
+
+  /**
+   * App homepage URL for WorkOS dashboard config.
+   * Defaults to http://localhost:{detected_port}
+   */
+  homepageUrl?: string;
+
+  /**
+   * Redirect URI for WorkOS callback.
+   * Defaults to framework-specific convention (e.g., /api/auth/callback)
+   */
+  redirectUri?: string;
 };
 
 export interface Feature {

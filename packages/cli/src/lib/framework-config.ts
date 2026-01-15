@@ -105,9 +105,6 @@ export interface UIConfig {
   /** Success message when agent completes */
   successMessage: string;
 
-  /** Estimated time for agent to complete (in minutes) */
-  estimatedDurationMinutes: number;
-
   /** Generate "What the agent did" bullets from context */
   getOutroChanges: (context: any) => string[];
 

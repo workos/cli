@@ -25,6 +25,8 @@ import {
 import { getCloudUrlFromRegion } from '../utils/urls';
 import chalk from 'chalk';
 import { uploadEnvironmentVariablesStep } from '../steps';
+import { autoConfigureWorkOSEnvironment } from './workos-management';
+import { detectPort } from './port-detection';
 
 /**
  * Universal agent-powered wizard runner.
@@ -72,6 +74,20 @@ export async function runAgentWizard(
     config.environment.requiresApiKey,
   );
 
+  // Auto-configure WorkOS environment (redirect URI, CORS, homepage)
+  if (apiKey && config.environment.requiresApiKey) {
+    const port = detectPort(config.metadata.integration, options.installDir);
+    await autoConfigureWorkOSEnvironment(
+      apiKey,
+      config.metadata.integration,
+      port,
+      {
+        homepageUrl: options.homepageUrl,
+        redirectUri: options.redirectUri,
+      },
+    );
+  }
+
   // Gather framework-specific context (e.g., Next.js router, React Native platform)
   const frameworkContext = config.metadata.gatherContext
     ? await config.metadata.gatherContext(options)
@@ -113,7 +129,6 @@ export async function runAgentWizard(
     options,
     spinner,
     {
-      estimatedDurationMinutes: config.ui.estimatedDurationMinutes,
       spinnerMessage: SPINNER_MESSAGE,
       successMessage: config.ui.successMessage,
       errorMessage: 'Integration failed',

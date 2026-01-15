@@ -61,6 +61,16 @@ yargs(hideBin(process.argv))
         'WorkOS Client ID (client_xxx)\nenv: WORKOS_WIZARD_CLIENT_ID',
       type: 'string',
     },
+    'homepage-url': {
+      describe:
+        'App homepage URL for WorkOS (defaults to http://localhost:{port})\nenv: WORKOS_WIZARD_HOMEPAGE_URL',
+      type: 'string',
+    },
+    'redirect-uri': {
+      describe:
+        'Redirect URI for WorkOS callback (defaults to framework convention)\nenv: WORKOS_WIZARD_REDIRECT_URI',
+      type: 'string',
+    },
   })
   .command(
     ['$0'],

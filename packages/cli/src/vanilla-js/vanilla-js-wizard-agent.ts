@@ -36,7 +36,6 @@ const VANILLA_JS_AGENT_CONFIG: FrameworkConfig = {
 
   ui: {
     successMessage: 'WorkOS AuthKit integration complete',
-    estimatedDurationMinutes: 6,
     getOutroChanges: () => [
       'Created WorkOS AuthKit integration',
       'Added authentication to your JavaScript application',
