@@ -38,7 +38,7 @@ export async function runAgentWizard(
   printWelcome({ wizardName: getWelcomeMessage(config.metadata.name) });
 
   clack.log.info(
-    `🧙 The wizard will use AI to intelligently set up WorkOS AuthKit in your ${config.metadata.name} project.\n\nQuestions or issues? Let us know:\n\n${chalk.cyan('https://github.com/workos/authkit-wizard/issues')}`,
+    `🧙 The wizard will use AI to intelligently set up WorkOS AuthKit in your ${config.metadata.name} project.`,
   );
 
   const typeScriptDetected = isUsingTypeScript(options);

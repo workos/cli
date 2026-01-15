@@ -1,8 +1,6 @@
 {
   "name": "@workos/authkit-wizard",
   "version": "1.0.0",
-  "homepage": "https://github.com/workos/authkit-wizard",
-  "repository": "https://github.com/workos/authkit-wizard",
   "description": "CLI wizard for automatically setting up WorkOS AuthKit in your project",
   "keywords": [
     "workos",

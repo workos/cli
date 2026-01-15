@@ -48,7 +48,6 @@ export const DEBUG = false;
 
 export const WORKOS_DOCS_URL = 'https://workos.com/docs/authkit';
 export const WORKOS_DASHBOARD_URL = 'https://dashboard.workos.com';
-export const ISSUES_URL = 'https://github.com/workos/authkit-wizard/issues';
 
 // Telemetry (disabled for now - can be enabled later)
 export const ANALYTICS_ENABLED = false;

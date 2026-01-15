@@ -23,6 +23,7 @@ export const getOauthClientIdFromRegion = (region: CloudRegion) => {
   return 'workos-oauth-client-id'; // Stub - OAuth not used
 };
 
+// FIXME: Update production URL once LLM gateway is deployed
 export const getLlmGatewayUrlFromHost = (host: string) => {
-  return 'https://mcp.workos.com/wizard'; // Stub - may not be needed
+  return IS_DEV ? 'http://localhost:8000' : 'https://llm-gateway.example.com';
 };

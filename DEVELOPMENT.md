@@ -194,26 +194,6 @@ tail -f /tmp/authkit-wizard.log
 **LLM Gateway logs:**
 Run `pnpm dev` in Terminal 1 - you'll see all API calls.
 
-## Production Deployment
-
-### What WorkOS Needs to Deploy
-
-**LLM Gateway** to `https://mcp.workos.com/wizard`:
-- Express server from `packages/llm-gateway/`
-- Set `ANTHROPIC_API_KEY` env var (WorkOS's key)
-- Deploy with Node.js 18+
-- Enable CORS for wizard access
-
-**Wizard changes for production:**
-```typescript
-// In utils/urls.ts - remove "local" mode check
-export const getLlmGatewayUrlFromHost = () => {
-  return 'https://mcp.workos.com/wizard';
-};
-```
-
-Then users only need WorkOS credentials (no `--local` flag, no ANTHROPIC_API_KEY).
-
 ## Common Tasks
 
 ```bash

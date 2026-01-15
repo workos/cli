@@ -4,7 +4,7 @@ LLM Gateway for WorkOS AuthKit Wizard - proxies Claude API calls so users don't 
 
 ## Purpose
 
-In production, this service runs at `https://mcp.workos.com/wizard` and allows the wizard to call Claude using WorkOS's Anthropic credentials instead of requiring users to have their own API keys.
+LLM proxy gateway that allows the wizard to call Claude API using backend Anthropic credentials instead of requiring users to have their own API keys.
 
 ## Architecture
 
@@ -81,22 +81,6 @@ Health check endpoint.
 - ✅ **Log Redaction** - Keys show as `sk_test_...X6Y` in logs
 - ✅ **Streaming Support** - Handles Anthropic's SSE responses
 - ✅ **Error Handling** - Returns proper error codes
-
-## Production Deployment
-
-This service should be deployed to `https://mcp.workos.com/wizard`
-
-**Requirements:**
-- Node.js 18+
-- WorkOS Anthropic API key set as env var
-- HTTPS endpoint
-- CORS headers for wizard access
-
-**Optional enhancements for production:**
-- Rate limiting per WorkOS customer
-- Usage tracking/analytics
-- Caching for repeated requests
-- Load balancing
 
 ## Development
 

@@ -113,14 +113,6 @@ See [DEVELOPMENT.md](./DEVELOPMENT.md) for development setup.
 
 ## Architecture
 
-### Production (When Deployed)
-
-```
-User → Wizard → LLM Gateway (mcp.workos.com/wizard) → Anthropic
-                    ↓
-               WorkOS MCP → AuthKit integration docs
-```
-
 ### Local Development
 
 ```bash
@@ -136,7 +128,6 @@ cd /path/to/your/app
 
 ## Support
 
-- **Issues:** [github.com/workos/authkit-wizard/issues](https://github.com/workos/authkit-wizard/issues)
 - **Docs:** [workos.com/docs/user-management/authkit](https://workos.com/docs/user-management/authkit)
 
 ## License
