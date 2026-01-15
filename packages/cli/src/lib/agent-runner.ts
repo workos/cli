@@ -26,7 +26,7 @@ import { getCloudUrlFromRegion } from '../utils/urls';
 import chalk from 'chalk';
 import { uploadEnvironmentVariablesStep } from '../steps';
 import { autoConfigureWorkOSEnvironment } from './workos-management';
-import { detectPort } from './port-detection';
+import { detectPort, getCallbackPath } from './port-detection';
 
 /**
  * Universal agent-powered wizard runner.
@@ -216,6 +216,8 @@ function buildIntegrationPrompt(
       ? '\n' + additionalLines.map((line) => `- ${line}`).join('\n')
       : '';
 
+  const callbackPath = getCallbackPath(config.metadata.integration);
+
   return `You are integrating WorkOS AuthKit into this ${config.metadata.name} application.
 
 Project context:
@@ -230,46 +232,52 @@ Follow the official WorkOS AuthKit documentation to integrate authentication int
 
 ## Instructions
 
-1. **Access Documentation** - Get the latest integration documentation:
-   - Use the WorkOS MCP server tools to access WorkOS documentation
-   - Use WebFetch to read the SDK README from GitHub for ${config.metadata.name}:
+1. **Access Documentation FIRST** - This is critical:
+   - Use WebFetch to read the SDK README from GitHub:
      * Next.js: https://github.com/workos/authkit-nextjs/blob/main/README.md
      * React: https://github.com/workos/authkit-react/blob/main/README.md
      * React Router: https://github.com/workos/authkit-react-router/blob/main/README.md
      * TanStack Start: https://github.com/workos/authkit-tanstack-start/blob/main/README.md
      * Vanilla JS: https://github.com/workos/authkit-js/blob/main/README.md
-   - The README is the source of truth for current SDK usage and examples
+   - The README is the **source of truth** - follow it exactly
+   - Pay attention to framework version-specific instructions (e.g., Next.js 16+ uses proxy.ts)
 
 2. **Install SDK** - Install the appropriate WorkOS AuthKit package using the detected package manager (check lockfiles).
 
 3. **Configure Environment** - Create/update .env.local with:
    - WORKOS_API_KEY: ${context.apiKey}
    - WORKOS_CLIENT_ID: ${context.clientId}
-   - WORKOS_REDIRECT_URI: http://localhost:3000/callback
+   - WORKOS_REDIRECT_URI: http://localhost:3000${callbackPath}
    - WORKOS_COOKIE_PASSWORD: <generate-32-char-random-string>
 
-4. **Follow Official Docs** - Implement exactly as documented:
-   - Create callback route
-   - Create sign-in/sign-out routes
-   - Set up middleware for route protection
-   - Use environment variables (never hardcode credentials)
+4. **Create Callback Route** - REQUIRED at exact path \`${callbackPath}\`:
+   - The WorkOS dashboard is already configured to redirect to http://localhost:3000${callbackPath}
+   - You MUST create a route handler at this exact path
+   - Get the callback handler code FROM THE README you fetched in step 1
+   - Use the SDK's callback handler (e.g., handleAuth, authLoader, handleCallbackRoute) - DO NOT write custom code
+   - For client-side SDKs (React/Vanilla), the SDK handles callbacks internally - no route needed
 
-5. **Add UI Components** - REQUIRED: Update the home page (app/page.tsx or pages/index.tsx) to demonstrate authentication:
+5. **Follow SDK Documentation EXACTLY** - Copy code from the README:
+   - Set up middleware/proxy EXACTLY as shown in SDK docs (Next.js 16+ uses proxy.ts, not middleware.ts)
+   - Use the authentication patterns from the README (e.g., getSignInUrl(), signOut())
+   - Do NOT create custom sign-in/sign-out routes - the SDK handles this
+   - Do NOT write custom cookie/session handling - the SDK does this internally
+   - When in doubt, copy the exact code from the README
+
+6. **Add UI Components** - Update the home page to demonstrate authentication:
 
    When logged OUT:
-   - Show prominent "Sign In" button/link that navigates to /auth/sign-in
-   - Add clear messaging like "Please sign in to continue"
+   - Show a "Sign In" button that triggers authentication (use SDK's recommended pattern)
+   - The SDK README shows how to get the sign-in URL and trigger auth
 
    When logged IN:
-   - Display welcome message with user's name (e.g., "Welcome, {firstName}!")
-   - Show user details: email, user ID, first name, last name
-   - Show prominent "Sign Out" button/link that navigates to /auth/sign-out
-   - Make the UI clean and visible (not hidden or tiny text)
+   - Display welcome message with user's name
+   - Show user details: email, name
+   - Show "Sign Out" button (use SDK's signOut function)
 
-   Use getUser() to check authentication status and conditionally render UI.
-   This is CRITICAL - users need to see authentication is working!
+   Use the SDK's user/session functions to check authentication status.
 
-6. **Report Status** - Use '[STATUS]' prefix to show progress:
+7. **Report Status** - Use '[STATUS]' prefix to show progress:
    - [STATUS] Accessing WorkOS documentation
    - [STATUS] Installing SDK
    - [STATUS] Creating routes
@@ -277,6 +285,8 @@ Follow the official WorkOS AuthKit documentation to integrate authentication int
    - [STATUS] Adding UI components
    - [STATUS] Complete
 
-**IMPORTANT:** Use the WorkOS MCP server to access current documentation. Don't use outdated examples or hardcoded instructions.
+**CRITICAL RULES:**
+1. The callback route path \`${callbackPath}\` is NON-NEGOTIABLE - create a route at this exact path regardless of what docs suggest
+2. For the route implementation, use the SDK's callback handler from the README - never write custom auth/cookie/session code
 `;
 }
