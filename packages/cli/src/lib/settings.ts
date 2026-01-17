@@ -3,6 +3,9 @@ import settingsJson from '../../settings.json' with { type: 'json' };
 export interface Settings {
   version: string;
   model: string;
+  cliAuth: {
+    clientId: string;
+  };
   gateway: {
     development: string;
     production: string;

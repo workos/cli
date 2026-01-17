@@ -27,7 +27,15 @@ import clack from './src/utils/clack.js';
 
 yargs(hideBin(process.argv))
   .env('WORKOS_WIZARD')
-  // global options
+  .options({})
+  .command('login', 'Authenticate with WorkOS', {}, async () => {
+    const { runLogin } = await import('./src/commands/login.js');
+    await runLogin();
+  })
+  .command('logout', 'Remove stored credentials', {}, async () => {
+    const { runLogout } = await import('./src/commands/logout.js');
+    await runLogout();
+  })
   .options({
     debug: {
       default: false,
@@ -53,13 +61,11 @@ yargs(hideBin(process.argv))
       type: 'boolean',
     },
     'api-key': {
-      describe:
-        'WorkOS API key (sk_xxx)\nenv: WORKOS_WIZARD_API_KEY',
+      describe: 'WorkOS API key (sk_xxx)\nenv: WORKOS_WIZARD_API_KEY',
       type: 'string',
     },
     'client-id': {
-      describe:
-        'WorkOS Client ID (client_xxx)\nenv: WORKOS_WIZARD_CLIENT_ID',
+      describe: 'WorkOS Client ID (client_xxx)\nenv: WORKOS_WIZARD_CLIENT_ID',
       type: 'string',
     },
     'homepage-url': {
@@ -91,7 +97,13 @@ yargs(hideBin(process.argv))
         },
         integration: {
           describe: 'Integration to set up',
-          choices: ['nextjs', 'react', 'tanstack-start', 'react-router', 'vanilla-js'],
+          choices: [
+            'nextjs',
+            'react',
+            'tanstack-start',
+            'react-router',
+            'vanilla-js',
+          ],
           type: 'string',
         },
       });
@@ -104,9 +116,7 @@ yargs(hideBin(process.argv))
         // Validate required CI flags
         if (!options.apiKey) {
           clack.intro(chalk.inverse(`WorkOS AuthKit Wizard`));
-          clack.log.error(
-            'CI mode requires --api-key (WorkOS API key sk_xxx)',
-          );
+          clack.log.error('CI mode requires --api-key (WorkOS API key sk_xxx)');
           process.exit(1);
         }
         if (!options.clientId) {
@@ -128,10 +138,10 @@ yargs(hideBin(process.argv))
         clack.intro(chalk.inverse(`WorkOS AuthKit Wizard`));
         clack.log.error(
           'This installer requires an interactive terminal (TTY) to run.\n' +
-          'It appears you are running in a non-interactive environment.\n' +
-          'Please run the wizard in an interactive terminal.\n\n' +
-          'For CI/CD environments, use --ci mode:\n' +
-          '  npx @workos/authkit-wizard --ci --api-key sk_xxx --client-id client_xxx',
+            'It appears you are running in a non-interactive environment.\n' +
+            'Please run the wizard in an interactive terminal.\n\n' +
+            'For CI/CD environments, use --ci mode:\n' +
+            '  npx @workos/authkit-wizard --ci --api-key sk_xxx --client-id client_xxx',
         );
         process.exit(1);
       }
@@ -143,4 +153,8 @@ yargs(hideBin(process.argv))
   .alias('help', 'h')
   .version()
   .alias('version', 'v')
-  .wrap(process.stdout.isTTY && process.stdout.columns ? process.stdout.columns : 80).argv;
+  .wrap(
+    process.stdout.isTTY && process.stdout.columns
+      ? process.stdout.columns
+      : 80,
+  ).argv;

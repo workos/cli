@@ -118,7 +118,7 @@ export async function runAgentWizard(
   // Initialize and run agent
   const spinner = clack.spinner();
 
-  const agent = initializeAgent(
+  const agent = await initializeAgent(
     {
       workingDirectory: options.installDir,
       workOSApiKey: apiKey,

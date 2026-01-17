@@ -38,6 +38,7 @@
     "@anthropic-ai/claude-agent-sdk": "~0.2.11",
     "@clack/core": "^0.3.4",
     "@clack/prompts": "0.7.0",
+    "@workos-inc/node": "^8.0.0",
     "axios": "1.7.4",
     "chalk": "^5.4.1",
     "fast-glob": "^3.3.3",

@@ -4,6 +4,7 @@
 interface Env {
   ANTHROPIC_API_KEY?: string;
   PORT?: string;
+  WORKOS_CLIENT_ID?: string;
 }
 
 function getEnv(): Env {
