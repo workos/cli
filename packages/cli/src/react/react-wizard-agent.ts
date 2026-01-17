@@ -17,7 +17,8 @@ const REACT_AGENT_CONFIG: FrameworkConfig = {
   detection: {
     packageName: 'react',
     packageDisplayName: 'React',
-    getVersion: (packageJson: any) => packageJson.dependencies?.react || packageJson.devDependencies?.react,
+    getVersion: (packageJson: any) =>
+      packageJson.dependencies?.react || packageJson.devDependencies?.react,
   },
 
   environment: {

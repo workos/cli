@@ -56,7 +56,10 @@ export const INTEGRATION_CONFIG = {
       const hasReact = hasPackageInstalled('react', packageJson);
       const hasNext = hasPackageInstalled('next', packageJson);
       const hasReactRouter = hasPackageInstalled('react-router', packageJson);
-      const hasTanstack = hasPackageInstalled('@tanstack/react-start', packageJson);
+      const hasTanstack = hasPackageInstalled(
+        '@tanstack/react-start',
+        packageJson,
+      );
       return hasReact && !hasNext && !hasReactRouter && !hasTanstack;
     },
     generateFilesRules: '',

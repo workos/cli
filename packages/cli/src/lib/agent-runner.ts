@@ -27,6 +27,7 @@ import chalk from 'chalk';
 import { uploadEnvironmentVariablesStep } from '../steps';
 import { autoConfigureWorkOSEnvironment } from './workos-management';
 import { detectPort, getCallbackPath } from './port-detection';
+import { writeEnvLocal } from './env-writer';
 
 /**
  * Universal agent-powered wizard runner.
@@ -93,20 +94,30 @@ export async function runAgentWizard(
     ? await config.metadata.gatherContext(options)
     : {};
 
+  // Write environment variables to .env.local BEFORE agent runs
+  // This prevents credentials from appearing in agent prompts
+  const port = detectPort(config.metadata.integration, options.installDir);
+  const callbackPath = getCallbackPath(config.metadata.integration);
+  const redirectUri =
+    options.redirectUri || `http://localhost:${port}${callbackPath}`;
+  writeEnvLocal(options.installDir, {
+    ...(apiKey ? { WORKOS_API_KEY: apiKey } : {}),
+    WORKOS_CLIENT_ID: clientId,
+    WORKOS_REDIRECT_URI: redirectUri,
+  });
+
   // Set analytics tags from framework context
   const contextTags = config.analytics.getTags(frameworkContext);
   Object.entries(contextTags).forEach(([key, value]) => {
     analytics.setTag(key, value);
   });
 
-  // Build integration prompt
+  // Build integration prompt (credentials are already in .env.local)
   const integrationPrompt = buildIntegrationPrompt(
     config,
     {
       frameworkVersion: frameworkVersion || 'latest',
       typescript: typeScriptDetected,
-      apiKey,
-      clientId,
     },
     frameworkContext,
   );
@@ -196,14 +207,13 @@ ${chalk.dim(
 /**
  * Build the integration prompt for the agent.
  * Uses shared base prompt with optional framework-specific addendum.
+ * Note: Credentials are pre-written to .env.local, so not included in prompt.
  */
 function buildIntegrationPrompt(
   config: FrameworkConfig,
   context: {
     frameworkVersion: string;
     typescript: boolean;
-    apiKey: string;
-    clientId: string;
   },
   frameworkContext: Record<string, any>,
 ): string {
@@ -218,13 +228,14 @@ function buildIntegrationPrompt(
 
   const callbackPath = getCallbackPath(config.metadata.integration);
 
-  return `You are integrating WorkOS AuthKit into this ${config.metadata.name} application.
+  return `You are integrating WorkOS AuthKit into this ${
+    config.metadata.name
+  } application.
 
 Project context:
 - Framework: ${config.metadata.name} ${context.frameworkVersion}
 - TypeScript: ${context.typescript ? 'Yes' : 'No'}
-- WorkOS API Key: ${context.apiKey}
-- WorkOS Client ID: ${context.clientId}${additionalContext}
+- Environment: Credentials are pre-configured in .env.local${additionalContext}
 
 ## Your Task
 
@@ -233,28 +244,27 @@ Follow the official WorkOS AuthKit documentation to integrate authentication int
 ## Instructions
 
 1. **Access Documentation FIRST** - This is critical:
-   - Use WebFetch to read the SDK README from GitHub:
-     * Next.js: https://github.com/workos/authkit-nextjs/blob/main/README.md
-     * React: https://github.com/workos/authkit-react/blob/main/README.md
-     * React Router: https://github.com/workos/authkit-react-router/blob/main/README.md
-     * TanStack Start: https://github.com/workos/authkit-tanstack-start/blob/main/README.md
-     * Vanilla JS: https://github.com/workos/authkit-js/blob/main/README.md
+   - Use WebFetch to read the SDK README from GitHub (use raw URLs):
+     * Next.js: https://raw.githubusercontent.com/workos/authkit-nextjs/main/README.md
+     * React: https://raw.githubusercontent.com/workos/authkit-react/main/README.md
+     * React Router: https://raw.githubusercontent.com/workos/authkit-react-router/main/README.md
+     * TanStack Start: https://raw.githubusercontent.com/workos/authkit-tanstack-start/main/README.md
+     * Vanilla JS: https://raw.githubusercontent.com/workos/authkit-js/main/README.md
    - The README is the **source of truth** - follow it exactly
    - Pay attention to framework version-specific instructions (e.g., Next.js 16+ uses proxy.ts)
+   - Verify import paths by checking the package.json exports field if imports fail
 
 2. **Install SDK** - Install the appropriate WorkOS AuthKit package using the detected package manager (check lockfiles).
 
-3. **Configure Environment** - Create/update .env.local with:
-   - WORKOS_API_KEY: ${context.apiKey}
-   - WORKOS_CLIENT_ID: ${context.clientId}
-   - WORKOS_REDIRECT_URI: http://localhost:3000${callbackPath}
-   - WORKOS_COOKIE_PASSWORD: <generate-32-char-random-string>
+3. **Verify Environment** - Check that .env.local exists with required variables:
+   - WORKOS_API_KEY, WORKOS_CLIENT_ID, WORKOS_REDIRECT_URI, WORKOS_COOKIE_PASSWORD
+   - These are already configured - DO NOT modify or log their values
 
-4. **Create Callback Route** - REQUIRED at exact path \`${callbackPath}\`:
-   - The WorkOS dashboard is already configured to redirect to http://localhost:3000${callbackPath}
-   - You MUST create a route handler at this exact path
-   - Get the callback handler code FROM THE README you fetched in step 1
-   - Use the SDK's callback handler (e.g., handleAuth, authLoader, handleCallbackRoute) - DO NOT write custom code
+4. **Create Callback Route** - CRITICAL: Create at EXACTLY this path: \`${callbackPath}\`
+   - The WorkOS dashboard and .env.local are configured with this EXACT path
+   - For Next.js: Create the file at \`app${callbackPath}/route.ts\` (e.g., \`app/api/auth/callback/route.ts\`)
+   - IGNORE any different paths shown in examples - use THIS path: \`${callbackPath}\`
+   - Use the SDK's handleAuth() function as shown in the README
    - For client-side SDKs (React/Vanilla), the SDK handles callbacks internally - no route needed
 
 5. **Follow SDK Documentation EXACTLY** - Copy code from the README:
@@ -288,5 +298,6 @@ Follow the official WorkOS AuthKit documentation to integrate authentication int
 **CRITICAL RULES:**
 1. The callback route path \`${callbackPath}\` is NON-NEGOTIABLE - create a route at this exact path regardless of what docs suggest
 2. For the route implementation, use the SDK's callback handler from the README - never write custom auth/cookie/session code
+3. Credentials are in .env.local - never log, echo, or display their values
 `;
 }

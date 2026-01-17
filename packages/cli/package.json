@@ -58,13 +58,14 @@
     "@types/inquirer": "^0.0.43",
     "@types/jest": "^29.5.14",
     "@types/lodash": "^4.17.15",
-    "@types/node": "^18.19.76",
+    "@types/node": "^22.19.7",
     "@types/opn": "5.1.0",
     "@types/rimraf": "^3.0.2",
     "@types/semver": "^7.3.7",
     "@types/yargs": "^16.0.9",
     "@typescript-eslint/eslint-plugin": "^5.13.0",
     "@typescript-eslint/parser": "^5.13.0",
+    "@vitest/ui": "^4.0.17",
     "dotenv": "^16.4.7",
     "eslint": "^8.18.0",
     "eslint-config-prettier": "^8.3.0",
@@ -78,7 +79,8 @@
     "ts-jest": "^29.1.0",
     "ts-node": "^10.9.1",
     "tsx": "^4.20.3",
-    "typescript": "^5.0.4"
+    "typescript": "^5.0.4",
+    "vitest": "^4.0.17"
   },
   "engines": {
     "node": ">=18",
@@ -98,15 +100,14 @@
     "fix:prettier": "prettier --write \"{lib,src,test}/**/*.ts\"",
     "fix:eslint": "eslint . --format stylish --fix",
     "try": "tsx bin.ts",
-    "dev": "pnpm build && pnpm link --global && pnpm build:watch"
+    "dev": "pnpm build && pnpm link --global && pnpm build:watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "lint-staged": {
     "*.{js,ts,tsx,jsx}": "pnpm fix"
   },
   "author": "WorkOS",
-  "license": "MIT",
-  "volta": {
-    "node": "20.18.2",
-    "pnpm": "10.23.0"
-  }
+  "license": "MIT"
 }
