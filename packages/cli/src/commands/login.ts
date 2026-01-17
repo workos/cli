@@ -5,7 +5,7 @@ import {
   getCredentials,
   getAccessToken,
 } from '../lib/credentials.js';
-import { getSettings } from '../lib/settings.js';
+import { getCliAuthClientId } from '../lib/settings.js';
 
 /**
  * Extract expiry time from JWT token
@@ -54,12 +54,11 @@ function sleep(ms: number): Promise<void> {
 }
 
 export async function runLogin(): Promise<void> {
-  const settings = getSettings();
-  const clientId = settings.cliAuth.clientId;
+  const clientId = getCliAuthClientId();
 
-  if (!clientId || clientId.includes('REPLACE')) {
+  if (!clientId) {
     clack.log.error(
-      'CLI auth not configured. Set cliAuth.clientId in settings.json',
+      'CLI auth not configured. Set WORKOS_CLI_CLIENT_ID environment variable.',
     );
     process.exit(1);
   }

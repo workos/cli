@@ -41,14 +41,7 @@ vi.mock('@workos-inc/node', () => {
 
 // Mock settings
 vi.mock('./settings.js', () => ({
-  getSettings: () => ({
-    cliAuth: {
-      clientId: 'client_test_123',
-    },
-    logging: {
-      logFile: '/tmp/test-wizard.log',
-    },
-  }),
+  getCliAuthClientId: () => 'client_test_123',
 }));
 
 // Mock debug utilities

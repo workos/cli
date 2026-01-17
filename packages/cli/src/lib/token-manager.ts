@@ -10,7 +10,7 @@ import {
   Credentials,
 } from './credentials.js';
 import { debug, logToFile } from '../utils/debug.js';
-import { getSettings } from './settings.js';
+import { getCliAuthClientId } from './settings.js';
 import { WorkOS } from '@workos-inc/node';
 
 // Check every 10 seconds for short-lived tokens
@@ -48,11 +48,10 @@ async function refreshToken(): Promise<boolean> {
     return true; // Token still valid
   }
 
-  const settings = getSettings();
-  const clientId = settings.cliAuth.clientId;
+  const clientId = getCliAuthClientId();
 
-  if (!clientId || clientId.includes('REPLACE')) {
-    logToFile('[TokenManager] CLI auth not configured');
+  if (!clientId) {
+    logToFile('[TokenManager] CLI auth not configured - WORKOS_CLI_CLIENT_ID not set');
     return false;
   }
 

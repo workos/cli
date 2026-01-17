@@ -6,7 +6,7 @@ import {
   Credentials,
 } from './credentials.js';
 import { debug, logToFile } from '../utils/debug.js';
-import { getSettings } from './settings.js';
+import { getCliAuthClientId } from './settings.js';
 
 /**
  * Extract expiry time from JWT token
@@ -39,11 +39,10 @@ export interface RefreshResult {
 }
 
 export async function ensureValidToken(): Promise<RefreshResult> {
-  const settings = getSettings();
-  const clientId = settings.cliAuth.clientId;
+  const clientId = getCliAuthClientId();
 
-  if (!clientId || clientId.includes('REPLACE')) {
-    logToFile('[ensureValidToken] CLI auth not configured');
+  if (!clientId) {
+    logToFile('[ensureValidToken] CLI auth not configured - WORKOS_CLI_CLIENT_ID not set');
     return { success: false, error: 'CLI auth not configured' };
   }
 

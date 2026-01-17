@@ -3,9 +3,7 @@ import settingsJson from '../../settings.json' with { type: 'json' };
 export interface Settings {
   version: string;
   model: string;
-  cliAuth: {
-    clientId: string;
-  };
+  cliAuth: Record<string, never>;
   gateway: {
     development: string;
     production: string;
@@ -55,4 +53,12 @@ export interface Settings {
  */
 export function getSettings(): Settings {
   return settingsJson as Settings;
+}
+
+/**
+ * Get the CLI auth client ID from environment variable.
+ * @returns The client ID or undefined if not set
+ */
+export function getCliAuthClientId(): string | undefined {
+  return process.env.WORKOS_CLI_CLIENT_ID;
 }
