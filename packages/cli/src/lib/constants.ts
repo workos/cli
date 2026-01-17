@@ -46,16 +46,12 @@ export const IS_DEV = ['test', 'development'].includes(
   process.env.NODE_ENV ?? '',
 );
 
-export const DEBUG = getSettings().logging.debugMode;
-
 const settings = getSettings();
+
+export const DEBUG = settings.logging.debugMode;
 export const WORKOS_DOCS_URL = settings.documentation.workosDocsUrl;
 export const WORKOS_DASHBOARD_URL = settings.documentation.dashboardUrl;
 export const ISSUES_URL = settings.documentation.issuesUrl;
-
-// Telemetry (disabled for now - can be enabled later)
 export const ANALYTICS_ENABLED = settings.telemetry.enabled;
 export const WIZARD_INTERACTION_EVENT_NAME = settings.telemetry.eventName;
-
-// OAuth port (kept for legacy compatibility, not used by WorkOS wizard)
 export const OAUTH_PORT = settings.legacy.oauthPort;

@@ -1,5 +1,4 @@
 import readEnvModule from 'read-env';
-// Handle CommonJS double default export
 const readEnv = ((readEnvModule as any).default || readEnvModule) as (prefix: string) => Record<string, unknown>;
 import { getPackageDotJson } from './clack-utils.js';
 import type { WizardOptions } from './types.js';
