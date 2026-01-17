@@ -27,6 +27,7 @@ import chalk from 'chalk';
 import { uploadEnvironmentVariablesStep } from '../steps';
 import { autoConfigureWorkOSEnvironment } from './workos-management';
 import { detectPort, getCallbackPath } from './port-detection';
+import { writeEnvLocal } from './env-writer';
 
 /**
  * Universal agent-powered wizard runner.
@@ -93,20 +94,30 @@ export async function runAgentWizard(
     ? await config.metadata.gatherContext(options)
     : {};
 
+  // Write environment variables to .env.local BEFORE agent runs
+  // This prevents credentials from appearing in agent prompts
+  const port = detectPort(config.metadata.integration, options.installDir);
+  const callbackPath = getCallbackPath(config.metadata.integration);
+  const redirectUri =
+    options.redirectUri || `http://localhost:${port}${callbackPath}`;
+  writeEnvLocal(options.installDir, {
+    ...(apiKey ? { WORKOS_API_KEY: apiKey } : {}),
+    WORKOS_CLIENT_ID: clientId,
+    WORKOS_REDIRECT_URI: redirectUri,
+  });
+
   // Set analytics tags from framework context
   const contextTags = config.analytics.getTags(frameworkContext);
   Object.entries(contextTags).forEach(([key, value]) => {
     analytics.setTag(key, value);
   });
 
-  // Build integration prompt
+  // Build integration prompt (credentials are already in .env.local)
   const integrationPrompt = buildIntegrationPrompt(
     config,
     {
       frameworkVersion: frameworkVersion || 'latest',
       typescript: typeScriptDetected,
-      apiKey,
-      clientId,
     },
     frameworkContext,
   );
@@ -195,15 +206,14 @@ ${chalk.dim(
 
 /**
  * Build the integration prompt for the agent.
- * Uses shared base prompt with optional framework-specific addendum.
+ * Uses skill-based approach where agent invokes framework-specific skill.
+ * Note: Credentials are pre-written to .env.local, so not included in prompt.
  */
 function buildIntegrationPrompt(
   config: FrameworkConfig,
   context: {
     frameworkVersion: string;
     typescript: boolean;
-    apiKey: string;
-    clientId: string;
   },
   frameworkContext: Record<string, any>,
 ): string {
@@ -216,77 +226,42 @@ function buildIntegrationPrompt(
       ? '\n' + additionalLines.map((line) => `- ${line}`).join('\n')
       : '';
 
-  const callbackPath = getCallbackPath(config.metadata.integration);
+  const skillName = config.metadata.skillName;
+  if (!skillName) {
+    throw new Error(
+      `Framework ${config.metadata.name} missing skillName in config`,
+    );
+  }
 
-  return `You are integrating WorkOS AuthKit into this ${config.metadata.name} application.
+  return `You are integrating WorkOS AuthKit into this ${
+    config.metadata.name
+  } application.
 
-Project context:
+## Project Context
+
 - Framework: ${config.metadata.name} ${context.frameworkVersion}
-- TypeScript: ${context.typescript ? 'Yes' : 'No'}
-- WorkOS API Key: ${context.apiKey}
-- WorkOS Client ID: ${context.clientId}${additionalContext}
+- TypeScript: ${context.typescript ? 'Yes' : 'No'}${additionalContext}
+
+## Environment
+
+The following environment variables have been configured in .env.local:
+- WORKOS_API_KEY
+- WORKOS_CLIENT_ID
+- WORKOS_REDIRECT_URI
+- WORKOS_COOKIE_PASSWORD
 
 ## Your Task
 
-Follow the official WorkOS AuthKit documentation to integrate authentication into this application.
+Use the \`${skillName}\` skill to integrate WorkOS AuthKit into this application.
 
-## Instructions
+The skill contains step-by-step instructions including:
+1. Fetching the SDK documentation
+2. Installing the SDK
+3. Creating the callback route
+4. Setting up middleware/auth handling
+5. Adding authentication UI to the home page
 
-1. **Access Documentation FIRST** - This is critical:
-   - Use WebFetch to read the SDK README from GitHub:
-     * Next.js: https://github.com/workos/authkit-nextjs/blob/main/README.md
-     * React: https://github.com/workos/authkit-react/blob/main/README.md
-     * React Router: https://github.com/workos/authkit-react-router/blob/main/README.md
-     * TanStack Start: https://github.com/workos/authkit-tanstack-start/blob/main/README.md
-     * Vanilla JS: https://github.com/workos/authkit-js/blob/main/README.md
-   - The README is the **source of truth** - follow it exactly
-   - Pay attention to framework version-specific instructions (e.g., Next.js 16+ uses proxy.ts)
+Report your progress using [STATUS] prefixes.
 
-2. **Install SDK** - Install the appropriate WorkOS AuthKit package using the detected package manager (check lockfiles).
-
-3. **Configure Environment** - Create/update .env.local with:
-   - WORKOS_API_KEY: ${context.apiKey}
-   - WORKOS_CLIENT_ID: ${context.clientId}
-   - WORKOS_REDIRECT_URI: http://localhost:3000${callbackPath}
-   - WORKOS_COOKIE_PASSWORD: <generate-32-char-random-string>
-
-4. **Create Callback Route** - REQUIRED at exact path \`${callbackPath}\`:
-   - The WorkOS dashboard is already configured to redirect to http://localhost:3000${callbackPath}
-   - You MUST create a route handler at this exact path
-   - Get the callback handler code FROM THE README you fetched in step 1
-   - Use the SDK's callback handler (e.g., handleAuth, authLoader, handleCallbackRoute) - DO NOT write custom code
-   - For client-side SDKs (React/Vanilla), the SDK handles callbacks internally - no route needed
-
-5. **Follow SDK Documentation EXACTLY** - Copy code from the README:
-   - Set up middleware/proxy EXACTLY as shown in SDK docs (Next.js 16+ uses proxy.ts, not middleware.ts)
-   - Use the authentication patterns from the README (e.g., getSignInUrl(), signOut())
-   - Do NOT create custom sign-in/sign-out routes - the SDK handles this
-   - Do NOT write custom cookie/session handling - the SDK does this internally
-   - When in doubt, copy the exact code from the README
-
-6. **Add UI Components** - Update the home page to demonstrate authentication:
-
-   When logged OUT:
-   - Show a "Sign In" button that triggers authentication (use SDK's recommended pattern)
-   - The SDK README shows how to get the sign-in URL and trigger auth
-
-   When logged IN:
-   - Display welcome message with user's name
-   - Show user details: email, name
-   - Show "Sign Out" button (use SDK's signOut function)
-
-   Use the SDK's user/session functions to check authentication status.
-
-7. **Report Status** - Use '[STATUS]' prefix to show progress:
-   - [STATUS] Accessing WorkOS documentation
-   - [STATUS] Installing SDK
-   - [STATUS] Creating routes
-   - [STATUS] Setting up middleware
-   - [STATUS] Adding UI components
-   - [STATUS] Complete
-
-**CRITICAL RULES:**
-1. The callback route path \`${callbackPath}\` is NON-NEGOTIABLE - create a route at this exact path regardless of what docs suggest
-2. For the route implementation, use the SDK's callback handler from the README - never write custom auth/cookie/session code
-`;
+Begin by invoking the ${skillName} skill.`;
 }

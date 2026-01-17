@@ -12,6 +12,7 @@ const VANILLA_JS_AGENT_CONFIG: FrameworkConfig = {
     docsUrl: 'https://workos.com/docs/user-management/authkit/javascript',
     unsupportedVersionDocsUrl:
       'https://workos.com/docs/user-management/authkit/javascript',
+    skillName: 'workos-authkit-vanilla-js',
   },
 
   detection: {

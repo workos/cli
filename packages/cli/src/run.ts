@@ -3,10 +3,7 @@ import { abortIfCancelled } from './utils/clack-utils';
 import { runNextjsWizardAgent } from './nextjs/nextjs-wizard-agent';
 import type { WizardOptions } from './utils/types';
 
-import {
-  getIntegrationDescription,
-  Integration,
-} from './lib/constants';
+import { getIntegrationDescription, Integration } from './lib/constants';
 import { readEnvironment } from './utils/environment';
 import clack from './utils/clack';
 import path from 'path';

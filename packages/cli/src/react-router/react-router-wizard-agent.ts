@@ -26,7 +26,9 @@ const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
     name: 'React Router',
     integration: Integration.reactRouter,
     docsUrl: 'https://workos.com/docs/user-management/authkit/react-router',
-    unsupportedVersionDocsUrl: 'https://workos.com/docs/user-management/authkit/react-router',
+    unsupportedVersionDocsUrl:
+      'https://workos.com/docs/user-management/authkit/react-router',
+    skillName: 'workos-authkit-react-router',
     gatherContext: async (options: WizardOptions) => {
       const routerMode = await getReactRouterMode(options);
       return { routerMode };
@@ -78,10 +80,7 @@ const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
         ? frameworkIdMap[routerMode]
         : ReactRouterMode.V7_FRAMEWORK;
 
-      return [
-        `Router mode: ${modeName}`,
-        `Framework docs ID: ${frameworkId}`,
-      ];
+      return [`Router mode: ${modeName}`, `Framework docs ID: ${frameworkId}`];
     },
   },
 

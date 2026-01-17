@@ -13,6 +13,7 @@ const TANSTACK_START_AGENT_CONFIG: FrameworkConfig = {
     docsUrl: 'https://workos.com/docs/user-management/authkit/tanstack-start',
     unsupportedVersionDocsUrl:
       'https://workos.com/docs/user-management/authkit/tanstack-start',
+    skillName: 'workos-authkit-tanstack-start',
   },
 
   detection: {

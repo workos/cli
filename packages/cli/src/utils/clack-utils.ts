@@ -16,10 +16,7 @@ import {
 import { fulfillsVersionRange } from './semver';
 import type { CloudRegion, Feature, WizardOptions } from './types';
 import { getPackageVersion } from './package-json';
-import {
-  ISSUES_URL,
-  type Integration,
-} from '../lib/constants';
+import { ISSUES_URL, type Integration } from '../lib/constants';
 import { analytics } from './analytics';
 import clack from './clack';
 import { getCloudUrlFromRegion, getHostFromRegion } from './urls';
@@ -31,6 +28,24 @@ interface ProjectData {
   host: string;
   distinctId: string;
   projectId: number;
+}
+
+/**
+ * Parse a .env file into key-value pairs.
+ * Handles comments, empty lines, and values containing '='.
+ */
+function parseEnvFile(content: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#')) {
+      const [key, ...valueParts] = trimmed.split('=');
+      if (key) {
+        result[key] = valueParts.join('=');
+      }
+    }
+  }
+  return result;
 }
 
 export interface CliSetupConfig {
@@ -567,7 +582,7 @@ export function isUsingTypeScript({
  * @param requireApiKey - Whether API key is needed (false for client-only SDKs like React, Vanilla JS)
  */
 export async function getOrAskForWorkOSCredentials(
-  _options: Pick<WizardOptions, 'ci' | 'apiKey' | 'clientId'>,
+  _options: Pick<WizardOptions, 'ci' | 'apiKey' | 'clientId' | 'installDir'>,
   requireApiKey: boolean = true,
 ): Promise<{
   apiKey: string;
@@ -582,6 +597,30 @@ export async function getOrAskForWorkOSCredentials(
     return { apiKey: apiKey || '', clientId };
   }
 
+  // Check if credentials already exist in .env.local
+  const envPath = join(_options.installDir, '.env.local');
+  if (fs.existsSync(envPath)) {
+    try {
+      const envContent = fs.readFileSync(envPath, 'utf-8');
+      const envVars = parseEnvFile(envContent);
+
+      const existingApiKey = envVars.WORKOS_API_KEY;
+      const existingClientId = envVars.WORKOS_CLIENT_ID;
+
+      // Use existing credentials if both are present (or API key not required)
+      if (existingClientId && (!requireApiKey || existingApiKey)) {
+        clack.log.success(`Found existing WorkOS credentials in .env.local`);
+        return {
+          apiKey: existingApiKey || '',
+          clientId: existingClientId,
+        };
+      }
+    } catch (error) {
+      // If we can't read/parse .env.local, just continue to prompt
+      debug('Failed to read .env.local:', error);
+    }
+  }
+
   // Otherwise, prompt user for credentials
   clack.log.step(
     `Get your credentials from ${chalk.cyan('https://dashboard.workos.com')}`,
@@ -589,7 +628,9 @@ export async function getOrAskForWorkOSCredentials(
 
   if (requireApiKey && !apiKey) {
     clack.log.info(
-      `${chalk.dim('ℹ️ Your API key will be hidden for security and saved to .env.local')}`,
+      `${chalk.dim(
+        'ℹ️ Your API key will be hidden for security and saved to .env.local',
+      )}`,
     );
     apiKey = (await abortIfCancelled(
       clack.password({
@@ -604,9 +645,7 @@ export async function getOrAskForWorkOSCredentials(
       }),
     )) as string;
   } else if (!requireApiKey) {
-    clack.log.info(
-      `${chalk.dim('ℹ️ Client-only SDK - API key not required')}`,
-    );
+    clack.log.info(`${chalk.dim('ℹ️ Client-only SDK - API key not required')}`);
   }
 
   if (!clientId) {
@@ -627,7 +666,6 @@ export async function getOrAskForWorkOSCredentials(
 
   return { apiKey: apiKey || '', clientId };
 }
-
 
 /**
  * Fetch project data using a personal API key (for CI mode)

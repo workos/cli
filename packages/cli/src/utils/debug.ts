@@ -15,7 +15,9 @@ export const LOG_FILE_PATH = '/tmp/authkit-wizard.log';
 export function initLogFile() {
   const header = `\n${'='.repeat(
     60,
-  )}\nWorkOS AuthKit Wizard Run: ${new Date().toISOString()}\n${'='.repeat(60)}\n`;
+  )}\nWorkOS AuthKit Wizard Run: ${new Date().toISOString()}\n${'='.repeat(
+    60,
+  )}\n`;
   appendFileSync(LOG_FILE_PATH, header);
 }
 

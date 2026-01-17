@@ -39,6 +39,13 @@ export interface FrameworkMetadata {
    * For React Native: detects Expo vs bare
    */
   gatherContext?: (options: WizardOptions) => Promise<Record<string, any>>;
+
+  /**
+   * Name of the framework-specific skill for agent integration.
+   * Skills are located in .claude/skills/{skillName}/SKILL.md
+   * Will be populated per-framework in Phase 3.
+   */
+  skillName?: string;
 }
 
 /**

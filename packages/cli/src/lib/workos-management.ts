@@ -33,7 +33,10 @@ async function createRedirectUri(
       const status = error.response?.status;
       const message = error.response?.data?.message || '';
       // WorkOS returns 422 (not 409) when URI already exists
-      if (status === 409 || (status === 422 && message.includes('already exists'))) {
+      if (
+        status === 409 ||
+        (status === 422 && message.includes('already exists'))
+      ) {
         return { success: true, alreadyExists: true };
       }
     }
@@ -61,7 +64,10 @@ async function createCorsOrigin(
       const status = error.response?.status;
       const message = error.response?.data?.message || '';
       // WorkOS returns 422 (not 409) when origin already exists
-      if (status === 409 || (status === 422 && message.includes('already exists'))) {
+      if (
+        status === 409 ||
+        (status === 422 && message.includes('already exists'))
+      ) {
         return { success: true, alreadyExists: true };
       }
     }
@@ -161,9 +167,10 @@ export async function autoConfigureWorkOSEnvironment(
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
       const responseData = error.response?.data;
-      const errorDetail = typeof responseData === 'object'
-        ? JSON.stringify(responseData)
-        : responseData;
+      const errorDetail =
+        typeof responseData === 'object'
+          ? JSON.stringify(responseData)
+          : responseData;
 
       if (status === 401) {
         clack.log.warn('Could not configure WorkOS dashboard: Invalid API key');
@@ -172,7 +179,9 @@ export async function autoConfigureWorkOSEnvironment(
           'Could not configure WorkOS dashboard: API key lacks permission',
         );
       } else if (status === 422) {
-        clack.log.warn(`Could not configure WorkOS dashboard: Validation error`);
+        clack.log.warn(
+          `Could not configure WorkOS dashboard: Validation error`,
+        );
         clack.log.info(`  API response: ${errorDetail}`);
       } else {
         clack.log.warn(`Could not configure WorkOS dashboard: ${message}`);
