@@ -5,7 +5,6 @@ import {
 } from './framework-config.js';
 import type { WizardOptions } from '../utils/types.js';
 import {
-  abort,
   confirmContinueIfNoOrDirtyGitRepo,
   ensurePackageIsInstalled,
   getOrAskForWorkOSCredentials,
@@ -16,13 +15,7 @@ import {
 import { analytics } from '../utils/analytics.js';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants.js';
 import clack from '../utils/clack.js';
-import {
-  initializeAgent,
-  runAgent,
-  AgentSignals,
-  AgentErrorType,
-} from './agent-interface.js';
-import { getCloudUrlFromRegion } from '../utils/urls.js';
+import { initializeAgent, runAgent } from './agent-interface.js';
 import chalk from 'chalk';
 import { uploadEnvironmentVariablesStep } from '../steps/index.js';
 import { autoConfigureWorkOSEnvironment } from './workos-management.js';
@@ -134,7 +127,8 @@ export async function runAgentWizard(
     options,
   );
 
-  const agentResult = await runAgent(
+  // Run agent - errors will throw naturally with skill-based approach
+  await runAgent(
     agent,
     integrationPrompt,
     options,
@@ -145,9 +139,6 @@ export async function runAgentWizard(
       errorMessage: 'Integration failed',
     },
   );
-
-  // No error detection needed - we use skill-based approach
-  // If agent fails, it will error naturally
 
   // Build environment variables from WorkOS credentials
   const envVars = config.environment.getEnvVars(apiKey, clientId);
