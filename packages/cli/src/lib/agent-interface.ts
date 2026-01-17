@@ -258,7 +258,7 @@ export function initializeAgent(
     const settings = getSettings();
     const gatewayUrl = options.local
       ? settings.gateway.development
-      : getLlmGatewayUrlFromHost(config.workOSApiHost);
+      : getLlmGatewayUrlFromHost();
 
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
     process.env.ANTHROPIC_AUTH_TOKEN = config.workOSApiKey;

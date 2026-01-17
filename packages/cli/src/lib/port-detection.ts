@@ -3,9 +3,8 @@ import { join } from 'node:path';
 import type { Integration } from './constants.js';
 import { getSettings } from './settings.js';
 
-/**
- * Map Integration enum values to settings keys.
- */
+const settings = getSettings();
+
 const INTEGRATION_TO_SETTINGS_KEY: Record<Integration, string> = {
   nextjs: 'nextjs',
   react: 'react',
@@ -14,29 +13,14 @@ const INTEGRATION_TO_SETTINGS_KEY: Record<Integration, string> = {
   'vanilla-js': 'vanillaJs',
 };
 
-/**
- * Get default dev server port for a framework from settings.
- */
 function getDefaultPort(integration: Integration): number {
-  const settings = getSettings();
   const settingsKey = INTEGRATION_TO_SETTINGS_KEY[integration];
   return settings.frameworks[settingsKey].port;
 }
 
-/**
- * Get default callback path for a framework from settings.
- */
-function getDefaultCallbackPath(integration: Integration): string {
-  const settings = getSettings();
+export function getCallbackPath(integration: Integration): string {
   const settingsKey = INTEGRATION_TO_SETTINGS_KEY[integration];
   return settings.frameworks[settingsKey].callbackPath;
-}
-
-/**
- * Get the callback path for a framework's AuthKit SDK.
- */
-export function getCallbackPath(integration: Integration): string {
-  return getDefaultCallbackPath(integration);
 }
 
 /**

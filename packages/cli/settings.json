@@ -1,5 +1,4 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
   "version": "1.0.0",
   "model": "claude-opus-4-5-20251101",
   "gateway": {
