@@ -25,7 +25,7 @@ const REACT_AGENT_CONFIG: FrameworkConfig = {
   environment: {
     uploadToHosting: false,
     requiresApiKey: false, // Client-only SPA
-    getEnvVars: (apiKey: string, clientId: string) => ({
+    getEnvVars: (_apiKey: string, clientId: string) => ({
       WORKOS_CLIENT_ID: clientId, // Only client ID needed
     }),
   },
