@@ -1,4 +1,5 @@
 import { abortIfCancelled } from './utils/clack-utils.js';
+import { debug } from './utils/debug.js';
 
 import { runNextjsWizardAgent } from './nextjs/nextjs-wizard-agent.js';
 import type { WizardOptions } from './utils/types.js';
@@ -102,6 +103,9 @@ export async function runWizard(argv: Args) {
         clack.log.error('No setup wizard selected!');
     }
   } catch (error) {
+    debug('Full error:', error);
+    debug('Error stack:', (error as Error).stack);
+
     analytics.captureException(error as Error, {
       integration,
       arguments: JSON.stringify(finalArgs),
