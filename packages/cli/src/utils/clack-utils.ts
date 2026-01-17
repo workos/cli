@@ -14,12 +14,11 @@ import {
   NPM as npm,
 } from './package-manager.js';
 import { fulfillsVersionRange } from './semver.js';
-import type { CloudRegion, Feature, WizardOptions } from './types.js';
+import type { Feature, WizardOptions } from './types.js';
 import { getPackageVersion } from './package-json.js';
 import { ISSUES_URL, type Integration } from '../lib/constants.js';
 import { analytics } from './analytics.js';
 import clack from './clack.js';
-import { getCloudUrlFromRegion, getHostFromRegion } from './urls.js';
 import { INTEGRATION_CONFIG } from '../lib/config.js';
 
 interface ProjectData {
@@ -213,7 +212,9 @@ export async function askForItemSelection(
   items: string[],
   message: string,
 ): Promise<{ value: string; index: number }> {
-  const selection = await abortIfCancelled<{ value: string; index: number } | symbol>(
+  const selection = await abortIfCancelled<
+    { value: string; index: number } | symbol
+  >(
     clack.select({
       maxItems: 12,
       message: message,
@@ -544,7 +545,9 @@ export async function getPackageManager(
       ? 'Multiple package managers detected. Please select one:'
       : 'Please select your package manager.';
 
-  const selectedPackageManager = await abortIfCancelled<PackageManager | symbol>(
+  const selectedPackageManager = await abortIfCancelled<
+    PackageManager | symbol
+  >(
     clack.select({
       message,
       options: pkgOptions.map((packageManager) => ({
@@ -554,7 +557,10 @@ export async function getPackageManager(
     }),
   );
 
-  analytics.setTag('package-manager', (selectedPackageManager as PackageManager).name);
+  analytics.setTag(
+    'package-manager',
+    (selectedPackageManager as PackageManager).name,
+  );
   return selectedPackageManager as PackageManager;
 }
 
