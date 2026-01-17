@@ -12,6 +12,7 @@ const REACT_AGENT_CONFIG: FrameworkConfig = {
     docsUrl: 'https://workos.com/docs/user-management/authkit/react',
     unsupportedVersionDocsUrl:
       'https://workos.com/docs/user-management/authkit/react',
+    skillName: 'workos-authkit-react',
   },
 
   detection: {

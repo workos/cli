@@ -28,6 +28,7 @@ const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
     docsUrl: 'https://workos.com/docs/user-management/authkit/react-router',
     unsupportedVersionDocsUrl:
       'https://workos.com/docs/user-management/authkit/react-router',
+    skillName: 'workos-authkit-react-router',
     gatherContext: async (options: WizardOptions) => {
       const routerMode = await getReactRouterMode(options);
       return { routerMode };

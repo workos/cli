@@ -27,6 +27,7 @@ const NEXTJS_AGENT_CONFIG = {
     docsUrl: 'https://workos.com/docs/user-management/authkit/nextjs',
     unsupportedVersionDocsUrl:
       'https://workos.com/docs/user-management/authkit/nextjs',
+    skillName: 'workos-authkit-nextjs',
     gatherContext: async (options: WizardOptions) => {
       const router = await getNextJsRouter(options);
       return { router };

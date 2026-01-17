@@ -7,6 +7,16 @@ description: Shared patterns for WorkOS AuthKit integration. Provides authentica
 
 This skill provides shared patterns for integrating WorkOS AuthKit. Framework-specific skills extend this with implementation details.
 
+## CRITICAL FIRST STEP: Package Installation
+
+**Before writing ANY code that imports from the SDK:**
+
+1. You MUST install the framework-specific SDK package first
+2. Wait for the installation command to complete successfully
+3. Verify the package exists in `node_modules/` before proceeding
+
+**Failure to install the package will cause "module not found" build errors.**
+
 ## Authentication Flow
 
 1. User clicks "Sign In" → Redirect to WorkOS hosted login
@@ -45,7 +55,9 @@ Use SDK middleware/guards to protect routes. Do NOT manually check cookies.
 
 ## Common Mistakes to Avoid
 
-1. **Custom OAuth code** - Use SDK handlers, not manual implementation
-2. **Hardcoded URLs** - Use environment variables
-3. **Missing cookie password** - Required for session encryption
-4. **Wrong callback path** - Must match dashboard configuration exactly
+1. **CRITICAL: Not installing the SDK package first** - This causes "module not found" errors. ALWAYS install before writing import statements.
+2. **Custom OAuth code** - Use SDK handlers, not manual implementation
+3. **Hardcoded URLs** - Use environment variables
+4. **Missing cookie password** - Required for session encryption
+5. **Wrong callback path** - Must match dashboard configuration exactly
+6. **Not waiting for package installation** - Run the install command and wait for it to complete before proceeding

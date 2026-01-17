@@ -71,6 +71,7 @@ type AgentRunConfig = {
   workingDirectory: string;
   mcpServers: McpServersConfig;
   model: string;
+  allowedTools: string[];
 };
 
 /**
@@ -279,6 +280,16 @@ export function initializeAgent(
         },
       },
       model: 'claude-opus-4-5-20251101',
+      allowedTools: [
+        'Skill',
+        'Read',
+        'Write',
+        'Edit',
+        'Bash',
+        'Glob',
+        'Grep',
+        'WebFetch',
+      ],
     };
 
     logToFile('Agent config:', {
@@ -366,6 +377,11 @@ export async function runAgent(
       await resultReceived;
     };
 
+    // Load plugin with bundled skills
+    // Path from dist/src/lib/ back to package root
+    const pluginPath = path.join(__dirname, '../../..');
+    logToFile('Loading plugin from:', pluginPath);
+
     const response = query({
       prompt: createPromptStream(),
       options: {
@@ -384,6 +400,8 @@ export async function runAgent(
           return Promise.resolve(result);
         },
         tools: { type: 'preset', preset: 'claude_code' },
+        allowedTools: agentConfig.allowedTools,
+        plugins: [{ type: 'local', path: pluginPath }],
         // Capture stderr from CLI subprocess for debugging
         stderr: (data: string) => {
           logToFile('CLI stderr:', data);
