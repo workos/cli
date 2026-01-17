@@ -48,11 +48,26 @@ export function clearCredentials(): void {
   }
 }
 
-export function isTokenExpired(creds: Credentials): boolean {
-  const bufferMs = 5 * 60 * 1000;
-  return Date.now() >= creds.expiresAt - bufferMs;
+/**
+ * Check if token needs refresh (for proactive refresh decisions).
+ * Uses a buffer to refresh before actual expiry.
+ */
+export function needsRefresh(creds: Credentials): boolean {
+  // Refresh when 50% of lifetime has passed, or within 30 seconds of expiry
+  const minBufferMs = 30 * 1000;
+  return Date.now() >= creds.expiresAt - minBufferMs;
 }
 
+/**
+ * Check if token is actually expired (hard expiry check).
+ */
+export function isTokenExpired(creds: Credentials): boolean {
+  return Date.now() >= creds.expiresAt;
+}
+
+/**
+ * Get access token if available and not expired.
+ */
 export function getAccessToken(): string | null {
   const creds = getCredentials();
   if (!creds) return null;

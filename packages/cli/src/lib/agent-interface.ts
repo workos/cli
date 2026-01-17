@@ -18,7 +18,8 @@ import { WIZARD_INTERACTION_EVENT_NAME } from './constants.js';
 import { LINTING_TOOLS } from './safe-tools.js';
 import { getLlmGatewayUrlFromHost } from '../utils/urls.js';
 import { getSettings } from './settings.js';
-import { getAccessToken } from './credentials.js';
+import { getCredentials, hasCredentials } from './credentials.js';
+import { ensureValidToken } from './token-refresh.js';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -237,10 +238,10 @@ export function wizardCanUseTool(
 /**
  * Initialize agent configuration for the LLM gateway
  */
-export function initializeAgent(
+export async function initializeAgent(
   config: AgentConfig,
   options: WizardOptions,
-): AgentRunConfig {
+): Promise<AgentRunConfig> {
   // Initialize log file for this run
   initLogFile();
   logToFile('Agent initialization starting');
@@ -257,13 +258,34 @@ export function initializeAgent(
       ? settings.gateway.development
       : getLlmGatewayUrlFromHost();
 
-    const userToken = getAccessToken();
-    if (!userToken) {
+    // Check/refresh authentication for production
+    if (!options.local) {
+      if (!hasCredentials()) {
+        throw new Error(
+          'Not authenticated. Run `wizard login` to authenticate.',
+        );
+      }
+
+      const refreshResult = await ensureValidToken();
+      if (!refreshResult.success) {
+        throw new Error(refreshResult.error || 'Authentication failed');
+      }
+    }
+
+    const creds = getCredentials();
+    if (!creds) {
       throw new Error('Not authenticated. Run `wizard login` to authenticate.');
     }
 
+    // Send both access and refresh tokens to gateway
+    // Format: accessToken::refreshToken
+    // Gateway will refresh if access token is expired
+    const combinedToken = `${creds.accessToken}::${creds.refreshToken}`;
+
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
-    process.env.ANTHROPIC_AUTH_TOKEN = userToken;
+    process.env.ANTHROPIC_AUTH_TOKEN = combinedToken;
+
+    logToFile('Sending combined token (access + refresh) to gateway');
 
     const authMode = options.local
       ? `local-gateway:${gatewayUrl}`
@@ -432,13 +454,13 @@ export async function runAgent(
     if (outputText.includes(AgentSignals.ERROR_MCP_MISSING)) {
       logToFile('Agent error: MCP_MISSING');
       spinner.stop('Agent could not access WorkOS MCP');
-      return { error: AgentErrorType.MCP_MISSING };
+            return { error: AgentErrorType.MCP_MISSING };
     }
 
     if (outputText.includes(AgentSignals.ERROR_RESOURCE_MISSING)) {
       logToFile('Agent error: RESOURCE_MISSING');
       spinner.stop('Agent could not access setup resource');
-      return { error: AgentErrorType.RESOURCE_MISSING };
+            return { error: AgentErrorType.RESOURCE_MISSING };
     }
 
     logToFile(`Agent run completed in ${Math.round(durationMs / 1000)}s`);
@@ -449,13 +471,13 @@ export async function runAgent(
     });
 
     spinner.stop(successMessage);
-    return {};
+        return {};
   } catch (error) {
     spinner.stop(errorMessage);
     clack.log.error(`Error: ${(error as Error).message}`);
     logToFile('Agent run failed:', error);
     debug('Full error:', error);
-    throw error;
+        throw error;
   }
 }
 

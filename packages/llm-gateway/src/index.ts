@@ -1,9 +1,16 @@
+import { config } from 'dotenv';
+
+// Load .env.local first, then .env as fallback
+config({ path: '.env.local' });
+config({ path: '.env' });
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { streamSSE } from 'hono/streaming';
 import { serve } from '@hono/node-server';
 import Anthropic from '@anthropic-ai/sdk';
 import { env } from './env.js';
+import { validateJWT } from './jwt.js';
+import { refreshAccessToken } from './refresh.js';
 
 const app = new Hono();
 const PORT = Number(env.PORT) || 8000;
@@ -25,20 +32,55 @@ app.post('/v1/messages', async (c) => {
   try {
     const authHeader = c.req.header('authorization');
 
-    // Validate WorkOS API key format
+    // Check for Bearer token
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return c.json({ error: 'Missing Authorization header' }, 401);
+      return c.json(
+        {
+          error: 'Missing Authorization header',
+          hint: 'Run `wizard login` to authenticate',
+        },
+        401
+      );
     }
 
-    const workosKey = authHeader.replace('Bearer ', '');
+    const tokenValue = authHeader.replace('Bearer ', '');
 
-    // Validate it's a WorkOS API key (starts with sk_test_ or sk_live_)
-    if (!workosKey.startsWith('sk_test_') && !workosKey.startsWith('sk_live_')) {
-      return c.json({ error: 'Invalid WorkOS API key format' }, 401);
+    // Token format: accessToken::refreshToken (refresh token is optional)
+    const [accessToken, refreshToken] = tokenValue.split('::');
+
+    // Validate JWT
+    let validation = await validateJWT(accessToken);
+
+    // If expired and we have a refresh token, try to refresh
+    if (!validation.valid && validation.error === 'Token expired' && refreshToken) {
+      console.log('[Auth] Access token expired, attempting refresh...');
+      const refreshResult = await refreshAccessToken(refreshToken);
+
+      if (refreshResult.success && refreshResult.accessToken) {
+        // Validate the new token
+        validation = await validateJWT(refreshResult.accessToken);
+        if (validation.valid) {
+          console.log('[Auth] Token refreshed and validated');
+        }
+      } else {
+        console.log(`[Auth] Refresh failed: ${refreshResult.error}`);
+      }
     }
+
+    if (!validation.valid) {
+      console.log(`[Auth] JWT validation failed: ${validation.error}`);
+      return c.json(
+        {
+          error: validation.error || 'Invalid token',
+          hint: 'Run `wizard login` to authenticate',
+        },
+        401
+      );
+    }
+
+    console.log(`[Auth] Request from user: ${validation.payload?.sub}`);
 
     const body = await c.req.json();
-    console.log(`[Proxy] Request from WorkOS key: ${workosKey.substring(0, 15)}...`);
     console.log(`[Proxy] Model: ${body.model}, Max tokens: ${body.max_tokens}`);
 
     // Check if streaming is requested
@@ -102,5 +144,6 @@ serve({
   console.log(`\n🚀 WorkOS LLM Gateway running on http://localhost:${PORT}`);
   console.log(`   Health check: http://localhost:${PORT}/health`);
   console.log(`   Anthropic proxy: POST http://localhost:${PORT}/v1/messages`);
-  console.log(`\n   Using Anthropic API Key: ${env.ANTHROPIC_API_KEY ? '✓ Set' : '✗ Missing'}\n`);
+  console.log(`\n   Anthropic API Key: ${env.ANTHROPIC_API_KEY ? '✓ Set' : '✗ Missing'}`);
+  console.log(`   WorkOS Client ID: ${env.WORKOS_CLIENT_ID ? '✓ Set' : '✗ Missing'}\n`);
 });

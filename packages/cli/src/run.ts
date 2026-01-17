@@ -18,8 +18,9 @@ import { EventEmitter } from 'events';
 import chalk from 'chalk';
 import { RateLimitError } from './utils/errors.js';
 import { getSettings } from './lib/settings.js';
-import { getAccessToken } from './lib/credentials.js';
+import { getAccessToken, getCredentials } from './lib/credentials.js';
 import { runLogin } from './commands/login.js';
+import { ensureValidToken } from './lib/token-refresh.js';
 
 EventEmitter.defaultMaxListeners = 50;
 
@@ -79,9 +80,27 @@ export async function runWizard(argv: Args) {
     clack.log.info(chalk.dim('Running in CI mode'));
   }
 
+  // Check if we need to authenticate or refresh
   if (!getAccessToken()) {
-    clack.log.step('Authentication required');
-    await runLogin();
+    const creds = getCredentials();
+
+    // If we have credentials with a refresh token, try to refresh first
+    if (creds?.refreshToken) {
+      clack.log.step('Session expired, refreshing...');
+      const refreshResult = await ensureValidToken();
+
+      if (!refreshResult.success) {
+        // Refresh failed, need full re-auth
+        clack.log.step('Session refresh failed, re-authentication required');
+        await runLogin();
+      }
+    } else {
+      // No credentials at all, need to login
+      clack.log.step('Authentication required');
+      await runLogin();
+    }
+
+    // Final check - must have valid token
     if (!getAccessToken()) {
       clack.log.error('Authentication failed. Please try again.');
       process.exit(1);

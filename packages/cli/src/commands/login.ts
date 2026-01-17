@@ -7,6 +7,22 @@ import {
 } from '../lib/credentials.js';
 import { getSettings } from '../lib/settings.js';
 
+/**
+ * Extract expiry time from JWT token
+ */
+function getJwtExpiry(token: string): number | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(
+      Buffer.from(parts[1], 'base64url').toString('utf-8')
+    );
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
 const WORKOS_API_BASE = 'https://api.workos.com/user_management';
 const POLL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -26,6 +42,7 @@ interface AuthSuccessResponse {
   };
   access_token: string;
   refresh_token: string;
+  expires_in?: number;
 }
 
 interface AuthErrorResponse {
@@ -111,18 +128,26 @@ export async function runLogin(): Promise<void> {
 
       if (tokenResponse.ok) {
         const result = data as AuthSuccessResponse;
-        const expiresIn = 15 * 60;
+
+        // Extract actual expiry from JWT, fallback to response or 15 min
+        const jwtExpiry = getJwtExpiry(result.access_token);
+        const expiresAt = jwtExpiry ?? (result.expires_in
+          ? Date.now() + result.expires_in * 1000
+          : Date.now() + 15 * 60 * 1000);
+
+        const expiresInSec = Math.round((expiresAt - Date.now()) / 1000);
 
         saveCredentials({
           accessToken: result.access_token,
           refreshToken: result.refresh_token,
-          expiresAt: Date.now() + expiresIn * 1000,
+          expiresAt,
           userId: result.user.id,
           email: result.user.email,
         });
 
         spinner.stop('Authentication successful!');
         clack.log.success(`Logged in as ${result.user.email}`);
+        clack.log.info(`Token expires in ${expiresInSec} seconds`);
         return;
       }
 

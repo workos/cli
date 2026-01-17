@@ -36,6 +36,7 @@ const {
   clearCredentials,
   hasCredentials,
   isTokenExpired,
+  needsRefresh,
   getAccessToken,
   getCredentialsPath,
 } = await import('./credentials.js');
@@ -160,20 +161,12 @@ describe('credentials', () => {
   });
 
   describe('isTokenExpired', () => {
-    it('returns false when token expires in more than 5 minutes', () => {
+    it('returns false when token has not expired', () => {
       const creds: Credentials = {
         ...validCreds,
-        expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes from now
+        expiresAt: Date.now() + 60 * 1000, // 1 minute from now
       };
       expect(isTokenExpired(creds)).toBe(false);
-    });
-
-    it('returns true when token expires in less than 5 minutes', () => {
-      const creds: Credentials = {
-        ...validCreds,
-        expiresAt: Date.now() + 2 * 60 * 1000, // 2 minutes from now
-      };
-      expect(isTokenExpired(creds)).toBe(true);
     });
 
     it('returns true when token is already expired', () => {
@@ -183,13 +176,31 @@ describe('credentials', () => {
       };
       expect(isTokenExpired(creds)).toBe(true);
     });
+  });
 
-    it('returns true when exactly at 5 minute boundary', () => {
+  describe('needsRefresh', () => {
+    it('returns false when token has plenty of time left', () => {
       const creds: Credentials = {
         ...validCreds,
-        expiresAt: Date.now() + 5 * 60 * 1000, // Exactly 5 minutes
+        expiresAt: Date.now() + 2 * 60 * 1000, // 2 minutes from now
       };
-      expect(isTokenExpired(creds)).toBe(true);
+      expect(needsRefresh(creds)).toBe(false);
+    });
+
+    it('returns true when token expires within 30 seconds', () => {
+      const creds: Credentials = {
+        ...validCreds,
+        expiresAt: Date.now() + 20 * 1000, // 20 seconds from now
+      };
+      expect(needsRefresh(creds)).toBe(true);
+    });
+
+    it('returns true when token is already expired', () => {
+      const creds: Credentials = {
+        ...validCreds,
+        expiresAt: Date.now() - 1000, // 1 second ago
+      };
+      expect(needsRefresh(creds)).toBe(true);
     });
   });
 
