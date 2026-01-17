@@ -4,6 +4,7 @@
  */
 
 import path from 'path';
+import { fileURLToPath } from 'url';
 import clack from '../utils/clack.js';
 import { debug, logToFile, initLogFile, LOG_FILE_PATH } from '../utils/debug.js';
 import type { WizardOptions } from '../utils/types.js';
@@ -20,16 +21,6 @@ async function getSDKModule(): Promise<any> {
     _sdkModule = await import('@anthropic-ai/claude-agent-sdk');
   }
   return _sdkModule;
-}
-
-/**
- * Get the path to the bundled Claude Code CLI from the SDK package.
- * This ensures we use the SDK's bundled version rather than the user's installed Claude Code.
- */
-function getClaudeCodeExecutablePath(): string {
-  // require.resolve finds the package's main entry, then we get cli.js from same dir
-  const sdkPackagePath = require.resolve('@anthropic-ai/claude-agent-sdk');
-  return path.join(path.dirname(sdkPackagePath), 'cli.js');
 }
 
 // Using `any` because typed imports from ESM modules require import attributes
@@ -350,9 +341,7 @@ export async function runAgent(
 
   spinner.start(spinnerMessage);
 
-  const cliPath = getClaudeCodeExecutablePath();
   logToFile('Starting agent run');
-  logToFile('Claude Code executable:', cliPath);
   logToFile('Prompt:', prompt);
 
   const startTime = Date.now();
@@ -381,6 +370,8 @@ export async function runAgent(
 
     // Load plugin with bundled skills
     // Path from dist/src/lib/ back to package root
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
     const pluginPath = path.join(__dirname, '../../..');
     logToFile('Loading plugin from:', pluginPath);
 
