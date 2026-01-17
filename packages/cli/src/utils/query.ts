@@ -1,12 +1,12 @@
 import axios from 'axios';
 import type { ZodSchema } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import type { AIModel, CloudRegion } from './types';
-import { getCloudUrlFromRegion } from './urls';
-import { analytics } from './analytics';
+import type { AIModel, CloudRegion } from './types.js';
+import { getCloudUrlFromRegion } from './urls.js';
+import { analytics } from './analytics.js';
 import { AxiosError } from 'axios';
-import { debug } from './debug';
-import { RateLimitError } from './errors';
+import { debug } from './debug.js';
+import { RateLimitError } from './errors.js';
 import * as crypto from 'node:crypto';
 
 const generateTraceId = () => {

@@ -4,23 +4,23 @@ import * as os from 'node:os';
 import { basename, isAbsolute, join, relative } from 'node:path';
 
 import chalk from 'chalk';
-import { traceStep } from '../telemetry';
-import { debug } from './debug';
-import { type PackageDotJson, hasPackageInstalled } from './package-json';
+import { traceStep } from '../telemetry.js';
+import { debug } from './debug.js';
+import { type PackageDotJson, hasPackageInstalled } from './package-json.js';
 import {
   type PackageManager,
   detectAllPackageManagers,
   packageManagers,
   NPM as npm,
-} from './package-manager';
-import { fulfillsVersionRange } from './semver';
-import type { CloudRegion, Feature, WizardOptions } from './types';
-import { getPackageVersion } from './package-json';
-import { ISSUES_URL, type Integration } from '../lib/constants';
-import { analytics } from './analytics';
-import clack from './clack';
-import { getCloudUrlFromRegion, getHostFromRegion } from './urls';
-import { INTEGRATION_CONFIG } from '../lib/config';
+} from './package-manager.js';
+import { fulfillsVersionRange } from './semver.js';
+import type { CloudRegion, Feature, WizardOptions } from './types.js';
+import { getPackageVersion } from './package-json.js';
+import { ISSUES_URL, type Integration } from '../lib/constants.js';
+import { analytics } from './analytics.js';
+import clack from './clack.js';
+import { getCloudUrlFromRegion, getHostFromRegion } from './urls.js';
+import { INTEGRATION_CONFIG } from '../lib/config.js';
 
 interface ProjectData {
   projectApiKey: string;
@@ -213,21 +213,20 @@ export async function askForItemSelection(
   items: string[],
   message: string,
 ): Promise<{ value: string; index: number }> {
-  const selection: { value: string; index: number } | symbol =
-    await abortIfCancelled(
-      clack.select({
-        maxItems: 12,
-        message: message,
-        options: items.map((item, index) => {
-          return {
-            value: { value: item, index: index },
-            label: item,
-          };
-        }),
+  const selection = await abortIfCancelled<{ value: string; index: number } | symbol>(
+    clack.select({
+      maxItems: 12,
+      message: message,
+      options: items.map((item, index) => {
+        return {
+          value: { value: item, index: index },
+          label: item,
+        };
       }),
-    );
+    }),
+  );
 
-  return selection;
+  return selection as { value: string; index: number };
 }
 
 export async function confirmContinueIfPackageVersionNotSupported({
@@ -545,19 +544,18 @@ export async function getPackageManager(
       ? 'Multiple package managers detected. Please select one:'
       : 'Please select your package manager.';
 
-  const selectedPackageManager: PackageManager | symbol =
-    await abortIfCancelled(
-      clack.select({
-        message,
-        options: pkgOptions.map((packageManager) => ({
-          value: packageManager,
-          label: packageManager.label,
-        })),
-      }),
-    );
+  const selectedPackageManager = await abortIfCancelled<PackageManager | symbol>(
+    clack.select({
+      message,
+      options: pkgOptions.map((packageManager) => ({
+        value: packageManager,
+        label: packageManager.label,
+      })),
+    }),
+  );
 
-  analytics.setTag('package-manager', selectedPackageManager.name);
-  return selectedPackageManager;
+  analytics.setTag('package-manager', (selectedPackageManager as PackageManager).name);
+  return selectedPackageManager as PackageManager;
 }
 
 export function isUsingTypeScript({
@@ -635,7 +633,7 @@ export async function getOrAskForWorkOSCredentials(
     apiKey = (await abortIfCancelled(
       clack.password({
         message: 'Enter your WorkOS API Key',
-        validate: (value) => {
+        validate: (value: string) => {
           if (!value) return 'API Key is required';
           if (!value.startsWith('sk_')) {
             return 'API Key should start with sk_';
@@ -653,7 +651,7 @@ export async function getOrAskForWorkOSCredentials(
       clack.text({
         message: 'Enter your WorkOS Client ID',
         placeholder: 'client_...',
-        validate: (value) => {
+        validate: (value: string) => {
           if (!value) return 'Client ID is required';
           if (!value.startsWith('client_')) {
             return 'Client ID should start with client_';

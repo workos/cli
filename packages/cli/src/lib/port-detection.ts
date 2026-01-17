@@ -1,35 +1,42 @@
 import * as fs from 'node:fs';
 import { join } from 'node:path';
-import type { Integration } from './constants';
+import type { Integration } from './constants.js';
+import { getSettings } from './settings.js';
 
 /**
- * Default dev server ports by framework.
+ * Map Integration enum values to settings keys.
  */
-const DEFAULT_PORTS: Record<Integration, number> = {
-  nextjs: 3000,
-  react: 5173,
-  'tanstack-start': 3000,
-  'react-router': 5173,
-  'vanilla-js': 5173,
+const INTEGRATION_TO_SETTINGS_KEY: Record<Integration, string> = {
+  nextjs: 'nextjs',
+  react: 'react',
+  'tanstack-start': 'tanstackStart',
+  'react-router': 'reactRouter',
+  'vanilla-js': 'vanillaJs',
 };
 
 /**
- * Default callback paths per SDK convention.
- * These match what each AuthKit SDK creates by default.
+ * Get default dev server port for a framework from settings.
  */
-const DEFAULT_CALLBACK_PATHS: Record<Integration, string> = {
-  nextjs: '/api/auth/callback',
-  react: '/callback',
-  'tanstack-start': '/api/auth/callback',
-  'react-router': '/callback',
-  'vanilla-js': '/callback',
-};
+function getDefaultPort(integration: Integration): number {
+  const settings = getSettings();
+  const settingsKey = INTEGRATION_TO_SETTINGS_KEY[integration];
+  return settings.frameworks[settingsKey].port;
+}
+
+/**
+ * Get default callback path for a framework from settings.
+ */
+function getDefaultCallbackPath(integration: Integration): string {
+  const settings = getSettings();
+  const settingsKey = INTEGRATION_TO_SETTINGS_KEY[integration];
+  return settings.frameworks[settingsKey].callbackPath;
+}
 
 /**
  * Get the callback path for a framework's AuthKit SDK.
  */
 export function getCallbackPath(integration: Integration): string {
-  return DEFAULT_CALLBACK_PATHS[integration];
+  return getDefaultCallbackPath(integration);
 }
 
 /**
@@ -133,5 +140,5 @@ export function detectPort(
     }
   }
 
-  return detectedPort ?? DEFAULT_PORTS[integration];
+  return detectedPort ?? getDefaultPort(integration);
 }

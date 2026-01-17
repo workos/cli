@@ -1,12 +1,13 @@
 import chalk from 'chalk';
 import { appendFileSync } from 'fs';
-import { prepareMessage } from './logging';
-import clack from './clack';
-import { redactCredentials } from './redact';
+import { prepareMessage } from './logging.js';
+import clack from './clack.js';
+import { redactCredentials } from './redact.js';
+import { getSettings } from '../lib/settings.js';
 
 let debugEnabled = false;
 
-export const LOG_FILE_PATH = '/tmp/authkit-wizard.log';
+export const LOG_FILE_PATH = getSettings().logging.logFile;
 
 /**
  * Initialize the log file with a run header.

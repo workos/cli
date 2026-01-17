@@ -1,10 +1,10 @@
 import { major, minVersion } from 'semver';
 import fg from 'fast-glob';
-import { abortIfCancelled, getPackageDotJson } from '../utils/clack-utils';
-import clack from '../utils/clack';
-import type { WizardOptions } from '../utils/types';
-import { Integration } from '../lib/constants';
-import { getPackageVersion } from '../utils/package-json';
+import { abortIfCancelled, getPackageDotJson } from '../utils/clack-utils.js';
+import clack from '../utils/clack.js';
+import type { WizardOptions } from '../utils/types.js';
+import { Integration } from '../lib/constants.js';
+import { getPackageVersion } from '../utils/package-json.js';
 import chalk from 'chalk';
 import * as fs from 'node:fs';
 import * as path from 'node:path';

@@ -1,6 +1,6 @@
-import { ANALYTICS_ENABLED } from '../lib/constants';
+import { ANALYTICS_ENABLED } from '../lib/constants.js';
 import { v4 as uuidv4 } from 'uuid';
-import { debug } from './debug';
+import { debug } from './debug.js';
 
 // Stub analytics class - telemetry disabled for WorkOS wizard
 // Can be re-enabled later if WorkOS wants usage tracking

@@ -1,21 +1,22 @@
-import { abortIfCancelled } from './utils/clack-utils';
+import { abortIfCancelled } from './utils/clack-utils.js';
 
-import { runNextjsWizardAgent } from './nextjs/nextjs-wizard-agent';
-import type { WizardOptions } from './utils/types';
+import { runNextjsWizardAgent } from './nextjs/nextjs-wizard-agent.js';
+import type { WizardOptions } from './utils/types.js';
 
-import { getIntegrationDescription, Integration } from './lib/constants';
-import { readEnvironment } from './utils/environment';
-import clack from './utils/clack';
+import { getIntegrationDescription, Integration } from './lib/constants.js';
+import { readEnvironment } from './utils/environment.js';
+import clack from './utils/clack.js';
 import path from 'path';
-import { INTEGRATION_CONFIG, INTEGRATION_ORDER } from './lib/config';
-import { runReactWizardAgent } from './react/react-wizard-agent';
-import { analytics } from './utils/analytics';
-import { runReactRouterWizardAgent } from './react-router/react-router-wizard-agent';
-import { runTanstackStartWizardAgent } from './tanstack-start/tanstack-start-wizard-agent';
-import { runVanillaJsWizardAgent } from './vanilla-js/vanilla-js-wizard-agent';
+import { INTEGRATION_CONFIG, INTEGRATION_ORDER } from './lib/config.js';
+import { runReactWizardAgent } from './react/react-wizard-agent.js';
+import { analytics } from './utils/analytics.js';
+import { runReactRouterWizardAgent } from './react-router/react-router-wizard-agent.js';
+import { runTanstackStartWizardAgent } from './tanstack-start/tanstack-start-wizard-agent.js';
+import { runVanillaJsWizardAgent } from './vanilla-js/vanilla-js-wizard-agent.js';
 import { EventEmitter } from 'events';
 import chalk from 'chalk';
-import { RateLimitError } from './utils/errors';
+import { RateLimitError } from './utils/errors.js';
+import { getSettings } from './lib/settings.js';
 
 EventEmitter.defaultMaxListeners = 50;
 
@@ -63,7 +64,13 @@ export async function runWizard(argv: Args) {
     redirectUri: finalArgs.redirectUri,
   };
 
-  clack.intro(`Welcome to the WorkOS AuthKit setup wizard ✨`);
+  const settings = getSettings();
+  if (settings.branding.showAsciiArt) {
+    console.log(chalk.cyan(settings.branding.asciiArt));
+    console.log();
+  } else {
+    clack.intro(`Welcome to the WorkOS AuthKit setup wizard ✨`);
+  }
 
   if (wizardOptions.ci) {
     clack.log.info(chalk.dim('Running in CI mode'));

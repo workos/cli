@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import { satisfies } from 'semver';
-import { red } from './src/utils/logging';
+import { red } from './src/utils/logging.js';
+import { getSettings } from './src/lib/settings.js';
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import chalk from 'chalk';
 
-const NODE_VERSION_RANGE = '>=18.17.0';
+const NODE_VERSION_RANGE = getSettings().nodeVersion;
 
 // Have to run this above the other imports because they are importing clack that
 // has the problematic imports.
@@ -17,10 +18,10 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
   process.exit(1);
 }
 
-import type { WizardOptions } from './src/utils/types';
-import { runWizard } from './src/run';
-import { isNonInteractiveEnvironment } from './src/utils/environment';
-import clack from './src/utils/clack';
+import type { WizardOptions } from './src/utils/types.js';
+import { runWizard } from './src/run.js';
+import { isNonInteractiveEnvironment } from './src/utils/environment.js';
+import clack from './src/utils/clack.js';
 
 // E2E tests removed - no mock server needed
 
@@ -142,4 +143,4 @@ yargs(hideBin(process.argv))
   .alias('help', 'h')
   .version()
   .alias('version', 'v')
-  .wrap(process.stdout.isTTY ? yargs.terminalWidth() : 80).argv;
+  .wrap(process.stdout.isTTY && process.stdout.columns ? process.stdout.columns : 80).argv;

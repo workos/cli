@@ -2,8 +2,8 @@ import {
   getWelcomeMessage,
   SPINNER_MESSAGE,
   type FrameworkConfig,
-} from './framework-config';
-import type { WizardOptions } from '../utils/types';
+} from './framework-config.js';
+import type { WizardOptions } from '../utils/types.js';
 import {
   abort,
   confirmContinueIfNoOrDirtyGitRepo,
@@ -12,22 +12,22 @@ import {
   getPackageDotJson,
   isUsingTypeScript,
   printWelcome,
-} from '../utils/clack-utils';
-import { analytics } from '../utils/analytics';
-import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
-import clack from '../utils/clack';
+} from '../utils/clack-utils.js';
+import { analytics } from '../utils/analytics.js';
+import { WIZARD_INTERACTION_EVENT_NAME } from './constants.js';
+import clack from '../utils/clack.js';
 import {
   initializeAgent,
   runAgent,
   AgentSignals,
   AgentErrorType,
-} from './agent-interface';
-import { getCloudUrlFromRegion } from '../utils/urls';
+} from './agent-interface.js';
+import { getCloudUrlFromRegion } from '../utils/urls.js';
 import chalk from 'chalk';
-import { uploadEnvironmentVariablesStep } from '../steps';
-import { autoConfigureWorkOSEnvironment } from './workos-management';
-import { detectPort, getCallbackPath } from './port-detection';
-import { writeEnvLocal } from './env-writer';
+import { uploadEnvironmentVariablesStep } from '../steps/index.js';
+import { autoConfigureWorkOSEnvironment } from './workos-management.js';
+import { detectPort, getCallbackPath } from './port-detection.js';
+import { writeEnvLocal } from './env-writer.js';
 
 /**
  * Universal agent-powered wizard runner.

@@ -1,5 +1,5 @@
-import type { Integration } from './constants';
-import type { WizardOptions } from '../utils/types';
+import type { Integration } from './constants.js';
+import type { WizardOptions } from '../utils/types.js';
 
 /**
  * Configuration interface for framework-specific agent integrations.

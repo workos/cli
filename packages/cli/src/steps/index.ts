@@ -1,3 +1,3 @@
-export * from './run-prettier';
-export * from './add-or-update-environment-variables';
-export * from './upload-environment-variables';
+export * from './run-prettier.js';
+export * from './add-or-update-environment-variables.js';
+export * from './upload-environment-variables/index.js';

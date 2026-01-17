@@ -1,8 +1,8 @@
 import chalk from 'chalk';
-import type { Integration } from '../lib/constants';
-import { traceStep } from '../telemetry';
-import { analytics } from '../utils/analytics';
-import clack from '../utils/clack';
+import type { Integration } from '../lib/constants.js';
+import { traceStep } from '../telemetry.js';
+import { analytics } from '../utils/analytics.js';
+import clack from '../utils/clack.js';
 import * as fs from 'fs';
 import path from 'path';
 

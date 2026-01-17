@@ -1,12 +1,17 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    // Node.js module system
-    "module": "node16",
-    "moduleResolution": "node16",
+    // ESM module system
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "ES2022",
 
     // Output
     "outDir": "./dist",
+
+    // JSON imports with import attributes
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": false,
 
     // Decorators for legacy compatibility
     "experimentalDecorators": true,

@@ -1,11 +1,11 @@
-import type { Integration } from '../../lib/constants';
-import { traceStep } from '../../telemetry';
-import { analytics } from '../../utils/analytics';
-import clack from '../../utils/clack';
-import { abortIfCancelled } from '../../utils/clack-utils';
-import type { WizardOptions } from '../../utils/types';
-import { EnvironmentProvider } from './EnvironmentProvider';
-import { VercelEnvironmentProvider } from './providers/vercel';
+import type { Integration } from '../../lib/constants.js';
+import { traceStep } from '../../telemetry.js';
+import { analytics } from '../../utils/analytics.js';
+import clack from '../../utils/clack.js';
+import { abortIfCancelled } from '../../utils/clack-utils.js';
+import type { WizardOptions } from '../../utils/types.js';
+import { EnvironmentProvider } from './EnvironmentProvider.js';
+import { VercelEnvironmentProvider } from './providers/vercel.js';
 
 export const uploadEnvironmentVariablesStep = async (
   envVars: Record<string, string>,

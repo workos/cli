@@ -1,7 +1,7 @@
-import { getPackageDotJson } from '../utils/clack-utils';
-import { hasPackageInstalled } from '../utils/package-json';
-import type { WizardOptions } from '../utils/types';
-import { Integration } from './constants';
+import { getPackageDotJson } from '../utils/clack-utils.js';
+import { hasPackageInstalled } from '../utils/package-json.js';
+import type { WizardOptions } from '../utils/types.js';
+import { Integration } from './constants.js';
 
 type IntegrationConfig = {
   name: string;
