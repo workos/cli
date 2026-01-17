@@ -6,13 +6,19 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import clack from '../utils/clack.js';
-import { debug, logToFile, initLogFile, LOG_FILE_PATH } from '../utils/debug.js';
+import {
+  debug,
+  logToFile,
+  initLogFile,
+  LOG_FILE_PATH,
+} from '../utils/debug.js';
 import type { WizardOptions } from '../utils/types.js';
 import { analytics } from '../utils/analytics.js';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants.js';
 import { LINTING_TOOLS } from './safe-tools.js';
 import { getLlmGatewayUrlFromHost } from '../utils/urls.js';
 import { getSettings } from './settings.js';
+import { getAccessToken } from './credentials.js';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -251,8 +257,17 @@ export function initializeAgent(
       ? settings.gateway.development
       : getLlmGatewayUrlFromHost();
 
+    // Check for user authentication (production mode only)
+    const userToken = getAccessToken();
+    if (!userToken && !options.local) {
+      throw new Error('Not authenticated. Run `wizard login` to authenticate.');
+    }
+
+    // Use user JWT for production, WorkOS API key for local dev
+    const authToken = options.local ? config.workOSApiKey : userToken;
+
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
-    process.env.ANTHROPIC_AUTH_TOKEN = config.workOSApiKey;
+    process.env.ANTHROPIC_AUTH_TOKEN = authToken!;
 
     const authMode = options.local
       ? `local-gateway:${gatewayUrl}`
