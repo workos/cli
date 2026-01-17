@@ -1,6 +1,9 @@
 {
   "version": "1.0.0",
   "model": "claude-opus-4-5-20251101",
+  "cliAuth": {
+    "clientId": "client_01JA4BGY6RK3NHY7NM0NWGPZBG"
+  },
   "gateway": {
     "development": "http://localhost:8000",
     "production": "https://llm-gateway.example.com",

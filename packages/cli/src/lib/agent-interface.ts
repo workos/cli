@@ -257,17 +257,13 @@ export function initializeAgent(
       ? settings.gateway.development
       : getLlmGatewayUrlFromHost();
 
-    // Check for user authentication (production mode only)
     const userToken = getAccessToken();
-    if (!userToken && !options.local) {
+    if (!userToken) {
       throw new Error('Not authenticated. Run `wizard login` to authenticate.');
     }
 
-    // Use user JWT for production, WorkOS API key for local dev
-    const authToken = options.local ? config.workOSApiKey : userToken;
-
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
-    process.env.ANTHROPIC_AUTH_TOKEN = authToken!;
+    process.env.ANTHROPIC_AUTH_TOKEN = userToken;
 
     const authMode = options.local
       ? `local-gateway:${gatewayUrl}`

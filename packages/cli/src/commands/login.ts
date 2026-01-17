@@ -5,6 +5,7 @@ import {
   hasCredentials,
   getCredentials,
 } from '../lib/credentials.js';
+import { getSettings } from '../lib/settings.js';
 
 const WORKOS_API_BASE = 'https://api.workos.com/user_management';
 const POLL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
@@ -36,10 +37,13 @@ function sleep(ms: number): Promise<void> {
 }
 
 export async function runLogin(): Promise<void> {
-  const clientId = process.env.WORKOS_CLIENT_ID;
+  const settings = getSettings();
+  const clientId = settings.cliAuth.clientId;
 
-  if (!clientId) {
-    clack.log.error('Missing WORKOS_CLIENT_ID in environment');
+  if (!clientId || clientId.includes('REPLACE')) {
+    clack.log.error(
+      'CLI auth not configured. Set cliAuth.clientId in settings.json',
+    );
     process.exit(1);
   }
 
@@ -55,7 +59,6 @@ export async function runLogin(): Promise<void> {
 
   clack.log.step('Starting authentication...');
 
-  // 1. Request device authorization
   const authResponse = await fetch(`${WORKOS_API_BASE}/authorize/device`, {
     method: 'POST',
     headers: {
@@ -74,20 +77,17 @@ export async function runLogin(): Promise<void> {
   const deviceAuth = (await authResponse.json()) as DeviceAuthResponse;
   const pollIntervalMs = (deviceAuth.interval || 5) * 1000;
 
-  // 2. Display instructions to user
   clack.log.info(`\nOpen this URL in your browser:\n`);
   console.log(`  ${deviceAuth.verification_uri}`);
   console.log(`\nEnter code: ${deviceAuth.user_code}\n`);
 
-  // Try to open browser automatically
   try {
-    await open(deviceAuth.verification_uri_complete);
+    open(deviceAuth.verification_uri_complete);
     clack.log.info('Browser opened automatically');
   } catch {
-    // Ignore - user can open manually
+    // User can open manually
   }
 
-  // 3. Poll for completion
   const spinner = clack.spinner();
   spinner.start('Waiting for authentication...');
 
@@ -113,10 +113,7 @@ export async function runLogin(): Promise<void> {
       const data = await tokenResponse.json();
 
       if (tokenResponse.ok) {
-        // Success!
         const result = data as AuthSuccessResponse;
-
-        // Default to 15 minutes if not specified
         const expiresIn = 15 * 60;
 
         saveCredentials({
@@ -132,33 +129,17 @@ export async function runLogin(): Promise<void> {
         return;
       }
 
-      // Handle error responses
       const errorData = data as AuthErrorResponse;
-
-      if (errorData.error === 'authorization_pending') {
-        // User hasn't completed auth yet, keep polling
-        continue;
-      }
+      if (errorData.error === 'authorization_pending') continue;
       if (errorData.error === 'slow_down') {
-        // Polling too fast, increase interval
         currentInterval += 5000;
         continue;
       }
-      if (
-        errorData.error === 'access_denied' ||
-        errorData.error === 'expired_token'
-      ) {
-        spinner.stop('Authentication failed');
-        clack.log.error(`Authentication error: ${errorData.error}`);
-        process.exit(1);
-      }
 
-      // Unknown error
       spinner.stop('Authentication failed');
-      clack.log.error(`Unexpected error: ${errorData.error}`);
+      clack.log.error(`Authentication error: ${errorData.error}`);
       process.exit(1);
-    } catch (error: unknown) {
-      // Network error - continue polling
+    } catch {
       continue;
     }
   }

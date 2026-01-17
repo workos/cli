@@ -27,7 +27,6 @@ import clack from './src/utils/clack.js';
 
 yargs(hideBin(process.argv))
   .env('WORKOS_WIZARD')
-  // global options
   .options({})
   .command('login', 'Authenticate with WorkOS', {}, async () => {
     const { runLogin } = await import('./src/commands/login.js');

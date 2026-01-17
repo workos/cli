@@ -5,7 +5,7 @@ import os from 'node:os';
 export interface Credentials {
   accessToken: string;
   refreshToken: string;
-  expiresAt: number; // Unix timestamp in milliseconds
+  expiresAt: number;
   userId: string;
   email?: string;
 }
@@ -28,7 +28,6 @@ export function getCredentials(): Credentials | null {
     const content = fs.readFileSync(getCredentialsPath(), 'utf-8');
     return JSON.parse(content);
   } catch {
-    // Corrupted file - treat as no credentials
     return null;
   }
 }
@@ -39,7 +38,7 @@ export function saveCredentials(creds: Credentials): void {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   }
   fs.writeFileSync(getCredentialsPath(), JSON.stringify(creds, null, 2), {
-    mode: 0o600, // Owner read/write only
+    mode: 0o600,
   });
 }
 
@@ -50,7 +49,6 @@ export function clearCredentials(): void {
 }
 
 export function isTokenExpired(creds: Credentials): boolean {
-  // Consider expired if within 5 minutes of expiry
   const bufferMs = 5 * 60 * 1000;
   return Date.now() >= creds.expiresAt - bufferMs;
 }
