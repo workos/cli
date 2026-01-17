@@ -18,6 +18,8 @@ import { EventEmitter } from 'events';
 import chalk from 'chalk';
 import { RateLimitError } from './utils/errors.js';
 import { getSettings } from './lib/settings.js';
+import { getAccessToken } from './lib/credentials.js';
+import { runLogin } from './commands/login.js';
 
 EventEmitter.defaultMaxListeners = 50;
 
@@ -75,6 +77,15 @@ export async function runWizard(argv: Args) {
 
   if (wizardOptions.ci) {
     clack.log.info(chalk.dim('Running in CI mode'));
+  }
+
+  if (!getAccessToken()) {
+    clack.log.step('Authentication required');
+    await runLogin();
+    if (!getAccessToken()) {
+      clack.log.error('Authentication failed. Please try again.');
+      process.exit(1);
+    }
   }
 
   const integration =

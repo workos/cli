@@ -2,8 +2,8 @@ import open from 'opn';
 import clack from '../utils/clack.js';
 import {
   saveCredentials,
-  hasCredentials,
   getCredentials,
+  getAccessToken,
 } from '../lib/credentials.js';
 import { getSettings } from '../lib/settings.js';
 
@@ -47,14 +47,11 @@ export async function runLogin(): Promise<void> {
     process.exit(1);
   }
 
-  // Check if already logged in
-  if (hasCredentials()) {
+  if (getAccessToken()) {
     const creds = getCredentials();
-    if (creds?.email) {
-      clack.log.info(`Already logged in as ${creds.email}`);
-      clack.log.info('Run `wizard logout` to log out');
-      return;
-    }
+    clack.log.info(`Already logged in as ${creds?.email ?? 'unknown'}`);
+    clack.log.info('Run `wizard logout` to log out');
+    return;
   }
 
   clack.log.step('Starting authentication...');
