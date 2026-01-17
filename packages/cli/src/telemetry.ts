@@ -1,4 +1,4 @@
-import { analytics } from './utils/analytics';
+import { analytics } from './utils/analytics.js';
 
 export function traceStep<T>(step: string, callback: () => T): T {
   updateProgress(step);

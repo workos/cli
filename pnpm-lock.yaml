@@ -27,8 +27,8 @@ importers:
         specifier: 1.7.4
         version: 1.7.4
       chalk:
-        specifier: ^2.4.1
-        version: 2.4.2
+        specifier: ^5.4.1
+        version: 5.4.1
       fast-glob:
         specifier: ^3.3.3
         version: 3.3.3
@@ -103,8 +103,8 @@ importers:
         specifier: ^7.3.7
         version: 7.5.8
       '@types/yargs':
-        specifier: ^16.0.9
-        version: 16.0.9
+        specifier: ^17.0.33
+        version: 17.0.33
       '@typescript-eslint/eslint-plugin':
         specifier: ^5.13.0
         version: 5.62.0(@typescript-eslint/parser@5.62.0(eslint@8.57.1)(typescript@5.7.3))(eslint@8.57.1)(typescript@5.7.3)
@@ -1096,9 +1096,6 @@ packages:
 
   '@types/yargs-parser@21.0.3':
     resolution: {integrity: sha512-I4q9QU9MQv4oEOz4tAHJtNz1cwuLxn2F3xcc2iV5WdqLPpUnj30aUuxt1mAxYTG+oe8CZMV/+6rU4S4gRDzqtQ==}
-
-  '@types/yargs@16.0.9':
-    resolution: {integrity: sha512-tHhzvkFXZQeTECenFoRljLBYPZJ7jAVxqqtEI0qTLOmuultnFp4I9yKE17vTuhf7BkhCu7I4XuemPgikDVuYqA==}
 
   '@types/yargs@17.0.33':
     resolution: {integrity: sha512-WpxBCKWPLr4xSsHgz511rFJAM+wS28w2zEO1QDNY5zM/S8ok70NNfztH0xwhqKyaK0OHCbN98LDAZuy1ctxDkA==}
@@ -4115,10 +4112,6 @@ snapshots:
   '@types/tough-cookie@4.0.5': {}
 
   '@types/yargs-parser@21.0.3': {}
-
-  '@types/yargs@16.0.9':
-    dependencies:
-      '@types/yargs-parser': 21.0.3
 
   '@types/yargs@17.0.33':
     dependencies:

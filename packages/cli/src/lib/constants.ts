@@ -1,3 +1,5 @@
+import { getSettings } from './settings.js';
+
 export enum Integration {
   nextjs = 'nextjs',
   react = 'react',
@@ -44,15 +46,12 @@ export const IS_DEV = ['test', 'development'].includes(
   process.env.NODE_ENV ?? '',
 );
 
-export const DEBUG = false;
+const settings = getSettings();
 
-export const WORKOS_DOCS_URL = 'https://workos.com/docs/authkit';
-export const WORKOS_DASHBOARD_URL = 'https://dashboard.workos.com';
-export const ISSUES_URL = 'https://github.com/workos/authkit-wizard/issues';
-
-// Telemetry (disabled for now - can be enabled later)
-export const ANALYTICS_ENABLED = false;
-export const WIZARD_INTERACTION_EVENT_NAME = 'wizard interaction';
-
-// OAuth port (kept for legacy compatibility, not used by WorkOS wizard)
-export const OAUTH_PORT = 8239;
+export const DEBUG = settings.logging.debugMode;
+export const WORKOS_DOCS_URL = settings.documentation.workosDocsUrl;
+export const WORKOS_DASHBOARD_URL = settings.documentation.dashboardUrl;
+export const ISSUES_URL = settings.documentation.issuesUrl;
+export const ANALYTICS_ENABLED = settings.telemetry.enabled;
+export const WIZARD_INTERACTION_EVENT_NAME = settings.telemetry.eventName;
+export const OAUTH_PORT = settings.legacy.oauthPort;

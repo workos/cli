@@ -1,4 +1,4 @@
-import type { WizardOptions } from '../../utils/types';
+import type { WizardOptions } from '../../utils/types.js';
 
 export abstract class EnvironmentProvider {
   protected options: WizardOptions;

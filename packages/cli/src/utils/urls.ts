@@ -1,29 +1,13 @@
-import { IS_DEV } from '../lib/constants';
-import type { CloudRegion } from './types';
+import { IS_DEV } from '../lib/constants.js';
+import { getSettings } from '../lib/settings.js';
 
-// WorkOS URLs (no region-specific logic needed)
-export const getWorkOSApiUrl = () => {
-  return IS_DEV ? 'http://localhost:8000' : 'https://api.workos.com';
-};
+const settings = getSettings();
 
-export const getWorkOSDashboardUrl = () => {
-  return IS_DEV ? 'http://localhost:3000' : 'https://dashboard.workos.com';
-};
+export const getWorkOSApiUrl = () =>
+  IS_DEV ? settings.api.workos.development : settings.api.workos.production;
 
-// Legacy functions - unused stubs for compatibility
-export const getHostFromRegion = (region: CloudRegion) => {
-  return getWorkOSApiUrl();
-};
+export const getWorkOSDashboardUrl = () =>
+  IS_DEV ? settings.api.dashboard.development : settings.api.dashboard.production;
 
-export const getCloudUrlFromRegion = (region: CloudRegion) => {
-  return getWorkOSDashboardUrl();
-};
-
-export const getOauthClientIdFromRegion = (region: CloudRegion) => {
-  return 'workos-oauth-client-id'; // Stub - OAuth not used
-};
-
-// FIXME: Update production URL once LLM gateway is deployed
-export const getLlmGatewayUrlFromHost = (host: string) => {
-  return IS_DEV ? 'http://localhost:8000' : 'https://llm-gateway.example.com';
-};
+export const getLlmGatewayUrlFromHost = () =>
+  IS_DEV ? settings.gateway.development : settings.gateway.production;

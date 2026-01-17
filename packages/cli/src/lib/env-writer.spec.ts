@@ -5,9 +5,9 @@ import {
   unlinkSync,
   writeFileSync,
   mkdtempSync,
-} from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
+} from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { writeEnvLocal } from './env-writer.js';
 
 describe('writeEnvLocal', () => {

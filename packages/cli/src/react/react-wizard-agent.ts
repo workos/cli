@@ -1,9 +1,9 @@
 /* React SPA wizard using Claude Agent SDK */
-import type { WizardOptions } from '../utils/types';
-import type { FrameworkConfig } from '../lib/framework-config';
-import { enableDebugLogs } from '../utils/debug';
-import { runAgentWizard } from '../lib/agent-runner';
-import { Integration } from '../lib/constants';
+import type { WizardOptions } from '../utils/types.js';
+import type { FrameworkConfig } from '../lib/framework-config.js';
+import { enableDebugLogs } from '../utils/debug.js';
+import { runAgentWizard } from '../lib/agent-runner.js';
+import { Integration } from '../lib/constants.js';
 
 const REACT_AGENT_CONFIG: FrameworkConfig = {
   metadata: {
@@ -25,7 +25,7 @@ const REACT_AGENT_CONFIG: FrameworkConfig = {
   environment: {
     uploadToHosting: false,
     requiresApiKey: false, // Client-only SPA
-    getEnvVars: (apiKey: string, clientId: string) => ({
+    getEnvVars: (_apiKey: string, clientId: string) => ({
       WORKOS_CLIENT_ID: clientId, // Only client ID needed
     }),
   },

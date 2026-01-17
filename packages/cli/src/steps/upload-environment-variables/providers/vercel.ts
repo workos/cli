@@ -1,11 +1,11 @@
 import { execSync, spawn, spawnSync } from 'child_process';
-import { EnvironmentProvider } from '../EnvironmentProvider';
+import { EnvironmentProvider } from '../EnvironmentProvider.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { WizardOptions } from '../../../utils/types';
-import clack from '../../../utils/clack';
+import type { WizardOptions } from '../../../utils/types.js';
+import clack from '../../../utils/clack.js';
 import chalk from 'chalk';
-import { analytics } from '../../../utils/analytics';
+import { analytics } from '../../../utils/analytics.js';
 
 export class VercelEnvironmentProvider extends EnvironmentProvider {
   name = 'Vercel';

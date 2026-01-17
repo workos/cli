@@ -1,8 +1,9 @@
-import readEnv from 'read-env';
-import { getPackageDotJson } from './clack-utils';
-import type { WizardOptions } from './types';
+import readEnvModule from 'read-env';
+const readEnv = ((readEnvModule as any).default || readEnvModule) as (prefix: string) => Record<string, unknown>;
+import { getPackageDotJson } from './clack-utils.js';
+import type { WizardOptions } from './types.js';
 import fg from 'fast-glob';
-import { IS_DEV } from '../lib/constants';
+import { IS_DEV } from '../lib/constants.js';
 
 export function isNonInteractiveEnvironment(): boolean {
   if (IS_DEV) {

@@ -1,12 +1,12 @@
 /* React Router wizard using Claude Agent SDK with WorkOS MCP */
-import type { WizardOptions } from '../utils/types';
-import type { FrameworkConfig } from '../lib/framework-config';
-import { enableDebugLogs } from '../utils/debug';
-import { runAgentWizard } from '../lib/agent-runner';
-import { Integration } from '../lib/constants';
-import { getPackageVersion } from '../utils/package-json';
-import { getPackageDotJson } from '../utils/clack-utils';
-import clack from '../utils/clack';
+import type { WizardOptions } from '../utils/types.js';
+import type { FrameworkConfig } from '../lib/framework-config.js';
+import { enableDebugLogs } from '../utils/debug.js';
+import { runAgentWizard } from '../lib/agent-runner.js';
+import { Integration } from '../lib/constants.js';
+import { getPackageVersion } from '../utils/package-json.js';
+import { getPackageDotJson } from '../utils/clack-utils.js';
+import clack from '../utils/clack.js';
 import chalk from 'chalk';
 import * as semver from 'semver';
 import {
@@ -14,7 +14,7 @@ import {
   getReactRouterModeName,
   getReactRouterVersionBucket,
   ReactRouterMode,
-} from './utils';
+} from './utils.js';
 
 /**
  * React Router framework configuration for the universal agent runner.

@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/typedef */
 import * as fs from 'fs';
 import * as path from 'path';
-import { traceStep } from '../telemetry';
-import { getPackageDotJson, updatePackageDotJson } from './clack-utils';
-import { analytics } from './analytics';
-import type { WizardOptions } from './types';
+import { traceStep } from '../telemetry.js';
+import { getPackageDotJson, updatePackageDotJson } from './clack-utils.js';
+import { analytics } from './analytics.js';
+import type { WizardOptions } from './types.js';
 
 export interface PackageManager {
   name: string;

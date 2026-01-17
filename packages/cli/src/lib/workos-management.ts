@@ -1,9 +1,9 @@
 import axios from 'axios';
-import type { Integration } from './constants';
-import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
-import { analytics } from '../utils/analytics';
-import clack from '../utils/clack';
-import { getCallbackPath } from './port-detection';
+import type { Integration } from './constants.js';
+import { WIZARD_INTERACTION_EVENT_NAME } from './constants.js';
+import { analytics } from '../utils/analytics.js';
+import clack from '../utils/clack.js';
+import { getCallbackPath } from './port-detection.js';
 
 const WORKOS_API_BASE = 'https://api.workos.com';
 

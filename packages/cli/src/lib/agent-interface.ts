@@ -4,13 +4,15 @@
  */
 
 import path from 'path';
-import clack from '../utils/clack';
-import { debug, logToFile, initLogFile, LOG_FILE_PATH } from '../utils/debug';
-import type { WizardOptions } from '../utils/types';
-import { analytics } from '../utils/analytics';
-import { WIZARD_INTERACTION_EVENT_NAME } from './constants';
-import { LINTING_TOOLS } from './safe-tools';
-import { getLlmGatewayUrlFromHost } from '../utils/urls';
+import { fileURLToPath } from 'url';
+import clack from '../utils/clack.js';
+import { debug, logToFile, initLogFile, LOG_FILE_PATH } from '../utils/debug.js';
+import type { WizardOptions } from '../utils/types.js';
+import { analytics } from '../utils/analytics.js';
+import { WIZARD_INTERACTION_EVENT_NAME } from './constants.js';
+import { LINTING_TOOLS } from './safe-tools.js';
+import { getLlmGatewayUrlFromHost } from '../utils/urls.js';
+import { getSettings } from './settings.js';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -19,16 +21,6 @@ async function getSDKModule(): Promise<any> {
     _sdkModule = await import('@anthropic-ai/claude-agent-sdk');
   }
   return _sdkModule;
-}
-
-/**
- * Get the path to the bundled Claude Code CLI from the SDK package.
- * This ensures we use the SDK's bundled version rather than the user's installed Claude Code.
- */
-function getClaudeCodeExecutablePath(): string {
-  // require.resolve finds the package's main entry, then we get cli.js from same dir
-  const sdkPackagePath = require.resolve('@anthropic-ai/claude-agent-sdk');
-  return path.join(path.dirname(sdkPackagePath), 'cli.js');
 }
 
 // Using `any` because typed imports from ESM modules require import attributes
@@ -254,9 +246,10 @@ export function initializeAgent(
     // Configure LLM gateway for Claude API calls
     // Local testing: use localhost LLM gateway
     // Production: use WorkOS production gateway
+    const settings = getSettings();
     const gatewayUrl = options.local
-      ? 'http://localhost:8000'
-      : getLlmGatewayUrlFromHost(config.workOSApiHost);
+      ? settings.gateway.development
+      : getLlmGatewayUrlFromHost();
 
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
     process.env.ANTHROPIC_AUTH_TOKEN = config.workOSApiKey;
@@ -279,7 +272,7 @@ export function initializeAgent(
           args: ['-y', '@workos/mcp-docs-server'],
         },
       },
-      model: 'claude-opus-4-5-20251101',
+      model: settings.model,
       allowedTools: [
         'Skill',
         'Read',
@@ -348,9 +341,7 @@ export async function runAgent(
 
   spinner.start(spinnerMessage);
 
-  const cliPath = getClaudeCodeExecutablePath();
   logToFile('Starting agent run');
-  logToFile('Claude Code executable:', cliPath);
   logToFile('Prompt:', prompt);
 
   const startTime = Date.now();
@@ -379,6 +370,8 @@ export async function runAgent(
 
     // Load plugin with bundled skills
     // Path from dist/src/lib/ back to package root
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
     const pluginPath = path.join(__dirname, '../../..');
     logToFile('Loading plugin from:', pluginPath);
 
