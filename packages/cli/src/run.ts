@@ -107,6 +107,12 @@ export async function runWizard(argv: Args) {
     }
   }
 
+  // Show who's authenticated
+  const creds = getCredentials();
+  if (creds?.email) {
+    clack.log.info(`Authenticated as ${chalk.cyan(creds.email)}`);
+  }
+
   const integration =
     finalArgs.integration ?? (await getIntegrationForSetup(wizardOptions));
 

@@ -1,0 +1,93 @@
+import type { Settings } from './src/lib/settings.js';
+
+export const settings = {
+  version: '1.0.0',
+  model: 'claude-opus-4-5-20251101',
+  cliAuth: {
+    // Production client ID - override via WORKOS_CLIENT_ID env var for dev/staging
+    clientId: 'client_01JA4BGY6RK3NHY7NM0NWGPZBG',
+  },
+
+  gateway: {
+    development: 'http://localhost:8000',
+    production: 'https://llm-gateway.example.com',
+    port: 8000,
+  },
+
+  api: {
+    workos: {
+      development: 'http://localhost:8000',
+      production: 'https://api.workos.com',
+    },
+    dashboard: {
+      development: 'http://localhost:3000',
+      production: 'https://dashboard.workos.com',
+    },
+  },
+
+  telemetry: {
+    enabled: false,
+    eventName: 'wizard interaction',
+  },
+
+  nodeVersion: '>=18.17.0',
+
+  logging: {
+    logFile: '/tmp/authkit-wizard.log',
+    debugMode: false,
+  },
+
+  documentation: {
+    workosDocsUrl: 'https://workos.com/docs/authkit',
+    dashboardUrl: 'https://dashboard.workos.com',
+    issuesUrl: 'https://github.com/workos/authkit-wizard/issues',
+  },
+
+  frameworks: {
+    nextjs: {
+      port: 3000,
+      callbackPath: '/api/auth/callback',
+    },
+    react: {
+      port: 5173,
+      callbackPath: '/callback',
+    },
+    tanstackStart: {
+      port: 3000,
+      callbackPath: '/api/auth/callback',
+    },
+    reactRouter: {
+      port: 5173,
+      callbackPath: '/callback',
+    },
+    vanillaJs: {
+      port: 5173,
+      callbackPath: '/callback',
+    },
+  },
+
+  legacy: {
+    oauthPort: 8239,
+  },
+
+  branding: {
+    showAsciiArt: true,
+    asciiArt: `░██       ░██                     ░██         ░██████     ░██████
+░██       ░██                     ░██        ░██   ░██   ░██   ░██
+░██  ░██  ░██  ░███████  ░██░████ ░██    ░██░██     ░██ ░██
+░██ ░████ ░██ ░██    ░██ ░███     ░██   ░██ ░██     ░██  ░████████
+░██░██ ░██░██ ░██    ░██ ░██      ░███████  ░██     ░██         ░██
+░████   ░████ ░██    ░██ ░██      ░██   ░██  ░██   ░██   ░██   ░██
+░███     ░███  ░███████  ░██      ░██    ░██  ░██████     ░██████
+
+
+
+   ░███                  ░██    ░██        ░██     ░██ ░██   ░██
+  ░██░██                 ░██    ░██        ░██    ░██        ░██
+ ░██  ░██  ░██    ░██ ░████████ ░████████  ░██   ░██   ░██░████████
+░█████████ ░██    ░██    ░██    ░██    ░██ ░███████    ░██   ░██
+░██    ░██ ░██    ░██    ░██    ░██    ░██ ░██   ░██   ░██   ░██
+░██    ░██ ░██   ░███    ░██    ░██    ░██ ░██    ░██  ░██   ░██
+░██    ░██  ░█████░██     ░████ ░██    ░██ ░██     ░██ ░██    ░████    `,
+  },
+} as const satisfies Settings;

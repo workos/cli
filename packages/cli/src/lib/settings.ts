@@ -1,9 +1,11 @@
-import settingsJson from '../../settings.json' with { type: 'json' };
+import { settings as settingsConfig } from '../../settings.config.js';
 
 export interface Settings {
   version: string;
   model: string;
-  cliAuth: Record<string, never>;
+  cliAuth: {
+    clientId: string;
+  };
   gateway: {
     development: string;
     production: string;
@@ -49,16 +51,16 @@ export interface Settings {
 }
 
 /**
- * Get settings from imported JSON
+ * Get settings from config
  */
 export function getSettings(): Settings {
-  return settingsJson as Settings;
+  return settingsConfig;
 }
 
 /**
- * Get the CLI auth client ID from environment variable.
- * @returns The client ID or undefined if not set
+ * Get the CLI auth client ID.
+ * Checks WORKOS_CLIENT_ID env var first (for dev/staging), falls back to settings.
  */
-export function getCliAuthClientId(): string | undefined {
-  return process.env.WORKOS_CLI_CLIENT_ID;
+export function getCliAuthClientId(): string {
+  return process.env.WORKOS_CLIENT_ID || settingsConfig.cliAuth.clientId;
 }
