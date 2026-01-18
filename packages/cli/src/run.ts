@@ -72,6 +72,7 @@ export async function runWizard(argv: Args) {
     homepageUrl: finalArgs.homepageUrl,
     redirectUri: finalArgs.redirectUri,
     dashboard: finalArgs.dashboard ?? false,
+    emitter,
   };
 
   const settings = getSettings();

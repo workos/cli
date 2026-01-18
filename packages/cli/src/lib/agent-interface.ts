@@ -15,6 +15,7 @@ import { getLlmGatewayUrlFromHost } from '../utils/urls.js';
 import { getSettings } from './settings.js';
 import { getCredentials, hasCredentials } from './credentials.js';
 import { ensureValidToken } from './token-refresh.js';
+import type { WizardEventEmitter } from './events.js';
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -330,12 +331,13 @@ export async function runAgent(
   agentConfig: AgentRunConfig,
   prompt: string,
   options: WizardOptions,
-  spinner: ReturnType<typeof clack.spinner>,
+  spinner: ReturnType<typeof clack.spinner> | null,
   config?: {
     spinnerMessage?: string;
     successMessage?: string;
     errorMessage?: string;
   },
+  emitter?: WizardEventEmitter,
 ): Promise<{ error?: AgentErrorType }> {
   const {
     spinnerMessage = 'Setting up WorkOS AuthKit...',
@@ -345,9 +347,11 @@ export async function runAgent(
 
   const { query } = await getSDKModule();
 
-  clack.log.step(`This may take a few minutes. Grab some coffee!`);
+  if (!options.dashboard) {
+    clack.log.step(`This may take a few minutes. Grab some coffee!`);
+  }
 
-  spinner.start(spinnerMessage);
+  spinner?.start(spinnerMessage);
 
   logToFile('Starting agent run');
   logToFile('Prompt:', prompt);
@@ -412,7 +416,7 @@ export async function runAgent(
 
     // Process the async generator
     for await (const message of response) {
-      handleSDKMessage(message, options, spinner, collectedText);
+      handleSDKMessage(message, options, spinner, collectedText, emitter);
       // Signal completion when result received
       if (message.type === 'result') {
         signalDone!();
@@ -445,7 +449,7 @@ export async function runAgent(
     spinner.stop(successMessage);
     return {};
   } catch (error) {
-    spinner.stop(errorMessage);
+    spinner?.stop(errorMessage);
     clack.log.error(`Error: ${(error as Error).message}`);
     logToFile('Agent run failed:', error);
     debug('Full error:', error);
@@ -459,8 +463,9 @@ export async function runAgent(
 function handleSDKMessage(
   message: SDKMessage,
   options: WizardOptions,
-  spinner: ReturnType<typeof clack.spinner>,
+  spinner: ReturnType<typeof clack.spinner> | null,
   collectedText: string[],
+  emitter?: WizardEventEmitter,
 ): void {
   logToFile(`SDK Message: ${message.type}`, JSON.stringify(message, null, 2));
 
@@ -477,6 +482,9 @@ function handleSDKMessage(
           if (block.type === 'text' && typeof block.text === 'string') {
             collectedText.push(block.text);
 
+            // Emit output event for dashboard
+            emitter?.emit('output', { text: block.text });
+
             // Check for [STATUS] markers
             const statusRegex = new RegExp(
               `^.*${AgentSignals.STATUS.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*(.+?)$`,
@@ -484,8 +492,11 @@ function handleSDKMessage(
             );
             const statusMatch = block.text.match(statusRegex);
             if (statusMatch) {
-              spinner.stop(statusMatch[1].trim());
-              spinner.start('Setting up WorkOS AuthKit...');
+              const statusText = statusMatch[1].trim();
+              spinner?.stop(statusText);
+              spinner?.start('Setting up WorkOS AuthKit...');
+              // Emit status event for dashboard
+              emitter?.emit('status', { message: statusText });
             }
           }
         }

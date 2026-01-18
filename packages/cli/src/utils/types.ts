@@ -73,6 +73,11 @@ export type WizardOptions = {
    * [Experimental] Enable visual dashboard mode
    */
   dashboard?: boolean;
+
+  /**
+   * Event emitter for dashboard mode
+   */
+  emitter?: import('../lib/events.js').WizardEventEmitter;
 };
 
 export interface Feature {

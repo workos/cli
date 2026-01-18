@@ -94,7 +94,8 @@ export async function runAgentWizard(config: FrameworkConfig, options: WizardOpt
   );
 
   // Initialize and run agent
-  const spinner = clack.spinner();
+  // Only create spinner if not in dashboard mode
+  const spinner = options.dashboard ? null : clack.spinner();
 
   const agent = await initializeAgent(
     {

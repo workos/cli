@@ -1,19 +1,45 @@
-// Dashboard module entry point
-// All Ink/React dependencies are contained here
+import type { WizardEventEmitter } from '../lib/events.js';
 
 export interface DashboardOptions {
-  emitter: import('../lib/events.js').WizardEventEmitter;
+  emitter: WizardEventEmitter;
+}
+
+let cleanup: (() => void) | null = null;
+let isRunning = false;
+
+// Enter alternate screen buffer for fullscreen TUI
+function enterFullscreen(): void {
+  process.stdout.write('\x1b[?1049h'); // Enter alternate screen
+  process.stdout.write('\x1b[2J');     // Clear entire screen
+  process.stdout.write('\x1b[H');      // Move cursor to home position
+  process.stdout.write('\x1b[?25l');   // Hide cursor
+}
+
+// Exit alternate screen buffer
+function exitFullscreen(): void {
+  process.stdout.write('\x1b[?25h');   // Show cursor
+  process.stdout.write('\x1b[?1049l'); // Exit alternate screen
 }
 
 export async function startDashboard(options: DashboardOptions): Promise<void> {
-  // Dynamic import to avoid loading React unless needed
+  if (isRunning) return; // Prevent double initialization
+  isRunning = true;
+
   const { render } = await import('ink');
   const { createElement } = await import('react');
   const { Dashboard } = await import('./components/Dashboard.js');
 
-  render(createElement(Dashboard, { emitter: options.emitter }));
+  enterFullscreen();
+
+  const instance = render(createElement(Dashboard, { emitter: options.emitter }));
+  cleanup = () => {
+    instance.unmount();
+    exitFullscreen();
+    isRunning = false;
+  };
 }
 
 export async function stopDashboard(): Promise<void> {
-  // Cleanup will be implemented in Phase 3
+  cleanup?.();
+  cleanup = null;
 }
