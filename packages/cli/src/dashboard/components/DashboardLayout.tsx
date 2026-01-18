@@ -3,17 +3,20 @@ import { Box, Text } from 'ink';
 import { useTerminalSize, MIN_COLUMNS, MIN_ROWS } from '../hooks/useTerminalSize.js';
 import { Panel } from './Panel.js';
 import { OutputPanel } from './OutputPanel.js';
+import { DiffPanel } from './DiffPanel.js';
 import { AnimatedLogo } from './AnimatedLogo.js';
 import type { WizardEventEmitter } from '../../lib/events.js';
 
+type FocusedPanel = 'changes' | 'output';
+
 interface DashboardLayoutProps {
   emitter: WizardEventEmitter;
-  topPanelContent?: React.ReactNode;
+  focusedPanel?: FocusedPanel;
 }
 
 export function DashboardLayout({
   emitter,
-  topPanelContent,
+  focusedPanel = 'changes',
 }: DashboardLayoutProps): React.ReactElement {
   const { columns, rows } = useTerminalSize();
 
@@ -32,32 +35,58 @@ export function DashboardLayout({
     );
   }
 
-  // Calculate explicit heights based on terminal size
-  const topHeight = Math.floor(rows * 0.6);
-  const bottomHeight = rows - topHeight;
+  // Calculate explicit heights - reserve 1 row for help hint
+  const availableRows = rows - 1;
+  const topHeight = Math.floor(availableRows * 0.6);
+  const bottomHeight = availableRows - topHeight;
+
+  // Calculate widths for bottom panels
+  const outputWidth = Math.floor(columns * 0.75);
+  const statusWidth = columns - outputWidth;
 
   return (
     <Box flexDirection="column" width={columns} height={rows}>
       {/* Top Panel - 60% height */}
-      <Panel title="Changes" height={topHeight}>
-        {topPanelContent || (
-          <Text dimColor>No changes yet...</Text>
-        )}
+      <Panel
+        title="Changes"
+        height={topHeight}
+        borderColor={focusedPanel === 'changes' ? 'cyan' : 'gray'}
+        contentHeight={topHeight - 4}
+      >
+        <DiffPanel
+          emitter={emitter}
+          focused={focusedPanel === 'changes'}
+          height={topHeight - 4}
+        />
       </Panel>
 
-      {/* Bottom Row - 40% height */}
+      {/* Bottom Row */}
       <Box flexDirection="row" height={bottomHeight}>
-        {/* Bottom Left - 60% width */}
-        <Panel title="Output" width="60%">
-          <OutputPanel emitter={emitter} />
+        {/* Bottom Left - 75% width */}
+        <Panel
+          title="Output"
+          width={outputWidth}
+          borderColor={focusedPanel === 'output' ? 'cyan' : 'gray'}
+          contentHeight={bottomHeight - 4}
+        >
+          <OutputPanel
+            emitter={emitter}
+            focused={focusedPanel === 'output'}
+            height={bottomHeight - 4}
+          />
         </Panel>
 
-        {/* Bottom Right - 40% width */}
-        <Panel title="Status" width="40%">
+        {/* Bottom Right - 25% width, no title */}
+        <Panel width={statusWidth}>
           <Box alignItems="center" justifyContent="center" flexGrow={1}>
             <AnimatedLogo mode="spin" />
           </Box>
         </Panel>
+      </Box>
+
+      {/* Help hint at bottom */}
+      <Box>
+        <Text dimColor> Tab: switch panel | j/k: scroll | gg/G: top/bottom</Text>
       </Box>
     </Box>
   );

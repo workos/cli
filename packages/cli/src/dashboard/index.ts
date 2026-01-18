@@ -10,14 +10,14 @@ let isRunning = false;
 // Enter alternate screen buffer for fullscreen TUI
 function enterFullscreen(): void {
   process.stdout.write('\x1b[?1049h'); // Enter alternate screen
-  process.stdout.write('\x1b[2J');     // Clear entire screen
-  process.stdout.write('\x1b[H');      // Move cursor to home position
-  process.stdout.write('\x1b[?25l');   // Hide cursor
+  process.stdout.write('\x1b[2J'); // Clear entire screen
+  process.stdout.write('\x1b[H'); // Move cursor to home position
+  process.stdout.write('\x1b[?25l'); // Hide cursor
 }
 
 // Exit alternate screen buffer
 function exitFullscreen(): void {
-  process.stdout.write('\x1b[?25h');   // Show cursor
+  process.stdout.write('\x1b[?25h'); // Show cursor
   process.stdout.write('\x1b[?1049l'); // Exit alternate screen
 }
 
@@ -31,7 +31,9 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
 
   enterFullscreen();
 
-  const instance = render(createElement(Dashboard, { emitter: options.emitter }));
+  const instance = render(
+    createElement(Dashboard, { emitter: options.emitter }),
+  );
   cleanup = () => {
     instance.unmount();
     exitFullscreen();

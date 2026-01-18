@@ -22,10 +22,14 @@
     "gateway:start": "pnpm --filter @workos/authkit-llm-gateway start"
   },
   "devDependencies": {
+    "@types/diff": "^8.0.0",
     "typescript": "^5.0.4"
   },
   "volta": {
     "node": "20.18.2",
     "pnpm": "10.23.0"
+  },
+  "dependencies": {
+    "diff": "^8.0.3"
   }
 }

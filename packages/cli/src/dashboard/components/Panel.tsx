@@ -8,6 +8,7 @@ interface PanelProps {
   flexGrow?: number;
   width?: string | number;
   height?: string | number;
+  contentHeight?: number;
 }
 
 export function Panel({

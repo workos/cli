@@ -17,6 +17,11 @@ import { getCredentials, hasCredentials } from './credentials.js';
 import { ensureValidToken } from './token-refresh.js';
 import type { WizardEventEmitter } from './events.js';
 
+// File content cache for computing edit diffs
+const fileContentCache = new Map<string, string>();
+// Track pending Read operations by tool_use_id
+const pendingReads = new Map<string, string>();
+
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
 async function getSDKModule(): Promise<any> {
@@ -499,8 +504,95 @@ function handleSDKMessage(
               emitter?.emit('status', { message: statusText });
             }
           }
+
+          // Check for tool_use blocks (Write/Edit operations)
+          if (block.type === 'tool_use') {
+            const toolName = block.name as string;
+            const input = block.input as Record<string, unknown>;
+
+            // Log tool usage for debugging
+            logToFile(`Tool use: ${toolName}`);
+
+            // Emit file:write event for Write tool
+            if (toolName === 'Write' && input) {
+              const filePath = input.file_path as string;
+              const fileContent = input.content as string;
+              if (filePath && fileContent) {
+                emitter?.emit('file:write', { path: filePath, content: fileContent });
+              }
+            }
+
+            // Emit file:edit event for Edit tool
+            if (toolName === 'Edit' && input) {
+              const filePath = input.file_path as string;
+              const oldString = input.old_string as string;
+              const newString = input.new_string as string;
+              if (filePath && oldString !== undefined && newString !== undefined) {
+                const oldContent = fileContentCache.get(filePath) || '';
+                const newContent = oldContent.replace(oldString, newString);
+                emitter?.emit('file:edit', { path: filePath, oldContent, newContent });
+                fileContentCache.set(filePath, newContent);
+              }
+            }
+
+            // Track Read operations for caching file content later
+            if (toolName === 'Read' && input && block.id) {
+              const filePath = input.file_path as string;
+              if (filePath) {
+                pendingReads.set(block.id as string, filePath);
+              }
+            }
+          }
         }
       }
+      break;
+    }
+
+    case 'user': {
+      // User messages contain tool results
+      const content = message.message?.content;
+      if (Array.isArray(content)) {
+        for (const block of content) {
+          // Tool results contain file content from Read operations
+          if (block.type === 'tool_result' && block.tool_use_id) {
+            const toolUseId = block.tool_use_id as string;
+            const filePath = pendingReads.get(toolUseId);
+            if (filePath) {
+              // Extract content from the tool result
+              let resultContent = '';
+              if (typeof block.content === 'string') {
+                resultContent = block.content;
+              } else if (Array.isArray(block.content)) {
+                // Content might be array of text blocks
+                for (const item of block.content) {
+                  if (item.type === 'text' && item.text) {
+                    resultContent += item.text;
+                  }
+                }
+              }
+              if (resultContent) {
+                fileContentCache.set(filePath, resultContent);
+              }
+              pendingReads.delete(toolUseId);
+            }
+          }
+        }
+      }
+      break;
+    }
+
+    case 'tool': {
+      // This case may not be used by the current SDK, keeping for compatibility
+      const toolName = message.tool as string;
+      const input = message.input as Record<string, unknown> | undefined;
+
+      if (toolName === 'Read' && message.content) {
+        const filePath = input?.file_path as string;
+        if (filePath && typeof message.content === 'string') {
+          fileContentCache.set(filePath, message.content);
+        }
+      }
+
       break;
     }
 
@@ -517,6 +609,8 @@ function handleSDKMessage(
           for (const err of message.errors) {
             clack.log.error(`Error: ${err}`);
             logToFile('ERROR:', err);
+            // Emit error event for dashboard
+            emitter?.emit('error', { message: err });
           }
         }
       }
