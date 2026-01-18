@@ -1,5 +1,6 @@
 import { abortIfCancelled } from './utils/clack-utils.js';
 import { debug } from './utils/debug.js';
+import { createWizardEventEmitter } from './lib/events.js';
 
 import { runNextjsWizardAgent } from './nextjs/nextjs-wizard-agent.js';
 import type { WizardOptions } from './utils/types.js';
@@ -36,6 +37,7 @@ type Args = {
   clientId?: string;
   homepageUrl?: string;
   redirectUri?: string;
+  dashboard?: boolean;
 };
 
 export async function runWizard(argv: Args) {
@@ -55,6 +57,8 @@ export async function runWizard(argv: Args) {
     resolvedInstallDir = process.cwd();
   }
 
+  const emitter = createWizardEventEmitter();
+
   const wizardOptions: WizardOptions = {
     debug: finalArgs.debug ?? false,
     forceInstall: finalArgs.forceInstall ?? false,
@@ -67,6 +71,7 @@ export async function runWizard(argv: Args) {
     clientId: finalArgs.clientId,
     homepageUrl: finalArgs.homepageUrl,
     redirectUri: finalArgs.redirectUri,
+    dashboard: finalArgs.dashboard ?? false,
   };
 
   const settings = getSettings();

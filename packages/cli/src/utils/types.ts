@@ -68,6 +68,11 @@ export type WizardOptions = {
    * Defaults to framework-specific convention (e.g., /api/auth/callback)
    */
   redirectUri?: string;
+
+  /**
+   * [Experimental] Enable visual dashboard mode
+   */
+  dashboard?: boolean;
 };
 
 export interface Feature {

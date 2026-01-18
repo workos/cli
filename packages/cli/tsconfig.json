@@ -6,6 +6,9 @@
     "moduleResolution": "nodenext",
     "target": "ES2022",
 
+    // JSX for React/Ink dashboard
+    "jsx": "react-jsx",
+
     // Output
     "outDir": "./dist",
 

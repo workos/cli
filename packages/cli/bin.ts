@@ -130,6 +130,13 @@ yargs(hideBin(process.argv))
           choices: ['nextjs', 'react', 'tanstack-start', 'react-router', 'vanilla-js'],
           type: 'string',
         },
+        dashboard: {
+          alias: 'd',
+          default: false,
+          describe:
+            '[Experimental] Enable visual dashboard mode\nenv: WORKOS_WIZARD_DASHBOARD',
+          type: 'boolean',
+        },
       });
     },
     (argv) => {
