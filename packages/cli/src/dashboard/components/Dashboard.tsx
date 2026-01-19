@@ -21,16 +21,28 @@ export function Dashboard({ emitter }: DashboardProps): React.ReactElement {
     summary?: string;
   } | null>(null);
   const [outputLog, setOutputLog] = useState<OutputLine[]>([]);
+  const [credentialsRequest, setCredentialsRequest] = useState<{
+    requiresApiKey: boolean;
+  } | null>(null);
 
-  // Tab to switch focus between panels
-  useInput((input, key) => {
-    if (key.tab) {
-      setFocusedPanel((prev) => (prev === 'changes' ? 'output' : 'changes'));
-    }
-  });
+  // Tab to switch focus between panels (only when not entering credentials)
+  useInput(
+    (input, key) => {
+      if (key.tab) {
+        setFocusedPanel((prev) => (prev === 'changes' ? 'output' : 'changes'));
+      }
+    },
+    { isActive: state === 'running' && !credentialsRequest },
+  );
 
   useEffect(() => {
-    const handleOutput = ({ text, isError }: { text: string; isError?: boolean }) => {
+    const handleOutput = ({
+      text,
+      isError,
+    }: {
+      text: string;
+      isError?: boolean;
+    }) => {
       const newLines = text.split('\n').map((line) => ({
         text: line,
         isError,
@@ -40,30 +52,60 @@ export function Dashboard({ emitter }: DashboardProps): React.ReactElement {
     };
 
     const handleStatus = ({ message }: { message: string }) => {
-      setOutputLog((prev) => [...prev, { text: `[STATUS] ${message}`, isStatus: true }]);
+      setOutputLog((prev) => [
+        ...prev,
+        { text: `[STATUS] ${message}`, isStatus: true },
+      ]);
     };
 
-    const handleComplete = ({ success, summary }: { success: boolean; summary?: string }) => {
+    const handleComplete = ({
+      success,
+      summary,
+    }: {
+      success: boolean;
+      summary?: string;
+    }) => {
       setCompletionData({ success, summary });
       setState('complete');
     };
 
     const handleError = ({ message }: { message: string }) => {
-      setOutputLog((prev) => [...prev, { text: `ERROR: ${message}`, isError: true }]);
+      setOutputLog((prev) => [
+        ...prev,
+        { text: `ERROR: ${message}`, isError: true },
+      ]);
+    };
+
+    const handleCredentialsRequest = ({
+      requiresApiKey,
+    }: {
+      requiresApiKey: boolean;
+    }) => {
+      setCredentialsRequest({ requiresApiKey });
     };
 
     emitter.on('output', handleOutput);
     emitter.on('status', handleStatus);
     emitter.on('complete', handleComplete);
     emitter.on('error', handleError);
+    emitter.on('credentials:request', handleCredentialsRequest);
 
     return () => {
       emitter.off('output', handleOutput);
       emitter.off('status', handleStatus);
       emitter.off('complete', handleComplete);
       emitter.off('error', handleError);
+      emitter.off('credentials:request', handleCredentialsRequest);
     };
   }, [emitter]);
+
+  const handleCredentialsSubmit = (credentials: {
+    apiKey: string;
+    clientId: string;
+  }) => {
+    emitter.emit('credentials:response', credentials);
+    setCredentialsRequest(null);
+  };
 
   if (state === 'complete' && completionData) {
     return (
@@ -75,5 +117,12 @@ export function Dashboard({ emitter }: DashboardProps): React.ReactElement {
     );
   }
 
-  return <DashboardLayout emitter={emitter} focusedPanel={focusedPanel} />;
+  return (
+    <DashboardLayout
+      emitter={emitter}
+      focusedPanel={focusedPanel}
+      credentialsRequest={credentialsRequest}
+      onCredentialsSubmit={handleCredentialsSubmit}
+    />
+  );
 }

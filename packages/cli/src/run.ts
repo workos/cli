@@ -1,4 +1,7 @@
-import { abortIfCancelled } from './utils/clack-utils.js';
+import {
+  abortIfCancelled,
+  checkExistingCredentials,
+} from './utils/clack-utils.js';
 import { debug } from './utils/debug.js';
 
 import { runNextjsWizardAgent } from './nextjs/nextjs-wizard-agent.js';
@@ -101,10 +104,43 @@ export async function runWizard(argv: Args) {
       process.exit(1);
     }
 
+    // Server-side frameworks need API key, client-only frameworks just need client ID
+    const requiresApiKey = [
+      Integration.nextjs,
+      Integration.tanstackStart,
+      Integration.reactRouter,
+    ].includes(integration);
+
     analytics.setTag('integration', integration);
+
+    // Start dashboard first
     await startDashboard({ emitter });
 
     try {
+      // Check for existing credentials (CLI args or .env.local)
+      let credentials = checkExistingCredentials(wizardOptions, requiresApiKey);
+
+      // If no credentials found, request them via TUI
+      if (!credentials) {
+        credentials = await new Promise<{ apiKey: string; clientId: string }>(
+          (resolve) => {
+            const handleResponse = (creds: {
+              apiKey: string;
+              clientId: string;
+            }) => {
+              emitter.off('credentials:response', handleResponse);
+              resolve(creds);
+            };
+            emitter.on('credentials:response', handleResponse);
+            emitter.emit('credentials:request', { requiresApiKey });
+          },
+        );
+      }
+
+      // Update wizardOptions with credentials so agent-runner doesn't re-prompt
+      wizardOptions.apiKey = credentials.apiKey;
+      wizardOptions.clientId = credentials.clientId;
+
       await runIntegrationWizard(integration, wizardOptions);
       await stopDashboard();
     } catch (error) {

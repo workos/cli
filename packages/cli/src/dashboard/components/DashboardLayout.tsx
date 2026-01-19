@@ -5,6 +5,7 @@ import { Panel } from './Panel.js';
 import { OutputPanel } from './OutputPanel.js';
 import { DiffPanel } from './DiffPanel.js';
 import { AnimatedLogo } from './AnimatedLogo.js';
+import { CredentialsForm } from './CredentialsForm.js';
 import type { WizardEventEmitter } from '../../lib/events.js';
 
 type FocusedPanel = 'changes' | 'output';
@@ -12,11 +13,15 @@ type FocusedPanel = 'changes' | 'output';
 interface DashboardLayoutProps {
   emitter: WizardEventEmitter;
   focusedPanel?: FocusedPanel;
+  credentialsRequest?: { requiresApiKey: boolean } | null;
+  onCredentialsSubmit?: (credentials: { apiKey: string; clientId: string }) => void;
 }
 
 export function DashboardLayout({
   emitter,
   focusedPanel = 'changes',
+  credentialsRequest,
+  onCredentialsSubmit,
 }: DashboardLayoutProps): React.ReactElement {
   const { columns, rows } = useTerminalSize();
 
@@ -48,16 +53,23 @@ export function DashboardLayout({
     <Box flexDirection="column" width={columns} height={rows}>
       {/* Top Panel - 60% height */}
       <Panel
-        title="Changes"
+        title={credentialsRequest ? 'Setup' : 'Changes'}
         height={topHeight}
         borderColor={focusedPanel === 'changes' ? 'cyan' : 'gray'}
         contentHeight={topHeight - 4}
       >
-        <DiffPanel
-          emitter={emitter}
-          focused={focusedPanel === 'changes'}
-          height={topHeight - 4}
-        />
+        {credentialsRequest && onCredentialsSubmit ? (
+          <CredentialsForm
+            requiresApiKey={credentialsRequest.requiresApiKey}
+            onSubmit={onCredentialsSubmit}
+          />
+        ) : (
+          <DiffPanel
+            emitter={emitter}
+            focused={focusedPanel === 'changes'}
+            height={topHeight - 4}
+          />
+        )}
       </Panel>
 
       {/* Bottom Row */}

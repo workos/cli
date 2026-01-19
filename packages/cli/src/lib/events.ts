@@ -8,6 +8,8 @@ export interface WizardEvents {
   'file:edit': { path: string; oldContent: string; newContent: string };
   'prompt:request': { id: string; message: string; options?: string[] };
   'prompt:response': { id: string; value: string };
+  'credentials:request': { requiresApiKey: boolean };
+  'credentials:response': { apiKey: string; clientId: string };
   complete: { success: boolean; summary?: string };
   error: { message: string; stack?: string };
 }
