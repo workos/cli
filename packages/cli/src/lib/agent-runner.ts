@@ -83,7 +83,7 @@ export async function runAgentWizard(config: FrameworkConfig, options: WizardOpt
   writeEnvLocal(options.installDir, {
     ...(apiKey ? { WORKOS_API_KEY: apiKey } : {}),
     WORKOS_CLIENT_ID: clientId,
-    WORKOS_REDIRECT_URI: redirectUri,
+    [redirectUriKey]: redirectUri,
   });
 
   // Set analytics tags from framework context
@@ -225,7 +225,7 @@ function buildIntegrationPrompt(
 The following environment variables have been configured in .env.local:
 - WORKOS_API_KEY
 - WORKOS_CLIENT_ID
-- WORKOS_REDIRECT_URI
+- ${redirectUriEnvVar}
 - WORKOS_COOKIE_PASSWORD
 
 ## Your Task

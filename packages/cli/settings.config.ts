@@ -46,7 +46,7 @@ export const settings = {
   frameworks: {
     nextjs: {
       port: 3000,
-      callbackPath: '/api/auth/callback',
+      callbackPath: '/auth/callback',
     },
     react: {
       port: 5173,

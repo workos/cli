@@ -5,7 +5,8 @@ import { parseEnvFile } from '../utils/env-parser.js';
 interface EnvVars {
   WORKOS_API_KEY?: string;
   WORKOS_CLIENT_ID: string;
-  WORKOS_REDIRECT_URI: string;
+  WORKOS_REDIRECT_URI?: string;
+  NEXT_PUBLIC_WORKOS_REDIRECT_URI?: string;
   WORKOS_COOKIE_PASSWORD?: string;
 }
 

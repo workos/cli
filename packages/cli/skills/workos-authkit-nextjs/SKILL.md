@@ -1,26 +1,26 @@
 ---
 name: workos-authkit-nextjs
-description: Integrate WorkOS AuthKit with Next.js applications. Supports App Router and Pages Router. Use when the project uses Next.js, next, or when user mentions Next.js authentication.
+description: Integrate WorkOS AuthKit with Next.js applications. Supports App Router and Pages Router.
 ---
 
 # WorkOS AuthKit for Next.js
 
-First, read the shared patterns: [../workos-authkit-base/SKILL.md](../workos-authkit-base/SKILL.md)
-
-## CRITICAL: Follow Steps In Order
-
-You MUST complete each step fully before moving to the next. Do NOT skip steps.
+## CRITICAL: Follow These Steps Exactly
 
 ## Step 1: Fetch SDK Documentation
 
 Use WebFetch to read: https://github.com/workos/authkit-nextjs/blob/main/README.md
-The README is the source of truth - follow it exactly.
+
+The README is the source of truth. If anything in this skill conflicts with the README, follow the README.
 
 Report: [STATUS] Reading SDK documentation
 
-## Step 2: Install SDK Package
+## Step 2: Install SDK
 
-**CRITICAL**: The package MUST be installed before writing any code that imports it.
+Detect package manager and install:
+- `pnpm-lock.yaml` → `pnpm add @workos-inc/authkit-nextjs`
+- `yarn.lock` → `yarn add @workos-inc/authkit-nextjs`
+- `package-lock.json` → `npm install @workos-inc/authkit-nextjs`
 
 Detect package manager (check for lock files):
 
@@ -38,16 +38,19 @@ npm install @workos-inc/authkit-nextjs
 
 Report: [STATUS] Installing @workos-inc/authkit-nextjs
 
-**Verify installation**: Check that `node_modules/@workos-inc/authkit-nextjs` exists before proceeding.
+## Step 3: Create Callback Route
 
-## Step 3: Detect Router Type
+Read `.env.local` to find `NEXT_PUBLIC_WORKOS_REDIRECT_URI`. The URL path determines the file path:
+- URI `http://localhost:3000/auth/callback` → create `app/auth/callback/route.ts`
+- URI `http://localhost:3000/callback` → create `app/callback/route.ts`
 
-- App Router: Has `app/` directory with `layout.tsx`
-- Pages Router: Has `pages/` directory with `_app.tsx`
+Create the callback route file:
 
-## Step 4: App Router Integration
+```typescript
+import { handleAuth } from '@workos-inc/authkit-nextjs';
 
-Check Next.js version in package.json to determine which approach to use.
+export const GET = handleAuth();
+```
 
 ### For Next.js 16+: Create Proxy Route
 
@@ -72,9 +75,19 @@ Wrap the app with `<AuthKitProvider>` in `app/layout.tsx`:
 - Import: `import { AuthKitProvider } from "@workos-inc/authkit-nextjs/client";`
 - Wrap {children} with the provider
 
-Report: [STATUS] Adding AuthKit provider to layout
+```typescript
+import { AuthKitProvider } from '@workos-inc/authkit-nextjs/components';
 
-## Pages Router Integration
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <AuthKitProvider>{children}</AuthKitProvider>
+      </body>
+    </html>
+  );
+}
+```
 
 ### API Routes
 
@@ -88,9 +101,10 @@ Create `pages/callback.tsx` or use the API route pattern from the README.
 
 Use `getUser()` in `getServerSideProps` for server-side user access.
 
-## Step 5: UI Integration
+Update `app/page.tsx` with authentication UI:
 
-Update the home page (`app/page.tsx`):
+```typescript
+import { withAuth, getSignInUrl, signOut } from '@workos-inc/authkit-nextjs';
 
 1. Import required functions:
 
@@ -104,13 +118,21 @@ Update the home page (`app/page.tsx`):
    const user = await getUser();
    ```
 
-3. Add UI logic:
-   - **Logged out**: Show "Sign In" button that links to `await getSignInUrl()`
-   - **Logged in**: Display user.firstName, user.email, and "Sign Out" form using `signOut()`
+  return (
+    <main>
+      <h1>Welcome, {user.firstName || user.email}!</h1>
+      <p>{user.email}</p>
+      <form action={async () => { 'use server'; await signOut(); }}>
+        <button type="submit">Sign Out</button>
+      </form>
+    </main>
+  );
+}
+```
 
-Follow the exact patterns from the SDK README.
+Report: [STATUS] Adding authentication UI
 
-Report: [STATUS] Adding authentication UI to home page
+## Step 7: Verify
 
 ## Step 6: Verify Installation
 
