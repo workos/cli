@@ -8,12 +8,7 @@ import { traceStep } from '../telemetry.js';
 import { debug } from './debug.js';
 import { parseEnvFile } from './env-parser.js';
 import { type PackageDotJson, hasPackageInstalled } from './package-json.js';
-import {
-  type PackageManager,
-  detectAllPackageManagers,
-  packageManagers,
-  NPM as npm,
-} from './package-manager.js';
+import { type PackageManager, detectAllPackageManagers, packageManagers, NPM as npm } from './package-manager.js';
 import { fulfillsVersionRange } from './semver.js';
 import type { Feature, WizardOptions } from './types.js';
 import { getPackageVersion } from './package-json.js';
@@ -68,12 +63,9 @@ export async function abortIfCancelled<T>(
 
   if (
     clack.isCancel(resolvedInput) ||
-    (typeof resolvedInput === 'symbol' &&
-      resolvedInput.description === 'clack:cancel')
+    (typeof resolvedInput === 'symbol' && resolvedInput.description === 'clack:cancel')
   ) {
-    const docsUrl = integration
-      ? INTEGRATION_CONFIG[integration].docsUrl
-      : 'https://workos.com/docs/user-management';
+    const docsUrl = integration ? INTEGRATION_CONFIG[integration].docsUrl : 'https://workos.com/docs/user-management';
 
     clack.cancel(
       `Wizard setup cancelled. You can read the documentation for ${
@@ -86,10 +78,7 @@ export async function abortIfCancelled<T>(
   }
 }
 
-export function printWelcome(options: {
-  wizardName: string;
-  message?: string;
-}): void {
+export function printWelcome(options: { wizardName: string; message?: string }): void {
   // eslint-disable-next-line no-console
   console.log('');
   clack.intro(chalk.inverse(` ${options.wizardName} `));
@@ -101,9 +90,7 @@ export function printWelcome(options: {
   clack.note(welcomeText);
 }
 
-export async function confirmContinueIfNoOrDirtyGitRepo(
-  options: Pick<WizardOptions, 'default' | 'ci'>,
-): Promise<void> {
+export async function confirmContinueIfNoOrDirtyGitRepo(options: Pick<WizardOptions, 'default' | 'ci'>): Promise<void> {
   return traceStep('check-git-status', async () => {
     if (!isInGitRepo()) {
       // CI mode: auto-continue without git
@@ -130,9 +117,7 @@ export async function confirmContinueIfNoOrDirtyGitRepo(
     if (uncommittedOrUntrackedFiles.length) {
       // CI mode: auto-continue with dirty repo
       if (options.ci) {
-        clack.log.info(
-          `CI mode: continuing with uncommitted/untracked files in repo`,
-        );
+        clack.log.info(`CI mode: continuing with uncommitted/untracked files in repo`);
         analytics.setTag('continue-with-dirty-repo', true);
         return;
       }
@@ -191,13 +176,8 @@ export function getUncommittedOrUntrackedFiles(): string[] {
   }
 }
 
-export async function askForItemSelection(
-  items: string[],
-  message: string,
-): Promise<{ value: string; index: number }> {
-  const selection = await abortIfCancelled<
-    { value: string; index: number } | symbol
-  >(
+export async function askForItemSelection(items: string[], message: string): Promise<{ value: string; index: number }> {
+  const selection = await abortIfCancelled<{ value: string; index: number } | symbol>(
     clack.select({
       maxItems: 12,
       message: message,
@@ -245,19 +225,13 @@ export async function confirmContinueIfPackageVersionNotSupported({
   ${packageId}@${packageVersion}`,
     );
 
-    clack.note(
-      note ??
-        `Please upgrade to ${acceptableVersions} if you wish to use the WorkOS AuthKit wizard.`,
-    );
+    clack.note(note ?? `Please upgrade to ${acceptableVersions} if you wish to use the WorkOS AuthKit wizard.`);
     const continueWithUnsupportedVersion = await abortIfCancelled(
       clack.confirm({
         message: 'Do you want to continue anyway?',
       }),
     );
-    analytics.setTag(
-      `${packageName.toLowerCase()}-continue-with-unsupported-version`,
-      continueWithUnsupportedVersion,
-    );
+    analytics.setTag(`${packageName.toLowerCase()}-continue-with-unsupported-version`, continueWithUnsupportedVersion);
 
     if (!continueWithUnsupportedVersion) {
       await abort(undefined, 0);
@@ -265,9 +239,7 @@ export async function confirmContinueIfPackageVersionNotSupported({
   });
 }
 
-export async function isReact19Installed({
-  installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+export async function isReact19Installed({ installDir }: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
   try {
     const packageJson = await getPackageDotJson({ installDir });
     const reactVersion = getPackageVersion('react', packageJson);
@@ -333,13 +305,11 @@ export async function installPackage({
 
     const sdkInstallSpinner = clack.spinner();
 
-    const pkgManager =
-      packageManager || (await getPackageManager({ installDir }));
+    const pkgManager = packageManager || (await getPackageManager({ installDir }));
 
     // Most packages aren't compatible with React 19 yet, skip strict peer dependency checks if needed.
     const isReact19 = await isReact19Installed({ installDir });
-    const legacyPeerDepsFlag =
-      isReact19 && pkgManager.name === 'npm' ? '--legacy-peer-deps' : '';
+    const legacyPeerDepsFlag = isReact19 && pkgManager.name === 'npm' ? '--legacy-peer-deps' : '';
 
     sdkInstallSpinner.start(
       `${alreadyInstalled ? 'Updating' : 'Installing'} ${chalk.bold.cyan(
@@ -358,10 +328,7 @@ export async function installPackage({
             if (err) {
               // Write a log file so we can better troubleshoot issues
               fs.writeFileSync(
-                join(
-                  process.cwd(),
-                  `authkit-wizard-installation-error-${Date.now()}.log`,
-                ),
+                join(process.cwd(), `authkit-wizard-installation-error-${Date.now()}.log`),
                 JSON.stringify({
                   stdout,
                   stderr,
@@ -441,17 +408,11 @@ export async function ensurePackageIsInstalled(
   });
 }
 
-export async function getPackageDotJson({
-  installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<PackageDotJson> {
-  const packageJsonFileContents = await fs.promises
-    .readFile(join(installDir, 'package.json'), 'utf8')
-    .catch(() => {
-      clack.log.error(
-        'Could not find package.json. Make sure to run the wizard in the root of your app!',
-      );
-      return abort();
-    });
+export async function getPackageDotJson({ installDir }: Pick<WizardOptions, 'installDir'>): Promise<PackageDotJson> {
+  const packageJsonFileContents = await fs.promises.readFile(join(installDir, 'package.json'), 'utf8').catch(() => {
+    clack.log.error('Could not find package.json. Make sure to run the wizard in the root of your app!');
+    return abort();
+  });
 
   let packageJson: PackageDotJson | undefined = undefined;
 
@@ -459,11 +420,7 @@ export async function getPackageDotJson({
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     packageJson = JSON.parse(packageJsonFileContents);
   } catch {
-    clack.log.error(
-      `Unable to parse your ${chalk.cyan(
-        'package.json',
-      )}. Make sure it has a valid format!`,
-    );
+    clack.log.error(`Unable to parse your ${chalk.cyan('package.json')}. Make sure it has a valid format!`);
 
     await abort();
   }
@@ -508,29 +465,21 @@ export async function getPackageManager(
 
   // CI mode: auto-select first detected or npm
   if (options.ci) {
-    const selectedPackageManager =
-      detectedPackageManagers.length > 0 ? detectedPackageManagers[0] : npm;
-    clack.log.info(
-      `CI mode: auto-selected package manager: ${selectedPackageManager.label}`,
-    );
+    const selectedPackageManager = detectedPackageManagers.length > 0 ? detectedPackageManagers[0] : npm;
+    clack.log.info(`CI mode: auto-selected package manager: ${selectedPackageManager.label}`);
     analytics.setTag('package-manager', selectedPackageManager.name);
     return selectedPackageManager;
   }
 
   // If multiple or no package managers detected, prompt user to select
-  const pkgOptions =
-    detectedPackageManagers.length > 0
-      ? detectedPackageManagers
-      : packageManagers;
+  const pkgOptions = detectedPackageManagers.length > 0 ? detectedPackageManagers : packageManagers;
 
   const message =
     detectedPackageManagers.length > 1
       ? 'Multiple package managers detected. Please select one:'
       : 'Please select your package manager.';
 
-  const selectedPackageManager = await abortIfCancelled<
-    PackageManager | symbol
-  >(
+  const selectedPackageManager = await abortIfCancelled<PackageManager | symbol>(
     clack.select({
       message,
       options: pkgOptions.map((packageManager) => ({
@@ -540,16 +489,11 @@ export async function getPackageManager(
     }),
   );
 
-  analytics.setTag(
-    'package-manager',
-    (selectedPackageManager as PackageManager).name,
-  );
+  analytics.setTag('package-manager', (selectedPackageManager as PackageManager).name);
   return selectedPackageManager as PackageManager;
 }
 
-export function isUsingTypeScript({
-  installDir,
-}: Pick<WizardOptions, 'installDir'>) {
+export function isUsingTypeScript({ installDir }: Pick<WizardOptions, 'installDir'>) {
   try {
     return fs.existsSync(join(installDir, 'tsconfig.json'));
   } catch {
@@ -609,16 +553,10 @@ export async function getOrAskForWorkOSCredentials(
   }
 
   // Otherwise, prompt user for credentials
-  clack.log.step(
-    `Get your credentials from ${chalk.cyan('https://dashboard.workos.com')}`,
-  );
+  clack.log.step(`Get your credentials from ${chalk.cyan('https://dashboard.workos.com')}`);
 
   if (requireApiKey && !apiKey) {
-    clack.log.info(
-      `${chalk.dim(
-        'ℹ️ Your API key will be hidden for security and saved to .env.local',
-      )}`,
-    );
+    clack.log.info(`${chalk.dim('ℹ️ Your API key will be hidden for security and saved to .env.local')}`);
     apiKey = (await abortIfCancelled(
       clack.password({
         message: 'Enter your WorkOS API Key',

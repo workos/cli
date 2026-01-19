@@ -23,6 +23,7 @@ First, read the shared patterns: [../workos-authkit-base/SKILL.md](../workos-aut
 
 TanStack Start uses server functions for auth operations.
 Follow the README for setting up:
+
 - Auth middleware
 - Session handling
 - User retrieval

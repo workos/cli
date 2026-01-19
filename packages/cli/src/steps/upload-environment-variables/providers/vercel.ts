@@ -17,8 +17,7 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
 
   // eslint-disable-next-line @typescript-eslint/require-await
   async detect(): Promise<boolean> {
-    const vercelDetected =
-      this.hasVercelCli() && this.isProjectLinked() && this.isAuthenticated();
+    const vercelDetected = this.hasVercelCli() && this.isProjectLinked() && this.isAuthenticated();
 
     analytics.setTag('vercel-detected', vercelDetected);
 
@@ -42,9 +41,7 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
   }
 
   isProjectLinked(): boolean {
-    const isProjectLinked = fs.existsSync(
-      path.join(this.options.installDir, '.vercel', 'project.json'),
-    );
+    const isProjectLinked = fs.existsSync(path.join(this.options.installDir, '.vercel', 'project.json'));
 
     analytics.setTag('vercel-project-linked', isProjectLinked);
 
@@ -62,15 +59,9 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
       },
     });
 
-    const output = (
-      String(result.stdout) + String(result.stderr)
-    ).toLowerCase();
+    const output = (String(result.stdout) + String(result.stderr)).toLowerCase();
 
-    if (
-      output.includes('log in to vercel') ||
-      output.includes('vercel login') ||
-      result.status !== 0
-    ) {
+    if (output.includes('log in to vercel') || output.includes('vercel login') || result.status !== 0) {
       analytics.setTag('vercel-authenticated', false);
       return false;
     }
@@ -80,11 +71,7 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
     return true;
   }
 
-  async uploadEnvironmentVariable(
-    key: string,
-    value: string,
-    environment: string,
-  ): Promise<void> {
+  async uploadEnvironmentVariable(key: string, value: string, environment: string): Promise<void> {
     await new Promise<void>((resolve, reject) => {
       const proc = spawn('vercel', ['env', 'add', key, environment], {
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -106,9 +93,7 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
         ) {
           reject(
             new Error(
-              `❌ Environment variable ${chalk.cyan(key)} already exists in ${
-                this.name
-              }. Please upload it manually.`,
+              `❌ Environment variable ${chalk.cyan(key)} already exists in ${this.name}. Please upload it manually.`,
             ),
           );
         } else if (code === 0) {
@@ -116,9 +101,7 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
         } else {
           reject(
             new Error(
-              `❌ Failed to upload environment variable ${chalk.cyan(key)} to ${
-                this.name
-              }. Please upload it manually.`,
+              `❌ Failed to upload environment variable ${chalk.cyan(key)} to ${this.name}. Please upload it manually.`,
             ),
           );
         }
@@ -126,20 +109,14 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
     });
   }
 
-  async uploadEnvVars(
-    vars: Record<string, string>,
-  ): Promise<Record<string, boolean>> {
+  async uploadEnvVars(vars: Record<string, string>): Promise<Record<string, boolean>> {
     const results: Record<string, boolean> = {};
 
     for (const [key, value] of Object.entries(vars)) {
       const spinner = clack.spinner();
 
       spinner.start(`Uploading ${chalk.cyan(key)} to ${this.name}...`);
-      await Promise.all(
-        this.environments.map((environment) =>
-          this.uploadEnvironmentVariable(key, value, environment),
-        ),
-      )
+      await Promise.all(this.environments.map((environment) => this.uploadEnvironmentVariable(key, value, environment)))
         .then(() => {
           spinner.stop(`✅ Uploaded ${chalk.cyan(key)} to ${this.name}`);
           results[key] = true;

@@ -1,8 +1,4 @@
-import {
-  getWelcomeMessage,
-  SPINNER_MESSAGE,
-  type FrameworkConfig,
-} from './framework-config.js';
+import { getWelcomeMessage, SPINNER_MESSAGE, type FrameworkConfig } from './framework-config.js';
 import type { WizardOptions } from '../utils/types.js';
 import {
   confirmContinueIfNoOrDirtyGitRepo,
@@ -26,10 +22,7 @@ import { writeEnvLocal } from './env-writer.js';
  * Universal agent-powered wizard runner.
  * Handles the complete flow for any framework using WorkOS MCP integration.
  */
-export async function runAgentWizard(
-  config: FrameworkConfig,
-  options: WizardOptions,
-): Promise<void> {
+export async function runAgentWizard(config: FrameworkConfig, options: WizardOptions): Promise<void> {
   // Setup phase
   printWelcome({ wizardName: getWelcomeMessage(config.metadata.name) });
 
@@ -43,11 +36,7 @@ export async function runAgentWizard(
 
   // Framework detection and version
   const packageJson = await getPackageDotJson(options);
-  await ensurePackageIsInstalled(
-    packageJson,
-    config.detection.packageName,
-    config.detection.packageDisplayName,
-  );
+  await ensurePackageIsInstalled(packageJson, config.detection.packageName, config.detection.packageDisplayName);
 
   const frameworkVersion = config.detection.getVersion(packageJson);
 
@@ -63,36 +52,25 @@ export async function runAgentWizard(
   });
 
   // Get WorkOS credentials (API key optional for client-only SDKs)
-  const { apiKey, clientId } = await getOrAskForWorkOSCredentials(
-    options,
-    config.environment.requiresApiKey,
-  );
+  const { apiKey, clientId } = await getOrAskForWorkOSCredentials(options, config.environment.requiresApiKey);
 
   // Auto-configure WorkOS environment (redirect URI, CORS, homepage)
   if (apiKey && config.environment.requiresApiKey) {
     const port = detectPort(config.metadata.integration, options.installDir);
-    await autoConfigureWorkOSEnvironment(
-      apiKey,
-      config.metadata.integration,
-      port,
-      {
-        homepageUrl: options.homepageUrl,
-        redirectUri: options.redirectUri,
-      },
-    );
+    await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, port, {
+      homepageUrl: options.homepageUrl,
+      redirectUri: options.redirectUri,
+    });
   }
 
   // Gather framework-specific context (e.g., Next.js router, React Native platform)
-  const frameworkContext = config.metadata.gatherContext
-    ? await config.metadata.gatherContext(options)
-    : {};
+  const frameworkContext = config.metadata.gatherContext ? await config.metadata.gatherContext(options) : {};
 
   // Write environment variables to .env.local BEFORE agent runs
   // This prevents credentials from appearing in agent prompts
   const port = detectPort(config.metadata.integration, options.installDir);
   const callbackPath = getCallbackPath(config.metadata.integration);
-  const redirectUri =
-    options.redirectUri || `http://localhost:${port}${callbackPath}`;
+  const redirectUri = options.redirectUri || `http://localhost:${port}${callbackPath}`;
   writeEnvLocal(options.installDir, {
     ...(apiKey ? { WORKOS_API_KEY: apiKey } : {}),
     WORKOS_CLIENT_ID: clientId,
@@ -128,17 +106,11 @@ export async function runAgentWizard(
   );
 
   // Run agent - errors will throw naturally with skill-based approach
-  await runAgent(
-    agent,
-    integrationPrompt,
-    options,
-    spinner,
-    {
-      spinnerMessage: SPINNER_MESSAGE,
-      successMessage: config.ui.successMessage,
-      errorMessage: 'Integration failed',
-    },
-  );
+  await runAgent(agent, integrationPrompt, options, spinner, {
+    spinnerMessage: SPINNER_MESSAGE,
+    successMessage: config.ui.successMessage,
+    errorMessage: 'Integration failed',
+  });
 
   // Build environment variables from WorkOS credentials
   const envVars = config.environment.getEnvVars(apiKey, clientId);
@@ -160,12 +132,8 @@ export async function runAgentWizard(
 
   const changes = [
     ...config.ui.getOutroChanges(frameworkContext),
-    Object.keys(envVars).length > 0
-      ? `Added environment variables to .env file`
-      : '',
-    uploadedEnvVars.length > 0
-      ? `Uploaded environment variables to your hosting provider`
-      : '',
+    Object.keys(envVars).length > 0 ? `Added environment variables to .env file` : '',
+    uploadedEnvVars.length > 0 ? `Uploaded environment variables to your hosting provider` : '',
   ].filter(Boolean);
 
   const nextSteps = [
@@ -213,20 +181,14 @@ function buildIntegrationPrompt(
     : [];
 
   const additionalContext =
-    additionalLines.length > 0
-      ? '\n' + additionalLines.map((line) => `- ${line}`).join('\n')
-      : '';
+    additionalLines.length > 0 ? '\n' + additionalLines.map((line) => `- ${line}`).join('\n') : '';
 
   const skillName = config.metadata.skillName;
   if (!skillName) {
-    throw new Error(
-      `Framework ${config.metadata.name} missing skillName in config`,
-    );
+    throw new Error(`Framework ${config.metadata.name} missing skillName in config`);
   }
 
-  return `You are integrating WorkOS AuthKit into this ${
-    config.metadata.name
-  } application.
+  return `You are integrating WorkOS AuthKit into this ${config.metadata.name} application.
 
 ## Project Context
 

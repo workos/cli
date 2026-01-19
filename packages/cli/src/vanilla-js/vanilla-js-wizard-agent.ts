@@ -10,8 +10,7 @@ const VANILLA_JS_AGENT_CONFIG: FrameworkConfig = {
     name: 'Vanilla JavaScript',
     integration: Integration.vanillaJs,
     docsUrl: 'https://workos.com/docs/user-management/authkit/javascript',
-    unsupportedVersionDocsUrl:
-      'https://workos.com/docs/user-management/authkit/javascript',
+    unsupportedVersionDocsUrl: 'https://workos.com/docs/user-management/authkit/javascript',
     skillName: 'workos-authkit-vanilla-js',
   },
 
@@ -49,9 +48,7 @@ const VANILLA_JS_AGENT_CONFIG: FrameworkConfig = {
   },
 };
 
-export async function runVanillaJsWizardAgent(
-  options: WizardOptions,
-): Promise<void> {
+export async function runVanillaJsWizardAgent(options: WizardOptions): Promise<void> {
   if (options.debug) {
     enableDebugLogs();
   }

@@ -17,9 +17,7 @@ interface EnvVars {
 function generateCookiePassword(): string {
   const array = new Uint8Array(16);
   crypto.getRandomValues(array);
-  return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join(
-    '',
-  );
+  return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 /**
@@ -27,10 +25,7 @@ function generateCookiePassword(): string {
  * Merges with existing .env.local if present (new vars take precedence).
  * Auto-generates WORKOS_COOKIE_PASSWORD if not provided.
  */
-export function writeEnvLocal(
-  installDir: string,
-  envVars: Partial<EnvVars>,
-): void {
+export function writeEnvLocal(installDir: string, envVars: Partial<EnvVars>): void {
   const envPath = join(installDir, '.env.local');
 
   // Read existing env if present

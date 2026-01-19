@@ -33,19 +33,10 @@ export function findInstalledPackageFromList(
     .find((sdkPackage): sdkPackage is NpmPackage => !!sdkPackage.version);
 }
 
-export function hasPackageInstalled(
-  packageName: string,
-  packageJson: PackageDotJson,
-): boolean {
+export function hasPackageInstalled(packageName: string, packageJson: PackageDotJson): boolean {
   return getPackageVersion(packageName, packageJson) !== undefined;
 }
 
-export function getPackageVersion(
-  packageName: string,
-  packageJson: PackageDotJson,
-): string | undefined {
-  return (
-    packageJson?.dependencies?.[packageName] ||
-    packageJson?.devDependencies?.[packageName]
-  );
+export function getPackageVersion(packageName: string, packageJson: PackageDotJson): string | undefined {
+  return packageJson?.dependencies?.[packageName] || packageJson?.devDependencies?.[packageName];
 }

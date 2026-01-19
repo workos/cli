@@ -8,12 +8,7 @@ import { getPackageDotJson } from '../utils/clack-utils.js';
 import clack from '../utils/clack.js';
 import chalk from 'chalk';
 import * as semver from 'semver';
-import {
-  getNextJsRouter,
-  getNextJsVersionBucket,
-  getNextJsRouterName,
-  NextJsRouter,
-} from './utils.js';
+import { getNextJsRouter, getNextJsVersionBucket, getNextJsRouterName, NextJsRouter } from './utils.js';
 
 /**
  * Next.js framework configuration for the universal agent runner.
@@ -25,8 +20,7 @@ const NEXTJS_AGENT_CONFIG = {
     name: 'Next.js',
     integration: Integration.nextjs,
     docsUrl: 'https://workos.com/docs/user-management/authkit/nextjs',
-    unsupportedVersionDocsUrl:
-      'https://workos.com/docs/user-management/authkit/nextjs',
+    unsupportedVersionDocsUrl: 'https://workos.com/docs/user-management/authkit/nextjs',
     skillName: 'workos-authkit-nextjs',
     gatherContext: async (options: WizardOptions) => {
       const router = await getNextJsRouter(options);
@@ -90,9 +84,7 @@ const NEXTJS_AGENT_CONFIG = {
 /**
  * Next.js wizard powered by the universal agent runner.
  */
-export async function runNextjsWizardAgent(
-  options: WizardOptions,
-): Promise<void> {
+export async function runNextjsWizardAgent(options: WizardOptions): Promise<void> {
   if (options.debug) {
     enableDebugLogs();
   }
@@ -104,9 +96,7 @@ export async function runNextjsWizardAgent(
   if (nextVersion) {
     const coercedVersion = semver.coerce(nextVersion);
     if (coercedVersion && semver.lt(coercedVersion, MINIMUM_NEXTJS_VERSION)) {
-      const docsUrl =
-        NEXTJS_AGENT_CONFIG.metadata.unsupportedVersionDocsUrl ??
-        NEXTJS_AGENT_CONFIG.metadata.docsUrl;
+      const docsUrl = NEXTJS_AGENT_CONFIG.metadata.unsupportedVersionDocsUrl ?? NEXTJS_AGENT_CONFIG.metadata.docsUrl;
 
       clack.log.warn(
         `Sorry: the wizard can't help you with Next.js ${nextVersion}. Upgrade to Next.js ${MINIMUM_NEXTJS_VERSION} or later, or check out the manual setup guide.`,

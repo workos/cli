@@ -7,10 +7,12 @@
   "engines": {
     "node": ">=18"
   },
+  "module": true,
   "scripts": {
     "build": "pnpm -r build",
     "dev": "pnpm -r --parallel dev",
     "clean": "pnpm -r clean && rm -rf node_modules",
+    "format": "pnpm -r format",
     "lint": "pnpm --filter @workos/authkit-wizard lint",
     "fix": "pnpm --filter @workos/authkit-wizard fix",
     "wizard:build": "pnpm --filter @workos/authkit-wizard build",

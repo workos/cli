@@ -9,12 +9,7 @@ import { getPackageDotJson } from '../utils/clack-utils.js';
 import clack from '../utils/clack.js';
 import chalk from 'chalk';
 import * as semver from 'semver';
-import {
-  getReactRouterMode,
-  getReactRouterModeName,
-  getReactRouterVersionBucket,
-  ReactRouterMode,
-} from './utils.js';
+import { getReactRouterMode, getReactRouterModeName, getReactRouterVersionBucket, ReactRouterMode } from './utils.js';
 
 /**
  * React Router framework configuration for the universal agent runner.
@@ -26,8 +21,7 @@ const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
     name: 'React Router',
     integration: Integration.reactRouter,
     docsUrl: 'https://workos.com/docs/user-management/authkit/react-router',
-    unsupportedVersionDocsUrl:
-      'https://workos.com/docs/user-management/authkit/react-router',
+    unsupportedVersionDocsUrl: 'https://workos.com/docs/user-management/authkit/react-router',
     skillName: 'workos-authkit-react-router',
     gatherContext: async (options: WizardOptions) => {
       const routerMode = await getReactRouterMode(options);
@@ -38,8 +32,7 @@ const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
   detection: {
     packageName: 'react-router',
     packageDisplayName: 'React Router',
-    getVersion: (packageJson: any) =>
-      getPackageVersion('react-router', packageJson),
+    getVersion: (packageJson: any) => getPackageVersion('react-router', packageJson),
     getVersionBucket: getReactRouterVersionBucket,
   },
 
@@ -64,9 +57,7 @@ const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
   prompts: {
     getAdditionalContextLines: (context: any) => {
       const routerMode = context.routerMode as ReactRouterMode;
-      const modeName = routerMode
-        ? getReactRouterModeName(routerMode)
-        : 'unknown';
+      const modeName = routerMode ? getReactRouterModeName(routerMode) : 'unknown';
 
       // Map router mode to framework ID for MCP docs resource
       const frameworkIdMap: Record<ReactRouterMode, string> = {
@@ -76,9 +67,7 @@ const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
         [ReactRouterMode.V7_DECLARATIVE]: 'react-react-router-7-declarative',
       };
 
-      const frameworkId = routerMode
-        ? frameworkIdMap[routerMode]
-        : ReactRouterMode.V7_FRAMEWORK;
+      const frameworkId = routerMode ? frameworkIdMap[routerMode] : ReactRouterMode.V7_FRAMEWORK;
 
       return [`Router mode: ${modeName}`, `Framework docs ID: ${frameworkId}`];
     },
@@ -88,9 +77,7 @@ const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
     successMessage: 'WorkOS AuthKit integration complete',
     getOutroChanges: (context: any) => {
       const routerMode = context.routerMode as ReactRouterMode;
-      const modeName = routerMode
-        ? getReactRouterModeName(routerMode)
-        : 'React Router';
+      const modeName = routerMode ? getReactRouterModeName(routerMode) : 'React Router';
       return [
         `Analyzed your React Router project structure (${modeName})`,
         `Created and configured WorkOS AuthKit`,
@@ -107,9 +94,7 @@ const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
 /**
  * React Router wizard powered by the universal agent runner.
  */
-export async function runReactRouterWizardAgent(
-  options: WizardOptions,
-): Promise<void> {
+export async function runReactRouterWizardAgent(options: WizardOptions): Promise<void> {
   if (options.debug) {
     enableDebugLogs();
   }
@@ -120,13 +105,9 @@ export async function runReactRouterWizardAgent(
 
   if (reactRouterVersion) {
     const coercedVersion = semver.coerce(reactRouterVersion);
-    if (
-      coercedVersion &&
-      semver.lt(coercedVersion, MINIMUM_REACT_ROUTER_VERSION)
-    ) {
+    if (coercedVersion && semver.lt(coercedVersion, MINIMUM_REACT_ROUTER_VERSION)) {
       const docsUrl =
-        REACT_ROUTER_AGENT_CONFIG.metadata.unsupportedVersionDocsUrl ??
-        REACT_ROUTER_AGENT_CONFIG.metadata.docsUrl;
+        REACT_ROUTER_AGENT_CONFIG.metadata.unsupportedVersionDocsUrl ?? REACT_ROUTER_AGENT_CONFIG.metadata.docsUrl;
 
       clack.log.warn(
         `Sorry: the wizard can't help you with React Router ${reactRouterVersion}. Upgrade to React Router ${MINIMUM_REACT_ROUTER_VERSION} or later, or check out the manual setup guide.`,

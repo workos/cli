@@ -62,8 +62,7 @@ describe('jwt', () => {
 
     it('returns error for invalid signature', async () => {
       const error = new Error('Invalid signature');
-      (error as unknown as { code: string }).code =
-        'ERR_JWS_SIGNATURE_VERIFICATION_FAILED';
+      (error as unknown as { code: string }).code = 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED';
 
       vi.spyOn(jose, 'jwtVerify').mockRejectedValue(error);
 
@@ -94,8 +93,7 @@ describe('jwt', () => {
       };
 
       const unknownKeyError = new Error('No matching key');
-      (unknownKeyError as unknown as { code: string }).code =
-        'ERR_JWKS_NO_MATCHING_KEY';
+      (unknownKeyError as unknown as { code: string }).code = 'ERR_JWKS_NO_MATCHING_KEY';
 
       let callCount = 0;
       vi.spyOn(jose, 'jwtVerify').mockImplementation(() => {
@@ -118,8 +116,7 @@ describe('jwt', () => {
 
     it('returns error when JWKS refresh fails', async () => {
       const unknownKeyError = new Error('No matching key');
-      (unknownKeyError as unknown as { code: string }).code =
-        'ERR_JWKS_NO_MATCHING_KEY';
+      (unknownKeyError as unknown as { code: string }).code = 'ERR_JWKS_NO_MATCHING_KEY';
 
       vi.spyOn(jose, 'jwtVerify').mockRejectedValue(unknownKeyError);
 

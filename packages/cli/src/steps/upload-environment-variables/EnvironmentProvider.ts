@@ -11,7 +11,5 @@ export abstract class EnvironmentProvider {
 
   abstract detect(): Promise<boolean>;
 
-  abstract uploadEnvVars(
-    vars: Record<string, string>,
-  ): Promise<Record<string, boolean>>;
+  abstract uploadEnvVars(vars: Record<string, string>): Promise<Record<string, boolean>>;
 }

@@ -47,7 +47,7 @@ app.post('/v1/messages', async (c) => {
             error: validation.error || 'Invalid token',
             hint: 'Run `wizard login` to authenticate',
           },
-          401
+          401,
         );
       }
 
@@ -62,7 +62,7 @@ app.post('/v1/messages', async (c) => {
           error: 'Missing Authorization header',
           hint: 'Run `wizard login` to authenticate',
         },
-        401
+        401,
       );
     }
 
@@ -107,7 +107,7 @@ app.post('/v1/messages', async (c) => {
             message: error.message,
           },
         },
-        error.status
+        error.status,
       );
     } else {
       return c.json(
@@ -117,20 +117,23 @@ app.post('/v1/messages', async (c) => {
             message: error.message,
           },
         },
-        500
+        500,
       );
     }
   }
 });
 
-serve({
-  fetch: app.fetch,
-  port: PORT,
-}, () => {
-  console.log(`\n🚀 WorkOS LLM Gateway running on http://localhost:${PORT}`);
-  console.log(`   Health check: http://localhost:${PORT}/health`);
-  console.log(`   Anthropic proxy: POST http://localhost:${PORT}/v1/messages`);
-  console.log(`\n   Anthropic API Key: ${env.ANTHROPIC_API_KEY ? '✓ Set' : '✗ Missing'}`);
-  console.log(`   WorkOS Client ID: ${env.WORKOS_CLIENT_ID ? '✓ Set' : '✗ Missing'}`);
-  console.log(`   Local Mode: ${isLocalMode ? '✓ Enabled (auth optional)' : '✗ Disabled (auth required)'}\n`);
-});
+serve(
+  {
+    fetch: app.fetch,
+    port: PORT,
+  },
+  () => {
+    console.log(`\n🚀 WorkOS LLM Gateway running on http://localhost:${PORT}`);
+    console.log(`   Health check: http://localhost:${PORT}/health`);
+    console.log(`   Anthropic proxy: POST http://localhost:${PORT}/v1/messages`);
+    console.log(`\n   Anthropic API Key: ${env.ANTHROPIC_API_KEY ? '✓ Set' : '✗ Missing'}`);
+    console.log(`   WorkOS Client ID: ${env.WORKOS_CLIENT_ID ? '✓ Set' : '✗ Missing'}`);
+    console.log(`   Local Mode: ${isLocalMode ? '✓ Enabled (auth optional)' : '✗ Disabled (auth required)'}\n`);
+  },
+);

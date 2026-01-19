@@ -15,11 +15,13 @@ First, read the shared patterns: [../workos-authkit-base/SKILL.md](../workos-aut
 2. **Install SDK**
 
    Via npm (if using bundler):
+
    ```bash
    npm install @workos-inc/authkit-js
    ```
 
    Via CDN (no build step):
+
    ```html
    <script src="https://unpkg.com/@workos-inc/authkit-js"></script>
    ```
@@ -39,6 +41,7 @@ No server-side route needed.
 ### Authentication Methods
 
 Use the SDK's methods:
+
 - `signIn()` - Trigger authentication
 - `signOut()` - Clear session
 - `getUser()` - Get current user
@@ -54,6 +57,7 @@ Add to your HTML:
 ```
 
 JavaScript:
+
 - On page load, check auth status
 - Show Sign In button if not authenticated
 - Show user info + Sign Out if authenticated

@@ -32,7 +32,7 @@ Gateway runs on `http://localhost:8000`
 ## How It Works
 
 1. **Receives** request from wizard with WorkOS API key in Authorization header
-2. **Validates** WorkOS API key format (sk_test_* or sk_live_*)
+2. **Validates** WorkOS API key format (sk*test*_ or sk*live*_)
 3. **Proxies** request to Anthropic API using backend credentials
 4. **Streams** response back to wizard
 5. **Redacts** API keys from logs
@@ -44,6 +44,7 @@ Gateway runs on `http://localhost:8000`
 Proxy for Anthropic Messages API.
 
 **Headers:**
+
 ```
 Authorization: Bearer sk_test_...  (WorkOS API key)
 Content-Type: application/json
@@ -60,6 +61,7 @@ Same as Anthropic Messages API (streamed)
 Health check endpoint.
 
 **Response:**
+
 ```json
 {
   "status": "ok",
@@ -85,16 +87,19 @@ Health check endpoint.
 ## Development
 
 **Start in watch mode:**
+
 ```bash
 pnpm dev
 ```
 
 **Build:**
+
 ```bash
 pnpm build
 ```
 
 **Start built version:**
+
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
 pnpm start
@@ -103,11 +108,13 @@ pnpm start
 ## Testing
 
 Test the health endpoint:
+
 ```bash
 curl http://localhost:8000/health
 ```
 
 Test a Claude API call:
+
 ```bash
 curl -X POST http://localhost:8000/v1/messages \
   -H "Authorization: Bearer sk_test_YOUR_WORKOS_KEY" \

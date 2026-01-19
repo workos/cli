@@ -19,14 +19,7 @@ export const INTEGRATION_CONFIG = {
   [Integration.nextjs]: {
     name: 'Next.js',
     filterPatterns: ['**/*.{tsx,ts,jsx,js,mjs,cjs}'],
-    ignorePatterns: [
-      'node_modules',
-      'dist',
-      'build',
-      'public',
-      'static',
-      'next-env.d.*',
-    ],
+    ignorePatterns: ['node_modules', 'dist', 'build', 'public', 'static', 'next-env.d.*'],
     detect: async (options) => {
       const packageJson = await getPackageDotJson(options);
       return hasPackageInstalled('next', packageJson);
@@ -42,24 +35,14 @@ export const INTEGRATION_CONFIG = {
   [Integration.react]: {
     name: 'React (SPA)',
     filterPatterns: ['**/*.{tsx,ts,jsx,js}'],
-    ignorePatterns: [
-      'node_modules',
-      'dist',
-      'build',
-      'public',
-      'static',
-      'assets',
-    ],
+    ignorePatterns: ['node_modules', 'dist', 'build', 'public', 'static', 'assets'],
     detect: async (options) => {
       const packageJson = await getPackageDotJson(options);
       // Detect React without routing frameworks
       const hasReact = hasPackageInstalled('react', packageJson);
       const hasNext = hasPackageInstalled('next', packageJson);
       const hasReactRouter = hasPackageInstalled('react-router', packageJson);
-      const hasTanstack = hasPackageInstalled(
-        '@tanstack/react-start',
-        packageJson,
-      );
+      const hasTanstack = hasPackageInstalled('@tanstack/react-start', packageJson);
       return hasReact && !hasNext && !hasReactRouter && !hasTanstack;
     },
     generateFilesRules: '',
@@ -89,14 +72,7 @@ export const INTEGRATION_CONFIG = {
   [Integration.reactRouter]: {
     name: 'React Router',
     filterPatterns: ['**/*.{tsx,ts,jsx,js}'],
-    ignorePatterns: [
-      'node_modules',
-      'dist',
-      'build',
-      'public',
-      'static',
-      'assets',
-    ],
+    ignorePatterns: ['node_modules', 'dist', 'build', 'public', 'static', 'assets'],
     detect: async (options) => {
       const packageJson = await getPackageDotJson(options);
       return hasPackageInstalled('react-router', packageJson);

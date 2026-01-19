@@ -5,8 +5,7 @@ import { debug } from './debug.js';
 // Stub analytics class - telemetry disabled for WorkOS wizard
 // Can be re-enabled later if WorkOS wants usage tracking
 export class Analytics {
-  private tags: Record<string, string | boolean | number | null | undefined> =
-    {};
+  private tags: Record<string, string | boolean | number | null | undefined> = {};
   private distinctId?: string;
   private anonymousId: string;
   private appName = 'authkit-wizard';

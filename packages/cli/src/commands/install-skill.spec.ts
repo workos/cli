@@ -3,13 +3,7 @@ import { existsSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
-import {
-  createAgents,
-  discoverSkills,
-  detectAgents,
-  installSkill,
-  type AgentConfig,
-} from './install-skill.js';
+import { createAgents, discoverSkills, detectAgents, installSkill, type AgentConfig } from './install-skill.js';
 
 describe('install-skill', () => {
   let testDir: string;
@@ -151,10 +145,7 @@ describe('install-skill', () => {
 
     beforeEach(() => {
       mkdirSync(join(skillsDir, 'test-skill'));
-      writeFileSync(
-        join(skillsDir, 'test-skill', 'SKILL.md'),
-        '---\nname: test-skill\n---\n# Test Skill',
-      );
+      writeFileSync(join(skillsDir, 'test-skill', 'SKILL.md'), '---\nname: test-skill\n---\n# Test Skill');
 
       targetAgent = {
         name: 'test-agent',
@@ -194,19 +185,13 @@ describe('install-skill', () => {
     it('overwrites existing skill file', async () => {
       await installSkill(skillsDir, 'test-skill', targetAgent);
 
-      writeFileSync(
-        join(skillsDir, 'test-skill', 'SKILL.md'),
-        '---\nname: test-skill\n---\n# Updated Skill',
-      );
+      writeFileSync(join(skillsDir, 'test-skill', 'SKILL.md'), '---\nname: test-skill\n---\n# Updated Skill');
 
       const result = await installSkill(skillsDir, 'test-skill', targetAgent);
 
       expect(result.success).toBe(true);
 
-      const content = readFileSync(
-        join(homeDir, '.test-agent/skills/test-skill/SKILL.md'),
-        'utf-8',
-      );
+      const content = readFileSync(join(homeDir, '.test-agent/skills/test-skill/SKILL.md'), 'utf-8');
       expect(content).toContain('# Updated Skill');
     });
   });

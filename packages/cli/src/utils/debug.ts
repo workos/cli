@@ -14,11 +14,7 @@ export const LOG_FILE_PATH = getSettings().logging.logFile;
  * Call this at the start of each wizard run.
  */
 export function initLogFile() {
-  const header = `\n${'='.repeat(
-    60,
-  )}\nWorkOS AuthKit Wizard Run: ${new Date().toISOString()}\n${'='.repeat(
-    60,
-  )}\n`;
+  const header = `\n${'='.repeat(60)}\nWorkOS AuthKit Wizard Run: ${new Date().toISOString()}\n${'='.repeat(60)}\n`;
   appendFileSync(LOG_FILE_PATH, header);
 }
 

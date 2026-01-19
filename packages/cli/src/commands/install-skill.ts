@@ -56,15 +56,10 @@ export function getSkillsDir(): string {
 export async function discoverSkills(skillsDir: string): Promise<string[]> {
   const entries = await readdir(skillsDir, { withFileTypes: true });
 
-  return entries
-    .filter((e) => e.isDirectory() && existsSync(join(skillsDir, e.name, 'SKILL.md')))
-    .map((e) => e.name);
+  return entries.filter((e) => e.isDirectory() && existsSync(join(skillsDir, e.name, 'SKILL.md'))).map((e) => e.name);
 }
 
-export function detectAgents(
-  agents: Record<string, AgentConfig>,
-  filter?: string[],
-): AgentConfig[] {
+export function detectAgents(agents: Record<string, AgentConfig>, filter?: string[]): AgentConfig[] {
   const detected: AgentConfig[] = [];
 
   for (const [key, config] of Object.entries(agents)) {
@@ -91,7 +86,10 @@ export async function installSkill(
     await copyFile(sourceFile, targetFile);
     return { success: true };
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
   }
 }
 
@@ -132,7 +130,12 @@ export async function runInstallSkill(options: InstallSkillOptions): Promise<voi
 
   console.log(chalk.bold('\nInstalling skills...\n'));
 
-  const results: Array<{ skill: string; agent: string; success: boolean; error?: string }> = [];
+  const results: Array<{
+    skill: string;
+    agent: string;
+    success: boolean;
+    error?: string;
+  }> = [];
 
   for (const skill of targetSkills) {
     for (const agent of targetAgents) {

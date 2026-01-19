@@ -40,10 +40,7 @@ class ApiError extends Error {
   }
 }
 
-export async function fetchUserData(
-  accessToken: string,
-  baseUrl: string,
-): Promise<ApiUser> {
+export async function fetchUserData(accessToken: string, baseUrl: string): Promise<ApiUser> {
   try {
     const response = await axios.get(`${baseUrl}/api/users/@me/`, {
       headers: {
@@ -62,11 +59,7 @@ export async function fetchUserData(
   }
 }
 
-export async function fetchProjectData(
-  accessToken: string,
-  projectId: number,
-  baseUrl: string,
-): Promise<ApiProject> {
+export async function fetchProjectData(accessToken: string, projectId: number, baseUrl: string): Promise<ApiProject> {
   try {
     const response = await axios.get(`${baseUrl}/api/projects/${projectId}/`, {
       headers: {
@@ -94,27 +87,15 @@ function handleApiError(error: unknown, operation: string): ApiError {
     const endpoint = axiosError.config?.url;
 
     if (status === 401) {
-      return new ApiError(
-        `Authentication failed while trying to ${operation}`,
-        status,
-        endpoint,
-      );
+      return new ApiError(`Authentication failed while trying to ${operation}`, status, endpoint);
     }
 
     if (status === 403) {
-      return new ApiError(
-        `Access denied while trying to ${operation}`,
-        status,
-        endpoint,
-      );
+      return new ApiError(`Access denied while trying to ${operation}`, status, endpoint);
     }
 
     if (status === 404) {
-      return new ApiError(
-        `Resource not found while trying to ${operation}`,
-        status,
-        endpoint,
-      );
+      return new ApiError(`Resource not found while trying to ${operation}`, status, endpoint);
     }
 
     const message = detail || `Failed to ${operation}`;
@@ -126,8 +107,6 @@ function handleApiError(error: unknown, operation: string): ApiError {
   }
 
   return new ApiError(
-    `Unexpected error while trying to ${operation}: ${
-      error instanceof Error ? error.message : 'Unknown error'
-    }`,
+    `Unexpected error while trying to ${operation}: ${error instanceof Error ? error.message : 'Unknown error'}`,
   );
 }

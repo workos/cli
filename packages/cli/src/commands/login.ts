@@ -1,10 +1,6 @@
 import open from 'opn';
 import clack from '../utils/clack.js';
-import {
-  saveCredentials,
-  getCredentials,
-  getAccessToken,
-} from '../lib/credentials.js';
+import { saveCredentials, getCredentials, getAccessToken } from '../lib/credentials.js';
 import { getCliAuthClientId } from '../lib/settings.js';
 
 /**
@@ -14,9 +10,7 @@ function getJwtExpiry(token: string): number | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    const payload = JSON.parse(
-      Buffer.from(parts[1], 'base64url').toString('utf-8')
-    );
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8'));
     return typeof payload.exp === 'number' ? payload.exp * 1000 : null;
   } catch {
     return null;
@@ -57,9 +51,7 @@ export async function runLogin(): Promise<void> {
   const clientId = getCliAuthClientId();
 
   if (!clientId) {
-    clack.log.error(
-      'CLI auth not configured. Set WORKOS_CLI_CLIENT_ID environment variable.',
-    );
+    clack.log.error('CLI auth not configured. Set WORKOS_CLI_CLIENT_ID environment variable.');
     process.exit(1);
   }
 
@@ -130,9 +122,8 @@ export async function runLogin(): Promise<void> {
 
         // Extract actual expiry from JWT, fallback to response or 15 min
         const jwtExpiry = getJwtExpiry(result.access_token);
-        const expiresAt = jwtExpiry ?? (result.expires_in
-          ? Date.now() + result.expires_in * 1000
-          : Date.now() + 15 * 60 * 1000);
+        const expiresAt =
+          jwtExpiry ?? (result.expires_in ? Date.now() + result.expires_in * 1000 : Date.now() + 15 * 60 * 1000);
 
         const expiresInSec = Math.round((expiresAt - Date.now()) / 1000);
 

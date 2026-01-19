@@ -11,16 +11,14 @@ const TANSTACK_START_AGENT_CONFIG: FrameworkConfig = {
     name: 'TanStack Start',
     integration: Integration.tanstackStart,
     docsUrl: 'https://workos.com/docs/user-management/authkit/tanstack-start',
-    unsupportedVersionDocsUrl:
-      'https://workos.com/docs/user-management/authkit/tanstack-start',
+    unsupportedVersionDocsUrl: 'https://workos.com/docs/user-management/authkit/tanstack-start',
     skillName: 'workos-authkit-tanstack-start',
   },
 
   detection: {
     packageName: '@tanstack/react-start',
     packageDisplayName: 'TanStack Start',
-    getVersion: (packageJson: any) =>
-      getPackageVersion('@tanstack/react-start', packageJson),
+    getVersion: (packageJson: any) => getPackageVersion('@tanstack/react-start', packageJson),
   },
 
   environment: {
@@ -52,9 +50,7 @@ const TANSTACK_START_AGENT_CONFIG: FrameworkConfig = {
   },
 };
 
-export async function runTanstackStartWizardAgent(
-  options: WizardOptions,
-): Promise<void> {
+export async function runTanstackStartWizardAgent(options: WizardOptions): Promise<void> {
   if (options.debug) {
     enableDebugLogs();
   }

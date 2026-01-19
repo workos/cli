@@ -23,11 +23,7 @@ async function getJWKS(clientId: string): Promise<jose.JWTVerifyGetKey> {
   const now = Date.now();
 
   // Return cached JWKS if still valid and for same client
-  if (
-    jwksCache &&
-    jwksCache.clientId === clientId &&
-    now - jwksCache.fetchedAt < JWKS_TTL_MS
-  ) {
+  if (jwksCache && jwksCache.clientId === clientId && now - jwksCache.fetchedAt < JWKS_TTL_MS) {
     return jwksCache.keys;
   }
 

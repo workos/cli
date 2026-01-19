@@ -89,6 +89,7 @@ npx @workos/authkit-wizard --ci \
 ## Logs
 
 Detailed logs (with redacted credentials) are saved to:
+
 ```
 /tmp/authkit-wizard.log
 ```
@@ -100,11 +101,13 @@ Use `--debug` flag for verbose terminal output.
 See the [monorepo root README](../../README.md) for development setup.
 
 Build:
+
 ```bash
 pnpm build
 ```
 
 Run locally:
+
 ```bash
 pnpm dev  # Watch mode
 ./dist/bin.js --help

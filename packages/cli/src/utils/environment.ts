@@ -23,9 +23,7 @@ export function readEnvironment(): Record<string, unknown> {
   return result;
 }
 
-export async function detectEnvVarPrefix(
-  options: WizardOptions,
-): Promise<string> {
+export async function detectEnvVarPrefix(options: WizardOptions): Promise<string> {
   const packageJson = await getPackageDotJson(options);
 
   const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
@@ -46,11 +44,7 @@ export async function detectEnvVarPrefix(
   }
 
   // --- Create React App
-  if (
-    has('react-scripts') ||
-    has('create-react-app') ||
-    (await hasAnyFile(['**/config-overrides.js']))
-  ) {
+  if (has('react-scripts') || has('create-react-app') || (await hasAnyFile(['**/config-overrides.js']))) {
     return 'REACT_APP_';
   }
 
@@ -61,18 +55,12 @@ export async function detectEnvVarPrefix(
   }
 
   // --- SvelteKit
-  if (
-    has('@sveltejs/kit') ||
-    (await hasAnyFile(['**/svelte.config.{js,ts}']))
-  ) {
+  if (has('@sveltejs/kit') || (await hasAnyFile(['**/svelte.config.{js,ts}']))) {
     return 'PUBLIC_';
   }
 
   // --- TanStack Start (uses Vite)
-  if (
-    has('@tanstack/start') ||
-    (await hasAnyFile(['**/tanstack.config.{js,ts}']))
-  ) {
+  if (has('@tanstack/start') || (await hasAnyFile(['**/tanstack.config.{js,ts}']))) {
     return 'VITE_PUBLIC_';
   }
 

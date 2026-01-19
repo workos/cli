@@ -2,11 +2,7 @@ import type { Integration } from '../lib/constants.js';
 import { traceStep } from '../telemetry.js';
 import { analytics } from '../utils/analytics.js';
 import clack from '../utils/clack.js';
-import {
-  getPackageDotJson,
-  getUncommittedOrUntrackedFiles,
-  isInGitRepo,
-} from '../utils/clack-utils.js';
+import { getPackageDotJson, getUncommittedOrUntrackedFiles, isInGitRepo } from '../utils/clack-utils.js';
 import { hasPackageInstalled } from '../utils/package-json.js';
 import type { WizardOptions } from '../utils/types.js';
 import * as childProcess from 'node:child_process';
@@ -49,21 +45,16 @@ export async function runPrettierStep({
 
     try {
       await new Promise<void>((resolve, reject) => {
-        childProcess.exec(
-          `npx prettier --ignore-unknown --write ${changedOrUntrackedFiles}`,
-          (err) => {
-            if (err) {
-              reject(err);
-            } else {
-              resolve();
-            }
-          },
-        );
+        childProcess.exec(`npx prettier --ignore-unknown --write ${changedOrUntrackedFiles}`, (err) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve();
+          }
+        });
       });
     } catch (e) {
-      prettierSpinner.stop(
-        'Prettier failed to run. You may want to format the changes manually.',
-      );
+      prettierSpinner.stop('Prettier failed to run. You may want to format the changes manually.');
       return;
     }
 

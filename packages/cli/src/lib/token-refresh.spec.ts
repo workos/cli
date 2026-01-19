@@ -1,10 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import {
-  existsSync,
-  unlinkSync,
-  mkdtempSync,
-  rmdirSync,
-} from 'node:fs';
+import { existsSync, unlinkSync, mkdtempSync, rmdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { Credentials } from './credentials.js';

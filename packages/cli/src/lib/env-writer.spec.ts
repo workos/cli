@@ -1,11 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import {
-  existsSync,
-  readFileSync,
-  unlinkSync,
-  writeFileSync,
-  mkdtempSync,
-} from 'node:fs';
+import { existsSync, readFileSync, unlinkSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { writeEnvLocal } from './env-writer.js';
@@ -35,9 +29,7 @@ describe('writeEnvLocal', () => {
 
     const content = readFileSync(envPath, 'utf-8');
     expect(content).toContain('WORKOS_CLIENT_ID=client_123');
-    expect(content).toContain(
-      'WORKOS_REDIRECT_URI=http://localhost:3000/callback',
-    );
+    expect(content).toContain('WORKOS_REDIRECT_URI=http://localhost:3000/callback');
   });
 
   it('generates cookie password when not provided', () => {
@@ -105,10 +97,7 @@ describe('writeEnvLocal', () => {
 
   it('handles comments in existing .env file', () => {
     const envPath = join(testDir, '.env.local');
-    writeFileSync(
-      envPath,
-      '# This is a comment\nEXISTING=value\n# Another comment\n',
-    );
+    writeFileSync(envPath, '# This is a comment\nEXISTING=value\n# Another comment\n');
 
     writeEnvLocal(testDir, {
       WORKOS_CLIENT_ID: 'client_123',

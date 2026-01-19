@@ -17,9 +17,7 @@ export const uploadEnvironmentVariablesStep = async (
     options: WizardOptions;
   },
 ): Promise<string[]> => {
-  const providers: EnvironmentProvider[] = [
-    new VercelEnvironmentProvider(options),
-  ];
+  const providers: EnvironmentProvider[] = [new VercelEnvironmentProvider(options)];
 
   let provider: EnvironmentProvider | null = null;
 
@@ -68,12 +66,9 @@ export const uploadEnvironmentVariablesStep = async (
     return [];
   }
 
-  const results = await traceStep(
-    'uploading environment variables',
-    async () => {
-      return await provider.uploadEnvVars(envVars);
-    },
-  );
+  const results = await traceStep('uploading environment variables', async () => {
+    return await provider.uploadEnvVars(envVars);
+  });
 
   analytics.capture('wizard interaction', {
     action: 'uploaded environment variables',

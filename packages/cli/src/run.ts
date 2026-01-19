@@ -107,8 +107,7 @@ export async function runWizard(argv: Args) {
     }
   }
 
-  const integration =
-    finalArgs.integration ?? (await getIntegrationForSetup(wizardOptions));
+  const integration = finalArgs.integration ?? (await getIntegrationForSetup(wizardOptions));
 
   analytics.setTag('integration', integration);
 
@@ -156,13 +155,9 @@ export async function runWizard(argv: Args) {
   }
 }
 
-async function detectIntegration(
-  options: Pick<WizardOptions, 'installDir'>,
-): Promise<Integration | undefined> {
+async function detectIntegration(options: Pick<WizardOptions, 'installDir'>): Promise<Integration | undefined> {
   const integrationConfigs = Object.entries(INTEGRATION_CONFIG).sort(
-    ([a], [b]) =>
-      INTEGRATION_ORDER.indexOf(a as Integration) -
-      INTEGRATION_ORDER.indexOf(b as Integration),
+    ([a], [b]) => INTEGRATION_ORDER.indexOf(a as Integration) - INTEGRATION_ORDER.indexOf(b as Integration),
   );
 
   for (const [integration, config] of integrationConfigs) {
@@ -173,15 +168,11 @@ async function detectIntegration(
   }
 }
 
-async function getIntegrationForSetup(
-  options: Pick<WizardOptions, 'installDir'>,
-) {
+async function getIntegrationForSetup(options: Pick<WizardOptions, 'installDir'>) {
   const detectedIntegration = await detectIntegration(options);
 
   if (detectedIntegration) {
-    clack.log.success(
-      `Detected integration: ${getIntegrationDescription(detectedIntegration)}`,
-    );
+    clack.log.success(`Detected integration: ${getIntegrationDescription(detectedIntegration)}`);
     return detectedIntegration;
   }
 

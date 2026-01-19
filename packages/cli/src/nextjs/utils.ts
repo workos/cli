@@ -14,9 +14,7 @@ export enum NextJsRouter {
   PAGES_ROUTER = 'pages-router',
 }
 
-export async function getNextJsRouter({
-  installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<NextJsRouter> {
+export async function getNextJsRouter({ installDir }: Pick<WizardOptions, 'installDir'>): Promise<NextJsRouter> {
   const pagesMatches = await fg('**/pages/_app.@(ts|tsx|js|jsx)', {
     dot: true,
     cwd: installDir,
@@ -34,16 +32,12 @@ export async function getNextJsRouter({
   const hasAppDir = appMatches.length > 0;
 
   if (hasPagesDir && !hasAppDir) {
-    clack.log.info(
-      `Detected ${getNextJsRouterName(NextJsRouter.PAGES_ROUTER)} 📃`,
-    );
+    clack.log.info(`Detected ${getNextJsRouterName(NextJsRouter.PAGES_ROUTER)} 📃`);
     return NextJsRouter.PAGES_ROUTER;
   }
 
   if (hasAppDir && !hasPagesDir) {
-    clack.log.info(
-      `Detected ${getNextJsRouterName(NextJsRouter.APP_ROUTER)} 📱`,
-    );
+    clack.log.info(`Detected ${getNextJsRouterName(NextJsRouter.APP_ROUTER)} 📱`);
     return NextJsRouter.APP_ROUTER;
   }
 

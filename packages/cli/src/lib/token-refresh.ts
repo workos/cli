@@ -1,8 +1,4 @@
-import {
-  getCredentials,
-  isTokenExpired,
-  Credentials,
-} from './credentials.js';
+import { getCredentials, isTokenExpired, Credentials } from './credentials.js';
 import { logToFile } from '../utils/debug.js';
 
 export interface TokenValidationResult {

@@ -129,5 +129,4 @@ export function getWelcomeMessage(frameworkName: string): string {
 /**
  * Shared spinner message for all frameworks
  */
-export const SPINNER_MESSAGE =
-  'Setting up WorkOS AuthKit with login, authentication, and session management...';
+export const SPINNER_MESSAGE = 'Setting up WorkOS AuthKit with login, authentication, and session management...';

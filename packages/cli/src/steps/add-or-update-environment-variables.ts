@@ -30,9 +30,7 @@ export async function addOrUpdateEnvironmentVariablesStep({
 
     const dotEnvLocalFilePath = path.join(installDir, '.env.local');
     const dotEnvFilePath = path.join(installDir, '.env');
-    const targetEnvFilePath = fs.existsSync(dotEnvLocalFilePath)
-      ? dotEnvLocalFilePath
-      : dotEnvFilePath;
+    const targetEnvFilePath = fs.existsSync(dotEnvLocalFilePath) ? dotEnvLocalFilePath : dotEnvFilePath;
 
     const dotEnvFileExists = fs.existsSync(targetEnvFilePath);
 
@@ -50,10 +48,7 @@ export async function addOrUpdateEnvironmentVariablesStep({
           const regex = new RegExp(`^${key}=.*$`, 'm');
 
           if (dotEnvFileContent.match(regex)) {
-            dotEnvFileContent = dotEnvFileContent.replace(
-              regex,
-              `${key}=${value}`,
-            );
+            dotEnvFileContent = dotEnvFileContent.replace(regex, `${key}=${value}`);
             updated = true;
           } else {
             if (!dotEnvFileContent.endsWith('\n')) {
@@ -69,17 +64,9 @@ export async function addOrUpdateEnvironmentVariablesStep({
             encoding: 'utf8',
             flag: 'w',
           });
-          clack.log.success(
-            `Updated environment variables in ${chalk.bold.cyan(
-              relativeEnvFilePath,
-            )}`,
-          );
+          clack.log.success(`Updated environment variables in ${chalk.bold.cyan(relativeEnvFilePath)}`);
         } else {
-          clack.log.success(
-            `${chalk.bold.cyan(
-              relativeEnvFilePath,
-            )} already has the necessary environment variables.`,
-          );
+          clack.log.success(`${chalk.bold.cyan(relativeEnvFilePath)} already has the necessary environment variables.`);
         }
 
         addedEnvVariables = true;
@@ -108,11 +95,7 @@ export async function addOrUpdateEnvironmentVariablesStep({
           encoding: 'utf8',
           flag: 'w',
         });
-        clack.log.success(
-          `Created ${chalk.bold.cyan(
-            relativeEnvFilePath,
-          )} with environment variables.`,
-        );
+        clack.log.success(`Created ${chalk.bold.cyan(relativeEnvFilePath)} with environment variables.`);
 
         addedEnvVariables = true;
       } catch (error) {
@@ -144,30 +127,20 @@ export async function addOrUpdateEnvironmentVariablesStep({
 
     if (gitignorePath) {
       const gitignoreContent = fs.readFileSync(gitignorePath, 'utf8');
-      const missingEnvFiles = envFiles.filter(
-        (file) => !gitignoreContent.includes(file),
-      );
+      const missingEnvFiles = envFiles.filter((file) => !gitignoreContent.includes(file));
 
       if (missingEnvFiles.length > 0) {
         try {
-          const newGitignoreContent = `${gitignoreContent}\n${missingEnvFiles.join(
-            '\n',
-          )}`;
+          const newGitignoreContent = `${gitignoreContent}\n${missingEnvFiles.join('\n')}`;
           await fs.promises.writeFile(gitignorePath, newGitignoreContent, {
             encoding: 'utf8',
             flag: 'w',
           });
-          clack.log.success(
-            `Updated ${chalk.bold.cyan(
-              '.gitignore',
-            )} to include ${chalk.bold.cyan(envFileName)}.`,
-          );
+          clack.log.success(`Updated ${chalk.bold.cyan('.gitignore')} to include ${chalk.bold.cyan(envFileName)}.`);
           addedGitignore = true;
         } catch (error) {
           clack.log.warning(
-            `Failed to update ${chalk.bold.cyan(
-              '.gitignore',
-            )} to include ${chalk.bold.cyan(envFileName)}.`,
+            `Failed to update ${chalk.bold.cyan('.gitignore')} to include ${chalk.bold.cyan(envFileName)}.`,
           );
 
           analytics.capture('wizard interaction', {
@@ -186,24 +159,14 @@ export async function addOrUpdateEnvironmentVariablesStep({
     } else {
       try {
         const newGitignoreContent = `${envFiles.join('\n')}\n`;
-        await fs.promises.writeFile(
-          path.join(installDir, '.gitignore'),
-          newGitignoreContent,
-          {
-            encoding: 'utf8',
-            flag: 'w',
-          },
-        );
-        clack.log.success(
-          `Created ${chalk.bold.cyan('.gitignore')} with environment files.`,
-        );
+        await fs.promises.writeFile(path.join(installDir, '.gitignore'), newGitignoreContent, {
+          encoding: 'utf8',
+          flag: 'w',
+        });
+        clack.log.success(`Created ${chalk.bold.cyan('.gitignore')} with environment files.`);
         addedGitignore = true;
       } catch (error) {
-        clack.log.warning(
-          `Failed to create ${chalk.bold.cyan(
-            '.gitignore',
-          )} with environment files.`,
-        );
+        clack.log.warning(`Failed to create ${chalk.bold.cyan('.gitignore')} with environment files.`);
 
         analytics.capture('wizard interaction', {
           action: 'failed to create gitignore',

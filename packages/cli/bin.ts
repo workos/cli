@@ -76,26 +76,22 @@ yargs(hideBin(process.argv))
     },
     default: {
       default: true,
-      describe:
-        'Use default options for all prompts\nenv: WORKOS_WIZARD_DEFAULT',
+      describe: 'Use default options for all prompts\nenv: WORKOS_WIZARD_DEFAULT',
       type: 'boolean',
     },
     local: {
       default: false,
-      describe:
-        'Use local services (LLM gateway on localhost:8000)\nenv: WORKOS_WIZARD_LOCAL',
+      describe: 'Use local services (LLM gateway on localhost:8000)\nenv: WORKOS_WIZARD_LOCAL',
       type: 'boolean',
     },
     ci: {
       default: false,
-      describe:
-        'Enable CI mode for non-interactive execution\nenv: WORKOS_WIZARD_CI',
+      describe: 'Enable CI mode for non-interactive execution\nenv: WORKOS_WIZARD_CI',
       type: 'boolean',
     },
     'skip-auth': {
       default: false,
-      describe:
-        'Skip authentication check (requires --local)\nenv: WORKOS_WIZARD_SKIP_AUTH',
+      describe: 'Skip authentication check (requires --local)\nenv: WORKOS_WIZARD_SKIP_AUTH',
       type: 'boolean',
     },
     'api-key': {
@@ -107,13 +103,11 @@ yargs(hideBin(process.argv))
       type: 'string',
     },
     'homepage-url': {
-      describe:
-        'App homepage URL for WorkOS (defaults to http://localhost:{port})\nenv: WORKOS_WIZARD_HOMEPAGE_URL',
+      describe: 'App homepage URL for WorkOS (defaults to http://localhost:{port})\nenv: WORKOS_WIZARD_HOMEPAGE_URL',
       type: 'string',
     },
     'redirect-uri': {
-      describe:
-        'Redirect URI for WorkOS callback (defaults to framework convention)\nenv: WORKOS_WIZARD_REDIRECT_URI',
+      describe: 'Redirect URI for WorkOS callback (defaults to framework convention)\nenv: WORKOS_WIZARD_REDIRECT_URI',
       type: 'string',
     },
   })
@@ -124,24 +118,16 @@ yargs(hideBin(process.argv))
       return yargs.options({
         'force-install': {
           default: false,
-          describe:
-            'Force install packages even if peer dependency checks fail\nenv: WORKOS_WIZARD_FORCE_INSTALL',
+          describe: 'Force install packages even if peer dependency checks fail\nenv: WORKOS_WIZARD_FORCE_INSTALL',
           type: 'boolean',
         },
         'install-dir': {
-          describe:
-            'Directory to install WorkOS AuthKit in\nenv: WORKOS_WIZARD_INSTALL_DIR',
+          describe: 'Directory to install WorkOS AuthKit in\nenv: WORKOS_WIZARD_INSTALL_DIR',
           type: 'string',
         },
         integration: {
           describe: 'Integration to set up',
-          choices: [
-            'nextjs',
-            'react',
-            'tanstack-start',
-            'react-router',
-            'vanilla-js',
-          ],
+          choices: ['nextjs', 'react', 'tanstack-start', 'react-router', 'vanilla-js'],
           type: 'string',
         },
       });
@@ -159,16 +145,12 @@ yargs(hideBin(process.argv))
         }
         if (!options.clientId) {
           clack.intro(chalk.inverse(`WorkOS AuthKit Wizard`));
-          clack.log.error(
-            'CI mode requires --client-id (WorkOS Client ID client_xxx)',
-          );
+          clack.log.error('CI mode requires --client-id (WorkOS Client ID client_xxx)');
           process.exit(1);
         }
         if (!options.installDir) {
           clack.intro(chalk.inverse(`WorkOS AuthKit Wizard`));
-          clack.log.error(
-            'CI mode requires --install-dir (directory to install WorkOS AuthKit in)',
-          );
+          clack.log.error('CI mode requires --install-dir (directory to install WorkOS AuthKit in)');
           process.exit(1);
         }
       } else if (isNonInteractiveEnvironment()) {
@@ -191,8 +173,4 @@ yargs(hideBin(process.argv))
   .alias('help', 'h')
   .version()
   .alias('version', 'v')
-  .wrap(
-    process.stdout.isTTY && process.stdout.columns
-      ? process.stdout.columns
-      : 80,
-  ).argv;
+  .wrap(process.stdout.isTTY && process.stdout.columns ? process.stdout.columns : 80).argv;

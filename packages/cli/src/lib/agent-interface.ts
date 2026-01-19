@@ -6,12 +6,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import clack from '../utils/clack.js';
-import {
-  debug,
-  logToFile,
-  initLogFile,
-  LOG_FILE_PATH,
-} from '../utils/debug.js';
+import { debug, logToFile, initLogFile, LOG_FILE_PATH } from '../utils/debug.js';
 import type { WizardOptions } from '../utils/types.js';
 import { analytics } from '../utils/analytics.js';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants.js';
@@ -143,17 +138,13 @@ function matchesAllowedPrefix(command: string): boolean {
 export function wizardCanUseTool(
   toolName: string,
   input: Record<string, unknown>,
-):
-  | { behavior: 'allow'; updatedInput: Record<string, unknown> }
-  | { behavior: 'deny'; message: string } {
+): { behavior: 'allow'; updatedInput: Record<string, unknown> } | { behavior: 'deny'; message: string } {
   // Allow all non-Bash tools
   if (toolName !== 'Bash') {
     return { behavior: 'allow', updatedInput: input };
   }
 
-  const command = (
-    typeof input.command === 'string' ? input.command : ''
-  ).trim();
+  const command = (typeof input.command === 'string' ? input.command : '').trim();
 
   // Block definitely dangerous operators: ; ` $ ( )
   if (DANGEROUS_OPERATORS.test(command)) {
@@ -238,10 +229,7 @@ export function wizardCanUseTool(
 /**
  * Initialize agent configuration for the LLM gateway
  */
-export async function initializeAgent(
-  config: AgentConfig,
-  options: WizardOptions,
-): Promise<AgentRunConfig> {
+export async function initializeAgent(config: AgentConfig, options: WizardOptions): Promise<AgentRunConfig> {
   // Initialize log file for this run
   initLogFile();
   logToFile('Agent initialization starting');
@@ -254,16 +242,12 @@ export async function initializeAgent(
     // Local testing: use localhost LLM gateway
     // Production: use WorkOS production gateway
     const settings = getSettings();
-    const gatewayUrl = options.local
-      ? settings.gateway.development
-      : getLlmGatewayUrlFromHost();
+    const gatewayUrl = options.local ? settings.gateway.development : getLlmGatewayUrlFromHost();
 
     // Check/refresh authentication for production (unless skipping auth)
     if (!options.skipAuth && !options.local) {
       if (!hasCredentials()) {
-        throw new Error(
-          'Not authenticated. Run `wizard login` to authenticate.',
-        );
+        throw new Error('Not authenticated. Run `wizard login` to authenticate.');
       }
 
       const refreshResult = await ensureValidToken();
@@ -287,9 +271,7 @@ export async function initializeAgent(
         throw new Error('Not authenticated. Run `wizard login` to authenticate.');
       }
       process.env.ANTHROPIC_AUTH_TOKEN = creds.accessToken;
-      authMode = options.local
-        ? `local-gateway:${gatewayUrl}`
-        : `workos-gateway:${gatewayUrl}`;
+      authMode = options.local ? `local-gateway:${gatewayUrl}` : `workos-gateway:${gatewayUrl}`;
       logToFile('Sending access token to gateway');
     }
 
@@ -308,16 +290,7 @@ export async function initializeAgent(
         },
       },
       model: settings.model,
-      allowedTools: [
-        'Skill',
-        'Read',
-        'Write',
-        'Edit',
-        'Bash',
-        'Glob',
-        'Grep',
-        'WebFetch',
-      ],
+      allowedTools: ['Skill', 'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch'],
     };
 
     logToFile('Agent config:', {
@@ -420,10 +393,7 @@ export async function runAgent(
         env: { ...process.env },
         canUseTool: (toolName: string, input: unknown) => {
           logToFile('canUseTool called:', { toolName, input });
-          const result = wizardCanUseTool(
-            toolName,
-            input as Record<string, unknown>,
-          );
+          const result = wizardCanUseTool(toolName, input as Record<string, unknown>);
           logToFile('canUseTool result:', result);
           return Promise.resolve(result);
         },
@@ -456,13 +426,13 @@ export async function runAgent(
     if (outputText.includes(AgentSignals.ERROR_MCP_MISSING)) {
       logToFile('Agent error: MCP_MISSING');
       spinner.stop('Agent could not access WorkOS MCP');
-            return { error: AgentErrorType.MCP_MISSING };
+      return { error: AgentErrorType.MCP_MISSING };
     }
 
     if (outputText.includes(AgentSignals.ERROR_RESOURCE_MISSING)) {
       logToFile('Agent error: RESOURCE_MISSING');
       spinner.stop('Agent could not access setup resource');
-            return { error: AgentErrorType.RESOURCE_MISSING };
+      return { error: AgentErrorType.RESOURCE_MISSING };
     }
 
     logToFile(`Agent run completed in ${Math.round(durationMs / 1000)}s`);
@@ -473,13 +443,13 @@ export async function runAgent(
     });
 
     spinner.stop(successMessage);
-        return {};
+    return {};
   } catch (error) {
     spinner.stop(errorMessage);
     clack.log.error(`Error: ${(error as Error).message}`);
     logToFile('Agent run failed:', error);
     debug('Full error:', error);
-        throw error;
+    throw error;
   }
 }
 
@@ -509,10 +479,7 @@ function handleSDKMessage(
 
             // Check for [STATUS] markers
             const statusRegex = new RegExp(
-              `^.*${AgentSignals.STATUS.replace(
-                /[.*+?^${}()|[\]\\]/g,
-                '\\$&',
-              )}\\s*(.+?)$`,
+              `^.*${AgentSignals.STATUS.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*(.+?)$`,
               'm',
             );
             const statusMatch = block.text.match(statusRegex);

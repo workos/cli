@@ -21,18 +21,14 @@ export enum ReactRouterMode {
 /**
  * Get React Router version bucket for analytics
  */
-export function getReactRouterVersionBucket(
-  version: string | undefined,
-): string {
+export function getReactRouterVersionBucket(version: string | undefined): string {
   return getVersionBucket(version, 6);
 }
 
 /**
  * Check if react-router.config.ts exists (indicates framework mode - React Router v7)
  */
-async function hasReactRouterConfig({
-  installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+async function hasReactRouterConfig({ installDir }: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
   const configMatches = await fg('**/react-router.config.@(ts|js|tsx|jsx)', {
     dot: true,
     cwd: installDir,
@@ -45,9 +41,7 @@ async function hasReactRouterConfig({
 /**
  * Search for createBrowserRouter usage in source files
  */
-async function hasCreateBrowserRouter({
-  installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+async function hasCreateBrowserRouter({ installDir }: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
   const sourceFiles = await fg('**/*.@(ts|tsx|js|jsx)', {
     dot: true,
     cwd: installDir,
@@ -75,9 +69,7 @@ async function hasCreateBrowserRouter({
 /**
  * Search for declarative BrowserRouter usage
  */
-async function hasDeclarativeRouter({
-  installDir,
-}: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+async function hasDeclarativeRouter({ installDir }: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
   const sourceFiles = await fg('**/*.@(ts|tsx|js|jsx)', {
     dot: true,
     cwd: installDir,
@@ -93,8 +85,7 @@ async function hasDeclarativeRouter({
       if (
         content.includes('<BrowserRouter') ||
         (content.includes('BrowserRouter') &&
-          (content.includes('from "react-router-dom"') ||
-            content.includes("from 'react-router-dom'")))
+          (content.includes('from "react-router-dom"') || content.includes("from 'react-router-dom'")))
       ) {
         return true;
       }
@@ -110,24 +101,17 @@ async function hasDeclarativeRouter({
 /**
  * Detect React Router mode
  */
-export async function getReactRouterMode(
-  options: WizardOptions,
-): Promise<ReactRouterMode> {
+export async function getReactRouterMode(options: WizardOptions): Promise<ReactRouterMode> {
   const { installDir } = options;
 
   // First, get the React Router version
   const packageJson = await getPackageDotJson(options);
   const reactRouterVersion =
-    getPackageVersion('react-router-dom', packageJson) ||
-    getPackageVersion('react-router', packageJson);
+    getPackageVersion('react-router-dom', packageJson) || getPackageVersion('react-router', packageJson);
 
   if (!reactRouterVersion) {
     // If we can't detect version, ask the user
-    clack.log.info(
-      `Learn more about React Router modes: ${chalk.cyan(
-        'https://reactrouter.com/start/modes',
-      )}`,
-    );
+    clack.log.info(`Learn more about React Router modes: ${chalk.cyan('https://reactrouter.com/start/modes')}`);
     const result: ReactRouterMode = await abortIfCancelled(
       clack.select({
         message: 'What React Router version and mode are you using?',
@@ -188,11 +172,7 @@ export async function getReactRouterMode(
     }
 
     // If v7 but can't detect mode, ask the user
-    clack.log.info(
-      `Learn more about React Router modes: ${chalk.cyan(
-        'https://reactrouter.com/start/modes',
-      )}`,
-    );
+    clack.log.info(`Learn more about React Router modes: ${chalk.cyan('https://reactrouter.com/start/modes')}`);
     const result: ReactRouterMode = await abortIfCancelled(
       clack.select({
         message: 'What React Router v7 mode are you using?',
@@ -217,11 +197,7 @@ export async function getReactRouterMode(
   }
 
   // If version is not 6 or 7, default to asking
-  clack.log.info(
-    `Learn more about React Router modes: ${chalk.cyan(
-      'https://reactrouter.com/start/modes',
-    )}`,
-  );
+  clack.log.info(`Learn more about React Router modes: ${chalk.cyan('https://reactrouter.com/start/modes')}`);
   const result: ReactRouterMode = await abortIfCancelled(
     clack.select({
       message: 'What React Router version and mode are you using?',

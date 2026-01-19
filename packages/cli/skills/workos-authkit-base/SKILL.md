@@ -27,6 +27,7 @@ This skill provides shared patterns for integrating WorkOS AuthKit. Framework-sp
 ## Environment Variables
 
 Your `.env.local` should contain:
+
 - `WORKOS_API_KEY` - Server-side API key (sk_xxx)
 - `WORKOS_CLIENT_ID` - Public client identifier
 - `WORKOS_REDIRECT_URI` - OAuth callback URL
@@ -35,14 +36,18 @@ Your `.env.local` should contain:
 ## UI Patterns
 
 ### Sign In Button
+
 Use the SDK's sign-in URL helper. Do NOT build OAuth URLs manually.
 
 ### User Display
+
 When authenticated, show:
+
 - User's name or email
 - Sign out button using SDK's signOut function
 
 ### Protected Routes
+
 Use SDK middleware/guards to protect routes. Do NOT manually check cookies.
 
 ## Testing Checklist

@@ -1,9 +1,5 @@
 import clack from '../utils/clack.js';
-import {
-  clearCredentials,
-  hasCredentials,
-  getCredentials,
-} from '../lib/credentials.js';
+import { clearCredentials, hasCredentials, getCredentials } from '../lib/credentials.js';
 
 export async function runLogout(): Promise<void> {
   if (!hasCredentials()) {

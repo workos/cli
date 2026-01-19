@@ -13,6 +13,7 @@ First, read the shared patterns: [../workos-authkit-base/SKILL.md](../workos-aut
    Use WebFetch to read: https://github.com/workos/authkit-react-router/blob/main/README.md
 
 2. **Install SDK**
+
    ```bash
    npm install @workos-inc/authkit-react-router
    ```
@@ -28,6 +29,7 @@ First, read the shared patterns: [../workos-authkit-base/SKILL.md](../workos-aut
 ### v7 Framework Mode (with react-router.config.ts)
 
 Use loader-based authentication. The SDK provides:
+
 - `authLoader` for route loaders
 - `handleCallbackRoute` for the callback route
 

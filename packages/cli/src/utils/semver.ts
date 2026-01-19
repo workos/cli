@@ -26,9 +26,7 @@ export function fulfillsVersionRange({
   return (
     // If the given version is a bogus format, this will still be undefined and we'll automatically reject it
     !!cleanedUserVersion &&
-    (isRange
-      ? subset(cleanedUserVersion, acceptableVersions)
-      : satisfies(cleanedUserVersion, acceptableVersions))
+    (isRange ? subset(cleanedUserVersion, acceptableVersions) : satisfies(cleanedUserVersion, acceptableVersions))
   );
 }
 
@@ -36,10 +34,7 @@ export function fulfillsVersionRange({
  * Get a version bucket string for analytics.
  * Returns format like "15.x" for versions >= minimumMajor, or "<{minimumMajor}.0.0" otherwise.
  */
-export function getVersionBucket(
-  version: string | undefined,
-  minimumMajor: number,
-): string {
+export function getVersionBucket(version: string | undefined, minimumMajor: number): string {
   if (!version) {
     return 'none';
   }

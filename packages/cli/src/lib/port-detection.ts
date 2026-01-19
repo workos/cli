@@ -68,10 +68,7 @@ function parseNextConfigPort(installDir: string): number | null {
  * Uses Vinxi: server: { port: N }
  */
 function parseTanStackPort(installDir: string): number | null {
-  const configPaths = [
-    join(installDir, 'app.config.ts'),
-    join(installDir, 'app.config.js'),
-  ];
+  const configPaths = [join(installDir, 'app.config.ts'), join(installDir, 'app.config.js')];
 
   for (const configPath of configPaths) {
     try {
@@ -92,10 +89,7 @@ function parseTanStackPort(installDir: string): number | null {
  * Detect the dev server port for a framework.
  * Checks config files first, falls back to framework default.
  */
-export function detectPort(
-  integration: Integration,
-  installDir: string,
-): number {
+export function detectPort(integration: Integration, installDir: string): number {
   let detectedPort: number | null = null;
 
   switch (integration) {

@@ -17,10 +17,7 @@ export interface AutoConfigResult {
  * Create a redirect URI in WorkOS.
  * Returns success on 201 or 409 (already exists).
  */
-async function createRedirectUri(
-  apiKey: string,
-  uri: string,
-): Promise<{ success: boolean; alreadyExists: boolean }> {
+async function createRedirectUri(apiKey: string, uri: string): Promise<{ success: boolean; alreadyExists: boolean }> {
   try {
     await axios.post(
       `${WORKOS_API_BASE}/user_management/redirect_uris`,
@@ -33,10 +30,7 @@ async function createRedirectUri(
       const status = error.response?.status;
       const message = error.response?.data?.message || '';
       // WorkOS returns 422 (not 409) when URI already exists
-      if (
-        status === 409 ||
-        (status === 422 && message.includes('already exists'))
-      ) {
+      if (status === 409 || (status === 422 && message.includes('already exists'))) {
         return { success: true, alreadyExists: true };
       }
     }
@@ -48,10 +42,7 @@ async function createRedirectUri(
  * Create a CORS origin in WorkOS.
  * Returns success on 201 or 409 (already exists).
  */
-async function createCorsOrigin(
-  apiKey: string,
-  origin: string,
-): Promise<{ success: boolean; alreadyExists: boolean }> {
+async function createCorsOrigin(apiKey: string, origin: string): Promise<{ success: boolean; alreadyExists: boolean }> {
   try {
     await axios.post(
       `${WORKOS_API_BASE}/user_management/cors_origins`,
@@ -64,10 +55,7 @@ async function createCorsOrigin(
       const status = error.response?.status;
       const message = error.response?.data?.message || '';
       // WorkOS returns 422 (not 409) when origin already exists
-      if (
-        status === 409 ||
-        (status === 422 && message.includes('already exists'))
-      ) {
+      if (status === 409 || (status === 422 && message.includes('already exists'))) {
         return { success: true, alreadyExists: true };
       }
     }
@@ -78,10 +66,7 @@ async function createCorsOrigin(
 /**
  * Set the app homepage URL in WorkOS.
  */
-async function setHomepageUrl(
-  apiKey: string,
-  url: string,
-): Promise<{ success: boolean }> {
+async function setHomepageUrl(apiKey: string, url: string): Promise<{ success: boolean }> {
   await axios.put(
     `${WORKOS_API_BASE}/user_management/app_homepage_url`,
     { url },
@@ -149,15 +134,11 @@ export async function autoConfigureWorkOSEnvironment(
         : `Redirect URI: ${callbackUrl} (created)`,
     );
     messages.push(
-      corsOrigin.alreadyExists
-        ? `CORS origin: ${baseUrl} (already existed)`
-        : `CORS origin: ${baseUrl} (created)`,
+      corsOrigin.alreadyExists ? `CORS origin: ${baseUrl} (already existed)` : `CORS origin: ${baseUrl} (created)`,
     );
     messages.push(`Homepage URL: ${homepageUrlValue} (updated)`);
 
-    clack.log.success(
-      'WorkOS dashboard configured:\n  ' + messages.join('\n  '),
-    );
+    clack.log.success('WorkOS dashboard configured:\n  ' + messages.join('\n  '));
 
     return results;
   } catch (error) {
@@ -167,21 +148,14 @@ export async function autoConfigureWorkOSEnvironment(
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
       const responseData = error.response?.data;
-      const errorDetail =
-        typeof responseData === 'object'
-          ? JSON.stringify(responseData)
-          : responseData;
+      const errorDetail = typeof responseData === 'object' ? JSON.stringify(responseData) : responseData;
 
       if (status === 401) {
         clack.log.warn('Could not configure WorkOS dashboard: Invalid API key');
       } else if (status === 403) {
-        clack.log.warn(
-          'Could not configure WorkOS dashboard: API key lacks permission',
-        );
+        clack.log.warn('Could not configure WorkOS dashboard: API key lacks permission');
       } else if (status === 422) {
-        clack.log.warn(
-          `Could not configure WorkOS dashboard: Validation error`,
-        );
+        clack.log.warn(`Could not configure WorkOS dashboard: Validation error`);
         clack.log.info(`  API response: ${errorDetail}`);
       } else {
         clack.log.warn(`Could not configure WorkOS dashboard: ${message}`);
@@ -193,9 +167,7 @@ export async function autoConfigureWorkOSEnvironment(
       clack.log.warn(`Could not configure WorkOS dashboard: ${message}`);
     }
 
-    clack.log.info(
-      'You can configure these settings manually in the WorkOS dashboard.',
-    );
+    clack.log.info('You can configure these settings manually in the WorkOS dashboard.');
 
     analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
       action: 'workos environment auto-config failed',

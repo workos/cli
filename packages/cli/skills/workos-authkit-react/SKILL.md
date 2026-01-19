@@ -23,6 +23,7 @@ Report: [STATUS] Reading SDK documentation
 **CRITICAL**: The package MUST be installed before writing any code that imports it.
 
 Detect package manager and run install:
+
 ```bash
 npm install @workos-inc/authkit-react
 ```
@@ -45,17 +46,14 @@ Get the exact implementation from the README.
 import { AuthKitProvider } from '@workos-inc/authkit-react';
 
 function App() {
-  return (
-    <AuthKitProvider clientId={process.env.REACT_APP_WORKOS_CLIENT_ID}>
-      {/* Your app */}
-    </AuthKitProvider>
-  );
+  return <AuthKitProvider clientId={process.env.REACT_APP_WORKOS_CLIENT_ID}>{/* Your app */}</AuthKitProvider>;
 }
 ```
 
 ### Environment Variables
 
 For React SPAs, use:
+
 - `REACT_APP_WORKOS_CLIENT_ID` (Create React App)
 - `VITE_WORKOS_CLIENT_ID` (Vite)
 
@@ -64,6 +62,7 @@ Note: No API key needed - client-side only.
 ### useAuth Hook
 
 Use the `useAuth()` hook from the SDK for:
+
 - Checking authentication status
 - Getting user information
 - Triggering sign in/out
@@ -78,11 +77,13 @@ No server-side callback route needed.
 Update your main component:
 
 1. Import `useAuth` hook:
+
    ```typescript
    import { useAuth } from '@workos-inc/authkit-react';
    ```
 
 2. Use the hook:
+
    ```typescript
    const { user, signIn, signOut } = useAuth();
    ```
@@ -98,6 +99,7 @@ Report: [STATUS] Adding authentication UI
 ## Step 5: Verify Installation
 
 Before reporting complete:
+
 1. Check that all imports can resolve (no "module not found" errors)
 2. Verify AuthKitProvider wraps the app
 3. Verify environment variable is configured
