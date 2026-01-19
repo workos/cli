@@ -6,13 +6,56 @@ import {
   computeDiff,
   filterWithContext,
   formatDiffLine,
+  getLanguage,
+  tokenize,
   type FileDiff,
+  type Token,
+  type TokenType,
 } from '../lib/diff-utils.js';
 
 interface DiffPanelProps {
   emitter: WizardEventEmitter;
   focused?: boolean;
   height?: number;
+}
+
+// Color mapping for syntax tokens
+const TOKEN_COLORS: Record<TokenType, string | undefined> = {
+  keyword: 'magenta',
+  string: 'yellow',
+  comment: 'gray',
+  number: 'cyan',
+  function: 'blue',
+  type: 'green',
+  operator: 'white',
+  punctuation: 'gray',
+  plain: undefined,
+};
+
+// Render a line with syntax highlighting
+function HighlightedLine({
+  content,
+  language,
+  prefix,
+  dimmed,
+}: {
+  content: string;
+  language: string;
+  prefix: string;
+  dimmed?: boolean;
+}): React.ReactElement {
+  const tokens = tokenize(content, language);
+
+  return (
+    <Text dimColor={dimmed}>
+      {prefix}
+      {tokens.map((token, i) => (
+        <Text key={i} color={dimmed ? undefined : TOKEN_COLORS[token.type]}>
+          {token.value}
+        </Text>
+      ))}
+    </Text>
+  );
 }
 
 export function DiffPanel({ emitter, focused = true, height }: DiffPanelProps): React.ReactElement {
@@ -53,25 +96,32 @@ export function DiffPanel({ emitter, focused = true, height }: DiffPanelProps): 
     };
   }, [emitter]);
 
-  // Flatten all diffs for display
+  // Flatten all diffs for display with language info
   const allLines = useMemo(() => {
     const lines: Array<{
       type: 'header' | 'add' | 'remove' | 'unchanged';
       content: string;
+      language: string;
     }> = [];
 
     for (const diff of diffs) {
+      const language = getLanguage(diff.path);
       lines.push({
         type: 'header',
         content: `── ${diff.path} ${diff.isNew ? '(new file)' : '(modified)'} ──`,
+        language: 'plain',
       });
 
       const filteredChanges = filterWithContext(diff.changes, 3);
       for (const change of filteredChanges) {
-        lines.push({ type: change.type, content: formatDiffLine(change) });
+        lines.push({
+          type: change.type,
+          content: formatDiffLine(change),
+          language,
+        });
       }
 
-      lines.push({ type: 'unchanged', content: '' });
+      lines.push({ type: 'unchanged', content: '', language: 'plain' });
     }
 
     return lines;
@@ -132,23 +182,62 @@ export function DiffPanel({ emitter, focused = true, height }: DiffPanelProps): 
   return (
     <Box flexDirection="row" flexGrow={1}>
       <Box flexDirection="column" flexGrow={1}>
-        {displayLines.map((line, i) => (
-          <Text
-            key={i}
-            color={
-              line.type === 'header'
-                ? 'cyan'
-                : line.type === 'add'
-                  ? 'green'
-                  : line.type === 'remove'
-                    ? 'red'
-                    : undefined
-            }
-            bold={line.type === 'header'}
-          >
-            {line.content}
-          </Text>
-        ))}
+        {displayLines.map((line, i) => {
+          if (line.type === 'header') {
+            return (
+              <Text key={i} color="cyan" bold>
+                {line.content}
+              </Text>
+            );
+          }
+
+          // Extract the prefix (+ - or space) and the actual content
+          const prefix = line.content.slice(0, 2);
+          const codeContent = line.content.slice(2);
+
+          if (line.type === 'add') {
+            return (
+              <Box key={i}>
+                <Text color="green" bold>
+                  {prefix}
+                </Text>
+                <HighlightedLine
+                  content={codeContent}
+                  language={line.language}
+                  prefix=""
+                  dimmed={false}
+                />
+              </Box>
+            );
+          }
+
+          if (line.type === 'remove') {
+            return (
+              <Box key={i}>
+                <Text color="red" bold>
+                  {prefix}
+                </Text>
+                <HighlightedLine
+                  content={codeContent}
+                  language={line.language}
+                  prefix=""
+                  dimmed={false}
+                />
+              </Box>
+            );
+          }
+
+          // Unchanged lines - dimmed with syntax highlighting
+          return (
+            <HighlightedLine
+              key={i}
+              content={codeContent}
+              language={line.language}
+              prefix={prefix}
+              dimmed={true}
+            />
+          );
+        })}
         {hasScroll && (
           <Text dimColor>
             [{scrollOffset + 1}-{Math.min(scrollOffset + contentLines, allLines.length)}/{allLines.length}]

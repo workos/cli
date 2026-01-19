@@ -551,10 +551,12 @@ function handleSDKMessage(
               const oldString = input.old_string as string;
               const newString = input.new_string as string;
               if (filePath && oldString !== undefined && newString !== undefined) {
-                const oldContent = fileContentCache.get(filePath) || '';
-                const newContent = oldContent.replace(oldString, newString);
-                emitter?.emit('file:edit', { path: filePath, oldContent, newContent });
-                fileContentCache.set(filePath, newContent);
+                // Emit the actual strings being replaced, not reconstructed full file
+                emitter?.emit('file:edit', {
+                  path: filePath,
+                  oldContent: oldString,
+                  newContent: newString,
+                });
               }
             }
 
