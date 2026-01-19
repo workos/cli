@@ -122,6 +122,13 @@ export async function runAgentWizard(config: FrameworkConfig, options: WizardOpt
     errorMessage: 'Integration failed',
   });
 
+  // If agent returned an error, don't proceed with success flow
+  // The complete event was already emitted by runAgent
+  if (agentResult.error) {
+    await analytics.shutdown('error');
+    return;
+  }
+
   // Build environment variables from WorkOS credentials
   const envVars = config.environment.getEnvVars(apiKey, clientId);
 

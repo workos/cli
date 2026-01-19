@@ -115,6 +115,37 @@ export async function runWizard(argv: Args) {
 
     analytics.setTag('integration', integration);
 
+    // Collect output for post-TUI summary
+    const outputLog: Array<{ text: string; isError?: boolean; isStatus?: boolean }> = [];
+    let completionData: { success: boolean; summary?: string } | null = null;
+
+    const handleOutput = ({ text, isError }: { text: string; isError?: boolean }) => {
+      text.split('\n').forEach((line) => {
+        outputLog.push({
+          text: line,
+          isError,
+          isStatus: line.includes('[STATUS]'),
+        });
+      });
+    };
+
+    const handleStatus = ({ message }: { message: string }) => {
+      outputLog.push({ text: `[STATUS] ${message}`, isStatus: true });
+    };
+
+    const handleComplete = ({ success, summary }: { success: boolean; summary?: string }) => {
+      completionData = { success, summary };
+    };
+
+    const handleError = ({ message }: { message: string }) => {
+      outputLog.push({ text: `ERROR: ${message}`, isError: true });
+    };
+
+    emitter.on('output', handleOutput);
+    emitter.on('status', handleStatus);
+    emitter.on('complete', handleComplete);
+    emitter.on('error', handleError);
+
     // Start dashboard first
     await startDashboard({ emitter });
 
@@ -178,8 +209,26 @@ export async function runWizard(argv: Args) {
 
       await runIntegrationWizard(integration, wizardOptions);
       await stopDashboard();
+
+      // Clean up listeners
+      emitter.off('output', handleOutput);
+      emitter.off('status', handleStatus);
+      emitter.off('complete', handleComplete);
+      emitter.off('error', handleError);
+
+      // Print post-TUI summary
+      printDashboardSummary(outputLog, completionData, integration);
     } catch (error) {
       await stopDashboard();
+
+      // Clean up listeners
+      emitter.off('output', handleOutput);
+      emitter.off('status', handleStatus);
+      emitter.off('complete', handleComplete);
+      emitter.off('error', handleError);
+
+      // Print error summary
+      printDashboardSummary(outputLog, { success: false, summary: (error as Error).message }, integration);
       throw error;
     }
     return;

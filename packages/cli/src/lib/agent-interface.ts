@@ -56,6 +56,8 @@ export enum AgentErrorType {
   MCP_MISSING = 'WIZARD_MCP_MISSING',
   /** Agent could not access the setup resource */
   RESOURCE_MISSING = 'WIZARD_RESOURCE_MISSING',
+  /** Agent execution failed (API error, auth error, etc.) */
+  EXECUTION_ERROR = 'WIZARD_EXECUTION_ERROR',
 }
 
 export type AgentConfig = {
@@ -426,8 +428,12 @@ export async function runAgent(
     });
 
     // Process the async generator
+    let sdkError: string | undefined;
     for await (const message of response) {
-      handleSDKMessage(message, options, spinner, collectedText, emitter);
+      const messageError = handleSDKMessage(message, options, spinner, collectedText, emitter);
+      if (messageError) {
+        sdkError = messageError;
+      }
       // Signal completion when result received
       if (message.type === 'result') {
         signalDone!();
@@ -436,6 +442,14 @@ export async function runAgent(
 
     const durationMs = Date.now() - startTime;
     const outputText = collectedText.join('\n');
+
+    // Check for SDK errors first (e.g., API errors, auth failures)
+    if (sdkError) {
+      logToFile('Agent SDK error:', sdkError);
+      spinner?.stop(errorMessage);
+      emitter?.emit('complete', { success: false, summary: sdkError });
+      return { error: AgentErrorType.EXECUTION_ERROR };
+    }
 
     // Check for error markers in the agent's output
     if (outputText.includes(AgentSignals.ERROR_MCP_MISSING)) {
@@ -472,6 +486,7 @@ export async function runAgent(
 
 /**
  * Handle SDK messages and provide user feedback
+ * @returns Error message if this was an error result, undefined otherwise
  */
 function handleSDKMessage(
   message: SDKMessage,
@@ -479,7 +494,7 @@ function handleSDKMessage(
   spinner: ReturnType<typeof clack.spinner> | null,
   collectedText: string[],
   emitter?: WizardEventEmitter,
-): void {
+): string | undefined {
   logToFile(`SDK Message: ${message.type}`, JSON.stringify(message, null, 2));
 
   if (options.debug) {
@@ -613,7 +628,7 @@ function handleSDKMessage(
       } else {
         // Error result
         logToFile('Agent error result:', message.subtype);
-        if (message.errors) {
+        if (message.errors && message.errors.length > 0) {
           for (const err of message.errors) {
             if (!options.dashboard) {
               clack.log.error(`Error: ${err}`);
@@ -622,7 +637,11 @@ function handleSDKMessage(
             // Emit error event for dashboard
             emitter?.emit('error', { message: err });
           }
+          // Return the first error message
+          return message.errors[0];
         }
+        // Return generic error if subtype indicates failure but no errors array
+        return `Agent execution failed: ${message.subtype}`;
       }
       break;
     }
@@ -645,4 +664,5 @@ function handleSDKMessage(
       }
       break;
   }
+  return undefined;
 }
