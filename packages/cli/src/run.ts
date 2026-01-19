@@ -77,6 +77,43 @@ export async function runWizard(argv: Args) {
     emitter,
   };
 
+  // Start dashboard immediately if enabled (bypasses clack UI)
+  if (wizardOptions.dashboard) {
+    // Validate skip-auth requires local (silent check)
+    if (wizardOptions.skipAuth && !wizardOptions.local) {
+      console.error('--skip-auth can only be used with --local');
+      process.exit(1);
+    }
+
+    // Silent auth check for dashboard mode
+    if (!wizardOptions.skipAuth && !getAccessToken()) {
+      console.error('Authentication required. Run `wizard login` first.');
+      process.exit(1);
+    }
+
+    const integration =
+      finalArgs.integration ?? (await detectIntegration(wizardOptions));
+
+    if (!integration) {
+      console.error(
+        'Could not detect integration. Use --integration to specify.',
+      );
+      process.exit(1);
+    }
+
+    analytics.setTag('integration', integration);
+    await startDashboard({ emitter });
+
+    try {
+      await runIntegrationWizard(integration, wizardOptions);
+      await stopDashboard();
+    } catch (error) {
+      await stopDashboard();
+      throw error;
+    }
+    return;
+  }
+
   const settings = getSettings();
   if (settings.branding.showAsciiArt) {
     console.log(chalk.cyan(settings.branding.asciiArt));
@@ -119,41 +156,9 @@ export async function runWizard(argv: Args) {
 
   analytics.setTag('integration', integration);
 
-  // Start dashboard if enabled
-  if (wizardOptions.dashboard) {
-    await startDashboard({ emitter });
-  }
-
   try {
-    switch (integration) {
-      case Integration.nextjs:
-        await runNextjsWizardAgent(wizardOptions);
-        break;
-      case Integration.react:
-        await runReactWizardAgent(wizardOptions);
-        break;
-      case Integration.tanstackStart:
-        await runTanstackStartWizardAgent(wizardOptions);
-        break;
-      case Integration.reactRouter:
-        await runReactRouterWizardAgent(wizardOptions);
-        break;
-      case Integration.vanillaJs:
-        await runVanillaJsWizardAgent(wizardOptions);
-        break;
-      default:
-        clack.log.error('No setup wizard selected!');
-    }
-
-    // Stop dashboard if it was running
-    if (wizardOptions.dashboard) {
-      await stopDashboard();
-    }
+    await runIntegrationWizard(integration, wizardOptions);
   } catch (error) {
-    // Stop dashboard on error
-    if (wizardOptions.dashboard) {
-      await stopDashboard();
-    }
     debug('Full error:', error);
     debug('Error stack:', (error as Error).stack);
 

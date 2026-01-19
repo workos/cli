@@ -68,6 +68,36 @@ yargs(hideBin(process.argv))
       });
     },
   )
+  .command(
+    'dashboard',
+    '[Experimental] Run the wizard with visual dashboard mode',
+    (yargs) => {
+      return yargs.options({
+        'install-dir': {
+          describe:
+            'Directory to install WorkOS AuthKit in\nenv: WORKOS_WIZARD_INSTALL_DIR',
+          type: 'string',
+        },
+        integration: {
+          describe: 'Integration to set up',
+          choices: [
+            'nextjs',
+            'react',
+            'tanstack-start',
+            'react-router',
+            'vanilla-js',
+          ],
+          type: 'string',
+        },
+      });
+    },
+    (argv) => {
+      const options = { ...argv, dashboard: true };
+      void import('./src/run.js').then(({ runWizard }) =>
+        runWizard(options as unknown as WizardOptions),
+      );
+    },
+  )
   .options({
     debug: {
       default: false,
@@ -130,13 +160,6 @@ yargs(hideBin(process.argv))
           choices: ['nextjs', 'react', 'tanstack-start', 'react-router', 'vanilla-js'],
           type: 'string',
         },
-        dashboard: {
-          alias: 'd',
-          default: false,
-          describe:
-            '[Experimental] Enable visual dashboard mode\nenv: WORKOS_WIZARD_DASHBOARD',
-          type: 'boolean',
-        },
       });
     },
     (argv) => {
@@ -176,6 +199,7 @@ yargs(hideBin(process.argv))
       void runWizard(options as unknown as WizardOptions);
     },
   )
+  .strict()
   .help()
   .alias('help', 'h')
   .version()
