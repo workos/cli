@@ -121,11 +121,18 @@ export async function runAgentWizard(config: FrameworkConfig, options: WizardOpt
   );
 
   // Run agent - errors will throw naturally with skill-based approach
-  const agentResult = await runAgent(agent, integrationPrompt, options, spinner, {
-    spinnerMessage: SPINNER_MESSAGE,
-    successMessage: config.ui.successMessage,
-    errorMessage: 'Integration failed',
-  });
+  const agentResult = await runAgent(
+    agent,
+    integrationPrompt,
+    options,
+    spinner,
+    {
+      spinnerMessage: SPINNER_MESSAGE,
+      successMessage: config.ui.successMessage,
+      errorMessage: 'Integration failed',
+    },
+    options.emitter,
+  );
 
   // If agent returned an error, don't proceed with success flow
   // The complete event was already emitted by runAgent

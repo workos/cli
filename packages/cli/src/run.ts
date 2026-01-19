@@ -90,10 +90,15 @@ export async function runWizard(argv: Args) {
       process.exit(1);
     }
 
-    // Silent auth check for dashboard mode
+    // Check authentication for dashboard mode (same as regular CLI)
     if (!wizardOptions.skipAuth && !getAccessToken()) {
-      console.error('Authentication required. Run `wizard login` first.');
-      process.exit(1);
+      await runLogin();
+
+      // Final check - must have valid token
+      if (!getAccessToken()) {
+        console.error('Authentication failed. Please try again.');
+        process.exit(1);
+      }
     }
 
     const integration = finalArgs.integration ?? (await detectIntegration(wizardOptions));
