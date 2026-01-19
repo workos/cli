@@ -78,6 +78,11 @@ export type WizardOptions = {
    * Event emitter for dashboard mode
    */
   emitter?: import('../lib/events.js').WizardEventEmitter;
+
+  /**
+   * Pre-selected framework integration (bypasses detection)
+   */
+  integration?: import('../lib/constants.js').Integration;
 };
 
 export interface Feature {
