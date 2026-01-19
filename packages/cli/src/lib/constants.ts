@@ -55,3 +55,15 @@ export const ISSUES_URL = settings.documentation.issuesUrl;
 export const ANALYTICS_ENABLED = settings.telemetry.enabled;
 export const WIZARD_INTERACTION_EVENT_NAME = settings.telemetry.eventName;
 export const OAUTH_PORT = settings.legacy.oauthPort;
+
+/**
+ * Common glob patterns to ignore when searching for files.
+ * Used by both Next.js and React Router integrations.
+ */
+export const IGNORE_PATTERNS: string[] = [
+  '**/node_modules/**',
+  '**/dist/**',
+  '**/build/**',
+  '**/public/**',
+  '**/.next/**',
+];

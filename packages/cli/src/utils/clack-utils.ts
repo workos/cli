@@ -6,6 +6,7 @@ import { basename, isAbsolute, join, relative } from 'node:path';
 import chalk from 'chalk';
 import { traceStep } from '../telemetry.js';
 import { debug } from './debug.js';
+import { parseEnvFile } from './env-parser.js';
 import { type PackageDotJson, hasPackageInstalled } from './package-json.js';
 import {
   type PackageManager,
@@ -27,24 +28,6 @@ interface ProjectData {
   host: string;
   distinctId: string;
   projectId: number;
-}
-
-/**
- * Parse a .env file into key-value pairs.
- * Handles comments, empty lines, and values containing '='.
- */
-function parseEnvFile(content: string): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (trimmed && !trimmed.startsWith('#')) {
-      const [key, ...valueParts] = trimmed.split('=');
-      if (key) {
-        result[key] = valueParts.join('=');
-      }
-    }
-  }
-  return result;
 }
 
 export interface CliSetupConfig {

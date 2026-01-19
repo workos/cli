@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { parseEnvFile } from '../utils/env-parser.js';
 
 interface EnvVars {
   WORKOS_API_KEY?: string;
@@ -19,24 +20,6 @@ function generateCookiePassword(): string {
   return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join(
     '',
   );
-}
-
-/**
- * Parse a .env file into key-value pairs.
- * Handles comments, empty lines, and values containing '='.
- */
-function parseEnvFile(content: string): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (trimmed && !trimmed.startsWith('#')) {
-      const [key, ...valueParts] = trimmed.split('=');
-      if (key) {
-        result[key] = valueParts.join('=');
-      }
-    }
-  }
-  return result;
 }
 
 /**

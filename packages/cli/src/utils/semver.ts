@@ -1,4 +1,4 @@
-import { satisfies, subset, valid, validRange } from 'semver';
+import { major, minVersion, satisfies, subset, valid, validRange } from 'semver';
 
 export function fulfillsVersionRange({
   version,
@@ -30,4 +30,31 @@ export function fulfillsVersionRange({
       ? subset(cleanedUserVersion, acceptableVersions)
       : satisfies(cleanedUserVersion, acceptableVersions))
   );
+}
+
+/**
+ * Get a version bucket string for analytics.
+ * Returns format like "15.x" for versions >= minimumMajor, or "<{minimumMajor}.0.0" otherwise.
+ */
+export function getVersionBucket(
+  version: string | undefined,
+  minimumMajor: number,
+): string {
+  if (!version) {
+    return 'none';
+  }
+
+  try {
+    const minVer = minVersion(version);
+    if (!minVer) {
+      return 'invalid';
+    }
+    const majorVersion = major(minVer);
+    if (majorVersion >= minimumMajor) {
+      return `${majorVersion}.x`;
+    }
+    return `<${minimumMajor}.0.0`;
+  } catch {
+    return 'unknown';
+  }
 }

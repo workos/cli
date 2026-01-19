@@ -1,28 +1,12 @@
-import { major, minVersion } from 'semver';
 import fg from 'fast-glob';
 import { abortIfCancelled } from '../utils/clack-utils.js';
 import clack from '../utils/clack.js';
+import { getVersionBucket } from '../utils/semver.js';
 import type { WizardOptions } from '../utils/types.js';
-import { Integration } from '../lib/constants.js';
+import { IGNORE_PATTERNS, Integration } from '../lib/constants.js';
 
-export function getNextJsVersionBucket(version: string | undefined) {
-  if (!version) {
-    return 'none';
-  }
-
-  try {
-    const minVer = minVersion(version);
-    if (!minVer) {
-      return 'invalid';
-    }
-    const majorVersion = major(minVer);
-    if (majorVersion >= 11) {
-      return `${majorVersion}.x`;
-    }
-    return '<11.0.0';
-  } catch {
-    return 'unknown';
-  }
+export function getNextJsVersionBucket(version: string | undefined): string {
+  return getVersionBucket(version, 11);
 }
 
 export enum NextJsRouter {
@@ -30,13 +14,6 @@ export enum NextJsRouter {
   PAGES_ROUTER = 'pages-router',
 }
 
-export const IGNORE_PATTERNS = [
-  '**/node_modules/**',
-  '**/dist/**',
-  '**/build/**',
-  '**/public/**',
-  '**/.next/**',
-];
 export async function getNextJsRouter({
   installDir,
 }: Pick<WizardOptions, 'installDir'>): Promise<NextJsRouter> {
