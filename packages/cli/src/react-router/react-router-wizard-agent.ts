@@ -93,8 +93,9 @@ const REACT_ROUTER_AGENT_CONFIG: FrameworkConfig = {
 
 /**
  * React Router wizard powered by the universal agent runner.
+ * @returns Summary of what was done, or empty string if version check fails
  */
-export async function runReactRouterWizardAgent(options: WizardOptions): Promise<void> {
+export async function runReactRouterWizardAgent(options: WizardOptions): Promise<string> {
   if (options.debug) {
     enableDebugLogs();
   }
@@ -114,9 +115,9 @@ export async function runReactRouterWizardAgent(options: WizardOptions): Promise
       );
       clack.log.info(`Setup React Router manually: ${chalk.cyan(docsUrl)}`);
       clack.outro('WorkOS AuthKit wizard will see you next time!');
-      return;
+      return '';
     }
   }
 
-  await runAgentWizard(REACT_ROUTER_AGENT_CONFIG, options);
+  return runAgentWizard(REACT_ROUTER_AGENT_CONFIG, options);
 }

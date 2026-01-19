@@ -26,8 +26,9 @@ import { runVanillaJsWizardAgent } from '../vanilla-js/vanilla-js-wizard-agent.j
 
 /**
  * Run the appropriate framework wizard based on integration type.
+ * @returns Detailed summary of what was done
  */
-async function runIntegrationWizardFn(integration: Integration, options: WizardOptions): Promise<void> {
+async function runIntegrationWizardFn(integration: Integration, options: WizardOptions): Promise<string> {
   switch (integration) {
     case Integration.nextjs:
       return runNextjsWizardAgent(options);
@@ -196,11 +197,13 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
             emitter: context.emitter,
           };
 
-          await runIntegrationWizardFn(integration, agentOptions);
+          // Run the wizard and get the detailed summary
+          const summary = await runIntegrationWizardFn(integration, agentOptions);
 
           return {
             success: true,
-            summary: `Successfully installed WorkOS AuthKit for ${integration}!`,
+            // Use the detailed summary from the wizard, with fallback
+            summary: summary || `Successfully installed WorkOS AuthKit for ${integration}!`,
           };
         } catch (error) {
           return {

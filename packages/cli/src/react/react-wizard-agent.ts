@@ -48,10 +48,10 @@ const REACT_AGENT_CONFIG: FrameworkConfig = {
   },
 };
 
-export async function runReactWizardAgent(options: WizardOptions): Promise<void> {
+export async function runReactWizardAgent(options: WizardOptions): Promise<string> {
   if (options.debug) {
     enableDebugLogs();
   }
 
-  await runAgentWizard(REACT_AGENT_CONFIG, options);
+  return runAgentWizard(REACT_AGENT_CONFIG, options);
 }
