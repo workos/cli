@@ -6,13 +6,23 @@ import { OutputPanel } from './OutputPanel.js';
 import { DiffPanel } from './DiffPanel.js';
 import { AnimatedLogo } from './AnimatedLogo.js';
 import { CredentialsForm } from './CredentialsForm.js';
+import { ConfirmPrompt } from './ConfirmPrompt.js';
 import type { WizardEventEmitter } from '../../lib/events.js';
 
 type FocusedPanel = 'changes' | 'output';
 
+interface ConfirmRequest {
+  id: string;
+  message: string;
+  warning?: string;
+  files?: string[];
+}
+
 interface DashboardLayoutProps {
   emitter: WizardEventEmitter;
   focusedPanel?: FocusedPanel;
+  confirmRequest?: ConfirmRequest | null;
+  onConfirm?: (confirmed: boolean) => void;
   credentialsRequest?: { requiresApiKey: boolean } | null;
   onCredentialsSubmit?: (credentials: { apiKey: string; clientId: string }) => void;
 }
@@ -20,6 +30,8 @@ interface DashboardLayoutProps {
 export function DashboardLayout({
   emitter,
   focusedPanel = 'changes',
+  confirmRequest,
+  onConfirm,
   credentialsRequest,
   onCredentialsSubmit,
 }: DashboardLayoutProps): React.ReactElement {
@@ -53,12 +65,19 @@ export function DashboardLayout({
     <Box flexDirection="column" width={columns} height={rows}>
       {/* Top Panel - 60% height */}
       <Panel
-        title={credentialsRequest ? 'Setup' : 'Changes'}
+        title={confirmRequest || credentialsRequest ? 'Setup' : 'Changes'}
         height={topHeight}
         borderColor={focusedPanel === 'changes' ? 'cyan' : 'gray'}
         contentHeight={topHeight - 4}
       >
-        {credentialsRequest && onCredentialsSubmit ? (
+        {confirmRequest && onConfirm ? (
+          <ConfirmPrompt
+            message={confirmRequest.message}
+            warning={confirmRequest.warning}
+            files={confirmRequest.files}
+            onConfirm={onConfirm}
+          />
+        ) : credentialsRequest && onCredentialsSubmit ? (
           <CredentialsForm
             requiresApiKey={credentialsRequest.requiresApiKey}
             onSubmit={onCredentialsSubmit}

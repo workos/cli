@@ -241,7 +241,9 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
   logToFile('Agent initialization starting');
   logToFile('Install directory:', options.installDir);
 
-  clack.log.step('Initializing Claude agent...');
+  if (!options.dashboard) {
+    clack.log.step('Initializing Claude agent...');
+  }
 
   try {
     // Configure LLM gateway for Claude API calls
@@ -315,11 +317,15 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
       });
     }
 
-    clack.log.step(`Verbose logs: ${LOG_FILE_PATH}`);
-    clack.log.success("Agent initialized. Let's get cooking!");
+    if (!options.dashboard) {
+      clack.log.step(`Verbose logs: ${LOG_FILE_PATH}`);
+      clack.log.success("Agent initialized. Let's get cooking!");
+    }
     return agentRunConfig;
   } catch (error) {
-    clack.log.error(`Failed to initialize agent: ${(error as Error).message}`);
+    if (!options.dashboard) {
+      clack.log.error(`Failed to initialize agent: ${(error as Error).message}`);
+    }
     logToFile('Agent initialization error:', error);
     debug('Agent initialization error:', error);
     throw error;
@@ -455,7 +461,9 @@ export async function runAgent(
     return {};
   } catch (error) {
     spinner?.stop(errorMessage);
-    clack.log.error(`Error: ${(error as Error).message}`);
+    if (!options.dashboard) {
+      clack.log.error(`Error: ${(error as Error).message}`);
+    }
     logToFile('Agent run failed:', error);
     debug('Full error:', error);
     throw error;
@@ -607,7 +615,9 @@ function handleSDKMessage(
         logToFile('Agent error result:', message.subtype);
         if (message.errors) {
           for (const err of message.errors) {
-            clack.log.error(`Error: ${err}`);
+            if (!options.dashboard) {
+              clack.log.error(`Error: ${err}`);
+            }
             logToFile('ERROR:', err);
             // Emit error event for dashboard
             emitter?.emit('error', { message: err });

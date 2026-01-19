@@ -26,13 +26,22 @@ export async function runAgentWizard(config: FrameworkConfig, options: WizardOpt
   // Setup phase
   printWelcome({ wizardName: getWelcomeMessage(config.metadata.name) });
 
-  clack.log.info(
-    `🧙 The wizard will use AI to intelligently set up WorkOS AuthKit in your ${config.metadata.name} project.`,
-  );
+    clack.log.info(
+      `🧙 The wizard will use AI to intelligently set up WorkOS AuthKit in your ${config.metadata.name} project.`,
+    );
+  } else {
+    // Emit status via event emitter for dashboard
+    options.emitter?.emit('status', {
+      message: `Setting up WorkOS AuthKit for ${config.metadata.name}`,
+    });
+  }
 
   const typeScriptDetected = isUsingTypeScript(options);
 
-  await confirmContinueIfNoOrDirtyGitRepo(options);
+  // Skip git check in dashboard mode (already done in run.ts)
+  if (!options.dashboard) {
+    await confirmContinueIfNoOrDirtyGitRepo(options);
+  }
 
   // Framework detection and version
   const packageJson = await getPackageDotJson(options);
@@ -159,7 +168,15 @@ ${chalk.dim(
   'Note: This wizard uses an LLM agent to analyze and modify your project. Please review the changes made.',
 )}`;
 
-  clack.outro(outroMessage);
+  if (options.dashboard) {
+    // Emit completion event for dashboard
+    options.emitter?.emit('complete', {
+      success: true,
+      summary: `Successfully installed WorkOS AuthKit!\n\nChanges:\n${changes.map((c) => `• ${c}`).join('\n')}\n\nNext steps:\n${nextSteps.map((s) => `• ${s}`).join('\n')}`,
+    });
+  } else {
+    clack.outro(outroMessage);
+  }
 
   await analytics.shutdown('success');
 }

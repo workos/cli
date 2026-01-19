@@ -1,6 +1,8 @@
 import {
   abortIfCancelled,
   checkExistingCredentials,
+  isInGitRepo,
+  getUncommittedOrUntrackedFiles,
 } from './utils/clack-utils.js';
 import { debug } from './utils/debug.js';
 
@@ -117,6 +119,39 @@ export async function runWizard(argv: Args) {
     await startDashboard({ emitter });
 
     try {
+      // Check git status first
+      if (isInGitRepo()) {
+        const dirtyFiles = getUncommittedOrUntrackedFiles();
+        if (dirtyFiles.length > 0) {
+          const confirmed = await new Promise<boolean>((resolve) => {
+            const handleResponse = ({
+              id,
+              confirmed,
+            }: {
+              id: string;
+              confirmed: boolean;
+            }) => {
+              if (id === 'git-status') {
+                emitter.off('confirm:response', handleResponse);
+                resolve(confirmed);
+              }
+            };
+            emitter.on('confirm:response', handleResponse);
+            emitter.emit('confirm:request', {
+              id: 'git-status',
+              message: 'Do you want to continue anyway?',
+              warning: 'You have uncommitted or untracked files in your repo.',
+              files: dirtyFiles,
+            });
+          });
+
+          if (!confirmed) {
+            await stopDashboard();
+            process.exit(0);
+          }
+        }
+      }
+
       // Check for existing credentials (CLI args or .env.local)
       let credentials = checkExistingCredentials(wizardOptions, requiresApiKey);
 

@@ -387,6 +387,7 @@ export async function ensurePackageIsInstalled(
   packageJson: PackageDotJson,
   packageId: string,
   packageName: string,
+  options?: Pick<WizardOptions, 'dashboard'>,
 ): Promise<void> {
   return traceStep('ensure-package-installed', async () => {
     const installed = hasPackageInstalled(packageId, packageJson);
@@ -394,6 +395,11 @@ export async function ensurePackageIsInstalled(
     analytics.setTag(`${packageName.toLowerCase()}-installed`, installed);
 
     if (!installed) {
+      // In dashboard mode, auto-continue (integration was already detected)
+      if (options?.dashboard) {
+        return;
+      }
+
       const continueWithoutPackage = await abortIfCancelled(
         clack.confirm({
           message: `${packageName} does not seem to be installed. Do you still want to continue?`,
@@ -555,7 +561,7 @@ export function checkExistingCredentials(
  * @param requireApiKey - Whether API key is needed (false for client-only SDKs like React, Vanilla JS)
  */
 export async function getOrAskForWorkOSCredentials(
-  _options: Pick<WizardOptions, 'ci' | 'apiKey' | 'clientId' | 'installDir'>,
+  _options: Pick<WizardOptions, 'ci' | 'apiKey' | 'clientId' | 'installDir' | 'dashboard'>,
   requireApiKey: boolean = true,
 ): Promise<{
   apiKey: string;
@@ -564,9 +570,12 @@ export async function getOrAskForWorkOSCredentials(
   let apiKey = _options.apiKey;
   let clientId = _options.clientId;
 
-  // If credentials provided via CLI (e.g., CI mode), use them
+  // If credentials provided via CLI (e.g., CI mode or dashboard mode), use them
   if ((!requireApiKey || apiKey) && clientId) {
-    clack.log.info('Using provided WorkOS credentials');
+    // Only log in non-dashboard mode
+    if (!_options.dashboard) {
+      clack.log.info('Using provided WorkOS credentials');
+    }
     return { apiKey: apiKey || '', clientId };
   }
 
@@ -582,7 +591,9 @@ export async function getOrAskForWorkOSCredentials(
 
       // Use existing credentials if both are present (or API key not required)
       if (existingClientId && (!requireApiKey || existingApiKey)) {
-        clack.log.success(`Found existing WorkOS credentials in .env.local`);
+        if (!_options.dashboard) {
+          clack.log.success(`Found existing WorkOS credentials in .env.local`);
+        }
         return {
           apiKey: existingApiKey || '',
           clientId: existingClientId,

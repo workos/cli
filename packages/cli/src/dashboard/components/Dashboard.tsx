@@ -13,6 +13,13 @@ interface OutputLine {
   isStatus?: boolean;
 }
 
+interface ConfirmRequest {
+  id: string;
+  message: string;
+  warning?: string;
+  files?: string[];
+}
+
 export function Dashboard({ emitter }: DashboardProps): React.ReactElement {
   const [state, setState] = useState<DashboardState>('running');
   const [focusedPanel, setFocusedPanel] = useState<FocusedPanel>('changes');
@@ -21,18 +28,19 @@ export function Dashboard({ emitter }: DashboardProps): React.ReactElement {
     summary?: string;
   } | null>(null);
   const [outputLog, setOutputLog] = useState<OutputLine[]>([]);
+  const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const [credentialsRequest, setCredentialsRequest] = useState<{
     requiresApiKey: boolean;
   } | null>(null);
 
-  // Tab to switch focus between panels (only when not entering credentials)
+  // Tab to switch focus between panels (only when not in a prompt)
   useInput(
     (input, key) => {
       if (key.tab) {
         setFocusedPanel((prev) => (prev === 'changes' ? 'output' : 'changes'));
       }
     },
-    { isActive: state === 'running' && !credentialsRequest },
+    { isActive: state === 'running' && !credentialsRequest && !confirmRequest },
   );
 
   useEffect(() => {
@@ -84,11 +92,26 @@ export function Dashboard({ emitter }: DashboardProps): React.ReactElement {
       setCredentialsRequest({ requiresApiKey });
     };
 
+    const handleConfirmRequest = ({
+      id,
+      message,
+      warning,
+      files,
+    }: {
+      id: string;
+      message: string;
+      warning?: string;
+      files?: string[];
+    }) => {
+      setConfirmRequest({ id, message, warning, files });
+    };
+
     emitter.on('output', handleOutput);
     emitter.on('status', handleStatus);
     emitter.on('complete', handleComplete);
     emitter.on('error', handleError);
     emitter.on('credentials:request', handleCredentialsRequest);
+    emitter.on('confirm:request', handleConfirmRequest);
 
     return () => {
       emitter.off('output', handleOutput);
@@ -96,8 +119,16 @@ export function Dashboard({ emitter }: DashboardProps): React.ReactElement {
       emitter.off('complete', handleComplete);
       emitter.off('error', handleError);
       emitter.off('credentials:request', handleCredentialsRequest);
+      emitter.off('confirm:request', handleConfirmRequest);
     };
   }, [emitter]);
+
+  const handleConfirm = (confirmed: boolean) => {
+    if (confirmRequest) {
+      emitter.emit('confirm:response', { id: confirmRequest.id, confirmed });
+      setConfirmRequest(null);
+    }
+  };
 
   const handleCredentialsSubmit = (credentials: {
     apiKey: string;
@@ -121,6 +152,8 @@ export function Dashboard({ emitter }: DashboardProps): React.ReactElement {
     <DashboardLayout
       emitter={emitter}
       focusedPanel={focusedPanel}
+      confirmRequest={confirmRequest}
+      onConfirm={handleConfirm}
       credentialsRequest={credentialsRequest}
       onCredentialsSubmit={handleCredentialsSubmit}
     />
