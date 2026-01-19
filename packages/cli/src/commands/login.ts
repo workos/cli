@@ -136,9 +136,10 @@ export async function runLogin(): Promise<void> {
 
         const expiresInSec = Math.round((expiresAt - Date.now()) / 1000);
 
+        // Only store access token - refresh tokens are not persisted for security
+        // User will need to re-authenticate when token expires
         saveCredentials({
           accessToken: result.access_token,
-          refreshToken: result.refresh_token,
           expiresAt,
           userId: result.user.id,
           email: result.user.email,

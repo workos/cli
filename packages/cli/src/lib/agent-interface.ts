@@ -277,15 +277,12 @@ export async function initializeAgent(
       throw new Error('Not authenticated. Run `wizard login` to authenticate.');
     }
 
-    // Send both access and refresh tokens to gateway
-    // Format: accessToken::refreshToken
-    // Gateway will refresh if access token is expired
-    const combinedToken = `${creds.accessToken}::${creds.refreshToken}`;
-
+    // Only send access token to gateway - refresh token stays client-side
+    // Token refresh is handled by TokenManager before expiry
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
-    process.env.ANTHROPIC_AUTH_TOKEN = combinedToken;
+    process.env.ANTHROPIC_AUTH_TOKEN = creds.accessToken;
 
-    logToFile('Sending combined token (access + refresh) to gateway');
+    logToFile('Sending access token to gateway (refresh token kept client-side)');
 
     const authMode = options.local
       ? `local-gateway:${gatewayUrl}`

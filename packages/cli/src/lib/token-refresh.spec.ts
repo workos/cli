@@ -27,23 +27,6 @@ vi.mock('node:os', async (importOriginal) => {
   };
 });
 
-// Mock WorkOS SDK
-const mockAuthenticateWithRefreshToken = vi.fn();
-vi.mock('@workos-inc/node', () => {
-  return {
-    WorkOS: class MockWorkOS {
-      userManagement = {
-        authenticateWithRefreshToken: mockAuthenticateWithRefreshToken,
-      };
-    },
-  };
-});
-
-// Mock settings
-vi.mock('./settings.js', () => ({
-  getCliAuthClientId: () => 'client_test_123',
-}));
-
 // Mock debug utilities
 vi.mock('../utils/debug.js', () => ({
   debug: vi.fn(),
@@ -51,9 +34,7 @@ vi.mock('../utils/debug.js', () => ({
 }));
 
 // Import after mocks are set up
-const { saveCredentials, clearCredentials, getCredentials } = await import(
-  './credentials.js'
-);
+const { saveCredentials, clearCredentials } = await import('./credentials.js');
 const { ensureValidToken } = await import('./token-refresh.js');
 
 describe('token-refresh', () => {
@@ -79,26 +60,24 @@ describe('token-refresh', () => {
 
   const validCreds: Credentials = {
     accessToken: 'access_token_123',
-    refreshToken: 'refresh_token_456',
     expiresAt: Date.now() + 60 * 60 * 1000, // 1 hour from now
     userId: 'user_abc',
     email: 'test@example.com',
   };
 
-  const expiringCreds: Credentials = {
+  const expiredCreds: Credentials = {
     ...validCreds,
-    expiresAt: Date.now() + 20 * 1000, // 20 seconds from now (within 30 sec buffer)
+    expiresAt: Date.now() - 1000, // 1 second ago
   };
 
   describe('ensureValidToken', () => {
-    it('returns success immediately for non-expired token', async () => {
+    it('returns success for non-expired token', async () => {
       saveCredentials(validCreds);
 
       const result = await ensureValidToken();
 
       expect(result.success).toBe(true);
       expect(result.credentials?.accessToken).toBe(validCreds.accessToken);
-      expect(mockAuthenticateWithRefreshToken).not.toHaveBeenCalled();
     });
 
     it('returns error when no credentials exist', async () => {
@@ -108,62 +87,8 @@ describe('token-refresh', () => {
       expect(result.error).toBe('Not authenticated');
     });
 
-    it('refreshes token when expiring soon', async () => {
-      saveCredentials(expiringCreds);
-
-      mockAuthenticateWithRefreshToken.mockResolvedValue({
-        accessToken: 'new_access_token',
-        refreshToken: 'new_refresh_token',
-        user: { id: 'user_abc', email: 'test@example.com' },
-      });
-
-      const result = await ensureValidToken();
-
-      expect(result.success).toBe(true);
-      expect(result.credentials?.accessToken).toBe('new_access_token');
-      expect(mockAuthenticateWithRefreshToken).toHaveBeenCalledWith({
-        clientId: 'client_test_123',
-        refreshToken: 'refresh_token_456',
-      });
-    });
-
-    it('updates credentials file after successful refresh', async () => {
-      saveCredentials(expiringCreds);
-
-      mockAuthenticateWithRefreshToken.mockResolvedValue({
-        accessToken: 'new_access_token',
-        refreshToken: 'new_refresh_token',
-        user: { id: 'user_abc', email: 'test@example.com' },
-      });
-
-      await ensureValidToken();
-
-      const savedCreds = getCredentials();
-      expect(savedCreds?.accessToken).toBe('new_access_token');
-      expect(savedCreds?.refreshToken).toBe('new_refresh_token');
-      expect(savedCreds?.userId).toBe('user_abc');
-      expect(savedCreds?.email).toBe('test@example.com');
-    });
-
-    it('returns error message when refresh fails', async () => {
-      saveCredentials(expiringCreds);
-
-      mockAuthenticateWithRefreshToken.mockRejectedValue(
-        new Error('Network error')
-      );
-
-      const result = await ensureValidToken();
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Network error');
-    });
-
-    it('returns session expired message for invalid_grant error', async () => {
-      saveCredentials(expiringCreds);
-
-      const error = new Error('Invalid grant');
-      (error as unknown as { code: string }).code = 'invalid_grant';
-      mockAuthenticateWithRefreshToken.mockRejectedValue(error);
+    it('returns error when token is expired', async () => {
+      saveCredentials(expiredCreds);
 
       const result = await ensureValidToken();
 
@@ -172,25 +97,14 @@ describe('token-refresh', () => {
       expect(result.error).toContain('wizard login');
     });
 
-    it('preserves userId and email after refresh', async () => {
-      const credsWithEmail: Credentials = {
-        ...expiringCreds,
-        userId: 'preserved_user_id',
-        email: 'preserved@example.com',
-      };
-      saveCredentials(credsWithEmail);
-
-      mockAuthenticateWithRefreshToken.mockResolvedValue({
-        accessToken: 'new_access_token',
-        refreshToken: 'new_refresh_token',
-        user: { id: 'preserved_user_id', email: 'preserved@example.com' },
-      });
+    it('preserves credentials on valid token', async () => {
+      saveCredentials(validCreds);
 
       const result = await ensureValidToken();
 
       expect(result.success).toBe(true);
-      expect(result.credentials?.userId).toBe('preserved_user_id');
-      expect(result.credentials?.email).toBe('preserved@example.com');
+      expect(result.credentials?.userId).toBe('user_abc');
+      expect(result.credentials?.email).toBe('test@example.com');
     });
   });
 });

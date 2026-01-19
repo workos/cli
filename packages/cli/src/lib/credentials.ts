@@ -4,7 +4,6 @@ import os from 'node:os';
 
 export interface Credentials {
   accessToken: string;
-  refreshToken: string;
   expiresAt: number;
   userId: string;
   email?: string;
@@ -48,15 +47,6 @@ export function clearCredentials(): void {
   }
 }
 
-/**
- * Check if token needs refresh (for proactive refresh decisions).
- * Uses a buffer to refresh before actual expiry.
- */
-export function needsRefresh(creds: Credentials): boolean {
-  // Refresh when 50% of lifetime has passed, or within 30 seconds of expiry
-  const minBufferMs = 30 * 1000;
-  return Date.now() >= creds.expiresAt - minBufferMs;
-}
 
 /**
  * Check if token is actually expired (hard expiry check).

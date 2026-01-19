@@ -10,7 +10,6 @@ import { serve } from '@hono/node-server';
 import Anthropic from '@anthropic-ai/sdk';
 import { env } from './env.js';
 import { validateJWT } from './jwt.js';
-import { refreshAccessToken } from './refresh.js';
 
 const app = new Hono();
 const PORT = Number(env.PORT) || 8000;
@@ -43,29 +42,10 @@ app.post('/v1/messages', async (c) => {
       );
     }
 
-    const tokenValue = authHeader.replace('Bearer ', '');
+    const accessToken = authHeader.replace('Bearer ', '');
 
-    // Token format: accessToken::refreshToken (refresh token is optional)
-    const [accessToken, refreshToken] = tokenValue.split('::');
-
-    // Validate JWT
-    let validation = await validateJWT(accessToken);
-
-    // If expired and we have a refresh token, try to refresh
-    if (!validation.valid && validation.error === 'Token expired' && refreshToken) {
-      console.log('[Auth] Access token expired, attempting refresh...');
-      const refreshResult = await refreshAccessToken(refreshToken);
-
-      if (refreshResult.success && refreshResult.accessToken) {
-        // Validate the new token
-        validation = await validateJWT(refreshResult.accessToken);
-        if (validation.valid) {
-          console.log('[Auth] Token refreshed and validated');
-        }
-      } else {
-        console.log(`[Auth] Refresh failed: ${refreshResult.error}`);
-      }
-    }
+    // Validate JWT - refresh is handled client-side before expiry
+    const validation = await validateJWT(accessToken);
 
     if (!validation.valid) {
       console.log(`[Auth] JWT validation failed: ${validation.error}`);

@@ -36,7 +36,6 @@ const {
   clearCredentials,
   hasCredentials,
   isTokenExpired,
-  needsRefresh,
   getAccessToken,
   getCredentialsPath,
 } = await import('./credentials.js');
@@ -64,7 +63,6 @@ describe('credentials', () => {
 
   const validCreds: Credentials = {
     accessToken: 'access_token_123',
-    refreshToken: 'refresh_token_456',
     expiresAt: Date.now() + 60 * 60 * 1000, // 1 hour from now
     userId: 'user_abc',
     email: 'test@example.com',
@@ -94,7 +92,6 @@ describe('credentials', () => {
       const content = readFileSync(credentialsFile, 'utf-8');
       const parsed = JSON.parse(content);
       expect(parsed.accessToken).toBe(validCreds.accessToken);
-      expect(parsed.refreshToken).toBe(validCreds.refreshToken);
       expect(parsed.userId).toBe(validCreds.userId);
       expect(parsed.email).toBe(validCreds.email);
     });
@@ -175,32 +172,6 @@ describe('credentials', () => {
         expiresAt: Date.now() - 1000, // 1 second ago
       };
       expect(isTokenExpired(creds)).toBe(true);
-    });
-  });
-
-  describe('needsRefresh', () => {
-    it('returns false when token has plenty of time left', () => {
-      const creds: Credentials = {
-        ...validCreds,
-        expiresAt: Date.now() + 2 * 60 * 1000, // 2 minutes from now
-      };
-      expect(needsRefresh(creds)).toBe(false);
-    });
-
-    it('returns true when token expires within 30 seconds', () => {
-      const creds: Credentials = {
-        ...validCreds,
-        expiresAt: Date.now() + 20 * 1000, // 20 seconds from now
-      };
-      expect(needsRefresh(creds)).toBe(true);
-    });
-
-    it('returns true when token is already expired', () => {
-      const creds: Credentials = {
-        ...validCreds,
-        expiresAt: Date.now() - 1000, // 1 second ago
-      };
-      expect(needsRefresh(creds)).toBe(true);
     });
   });
 
