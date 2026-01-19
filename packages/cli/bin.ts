@@ -36,6 +36,38 @@ yargs(hideBin(process.argv))
     const { runLogout } = await import('./src/commands/logout.js');
     await runLogout();
   })
+  .command(
+    'install-skill',
+    'Install bundled AuthKit skills to coding agents',
+    (yargs) => {
+      return yargs
+        .option('list', {
+          alias: 'l',
+          type: 'boolean',
+          description: 'List available skills without installing',
+        })
+        .option('skill', {
+          alias: 's',
+          type: 'array',
+          string: true,
+          description: 'Install specific skill(s)',
+        })
+        .option('agent', {
+          alias: 'a',
+          type: 'array',
+          string: true,
+          description: 'Target specific agent(s): claude-code, codex, cursor, goose',
+        });
+    },
+    async (argv) => {
+      const { runInstallSkill } = await import('./src/commands/install-skill.js');
+      await runInstallSkill({
+        list: argv.list as boolean | undefined,
+        skill: argv.skill as string[] | undefined,
+        agent: argv.agent as string[] | undefined,
+      });
+    },
+  )
   .options({
     debug: {
       default: false,
