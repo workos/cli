@@ -20,6 +20,8 @@ import { RateLimitError } from './utils/errors.js';
 import { getSettings } from './lib/settings.js';
 import { getAccessToken, getCredentials } from './lib/credentials.js';
 import { runLogin } from './commands/login.js';
+import { createWizardEventEmitter } from './lib/events.js';
+import { startDashboard, stopDashboard } from './dashboard/index.js';
 
 EventEmitter.defaultMaxListeners = 50;
 
@@ -36,6 +38,7 @@ type Args = {
   clientId?: string;
   homepageUrl?: string;
   redirectUri?: string;
+  dashboard?: boolean;
 };
 
 export async function runWizard(argv: Args) {
@@ -55,6 +58,9 @@ export async function runWizard(argv: Args) {
     resolvedInstallDir = process.cwd();
   }
 
+  // Create event emitter for dashboard mode
+  const emitter = createWizardEventEmitter();
+
   const wizardOptions: WizardOptions = {
     debug: finalArgs.debug ?? false,
     forceInstall: finalArgs.forceInstall ?? false,
@@ -67,6 +73,8 @@ export async function runWizard(argv: Args) {
     clientId: finalArgs.clientId,
     homepageUrl: finalArgs.homepageUrl,
     redirectUri: finalArgs.redirectUri,
+    dashboard: finalArgs.dashboard ?? false,
+    emitter,
   };
 
   const settings = getSettings();
@@ -111,6 +119,11 @@ export async function runWizard(argv: Args) {
 
   analytics.setTag('integration', integration);
 
+  // Start dashboard if enabled
+  if (wizardOptions.dashboard) {
+    await startDashboard({ emitter });
+  }
+
   try {
     switch (integration) {
       case Integration.nextjs:
@@ -131,7 +144,16 @@ export async function runWizard(argv: Args) {
       default:
         clack.log.error('No setup wizard selected!');
     }
+
+    // Stop dashboard if it was running
+    if (wizardOptions.dashboard) {
+      await stopDashboard();
+    }
   } catch (error) {
+    // Stop dashboard on error
+    if (wizardOptions.dashboard) {
+      await stopDashboard();
+    }
     debug('Full error:', error);
     debug('Error stack:', (error as Error).stack);
 
