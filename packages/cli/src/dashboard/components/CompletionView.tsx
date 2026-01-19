@@ -13,11 +13,7 @@ interface CompletionViewProps {
   outputLog: OutputLine[];
 }
 
-export function CompletionView({
-  success,
-  summary,
-  outputLog,
-}: CompletionViewProps): React.ReactElement {
+export function CompletionView({ success, summary, outputLog }: CompletionViewProps): React.ReactElement {
   const { exit } = useApp();
   const [scrollOffset, setScrollOffset] = useState(Math.max(0, outputLog.length - 20));
 
@@ -49,21 +45,12 @@ export function CompletionView({
       )}
 
       {/* Scrollable Log */}
-      <Box
-        flexDirection="column"
-        borderStyle="round"
-        borderColor="gray"
-        flexGrow={1}
-        paddingX={1}
-      >
+      <Box flexDirection="column" borderStyle="round" borderColor="gray" flexGrow={1} paddingX={1}>
         <Text bold dimColor>
           Output Log [{scrollOffset + 1}-{scrollOffset + visibleLines.length} of {outputLog.length}]
         </Text>
         {visibleLines.map((line, i) => (
-          <Text
-            key={i}
-            color={line.isError ? 'red' : line.isStatus ? 'yellow' : undefined}
-          >
+          <Text key={i} color={line.isError ? 'red' : line.isStatus ? 'yellow' : undefined}>
             {line.text}
           </Text>
         ))}

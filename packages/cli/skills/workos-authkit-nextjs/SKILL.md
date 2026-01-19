@@ -18,6 +18,7 @@ Report: [STATUS] Reading SDK documentation
 ## Step 2: Install SDK
 
 Detect package manager and install:
+
 - `pnpm-lock.yaml` → `pnpm add @workos-inc/authkit-nextjs`
 - `yarn.lock` → `yarn add @workos-inc/authkit-nextjs`
 - `package-lock.json` → `npm install @workos-inc/authkit-nextjs`
@@ -41,6 +42,7 @@ Report: [STATUS] Installing @workos-inc/authkit-nextjs
 ## Step 3: Create Callback Route
 
 Read `.env.local` to find `NEXT_PUBLIC_WORKOS_REDIRECT_URI`. The URL path determines the file path:
+
 - URI `http://localhost:3000/auth/callback` → create `app/auth/callback/route.ts`
 - URI `http://localhost:3000/callback` → create `app/callback/route.ts`
 
@@ -103,14 +105,14 @@ Use `getUser()` in `getServerSideProps` for server-side user access.
 
 Update `app/page.tsx` with authentication UI:
 
-```typescript
+````typescript
 import { withAuth, getSignInUrl, signOut } from '@workos-inc/authkit-nextjs';
 
 1. Import required functions:
 
    ```typescript
    import { getUser, getSignInUrl, signOut } from '@workos-inc/authkit-nextjs';
-   ```
+````
 
 2. Get user in server component:
 
@@ -118,16 +120,18 @@ import { withAuth, getSignInUrl, signOut } from '@workos-inc/authkit-nextjs';
    const user = await getUser();
    ```
 
-  return (
-    <main>
-      <h1>Welcome, {user.firstName || user.email}!</h1>
-      <p>{user.email}</p>
-      <form action={async () => { 'use server'; await signOut(); }}>
-        <button type="submit">Sign Out</button>
-      </form>
-    </main>
-  );
+return (
+
+<main>
+<h1>Welcome, {user.firstName || user.email}!</h1>
+<p>{user.email}</p>
+<form action={async () => { 'use server'; await signOut(); }}>
+<button type="submit">Sign Out</button>
+</form>
+</main>
+);
 }
+
 ```
 
 Report: [STATUS] Adding authentication UI
@@ -143,3 +147,4 @@ Before reporting complete:
 3. Verify AuthKitProvider wraps the app in layout.tsx
 
 Report: [STATUS] Integration complete
+```

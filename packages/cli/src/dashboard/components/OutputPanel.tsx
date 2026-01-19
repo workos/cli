@@ -50,21 +50,11 @@ export function OutputPanel({
     };
 
     const handleStatus = ({ message }: { message: string }) => {
-      setLines((prev) =>
-        [...prev, { text: `[STATUS] ${message}`, isStatus: true }].slice(-maxLines)
-      );
+      setLines((prev) => [...prev, { text: `[STATUS] ${message}`, isStatus: true }].slice(-maxLines));
       setScrollOffset(null);
     };
 
-    const handlePromptRequest = ({
-      id,
-      message,
-      options,
-    }: {
-      id: string;
-      message: string;
-      options?: string[];
-    }) => {
+    const handlePromptRequest = ({ id, message, options }: { id: string; message: string; options?: string[] }) => {
       if (options && options.length > 0) {
         setActivePrompt({ id, message, options });
       }
@@ -121,11 +111,7 @@ export function OutputPanel({
     if (activePrompt) {
       emitter.emit('prompt:response', { id: activePrompt.id, value });
       setLines((prev) =>
-        [
-          ...prev,
-          { text: `? ${activePrompt.message}`, isStatus: true },
-          { text: `  → ${value}` },
-        ].slice(-maxLines)
+        [...prev, { text: `? ${activePrompt.message}`, isStatus: true }, { text: `  → ${value}` }].slice(-maxLines),
       );
       setActivePrompt(null);
     }
@@ -138,18 +124,12 @@ export function OutputPanel({
   const contentLines = hasScroll ? visibleLines - promptHeight - 1 : visibleLines - promptHeight;
   const maxOffset = Math.max(0, lines.length - contentLines);
   const effectiveOffset = scrollOffset ?? maxOffset;
-  const displayLines = lines.slice(
-    Math.max(0, effectiveOffset),
-    Math.max(0, effectiveOffset) + contentLines
-  );
+  const displayLines = lines.slice(Math.max(0, effectiveOffset), Math.max(0, effectiveOffset) + contentLines);
 
   // Calculate scrollbar position
-  const scrollbarHeight = lines.length > 0
-    ? Math.max(1, Math.floor((contentLines / lines.length) * contentLines))
-    : 1;
-  const scrollbarPosition = maxOffset > 0
-    ? Math.floor((effectiveOffset / maxOffset) * (contentLines - scrollbarHeight))
-    : 0;
+  const scrollbarHeight = lines.length > 0 ? Math.max(1, Math.floor((contentLines / lines.length) * contentLines)) : 1;
+  const scrollbarPosition =
+    maxOffset > 0 ? Math.floor((effectiveOffset / maxOffset) * (contentLines - scrollbarHeight)) : 0;
 
   return (
     <Box flexDirection="row" flexGrow={1}>
@@ -158,21 +138,14 @@ export function OutputPanel({
           <Text dimColor>Waiting for output...</Text>
         ) : (
           displayLines.map((line, i) => (
-            <Text
-              key={i}
-              color={line.isError ? 'red' : line.isStatus ? 'yellow' : undefined}
-            >
+            <Text key={i} color={line.isError ? 'red' : line.isStatus ? 'yellow' : undefined}>
               {line.text}
             </Text>
           ))
         )}
 
         {activePrompt && (
-          <InlinePrompt
-            message={activePrompt.message}
-            options={activePrompt.options}
-            onSelect={handlePromptSelect}
-          />
+          <InlinePrompt message={activePrompt.message} options={activePrompt.options} onSelect={handlePromptSelect} />
         )}
 
         {hasScroll && (

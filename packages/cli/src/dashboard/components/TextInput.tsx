@@ -82,9 +82,7 @@ export function TextInput({
         <Text color="cyan" bold>
           {label}:{' '}
         </Text>
-        <Text dimColor={showPlaceholder}>
-          {showPlaceholder ? placeholder : displayValue}
-        </Text>
+        <Text dimColor={showPlaceholder}>{showPlaceholder ? placeholder : displayValue}</Text>
         {focused && cursorVisible && <Text color="cyan">|</Text>}
       </Box>
       {error && (

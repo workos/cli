@@ -8,12 +8,7 @@ interface ConfirmPromptProps {
   onConfirm: (confirmed: boolean) => void;
 }
 
-export function ConfirmPrompt({
-  message,
-  warning,
-  files,
-  onConfirm,
-}: ConfirmPromptProps): React.ReactElement {
+export function ConfirmPrompt({ message, warning, files, onConfirm }: ConfirmPromptProps): React.ReactElement {
   const [selected, setSelected] = useState<'yes' | 'no'>('yes');
 
   useInput((input, key) => {
@@ -47,9 +42,7 @@ export function ConfirmPrompt({
               {file}
             </Text>
           ))}
-          {files.length > 10 && (
-            <Text dimColor>...and {files.length - 10} more</Text>
-          )}
+          {files.length > 10 && <Text dimColor>...and {files.length - 10} more</Text>}
         </Box>
       )}
 
@@ -61,7 +54,7 @@ export function ConfirmPrompt({
         <Text color={selected === 'yes' ? 'cyan' : undefined} bold={selected === 'yes'}>
           {selected === 'yes' ? '● ' : '○ '}Yes
         </Text>
-        <Text>  </Text>
+        <Text> </Text>
         <Text color={selected === 'no' ? 'cyan' : undefined} bold={selected === 'no'}>
           {selected === 'no' ? '● ' : '○ '}No
         </Text>

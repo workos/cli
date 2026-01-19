@@ -74,28 +74,19 @@ yargs(hideBin(process.argv))
     (yargs) => {
       return yargs.options({
         'install-dir': {
-          describe:
-            'Directory to install WorkOS AuthKit in\nenv: WORKOS_WIZARD_INSTALL_DIR',
+          describe: 'Directory to install WorkOS AuthKit in\nenv: WORKOS_WIZARD_INSTALL_DIR',
           type: 'string',
         },
         integration: {
           describe: 'Integration to set up',
-          choices: [
-            'nextjs',
-            'react',
-            'tanstack-start',
-            'react-router',
-            'vanilla-js',
-          ],
+          choices: ['nextjs', 'react', 'tanstack-start', 'react-router', 'vanilla-js'],
           type: 'string',
         },
       });
     },
     (argv) => {
       const options = { ...argv, dashboard: true };
-      void import('./src/run.js').then(({ runWizard }) =>
-        runWizard(options as unknown as WizardOptions),
-      );
+      void import('./src/run.js').then(({ runWizard }) => runWizard(options as unknown as WizardOptions));
     },
   )
   .options({

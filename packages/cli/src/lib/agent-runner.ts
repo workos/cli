@@ -23,9 +23,9 @@ import { writeEnvLocal } from './env-writer.js';
  * Handles the complete flow for any framework using WorkOS MCP integration.
  */
 export async function runAgentWizard(config: FrameworkConfig, options: WizardOptions): Promise<void> {
-  // Setup phase
-  printWelcome({ wizardName: getWelcomeMessage(config.metadata.name) });
-
+  // Setup phase - skip clack UI in dashboard mode
+  if (!options.dashboard) {
+    printWelcome({ wizardName: getWelcomeMessage(config.metadata.name) });
     clack.log.info(
       `🧙 The wizard will use AI to intelligently set up WorkOS AuthKit in your ${config.metadata.name} project.`,
     );
@@ -80,6 +80,11 @@ export async function runAgentWizard(config: FrameworkConfig, options: WizardOpt
   const port = detectPort(config.metadata.integration, options.installDir);
   const callbackPath = getCallbackPath(config.metadata.integration);
   const redirectUri = options.redirectUri || `http://localhost:${port}${callbackPath}`;
+
+  // Next.js requires NEXT_PUBLIC_ prefix for client-side env vars
+  const redirectUriKey =
+    config.metadata.integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
+
   writeEnvLocal(options.installDir, {
     ...(apiKey ? { WORKOS_API_KEY: apiKey } : {}),
     WORKOS_CLIENT_ID: clientId,
@@ -116,7 +121,7 @@ export async function runAgentWizard(config: FrameworkConfig, options: WizardOpt
   );
 
   // Run agent - errors will throw naturally with skill-based approach
-  await runAgent(agent, integrationPrompt, options, spinner, {
+  const agentResult = await runAgent(agent, integrationPrompt, options, spinner, {
     spinnerMessage: SPINNER_MESSAGE,
     successMessage: config.ui.successMessage,
     errorMessage: 'Integration failed',
@@ -212,6 +217,10 @@ function buildIntegrationPrompt(
   if (!skillName) {
     throw new Error(`Framework ${config.metadata.name} missing skillName in config`);
   }
+
+  // Next.js uses NEXT_PUBLIC_ prefix for redirect URI
+  const redirectUriEnvVar =
+    config.metadata.integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
 
   return `You are integrating WorkOS AuthKit into this ${config.metadata.name} application.
 

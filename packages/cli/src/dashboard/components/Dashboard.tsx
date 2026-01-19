@@ -44,13 +44,7 @@ export function Dashboard({ emitter }: DashboardProps): React.ReactElement {
   );
 
   useEffect(() => {
-    const handleOutput = ({
-      text,
-      isError,
-    }: {
-      text: string;
-      isError?: boolean;
-    }) => {
+    const handleOutput = ({ text, isError }: { text: string; isError?: boolean }) => {
       const newLines = text.split('\n').map((line) => ({
         text: line,
         isError,
@@ -60,35 +54,19 @@ export function Dashboard({ emitter }: DashboardProps): React.ReactElement {
     };
 
     const handleStatus = ({ message }: { message: string }) => {
-      setOutputLog((prev) => [
-        ...prev,
-        { text: `[STATUS] ${message}`, isStatus: true },
-      ]);
+      setOutputLog((prev) => [...prev, { text: `[STATUS] ${message}`, isStatus: true }]);
     };
 
-    const handleComplete = ({
-      success,
-      summary,
-    }: {
-      success: boolean;
-      summary?: string;
-    }) => {
+    const handleComplete = ({ success, summary }: { success: boolean; summary?: string }) => {
       setCompletionData({ success, summary });
       setState('complete');
     };
 
     const handleError = ({ message }: { message: string }) => {
-      setOutputLog((prev) => [
-        ...prev,
-        { text: `ERROR: ${message}`, isError: true },
-      ]);
+      setOutputLog((prev) => [...prev, { text: `ERROR: ${message}`, isError: true }]);
     };
 
-    const handleCredentialsRequest = ({
-      requiresApiKey,
-    }: {
-      requiresApiKey: boolean;
-    }) => {
+    const handleCredentialsRequest = ({ requiresApiKey }: { requiresApiKey: boolean }) => {
       setCredentialsRequest({ requiresApiKey });
     };
 
@@ -130,22 +108,13 @@ export function Dashboard({ emitter }: DashboardProps): React.ReactElement {
     }
   };
 
-  const handleCredentialsSubmit = (credentials: {
-    apiKey: string;
-    clientId: string;
-  }) => {
+  const handleCredentialsSubmit = (credentials: { apiKey: string; clientId: string }) => {
     emitter.emit('credentials:response', credentials);
     setCredentialsRequest(null);
   };
 
   if (state === 'complete' && completionData) {
-    return (
-      <CompletionView
-        success={completionData.success}
-        summary={completionData.summary}
-        outputLog={outputLog}
-      />
-    );
+    return <CompletionView success={completionData.success} summary={completionData.summary} outputLog={outputLog} />;
   }
 
   return (

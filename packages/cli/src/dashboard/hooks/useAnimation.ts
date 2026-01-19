@@ -6,11 +6,7 @@ interface UseAnimationOptions {
   paused?: boolean;
 }
 
-export function useAnimation({
-  frameCount,
-  frameDelayMs,
-  paused = false,
-}: UseAnimationOptions): number {
+export function useAnimation({ frameCount, frameDelayMs, paused = false }: UseAnimationOptions): number {
   const [frameIndex, setFrameIndex] = useState(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 

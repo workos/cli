@@ -78,16 +78,9 @@ export function DashboardLayout({
             onConfirm={onConfirm}
           />
         ) : credentialsRequest && onCredentialsSubmit ? (
-          <CredentialsForm
-            requiresApiKey={credentialsRequest.requiresApiKey}
-            onSubmit={onCredentialsSubmit}
-          />
+          <CredentialsForm requiresApiKey={credentialsRequest.requiresApiKey} onSubmit={onCredentialsSubmit} />
         ) : (
-          <DiffPanel
-            emitter={emitter}
-            focused={focusedPanel === 'changes'}
-            height={topHeight - 4}
-          />
+          <DiffPanel emitter={emitter} focused={focusedPanel === 'changes'} height={topHeight - 4} />
         )}
       </Panel>
 
@@ -100,11 +93,7 @@ export function DashboardLayout({
           borderColor={focusedPanel === 'output' ? 'cyan' : 'gray'}
           contentHeight={bottomHeight - 4}
         >
-          <OutputPanel
-            emitter={emitter}
-            focused={focusedPanel === 'output'}
-            height={bottomHeight - 4}
-          />
+          <OutputPanel emitter={emitter} focused={focusedPanel === 'output'} height={bottomHeight - 4} />
         </Panel>
 
         {/* Bottom Right - 25% width, no title */}

@@ -133,9 +133,7 @@ export function tokenize(line: string, language: string): Token[] {
     }
 
     // Strings (single, double, template)
-    const stringMatch = remaining.match(
-      /^("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)/,
-    );
+    const stringMatch = remaining.match(/^("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)/);
     if (stringMatch) {
       tokens.push({ type: 'string', value: stringMatch[1] });
       remaining = remaining.slice(stringMatch[1].length);
@@ -209,11 +207,7 @@ export function tokenize(line: string, language: string): Token[] {
   return tokens;
 }
 
-export function computeDiff(
-  path: string,
-  oldContent: string | null,
-  newContent: string,
-): FileDiff {
+export function computeDiff(path: string, oldContent: string | null, newContent: string): FileDiff {
   const isNew = oldContent === null || oldContent === '';
 
   if (isNew) {
@@ -288,21 +282,14 @@ export function computeDiff(
 }
 
 // Helper: filter diff lines to show only changes with context
-export function filterWithContext(
-  changes: DiffLine[],
-  contextLines: number,
-): DiffLine[] {
+export function filterWithContext(changes: DiffLine[], contextLines: number): DiffLine[] {
   const result: DiffLine[] = [];
   const indices = new Set<number>();
 
   // Mark indices of changed lines and their context
   changes.forEach((change, i) => {
     if (change.type === 'add' || change.type === 'remove') {
-      for (
-        let j = Math.max(0, i - contextLines);
-        j <= Math.min(changes.length - 1, i + contextLines);
-        j++
-      ) {
+      for (let j = Math.max(0, i - contextLines); j <= Math.min(changes.length - 1, i + contextLines); j++) {
         indices.add(j);
       }
     }

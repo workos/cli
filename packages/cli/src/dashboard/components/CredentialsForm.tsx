@@ -9,18 +9,11 @@ interface CredentialsFormProps {
 
 type Field = 'apiKey' | 'clientId';
 
-export function CredentialsForm({
-  requiresApiKey,
-  onSubmit,
-}: CredentialsFormProps): React.ReactElement {
+export function CredentialsForm({ requiresApiKey, onSubmit }: CredentialsFormProps): React.ReactElement {
   const [apiKey, setApiKey] = useState('');
   const [clientId, setClientId] = useState('');
-  const [focusedField, setFocusedField] = useState<Field>(
-    requiresApiKey ? 'apiKey' : 'clientId',
-  );
-  const [errors, setErrors] = useState<{ apiKey?: string; clientId?: string }>(
-    {},
-  );
+  const [focusedField, setFocusedField] = useState<Field>(requiresApiKey ? 'apiKey' : 'clientId');
+  const [errors, setErrors] = useState<{ apiKey?: string; clientId?: string }>({});
 
   const validate = (): boolean => {
     const newErrors: { apiKey?: string; clientId?: string } = {};
@@ -68,9 +61,7 @@ export function CredentialsForm({
         </Text>
       </Box>
       <Box marginBottom={1}>
-        <Text dimColor>
-          Get them from https://dashboard.workos.com
-        </Text>
+        <Text dimColor>Get them from https://dashboard.workos.com</Text>
       </Box>
 
       <Box flexDirection="column" marginTop={1}>
@@ -103,9 +94,7 @@ export function CredentialsForm({
       </Box>
 
       <Box marginTop={1}>
-        <Text dimColor>
-          {requiresApiKey ? 'Tab: switch fields | ' : ''}Ctrl+U: clear | Enter: continue
-        </Text>
+        <Text dimColor>{requiresApiKey ? 'Tab: switch fields | ' : ''}Ctrl+U: clear | Enter: continue</Text>
       </Box>
     </Box>
   );

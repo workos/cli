@@ -21,9 +21,7 @@ export function useScrollNavigation({
     } else if (key.pageUp) {
       setScrollOffset(Math.max(0, scrollOffset - visibleItems));
     } else if (key.pageDown) {
-      setScrollOffset(
-        Math.min(totalItems - visibleItems, scrollOffset + visibleItems),
-      );
+      setScrollOffset(Math.min(totalItems - visibleItems, scrollOffset + visibleItems));
     }
   });
 }

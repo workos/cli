@@ -96,22 +96,17 @@ export async function runWizard(argv: Args) {
       process.exit(1);
     }
 
-    const integration =
-      finalArgs.integration ?? (await detectIntegration(wizardOptions));
+    const integration = finalArgs.integration ?? (await detectIntegration(wizardOptions));
 
     if (!integration) {
-      console.error(
-        'Could not detect integration. Use --integration to specify.',
-      );
+      console.error('Could not detect integration. Use --integration to specify.');
       process.exit(1);
     }
 
     // Server-side frameworks need API key, client-only frameworks just need client ID
-    const requiresApiKey = [
-      Integration.nextjs,
-      Integration.tanstackStart,
-      Integration.reactRouter,
-    ].includes(integration);
+    const requiresApiKey = [Integration.nextjs, Integration.tanstackStart, Integration.reactRouter].includes(
+      integration,
+    );
 
     analytics.setTag('integration', integration);
 
@@ -155,13 +150,7 @@ export async function runWizard(argv: Args) {
         const dirtyFiles = getUncommittedOrUntrackedFiles();
         if (dirtyFiles.length > 0) {
           const confirmed = await new Promise<boolean>((resolve) => {
-            const handleResponse = ({
-              id,
-              confirmed,
-            }: {
-              id: string;
-              confirmed: boolean;
-            }) => {
+            const handleResponse = ({ id, confirmed }: { id: string; confirmed: boolean }) => {
               if (id === 'git-status') {
                 emitter.off('confirm:response', handleResponse);
                 resolve(confirmed);
@@ -188,19 +177,14 @@ export async function runWizard(argv: Args) {
 
       // If no credentials found, request them via TUI
       if (!credentials) {
-        credentials = await new Promise<{ apiKey: string; clientId: string }>(
-          (resolve) => {
-            const handleResponse = (creds: {
-              apiKey: string;
-              clientId: string;
-            }) => {
-              emitter.off('credentials:response', handleResponse);
-              resolve(creds);
-            };
-            emitter.on('credentials:response', handleResponse);
-            emitter.emit('credentials:request', { requiresApiKey });
-          },
-        );
+        credentials = await new Promise<{ apiKey: string; clientId: string }>((resolve) => {
+          const handleResponse = (creds: { apiKey: string; clientId: string }) => {
+            emitter.off('credentials:response', handleResponse);
+            resolve(creds);
+          };
+          emitter.on('credentials:response', handleResponse);
+          emitter.emit('credentials:request', { requiresApiKey });
+        });
       }
 
       // Update wizardOptions with credentials so agent-runner doesn't re-prompt
@@ -313,6 +297,67 @@ async function detectIntegration(options: Pick<WizardOptions, 'installDir'>): Pr
       return integration as Integration;
     }
   }
+}
+
+async function runIntegrationWizard(integration: Integration, options: WizardOptions): Promise<void> {
+  switch (integration) {
+    case Integration.nextjs:
+      return runNextjsWizardAgent(options);
+    case Integration.react:
+      return runReactWizardAgent(options);
+    case Integration.reactRouter:
+      return runReactRouterWizardAgent(options);
+    case Integration.tanstackStart:
+      return runTanstackStartWizardAgent(options);
+    case Integration.vanillaJs:
+      return runVanillaJsWizardAgent(options);
+    default:
+      throw new Error(`Unknown integration: ${integration}`);
+  }
+}
+
+function printDashboardSummary(
+  outputLog: Array<{ text: string; isError?: boolean; isStatus?: boolean }>,
+  completionData: { success: boolean; summary?: string } | null,
+  integration: Integration,
+): void {
+  console.log('\n' + chalk.bold('=== Wizard Summary ===\n'));
+
+  // Print status messages
+  const statusMessages = outputLog.filter((entry) => entry.isStatus);
+  if (statusMessages.length > 0) {
+    console.log(chalk.cyan('Progress:'));
+    statusMessages.forEach((entry) => {
+      console.log(`  ${entry.text.replace('[STATUS]', '').trim()}`);
+    });
+    console.log();
+  }
+
+  // Print completion status
+  if (completionData) {
+    if (completionData.success) {
+      console.log(chalk.green('Status: Success'));
+      if (completionData.summary) {
+        console.log('\n' + completionData.summary);
+      }
+    } else {
+      console.log(chalk.red('Status: Failed'));
+      if (completionData.summary) {
+        console.log(chalk.red('\nError: ' + completionData.summary));
+      }
+    }
+  }
+
+  // Print errors if any
+  const errors = outputLog.filter((entry) => entry.isError && !entry.isStatus);
+  if (errors.length > 0) {
+    console.log(chalk.red('\nErrors:'));
+    errors.forEach((entry) => {
+      console.log(`  ${entry.text}`);
+    });
+  }
+
+  console.log(`\nDocs: ${chalk.cyan(INTEGRATION_CONFIG[integration].docsUrl)}`);
 }
 
 async function getIntegrationForSetup(options: Pick<WizardOptions, 'installDir'>) {

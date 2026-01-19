@@ -454,13 +454,13 @@ export async function runAgent(
     // Check for error markers in the agent's output
     if (outputText.includes(AgentSignals.ERROR_MCP_MISSING)) {
       logToFile('Agent error: MCP_MISSING');
-      spinner.stop('Agent could not access WorkOS MCP');
+      spinner?.stop('Agent could not access WorkOS MCP');
       return { error: AgentErrorType.MCP_MISSING };
     }
 
     if (outputText.includes(AgentSignals.ERROR_RESOURCE_MISSING)) {
       logToFile('Agent error: RESOURCE_MISSING');
-      spinner.stop('Agent could not access setup resource');
+      spinner?.stop('Agent could not access setup resource');
       return { error: AgentErrorType.RESOURCE_MISSING };
     }
 
@@ -471,7 +471,7 @@ export async function runAgent(
       duration_seconds: Math.round(durationMs / 1000),
     });
 
-    spinner.stop(successMessage);
+    spinner?.stop(successMessage);
     return {};
   } catch (error) {
     spinner?.stop(errorMessage);

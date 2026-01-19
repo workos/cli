@@ -23,17 +23,11 @@ export class WizardEventEmitter extends EventEmitter {
     return super.emit(event, payload);
   }
 
-  on<K extends WizardEventName>(
-    event: K,
-    listener: (payload: WizardEvents[K]) => void,
-  ): this {
+  on<K extends WizardEventName>(event: K, listener: (payload: WizardEvents[K]) => void): this {
     return super.on(event, listener);
   }
 
-  off<K extends WizardEventName>(
-    event: K,
-    listener: (payload: WizardEvents[K]) => void,
-  ): this {
+  off<K extends WizardEventName>(event: K, listener: (payload: WizardEvents[K]) => void): this {
     return super.off(event, listener);
   }
 }

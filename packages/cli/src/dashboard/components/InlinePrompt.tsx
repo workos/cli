@@ -7,11 +7,7 @@ interface InlinePromptProps {
   onSelect: (value: string) => void;
 }
 
-export function InlinePrompt({
-  message,
-  options,
-  onSelect,
-}: InlinePromptProps): React.ReactElement {
+export function InlinePrompt({ message, options, onSelect }: InlinePromptProps): React.ReactElement {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   useInput((input, key) => {

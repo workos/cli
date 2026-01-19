@@ -73,15 +73,7 @@ export function DiffPanel({ emitter, focused = true, height }: DiffPanelProps): 
       setScrollOffset(0);
     };
 
-    const handleEdit = ({
-      path,
-      oldContent,
-      newContent,
-    }: {
-      path: string;
-      oldContent: string;
-      newContent: string;
-    }) => {
+    const handleEdit = ({ path, oldContent, newContent }: { path: string; oldContent: string; newContent: string }) => {
       const diff = computeDiff(path, oldContent, newContent);
       setDiffs((prev) => [diff, ...prev].slice(0, 10));
       setScrollOffset(0);
@@ -175,9 +167,8 @@ export function DiffPanel({ emitter, focused = true, height }: DiffPanelProps): 
 
   // Calculate scrollbar position
   const scrollbarHeight = Math.max(1, Math.floor((contentLines / allLines.length) * contentLines));
-  const scrollbarPosition = maxOffset > 0
-    ? Math.floor((scrollOffset / maxOffset) * (contentLines - scrollbarHeight))
-    : 0;
+  const scrollbarPosition =
+    maxOffset > 0 ? Math.floor((scrollOffset / maxOffset) * (contentLines - scrollbarHeight)) : 0;
 
   return (
     <Box flexDirection="row" flexGrow={1}>
@@ -201,12 +192,7 @@ export function DiffPanel({ emitter, focused = true, height }: DiffPanelProps): 
                 <Text color="green" bold>
                   {prefix}
                 </Text>
-                <HighlightedLine
-                  content={codeContent}
-                  language={line.language}
-                  prefix=""
-                  dimmed={false}
-                />
+                <HighlightedLine content={codeContent} language={line.language} prefix="" dimmed={false} />
               </Box>
             );
           }
@@ -217,25 +203,14 @@ export function DiffPanel({ emitter, focused = true, height }: DiffPanelProps): 
                 <Text color="red" bold>
                   {prefix}
                 </Text>
-                <HighlightedLine
-                  content={codeContent}
-                  language={line.language}
-                  prefix=""
-                  dimmed={false}
-                />
+                <HighlightedLine content={codeContent} language={line.language} prefix="" dimmed={false} />
               </Box>
             );
           }
 
           // Unchanged lines - dimmed with syntax highlighting
           return (
-            <HighlightedLine
-              key={i}
-              content={codeContent}
-              language={line.language}
-              prefix={prefix}
-              dimmed={true}
-            />
+            <HighlightedLine key={i} content={codeContent} language={line.language} prefix={prefix} dimmed={true} />
           );
         })}
         {hasScroll && (
