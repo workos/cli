@@ -26,13 +26,37 @@ app.get('/health', (c) => {
   return c.json({ status: 'ok', service: 'workos-llm-gateway' });
 });
 
+// Check if local development mode is enabled via env var
+const isLocalMode = env.LOCAL_MODE === 'true' || env.LOCAL_MODE === '1';
+
 // Anthropic Messages API proxy
 app.post('/v1/messages', async (c) => {
   try {
     const authHeader = c.req.header('authorization');
+    const hasToken = authHeader && authHeader.startsWith('Bearer ') && authHeader.length > 7;
 
-    // Check for Bearer token
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // If token provided, always validate it
+    if (hasToken) {
+      const accessToken = authHeader.replace('Bearer ', '');
+      const validation = await validateJWT(accessToken);
+
+      if (!validation.valid) {
+        console.log(`[Auth] JWT validation failed: ${validation.error}`);
+        return c.json(
+          {
+            error: validation.error || 'Invalid token',
+            hint: 'Run `wizard login` to authenticate',
+          },
+          401
+        );
+      }
+
+      console.log(`[Auth] Request from user: ${validation.payload?.sub}`);
+    } else if (isLocalMode) {
+      // No token but LOCAL_MODE enabled - allow for local development
+      console.log(`[Auth] Local development mode (LOCAL_MODE=true, no token)`);
+    } else {
+      // No token and not in local mode - reject
       return c.json(
         {
           error: 'Missing Authorization header',
@@ -41,24 +65,6 @@ app.post('/v1/messages', async (c) => {
         401
       );
     }
-
-    const accessToken = authHeader.replace('Bearer ', '');
-
-    // Validate JWT - refresh is handled client-side before expiry
-    const validation = await validateJWT(accessToken);
-
-    if (!validation.valid) {
-      console.log(`[Auth] JWT validation failed: ${validation.error}`);
-      return c.json(
-        {
-          error: validation.error || 'Invalid token',
-          hint: 'Run `wizard login` to authenticate',
-        },
-        401
-      );
-    }
-
-    console.log(`[Auth] Request from user: ${validation.payload?.sub}`);
 
     const body = await c.req.json();
     console.log(`[Proxy] Model: ${body.model}, Max tokens: ${body.max_tokens}`);
@@ -125,5 +131,6 @@ serve({
   console.log(`   Health check: http://localhost:${PORT}/health`);
   console.log(`   Anthropic proxy: POST http://localhost:${PORT}/v1/messages`);
   console.log(`\n   Anthropic API Key: ${env.ANTHROPIC_API_KEY ? '✓ Set' : '✗ Missing'}`);
-  console.log(`   WorkOS Client ID: ${env.WORKOS_CLIENT_ID ? '✓ Set' : '✗ Missing'}\n`);
+  console.log(`   WorkOS Client ID: ${env.WORKOS_CLIENT_ID ? '✓ Set' : '✗ Missing'}`);
+  console.log(`   Local Mode: ${isLocalMode ? '✓ Enabled (auth optional)' : '✗ Disabled (auth required)'}\n`);
 });

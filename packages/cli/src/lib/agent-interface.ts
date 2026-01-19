@@ -258,8 +258,8 @@ export async function initializeAgent(
       ? settings.gateway.development
       : getLlmGatewayUrlFromHost();
 
-    // Check/refresh authentication for production
-    if (!options.local) {
+    // Check/refresh authentication for production (unless skipping auth)
+    if (!options.skipAuth && !options.local) {
       if (!hasCredentials()) {
         throw new Error(
           'Not authenticated. Run `wizard login` to authenticate.',
@@ -272,21 +272,26 @@ export async function initializeAgent(
       }
     }
 
-    const creds = getCredentials();
-    if (!creds) {
-      throw new Error('Not authenticated. Run `wizard login` to authenticate.');
-    }
-
-    // Only send access token to gateway - refresh token stays client-side
-    // Token refresh is handled by TokenManager before expiry
+    // Set gateway URL
     process.env.ANTHROPIC_BASE_URL = gatewayUrl;
-    process.env.ANTHROPIC_AUTH_TOKEN = creds.accessToken;
 
-    logToFile('Sending access token to gateway (refresh token kept client-side)');
-
-    const authMode = options.local
-      ? `local-gateway:${gatewayUrl}`
-      : `workos-gateway:${gatewayUrl}`;
+    // Only send access token if not skipping auth
+    let authMode: string;
+    if (options.skipAuth) {
+      delete process.env.ANTHROPIC_AUTH_TOKEN;
+      authMode = `skip-auth:${gatewayUrl}`;
+      logToFile('Skipping auth - no token sent to gateway');
+    } else {
+      const creds = getCredentials();
+      if (!creds) {
+        throw new Error('Not authenticated. Run `wizard login` to authenticate.');
+      }
+      process.env.ANTHROPIC_AUTH_TOKEN = creds.accessToken;
+      authMode = options.local
+        ? `local-gateway:${gatewayUrl}`
+        : `workos-gateway:${gatewayUrl}`;
+      logToFile('Sending access token to gateway');
+    }
 
     logToFile('Configured LLM gateway:', gatewayUrl);
 

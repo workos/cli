@@ -31,6 +31,7 @@ type Args = {
   default?: boolean;
   local?: boolean;
   ci?: boolean;
+  skipAuth?: boolean;
   apiKey?: string;
   clientId?: string;
   homepageUrl?: string;
@@ -61,6 +62,7 @@ export async function runWizard(argv: Args) {
     default: finalArgs.default ?? false,
     local: finalArgs.local ?? false,
     ci: finalArgs.ci ?? false,
+    skipAuth: finalArgs.skipAuth ?? false,
     apiKey: finalArgs.apiKey,
     clientId: finalArgs.clientId,
     homepageUrl: finalArgs.homepageUrl,
@@ -80,21 +82,29 @@ export async function runWizard(argv: Args) {
   }
 
   // Check if we need to authenticate (no refresh tokens stored for security)
-  if (!getAccessToken()) {
-    clack.log.step('Authentication required');
-    await runLogin();
-
-    // Final check - must have valid token
-    if (!getAccessToken()) {
-      clack.log.error('Authentication failed. Please try again.');
+  if (wizardOptions.skipAuth) {
+    if (!wizardOptions.local) {
+      clack.log.error('--skip-auth can only be used with --local');
       process.exit(1);
     }
-  }
+    clack.log.warn(chalk.yellow('Skipping authentication (--skip-auth flag)'));
+  } else {
+    if (!getAccessToken()) {
+      clack.log.step('Authentication required');
+      await runLogin();
 
-  // Show who's authenticated
-  const creds = getCredentials();
-  if (creds?.email) {
-    clack.log.info(`Authenticated as ${chalk.cyan(creds.email)}`);
+      // Final check - must have valid token
+      if (!getAccessToken()) {
+        clack.log.error('Authentication failed. Please try again.');
+        process.exit(1);
+      }
+    }
+
+    // Show who's authenticated
+    const creds = getCredentials();
+    if (creds?.email) {
+      clack.log.info(`Authenticated as ${chalk.cyan(creds.email)}`);
+    }
   }
 
   const integration =

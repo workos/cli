@@ -60,6 +60,12 @@ yargs(hideBin(process.argv))
         'Enable CI mode for non-interactive execution\nenv: WORKOS_WIZARD_CI',
       type: 'boolean',
     },
+    'skip-auth': {
+      default: false,
+      describe:
+        'Skip authentication check (requires --local)\nenv: WORKOS_WIZARD_SKIP_AUTH',
+      type: 'boolean',
+    },
     'api-key': {
       describe: 'WorkOS API key (sk_xxx)\nenv: WORKOS_WIZARD_API_KEY',
       type: 'string',

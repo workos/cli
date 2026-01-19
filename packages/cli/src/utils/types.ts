@@ -43,6 +43,11 @@ export type WizardOptions = {
   ci: boolean;
 
   /**
+   * Skip authentication check (for local development only)
+   */
+  skipAuth: boolean;
+
+  /**
    * WorkOS API key (sk_xxx)
    */
   apiKey?: string;

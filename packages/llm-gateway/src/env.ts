@@ -5,6 +5,8 @@ interface Env {
   ANTHROPIC_API_KEY?: string;
   PORT?: string;
   WORKOS_CLIENT_ID?: string;
+  /** Enable local development mode - allows unauthenticated requests */
+  LOCAL_MODE?: string;
 }
 
 function getEnv(): Env {

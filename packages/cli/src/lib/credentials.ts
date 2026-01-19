@@ -47,7 +47,6 @@ export function clearCredentials(): void {
   }
 }
 
-
 /**
  * Check if token is actually expired (hard expiry check).
  */
