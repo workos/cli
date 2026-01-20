@@ -229,7 +229,7 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
     inspector = createSkyInspector();
     setTimeout(() => {
       console.log = originalLog;
-    }, 5000);
+    }, 5000).unref();
   }
 
   actor = createActor(machineWithActors, {

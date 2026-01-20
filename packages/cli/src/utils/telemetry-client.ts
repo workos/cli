@@ -30,7 +30,7 @@ export class TelemetryClient {
     }
 
     const payload: TelemetryRequest = { events: [...this.events] };
-    this.events = []; // Clear immediately
+    this.events = [];
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -39,6 +39,9 @@ export class TelemetryClient {
       headers['Authorization'] = `Bearer ${this.accessToken}`;
     }
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+
     try {
       debug(`[Telemetry] Sending ${payload.events.length} events to ${this.gatewayUrl}/telemetry`);
 
@@ -46,6 +49,7 @@ export class TelemetryClient {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -53,7 +57,8 @@ export class TelemetryClient {
       }
     } catch (error) {
       debug(`[Telemetry] Error sending events: ${error}`);
-      // Silent failure - don't crash wizard
+    } finally {
+      clearTimeout(timeout);
     }
   }
 }
