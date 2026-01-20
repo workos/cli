@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Load .env.local from the package directory
-config({ path: resolve(__dirname, '.env.local') });
+config({ path: resolve(__dirname, '.env.local'), quiet: true });
 
 // Now import and run the actual CLI
 import './bin.js';
