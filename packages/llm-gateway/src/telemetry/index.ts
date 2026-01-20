@@ -1,19 +1,21 @@
 import { NodeSDK } from '@opentelemetry/sdk-node';
-import { getExporter } from './exporter.js';
+import { getTraceExporter, getMetricReader } from './exporter.js';
 
 let sdk: NodeSDK | null = null;
 
 export function initTelemetry(serviceName: string) {
-  const exporter = getExporter();
+  const traceExporter = getTraceExporter();
+  const metricReader = getMetricReader();
 
-  if (!exporter) {
+  if (!traceExporter && !metricReader) {
     console.log('[Telemetry] Disabled (OTEL_EXPORTER_TYPE=none)');
     return;
   }
 
   sdk = new NodeSDK({
     serviceName,
-    traceExporter: exporter,
+    traceExporter: traceExporter ?? undefined,
+    metricReader: metricReader ?? undefined,
   });
 
   sdk.start();

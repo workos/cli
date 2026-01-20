@@ -8,6 +8,13 @@ import type {
   AgentToolEvent,
   AgentLLMEvent,
 } from './types.js';
+import {
+  sessionCounter,
+  sessionSuccessCounter,
+  sessionFailureCounter,
+  tokensHistogram,
+  durationHistogram,
+} from './metrics.js';
 
 const tracer = trace.getTracer('wizard-telemetry');
 
@@ -42,18 +49,39 @@ function processSessionEnd(event: SessionEndEvent) {
   const span = activeSessions.get(event.sessionId);
   if (!span) return;
 
-  // Add all attributes
   for (const [key, value] of Object.entries(event.attributes)) {
     if (value !== undefined) span.setAttribute(key, value);
   }
 
-  // Set status based on outcome
-  if (event.attributes['wizard.outcome'] === 'error') {
+  const outcome = event.attributes['wizard.outcome'];
+  if (outcome === 'error') {
     span.setStatus({ code: SpanStatusCode.ERROR });
   }
 
   span.end(new Date(event.timestamp));
   activeSessions.delete(event.sessionId);
+
+  // Record metrics
+  const framework = event.attributes['wizard.framework'] as string | undefined;
+  const metricAttrs = framework ? { framework } : {};
+
+  sessionCounter.add(1, metricAttrs);
+  if (outcome === 'success') {
+    sessionSuccessCounter.add(1, metricAttrs);
+  } else if (outcome === 'error' || outcome === 'cancelled') {
+    sessionFailureCounter.add(1, metricAttrs);
+  }
+
+  const duration = event.attributes['wizard.duration_ms'];
+  if (typeof duration === 'number') {
+    durationHistogram.record(duration, metricAttrs);
+  }
+
+  const inputTokens = event.attributes['wizard.agent.tokens.input'];
+  const outputTokens = event.attributes['wizard.agent.tokens.output'];
+  if (typeof inputTokens === 'number' && typeof outputTokens === 'number') {
+    tokensHistogram.record(inputTokens + outputTokens, metricAttrs);
+  }
 }
 
 function processStep(event: StepEvent) {
