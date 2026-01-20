@@ -1,5 +1,3 @@
-import readEnvModule from 'read-env';
-const readEnv = ((readEnvModule as any).default || readEnvModule) as (prefix: string) => Record<string, unknown>;
 import { getPackageDotJson } from './clack-utils.js';
 import type { WizardOptions } from './types.js';
 import fg from 'fast-glob';
@@ -18,7 +16,15 @@ export function isNonInteractiveEnvironment(): boolean {
 }
 
 export function readEnvironment(): Record<string, unknown> {
-  const result = readEnv('WORKOS_WIZARD');
+  const prefix = 'WORKOS_WIZARD_';
+  const result: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(process.env)) {
+    if (key.startsWith(prefix)) {
+      const envKey = key.slice(prefix.length).toLowerCase();
+      result[envKey] = value;
+    }
+  }
 
   return result;
 }

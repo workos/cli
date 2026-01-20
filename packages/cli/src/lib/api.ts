@@ -1,4 +1,3 @@
-import axios, { AxiosError } from 'axios';
 import { z } from 'zod';
 import { analytics } from '../utils/analytics.js';
 
@@ -6,22 +5,22 @@ export const ApiUserSchema = z.object({
   distinct_id: z.string(),
   organizations: z.array(
     z.object({
-      id: z.string().uuid(),
+      id: z.uuid(),
     }),
   ),
   team: z.object({
     id: z.number(),
-    organization: z.string().uuid(),
+    organization: z.uuid(),
   }),
   organization: z.object({
-    id: z.string().uuid(),
+    id: z.uuid(),
   }),
 });
 
 export const ApiProjectSchema = z.object({
   id: z.number(),
-  uuid: z.string().uuid(),
-  organization: z.string().uuid(),
+  uuid: z.uuid(),
+  organization: z.uuid(),
   api_token: z.string(),
   name: z.string(),
 });
@@ -41,18 +40,24 @@ class ApiError extends Error {
 }
 
 export async function fetchUserData(accessToken: string, baseUrl: string): Promise<ApiUser> {
+  const endpoint = '/api/users/@me/';
   try {
-    const response = await axios.get(`${baseUrl}/api/users/@me/`, {
+    const response = await fetch(`${baseUrl}${endpoint}`, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
     });
 
-    return ApiUserSchema.parse(response.data);
+    if (!response.ok) {
+      throw await createFetchError(response, endpoint);
+    }
+
+    const data = await response.json();
+    return ApiUserSchema.parse(data);
   } catch (error) {
-    const apiError = handleApiError(error, 'fetch user data');
+    const apiError = handleApiError(error, 'fetch user data', endpoint);
     analytics.captureException(apiError, {
-      endpoint: '/api/users/@me/',
+      endpoint,
       baseUrl,
     });
     throw apiError;
@@ -60,18 +65,24 @@ export async function fetchUserData(accessToken: string, baseUrl: string): Promi
 }
 
 export async function fetchProjectData(accessToken: string, projectId: number, baseUrl: string): Promise<ApiProject> {
+  const endpoint = `/api/projects/${projectId}/`;
   try {
-    const response = await axios.get(`${baseUrl}/api/projects/${projectId}/`, {
+    const response = await fetch(`${baseUrl}${endpoint}`, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
     });
 
-    return ApiProjectSchema.parse(response.data);
+    if (!response.ok) {
+      throw await createFetchError(response, endpoint);
+    }
+
+    const data = await response.json();
+    return ApiProjectSchema.parse(data);
   } catch (error) {
-    const apiError = handleApiError(error, 'fetch project data');
+    const apiError = handleApiError(error, 'fetch project data', endpoint);
     analytics.captureException(apiError, {
-      endpoint: `/api/projects/${projectId}/`,
+      endpoint,
       baseUrl,
       projectId,
     });
@@ -79,12 +90,37 @@ export async function fetchProjectData(accessToken: string, projectId: number, b
   }
 }
 
-function handleApiError(error: unknown, operation: string): ApiError {
-  if (axios.isAxiosError(error)) {
-    const axiosError = error as AxiosError<{ detail?: string }>;
-    const status = axiosError.response?.status;
-    const detail = axiosError.response?.data?.detail;
-    const endpoint = axiosError.config?.url;
+interface FetchError extends Error {
+  status: number;
+  endpoint: string;
+  detail?: string;
+}
+
+async function createFetchError(response: Response, endpoint: string): Promise<FetchError> {
+  let detail: string | undefined;
+  try {
+    const data: unknown = await response.json();
+    if (typeof data === 'object' && data !== null && 'detail' in data) {
+      detail = String((data as { detail: unknown }).detail);
+    }
+  } catch {
+    // Response wasn't JSON
+  }
+
+  const error = new Error(`HTTP ${response.status}`) as FetchError;
+  error.status = response.status;
+  error.endpoint = endpoint;
+  error.detail = detail;
+  return error;
+}
+
+function isFetchError(error: unknown): error is FetchError {
+  return error instanceof Error && 'status' in error && typeof (error as FetchError).status === 'number';
+}
+
+function handleApiError(error: unknown, operation: string, endpoint: string): ApiError {
+  if (isFetchError(error)) {
+    const { status, detail } = error;
 
     if (status === 401) {
       return new ApiError(`Authentication failed while trying to ${operation}`, status, endpoint);

@@ -1,4 +1,3 @@
-import axios from 'axios';
 import type { Integration } from './constants.js';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants.js';
 import { analytics } from '../utils/analytics.js';
@@ -13,29 +12,60 @@ export interface AutoConfigResult {
   homepageUrl: { success: boolean };
 }
 
+interface FetchError {
+  status: number;
+  message: string;
+  data?: unknown;
+}
+
+async function workosRequest(
+  method: 'POST' | 'PUT',
+  endpoint: string,
+  apiKey: string,
+  body: Record<string, string>,
+): Promise<Response> {
+  return fetch(`${WORKOS_API_BASE}${endpoint}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+async function parseFetchError(response: Response): Promise<FetchError> {
+  let data: unknown;
+  try {
+    data = await response.json();
+  } catch {
+    // Response wasn't JSON
+  }
+  return {
+    status: response.status,
+    message: typeof data === 'object' && data && 'message' in data ? String((data as { message: string }).message) : '',
+    data,
+  };
+}
+
 /**
  * Create a redirect URI in WorkOS.
  * Returns success on 201 or 409 (already exists).
  */
 async function createRedirectUri(apiKey: string, uri: string): Promise<{ success: boolean; alreadyExists: boolean }> {
-  try {
-    await axios.post(
-      `${WORKOS_API_BASE}/user_management/redirect_uris`,
-      { uri },
-      { headers: { Authorization: `Bearer ${apiKey}` } },
-    );
+  const response = await workosRequest('POST', '/user_management/redirect_uris', apiKey, { uri });
+
+  if (response.ok) {
     return { success: true, alreadyExists: false };
-  } catch (error) {
-    if (axios.isAxiosError(error)) {
-      const status = error.response?.status;
-      const message = error.response?.data?.message || '';
-      // WorkOS returns 422 (not 409) when URI already exists
-      if (status === 409 || (status === 422 && message.includes('already exists'))) {
-        return { success: true, alreadyExists: true };
-      }
-    }
-    throw error;
   }
+
+  const error = await parseFetchError(response);
+  // WorkOS returns 422 (not 409) when URI already exists
+  if (error.status === 409 || (error.status === 422 && error.message.includes('already exists'))) {
+    return { success: true, alreadyExists: true };
+  }
+
+  throw new Error(error.message || `HTTP ${error.status}`);
 }
 
 /**
@@ -43,35 +73,32 @@ async function createRedirectUri(apiKey: string, uri: string): Promise<{ success
  * Returns success on 201 or 409 (already exists).
  */
 async function createCorsOrigin(apiKey: string, origin: string): Promise<{ success: boolean; alreadyExists: boolean }> {
-  try {
-    await axios.post(
-      `${WORKOS_API_BASE}/user_management/cors_origins`,
-      { origin },
-      { headers: { Authorization: `Bearer ${apiKey}` } },
-    );
+  const response = await workosRequest('POST', '/user_management/cors_origins', apiKey, { origin });
+
+  if (response.ok) {
     return { success: true, alreadyExists: false };
-  } catch (error) {
-    if (axios.isAxiosError(error)) {
-      const status = error.response?.status;
-      const message = error.response?.data?.message || '';
-      // WorkOS returns 422 (not 409) when origin already exists
-      if (status === 409 || (status === 422 && message.includes('already exists'))) {
-        return { success: true, alreadyExists: true };
-      }
-    }
-    throw error;
   }
+
+  const error = await parseFetchError(response);
+  // WorkOS returns 422 (not 409) when origin already exists
+  if (error.status === 409 || (error.status === 422 && error.message.includes('already exists'))) {
+    return { success: true, alreadyExists: true };
+  }
+
+  throw new Error(error.message || `HTTP ${error.status}`);
 }
 
 /**
  * Set the app homepage URL in WorkOS.
  */
 async function setHomepageUrl(apiKey: string, url: string): Promise<{ success: boolean }> {
-  await axios.put(
-    `${WORKOS_API_BASE}/user_management/app_homepage_url`,
-    { url },
-    { headers: { Authorization: `Bearer ${apiKey}` } },
-  );
+  const response = await workosRequest('PUT', '/user_management/app_homepage_url', apiKey, { url });
+
+  if (!response.ok) {
+    const error = await parseFetchError(response);
+    throw new Error(error.message || `HTTP ${error.status}`);
+  }
+
   return { success: true };
 }
 
@@ -145,24 +172,13 @@ export async function autoConfigureWorkOSEnvironment(
     const message = error instanceof Error ? error.message : 'Unknown error';
 
     // Provide specific guidance for common errors
-    if (axios.isAxiosError(error)) {
-      const status = error.response?.status;
-      const responseData = error.response?.data;
-      const errorDetail = typeof responseData === 'object' ? JSON.stringify(responseData) : responseData;
-
-      if (status === 401) {
-        clack.log.warn('Could not configure WorkOS dashboard: Invalid API key');
-      } else if (status === 403) {
-        clack.log.warn('Could not configure WorkOS dashboard: API key lacks permission');
-      } else if (status === 422) {
-        clack.log.warn(`Could not configure WorkOS dashboard: Validation error`);
-        clack.log.info(`  API response: ${errorDetail}`);
-      } else {
-        clack.log.warn(`Could not configure WorkOS dashboard: ${message}`);
-        if (errorDetail) {
-          clack.log.info(`  API response: ${errorDetail}`);
-        }
-      }
+    if (message.includes('401') || message.includes('Invalid API key')) {
+      clack.log.warn('Could not configure WorkOS dashboard: Invalid API key');
+    } else if (message.includes('403') || message.includes('permission')) {
+      clack.log.warn('Could not configure WorkOS dashboard: API key lacks permission');
+    } else if (message.includes('422') || message.includes('Validation')) {
+      clack.log.warn(`Could not configure WorkOS dashboard: Validation error`);
+      clack.log.info(`  Error: ${message}`);
     } else {
       clack.log.warn(`Could not configure WorkOS dashboard: ${message}`);
     }
