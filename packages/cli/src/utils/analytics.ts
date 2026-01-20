@@ -48,12 +48,11 @@ export class Analytics {
 
     debug(`[Analytics] capture: ${eventName}`, properties);
 
-    // Accumulate as tags for the session.end event
-    // Phase 3 will add proper event tracking
+    // Accumulate primitive values as tags for the session.end event
     if (properties) {
       for (const [key, value] of Object.entries(properties)) {
-        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-          this.tags[key] = value;
+        if (['string', 'number', 'boolean'].includes(typeof value)) {
+          this.tags[key] = value as string | number | boolean;
         }
       }
     }
@@ -147,13 +146,10 @@ export class Analytics {
 
     const duration = Date.now() - this.sessionStartTime.getTime();
 
-    // Build extra attributes from accumulated tags
-    const extraAttributes: Record<string, string | number | boolean> = {};
-    for (const [key, value] of Object.entries(this.tags)) {
-      if (value !== null && value !== undefined) {
-        extraAttributes[key] = value;
-      }
-    }
+    // Filter out null/undefined tags
+    const extraAttributes = Object.fromEntries(
+      Object.entries(this.tags).filter(([, v]) => v != null),
+    ) as Record<string, string | number | boolean>;
 
     const event: SessionEndEvent = {
       type: 'session.end',
