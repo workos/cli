@@ -84,8 +84,7 @@ function processAgentEvent(event: AgentToolEvent | AgentLLMEvent) {
   const parentSpan = activeSessions.get(event.sessionId);
   const ctx = parentSpan ? trace.setSpan(context.active(), parentSpan) : undefined;
 
-  const spanName =
-    event.type === 'agent.tool' ? `wizard.agent.tool.${event.toolName}` : 'wizard.agent.llm';
+  const spanName = event.type === 'agent.tool' ? `wizard.agent.tool.${event.toolName}` : 'wizard.agent.llm';
 
   const span = tracer.startSpan(spanName, { kind: SpanKind.INTERNAL }, ctx);
 

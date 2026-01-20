@@ -52,12 +52,7 @@ export interface AgentLLMEvent extends TelemetryEvent {
   outputTokens: number;
 }
 
-export type TelemetryEventPayload =
-  | SessionStartEvent
-  | SessionEndEvent
-  | StepEvent
-  | AgentToolEvent
-  | AgentLLMEvent;
+export type TelemetryEventPayload = SessionStartEvent | SessionEndEvent | StepEvent | AgentToolEvent | AgentLLMEvent;
 
 /** Batch request for telemetry endpoint */
 export interface TelemetryRequest {

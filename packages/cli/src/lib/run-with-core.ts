@@ -246,6 +246,15 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
 
   let wizardStatus: 'success' | 'error' | 'cancelled' = 'success';
 
+  // Handle ctrl+c to flush telemetry before exit
+  const handleSigint = async () => {
+    wizardStatus = 'cancelled';
+    await analytics.shutdown(wizardStatus);
+    await adapter.stop();
+    process.exit(130); // Standard exit code for SIGINT
+  };
+  process.on('SIGINT', handleSigint);
+
   try {
     await new Promise<void>((resolve, reject) => {
       actor!.subscribe({
@@ -272,6 +281,7 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
     wizardStatus = 'error';
     throw error;
   } finally {
+    process.off('SIGINT', handleSigint);
     await analytics.shutdown(wizardStatus);
     await adapter.stop();
   }
