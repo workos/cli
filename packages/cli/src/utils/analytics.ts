@@ -89,9 +89,6 @@ export class Analytics {
     telemetryClient.queueEvent(event);
   }
 
-  /**
-   * Record a completed wizard step with timing.
-   */
   stepCompleted(name: string, durationMs: number, success: boolean, error?: Error) {
     if (!WIZARD_TELEMETRY_ENABLED) return;
 
@@ -108,9 +105,6 @@ export class Analytics {
     telemetryClient.queueEvent(event);
   }
 
-  /**
-   * Record an agent tool call with timing.
-   */
   toolCalled(toolName: string, durationMs: number, success: boolean) {
     if (!WIZARD_TELEMETRY_ENABLED) return;
 
@@ -126,9 +120,6 @@ export class Analytics {
     telemetryClient.queueEvent(event);
   }
 
-  /**
-   * Record an LLM API request with token counts.
-   */
   llmRequest(model: string, inputTokens: number, outputTokens: number) {
     if (!WIZARD_TELEMETRY_ENABLED) return;
 
@@ -147,9 +138,6 @@ export class Analytics {
     telemetryClient.queueEvent(event);
   }
 
-  /**
-   * Increment the agent iteration counter.
-   */
   incrementAgentIterations() {
     this.agentIterations++;
   }
