@@ -61,6 +61,7 @@
   },
   "devDependencies": {
     "@babel/types": "~7.21.4",
+    "@statelyai/inspect": "^0.4.0",
     "@types/chai": "^4.3.17",
     "@types/glob": "^7.2.0",
     "@types/inquirer": "^0.0.43",

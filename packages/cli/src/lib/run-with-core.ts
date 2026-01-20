@@ -1,4 +1,8 @@
 import { createActor, fromPromise } from 'xstate';
+import { createSkyInspector } from '@statelyai/inspect';
+import open from 'opn';
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
 import { wizardMachine } from './wizard-core.js';
 import { createWizardEventEmitter } from './events.js';
 import { CLIAdapter } from './adapters/cli-adapter.js';
@@ -7,8 +11,8 @@ import type { WizardAdapter } from './adapters/types.js';
 import type { WizardOptions } from '../utils/types.js';
 import type { WizardMachineContext, DetectionOutput, GitCheckOutput, AgentOutput } from './wizard-core.types.js';
 import { Integration } from './constants.js';
+import { parseEnvFile } from '../utils/env-parser.js';
 
-// Import existing utilities for actor implementations
 import { getAccessToken } from './credentials.js';
 import { runLogin } from '../commands/login.js';
 import { isInGitRepo, getUncommittedOrUntrackedFiles } from '../utils/clack-utils.js';
@@ -16,18 +20,12 @@ import { INTEGRATION_CONFIG, INTEGRATION_ORDER } from './config.js';
 import { autoConfigureWorkOSEnvironment } from './workos-management.js';
 import { detectPort, getCallbackPath } from './port-detection.js';
 import { writeEnvLocal } from './env-writer.js';
-
-// Import framework-specific wizard agents
 import { runNextjsWizardAgent } from '../nextjs/nextjs-wizard-agent.js';
 import { runReactWizardAgent } from '../react/react-wizard-agent.js';
 import { runReactRouterWizardAgent } from '../react-router/react-router-wizard-agent.js';
 import { runTanstackStartWizardAgent } from '../tanstack-start/tanstack-start-wizard-agent.js';
 import { runVanillaJsWizardAgent } from '../vanilla-js/vanilla-js-wizard-agent.js';
 
-/**
- * Run the appropriate framework wizard based on integration type.
- * @returns Detailed summary of what was done
- */
 async function runIntegrationWizardFn(integration: Integration, options: WizardOptions): Promise<string> {
   switch (integration) {
     case Integration.nextjs:
@@ -45,9 +43,24 @@ async function runIntegrationWizardFn(integration: Integration, options: WizardO
   }
 }
 
-/**
- * Detect integration from project files.
- */
+function readExistingCredentials(installDir: string): { apiKey?: string; clientId?: string } {
+  const envPath = join(installDir, '.env.local');
+  if (!existsSync(envPath)) {
+    return {};
+  }
+
+  try {
+    const content = readFileSync(envPath, 'utf-8');
+    const envVars = parseEnvFile(content);
+    return {
+      apiKey: envVars.WORKOS_API_KEY || undefined,
+      clientId: envVars.WORKOS_CLIENT_ID || undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
 async function detectIntegrationFn(options: Pick<WizardOptions, 'installDir'>): Promise<Integration | undefined> {
   const integrationConfigs = Object.entries(INTEGRATION_CONFIG).sort(
     ([a], [b]) => INTEGRATION_ORDER.indexOf(a as Integration) - INTEGRATION_ORDER.indexOf(b as Integration),
@@ -62,20 +75,15 @@ async function detectIntegrationFn(options: Pick<WizardOptions, 'installDir'>): 
   return undefined;
 }
 
-/**
- * Run the wizard using the headless core architecture.
- *
- * This is the unified entry point that:
- * 1. Creates the event emitter
- * 2. Creates the appropriate UI adapter
- * 3. Provides real implementations to the machine
- * 4. Starts the machine and awaits completion
- */
 export async function runWithCore(options: WizardOptions): Promise<void> {
-  // Create the event emitter
-  const emitter = createWizardEventEmitter();
+  const existingCreds = readExistingCredentials(options.installDir);
+  const augmentedOptions: WizardOptions = {
+    ...options,
+    apiKey: options.apiKey || existingCreds.apiKey,
+    clientId: options.clientId || existingCreds.clientId,
+  };
 
-  // Track the actor so adapters can send events
+  const emitter = createWizardEventEmitter();
   let actor: ReturnType<typeof createActor<typeof wizardMachine>> | null = null;
 
   const sendEvent = (event: { type: string; [key: string]: unknown }) => {
@@ -84,64 +92,38 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
     }
   };
 
-  // Create the appropriate adapter
   const adapter: WizardAdapter = options.dashboard
     ? new DashboardAdapter({ emitter, sendEvent })
     : new CLIAdapter({ emitter, sendEvent });
 
-  // Provide real implementations for machine actors
   const machineWithActors = wizardMachine.provide({
     actors: {
-      /**
-       * Check if user is authenticated, perform login if needed.
-       */
       checkAuthentication: fromPromise(async () => {
         const token = getAccessToken();
-        if (token) {
-          return true;
-        }
+        if (token) return true;
 
-        // Trigger login flow
         await runLogin();
 
-        // Check again
         const newToken = getAccessToken();
         if (!newToken) {
           throw new Error('Authentication failed. Please try again.');
         }
-
         return true;
       }),
 
-      /**
-       * Detect the framework integration from project files.
-       */
       detectIntegration: fromPromise<DetectionOutput, { options: WizardOptions }>(async ({ input }) => {
-        const integration = await detectIntegrationFn({
-          installDir: input.options.installDir,
-        });
+        const integration = await detectIntegrationFn({ installDir: input.options.installDir });
         return { integration };
       }),
 
-      /**
-       * Check git status for uncommitted/untracked files.
-       */
       checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => {
-        // If not in a git repo, treat as clean
         if (!isInGitRepo()) {
           return { isClean: true, files: [] };
         }
-
         const files = getUncommittedOrUntrackedFiles();
-        return {
-          isClean: files.length === 0,
-          files,
-        };
+        return { isClean: files.length === 0, files };
       }),
 
-      /**
-       * Configure environment: write .env.local, auto-configure WorkOS.
-       */
       configureEnvironment: fromPromise<void, { context: WizardMachineContext }>(async ({ input }) => {
         const { context } = input;
         const { options: wizardOptions, integration, credentials } = context;
@@ -150,12 +132,10 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
           throw new Error('Missing integration or credentials');
         }
 
-        // Detect port for redirect URI
         const port = detectPort(integration, wizardOptions.installDir);
         const callbackPath = getCallbackPath(integration);
         const redirectUri = wizardOptions.redirectUri || `http://localhost:${port}${callbackPath}`;
 
-        // Auto-configure WorkOS (redirect URI, CORS, homepage)
         const requiresApiKey = [Integration.nextjs, Integration.tanstackStart, Integration.reactRouter].includes(
           integration,
         );
@@ -166,7 +146,6 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
           });
         }
 
-        // Write .env.local
         const redirectUriKey =
           integration === Integration.nextjs ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
 
@@ -177,9 +156,6 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
         });
       }),
 
-      /**
-       * Run the AI agent to perform the integration.
-       */
       runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async ({ input }) => {
         const { context } = input;
         const { options: wizardOptions, integration, credentials } = context;
@@ -189,20 +165,15 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
         }
 
         try {
-          // Update options with credentials for the agent
           const agentOptions: WizardOptions = {
             ...wizardOptions,
             apiKey: credentials?.apiKey,
             clientId: credentials?.clientId,
             emitter: context.emitter,
           };
-
-          // Run the wizard and get the detailed summary
           const summary = await runIntegrationWizardFn(integration, agentOptions);
-
           return {
             success: true,
-            // Use the detailed summary from the wizard, with fallback
             summary: summary || `Successfully installed WorkOS AuthKit for ${integration}!`,
           };
         } catch (error) {
@@ -215,16 +186,37 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
     },
   });
 
-  // Create the actor
+  let inspector: ReturnType<typeof createSkyInspector> | undefined;
+  if (augmentedOptions.inspect) {
+    const originalLog = console.log;
+    let inspectUrl: string | undefined;
+
+    console.log = (...args: unknown[]) => {
+      const msg = args.join(' ');
+      if (typeof msg === 'string' && msg.startsWith('https://stately.ai/inspect/')) {
+        inspectUrl = msg;
+        console.log = originalLog;
+        console.log(`Opening XState inspector: ${inspectUrl}`);
+        void open(inspectUrl);
+      } else {
+        originalLog.apply(console, args);
+      }
+    };
+
+    inspector = createSkyInspector();
+    setTimeout(() => {
+      console.log = originalLog;
+    }, 5000);
+  }
+
   actor = createActor(machineWithActors, {
-    input: { emitter, options },
+    input: { emitter, options: augmentedOptions },
+    inspect: inspector?.inspect,
   });
 
-  // Start the adapter
   await adapter.start();
 
   try {
-    // Wait for the machine to reach a terminal state
     await new Promise<void>((resolve, reject) => {
       actor!.subscribe({
         complete: () => {
@@ -239,12 +231,10 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
         error: (err) => reject(err),
       });
 
-      // Start the machine
       actor!.start();
       actor!.send({ type: 'START' });
     });
   } finally {
-    // Always stop the adapter
     await adapter.stop();
   }
 }

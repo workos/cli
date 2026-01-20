@@ -9,19 +9,6 @@ import type {
 } from './wizard-core.types.js';
 import type { WizardOptions } from '../utils/types.js';
 
-/**
- * Creates the wizard state machine using XState v5 setup() API.
- *
- * The machine orchestrates:
- * 1. Authentication check
- * 2. Parallel: framework detection + git status check
- * 3. Credentials gathering (if needed)
- * 4. Environment configuration
- * 5. Agent execution
- *
- * All UI communication happens through the emitter - the machine
- * never directly renders anything.
- */
 export const wizardMachine = setup({
   types: {
     context: {} as WizardMachineContext,
@@ -30,15 +17,12 @@ export const wizardMachine = setup({
   },
 
   actions: {
-    // ===== State lifecycle actions =====
     emitStateEnter: ({ context }, params: { state: string }) => {
       context.emitter.emit('state:enter', { state: params.state });
     },
     emitStateExit: ({ context }, params: { state: string }) => {
       context.emitter.emit('state:exit', { state: params.state });
     },
-
-    // ===== Auth actions =====
     emitAuthChecking: ({ context }) => {
       context.emitter.emit('auth:checking', {});
     },
@@ -52,8 +36,6 @@ export const wizardMachine = setup({
       const message = context.error?.message ?? 'Authentication failed';
       context.emitter.emit('auth:failure', { message });
     },
-
-    // ===== Detection actions =====
     emitDetectionStart: ({ context }) => {
       context.emitter.emit('detection:start', {});
     },
@@ -64,8 +46,6 @@ export const wizardMachine = setup({
         context.emitter.emit('detection:none', {});
       }
     },
-
-    // ===== Git actions =====
     emitGitChecking: ({ context }) => {
       context.emitter.emit('git:checking', {});
     },
@@ -81,24 +61,20 @@ export const wizardMachine = setup({
     emitGitCancelled: ({ context }) => {
       context.emitter.emit('git:dirty:cancelled', {});
     },
-
-    // ===== Credentials actions =====
     emitCredentialsGathering: ({ context }) => {
-      // Determine if API key is required based on integration
       const requiresApiKey = ['nextjs', 'tanstack-start', 'react-router'].includes(context.integration ?? '');
       context.emitter.emit('credentials:gathering', { requiresApiKey });
       context.emitter.emit('credentials:request', { requiresApiKey });
     },
-
-    // ===== Config actions =====
+    emitCredentialsFound: ({ context }) => {
+      context.emitter.emit('credentials:found', {});
+    },
     emitConfigStart: ({ context }) => {
       context.emitter.emit('config:start', {});
     },
     emitConfigComplete: ({ context }) => {
       context.emitter.emit('config:complete', {});
     },
-
-    // ===== Agent actions =====
     emitAgentStart: ({ context }) => {
       context.emitter.emit('agent:start', {});
     },
@@ -112,24 +88,18 @@ export const wizardMachine = setup({
       context.emitter.emit('agent:failure', { message, stack });
       context.emitter.emit('complete', { success: false, summary: message });
     },
-
-    // ===== Context assignment actions =====
     assignDetectionResult: assign({
       integration: ({ event }) => {
-        // XState internal done event has output property
         const doneEvent = event as unknown as { output: DetectionOutput };
         return doneEvent.output?.integration;
       },
     }),
-
     assignGitResult: assign({
       gitIsClean: ({ event }) => {
-        // XState internal done event has output property
         const doneEvent = event as unknown as { output: GitCheckOutput };
         return doneEvent.output?.isClean ?? true;
       },
       gitDirtyFiles: ({ event }) => {
-        // XState internal done event has output property
         const doneEvent = event as unknown as { output: GitCheckOutput };
         return doneEvent.output?.files ?? [];
       },
@@ -156,7 +126,6 @@ export const wizardMachine = setup({
       },
     }),
 
-    // ===== Completion actions =====
     emitCancelled: ({ context }) => {
       context.emitter.emit('complete', { success: false, summary: 'Wizard cancelled by user' });
     },
@@ -168,54 +137,25 @@ export const wizardMachine = setup({
   },
 
   guards: {
-    /** Check if user wants to skip auth (--skip-auth flag) */
     shouldSkipAuth: ({ context }) => context.options.skipAuth === true,
-
-    /** Check if git is clean after git check completes */
     gitIsClean: ({ context }) => context.gitIsClean === true,
-
-    /** Check if we have credentials already (from CLI args or env) */
     hasCredentials: ({ context }) => context.options.apiKey !== undefined && context.options.clientId !== undefined,
-
-    /** Check if detection found an integration */
     hasIntegration: ({ context }) => context.integration !== undefined,
   },
 
   actors: {
-    /**
-     * Check if user is authenticated.
-     * Returns true if auth is valid, throws if auth fails.
-     */
     checkAuthentication: fromPromise<boolean, { options: WizardOptions }>(async () => {
-      // Implementation injected at runtime via machine.provide()
-      // This is a placeholder that will be replaced
       throw new Error('checkAuthentication not implemented - provide via machine.provide()');
     }),
-
-    /**
-     * Detect the framework integration from the project.
-     */
     detectIntegration: fromPromise<DetectionOutput, { options: WizardOptions }>(async () => {
       throw new Error('detectIntegration not implemented - provide via machine.provide()');
     }),
-
-    /**
-     * Check git status for uncommitted changes.
-     */
     checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => {
       throw new Error('checkGitStatus not implemented - provide via machine.provide()');
     }),
-
-    /**
-     * Configure environment (write .env.local, auto-configure WorkOS).
-     */
     configureEnvironment: fromPromise<void, { context: WizardMachineContext }>(async () => {
       throw new Error('configureEnvironment not implemented - provide via machine.provide()');
     }),
-
-    /**
-     * Run the AI agent to perform the integration.
-     */
     runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => {
       throw new Error('runAgent not implemented - provide via machine.provide()');
     }),
@@ -238,9 +178,6 @@ export const wizardMachine = setup({
   }),
 
   states: {
-    /**
-     * Initial idle state. Waits for START event to begin.
-     */
     idle: {
       on: {
         START: [
@@ -257,9 +194,6 @@ export const wizardMachine = setup({
       },
     },
 
-    /**
-     * Checking/performing authentication.
-     */
     authenticating: {
       entry: ['emitAuthChecking'],
       invoke: {
@@ -281,10 +215,6 @@ export const wizardMachine = setup({
       },
     },
 
-    /**
-     * Parallel state: detect framework AND check git status concurrently.
-     * Completes when BOTH child states reach their final states.
-     */
     preparing: {
       type: 'parallel',
       states: {
@@ -363,7 +293,6 @@ export const wizardMachine = setup({
           },
         },
       },
-      // This onDone fires when BOTH parallel regions reach their final states
       onDone: [
         {
           target: 'gatheringCredentials',
@@ -371,7 +300,6 @@ export const wizardMachine = setup({
           actions: { type: 'emitStateExit', params: { state: 'preparing' } },
         },
         {
-          // No integration detected and couldn't detect - this is an error
           target: 'error',
           actions: [
             assign({ error: () => new Error('Could not detect framework integration') }),
@@ -381,33 +309,38 @@ export const wizardMachine = setup({
       ],
     },
 
-    /**
-     * Gathering WorkOS credentials from user (if not already provided).
-     */
     gatheringCredentials: {
-      entry: [{ type: 'emitStateEnter', params: { state: 'gatheringCredentials' } }, 'emitCredentialsGathering'],
-      always: [
-        {
-          target: 'configuring',
-          guard: 'hasCredentials',
-          actions: { type: 'emitStateExit', params: { state: 'gatheringCredentials' } },
+      entry: [{ type: 'emitStateEnter', params: { state: 'gatheringCredentials' } }],
+      initial: 'checking',
+      states: {
+        checking: {
+          always: [
+            {
+              target: '#wizard.configuring',
+              guard: 'hasCredentials',
+              actions: ['emitCredentialsFound', { type: 'emitStateExit', params: { state: 'gatheringCredentials' } }],
+            },
+            {
+              target: 'prompting',
+            },
+          ],
         },
-      ],
-      on: {
-        CREDENTIALS_SUBMITTED: {
-          target: 'configuring',
-          actions: ['assignCredentials', { type: 'emitStateExit', params: { state: 'gatheringCredentials' } }],
-        },
-        CANCEL: {
-          target: 'cancelled',
-          actions: { type: 'emitStateExit', params: { state: 'gatheringCredentials' } },
+        prompting: {
+          entry: ['emitCredentialsGathering'],
+          on: {
+            CREDENTIALS_SUBMITTED: {
+              target: '#wizard.configuring',
+              actions: ['assignCredentials', { type: 'emitStateExit', params: { state: 'gatheringCredentials' } }],
+            },
+            CANCEL: {
+              target: '#wizard.cancelled',
+              actions: { type: 'emitStateExit', params: { state: 'gatheringCredentials' } },
+            },
+          },
         },
       },
     },
 
-    /**
-     * Configuring environment (writing .env.local, auto-configuring WorkOS).
-     */
     configuring: {
       entry: [{ type: 'emitStateEnter', params: { state: 'configuring' } }, 'emitConfigStart'],
       invoke: {
@@ -425,9 +358,6 @@ export const wizardMachine = setup({
       },
     },
 
-    /**
-     * Running the AI agent to perform the actual integration.
-     */
     runningAgent: {
       entry: [{ type: 'emitStateEnter', params: { state: 'runningAgent' } }, 'emitAgentStart'],
       invoke: {
@@ -462,25 +392,16 @@ export const wizardMachine = setup({
       },
     },
 
-    /**
-     * Wizard completed successfully.
-     */
     complete: {
       type: 'final',
       entry: { type: 'emitStateEnter', params: { state: 'complete' } },
     },
 
-    /**
-     * Wizard was cancelled by user.
-     */
     cancelled: {
       type: 'final',
       entry: [{ type: 'emitStateEnter', params: { state: 'cancelled' } }, 'emitCancelled'],
     },
 
-    /**
-     * Wizard encountered an error.
-     */
     error: {
       type: 'final',
       entry: [{ type: 'emitStateEnter', params: { state: 'error' } }, 'emitError'],
@@ -488,6 +409,5 @@ export const wizardMachine = setup({
   },
 });
 
-// Export the machine type for use in actors
 export type WizardMachine = typeof wizardMachine;
 export type WizardActor = ActorRefFrom<typeof wizardMachine>;

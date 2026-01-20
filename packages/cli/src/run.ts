@@ -22,6 +22,7 @@ type Args = {
   homepageUrl?: string;
   redirectUri?: string;
   dashboard?: boolean;
+  inspect?: boolean;
 };
 
 /**
@@ -56,6 +57,7 @@ function buildOptions(argv: Args): WizardOptions {
     redirectUri: merged.redirectUri,
     dashboard: merged.dashboard ?? false,
     integration: merged.integration,
+    inspect: merged.inspect ?? false,
     emitter: createWizardEventEmitter(), // Will be replaced in runWithCore
   };
 }

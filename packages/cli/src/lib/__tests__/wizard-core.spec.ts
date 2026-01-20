@@ -391,7 +391,9 @@ describe('WizardCore State Machine', () => {
       // Wait for preparing to complete
       await new Promise((r) => setTimeout(r, 100));
 
-      expect(actor.getSnapshot().value).toBe('gatheringCredentials');
+      // gatheringCredentials is now a hierarchical state with substates
+      const snapshot = actor.getSnapshot();
+      expect(snapshot.matches('gatheringCredentials')).toBe(true);
       expect(credentialsRequested).toBe(true);
 
       // Submit credentials

@@ -20,6 +20,7 @@ vi.mock('../../../utils/clack.js', () => ({
     })),
     confirm: vi.fn(),
     text: vi.fn(),
+    password: vi.fn(),
     isCancel: vi.fn(() => false),
     outro: vi.fn(),
   },
@@ -159,9 +160,8 @@ describe('CLIAdapter', () => {
     it('sends CREDENTIALS_SUBMITTED on credentials form', async () => {
       await adapter.start();
       const clack = await import('../../../utils/clack.js');
-      vi.mocked(clack.default.text)
-        .mockResolvedValueOnce('client_123') // clientId
-        .mockResolvedValueOnce('sk_test'); // apiKey
+      vi.mocked(clack.default.text).mockResolvedValueOnce('client_123'); // clientId
+      vi.mocked(clack.default.password).mockResolvedValueOnce('sk_test'); // apiKey (now uses password input)
 
       emitter.emit('credentials:request', { requiresApiKey: true });
 

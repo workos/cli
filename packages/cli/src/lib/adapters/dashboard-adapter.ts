@@ -1,5 +1,6 @@
 import type { WizardAdapter, AdapterConfig } from './types.js';
-import type { WizardEventEmitter } from '../events.js';
+import type { WizardEventEmitter, WizardEvents } from '../events.js';
+import chalk from 'chalk';
 
 /**
  * Dashboard adapter that renders wizard events via Ink/React TUI.
@@ -12,6 +13,7 @@ export class DashboardAdapter implements WizardAdapter {
   private sendEvent: AdapterConfig['sendEvent'];
   private cleanup: (() => void) | null = null;
   private isStarted = false;
+  private completionData: { success: boolean; summary?: string } | null = null;
 
   constructor(config: AdapterConfig) {
     this.emitter = config.emitter;
@@ -47,18 +49,47 @@ export class DashboardAdapter implements WizardAdapter {
     // The Dashboard component emits these when user interacts
     this.emitter.on('confirm:response', this.handleConfirmResponse);
     this.emitter.on('credentials:response', this.handleCredentialsResponse);
+
+    // Track completion for post-exit summary
+    this.emitter.on('complete', this.handleComplete);
   }
+
+  /**
+   * Capture completion data for display after exit.
+   */
+  private handleComplete = ({ success, summary }: WizardEvents['complete']): void => {
+    this.completionData = { success, summary };
+  };
 
   async stop(): Promise<void> {
     if (!this.isStarted) return;
 
-    // Unsubscribe from response events
+    // Unsubscribe from events
     this.emitter.off('confirm:response', this.handleConfirmResponse);
     this.emitter.off('credentials:response', this.handleCredentialsResponse);
+    this.emitter.off('complete', this.handleComplete);
 
     // Run cleanup (unmount Ink, exit fullscreen)
     this.cleanup?.();
     this.cleanup = null;
+
+    // Print completion summary to terminal after exiting alternate screen
+    if (this.completionData) {
+      console.log(); // blank line
+      if (this.completionData.success) {
+        console.log(chalk.green('✓ Installation Complete'));
+        if (this.completionData.summary) {
+          console.log();
+          console.log(this.completionData.summary);
+        }
+      } else {
+        console.log(chalk.red('✗ Installation Failed'));
+        if (this.completionData.summary) {
+          console.log(chalk.dim(this.completionData.summary));
+        }
+      }
+      console.log();
+    }
 
     this.isStarted = false;
   }

@@ -38,6 +38,7 @@ export function createEventCapture() {
     'git:dirty:confirmed',
     'git:dirty:cancelled',
     'credentials:gathering',
+    'credentials:found',
     'credentials:request',
     'credentials:response',
     'config:start',

@@ -19,9 +19,32 @@ export class CLIAdapter implements WizardAdapter {
   // Store bound handlers for cleanup
   private handlers = new Map<string, (...args: unknown[]) => void>();
 
+  // Queue for logs while prompt is active (parallel state issue)
+  private isPromptActive = false;
+  private pendingLogs: Array<() => void> = [];
+
   constructor(config: AdapterConfig) {
     this.emitter = config.emitter;
     this.sendEvent = config.sendEvent;
+  }
+
+  /**
+   * Queue a log call if a prompt is active, otherwise execute immediately.
+   */
+  private queueableLog(logFn: () => void): void {
+    if (this.isPromptActive) {
+      this.pendingLogs.push(logFn);
+    } else {
+      logFn();
+    }
+  }
+
+  /**
+   * Flush any queued logs after prompt completes.
+   */
+  private flushPendingLogs(): void {
+    const logs = this.pendingLogs.splice(0);
+    logs.forEach((fn) => fn());
   }
 
   async start(): Promise<void> {
@@ -48,6 +71,7 @@ export class CLIAdapter implements WizardAdapter {
     this.subscribe('git:checking', this.handleGitChecking);
     this.subscribe('git:clean', this.handleGitClean);
     this.subscribe('git:dirty', this.handleGitDirty);
+    this.subscribe('credentials:found', this.handleCredentialsFound);
     this.subscribe('credentials:request', this.handleCredentialsRequest);
     this.subscribe('config:start', this.handleConfigStart);
     this.subscribe('config:complete', this.handleConfigComplete);
@@ -104,15 +128,15 @@ export class CLIAdapter implements WizardAdapter {
   };
 
   private handleDetectionStart = (): void => {
-    clack.log.step('Detecting framework...');
+    this.queueableLog(() => clack.log.step('Detecting framework...'));
   };
 
   private handleDetectionComplete = ({ integration }: WizardEvents['detection:complete']): void => {
-    clack.log.success(`Detected: ${integration}`);
+    this.queueableLog(() => clack.log.success(`Detected: ${integration}`));
   };
 
   private handleDetectionNone = (): void => {
-    clack.log.warn('Could not detect framework automatically');
+    this.queueableLog(() => clack.log.warn('Could not detect framework automatically'));
   };
 
   private handleGitChecking = (): void => {
@@ -123,6 +147,10 @@ export class CLIAdapter implements WizardAdapter {
     // Silent - don't clutter output
   };
 
+  private handleCredentialsFound = (): void => {
+    clack.log.success('Found existing WorkOS credentials in .env.local');
+  };
+
   private handleGitDirty = async ({ files }: WizardEvents['git:dirty']): Promise<void> => {
     clack.log.warn('You have uncommitted or untracked files:');
     files.slice(0, 5).forEach((f) => clack.log.info(chalk.dim(`  ${f}`)));
@@ -130,10 +158,13 @@ export class CLIAdapter implements WizardAdapter {
       clack.log.info(chalk.dim(`  ... and ${files.length - 5} more`));
     }
 
+    this.isPromptActive = true;
     const confirmed = await clack.confirm({
       message: 'Continue anyway?',
       initialValue: false,
     });
+    this.isPromptActive = false;
+    this.flushPendingLogs();
 
     if (clack.isCancel(confirmed)) {
       this.sendEvent({ type: 'GIT_CANCELLED' });
@@ -145,6 +176,8 @@ export class CLIAdapter implements WizardAdapter {
   };
 
   private handleCredentialsRequest = async ({ requiresApiKey }: WizardEvents['credentials:request']): Promise<void> => {
+    clack.log.step(`Get your credentials from ${chalk.cyan('https://dashboard.workos.com')}`);
+
     const clientId = await clack.text({
       message: 'Enter your WorkOS Client ID:',
       placeholder: 'client_...',
@@ -166,9 +199,9 @@ export class CLIAdapter implements WizardAdapter {
 
     let apiKey = '';
     if (requiresApiKey) {
-      const apiKeyResult = await clack.text({
+      clack.log.info(chalk.dim('ℹ️ Your API key will be hidden for security and saved to .env.local'));
+      const apiKeyResult = await clack.password({
         message: 'Enter your WorkOS API Key:',
-        placeholder: 'sk_...',
         validate: (value) => {
           if (!value || value.trim().length === 0) {
             return 'API Key is required';
@@ -185,6 +218,8 @@ export class CLIAdapter implements WizardAdapter {
         return;
       }
       apiKey = apiKeyResult as string;
+    } else {
+      clack.log.info(chalk.dim('ℹ️ Client-only SDK - API key not required'));
     }
 
     this.sendEvent({
