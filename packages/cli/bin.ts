@@ -31,6 +31,7 @@ yargs(hideBin(process.argv))
   .command('login', 'Authenticate with WorkOS', {}, async () => {
     const { runLogin } = await import('./src/commands/login.js');
     await runLogin();
+    process.exit(0);
   })
   .command('logout', 'Remove stored credentials', {}, async () => {
     const { runLogout } = await import('./src/commands/logout.js');

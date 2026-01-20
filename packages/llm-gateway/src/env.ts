@@ -5,6 +5,8 @@ interface Env {
   ANTHROPIC_API_KEY?: string;
   PORT?: string;
   WORKOS_CLIENT_ID?: string;
+  /** AuthKit domain for Connect OAuth JWT validation */
+  WORKOS_AUTHKIT_DOMAIN?: string;
   /** Enable local development mode - allows unauthenticated requests */
   LOCAL_MODE?: string;
   /** OTel exporter type: 'otlp' | 'console' | 'none' */

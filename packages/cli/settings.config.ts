@@ -5,7 +5,9 @@ export const settings = {
   model: 'claude-opus-4-5-20251101',
   cliAuth: {
     // Production client ID - override via WORKOS_CLIENT_ID env var for dev/staging
-    clientId: 'client_01JA4BGY6RK3NHY7NM0NWGPZBG',
+    clientId: 'client_01KFET29VF2PJV9BHMYJR6753Q',
+    // AuthKit domain for Connect OAuth endpoints - override via WORKOS_AUTHKIT_DOMAIN env var
+    authkitDomain: 'https://classic-jungle-88-staging.authkit.app',
   },
 
   gateway: {
