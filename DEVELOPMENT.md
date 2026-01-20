@@ -5,7 +5,7 @@
 ```
 wizard/
 ├── packages/
-│   ├── wizard/         # CLI wizard (TypeScript)
+│   ├── cli/            # CLI wizard (TypeScript)
 │   └── llm-gateway/    # LLM API proxy (TypeScript)
 ├── tsconfig.json       # Shared TypeScript config
 ├── .prettierrc         # Shared formatting
@@ -102,27 +102,39 @@ pnpm --filter @workos/authkit-llm-gateway build
 
 ```
 packages/cli/src/
+├── run.ts                    # Entry point
 ├── lib/
 │   ├── agent-runner.ts       # Core agent execution
 │   ├── agent-interface.ts    # SDK interface
+│   ├── wizard-core.ts        # Headless wizard core
+│   ├── config.ts             # Framework detection config
 │   ├── framework-config.ts   # Framework definitions
-│   └── constants.ts          # Integration types
-├── nextjs/                   # Next.js wizard
-├── react/                    # React wizard
-├── react-router/             # React Router wizard
-├── tanstack-start/           # TanStack Start wizard
-├── vanilla-js/               # Vanilla JS wizard
+│   ├── constants.ts          # Integration types
+│   ├── events.ts             # WizardEventEmitter
+│   └── adapters/             # CLI and dashboard adapters
+├── commands/                 # Subcommands (install-skill, login, logout)
+├── steps/                    # Wizard step implementations
+├── dashboard/                # Ink/React TUI components
+├── nextjs/                   # Next.js wizard agent
+├── react/                    # React SPA wizard agent
+├── react-router/             # React Router wizard agent
+├── tanstack-start/           # TanStack Start wizard agent
+├── vanilla-js/               # Vanilla JS wizard agent
 └── utils/
     ├── clack-utils.ts        # CLI prompts
     ├── debug.ts              # Logging with redaction
-    └── redact.ts             # Credential redaction
+    ├── redact.ts             # Credential redaction
+    ├── package-manager.ts    # Package manager detection
+    └── ...                   # Additional utilities
 ```
 
 ### LLM Gateway Package
 
 ```
 packages/llm-gateway/src/
-└── index.ts                  # Express server + Anthropic proxy
+├── index.ts                  # Hono server + Anthropic proxy
+├── env.ts                    # Environment configuration
+└── jwt.ts                    # JWT validation
 ```
 
 ## Making Changes
@@ -210,4 +222,4 @@ cd packages/llm-gateway && pnpm tsc --noEmit
 
 ## Questions?
 
-See [root README](../../README.md) for user-facing docs.
+See [root README](./README.md) for user-facing docs.

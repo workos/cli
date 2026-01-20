@@ -45,7 +45,13 @@ Get your credentials from [dashboard.workos.com](https://dashboard.workos.com):
 ## CLI Options
 
 ```bash
-authkit-wizard [options]
+authkit-wizard [options] [command]
+
+Commands:
+  dashboard              Run wizard with visual TUI dashboard (experimental)
+  login                  Authenticate with WorkOS
+  logout                 Remove stored credentials
+  install-skill          Install AuthKit skills to coding agents (Claude Code, Codex, etc.)
 
 Options:
   --integration <name>    Framework: nextjs, react, react-router, tanstack-start, vanilla-js
@@ -57,6 +63,8 @@ Options:
   --install-dir <path>    Installation directory
   --debug                 Verbose logging to /tmp/authkit-wizard.log
   --local                 Use local LLM gateway (development only)
+  --default               Use default options for all prompts (default: true)
+  --skip-auth             Skip authentication check (requires --local)
 ```
 
 ## Examples

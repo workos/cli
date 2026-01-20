@@ -65,8 +65,7 @@ Health check endpoint.
 ```json
 {
   "status": "ok",
-  "service": "workos-llm-gateway",
-  "anthropicKeySet": true
+  "service": "workos-llm-gateway"
 }
 ```
 
