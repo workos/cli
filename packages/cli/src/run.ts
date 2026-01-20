@@ -1,32 +1,10 @@
-import {
-  abortIfCancelled,
-  checkExistingCredentials,
-  isInGitRepo,
-  getUncommittedOrUntrackedFiles,
-} from './utils/clack-utils.js';
-import { debug } from './utils/debug.js';
-
-import { runNextjsWizardAgent } from './nextjs/nextjs-wizard-agent.js';
-import type { WizardOptions } from './utils/types.js';
-
-import { getIntegrationDescription, Integration } from './lib/constants.js';
 import { readEnvironment } from './utils/environment.js';
-import clack from './utils/clack.js';
-import path from 'path';
-import { INTEGRATION_CONFIG, INTEGRATION_ORDER } from './lib/config.js';
-import { runReactWizardAgent } from './react/react-wizard-agent.js';
-import { analytics } from './utils/analytics.js';
-import { runReactRouterWizardAgent } from './react-router/react-router-wizard-agent.js';
-import { runTanstackStartWizardAgent } from './tanstack-start/tanstack-start-wizard-agent.js';
-import { runVanillaJsWizardAgent } from './vanilla-js/vanilla-js-wizard-agent.js';
-import { EventEmitter } from 'events';
-import chalk from 'chalk';
-import { RateLimitError } from './utils/errors.js';
-import { getSettings } from './lib/settings.js';
-import { getAccessToken, getCredentials } from './lib/credentials.js';
-import { runLogin } from './commands/login.js';
+import { runWithCore } from './lib/run-with-core.js';
+import type { WizardOptions } from './utils/types.js';
+import type { Integration } from './lib/constants.js';
 import { createWizardEventEmitter } from './lib/events.js';
-import { startDashboard, stopDashboard } from './dashboard/index.js';
+import path from 'path';
+import { EventEmitter } from 'events';
 
 EventEmitter.defaultMaxListeners = 50;
 
@@ -44,347 +22,50 @@ type Args = {
   homepageUrl?: string;
   redirectUri?: string;
   dashboard?: boolean;
+  inspect?: boolean;
 };
 
-export async function runWizard(argv: Args) {
-  const finalArgs = {
-    ...argv,
-    ...readEnvironment(),
+/**
+ * Main entry point for the wizard CLI.
+ * Builds options from args and delegates to the core.
+ */
+export async function runWizard(argv: Args): Promise<void> {
+  const options = buildOptions(argv);
+  await runWithCore(options);
+}
+
+/**
+ * Build WizardOptions from CLI args and environment.
+ */
+function buildOptions(argv: Args): WizardOptions {
+  const envArgs = readEnvironment();
+  const merged = { ...argv, ...envArgs };
+
+  const installDir = resolveInstallDir(merged.installDir);
+
+  return {
+    debug: merged.debug ?? false,
+    forceInstall: merged.forceInstall ?? false,
+    installDir,
+    default: merged.default ?? false,
+    local: merged.local ?? false,
+    ci: merged.ci ?? false,
+    skipAuth: merged.skipAuth ?? false,
+    apiKey: merged.apiKey,
+    clientId: merged.clientId,
+    homepageUrl: merged.homepageUrl,
+    redirectUri: merged.redirectUri,
+    dashboard: merged.dashboard ?? false,
+    integration: merged.integration,
+    inspect: merged.inspect ?? false,
+    emitter: createWizardEventEmitter(), // Will be replaced in runWithCore
   };
-
-  let resolvedInstallDir: string;
-  if (finalArgs.installDir) {
-    if (path.isAbsolute(finalArgs.installDir)) {
-      resolvedInstallDir = finalArgs.installDir;
-    } else {
-      resolvedInstallDir = path.join(process.cwd(), finalArgs.installDir);
-    }
-  } else {
-    resolvedInstallDir = process.cwd();
-  }
-
-  // Create event emitter for dashboard mode
-  const emitter = createWizardEventEmitter();
-
-  const wizardOptions: WizardOptions = {
-    debug: finalArgs.debug ?? false,
-    forceInstall: finalArgs.forceInstall ?? false,
-    installDir: resolvedInstallDir,
-    default: finalArgs.default ?? false,
-    local: finalArgs.local ?? false,
-    ci: finalArgs.ci ?? false,
-    skipAuth: finalArgs.skipAuth ?? false,
-    apiKey: finalArgs.apiKey,
-    clientId: finalArgs.clientId,
-    homepageUrl: finalArgs.homepageUrl,
-    redirectUri: finalArgs.redirectUri,
-    dashboard: finalArgs.dashboard ?? false,
-    emitter,
-  };
-
-  // Start dashboard immediately if enabled (bypasses clack UI)
-  if (wizardOptions.dashboard) {
-    // Validate skip-auth requires local (silent check)
-    if (wizardOptions.skipAuth && !wizardOptions.local) {
-      console.error('--skip-auth can only be used with --local');
-      process.exit(1);
-    }
-
-    // Check authentication for dashboard mode (same as regular CLI)
-    if (!wizardOptions.skipAuth && !getAccessToken()) {
-      await runLogin();
-
-      // Final check - must have valid token
-      if (!getAccessToken()) {
-        console.error('Authentication failed. Please try again.');
-        process.exit(1);
-      }
-    }
-
-    const integration = finalArgs.integration ?? (await detectIntegration(wizardOptions));
-
-    if (!integration) {
-      console.error('Could not detect integration. Use --integration to specify.');
-      process.exit(1);
-    }
-
-    // Server-side frameworks need API key, client-only frameworks just need client ID
-    const requiresApiKey = [Integration.nextjs, Integration.tanstackStart, Integration.reactRouter].includes(
-      integration,
-    );
-
-    analytics.setTag('integration', integration);
-
-    // Collect output for post-TUI summary
-    const outputLog: Array<{ text: string; isError?: boolean; isStatus?: boolean }> = [];
-    let completionData: { success: boolean; summary?: string } | null = null;
-
-    const handleOutput = ({ text, isError }: { text: string; isError?: boolean }) => {
-      text.split('\n').forEach((line) => {
-        outputLog.push({
-          text: line,
-          isError,
-          isStatus: line.includes('[STATUS]'),
-        });
-      });
-    };
-
-    const handleStatus = ({ message }: { message: string }) => {
-      outputLog.push({ text: `[STATUS] ${message}`, isStatus: true });
-    };
-
-    const handleComplete = ({ success, summary }: { success: boolean; summary?: string }) => {
-      completionData = { success, summary };
-    };
-
-    const handleError = ({ message }: { message: string }) => {
-      outputLog.push({ text: `ERROR: ${message}`, isError: true });
-    };
-
-    emitter.on('output', handleOutput);
-    emitter.on('status', handleStatus);
-    emitter.on('complete', handleComplete);
-    emitter.on('error', handleError);
-
-    // Start dashboard first
-    await startDashboard({ emitter });
-
-    try {
-      // Check git status first
-      if (isInGitRepo()) {
-        const dirtyFiles = getUncommittedOrUntrackedFiles();
-        if (dirtyFiles.length > 0) {
-          const confirmed = await new Promise<boolean>((resolve) => {
-            const handleResponse = ({ id, confirmed }: { id: string; confirmed: boolean }) => {
-              if (id === 'git-status') {
-                emitter.off('confirm:response', handleResponse);
-                resolve(confirmed);
-              }
-            };
-            emitter.on('confirm:response', handleResponse);
-            emitter.emit('confirm:request', {
-              id: 'git-status',
-              message: 'Do you want to continue anyway?',
-              warning: 'You have uncommitted or untracked files in your repo.',
-              files: dirtyFiles,
-            });
-          });
-
-          if (!confirmed) {
-            await stopDashboard();
-            process.exit(0);
-          }
-        }
-      }
-
-      // Check for existing credentials (CLI args or .env.local)
-      let credentials = checkExistingCredentials(wizardOptions, requiresApiKey);
-
-      // If no credentials found, request them via TUI
-      if (!credentials) {
-        credentials = await new Promise<{ apiKey: string; clientId: string }>((resolve) => {
-          const handleResponse = (creds: { apiKey: string; clientId: string }) => {
-            emitter.off('credentials:response', handleResponse);
-            resolve(creds);
-          };
-          emitter.on('credentials:response', handleResponse);
-          emitter.emit('credentials:request', { requiresApiKey });
-        });
-      }
-
-      // Update wizardOptions with credentials so agent-runner doesn't re-prompt
-      wizardOptions.apiKey = credentials.apiKey;
-      wizardOptions.clientId = credentials.clientId;
-
-      await runIntegrationWizard(integration, wizardOptions);
-      await stopDashboard();
-
-      // Clean up listeners
-      emitter.off('output', handleOutput);
-      emitter.off('status', handleStatus);
-      emitter.off('complete', handleComplete);
-      emitter.off('error', handleError);
-
-      // Print post-TUI summary
-      printDashboardSummary(outputLog, completionData, integration);
-    } catch (error) {
-      await stopDashboard();
-
-      // Clean up listeners
-      emitter.off('output', handleOutput);
-      emitter.off('status', handleStatus);
-      emitter.off('complete', handleComplete);
-      emitter.off('error', handleError);
-
-      // Print error summary
-      printDashboardSummary(outputLog, { success: false, summary: (error as Error).message }, integration);
-      throw error;
-    }
-    return;
-  }
-
-  const settings = getSettings();
-  if (settings.branding.showAsciiArt) {
-    console.log(chalk.cyan(settings.branding.asciiArt));
-    console.log();
-  } else {
-    clack.intro(`Welcome to the WorkOS AuthKit setup wizard ✨`);
-  }
-
-  if (wizardOptions.ci) {
-    clack.log.info(chalk.dim('Running in CI mode'));
-  }
-
-  // Check if we need to authenticate (no refresh tokens stored for security)
-  if (wizardOptions.skipAuth) {
-    if (!wizardOptions.local) {
-      clack.log.error('--skip-auth can only be used with --local');
-      process.exit(1);
-    }
-    clack.log.warn(chalk.yellow('Skipping authentication (--skip-auth flag)'));
-  } else {
-    if (!getAccessToken()) {
-      clack.log.step('Authentication required');
-      await runLogin();
-
-      // Final check - must have valid token
-      if (!getAccessToken()) {
-        clack.log.error('Authentication failed. Please try again.');
-        process.exit(1);
-      }
-    }
-
-    // Show who's authenticated
-    const creds = getCredentials();
-    if (creds?.email) {
-      clack.log.info(`Authenticated as ${chalk.cyan(creds.email)}`);
-    }
-  }
-
-  const integration = finalArgs.integration ?? (await getIntegrationForSetup(wizardOptions));
-
-  analytics.setTag('integration', integration);
-
-  try {
-    await runIntegrationWizard(integration, wizardOptions);
-  } catch (error) {
-    debug('Full error:', error);
-    debug('Error stack:', (error as Error).stack);
-
-    analytics.captureException(error as Error, {
-      integration,
-      arguments: JSON.stringify(finalArgs),
-    });
-
-    await analytics.shutdown('error');
-
-    if (error instanceof RateLimitError) {
-      clack.log.error('Wizard usage limit reached. Please try again later.');
-    } else {
-      clack.log.error(
-        `Something went wrong. You can read the documentation at ${chalk.cyan(
-          `${INTEGRATION_CONFIG[integration].docsUrl}`,
-        )} to set up WorkOS AuthKit manually.`,
-      );
-    }
-    process.exit(1);
-  }
 }
 
-async function detectIntegration(options: Pick<WizardOptions, 'installDir'>): Promise<Integration | undefined> {
-  const integrationConfigs = Object.entries(INTEGRATION_CONFIG).sort(
-    ([a], [b]) => INTEGRATION_ORDER.indexOf(a as Integration) - INTEGRATION_ORDER.indexOf(b as Integration),
-  );
-
-  for (const [integration, config] of integrationConfigs) {
-    const detected = await config.detect(options);
-    if (detected) {
-      return integration as Integration;
-    }
-  }
-}
-
-async function runIntegrationWizard(integration: Integration, options: WizardOptions): Promise<void> {
-  switch (integration) {
-    case Integration.nextjs:
-      return runNextjsWizardAgent(options);
-    case Integration.react:
-      return runReactWizardAgent(options);
-    case Integration.reactRouter:
-      return runReactRouterWizardAgent(options);
-    case Integration.tanstackStart:
-      return runTanstackStartWizardAgent(options);
-    case Integration.vanillaJs:
-      return runVanillaJsWizardAgent(options);
-    default:
-      throw new Error(`Unknown integration: ${integration}`);
-  }
-}
-
-function printDashboardSummary(
-  outputLog: Array<{ text: string; isError?: boolean; isStatus?: boolean }>,
-  completionData: { success: boolean; summary?: string } | null,
-  integration: Integration,
-): void {
-  console.log('\n' + chalk.bold('=== Wizard Summary ===\n'));
-
-  // Print status messages
-  const statusMessages = outputLog.filter((entry) => entry.isStatus);
-  if (statusMessages.length > 0) {
-    console.log(chalk.cyan('Progress:'));
-    statusMessages.forEach((entry) => {
-      console.log(`  ${entry.text.replace('[STATUS]', '').trim()}`);
-    });
-    console.log();
-  }
-
-  // Print completion status
-  if (completionData) {
-    if (completionData.success) {
-      console.log(chalk.green('Status: Success'));
-      if (completionData.summary) {
-        console.log('\n' + completionData.summary);
-      }
-    } else {
-      console.log(chalk.red('Status: Failed'));
-      if (completionData.summary) {
-        console.log(chalk.red('\nError: ' + completionData.summary));
-      }
-    }
-  }
-
-  // Print errors if any
-  const errors = outputLog.filter((entry) => entry.isError && !entry.isStatus);
-  if (errors.length > 0) {
-    console.log(chalk.red('\nErrors:'));
-    errors.forEach((entry) => {
-      console.log(`  ${entry.text}`);
-    });
-  }
-
-  console.log(`\nDocs: ${chalk.cyan(INTEGRATION_CONFIG[integration].docsUrl)}`);
-}
-
-async function getIntegrationForSetup(options: Pick<WizardOptions, 'installDir'>) {
-  const detectedIntegration = await detectIntegration(options);
-
-  if (detectedIntegration) {
-    clack.log.success(`Detected integration: ${getIntegrationDescription(detectedIntegration)}`);
-    return detectedIntegration;
-  }
-
-  const integration: Integration = await abortIfCancelled(
-    clack.select({
-      message: 'What do you want to set up?',
-      options: [
-        { value: Integration.nextjs, label: 'Next.js' },
-        { value: Integration.tanstackStart, label: 'TanStack Start' },
-        { value: Integration.reactRouter, label: 'React Router' },
-        { value: Integration.react, label: 'React (SPA)' },
-        { value: Integration.vanillaJs, label: 'Vanilla JavaScript' },
-      ],
-    }),
-  );
-
-  return integration;
+/**
+ * Resolve install directory to absolute path.
+ */
+function resolveInstallDir(dir?: string): string {
+  if (!dir) return process.cwd();
+  return path.isAbsolute(dir) ? dir : path.join(process.cwd(), dir);
 }

@@ -131,6 +131,11 @@ yargs(hideBin(process.argv))
       describe: 'Redirect URI for WorkOS callback (defaults to framework convention)\nenv: WORKOS_WIZARD_REDIRECT_URI',
       type: 'string',
     },
+    inspect: {
+      default: false,
+      describe: 'Open XState inspector in browser to visualize state machine live',
+      type: 'boolean',
+    },
   })
   .command(
     ['$0'],

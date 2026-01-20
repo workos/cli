@@ -83,8 +83,9 @@ const NEXTJS_AGENT_CONFIG = {
 
 /**
  * Next.js wizard powered by the universal agent runner.
+ * @returns Summary of what was done, or empty string if version check fails
  */
-export async function runNextjsWizardAgent(options: WizardOptions): Promise<void> {
+export async function runNextjsWizardAgent(options: WizardOptions): Promise<string> {
   if (options.debug) {
     enableDebugLogs();
   }
@@ -103,9 +104,9 @@ export async function runNextjsWizardAgent(options: WizardOptions): Promise<void
       );
       clack.log.info(`Setup Next.js manually: ${chalk.cyan(docsUrl)}`);
       clack.outro('WorkOS AuthKit wizard will see you next time!');
-      return;
+      return '';
     }
   }
 
-  await runAgentWizard(NEXTJS_AGENT_CONFIG, options);
+  return runAgentWizard(NEXTJS_AGENT_CONFIG, options);
 }

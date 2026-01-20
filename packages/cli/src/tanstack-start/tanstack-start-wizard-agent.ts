@@ -50,10 +50,10 @@ const TANSTACK_START_AGENT_CONFIG: FrameworkConfig = {
   },
 };
 
-export async function runTanstackStartWizardAgent(options: WizardOptions): Promise<void> {
+export async function runTanstackStartWizardAgent(options: WizardOptions): Promise<string> {
   if (options.debug) {
     enableDebugLogs();
   }
 
-  await runAgentWizard(TANSTACK_START_AGENT_CONFIG, options);
+  return runAgentWizard(TANSTACK_START_AGENT_CONFIG, options);
 }

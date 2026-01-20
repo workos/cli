@@ -54,12 +54,14 @@
     "uuid": "^11.1.0",
     "xcode": "3.0.1",
     "xml-js": "^1.6.11",
+    "xstate": "^5.25.1",
     "yargs": "^16.2.0",
     "zod": "^3.24.2",
     "zod-to-json-schema": "^3.24.3"
   },
   "devDependencies": {
     "@babel/types": "~7.21.4",
+    "@statelyai/inspect": "^0.4.0",
     "@types/chai": "^4.3.17",
     "@types/glob": "^7.2.0",
     "@types/inquirer": "^0.0.43",

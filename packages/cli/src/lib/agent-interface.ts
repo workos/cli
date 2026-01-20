@@ -5,7 +5,6 @@
 
 import path from 'path';
 import { fileURLToPath } from 'url';
-import clack from '../utils/clack.js';
 import { debug, logToFile, initLogFile, LOG_FILE_PATH } from '../utils/debug.js';
 import type { WizardOptions } from '../utils/types.js';
 import { analytics } from '../utils/analytics.js';
@@ -243,9 +242,8 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
   logToFile('Agent initialization starting');
   logToFile('Install directory:', options.installDir);
 
-  if (!options.dashboard) {
-    clack.log.step('Initializing Claude agent...');
-  }
+  // Emit status event for adapters to render
+  options.emitter?.emit('status', { message: 'Initializing Claude agent...' });
 
   try {
     // Configure LLM gateway for Claude API calls
@@ -319,15 +317,14 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
       });
     }
 
-    if (!options.dashboard) {
-      clack.log.step(`Verbose logs: ${LOG_FILE_PATH}`);
-      clack.log.success("Agent initialized. Let's get cooking!");
-    }
+    // Emit status events for adapters to render
+    options.emitter?.emit('status', { message: `Verbose logs: ${LOG_FILE_PATH}` });
+    options.emitter?.emit('status', { message: "Agent initialized. Let's get cooking!" });
+
     return agentRunConfig;
   } catch (error) {
-    if (!options.dashboard) {
-      clack.log.error(`Failed to initialize agent: ${(error as Error).message}`);
-    }
+    // Emit error via emitter for adapters to handle
+    options.emitter?.emit('error', { message: `Failed to initialize agent: ${(error as Error).message}` });
     logToFile('Agent initialization error:', error);
     debug('Agent initialization error:', error);
     throw error;
@@ -336,7 +333,7 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
 
 /**
  * Execute an agent with the provided prompt and options
- * Handles the full lifecycle: spinner, execution, error handling
+ * Handles the full lifecycle via event emissions - adapters handle UI rendering.
  *
  * @returns An object containing any error detected in the agent's output
  */
@@ -344,7 +341,6 @@ export async function runAgent(
   agentConfig: AgentRunConfig,
   prompt: string,
   options: WizardOptions,
-  spinner: ReturnType<typeof clack.spinner> | null,
   config?: {
     spinnerMessage?: string;
     successMessage?: string;
@@ -360,11 +356,9 @@ export async function runAgent(
 
   const { query } = await getSDKModule();
 
-  if (!options.dashboard) {
-    clack.log.step(`This may take a few minutes. Grab some coffee!`);
-  }
-
-  spinner?.start(spinnerMessage);
+  // Emit progress for adapters to handle (e.g., CLI adapter starts spinner)
+  emitter?.emit('agent:progress', { step: 'Starting', detail: 'This may take a few minutes. Grab some coffee!' });
+  emitter?.emit('agent:progress', { step: spinnerMessage });
 
   logToFile('Starting agent run');
   logToFile('Prompt:', prompt);
@@ -430,7 +424,7 @@ export async function runAgent(
     // Process the async generator
     let sdkError: string | undefined;
     for await (const message of response) {
-      const messageError = handleSDKMessage(message, options, spinner, collectedText, emitter);
+      const messageError = handleSDKMessage(message, options, collectedText, emitter);
       if (messageError) {
         sdkError = messageError;
       }
@@ -444,23 +438,20 @@ export async function runAgent(
     const outputText = collectedText.join('\n');
 
     // Check for SDK errors first (e.g., API errors, auth failures)
+    // Return error type - caller decides whether to throw or emit events
     if (sdkError) {
       logToFile('Agent SDK error:', sdkError);
-      spinner?.stop(errorMessage);
-      emitter?.emit('complete', { success: false, summary: sdkError });
       return { error: AgentErrorType.EXECUTION_ERROR };
     }
 
     // Check for error markers in the agent's output
     if (outputText.includes(AgentSignals.ERROR_MCP_MISSING)) {
       logToFile('Agent error: MCP_MISSING');
-      spinner?.stop('Agent could not access WorkOS MCP');
       return { error: AgentErrorType.MCP_MISSING };
     }
 
     if (outputText.includes(AgentSignals.ERROR_RESOURCE_MISSING)) {
       logToFile('Agent error: RESOURCE_MISSING');
-      spinner?.stop('Agent could not access setup resource');
       return { error: AgentErrorType.RESOURCE_MISSING };
     }
 
@@ -471,13 +462,10 @@ export async function runAgent(
       duration_seconds: Math.round(durationMs / 1000),
     });
 
-    spinner?.stop(successMessage);
+    // Don't emit agent:success here - let the state machine handle lifecycle events
     return {};
   } catch (error) {
-    spinner?.stop(errorMessage);
-    if (!options.dashboard) {
-      clack.log.error(`Error: ${(error as Error).message}`);
-    }
+    // Don't emit events here - just log and re-throw for state machine to handle
     logToFile('Agent run failed:', error);
     debug('Full error:', error);
     throw error;
@@ -485,13 +473,12 @@ export async function runAgent(
 }
 
 /**
- * Handle SDK messages and provide user feedback
+ * Handle SDK messages and emit events for adapters to render.
  * @returns Error message if this was an error result, undefined otherwise
  */
 function handleSDKMessage(
   message: SDKMessage,
   options: WizardOptions,
-  spinner: ReturnType<typeof clack.spinner> | null,
   collectedText: string[],
   emitter?: WizardEventEmitter,
 ): string | undefined {
@@ -513,7 +500,7 @@ function handleSDKMessage(
             // Emit output event for dashboard
             emitter?.emit('output', { text: block.text });
 
-            // Check for [STATUS] markers
+            // Check for [STATUS] markers and emit progress events
             const statusRegex = new RegExp(
               `^.*${AgentSignals.STATUS.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*(.+?)$`,
               'm',
@@ -521,9 +508,8 @@ function handleSDKMessage(
             const statusMatch = block.text.match(statusRegex);
             if (statusMatch) {
               const statusText = statusMatch[1].trim();
-              spinner?.stop(statusText);
-              spinner?.start('Setting up WorkOS AuthKit...');
-              // Emit status event for dashboard
+              // Emit progress event - adapters handle spinner updates
+              emitter?.emit('agent:progress', { step: statusText });
               emitter?.emit('status', { message: statusText });
             }
           }
@@ -632,11 +618,8 @@ function handleSDKMessage(
         logToFile('Agent error result:', message.subtype);
         if (message.errors && message.errors.length > 0) {
           for (const err of message.errors) {
-            if (!options.dashboard) {
-              clack.log.error(`Error: ${err}`);
-            }
             logToFile('ERROR:', err);
-            // Emit error event for dashboard
+            // Emit error event - adapters handle rendering
             emitter?.emit('error', { message: err });
           }
           // Return the first error message

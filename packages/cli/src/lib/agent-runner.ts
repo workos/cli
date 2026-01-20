@@ -1,18 +1,14 @@
-import { getWelcomeMessage, SPINNER_MESSAGE, type FrameworkConfig } from './framework-config.js';
+import { SPINNER_MESSAGE, type FrameworkConfig } from './framework-config.js';
 import type { WizardOptions } from '../utils/types.js';
 import {
-  confirmContinueIfNoOrDirtyGitRepo,
   ensurePackageIsInstalled,
   getOrAskForWorkOSCredentials,
   getPackageDotJson,
   isUsingTypeScript,
-  printWelcome,
 } from '../utils/clack-utils.js';
 import { analytics } from '../utils/analytics.js';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants.js';
-import clack from '../utils/clack.js';
 import { initializeAgent, runAgent } from './agent-interface.js';
-import chalk from 'chalk';
 import { uploadEnvironmentVariablesStep } from '../steps/index.js';
 import { autoConfigureWorkOSEnvironment } from './workos-management.js';
 import { detectPort, getCallbackPath } from './port-detection.js';
@@ -21,27 +17,18 @@ import { writeEnvLocal } from './env-writer.js';
 /**
  * Universal agent-powered wizard runner.
  * Handles the complete flow for any framework using WorkOS MCP integration.
+ *
+ * @returns A detailed summary of what was done and next steps
  */
-export async function runAgentWizard(config: FrameworkConfig, options: WizardOptions): Promise<void> {
-  // Setup phase - skip clack UI in dashboard mode
-  if (!options.dashboard) {
-    printWelcome({ wizardName: getWelcomeMessage(config.metadata.name) });
-    clack.log.info(
-      `🧙 The wizard will use AI to intelligently set up WorkOS AuthKit in your ${config.metadata.name} project.`,
-    );
-  } else {
-    // Emit status via event emitter for dashboard
-    options.emitter?.emit('status', {
-      message: `Setting up WorkOS AuthKit for ${config.metadata.name}`,
-    });
-  }
+export async function runAgentWizard(config: FrameworkConfig, options: WizardOptions): Promise<string> {
+  // Emit status for UI adapters to render
+  options.emitter?.emit('status', {
+    message: `Setting up WorkOS AuthKit for ${config.metadata.name}`,
+  });
 
   const typeScriptDetected = isUsingTypeScript(options);
 
-  // Skip git check in dashboard mode (already done in run.ts)
-  if (!options.dashboard) {
-    await confirmContinueIfNoOrDirtyGitRepo(options);
-  }
+  // Git check is now handled by the state machine - no need to check here
 
   // Framework detection and version
   const packageJson = await getPackageDotJson(options);
@@ -108,9 +95,7 @@ export async function runAgentWizard(config: FrameworkConfig, options: WizardOpt
   );
 
   // Initialize and run agent
-  // Only create spinner if not in dashboard mode
-  const spinner = options.dashboard ? null : clack.spinner();
-
+  // Spinner is now handled by adapters listening to agent:start/agent:progress events
   const agent = await initializeAgent(
     {
       workingDirectory: options.installDir,
@@ -125,7 +110,6 @@ export async function runAgentWizard(config: FrameworkConfig, options: WizardOpt
     agent,
     integrationPrompt,
     options,
-    spinner,
     {
       spinnerMessage: SPINNER_MESSAGE,
       successMessage: config.ui.successMessage,
@@ -134,11 +118,10 @@ export async function runAgentWizard(config: FrameworkConfig, options: WizardOpt
     options.emitter,
   );
 
-  // If agent returned an error, don't proceed with success flow
-  // The complete event was already emitted by runAgent
+  // If agent returned an error, throw so state machine can handle it
   if (agentResult.error) {
     await analytics.shutdown('error');
-    return;
+    throw new Error(`Agent failed: ${agentResult.error}`);
   }
 
   // Build environment variables from WorkOS credentials
@@ -172,32 +155,12 @@ export async function runAgentWizard(config: FrameworkConfig, options: WizardOpt
       : '',
   ].filter(Boolean);
 
-  const outroMessage = `
-${chalk.green('Successfully installed WorkOS AuthKit!')}
-
-${chalk.cyan('What the agent did:')}
-${changes.map((change) => `• ${change}`).join('\n')}
-
-${chalk.yellow('Next steps:')}
-${nextSteps.map((step) => `• ${step}`).join('\n')}
-
-Learn more: ${chalk.cyan(config.metadata.docsUrl)}
-${continueUrl ? `\nContinue onboarding: ${chalk.cyan(continueUrl)}\n` : ``}
-${chalk.dim(
-  'Note: This wizard uses an LLM agent to analyze and modify your project. Please review the changes made.',
-)}`;
-
-  if (options.dashboard) {
-    // Emit completion event for dashboard
-    options.emitter?.emit('complete', {
-      success: true,
-      summary: `Successfully installed WorkOS AuthKit!\n\nChanges:\n${changes.map((c) => `• ${c}`).join('\n')}\n\nNext steps:\n${nextSteps.map((s) => `• ${s}`).join('\n')}`,
-    });
-  } else {
-    clack.outro(outroMessage);
-  }
+  // Build detailed summary to return to caller (state machine)
+  const summary = buildCompletionSummary(config, changes, nextSteps, continueUrl);
 
   await analytics.shutdown('success');
+
+  return summary;
 }
 
 /**
@@ -258,4 +221,43 @@ The skill contains step-by-step instructions including:
 Report your progress using [STATUS] prefixes.
 
 Begin by invoking the ${skillName} skill.`;
+}
+
+/**
+ * Build a completion summary for the event payload.
+ * This is a plain-text summary without styling (adapters handle presentation).
+ */
+function buildCompletionSummary(
+  config: FrameworkConfig,
+  changes: string[],
+  nextSteps: string[],
+  continueUrl: string | undefined,
+): string {
+  const lines: string[] = [];
+
+  lines.push('Successfully installed WorkOS AuthKit!');
+  lines.push('');
+
+  if (changes.length > 0) {
+    lines.push('What the agent did:');
+    changes.forEach((change) => lines.push(`• ${change}`));
+    lines.push('');
+  }
+
+  if (nextSteps.length > 0) {
+    lines.push('Next steps:');
+    nextSteps.forEach((step) => lines.push(`• ${step}`));
+    lines.push('');
+  }
+
+  lines.push(`Learn more: ${config.metadata.docsUrl}`);
+
+  if (continueUrl) {
+    lines.push(`Continue onboarding: ${continueUrl}`);
+  }
+
+  lines.push('');
+  lines.push('Note: This wizard uses an LLM agent to analyze and modify your project. Please review the changes made.');
+
+  return lines.join('\n');
 }

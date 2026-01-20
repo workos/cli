@@ -78,6 +78,16 @@ export type WizardOptions = {
    * Event emitter for dashboard mode
    */
   emitter?: import('../lib/events.js').WizardEventEmitter;
+
+  /**
+   * Pre-selected framework integration (bypasses detection)
+   */
+  integration?: import('../lib/constants.js').Integration;
+
+  /**
+   * Enable XState inspector - opens browser to visualize state machine live
+   */
+  inspect?: boolean;
 };
 
 export interface Feature {

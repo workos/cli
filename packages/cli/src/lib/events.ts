@@ -1,6 +1,5 @@
 import { EventEmitter } from 'events';
 
-// Event payload types
 export interface WizardEvents {
   status: { message: string };
   output: { text: string; isError?: boolean };
@@ -14,6 +13,29 @@ export interface WizardEvents {
   'credentials:response': { apiKey: string; clientId: string };
   complete: { success: boolean; summary?: string };
   error: { message: string; stack?: string };
+
+  'state:enter': { state: string };
+  'state:exit': { state: string };
+  'auth:checking': Record<string, never>;
+  'auth:required': Record<string, never>;
+  'auth:success': Record<string, never>;
+  'auth:failure': { message: string };
+  'detection:start': Record<string, never>;
+  'detection:complete': { integration: string };
+  'detection:none': Record<string, never>;
+  'git:checking': Record<string, never>;
+  'git:clean': Record<string, never>;
+  'git:dirty': { files: string[] };
+  'git:dirty:confirmed': Record<string, never>;
+  'git:dirty:cancelled': Record<string, never>;
+  'credentials:gathering': { requiresApiKey: boolean };
+  'credentials:found': Record<string, never>;
+  'config:start': Record<string, never>;
+  'config:complete': Record<string, never>;
+  'agent:start': Record<string, never>;
+  'agent:progress': { step: string; detail?: string };
+  'agent:success': { summary?: string };
+  'agent:failure': { message: string; stack?: string };
 }
 
 export type WizardEventName = keyof WizardEvents;
@@ -30,9 +52,12 @@ export class WizardEventEmitter extends EventEmitter {
   off<K extends WizardEventName>(event: K, listener: (payload: WizardEvents[K]) => void): this {
     return super.off(event, listener);
   }
+
+  once<K extends WizardEventName>(event: K, listener: (payload: WizardEvents[K]) => void): this {
+    return super.once(event, listener);
+  }
 }
 
-// Factory function for easy creation
 export function createWizardEventEmitter(): WizardEventEmitter {
   return new WizardEventEmitter();
 }

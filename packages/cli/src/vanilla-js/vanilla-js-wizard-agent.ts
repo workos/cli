@@ -48,10 +48,10 @@ const VANILLA_JS_AGENT_CONFIG: FrameworkConfig = {
   },
 };
 
-export async function runVanillaJsWizardAgent(options: WizardOptions): Promise<void> {
+export async function runVanillaJsWizardAgent(options: WizardOptions): Promise<string> {
   if (options.debug) {
     enableDebugLogs();
   }
 
-  await runAgentWizard(VANILLA_JS_AGENT_CONFIG, options);
+  return runAgentWizard(VANILLA_JS_AGENT_CONFIG, options);
 }
