@@ -49,7 +49,7 @@ authkit-wizard [options] [command]
 
 Commands:
   dashboard              Run wizard with visual TUI dashboard (experimental)
-  login                  Authenticate with WorkOS
+  login                  Authenticate with WorkOS via Connect OAuth device flow
   logout                 Remove stored credentials
   install-skill          Install AuthKit skills to coding agents (Claude Code, Codex, etc.)
 
@@ -85,6 +85,20 @@ npx @workos/authkit-wizard --ci \
   --api-key $WORKOS_API_KEY \
   --client-id $WORKOS_CLIENT_ID
 ```
+
+## Authentication
+
+The wizard uses WorkOS Connect OAuth device flow for authentication:
+
+```bash
+# Login (opens browser for authentication)
+authkit-wizard login
+
+# Logout (clears stored credentials)
+authkit-wizard logout
+```
+
+Credentials are stored in `~/.wizard/credentials.json`. Access tokens are not persisted long-term for security - users re-authenticate when tokens expire.
 
 ## How It Works
 
