@@ -1,7 +1,13 @@
 import { v4 as uuidv4 } from 'uuid';
 import { debug } from './debug.js';
 import { telemetryClient } from './telemetry-client.js';
-import type { SessionStartEvent, SessionEndEvent } from './telemetry-types.js';
+import type {
+  SessionStartEvent,
+  SessionEndEvent,
+  StepEvent,
+  AgentToolEvent,
+  AgentLLMEvent,
+} from './telemetry-types.js';
 import { WIZARD_TELEMETRY_ENABLED } from '../lib/constants.js';
 
 export class Analytics {
@@ -9,6 +15,11 @@ export class Analytics {
   private sessionId: string;
   private sessionStartTime: Date;
   private distinctId?: string;
+
+  // Agent metrics tracking
+  private totalInputTokens = 0;
+  private totalOutputTokens = 0;
+  private agentIterations = 0;
 
   constructor() {
     this.sessionId = uuidv4();
@@ -78,6 +89,71 @@ export class Analytics {
     telemetryClient.queueEvent(event);
   }
 
+  /**
+   * Record a completed wizard step with timing.
+   */
+  stepCompleted(name: string, durationMs: number, success: boolean, error?: Error) {
+    if (!WIZARD_TELEMETRY_ENABLED) return;
+
+    const event: StepEvent = {
+      type: 'step',
+      sessionId: this.sessionId,
+      timestamp: new Date().toISOString(),
+      name,
+      durationMs,
+      success,
+      error: error ? { type: error.name, message: error.message } : undefined,
+    };
+
+    telemetryClient.queueEvent(event);
+  }
+
+  /**
+   * Record an agent tool call with timing.
+   */
+  toolCalled(toolName: string, durationMs: number, success: boolean) {
+    if (!WIZARD_TELEMETRY_ENABLED) return;
+
+    const event: AgentToolEvent = {
+      type: 'agent.tool',
+      sessionId: this.sessionId,
+      timestamp: new Date().toISOString(),
+      toolName,
+      durationMs,
+      success,
+    };
+
+    telemetryClient.queueEvent(event);
+  }
+
+  /**
+   * Record an LLM API request with token counts.
+   */
+  llmRequest(model: string, inputTokens: number, outputTokens: number) {
+    if (!WIZARD_TELEMETRY_ENABLED) return;
+
+    this.totalInputTokens += inputTokens;
+    this.totalOutputTokens += outputTokens;
+
+    const event: AgentLLMEvent = {
+      type: 'agent.llm',
+      sessionId: this.sessionId,
+      timestamp: new Date().toISOString(),
+      model,
+      inputTokens,
+      outputTokens,
+    };
+
+    telemetryClient.queueEvent(event);
+  }
+
+  /**
+   * Increment the agent iteration counter.
+   */
+  incrementAgentIterations() {
+    this.agentIterations++;
+  }
+
   async shutdown(status: 'success' | 'error' | 'cancelled') {
     if (!WIZARD_TELEMETRY_ENABLED) return;
 
@@ -98,6 +174,9 @@ export class Analytics {
       attributes: {
         'wizard.outcome': status,
         'wizard.duration_ms': duration,
+        'wizard.agent.iterations': this.agentIterations,
+        'wizard.agent.tokens.input': this.totalInputTokens,
+        'wizard.agent.tokens.output': this.totalOutputTokens,
         ...extraAttributes,
       },
     };

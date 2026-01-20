@@ -268,6 +268,113 @@ describe('Analytics', () => {
         expect(result).toBeUndefined();
       });
     });
+
+    describe('stepCompleted', () => {
+      it('queues step event with timing', () => {
+        analytics.stepCompleted('detect_framework', 150, true);
+
+        expect(mockQueueEvent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'step',
+            sessionId: 'test-session-id-123',
+            name: 'detect_framework',
+            durationMs: 150,
+            success: true,
+          }),
+        );
+      });
+
+      it('includes error info on failure', () => {
+        const error = new TypeError('Detection failed');
+        analytics.stepCompleted('detect_framework', 50, false, error);
+
+        expect(mockQueueEvent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'step',
+            success: false,
+            error: {
+              type: 'TypeError',
+              message: 'Detection failed',
+            },
+          }),
+        );
+      });
+
+      it('omits error field on success', () => {
+        analytics.stepCompleted('install_sdk', 2000, true);
+
+        const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'step')[0];
+        expect(event.error).toBeUndefined();
+      });
+    });
+
+    describe('toolCalled', () => {
+      it('queues agent.tool event', () => {
+        analytics.toolCalled('Write', 50, true);
+
+        expect(mockQueueEvent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'agent.tool',
+            sessionId: 'test-session-id-123',
+            toolName: 'Write',
+            durationMs: 50,
+            success: true,
+          }),
+        );
+      });
+
+      it('records failed tool calls', () => {
+        analytics.toolCalled('Bash', 100, false);
+
+        expect(mockQueueEvent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'agent.tool',
+            toolName: 'Bash',
+            success: false,
+          }),
+        );
+      });
+    });
+
+    describe('llmRequest', () => {
+      it('queues agent.llm event with token counts', () => {
+        analytics.llmRequest('claude-sonnet-4-20250514', 1000, 500);
+
+        expect(mockQueueEvent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'agent.llm',
+            sessionId: 'test-session-id-123',
+            model: 'claude-sonnet-4-20250514',
+            inputTokens: 1000,
+            outputTokens: 500,
+          }),
+        );
+      });
+
+      it('accumulates tokens for session.end', async () => {
+        analytics.llmRequest('claude-sonnet-4-20250514', 1000, 500);
+        analytics.llmRequest('claude-sonnet-4-20250514', 800, 300);
+
+        await analytics.shutdown('success');
+
+        const sessionEnd = mockQueueEvent.mock.calls.find((c) => c[0].type === 'session.end')[0];
+        expect(sessionEnd.attributes['wizard.agent.tokens.input']).toBe(1800);
+        expect(sessionEnd.attributes['wizard.agent.tokens.output']).toBe(800);
+      });
+    });
+
+    describe('incrementAgentIterations', () => {
+      it('tracks iterations in session.end', async () => {
+        analytics.incrementAgentIterations();
+        analytics.incrementAgentIterations();
+        analytics.incrementAgentIterations();
+
+        await analytics.shutdown('success');
+
+        const sessionEnd = mockQueueEvent.mock.calls.find((c) => c[0].type === 'session.end')[0];
+        expect(sessionEnd.attributes['wizard.agent.iterations']).toBe(3);
+      });
+    });
   });
 
   describe('with telemetry disabled', () => {
@@ -319,6 +426,33 @@ describe('Analytics', () => {
 
       expect(mockQueueEvent).not.toHaveBeenCalled();
       expect(mockFlush).not.toHaveBeenCalled();
+    });
+
+    it('stepCompleted does nothing', async () => {
+      const { Analytics } = await import('./analytics.js');
+      const analytics = new Analytics();
+
+      analytics.stepCompleted('test_step', 100, true);
+
+      expect(mockQueueEvent).not.toHaveBeenCalled();
+    });
+
+    it('toolCalled does nothing', async () => {
+      const { Analytics } = await import('./analytics.js');
+      const analytics = new Analytics();
+
+      analytics.toolCalled('Write', 50, true);
+
+      expect(mockQueueEvent).not.toHaveBeenCalled();
+    });
+
+    it('llmRequest does nothing', async () => {
+      const { Analytics } = await import('./analytics.js');
+      const analytics = new Analytics();
+
+      analytics.llmRequest('claude-sonnet-4-20250514', 1000, 500);
+
+      expect(mockQueueEvent).not.toHaveBeenCalled();
     });
   });
 });
