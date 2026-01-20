@@ -7,6 +7,12 @@ interface Env {
   WORKOS_CLIENT_ID?: string;
   /** Enable local development mode - allows unauthenticated requests */
   LOCAL_MODE?: string;
+  /** OTel exporter type: 'otlp' | 'console' | 'none' */
+  OTEL_EXPORTER_TYPE?: string;
+  /** OTLP endpoint URL for trace export */
+  OTEL_EXPORTER_OTLP_ENDPOINT?: string;
+  /** Service name for telemetry (defaults to 'workos-authkit-wizard') */
+  OTEL_SERVICE_NAME?: string;
 }
 
 function getEnv(): Env {

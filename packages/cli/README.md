@@ -65,6 +65,9 @@ Options:
   --local                 Use local LLM gateway (development only)
   --default               Use default options for all prompts (default: true)
   --skip-auth             Skip authentication check (requires --local)
+
+Environment Variables:
+  WIZARD_TELEMETRY=false  Disable telemetry collection
 ```
 
 ## Examples
@@ -93,6 +96,21 @@ npx @workos/authkit-wizard --ci \
 6. **Installs** SDK with detected package manager
 7. **Creates** auth routes, middleware, and UI
 8. **Configures** environment variables securely
+
+## Telemetry
+
+The wizard collects anonymous usage telemetry to help improve the product:
+
+- Session outcome (success/error/cancelled)
+- Framework detected
+- Duration and step timing
+- Token usage (for capacity planning)
+
+No code, credentials, or personal data is collected. Disable with:
+
+```bash
+WIZARD_TELEMETRY=false npx @workos/authkit-wizard
+```
 
 ## Logs
 

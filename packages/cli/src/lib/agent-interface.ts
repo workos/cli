@@ -20,6 +20,8 @@ import type { WizardEventEmitter } from './events.js';
 const fileContentCache = new Map<string, string>();
 // Track pending Read operations by tool_use_id
 const pendingReads = new Map<string, string>();
+// Track tool start times by tool_use_id for telemetry
+const pendingToolCalls = new Map<string, { toolName: string; startTime: number }>();
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -490,6 +492,16 @@ function handleSDKMessage(
 
   switch (message.type) {
     case 'assistant': {
+      // Extract usage data from Anthropic API response for telemetry
+      const usage = message.message?.usage;
+      if (usage) {
+        const inputTokens = usage.input_tokens ?? 0;
+        const outputTokens = usage.output_tokens ?? 0;
+        const model = message.message?.model ?? 'unknown';
+        analytics.llmRequest(model, inputTokens, outputTokens);
+        analytics.incrementAgentIterations();
+      }
+
       // Extract text content from assistant messages
       const content = message.message?.content;
       if (Array.isArray(content)) {
@@ -517,10 +529,16 @@ function handleSDKMessage(
           // Check for tool_use blocks (Write/Edit operations)
           if (block.type === 'tool_use') {
             const toolName = block.name as string;
+            const toolUseId = block.id as string;
             const input = block.input as Record<string, unknown>;
 
             // Log tool usage for debugging
             logToFile(`Tool use: ${toolName}`);
+
+            // Track tool start time for telemetry
+            if (toolUseId) {
+              pendingToolCalls.set(toolUseId, { toolName, startTime: Date.now() });
+            }
 
             // Emit file:write event for Write tool
             if (toolName === 'Write' && input) {
@@ -567,6 +585,17 @@ function handleSDKMessage(
           // Tool results contain file content from Read operations
           if (block.type === 'tool_result' && block.tool_use_id) {
             const toolUseId = block.tool_use_id as string;
+
+            // Emit telemetry for completed tool call
+            const pendingTool = pendingToolCalls.get(toolUseId);
+            if (pendingTool) {
+              const durationMs = Date.now() - pendingTool.startTime;
+              // Check if tool result indicates error (is_error field or error in content)
+              const isError = block.is_error === true;
+              analytics.toolCalled(pendingTool.toolName, durationMs, !isError);
+              pendingToolCalls.delete(toolUseId);
+            }
+
             const filePath = pendingReads.get(toolUseId);
             if (filePath) {
               // Extract content from the tool result

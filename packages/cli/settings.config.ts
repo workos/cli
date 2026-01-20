@@ -26,7 +26,7 @@ export const settings = {
   },
 
   telemetry: {
-    enabled: false,
+    enabled: true,
     eventName: 'wizard interaction',
   },
 

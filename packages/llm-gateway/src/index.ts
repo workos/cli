@@ -3,6 +3,8 @@ import { config } from 'dotenv';
 // Load .env.local first, then .env as fallback
 config({ path: '.env.local' });
 config({ path: '.env' });
+
+import { initTelemetry, shutdownTelemetry } from './telemetry/index.js';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { streamSSE } from 'hono/streaming';
@@ -10,6 +12,10 @@ import { serve } from '@hono/node-server';
 import Anthropic from '@anthropic-ai/sdk';
 import { env } from './env.js';
 import { validateJWT } from './jwt.js';
+import { telemetry } from './routes/telemetry.js';
+
+// Initialize OTel before creating app
+initTelemetry(env.OTEL_SERVICE_NAME || 'workos-authkit-wizard');
 
 const app = new Hono();
 const PORT = Number(env.PORT) || 8000;
@@ -20,6 +26,9 @@ const anthropic = new Anthropic({
 });
 
 app.use('*', cors());
+
+// Mount telemetry route
+app.route('/telemetry', telemetry);
 
 // Health check
 app.get('/health', (c) => {
@@ -132,8 +141,16 @@ serve(
     console.log(`\n🚀 WorkOS LLM Gateway running on http://localhost:${PORT}`);
     console.log(`   Health check: http://localhost:${PORT}/health`);
     console.log(`   Anthropic proxy: POST http://localhost:${PORT}/v1/messages`);
+    console.log(`   Telemetry: POST http://localhost:${PORT}/telemetry`);
     console.log(`\n   Anthropic API Key: ${env.ANTHROPIC_API_KEY ? '✓ Set' : '✗ Missing'}`);
     console.log(`   WorkOS Client ID: ${env.WORKOS_CLIENT_ID ? '✓ Set' : '✗ Missing'}`);
     console.log(`   Local Mode: ${isLocalMode ? '✓ Enabled (auth optional)' : '✗ Disabled (auth required)'}\n`);
   },
 );
+
+// Handle graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('[Gateway] SIGTERM received, shutting down...');
+  await shutdownTelemetry();
+  process.exit(0);
+});

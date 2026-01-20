@@ -31,7 +31,9 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
 
   enterFullscreen();
 
-  const instance = render(createElement(Dashboard, { emitter: options.emitter }));
+  const instance = render(createElement(Dashboard, { emitter: options.emitter }), {
+    exitOnCtrlC: false,
+  });
   cleanup = () => {
     instance.unmount();
     exitFullscreen();
