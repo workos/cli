@@ -2,8 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { debug } from './debug.js';
 import { telemetryClient } from './telemetry-client.js';
 import type { SessionStartEvent, SessionEndEvent } from './telemetry-types.js';
-
-const TELEMETRY_ENABLED = process.env.WIZARD_TELEMETRY !== 'false';
+import { WIZARD_TELEMETRY_ENABLED } from '../lib/constants.js';
 
 export class Analytics {
   private tags: Record<string, string | boolean | number | null | undefined> = {};
@@ -34,7 +33,7 @@ export class Analytics {
   }
 
   capture(eventName: string, properties?: Record<string, unknown>) {
-    if (!TELEMETRY_ENABLED) return;
+    if (!WIZARD_TELEMETRY_ENABLED) return;
 
     debug(`[Analytics] capture: ${eventName}`, properties);
 
@@ -50,7 +49,7 @@ export class Analytics {
   }
 
   captureException(error: Error, properties: Record<string, unknown> = {}) {
-    if (!TELEMETRY_ENABLED) return;
+    if (!WIZARD_TELEMETRY_ENABLED) return;
 
     debug('[Analytics] captureException:', error.message, properties);
     this.tags['error.type'] = error.name;
@@ -63,7 +62,7 @@ export class Analytics {
   }
 
   sessionStart(mode: 'cli' | 'tui', version: string) {
-    if (!TELEMETRY_ENABLED) return;
+    if (!WIZARD_TELEMETRY_ENABLED) return;
 
     const event: SessionStartEvent = {
       type: 'session.start',
@@ -80,7 +79,7 @@ export class Analytics {
   }
 
   async shutdown(status: 'success' | 'error' | 'cancelled') {
-    if (!TELEMETRY_ENABLED) return;
+    if (!WIZARD_TELEMETRY_ENABLED) return;
 
     const duration = Date.now() - this.sessionStartTime.getTime();
 
