@@ -35,7 +35,7 @@
     "definition": "dist/index.d.ts"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "~0.2.11",
+    "@anthropic-ai/claude-agent-sdk": "~0.2.12",
     "@clack/core": "^0.3.4",
     "@clack/prompts": "0.7.0",
     "@workos-inc/node": "^8.0.0",
@@ -89,7 +89,7 @@
     "ts-jest": "^29.1.0",
     "ts-node": "^10.9.1",
     "tsx": "^4.20.3",
-    "typescript": "^5.0.4",
+    "typescript": "^5.9.3",
     "vitest": "^4.0.17"
   },
   "engines": {
