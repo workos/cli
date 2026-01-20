@@ -13,7 +13,10 @@ import type { WizardMachineContext, DetectionOutput, GitCheckOutput, AgentOutput
 import { Integration } from './constants.js';
 import { parseEnvFile } from '../utils/env-parser.js';
 
-import { getAccessToken } from './credentials.js';
+import { getAccessToken, getCredentials } from './credentials.js';
+import { analytics } from '../utils/analytics.js';
+import { getSettings } from './settings.js';
+import { getLlmGatewayUrlFromHost } from '../utils/urls.js';
 import { runLogin } from '../commands/login.js';
 import { isInGitRepo, getUncommittedOrUntrackedFiles } from '../utils/clack-utils.js';
 import { INTEGRATION_CONFIG, INTEGRATION_ORDER } from './config.js';
@@ -76,6 +79,11 @@ async function detectIntegrationFn(options: Pick<WizardOptions, 'installDir'>): 
 }
 
 export async function runWithCore(options: WizardOptions): Promise<void> {
+  // Configure telemetry endpoint (same URL as LLM gateway)
+  const settings = getSettings();
+  const gatewayUrl = options.local ? settings.gateway.development : getLlmGatewayUrlFromHost();
+  analytics.setGatewayUrl(gatewayUrl);
+
   const existingCreds = readExistingCredentials(options.installDir);
   const augmentedOptions: WizardOptions = {
     ...options,
@@ -100,13 +108,28 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
     actors: {
       checkAuthentication: fromPromise(async () => {
         const token = getAccessToken();
-        if (token) return true;
+        if (token) {
+          // Set telemetry from existing credentials
+          const creds = getCredentials();
+          if (creds) {
+            analytics.setAccessToken(creds.accessToken);
+            analytics.setDistinctId(creds.userId);
+          }
+          return true;
+        }
 
         await runLogin();
 
         const newToken = getAccessToken();
         if (!newToken) {
           throw new Error('Authentication failed. Please try again.');
+        }
+
+        // Set telemetry after fresh login
+        const creds = getCredentials();
+        if (creds) {
+          analytics.setAccessToken(creds.accessToken);
+          analytics.setDistinctId(creds.userId);
         }
         return true;
       }),
@@ -216,6 +239,13 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
 
   await adapter.start();
 
+  // Start telemetry session
+  const mode = augmentedOptions.dashboard ? 'tui' : 'cli';
+  const version = getSettings().version;
+  analytics.sessionStart(mode, version);
+
+  let wizardStatus: 'success' | 'error' | 'cancelled' = 'success';
+
   try {
     await new Promise<void>((resolve, reject) => {
       actor!.subscribe({
@@ -223,18 +253,26 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
           const snapshot = actor!.getSnapshot();
           if (snapshot.value === 'error') {
             const err = snapshot.context.error;
+            wizardStatus = 'error';
             reject(err ?? new Error('Wizard failed'));
           } else {
             resolve();
           }
         },
-        error: (err) => reject(err),
+        error: (err) => {
+          wizardStatus = 'error';
+          reject(err);
+        },
       });
 
       actor!.start();
       actor!.send({ type: 'START' });
     });
+  } catch (error) {
+    wizardStatus = 'error';
+    throw error;
   } finally {
+    await analytics.shutdown(wizardStatus);
     await adapter.stop();
   }
 }
