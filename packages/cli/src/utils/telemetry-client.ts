@@ -40,6 +40,8 @@ export class TelemetryClient {
     }
 
     try {
+      debug(`[Telemetry] Sending ${payload.events.length} events to ${this.gatewayUrl}/telemetry`);
+
       const response = await fetch(`${this.gatewayUrl}/telemetry`, {
         method: 'POST',
         headers,

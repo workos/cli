@@ -31,7 +31,11 @@ export async function startDashboard(options: DashboardOptions): Promise<void> {
 
   enterFullscreen();
 
-  const instance = render(createElement(Dashboard, { emitter: options.emitter }));
+  // Disable Ink's automatic Ctrl+C handling so our SIGINT handler in run-with-core.ts
+  // can properly flush telemetry before exit
+  const instance = render(createElement(Dashboard, { emitter: options.emitter }), {
+    exitOnCtrlC: false,
+  });
   cleanup = () => {
     instance.unmount();
     exitFullscreen();

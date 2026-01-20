@@ -40,6 +40,10 @@ telemetry.post('/', async (c) => {
   // Process events (non-blocking)
   for (const event of body.events) {
     try {
+      // Log events in local mode for debugging
+      if (isLocalMode) {
+        console.log('[Telemetry] Received:', event.type, event.sessionId?.slice(0, 8));
+      }
       processEvent(event);
     } catch (err) {
       console.error('[Telemetry] Error processing event:', err);

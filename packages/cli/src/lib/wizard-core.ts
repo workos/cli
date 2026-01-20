@@ -177,6 +177,13 @@ export const wizardMachine = setup({
     error: undefined,
   }),
 
+  // Global event handlers - CANCEL can be sent from any state
+  on: {
+    CANCEL: {
+      target: '.cancelled',
+    },
+  },
+
   states: {
     idle: {
       on: {

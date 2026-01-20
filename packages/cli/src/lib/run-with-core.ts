@@ -246,12 +246,10 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
 
   let wizardStatus: 'success' | 'error' | 'cancelled' = 'success';
 
-  // Handle ctrl+c to flush telemetry before exit
-  const handleSigint = async () => {
+  // Handle ctrl+c by sending CANCEL to state machine for graceful shutdown
+  const handleSigint = () => {
     wizardStatus = 'cancelled';
-    await analytics.shutdown(wizardStatus);
-    await adapter.stop();
-    process.exit(130); // Standard exit code for SIGINT
+    actor?.send({ type: 'CANCEL' });
   };
   process.on('SIGINT', handleSigint);
 
@@ -264,6 +262,9 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
             const err = snapshot.context.error;
             wizardStatus = 'error';
             reject(err ?? new Error('Wizard failed'));
+          } else if (snapshot.value === 'cancelled') {
+            wizardStatus = 'cancelled';
+            resolve();
           } else {
             resolve();
           }
