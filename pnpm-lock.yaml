@@ -16,8 +16,8 @@ importers:
         specifier: ^8.0.0
         version: 8.0.0
       typescript:
-        specifier: ^5.0.4
-        version: 5.7.3
+        specifier: ^5.9.3
+        version: 5.9.3
 
   packages/cli:
     dependencies:
@@ -3395,6 +3395,11 @@ packages:
     engines: {node: '>=14.17'}
     hasBin: true
 
+  typescript@5.9.3:
+    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
   uint8array-extras@1.5.0:
     resolution: {integrity: sha512-rvKSBiC5zqCCiDZ9kAOszZcDvdAHwwIKJG33Ykj43OKcWsnmcBRL09YTU4nOeHZ8Y2a7l1MgTd08SBe9A8Qj6A==}
     engines: {node: '>=18'}
@@ -5066,7 +5071,7 @@ snapshots:
       sirv: 3.0.2
       tinyglobby: 0.2.15
       tinyrainbow: 3.0.3
-      vitest: 4.0.17(@opentelemetry/api@1.9.0)(@types/node@20.19.28)(@vitest/ui@4.0.17)(msw@2.10.4(@types/node@20.19.28)(typescript@5.7.3))(tsx@4.21.0)(yaml@2.7.1)
+      vitest: 4.0.17(@opentelemetry/api@1.9.0)(@types/node@22.19.7)(@vitest/ui@4.0.17)(msw@2.10.4(@types/node@22.19.7)(typescript@5.7.3))(tsx@4.21.0)(yaml@2.7.1)
 
   '@vitest/utils@4.0.17':
     dependencies:
@@ -7177,6 +7182,8 @@ snapshots:
   type-fest@4.41.0: {}
 
   typescript@5.7.3: {}
+
+  typescript@5.9.3: {}
 
   uint8array-extras@1.5.0: {}
 

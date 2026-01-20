@@ -23,7 +23,7 @@
   },
   "devDependencies": {
     "@types/diff": "^8.0.0",
-    "typescript": "^5.0.4"
+    "typescript": "^5.9.3"
   },
   "volta": {
     "node": "20.18.2",

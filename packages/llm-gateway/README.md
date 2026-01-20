@@ -56,6 +56,34 @@ Same as Anthropic Messages API
 **Response:**
 Same as Anthropic Messages API (streamed)
 
+### `POST /telemetry`
+
+Receives wizard telemetry events and converts to OpenTelemetry spans/metrics.
+
+**Headers:**
+
+```
+Authorization: Bearer <access_token>  (optional in LOCAL_MODE)
+Content-Type: application/json
+```
+
+**Body:**
+
+```json
+{
+  "events": [
+    { "type": "session.start", "sessionId": "...", "timestamp": "...", "attributes": {...} },
+    { "type": "session.end", "sessionId": "...", "timestamp": "...", "attributes": {...} }
+  ]
+}
+```
+
+**Response:**
+
+```json
+{ "received": 2 }
+```
+
 ### `GET /health`
 
 Health check endpoint.
@@ -75,6 +103,13 @@ Health check endpoint.
 
 - `ANTHROPIC_API_KEY` (required) - WorkOS's Anthropic API key
 - `PORT` (optional) - Server port (default: 8000)
+- `LOCAL_MODE` (optional) - Set `true` for dev mode (console telemetry, auth optional)
+
+**Telemetry:**
+
+- `OTEL_EXPORTER_TYPE` - Telemetry exporter: `console` (default), `otlp`, `none`
+- `OTEL_EXPORTER_OTLP_ENDPOINT` - OTLP endpoint (default: `http://localhost:4318/v1/traces`)
+- `OTEL_SERVICE_NAME` - Service name in traces (default: `workos-authkit-wizard`)
 
 ## Security Features
 
