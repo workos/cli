@@ -32,9 +32,19 @@ export interface FileRule {
   mustContainAny?: string[]; // at least one must appear
 }
 
+export interface VariantRules {
+  files?: FileRule[];
+  packages?: PackageRule[];
+  envVars?: EnvVarRule[];
+}
+
 export interface ValidationRules {
   framework: string;
   packages: PackageRule[];
   envVars: EnvVarRule[];
   files: FileRule[];
+  variants?: Record<string, VariantRules>;
 }
+
+// Re-export BuildResult from build-validator
+export type { BuildResult } from './build-validator.js';

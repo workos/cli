@@ -129,7 +129,9 @@ export async function runAgentWizard(config: FrameworkConfig, options: WizardOpt
   if (!options.noValidate) {
     options.emitter?.emit('validation:start', { framework: config.metadata.integration });
 
-    const validationResult = await validateInstallation(config.metadata.integration, options.installDir);
+    const validationResult = await validateInstallation(config.metadata.integration, options.installDir, {
+      runBuild: !options.noBuild,
+    });
 
     if (validationResult.issues.length > 0) {
       options.emitter?.emit('validation:issues', { issues: validationResult.issues });

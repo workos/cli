@@ -93,6 +93,11 @@ export type WizardOptions = {
    * Skip post-installation validation
    */
   noValidate?: boolean;
+
+  /**
+   * Skip build validation during post-installation
+   */
+  noBuild?: boolean;
 };
 
 export interface Feature {

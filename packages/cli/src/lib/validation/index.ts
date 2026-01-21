@@ -1,4 +1,5 @@
-export { validateInstallation } from './validator.js';
+export { validateInstallation, type ValidateOptions } from './validator.js';
+export { runBuildValidation, type BuildResult } from './build-validator.js';
 export type {
   ValidationResult,
   ValidationRules,
@@ -8,4 +9,5 @@ export type {
   PackageRule,
   EnvVarRule,
   FileRule,
+  VariantRules,
 } from './types.js';
