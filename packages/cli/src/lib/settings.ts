@@ -5,6 +5,7 @@ export interface Settings {
   model: string;
   cliAuth: {
     clientId: string;
+    authkitDomain: string;
   };
   gateway: {
     development: string;
@@ -63,4 +64,12 @@ export function getSettings(): Settings {
  */
 export function getCliAuthClientId(): string {
   return process.env.WORKOS_CLIENT_ID || settingsConfig.cliAuth.clientId;
+}
+
+/**
+ * Get the AuthKit domain for Connect OAuth endpoints.
+ * Checks WORKOS_AUTHKIT_DOMAIN env var first (for dev/staging), falls back to settings.
+ */
+export function getAuthkitDomain(): string {
+  return process.env.WORKOS_AUTHKIT_DOMAIN || settingsConfig.cliAuth.authkitDomain;
 }

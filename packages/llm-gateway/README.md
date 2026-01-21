@@ -102,8 +102,14 @@ Health check endpoint.
 **Environment Variables:**
 
 - `ANTHROPIC_API_KEY` (required) - WorkOS's Anthropic API key
+- `WORKOS_AUTHKIT_DOMAIN` (required for auth) - AuthKit domain for JWT validation (e.g., `https://your-app.authkit.app`)
+- `WORKOS_CLIENT_ID` (optional) - Fallback for legacy User Management auth
 - `PORT` (optional) - Server port (default: 8000)
 - `LOCAL_MODE` (optional) - Set `true` for dev mode (console telemetry, auth optional)
+
+**Authentication:**
+
+The gateway validates JWTs issued by WorkOS Connect OAuth. It uses OIDC discovery to automatically fetch the issuer and JWKS URI from `{WORKOS_AUTHKIT_DOMAIN}/.well-known/openid-configuration`.
 
 **Telemetry:**
 

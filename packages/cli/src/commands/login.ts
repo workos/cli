@@ -1,24 +1,42 @@
 import open from 'opn';
 import clack from '../utils/clack.js';
 import { saveCredentials, getCredentials, getAccessToken } from '../lib/credentials.js';
-import { getCliAuthClientId } from '../lib/settings.js';
+import { getCliAuthClientId, getAuthkitDomain } from '../lib/settings.js';
 
 /**
- * Extract expiry time from JWT token
+ * Parse JWT payload
  */
-function getJwtExpiry(token: string): number | null {
+function parseJwt(token: string): Record<string, unknown> | null {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8'));
-    return typeof payload.exp === 'number' ? payload.exp * 1000 : null;
+    return JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8'));
   } catch {
     return null;
   }
 }
 
-const WORKOS_API_BASE = 'https://api.workos.com/user_management';
+/**
+ * Extract expiry time from JWT token
+ */
+function getJwtExpiry(token: string): number | null {
+  const payload = parseJwt(token);
+  if (!payload || typeof payload.exp !== 'number') return null;
+  return payload.exp * 1000;
+}
+
 const POLL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Get Connect OAuth endpoints from AuthKit domain
+ */
+function getConnectEndpoints() {
+  const domain = getAuthkitDomain();
+  return {
+    deviceAuthorization: `${domain}/oauth2/device_authorization`,
+    token: `${domain}/oauth2/token`,
+  };
+}
 
 interface DeviceAuthResponse {
   device_code: string;
@@ -29,14 +47,12 @@ interface DeviceAuthResponse {
   interval: number;
 }
 
-interface AuthSuccessResponse {
-  user: {
-    id: string;
-    email: string;
-  };
+interface ConnectTokenResponse {
   access_token: string;
-  refresh_token: string;
-  expires_in?: number;
+  id_token: string;
+  token_type: string;
+  expires_in: number;
+  refresh_token?: string;
 }
 
 interface AuthErrorResponse {
@@ -64,7 +80,9 @@ export async function runLogin(): Promise<void> {
 
   clack.log.step('Starting authentication...');
 
-  const authResponse = await fetch(`${WORKOS_API_BASE}/authorize/device`, {
+  const endpoints = getConnectEndpoints();
+
+  const authResponse = await fetch(endpoints.deviceAuthorization, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -103,7 +121,7 @@ export async function runLogin(): Promise<void> {
     await sleep(currentInterval);
 
     try {
-      const tokenResponse = await fetch(`${WORKOS_API_BASE}/authenticate`, {
+      const tokenResponse = await fetch(endpoints.token, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -118,26 +136,29 @@ export async function runLogin(): Promise<void> {
       const data = await tokenResponse.json();
 
       if (tokenResponse.ok) {
-        const result = data as AuthSuccessResponse;
+        const result = data as ConnectTokenResponse;
 
-        // Extract actual expiry from JWT, fallback to response or 15 min
+        // Parse user info from id_token JWT
+        const idTokenPayload = parseJwt(result.id_token);
+        const userId = (idTokenPayload?.sub as string) || 'unknown';
+        const email = (idTokenPayload?.email as string) || undefined;
+
+        // Extract actual expiry from access token JWT, fallback to response or 15 min
         const jwtExpiry = getJwtExpiry(result.access_token);
         const expiresAt =
           jwtExpiry ?? (result.expires_in ? Date.now() + result.expires_in * 1000 : Date.now() + 15 * 60 * 1000);
 
         const expiresInSec = Math.round((expiresAt - Date.now()) / 1000);
 
-        // Only store access token - refresh tokens are not persisted for security
-        // User will need to re-authenticate when token expires
         saveCredentials({
           accessToken: result.access_token,
           expiresAt,
-          userId: result.user.id,
-          email: result.user.email,
+          userId,
+          email,
         });
 
         spinner.stop('Authentication successful!');
-        clack.log.success(`Logged in as ${result.user.email}`);
+        clack.log.success(`Logged in as ${email || userId}`);
         clack.log.info(`Token expires in ${expiresInSec} seconds`);
         return;
       }

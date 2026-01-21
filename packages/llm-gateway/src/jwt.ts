@@ -1,40 +1,72 @@
 import * as jose from 'jose';
 import { env } from './env.js';
 
+interface OIDCConfig {
+  issuer: string;
+  jwks_uri: string;
+}
+
 interface JWKSCache {
   keys: jose.JWTVerifyGetKey;
+  issuer: string;
   fetchedAt: number;
-  clientId: string;
 }
 
-const JWKS_TTL_MS = 60 * 60 * 1000; // 1 hour
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
 
+let oidcConfigCache: { config: OIDCConfig; fetchedAt: number } | null = null;
 let jwksCache: JWKSCache | null = null;
 
-function getWorkOSJwksUrl(clientId: string): string {
-  return `https://api.workos.com/sso/jwks/${clientId}`;
+/**
+ * Fetch OIDC discovery document to get issuer and JWKS URI
+ */
+async function getOIDCConfig(): Promise<OIDCConfig> {
+  const authkitDomain = env.WORKOS_AUTHKIT_DOMAIN;
+
+  if (authkitDomain) {
+    const now = Date.now();
+
+    // Return cached config if still valid
+    if (oidcConfigCache && now - oidcConfigCache.fetchedAt < CACHE_TTL_MS) {
+      return oidcConfigCache.config;
+    }
+
+    // Fetch OIDC discovery document
+    const discoveryUrl = `${authkitDomain}/.well-known/openid-configuration`;
+    const response = await fetch(discoveryUrl);
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch OIDC config: ${response.status}`);
+    }
+
+    const config = await response.json() as OIDCConfig;
+    oidcConfigCache = { config, fetchedAt: now };
+    return config;
+  }
+
+  // Fallback to User Management (legacy)
+  const clientId = env.WORKOS_CLIENT_ID;
+  return {
+    issuer: 'https://api.workos.com',
+    jwks_uri: `https://api.workos.com/sso/jwks/${clientId}`,
+  };
 }
 
-function getWorkOSIssuer(): string {
-  return 'https://api.workos.com';
-}
-
-async function getJWKS(clientId: string): Promise<jose.JWTVerifyGetKey> {
+async function getJWKS(jwksUri: string, issuer: string): Promise<jose.JWTVerifyGetKey> {
   const now = Date.now();
 
-  // Return cached JWKS if still valid and for same client
-  if (jwksCache && jwksCache.clientId === clientId && now - jwksCache.fetchedAt < JWKS_TTL_MS) {
+  // Return cached JWKS if still valid and for same issuer
+  if (jwksCache && jwksCache.issuer === issuer && now - jwksCache.fetchedAt < CACHE_TTL_MS) {
     return jwksCache.keys;
   }
 
   // Fetch fresh JWKS
-  const jwksUrl = getWorkOSJwksUrl(clientId);
-  const JWKS = jose.createRemoteJWKSet(new URL(jwksUrl));
+  const JWKS = jose.createRemoteJWKSet(new URL(jwksUri));
 
   jwksCache = {
     keys: JWKS,
+    issuer,
     fetchedAt: now,
-    clientId,
   };
 
   return JWKS;
@@ -55,31 +87,34 @@ export interface ValidationResult {
 }
 
 export async function validateJWT(token: string): Promise<ValidationResult> {
+  const authkitDomain = env.WORKOS_AUTHKIT_DOMAIN;
   const clientId = env.WORKOS_CLIENT_ID;
 
-  if (!clientId) {
-    console.error('[Auth] WORKOS_CLIENT_ID not configured');
+  if (!authkitDomain && !clientId) {
+    console.error('[Auth] Neither WORKOS_AUTHKIT_DOMAIN nor WORKOS_CLIENT_ID configured');
     return { valid: false, error: 'Server misconfigured' };
   }
 
-  const expectedIssuer = getWorkOSIssuer();
-
-  // Decode token first to see what issuer it has (for debugging)
   try {
-    const decoded = jose.decodeJwt(token);
-    if (decoded.iss !== expectedIssuer) {
-      console.log(`[Auth] Token issuer: "${decoded.iss}"`);
-      console.log(`[Auth] Expected issuer: "${expectedIssuer}"`);
+    // Get issuer and JWKS URI from OIDC discovery (or fallback)
+    const oidcConfig = await getOIDCConfig();
+    const { issuer, jwks_uri } = oidcConfig;
+
+    // Decode token first to see what issuer it has (for debugging)
+    try {
+      const decoded = jose.decodeJwt(token);
+      if (decoded.iss !== issuer) {
+        console.log(`[Auth] Token issuer: "${decoded.iss}"`);
+        console.log(`[Auth] Expected issuer: "${issuer}"`);
+      }
+    } catch {
+      // Ignore decode errors, will be caught in verify
     }
-  } catch {
-    // Ignore decode errors, will be caught in verify
-  }
 
-  try {
-    const JWKS = await getJWKS(clientId);
+    const JWKS = await getJWKS(jwks_uri, issuer);
 
     const { payload } = await jose.jwtVerify(token, JWKS, {
-      issuer: expectedIssuer,
+      issuer,
       // Don't validate audience - any authenticated user can access
     });
 
@@ -103,10 +138,12 @@ export async function validateJWT(token: string): Promise<ValidationResult> {
     if (joseError.code === 'ERR_JWKS_NO_MATCHING_KEY') {
       // Unknown key ID - try refreshing JWKS
       jwksCache = null;
+      oidcConfigCache = null;
       try {
-        const JWKS = await getJWKS(clientId);
+        const oidcConfig = await getOIDCConfig();
+        const JWKS = await getJWKS(oidcConfig.jwks_uri, oidcConfig.issuer);
         const { payload } = await jose.jwtVerify(token, JWKS, {
-          issuer: expectedIssuer,
+          issuer: oidcConfig.issuer,
         });
         return { valid: true, payload: payload as JWTPayload };
       } catch {
@@ -118,7 +155,8 @@ export async function validateJWT(token: string): Promise<ValidationResult> {
   }
 }
 
-// Clear cache (useful for testing)
+// Clear caches (useful for testing)
 export function clearJWKSCache(): void {
   jwksCache = null;
+  oidcConfigCache = null;
 }
