@@ -13,6 +13,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { env } from './env.js';
 import { validateJWT } from './jwt.js';
 import { telemetry } from './routes/telemetry.js';
+import { gatewayRequests, gatewayTokensIn, gatewayTokensOut } from './telemetry/metrics.js';
 
 // Initialize OTel before creating app
 initTelemetry(env.OTEL_SERVICE_NAME || 'workos-authkit-wizard');
@@ -40,6 +41,8 @@ const isLocalMode = env.LOCAL_MODE === 'true' || env.LOCAL_MODE === '1';
 
 // Anthropic Messages API proxy
 app.post('/v1/messages', async (c) => {
+  let userId = 'anonymous';
+
   try {
     const authHeader = c.req.header('authorization');
     const hasToken = authHeader && authHeader.startsWith('Bearer ') && authHeader.length > 7;
@@ -60,9 +63,11 @@ app.post('/v1/messages', async (c) => {
         );
       }
 
-      console.log(`[Auth] Request from user: ${validation.payload?.sub}`);
+      userId = validation.payload?.sub || 'unknown';
+      console.log(`[Auth] Request from user: ${userId}`);
     } else if (isLocalMode) {
       // No token but LOCAL_MODE enabled - allow for local development
+      userId = 'local-dev';
       console.log(`[Auth] Local development mode (LOCAL_MODE=true, no token)`);
     } else {
       // No token and not in local mode - reject
@@ -76,23 +81,34 @@ app.post('/v1/messages', async (c) => {
     }
 
     const body = await c.req.json();
-    console.log(`[Proxy] Model: ${body.model}, Max tokens: ${body.max_tokens}`);
+    const model = body.model || 'unknown';
+    console.log(`[Proxy] Model: ${model}, Max tokens: ${body.max_tokens}`);
+
+    // Track request
+    gatewayRequests.add(1, { user: userId, model });
 
     // Check if streaming is requested
     const stream = body.stream === true;
 
     if (stream) {
       // Streaming response using SSE
-      return streamSSE(c, async (stream) => {
+      return streamSSE(c, async (sseStream) => {
         const messageStream = anthropic.messages.stream({
           ...body,
         });
 
         for await (const event of messageStream) {
-          await stream.writeSSE({
+          await sseStream.writeSSE({
             event: 'message_delta',
             data: JSON.stringify(event),
           });
+        }
+
+        // Track token usage after stream completes
+        const finalMessage = await messageStream.finalMessage();
+        if (finalMessage.usage) {
+          gatewayTokensIn.add(finalMessage.usage.input_tokens, { user: userId, model });
+          gatewayTokensOut.add(finalMessage.usage.output_tokens, { user: userId, model });
         }
       });
     } else {
@@ -101,6 +117,12 @@ app.post('/v1/messages', async (c) => {
         ...body,
         stream: false,
       });
+
+      // Track token usage
+      if (response.usage) {
+        gatewayTokensIn.add(response.usage.input_tokens, { user: userId, model });
+        gatewayTokensOut.add(response.usage.output_tokens, { user: userId, model });
+      }
 
       console.log(`[Proxy] Request completed successfully`);
       return c.json(response);
