@@ -37,7 +37,7 @@ describe('validateInstallation', () => {
       // Create .env.local with required vars to isolate package test
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://test\nWORKOS_COOKIE_PASSWORD=test123\n',
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://test\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
 
       const result = await validateInstallation('nextjs', testDir);
@@ -59,7 +59,7 @@ describe('validateInstallation', () => {
       );
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://test\nWORKOS_COOKIE_PASSWORD=test123\n',
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://test\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       // Create required files to isolate package test
       mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
@@ -80,7 +80,7 @@ describe('validateInstallation', () => {
       writeFileSync(join(testDir, 'package.json'), '{ invalid json }');
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://test\nWORKOS_COOKIE_PASSWORD=test123\n',
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://test\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
 
       const result = await validateInstallation('nextjs', testDir);
@@ -118,7 +118,7 @@ describe('validateInstallation', () => {
       // Missing WORKOS_COOKIE_PASSWORD
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://test\n',
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://test\n',
       );
 
       const result = await validateInstallation('nextjs', testDir);
@@ -137,7 +137,7 @@ describe('validateInstallation', () => {
       );
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://test\nWORKOS_COOKIE_PASSWORD=secret123\n',
+        'WORKOS_API_KEY=sk_test_key\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
       writeFileSync(
@@ -147,7 +147,7 @@ describe('validateInstallation', () => {
       writeFileSync(join(testDir, 'middleware.ts'), "import { authkitMiddleware } from '@workos-inc/authkit-nextjs';");
       writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
 
-      const result = await validateInstallation('nextjs', testDir);
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
 
       const envIssues = result.issues.filter((i) => i.type === 'env');
       expect(envIssues).toHaveLength(0);
@@ -164,7 +164,7 @@ describe('validateInstallation', () => {
       );
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://test\nWORKOS_COOKIE_PASSWORD=test123\n',
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://test\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       // No callback route file created
 
@@ -184,7 +184,7 @@ describe('validateInstallation', () => {
       );
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://test\nWORKOS_COOKIE_PASSWORD=test123\n',
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://test\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
       writeFileSync(
@@ -212,7 +212,7 @@ describe('validateInstallation', () => {
       );
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://test\nWORKOS_COOKIE_PASSWORD=test123\n',
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://test\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
       // Missing required patterns
@@ -236,7 +236,7 @@ describe('validateInstallation', () => {
       );
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://test\nWORKOS_COOKIE_PASSWORD=test123\n',
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://test\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
       writeFileSync(
@@ -261,7 +261,7 @@ describe('validateInstallation', () => {
       writeFileSync(join(testDir, 'package.json'), JSON.stringify({ dependencies: {} }));
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://test\nWORKOS_COOKIE_PASSWORD=test123\n',
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://test\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
 
       const result = await validateInstallation('nextjs', testDir);
@@ -280,7 +280,7 @@ describe('validateInstallation', () => {
       // Redirect URI path must match the callback route location
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=test123\n',
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
       // File exists but missing some patterns (warning level)
@@ -311,7 +311,7 @@ describe('validateInstallation', () => {
       // Redirect URI says /auth/callback but route is at /api/auth/callback
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=test123\n',
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       // Route exists at DIFFERENT path
       mkdirSync(join(testDir, 'app', 'api', 'auth', 'callback'), { recursive: true });
@@ -334,7 +334,7 @@ describe('validateInstallation', () => {
       );
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/api/auth/callback\nWORKOS_COOKIE_PASSWORD=test123\n',
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/api/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       mkdirSync(join(testDir, 'app', 'api', 'auth', 'callback'), { recursive: true });
       writeFileSync(join(testDir, 'app', 'api', 'auth', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
@@ -367,7 +367,7 @@ describe('validateInstallation', () => {
       // Redirect URI says /auth/callback but route is at /callback
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nWORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=test123\n',
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       // Route exists at DIFFERENT path (dot notation)
       mkdirSync(join(testDir, 'app', 'routes'), { recursive: true });
@@ -387,7 +387,7 @@ describe('validateInstallation', () => {
       );
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nWORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=test123\n',
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       // Route at correct path using dot notation: auth.callback.tsx
       mkdirSync(join(testDir, 'app', 'routes'), { recursive: true });
@@ -408,7 +408,7 @@ describe('validateInstallation', () => {
       );
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nWORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=test123\n',
+        'WORKOS_API_KEY=sk_test_1234567890123456789012345\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       // Route at wrong path
       mkdirSync(join(testDir, 'app', 'routes', 'api', 'callback'), { recursive: true });
@@ -427,7 +427,7 @@ describe('validateInstallation', () => {
       );
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nWORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=test123\n',
+        'WORKOS_API_KEY=sk_test_1234567890123456789012345\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       mkdirSync(join(testDir, 'app', 'routes', 'auth', 'callback'), { recursive: true });
       writeFileSync(join(testDir, 'app', 'routes', 'auth', 'callback', 'index.tsx'), 'export default function Callback() {}');
@@ -436,6 +436,272 @@ describe('validateInstallation', () => {
 
       const mismatchIssue = result.issues.find((i) => i.message.includes('no matching route file'));
       expect(mismatchIssue).toBeUndefined();
+    });
+  });
+
+  describe('cookie password length validation', () => {
+    it('detects cookie password shorter than 32 characters', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@workos-inc/authkit-nextjs': '^1.0.0' } }),
+      );
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_key\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=tooshort\n',
+      );
+      mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
+      writeFileSync(join(testDir, 'app', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
+      writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
+      writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
+
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+
+      const pwIssue = result.issues.find((i) => i.message.includes('at least 32 characters'));
+      expect(pwIssue).toBeDefined();
+      expect(pwIssue?.severity).toBe('error');
+      expect(pwIssue?.hint).toContain('openssl');
+    });
+
+    it('passes when cookie password is 32+ characters', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@workos-inc/authkit-nextjs': '^1.0.0' } }),
+      );
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_key\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
+      writeFileSync(join(testDir, 'app', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
+      writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
+      writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
+
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+
+      const pwIssue = result.issues.find((i) => i.message.includes('at least 32 characters'));
+      expect(pwIssue).toBeUndefined();
+    });
+  });
+
+  describe('credential format validation', () => {
+    it('detects invalid API key format', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@workos-inc/authkit-nextjs': '^1.0.0' } }),
+      );
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=invalid_key_format\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+
+      const keyIssue = result.issues.find((i) => i.message.includes('Invalid API key format'));
+      expect(keyIssue).toBeDefined();
+      expect(keyIssue?.hint).toContain('sk_');
+    });
+
+    it('detects invalid Client ID format', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@workos-inc/authkit-nextjs': '^1.0.0' } }),
+      );
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_key\nWORKOS_CLIENT_ID=invalid_client_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+
+      const clientIssue = result.issues.find((i) => i.message.includes('Invalid Client ID format'));
+      expect(clientIssue).toBeDefined();
+      expect(clientIssue?.hint).toContain('client_');
+    });
+
+    it('passes when credentials have correct format', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@workos-inc/authkit-nextjs': '^1.0.0' } }),
+      );
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_key\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
+      writeFileSync(join(testDir, 'app', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
+      writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
+      writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
+
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+
+      const formatIssues = result.issues.filter(
+        (i) => i.message.includes('Invalid API key') || i.message.includes('Invalid Client ID'),
+      );
+      expect(formatIssues).toHaveLength(0);
+    });
+  });
+
+  describe('middleware placement validation', () => {
+    it('detects middleware in wrong location', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@workos-inc/authkit-nextjs': '^1.0.0' } }),
+      );
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_key\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      // Middleware in wrong location (nested in app/)
+      mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
+      writeFileSync(join(testDir, 'app', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
+      writeFileSync(join(testDir, 'app', 'middleware.ts'), 'export const authkitMiddleware = () => {};');
+      writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
+
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+
+      const middlewareIssue = result.issues.find((i) => i.message.includes('wrong location'));
+      expect(middlewareIssue).toBeDefined();
+      expect(middlewareIssue?.hint).toContain('project root');
+    });
+
+    it('passes when middleware is at project root', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@workos-inc/authkit-nextjs': '^1.0.0' } }),
+      );
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_key\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
+      writeFileSync(join(testDir, 'app', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
+      writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
+      writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
+
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+
+      const middlewareIssue = result.issues.find((i) => i.message.includes('wrong location'));
+      expect(middlewareIssue).toBeUndefined();
+    });
+
+    it('passes when middleware is in src/ folder', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@workos-inc/authkit-nextjs': '^1.0.0' } }),
+      );
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_key\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      mkdirSync(join(testDir, 'src', 'app', 'callback'), { recursive: true });
+      writeFileSync(join(testDir, 'src', 'app', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(join(testDir, 'src', 'middleware.ts'), 'export const authkitMiddleware = () => {};');
+      writeFileSync(join(testDir, 'src', 'app', 'layout.tsx'), '<AuthKitProvider>');
+
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+
+      const middlewareIssue = result.issues.find((i) => i.message.includes('wrong location'));
+      expect(middlewareIssue).toBeUndefined();
+    });
+  });
+
+  describe('provider wrapping validation (React SPA)', () => {
+    it('detects missing AuthKitProvider in React SPA', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@workos-inc/authkit-react': '^1.0.0' } }),
+      );
+      writeFileSync(join(testDir, '.env.local'), 'WORKOS_CLIENT_ID=client_test_id\n');
+      // No AuthKitProvider in entry files
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(join(testDir, 'src', 'main.tsx'), 'ReactDOM.render(<App />, document.getElementById("root"));');
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      const providerIssue = result.issues.find((i) => i.message.includes('AuthKitProvider'));
+      expect(providerIssue).toBeDefined();
+      expect(providerIssue?.severity).toBe('warning');
+    });
+
+    it('passes when AuthKitProvider is present in main.tsx', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@workos-inc/authkit-react': '^1.0.0' } }),
+      );
+      writeFileSync(join(testDir, '.env.local'), 'WORKOS_CLIENT_ID=client_test_id\n');
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(join(testDir, 'src', 'main.tsx'), '<AuthKitProvider clientId="client_test"><App /></AuthKitProvider>');
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      const providerIssue = result.issues.find((i) => i.message.includes('AuthKitProvider'));
+      expect(providerIssue).toBeUndefined();
+    });
+  });
+
+  describe('duplicate env var detection', () => {
+    it('detects conflicting values between .env and .env.local', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@workos-inc/authkit-nextjs': '^1.0.0' } }),
+      );
+      // Different values for WORKOS_API_KEY
+      writeFileSync(join(testDir, '.env'), 'WORKOS_API_KEY=sk_old_key\n');
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_new_key\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+
+      const dupIssue = result.issues.find((i) => i.message.includes('different values'));
+      expect(dupIssue).toBeDefined();
+      expect(dupIssue?.severity).toBe('warning');
+      expect(dupIssue?.hint).toContain('precedence');
+    });
+
+    it('passes when env vars are consistent', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@workos-inc/authkit-nextjs': '^1.0.0' } }),
+      );
+      // Same values in both files
+      writeFileSync(join(testDir, '.env'), 'WORKOS_API_KEY=sk_test_key\n');
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_key\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
+      writeFileSync(join(testDir, 'app', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
+      writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
+      writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
+
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+
+      const dupIssue = result.issues.find((i) => i.message.includes('different values'));
+      expect(dupIssue).toBeUndefined();
+    });
+
+    it('ignores when only .env.local exists (no conflict possible)', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@workos-inc/authkit-nextjs': '^1.0.0' } }),
+      );
+      // Only .env.local, no .env
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_key\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
+      writeFileSync(join(testDir, 'app', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
+      writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
+      writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
+
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+
+      const dupIssue = result.issues.find((i) => i.message.includes('different values'));
+      expect(dupIssue).toBeUndefined();
     });
   });
 });

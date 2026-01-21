@@ -205,15 +205,27 @@ async function validateFrameworkSpecific(
   projectDir: string,
   issues: ValidationIssue[]
 ): Promise<void> {
+  // Universal cross-validations
+  await validateCredentialFormats(projectDir, issues);
+  await validateDuplicateEnvVars(projectDir, issues);
+
+  // Framework-specific validations
   switch (framework) {
     case 'nextjs':
       await validateNextjsRedirectUri(projectDir, issues);
+      await validateNextjsMiddlewarePlacement(projectDir, issues);
+      await validateCookiePasswordLength(projectDir, issues, 'WORKOS_COOKIE_PASSWORD');
+      break;
+    case 'react':
+      await validateReactProviderWrapping(projectDir, issues);
       break;
     case 'react-router':
       await validateReactRouterRedirectUri(projectDir, issues);
+      await validateCookiePasswordLength(projectDir, issues, 'WORKOS_COOKIE_PASSWORD');
       break;
     case 'tanstack-start':
       await validateTanstackStartRedirectUri(projectDir, issues);
+      await validateCookiePasswordLength(projectDir, issues, 'WORKOS_COOKIE_PASSWORD');
       break;
   }
 }
@@ -468,5 +480,249 @@ async function validateTanstackStartRedirectUri(projectDir: string, issues: Vali
       message: `Redirect URI path "${callbackPath}" has no matching route file`,
       hint,
     });
+  }
+}
+
+/**
+ * Validates cookie password is at least 32 characters.
+ * WorkOS requires this for secure session encryption.
+ */
+async function validateCookiePasswordLength(
+  projectDir: string,
+  issues: ValidationIssue[],
+  envVarName: string
+): Promise<void> {
+  const envPath = join(projectDir, '.env.local');
+  let envContent: string;
+
+  try {
+    envContent = await readFile(envPath, 'utf-8');
+  } catch {
+    return; // No .env.local - other validators handle this
+  }
+
+  const match = envContent.match(new RegExp(`^${envVarName}=(.*)$`, 'm'));
+  if (!match) {
+    return; // Missing env var - other validators handle this
+  }
+
+  const password = match[1].trim();
+  if (password.length < 32) {
+    issues.push({
+      type: 'env',
+      severity: 'error',
+      message: `${envVarName} must be at least 32 characters (currently ${password.length})`,
+      hint: `Generate a secure password: openssl rand -base64 32`,
+    });
+  }
+}
+
+/**
+ * Validates credential formats:
+ * - API key should start with sk_
+ * - Client ID should start with client_
+ */
+async function validateCredentialFormats(projectDir: string, issues: ValidationIssue[]): Promise<void> {
+  const envPath = join(projectDir, '.env.local');
+  let envContent: string;
+
+  try {
+    envContent = await readFile(envPath, 'utf-8');
+  } catch {
+    return;
+  }
+
+  // Check API key format (any common variation)
+  const apiKeyPatterns = [
+    /^WORKOS_API_KEY=(.*)$/m,
+    /^NEXT_PUBLIC_WORKOS_API_KEY=(.*)$/m,
+  ];
+
+  for (const pattern of apiKeyPatterns) {
+    const match = envContent.match(pattern);
+    if (match) {
+      const value = match[1].trim();
+      if (value && !value.startsWith('sk_')) {
+        issues.push({
+          type: 'env',
+          severity: 'error',
+          message: `Invalid API key format: "${value.substring(0, 10)}..."`,
+          hint: 'WorkOS API keys start with "sk_". Check your WorkOS Dashboard for the correct key.',
+        });
+      }
+    }
+  }
+
+  // Check Client ID format
+  const clientIdPatterns = [
+    /^WORKOS_CLIENT_ID=(.*)$/m,
+    /^NEXT_PUBLIC_WORKOS_CLIENT_ID=(.*)$/m,
+  ];
+
+  for (const pattern of clientIdPatterns) {
+    const match = envContent.match(pattern);
+    if (match) {
+      const value = match[1].trim();
+      if (value && !value.startsWith('client_')) {
+        issues.push({
+          type: 'env',
+          severity: 'error',
+          message: `Invalid Client ID format: "${value.substring(0, 15)}..."`,
+          hint: 'WorkOS Client IDs start with "client_". Check your WorkOS Dashboard for the correct ID.',
+        });
+      }
+    }
+  }
+}
+
+/**
+ * Validates Next.js middleware.ts is at the correct location.
+ * Must be at project root or src/ folder, not nested deeper.
+ */
+async function validateNextjsMiddlewarePlacement(projectDir: string, issues: ValidationIssue[]): Promise<void> {
+  // Valid locations
+  const validPaths = [
+    'middleware.ts',
+    'middleware.js',
+    'src/middleware.ts',
+    'src/middleware.js',
+  ];
+
+  const hasValidMiddleware = validPaths.some((p) => existsSync(join(projectDir, p)));
+  if (hasValidMiddleware) {
+    return; // Correctly placed
+  }
+
+  // Check for misplaced middleware
+  const misplacedMiddleware = await fg(['**/middleware.{ts,js}'], {
+    cwd: projectDir,
+    ignore: ['node_modules/**'],
+  });
+
+  if (misplacedMiddleware.length > 0) {
+    issues.push({
+      type: 'file',
+      severity: 'error',
+      message: `middleware.ts found at wrong location: ${misplacedMiddleware[0]}`,
+      hint: 'Next.js middleware must be at project root (middleware.ts) or src/middleware.ts, not nested in app/ or other folders.',
+    });
+  }
+}
+
+/**
+ * Validates React SPA has AuthKitProvider wrapping the app.
+ */
+async function validateReactProviderWrapping(projectDir: string, issues: ValidationIssue[]): Promise<void> {
+  // Common entry points for React apps
+  const entryPatterns = [
+    'src/main.tsx',
+    'src/main.jsx',
+    'src/index.tsx',
+    'src/index.jsx',
+    'src/App.tsx',
+    'src/App.jsx',
+    'app/layout.tsx',
+    'app/layout.jsx',
+  ];
+
+  let foundProvider = false;
+
+  for (const pattern of entryPatterns) {
+    const filePath = join(projectDir, pattern);
+    if (!existsSync(filePath)) continue;
+
+    try {
+      const content = await readFile(filePath, 'utf-8');
+      if (content.includes('AuthKitProvider')) {
+        foundProvider = true;
+        break;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  if (!foundProvider) {
+    // Check if package is installed (if not, other validators handle it)
+    const pkgPath = join(projectDir, 'package.json');
+    if (existsSync(pkgPath)) {
+      try {
+        const pkg = JSON.parse(await readFile(pkgPath, 'utf-8'));
+        const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+        if (deps['@workos-inc/authkit-react']) {
+          issues.push({
+            type: 'pattern',
+            severity: 'warning',
+            message: 'AuthKitProvider not found in common entry points',
+            hint: 'Wrap your app with <AuthKitProvider> in main.tsx or App.tsx. See: https://workos.com/docs/user-management/react/authkit',
+          });
+        }
+      } catch {
+        // Malformed package.json - skip
+      }
+    }
+  }
+}
+
+/**
+ * Detects duplicate env vars between .env and .env.local with different values.
+ * This can cause confusing behavior where wrong values are used.
+ */
+async function validateDuplicateEnvVars(projectDir: string, issues: ValidationIssue[]): Promise<void> {
+  const envPath = join(projectDir, '.env');
+  const envLocalPath = join(projectDir, '.env.local');
+
+  let envContent: string;
+  let envLocalContent: string;
+
+  try {
+    envContent = await readFile(envPath, 'utf-8');
+  } catch {
+    return; // No .env file - no conflict possible
+  }
+
+  try {
+    envLocalContent = await readFile(envLocalPath, 'utf-8');
+  } catch {
+    return; // No .env.local - no conflict possible
+  }
+
+  // Parse env files into key-value maps
+  const parseEnv = (content: string): Map<string, string> => {
+    const map = new Map<string, string>();
+    for (const line of content.split('\n')) {
+      const match = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+      if (match) {
+        map.set(match[1], match[2].trim());
+      }
+    }
+    return map;
+  };
+
+  const envVars = parseEnv(envContent);
+  const envLocalVars = parseEnv(envLocalContent);
+
+  // Check for WorkOS-related vars that differ
+  const workosVars = [
+    'WORKOS_API_KEY',
+    'WORKOS_CLIENT_ID',
+    'WORKOS_REDIRECT_URI',
+    'WORKOS_COOKIE_PASSWORD',
+    'NEXT_PUBLIC_WORKOS_CLIENT_ID',
+    'NEXT_PUBLIC_WORKOS_REDIRECT_URI',
+  ];
+
+  for (const varName of workosVars) {
+    const envValue = envVars.get(varName);
+    const localValue = envLocalVars.get(varName);
+
+    if (envValue && localValue && envValue !== localValue) {
+      issues.push({
+        type: 'env',
+        severity: 'warning',
+        message: `${varName} has different values in .env and .env.local`,
+        hint: `.env.local takes precedence. Remove from .env to avoid confusion, or ensure they match.`,
+      });
+    }
   }
 }
