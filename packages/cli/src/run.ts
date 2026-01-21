@@ -23,6 +23,8 @@ type Args = {
   redirectUri?: string;
   dashboard?: boolean;
   inspect?: boolean;
+  noValidate?: boolean;
+  noBuild?: boolean;
 };
 
 /**
@@ -58,6 +60,8 @@ function buildOptions(argv: Args): WizardOptions {
     dashboard: merged.dashboard ?? false,
     integration: merged.integration,
     inspect: merged.inspect ?? false,
+    noValidate: merged.noValidate ?? false,
+    noBuild: merged.noBuild ?? false,
     emitter: createWizardEventEmitter(), // Will be replaced in runWithCore
   };
 }

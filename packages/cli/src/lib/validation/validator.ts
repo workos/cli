@@ -34,6 +34,9 @@ export async function validateInstallation(
   await validateEnvVars(rules, projectDir, issues);
   await validateFiles(rules, projectDir, issues);
 
+  // Run framework-specific cross-validations
+  await validateFrameworkSpecific(framework, projectDir, issues);
+
   // Run build validation if enabled
   if (options.runBuild !== false) {
     const buildResult = await runBuildValidation(projectDir);
@@ -191,5 +194,97 @@ async function validateFiles(rules: ValidationRules, projectDir: string, issues:
         }
       }
     }
+  }
+}
+
+/**
+ * Framework-specific cross-validations that require reading multiple sources.
+ */
+async function validateFrameworkSpecific(
+  framework: string,
+  projectDir: string,
+  issues: ValidationIssue[]
+): Promise<void> {
+  if (framework === 'nextjs') {
+    await validateNextjsRedirectUri(projectDir, issues);
+  }
+  // Add other framework-specific validations here
+}
+
+/**
+ * Validates that the Next.js redirect URI matches an existing callback route.
+ *
+ * Common failure: .env.local has /auth/callback but route is at /api/auth/callback
+ */
+async function validateNextjsRedirectUri(projectDir: string, issues: ValidationIssue[]): Promise<void> {
+  const envPath = join(projectDir, '.env.local');
+  let envContent: string;
+
+  try {
+    envContent = await readFile(envPath, 'utf-8');
+  } catch {
+    return; // No .env.local - other validators handle this
+  }
+
+  // Extract redirect URI value
+  const match = envContent.match(/^NEXT_PUBLIC_WORKOS_REDIRECT_URI=(.+)$/m);
+  if (!match) {
+    return; // Missing env var - other validators handle this
+  }
+
+  const redirectUri = match[1].trim();
+  let callbackPath: string;
+
+  try {
+    const url = new URL(redirectUri);
+    callbackPath = url.pathname;
+  } catch {
+    issues.push({
+      type: 'env',
+      severity: 'error',
+      message: `Invalid redirect URI: ${redirectUri}`,
+      hint: 'NEXT_PUBLIC_WORKOS_REDIRECT_URI must be a valid URL',
+    });
+    return;
+  }
+
+  // Remove leading slash for path matching
+  const routePath = callbackPath.replace(/^\//, '');
+
+  // Check if route file exists at expected location (Next.js App Router)
+  const routePatterns = [
+    `app/${routePath}/route.ts`,
+    `app/${routePath}/route.tsx`,
+    `app/${routePath}/route.js`,
+    `app/${routePath}/route.jsx`,
+    `src/app/${routePath}/route.ts`,
+    `src/app/${routePath}/route.tsx`,
+    `src/app/${routePath}/route.js`,
+    `src/app/${routePath}/route.jsx`,
+  ];
+
+  const routeExists = routePatterns.some((pattern) => existsSync(join(projectDir, pattern)));
+
+  if (!routeExists) {
+    // Check what routes DO exist to give a better hint
+    const existingRoutes = await fg(['app/**/callback/**/route.{ts,tsx,js,jsx}', 'src/app/**/callback/**/route.{ts,tsx,js,jsx}'], {
+      cwd: projectDir,
+    });
+
+    let hint = `Create a route handler at app/${routePath}/route.ts`;
+    if (existingRoutes.length > 0) {
+      // Found a route at a different path - likely the mismatch
+      const actualPath = '/' + existingRoutes[0].replace(/^(src\/)?app\//, '').replace(/\/route\.(ts|tsx|js|jsx)$/, '');
+      hint = `Found callback route at ${existingRoutes[0]} but redirect URI points to ${callbackPath}. Either:\n` +
+        `  1. Change NEXT_PUBLIC_WORKOS_REDIRECT_URI to http://localhost:3000${actualPath}\n` +
+        `  2. Move the route to app/${routePath}/route.ts`;
+    }
+
+    issues.push({
+      type: 'file',
+      severity: 'error',
+      message: `Redirect URI path "${callbackPath}" has no matching route file`,
+      hint,
+    });
   }
 }

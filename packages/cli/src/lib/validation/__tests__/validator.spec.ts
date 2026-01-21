@@ -277,9 +277,10 @@ describe('validateInstallation', () => {
           dependencies: { '@workos-inc/authkit-nextjs': '^1.0.0' },
         }),
       );
+      // Redirect URI path must match the callback route location
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://test\nWORKOS_COOKIE_PASSWORD=test123\n',
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=test123\n',
       );
       mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
       // File exists but missing some patterns (warning level)
@@ -298,6 +299,62 @@ describe('validateInstallation', () => {
 
       expect(typeof result.durationMs).toBe('number');
       expect(result.durationMs).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('redirect URI validation (Next.js)', () => {
+    it('detects redirect URI path mismatch with callback route', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@workos-inc/authkit-nextjs': '^1.0.0' } }),
+      );
+      // Redirect URI says /auth/callback but route is at /api/auth/callback
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=test123\n',
+      );
+      // Route exists at DIFFERENT path
+      mkdirSync(join(testDir, 'app', 'api', 'auth', 'callback'), { recursive: true });
+      writeFileSync(join(testDir, 'app', 'api', 'auth', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
+      writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
+      writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
+
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+
+      expect(result.passed).toBe(false);
+      const mismatchIssue = result.issues.find((i) => i.message.includes('no matching route file'));
+      expect(mismatchIssue).toBeDefined();
+      expect(mismatchIssue?.hint).toContain('/api/auth/callback');
+    });
+
+    it('passes when redirect URI matches callback route path', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@workos-inc/authkit-nextjs': '^1.0.0' } }),
+      );
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/api/auth/callback\nWORKOS_COOKIE_PASSWORD=test123\n',
+      );
+      mkdirSync(join(testDir, 'app', 'api', 'auth', 'callback'), { recursive: true });
+      writeFileSync(join(testDir, 'app', 'api', 'auth', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
+      writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
+      writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
+
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+
+      const mismatchIssue = result.issues.find((i) => i.message.includes('no matching route file'));
+      expect(mismatchIssue).toBeUndefined();
+    });
+
+    it('detects invalid redirect URI format', async () => {
+      writeFileSync(join(testDir, 'package.json'), JSON.stringify({ dependencies: {} }));
+      writeFileSync(join(testDir, '.env.local'), 'NEXT_PUBLIC_WORKOS_REDIRECT_URI=not-a-valid-url\n');
+
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+
+      const invalidIssue = result.issues.find((i) => i.message.includes('Invalid redirect URI'));
+      expect(invalidIssue).toBeDefined();
     });
   });
 });
