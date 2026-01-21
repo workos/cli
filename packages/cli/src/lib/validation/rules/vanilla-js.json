@@ -1,0 +1,6 @@
+{
+  "framework": "vanilla-js",
+  "packages": [],
+  "envVars": [{ "name": "WORKOS_CLIENT_ID" }],
+  "files": []
+}

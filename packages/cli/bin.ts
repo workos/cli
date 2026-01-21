@@ -87,7 +87,11 @@ yargs(hideBin(process.argv))
     },
     (argv) => {
       const options = { ...argv, dashboard: true };
-      void import('./src/run.js').then(({ runWizard }) => runWizard(options as unknown as WizardOptions));
+      void import('./src/run.js').then(({ runWizard }) =>
+        runWizard(options as unknown as WizardOptions)
+          .then(() => process.exit(0))
+          .catch(() => process.exit(1))
+      );
     },
   )
   .options({
@@ -135,6 +139,16 @@ yargs(hideBin(process.argv))
     inspect: {
       default: false,
       describe: 'Open XState inspector in browser to visualize state machine live',
+      type: 'boolean',
+    },
+    'no-validate': {
+      default: false,
+      describe: 'Skip post-installation validation\nenv: WORKOS_WIZARD_NO_VALIDATE',
+      type: 'boolean',
+    },
+    'no-build': {
+      default: false,
+      describe: 'Skip build verification during validation\nenv: WORKOS_WIZARD_NO_BUILD',
       type: 'boolean',
     },
   })
@@ -193,7 +207,9 @@ yargs(hideBin(process.argv))
         process.exit(1);
       }
 
-      void runWizard(options as unknown as WizardOptions);
+      void runWizard(options as unknown as WizardOptions)
+        .then(() => process.exit(0))
+        .catch(() => process.exit(1));
     },
   )
   .strict()

@@ -84,12 +84,37 @@ export function Dashboard({ emitter }: DashboardProps): React.ReactElement {
       setConfirmRequest({ id, message, warning, files });
     };
 
+    const handleValidationStart = () => {
+      setOutputLog((prev) => [...prev, { text: '[STATUS] Validating installation...', isStatus: true }]);
+    };
+
+    const handleValidationIssues = ({ issues }: { issues: Array<{ severity: string; message: string; hint?: string }> }) => {
+      for (const issue of issues) {
+        const prefix = issue.severity === 'error' ? '!' : '?';
+        setOutputLog((prev) => [...prev, { text: `${prefix} ${issue.message}`, isError: issue.severity === 'error' }]);
+        if (issue.hint) {
+          setOutputLog((prev) => [...prev, { text: `  Hint: ${issue.hint}` }]);
+        }
+      }
+    };
+
+    const handleValidationComplete = ({ passed, issueCount }: { passed: boolean; issueCount: number }) => {
+      if (passed) {
+        setOutputLog((prev) => [...prev, { text: '[STATUS] Validation passed', isStatus: true }]);
+      } else {
+        setOutputLog((prev) => [...prev, { text: `[STATUS] Validation found ${issueCount} issue(s)`, isStatus: true }]);
+      }
+    };
+
     emitter.on('output', handleOutput);
     emitter.on('status', handleStatus);
     emitter.on('complete', handleComplete);
     emitter.on('error', handleError);
     emitter.on('credentials:request', handleCredentialsRequest);
     emitter.on('confirm:request', handleConfirmRequest);
+    emitter.on('validation:start', handleValidationStart);
+    emitter.on('validation:issues', handleValidationIssues);
+    emitter.on('validation:complete', handleValidationComplete);
 
     return () => {
       emitter.off('output', handleOutput);
@@ -98,6 +123,9 @@ export function Dashboard({ emitter }: DashboardProps): React.ReactElement {
       emitter.off('error', handleError);
       emitter.off('credentials:request', handleCredentialsRequest);
       emitter.off('confirm:request', handleConfirmRequest);
+      emitter.off('validation:start', handleValidationStart);
+      emitter.off('validation:issues', handleValidationIssues);
+      emitter.off('validation:complete', handleValidationComplete);
     };
   }, [emitter]);
 

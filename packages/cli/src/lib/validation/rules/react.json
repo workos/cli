@@ -1,0 +1,11 @@
+{
+  "framework": "react",
+  "packages": [{ "name": "@workos-inc/authkit-react", "location": "dependencies" }],
+  "envVars": [{ "name": "WORKOS_CLIENT_ID" }],
+  "files": [
+    {
+      "path": "src/**/*.{ts,tsx,js,jsx}",
+      "mustContainAny": ["AuthKitProvider", "useAuth"]
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "framework": "nextjs",
+  "packages": [{ "name": "@workos-inc/authkit-nextjs", "location": "dependencies" }],
+  "envVars": [
+    { "name": "WORKOS_API_KEY" },
+    { "name": "WORKOS_CLIENT_ID" },
+    { "name": "NEXT_PUBLIC_WORKOS_REDIRECT_URI" },
+    { "name": "WORKOS_COOKIE_PASSWORD" }
+  ],
+  "files": [
+    {
+      "path": "app/**/callback/**/route.{ts,tsx,js,jsx}",
+      "mustContain": ["handleAuth", "@workos-inc/authkit-nextjs"]
+    },
+    {
+      "path": "{middleware,proxy}.{ts,js}",
+      "mustContainAny": ["authkitMiddleware", "authkit"]
+    },
+    {
+      "path": "app/**/layout.{ts,tsx,js,jsx}",
+      "mustContain": ["AuthKitProvider"]
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "framework": "react-router",
+  "packages": [
+    { "name": "react-router", "location": "any" },
+    { "name": "react-router-dom", "location": "any", "optional": true }
+  ],
+  "envVars": [
+    { "name": "WORKOS_API_KEY" },
+    { "name": "WORKOS_CLIENT_ID" },
+    { "name": "WORKOS_REDIRECT_URI" },
+    { "name": "WORKOS_COOKIE_PASSWORD" }
+  ],
+  "files": [],
+  "variants": {
+    "v7-framework": {
+      "files": [
+        {
+          "path": "react-router.config.{ts,js,tsx,jsx}",
+          "mustContain": []
+        }
+      ]
+    }
+  }
+}
