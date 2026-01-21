@@ -24,3 +24,16 @@ export const durationHistogram = meter.createHistogram('wizard.duration', {
   description: 'Session duration',
   unit: 'ms',
 });
+
+// Gateway metrics for abuse detection
+export const gatewayRequests = meter.createCounter('gateway.requests', {
+  description: 'API requests through gateway',
+});
+
+export const gatewayTokensIn = meter.createCounter('gateway.tokens.input', {
+  description: 'Input tokens consumed',
+});
+
+export const gatewayTokensOut = meter.createCounter('gateway.tokens.output', {
+  description: 'Output tokens generated',
+});
