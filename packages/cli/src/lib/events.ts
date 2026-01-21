@@ -36,6 +36,10 @@ export interface WizardEvents {
   'agent:progress': { step: string; detail?: string };
   'agent:success': { summary?: string };
   'agent:failure': { message: string; stack?: string };
+
+  'validation:start': { framework: string };
+  'validation:issues': { issues: import('./validation/types.js').ValidationIssue[] };
+  'validation:complete': { passed: boolean; issueCount: number; durationMs: number };
 }
 
 export type WizardEventName = keyof WizardEvents;

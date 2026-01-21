@@ -1,4 +1,5 @@
 import { SPINNER_MESSAGE, type FrameworkConfig } from './framework-config.js';
+import { validateInstallation } from './validation/index.js';
 import type { WizardOptions } from '../utils/types.js';
 import {
   ensurePackageIsInstalled,
@@ -122,6 +123,23 @@ export async function runAgentWizard(config: FrameworkConfig, options: WizardOpt
   if (agentResult.error) {
     await analytics.shutdown('error');
     throw new Error(`Agent failed: ${agentResult.error}`);
+  }
+
+  // Run post-installation validation
+  if (!options.noValidate) {
+    options.emitter?.emit('validation:start', { framework: config.metadata.integration });
+
+    const validationResult = await validateInstallation(config.metadata.integration, options.installDir);
+
+    if (validationResult.issues.length > 0) {
+      options.emitter?.emit('validation:issues', { issues: validationResult.issues });
+    }
+
+    options.emitter?.emit('validation:complete', {
+      passed: validationResult.passed,
+      issueCount: validationResult.issues.length,
+      durationMs: validationResult.durationMs,
+    });
   }
 
   // Build environment variables from WorkOS credentials

@@ -77,6 +77,9 @@ export class CLIAdapter implements WizardAdapter {
     this.subscribe('config:complete', this.handleConfigComplete);
     this.subscribe('agent:start', this.handleAgentStart);
     this.subscribe('agent:progress', this.handleAgentProgress);
+    this.subscribe('validation:start', this.handleValidationStart);
+    this.subscribe('validation:issues', this.handleValidationIssues);
+    this.subscribe('validation:complete', this.handleValidationComplete);
     this.subscribe('complete', this.handleComplete);
     this.subscribe('error', this.handleError);
   }
@@ -245,6 +248,32 @@ export class CLIAdapter implements WizardAdapter {
   private handleAgentProgress = ({ step, detail }: WizardEvents['agent:progress']): void => {
     const message = detail ? `${step}: ${detail}` : step;
     this.spinner?.message(message);
+  };
+
+  private handleValidationStart = (): void => {
+    if (this.spinner) {
+      this.spinner.stop('Agent completed');
+      this.spinner = null;
+    }
+    clack.log.step('Validating installation...');
+  };
+
+  private handleValidationIssues = ({ issues }: WizardEvents['validation:issues']): void => {
+    for (const issue of issues) {
+      const prefix = issue.severity === 'error' ? '!' : '?';
+      clack.log.warn(`${prefix} ${issue.message}`);
+      if (issue.hint) {
+        clack.log.info(chalk.dim(`  Hint: ${issue.hint}`));
+      }
+    }
+  };
+
+  private handleValidationComplete = ({ passed, issueCount }: WizardEvents['validation:complete']): void => {
+    if (passed) {
+      clack.log.success('Validation passed');
+    } else {
+      clack.log.warn(`Validation found ${issueCount} issue(s)`);
+    }
   };
 
   private handleComplete = ({ success, summary }: WizardEvents['complete']): void => {

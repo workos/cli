@@ -88,6 +88,11 @@ export type WizardOptions = {
    * Enable XState inspector - opens browser to visualize state machine live
    */
   inspect?: boolean;
+
+  /**
+   * Skip post-installation validation
+   */
+  noValidate?: boolean;
 };
 
 export interface Feature {
