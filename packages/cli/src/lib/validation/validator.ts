@@ -205,10 +205,17 @@ async function validateFrameworkSpecific(
   projectDir: string,
   issues: ValidationIssue[]
 ): Promise<void> {
-  if (framework === 'nextjs') {
-    await validateNextjsRedirectUri(projectDir, issues);
+  switch (framework) {
+    case 'nextjs':
+      await validateNextjsRedirectUri(projectDir, issues);
+      break;
+    case 'react-router':
+      await validateReactRouterRedirectUri(projectDir, issues);
+      break;
+    case 'tanstack-start':
+      await validateTanstackStartRedirectUri(projectDir, issues);
+      break;
   }
-  // Add other framework-specific validations here
 }
 
 /**
@@ -278,6 +285,181 @@ async function validateNextjsRedirectUri(projectDir: string, issues: ValidationI
       hint = `Found callback route at ${existingRoutes[0]} but redirect URI points to ${callbackPath}. Either:\n` +
         `  1. Change NEXT_PUBLIC_WORKOS_REDIRECT_URI to http://localhost:3000${actualPath}\n` +
         `  2. Move the route to app/${routePath}/route.ts`;
+    }
+
+    issues.push({
+      type: 'file',
+      severity: 'error',
+      message: `Redirect URI path "${callbackPath}" has no matching route file`,
+      hint,
+    });
+  }
+}
+
+/**
+ * Validates that the React Router redirect URI matches an existing callback route.
+ *
+ * React Router v7 framework mode uses file-based routing:
+ * - /auth/callback → app/routes/auth.callback.tsx (dot notation)
+ * - /auth/callback → app/routes/auth/callback.tsx (nested folders)
+ */
+async function validateReactRouterRedirectUri(projectDir: string, issues: ValidationIssue[]): Promise<void> {
+  const envPath = join(projectDir, '.env.local');
+  let envContent: string;
+
+  try {
+    envContent = await readFile(envPath, 'utf-8');
+  } catch {
+    return;
+  }
+
+  const match = envContent.match(/^WORKOS_REDIRECT_URI=(.+)$/m);
+  if (!match) {
+    return;
+  }
+
+  const redirectUri = match[1].trim();
+  let callbackPath: string;
+
+  try {
+    const url = new URL(redirectUri);
+    callbackPath = url.pathname;
+  } catch {
+    issues.push({
+      type: 'env',
+      severity: 'error',
+      message: `Invalid redirect URI: ${redirectUri}`,
+      hint: 'WORKOS_REDIRECT_URI must be a valid URL',
+    });
+    return;
+  }
+
+  const routePath = callbackPath.replace(/^\//, '');
+  // React Router uses dot notation: /auth/callback → auth.callback
+  const dotPath = routePath.replace(/\//g, '.');
+
+  // Check possible route file locations
+  const routePatterns = [
+    // Dot notation (e.g., app/routes/auth.callback.tsx)
+    `app/routes/${dotPath}.tsx`,
+    `app/routes/${dotPath}.ts`,
+    `app/routes/${dotPath}.jsx`,
+    `app/routes/${dotPath}.js`,
+    // Nested folders (e.g., app/routes/auth/callback.tsx)
+    `app/routes/${routePath}.tsx`,
+    `app/routes/${routePath}.ts`,
+    `app/routes/${routePath}.jsx`,
+    `app/routes/${routePath}.js`,
+    // Index file in folder (e.g., app/routes/auth/callback/index.tsx)
+    `app/routes/${routePath}/index.tsx`,
+    `app/routes/${routePath}/index.ts`,
+    `app/routes/${routePath}/index.jsx`,
+    `app/routes/${routePath}/index.js`,
+    // Route file in folder (e.g., app/routes/auth/callback/route.tsx)
+    `app/routes/${routePath}/route.tsx`,
+    `app/routes/${routePath}/route.ts`,
+    `app/routes/${routePath}/route.jsx`,
+    `app/routes/${routePath}/route.js`,
+  ];
+
+  const routeExists = routePatterns.some((pattern) => existsSync(join(projectDir, pattern)));
+
+  if (!routeExists) {
+    const existingRoutes = await fg(['app/routes/**/*callback*.{ts,tsx,js,jsx}'], {
+      cwd: projectDir,
+    });
+
+    let hint = `Create a route at app/routes/${dotPath}.tsx`;
+    if (existingRoutes.length > 0) {
+      const actualFile = existingRoutes[0];
+      // Convert file path back to URL path
+      const actualPath = '/' + actualFile
+        .replace(/^app\/routes\//, '')
+        .replace(/\.(tsx?|jsx?)$/, '')
+        .replace(/\/(index|route)$/, '')
+        .replace(/\./g, '/');
+      hint = `Found callback route at ${actualFile} but redirect URI points to ${callbackPath}. Either:\n` +
+        `  1. Change WORKOS_REDIRECT_URI to http://localhost:3000${actualPath}\n` +
+        `  2. Move the route to app/routes/${dotPath}.tsx`;
+    }
+
+    issues.push({
+      type: 'file',
+      severity: 'error',
+      message: `Redirect URI path "${callbackPath}" has no matching route file`,
+      hint,
+    });
+  }
+}
+
+/**
+ * Validates that the TanStack Start redirect URI matches an existing callback route.
+ *
+ * TanStack Start uses file-based routing:
+ * - /auth/callback → app/routes/auth/callback.tsx
+ */
+async function validateTanstackStartRedirectUri(projectDir: string, issues: ValidationIssue[]): Promise<void> {
+  const envPath = join(projectDir, '.env.local');
+  let envContent: string;
+
+  try {
+    envContent = await readFile(envPath, 'utf-8');
+  } catch {
+    return;
+  }
+
+  const match = envContent.match(/^WORKOS_REDIRECT_URI=(.+)$/m);
+  if (!match) {
+    return;
+  }
+
+  const redirectUri = match[1].trim();
+  let callbackPath: string;
+
+  try {
+    const url = new URL(redirectUri);
+    callbackPath = url.pathname;
+  } catch {
+    issues.push({
+      type: 'env',
+      severity: 'error',
+      message: `Invalid redirect URI: ${redirectUri}`,
+      hint: 'WORKOS_REDIRECT_URI must be a valid URL',
+    });
+    return;
+  }
+
+  const routePath = callbackPath.replace(/^\//, '');
+
+  // TanStack Start route patterns
+  const routePatterns = [
+    `app/routes/${routePath}.tsx`,
+    `app/routes/${routePath}.ts`,
+    `app/routes/${routePath}.jsx`,
+    `app/routes/${routePath}.js`,
+    `app/routes/${routePath}/index.tsx`,
+    `app/routes/${routePath}/index.ts`,
+    `app/routes/${routePath}/index.jsx`,
+    `app/routes/${routePath}/index.js`,
+  ];
+
+  const routeExists = routePatterns.some((pattern) => existsSync(join(projectDir, pattern)));
+
+  if (!routeExists) {
+    const existingRoutes = await fg(['app/routes/**/*callback*.{ts,tsx,js,jsx}'], {
+      cwd: projectDir,
+    });
+
+    let hint = `Create a route at app/routes/${routePath}.tsx`;
+    if (existingRoutes.length > 0) {
+      const actualFile = existingRoutes[0];
+      const actualPath = '/' + actualFile
+        .replace(/^app\/routes\//, '')
+        .replace(/\.(tsx?|jsx?)$/, '')
+        .replace(/\/index$/, '');
+      hint = `Found callback route at ${actualFile} but redirect URI points to ${callbackPath}. Either:\n` +
+        `  1. Change WORKOS_REDIRECT_URI to http://localhost:3000${actualPath}\n` +
+        `  2. Move the route to app/routes/${routePath}.tsx`;
     }
 
     issues.push({

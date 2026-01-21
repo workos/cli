@@ -357,4 +357,85 @@ describe('validateInstallation', () => {
       expect(invalidIssue).toBeDefined();
     });
   });
+
+  describe('redirect URI validation (React Router)', () => {
+    it('detects redirect URI path mismatch with callback route', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { 'react-router': '^7.0.0' } }),
+      );
+      // Redirect URI says /auth/callback but route is at /callback
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nWORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=test123\n',
+      );
+      // Route exists at DIFFERENT path (dot notation)
+      mkdirSync(join(testDir, 'app', 'routes'), { recursive: true });
+      writeFileSync(join(testDir, 'app', 'routes', 'callback.tsx'), 'export default function Callback() {}');
+
+      const result = await validateInstallation('react-router', testDir, { runBuild: false });
+
+      const mismatchIssue = result.issues.find((i) => i.message.includes('no matching route file'));
+      expect(mismatchIssue).toBeDefined();
+      expect(mismatchIssue?.hint).toContain('callback');
+    });
+
+    it('passes when redirect URI matches callback route (dot notation)', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { 'react-router': '^7.0.0' } }),
+      );
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nWORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=test123\n',
+      );
+      // Route at correct path using dot notation: auth.callback.tsx
+      mkdirSync(join(testDir, 'app', 'routes'), { recursive: true });
+      writeFileSync(join(testDir, 'app', 'routes', 'auth.callback.tsx'), 'export default function Callback() {}');
+
+      const result = await validateInstallation('react-router', testDir, { runBuild: false });
+
+      const mismatchIssue = result.issues.find((i) => i.message.includes('no matching route file'));
+      expect(mismatchIssue).toBeUndefined();
+    });
+  });
+
+  describe('redirect URI validation (TanStack Start)', () => {
+    it('detects redirect URI path mismatch with callback route', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@tanstack/react-start': '^1.0.0' } }),
+      );
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nWORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=test123\n',
+      );
+      // Route at wrong path
+      mkdirSync(join(testDir, 'app', 'routes', 'api', 'callback'), { recursive: true });
+      writeFileSync(join(testDir, 'app', 'routes', 'api', 'callback', 'index.tsx'), 'export default function Callback() {}');
+
+      const result = await validateInstallation('tanstack-start', testDir, { runBuild: false });
+
+      const mismatchIssue = result.issues.find((i) => i.message.includes('no matching route file'));
+      expect(mismatchIssue).toBeDefined();
+    });
+
+    it('passes when redirect URI matches callback route', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@tanstack/react-start': '^1.0.0' } }),
+      );
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nWORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=test123\n',
+      );
+      mkdirSync(join(testDir, 'app', 'routes', 'auth', 'callback'), { recursive: true });
+      writeFileSync(join(testDir, 'app', 'routes', 'auth', 'callback', 'index.tsx'), 'export default function Callback() {}');
+
+      const result = await validateInstallation('tanstack-start', testDir, { runBuild: false });
+
+      const mismatchIssue = result.issues.find((i) => i.message.includes('no matching route file'));
+      expect(mismatchIssue).toBeUndefined();
+    });
+  });
 });
