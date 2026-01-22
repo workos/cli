@@ -12,6 +12,7 @@ import type { WizardOptions } from '../utils/types.js';
 import type { WizardMachineContext, DetectionOutput, GitCheckOutput, AgentOutput } from './wizard-core.types.js';
 import { Integration } from './constants.js';
 import { parseEnvFile } from '../utils/env-parser.js';
+import { enableDebugLogs, initLogFile, logToFile } from '../utils/debug.js';
 
 import { getAccessToken, getCredentials } from './credentials.js';
 import { analytics } from '../utils/analytics.js';
@@ -79,6 +80,20 @@ async function detectIntegrationFn(options: Pick<WizardOptions, 'installDir'>): 
 }
 
 export async function runWithCore(options: WizardOptions): Promise<void> {
+  // Initialize debug/logging early so we capture all failures
+  initLogFile();
+  if (options.debug) {
+    enableDebugLogs();
+  }
+  logToFile('Wizard starting with options:', {
+    debug: options.debug,
+    dashboard: options.dashboard,
+    local: options.local,
+    ci: options.ci,
+    skipAuth: options.skipAuth,
+    installDir: options.installDir,
+  });
+
   // Configure telemetry endpoint (same URL as LLM gateway)
   const settings = getSettings();
   const gatewayUrl = options.local ? settings.gateway.development : getLlmGatewayUrlFromHost();
@@ -101,8 +116,8 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
   };
 
   const adapter: WizardAdapter = options.dashboard
-    ? new DashboardAdapter({ emitter, sendEvent })
-    : new CLIAdapter({ emitter, sendEvent });
+    ? new DashboardAdapter({ emitter, sendEvent, debug: augmentedOptions.debug })
+    : new CLIAdapter({ emitter, sendEvent, debug: augmentedOptions.debug });
 
   const machineWithActors = wizardMachine.provide({
     actors: {
@@ -280,6 +295,7 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
     });
   } catch (error) {
     wizardStatus = 'error';
+    logToFile('Wizard failed with error:', error instanceof Error ? error.stack || error.message : String(error));
     throw error;
   } finally {
     process.off('SIGINT', handleSigint);

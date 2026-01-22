@@ -11,7 +11,7 @@ export const settings = {
   },
 
   gateway: {
-    development: 'http://localhost:8000',
+    development: 'https://api.workos.engineer/llm-gateway',
     production: 'https://llm-gateway.example.com',
     port: 8000,
   },
