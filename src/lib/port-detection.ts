@@ -1,9 +1,9 @@
 import * as fs from 'node:fs';
 import { join } from 'node:path';
 import type { Integration } from './constants.js';
-import { getSettings } from './settings.js';
+import { getConfig } from './settings.js';
 
-const settings = getSettings();
+const settings = getConfig();
 
 const INTEGRATION_TO_SETTINGS_KEY: Record<Integration, string> = {
   nextjs: 'nextjs',

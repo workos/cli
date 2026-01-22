@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 import { satisfies } from 'semver';
 import { red } from './src/utils/logging.js';
-import { getSettings } from './src/lib/settings.js';
+import { getConfig } from './src/lib/settings.js';
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import chalk from 'chalk';
 
-const NODE_VERSION_RANGE = getSettings().nodeVersion;
+const NODE_VERSION_RANGE = getConfig().nodeVersion;
 
 // Have to run this above the other imports because they are importing clack that
 // has the problematic imports.

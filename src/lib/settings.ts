@@ -1,26 +1,22 @@
-import { settings as settingsConfig } from '../../settings.config.js';
+import { createRequire } from 'module';
+import { config } from '../../installer.config.js';
 
-export interface Settings {
-  version: string;
+const require = createRequire(import.meta.url);
+const pkg = require('../../package.json');
+
+/**
+ * Get version from package.json
+ */
+export function getVersion(): string {
+  return pkg.version;
+}
+
+export interface InstallerConfig {
   model: string;
-  cliAuth: {
+  workos: {
     clientId: string;
     authkitDomain: string;
-  };
-  gateway: {
-    development: string;
-    production: string;
-    port: number;
-  };
-  api: {
-    workos: {
-      development: string;
-      production: string;
-    };
-    dashboard: {
-      development: string;
-      production: string;
-    };
+    llmGatewayUrl: string;
   };
   telemetry: {
     enabled: boolean;
@@ -52,24 +48,32 @@ export interface Settings {
 }
 
 /**
- * Get settings from config
+ * Get config
  */
-export function getSettings(): Settings {
-  return settingsConfig;
+export function getConfig(): InstallerConfig {
+  return config;
 }
 
 /**
  * Get the CLI auth client ID.
- * Checks WORKOS_CLIENT_ID env var first (for dev/staging), falls back to settings.
+ * Env var overrides config default.
  */
 export function getCliAuthClientId(): string {
-  return process.env.WORKOS_CLIENT_ID || settingsConfig.cliAuth.clientId;
+  return process.env.WORKOS_CLIENT_ID || config.workos.clientId;
 }
 
 /**
- * Get the AuthKit domain for Connect OAuth endpoints.
- * Checks WORKOS_AUTHKIT_DOMAIN env var first (for dev/staging), falls back to settings.
+ * Get the AuthKit domain.
+ * Env var overrides config default.
  */
 export function getAuthkitDomain(): string {
-  return process.env.WORKOS_AUTHKIT_DOMAIN || settingsConfig.cliAuth.authkitDomain;
+  return process.env.WORKOS_AUTHKIT_DOMAIN || config.workos.authkitDomain;
+}
+
+/**
+ * Get the LLM gateway URL.
+ * Env var overrides config default.
+ */
+export function getLlmGatewayUrl(): string {
+  return process.env.WORKOS_LLM_GATEWAY_URL || config.workos.llmGatewayUrl;
 }

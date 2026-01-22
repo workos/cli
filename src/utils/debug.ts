@@ -3,11 +3,11 @@ import { appendFileSync } from 'fs';
 import { prepareMessage } from './logging.js';
 import clack from './clack.js';
 import { redactCredentials } from './redact.js';
-import { getSettings } from '../lib/settings.js';
+import { getConfig } from '../lib/settings.js';
 
 let debugEnabled = false;
 
-export const LOG_FILE_PATH = getSettings().logging.logFile;
+export const LOG_FILE_PATH = getConfig().logging.logFile;
 
 /**
  * Initialize the log file with a run header.

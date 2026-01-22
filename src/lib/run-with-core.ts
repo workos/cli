@@ -16,7 +16,7 @@ import { enableDebugLogs, initLogFile, logToFile } from '../utils/debug.js';
 
 import { getAccessToken, getCredentials } from './credentials.js';
 import { analytics } from '../utils/analytics.js';
-import { getSettings } from './settings.js';
+import { getVersion } from './settings.js';
 import { getLlmGatewayUrlFromHost } from '../utils/urls.js';
 import { runLogin } from '../commands/login.js';
 import { isInGitRepo, getUncommittedOrUntrackedFiles } from '../utils/clack-utils.js';
@@ -95,8 +95,7 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
   });
 
   // Configure telemetry endpoint (same URL as LLM gateway)
-  const settings = getSettings();
-  const gatewayUrl = options.local ? settings.gateway.development : getLlmGatewayUrlFromHost();
+  const gatewayUrl = getLlmGatewayUrlFromHost();
   analytics.setGatewayUrl(gatewayUrl);
 
   const existingCreds = readExistingCredentials(options.installDir);
@@ -256,8 +255,7 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
 
   // Start telemetry session
   const mode = augmentedOptions.dashboard ? 'tui' : 'cli';
-  const version = getSettings().version;
-  analytics.sessionStart(mode, version);
+  analytics.sessionStart(mode, getVersion());
 
   let wizardStatus: 'success' | 'error' | 'cancelled' = 'success';
 
