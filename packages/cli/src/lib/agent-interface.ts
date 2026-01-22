@@ -290,6 +290,9 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
     // Disable experimental betas (like input_examples) that the LLM gateway doesn't support
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
 
+    // Disable SDK telemetry - our gateway doesn't proxy /api/event_logging/batch
+    process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = 'true';
+
     // Configure WorkOS MCP docs server for accessing WorkOS documentation
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
