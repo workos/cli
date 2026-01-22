@@ -1,17 +1,38 @@
 # Development Guide
 
-## Monorepo Structure
+## Project Structure
 
 ```
 wizard/
-├── packages/
-│   ├── cli/            # CLI wizard (TypeScript)
-│   └── llm-gateway/    # LLM API proxy (TypeScript)
-├── tsconfig.json       # Shared TypeScript config
-├── .prettierrc         # Shared formatting
-├── .eslintrc.js        # Shared linting
-├── pnpm-workspace.yaml # Workspace definition
-└── package.json        # Root scripts
+├── src/
+│   ├── run.ts                # Entry point
+│   ├── lib/
+│   │   ├── agent-runner.ts       # Core agent execution
+│   │   ├── agent-interface.ts    # SDK interface
+│   │   ├── wizard-core.ts        # Headless wizard core
+│   │   ├── config.ts             # Framework detection config
+│   │   ├── framework-config.ts   # Framework definitions
+│   │   ├── constants.ts          # Integration types
+│   │   ├── events.ts             # WizardEventEmitter
+│   │   └── adapters/             # CLI and dashboard adapters
+│   ├── commands/                 # Subcommands (install-skill, login, logout)
+│   ├── steps/                    # Wizard step implementations
+│   ├── dashboard/                # Ink/React TUI components
+│   ├── nextjs/                   # Next.js wizard agent
+│   ├── react/                    # React SPA wizard agent
+│   ├── react-router/             # React Router wizard agent
+│   ├── tanstack-start/           # TanStack Start wizard agent
+│   ├── vanilla-js/               # Vanilla JS wizard agent
+│   └── utils/
+│       ├── clack-utils.ts        # CLI prompts
+│       ├── debug.ts              # Logging with redaction
+│       ├── redact.ts             # Credential redaction
+│       ├── package-manager.ts    # Package manager detection
+│       └── ...                   # Additional utilities
+├── bin.ts                    # CLI entry point
+├── settings.config.ts        # App configuration (model, URLs)
+├── tsconfig.json             # TypeScript config
+└── package.json              # Dependencies and scripts
 ```
 
 ## Setup
@@ -20,144 +41,70 @@ wizard/
 # Install dependencies
 pnpm install
 
-# Build all packages
+# Build
 pnpm build
 ```
 
 ## Development Workflow
 
-### Working on the Wizard
-
 ```bash
-# Build and watch
-cd packages/cli
-pnpm build
-pnpm build:watch
+# Build, link globally, and watch for changes
+pnpm dev
 
-# Test locally
+# Test locally in another project
 cd /path/to/test/nextjs-app
-~/Developer/wizard/dist/bin.js
+wizard dashboard
 ```
 
-### Working on LLM Gateway
+## Commands
 
 ```bash
-cd packages/llm-gateway
-
-# Set your Anthropic key
-export ANTHROPIC_API_KEY=sk-ant-...
-
-# Start in watch mode
-pnpm dev
-
-# Test health
-curl http://localhost:8000/health
-```
-
-### Testing End-to-End
-
-**Terminal 1 - LLM Gateway:**
-```bash
-cd packages/llm-gateway
-export ANTHROPIC_API_KEY=sk-ant-YOUR-KEY
-pnpm dev
-```
-
-**Terminal 2 - Test Wizard:**
-```bash
-cd /tmp/test-nextjs-app
-~/Developer/wizard/dist/bin.js --local
-```
-
-The wizard will connect to your local gateway instead of production.
-
-## Workspace Commands
-
-```bash
-# Build everything
+# Build
 pnpm build
 
-# Clean everything
-pnpm clean
+# Clean and rebuild
+pnpm clean && pnpm build
 
-# Build specific package
-pnpm --filter @workos/authkit-wizard build
-pnpm --filter @workos/authkit-llm-gateway build
+# Format code
+pnpm format
+
+# Check types
+pnpm typecheck
+
+# Run tests
+pnpm test
+pnpm test:watch
 ```
 
 ## TypeScript Configuration
 
-**Shared base:** `tsconfig.json` (root)
-- Common compiler options
-- Strict mode enabled
-- ES2022 target
-
-**Package configs extend base:**
-- `packages/cli/tsconfig.json` → Node16 modules (CJS compat)
-- `packages/llm-gateway/tsconfig.json` → ESNext modules (modern ESM)
-
-## Code Organization
-
-### Wizard Package
-
-```
-packages/cli/src/
-├── run.ts                    # Entry point
-├── lib/
-│   ├── agent-runner.ts       # Core agent execution
-│   ├── agent-interface.ts    # SDK interface
-│   ├── wizard-core.ts        # Headless wizard core
-│   ├── config.ts             # Framework detection config
-│   ├── framework-config.ts   # Framework definitions
-│   ├── constants.ts          # Integration types
-│   ├── events.ts             # WizardEventEmitter
-│   └── adapters/             # CLI and dashboard adapters
-├── commands/                 # Subcommands (install-skill, login, logout)
-├── steps/                    # Wizard step implementations
-├── dashboard/                # Ink/React TUI components
-├── nextjs/                   # Next.js wizard agent
-├── react/                    # React SPA wizard agent
-├── react-router/             # React Router wizard agent
-├── tanstack-start/           # TanStack Start wizard agent
-├── vanilla-js/               # Vanilla JS wizard agent
-└── utils/
-    ├── clack-utils.ts        # CLI prompts
-    ├── debug.ts              # Logging with redaction
-    ├── redact.ts             # Credential redaction
-    ├── package-manager.ts    # Package manager detection
-    └── ...                   # Additional utilities
-```
-
-### LLM Gateway Package
-
-```
-packages/llm-gateway/src/
-├── index.ts                  # Hono server + Anthropic proxy
-├── env.ts                    # Environment configuration
-└── jwt.ts                    # JWT validation
-```
+- **Target:** ES2022
+- **Module:** NodeNext (ESM)
+- **Strict mode** enabled
+- **JSX:** react-jsx (for Ink/React dashboard)
 
 ## Making Changes
 
 ### Adding a New Framework
 
-1. Create `packages/cli/src/your-framework/your-framework-wizard-agent.ts`
+1. Create `src/your-framework/your-framework-wizard-agent.ts`
 2. Define `FrameworkConfig` with metadata, detection, environment, UI
 3. Export `runYourFrameworkWizardAgent(options)` function
-4. Add to `Integration` enum in `constants.ts`
-5. Add detection logic to `config.ts`
+4. Add to `Integration` enum in `lib/constants.ts`
+5. Add detection logic to `lib/config.ts`
 6. Wire up in `run.ts`
 
-See `nextjs-wizard-agent.ts` as reference.
+See `nextjs/nextjs-wizard-agent.ts` as reference.
 
 ### Updating Integration Instructions
 
 The wizard prompt in `agent-runner.ts` tells Claude to:
+
 1. Fetch live docs from workos.com
 2. Fetch SDK README from GitHub/npm
 3. Follow official documentation
 
-To change instructions, edit `buildIntegrationPrompt()` in `agent-runner.ts`.
+To change instructions, edit `buildIntegrationPrompt()` in `lib/agent-runner.ts`.
 
 ### Adding Security Features
 
@@ -166,10 +113,7 @@ Credential redaction is in `utils/redact.ts`. Add patterns:
 ```typescript
 export function redactCredentials(obj: any): any {
   // Add new patterns here
-  const redacted = JSON.stringify(obj)
-    .replace(/sk_test_[a-zA-Z0-9]+/g, (match) =>
-      `sk_test_...${match.slice(-3)}`
-    );
+  const redacted = JSON.stringify(obj).replace(/sk_test_[a-zA-Z0-9]+/g, (match) => `sk_test_...${match.slice(-3)}`);
   return JSON.parse(redacted);
 }
 ```
@@ -177,12 +121,13 @@ export function redactCredentials(obj: any): any {
 ## Testing
 
 **Manual testing:**
-1. Start LLM gateway with your Anthropic key
-2. Run wizard with `--local` flag in a test app
-3. Check logs at `/tmp/authkit-wizard.log`
-4. Verify integration works in test app
+
+1. Run wizard in a test app: `wizard dashboard`
+2. Check logs at `/tmp/authkit-wizard.log`
+3. Verify integration works in test app
 
 **What to test:**
+
 - Framework detection
 - API key masking (should show `*****`)
 - Log redaction (keys show as `sk_test_...X6Y`)
@@ -194,32 +139,17 @@ export function redactCredentials(obj: any): any {
 ## Debugging
 
 **Verbose logs:**
+
 ```bash
-./dist/bin.js --debug --local
+wizard --debug
 ```
 
 **Check logs:**
+
 ```bash
 tail -f /tmp/authkit-wizard.log
 ```
 
-**LLM Gateway logs:**
-Run `pnpm dev` in Terminal 1 - you'll see all API calls.
-
-## Common Tasks
-
-```bash
-# Build everything
-pnpm build
-
-# Format code
-pnpm --filter @workos/authkit-wizard fix
-
-# Check types
-cd packages/cli && pnpm tsc --noEmit
-cd packages/llm-gateway && pnpm tsc --noEmit
-```
-
 ## Questions?
 
-See [root README](./README.md) for user-facing docs.
+See [README](./README.md) for user-facing docs.

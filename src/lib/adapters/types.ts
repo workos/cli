@@ -12,6 +12,9 @@ export interface AdapterConfig {
    * Used for user responses (confirmations, credentials, etc.)
    */
   sendEvent: (event: { type: string; [key: string]: unknown }) => void;
+
+  /** Enable verbose debug output (stack traces, etc.) */
+  debug?: boolean;
 }
 
 /**

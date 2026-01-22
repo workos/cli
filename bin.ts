@@ -90,7 +90,13 @@ yargs(hideBin(process.argv))
       void import('./src/run.js').then(({ runWizard }) =>
         runWizard(options as unknown as WizardOptions)
           .then(() => process.exit(0))
-          .catch(() => process.exit(1))
+          .catch((err) => {
+            if (argv.debug) {
+              console.error('\nWizard failed with error:');
+              console.error(err instanceof Error ? err.stack || err.message : String(err));
+            }
+            process.exit(1);
+          }),
       );
     },
   )
@@ -209,7 +215,13 @@ yargs(hideBin(process.argv))
 
       void runWizard(options as unknown as WizardOptions)
         .then(() => process.exit(0))
-        .catch(() => process.exit(1));
+        .catch((err) => {
+          if (options.debug) {
+            console.error('\nWizard failed with error:');
+            console.error(err instanceof Error ? err.stack || err.message : String(err));
+          }
+          process.exit(1);
+        });
     },
   )
   .strict()

@@ -88,7 +88,11 @@ export function Dashboard({ emitter }: DashboardProps): React.ReactElement {
       setOutputLog((prev) => [...prev, { text: '[STATUS] Validating installation...', isStatus: true }]);
     };
 
-    const handleValidationIssues = ({ issues }: { issues: Array<{ severity: string; message: string; hint?: string }> }) => {
+    const handleValidationIssues = ({
+      issues,
+    }: {
+      issues: Array<{ severity: string; message: string; hint?: string }>;
+    }) => {
       for (const issue of issues) {
         const prefix = issue.severity === 'error' ? '!' : '?';
         setOutputLog((prev) => [...prev, { text: `${prefix} ${issue.message}`, isError: issue.severity === 'error' }]);

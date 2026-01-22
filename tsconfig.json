@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
     // Target and output
     "target": "ES2022",
@@ -21,7 +20,31 @@
     // Interop
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+
+    // ESM module system
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "ES2022",
+
+    // JSX for React/Ink dashboard
+    "jsx": "react-jsx",
+
+    // Output
+    "outDir": "./dist",
+
+    // JSON imports with import attributes
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": false,
+
+    // Decorators for legacy compatibility
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
+    // Node types
+    "types": ["node"],
+    "typeRoots": ["./node_modules/@types", "./types"]
   },
-  "exclude": ["node_modules", "dist", "**/dist", "**/node_modules"]
+  "include": ["bin.ts", "src/**/*", "types/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.spec.ts"]
 }

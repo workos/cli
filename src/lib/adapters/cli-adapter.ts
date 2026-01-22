@@ -13,6 +13,7 @@ import { getSettings } from '../settings.js';
 export class CLIAdapter implements WizardAdapter {
   readonly emitter: WizardEventEmitter;
   private sendEvent: AdapterConfig['sendEvent'];
+  private debug: boolean;
   private spinner: ReturnType<typeof clack.spinner> | null = null;
   private isStarted = false;
 
@@ -26,6 +27,7 @@ export class CLIAdapter implements WizardAdapter {
   constructor(config: AdapterConfig) {
     this.emitter = config.emitter;
     this.sendEvent = config.sendEvent;
+    this.debug = config.debug ?? false;
   }
 
   /**
@@ -300,7 +302,7 @@ export class CLIAdapter implements WizardAdapter {
     }
 
     clack.log.error(message);
-    if (stack && process.env.DEBUG) {
+    if (stack && this.debug) {
       console.error(chalk.dim(stack));
     }
   };

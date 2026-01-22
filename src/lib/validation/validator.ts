@@ -13,7 +13,7 @@ export interface ValidateOptions {
 export async function validateInstallation(
   framework: string,
   projectDir: string,
-  options: ValidateOptions = {}
+  options: ValidateOptions = {},
 ): Promise<ValidationResult> {
   const startTime = Date.now();
   const issues: ValidationIssue[] = [];
@@ -203,7 +203,7 @@ async function validateFiles(rules: ValidationRules, projectDir: string, issues:
 async function validateFrameworkSpecific(
   framework: string,
   projectDir: string,
-  issues: ValidationIssue[]
+  issues: ValidationIssue[],
 ): Promise<void> {
   // Universal cross-validations
   await validateCredentialFormats(projectDir, issues);
@@ -286,15 +286,19 @@ async function validateNextjsRedirectUri(projectDir: string, issues: ValidationI
 
   if (!routeExists) {
     // Check what routes DO exist to give a better hint
-    const existingRoutes = await fg(['app/**/callback/**/route.{ts,tsx,js,jsx}', 'src/app/**/callback/**/route.{ts,tsx,js,jsx}'], {
-      cwd: projectDir,
-    });
+    const existingRoutes = await fg(
+      ['app/**/callback/**/route.{ts,tsx,js,jsx}', 'src/app/**/callback/**/route.{ts,tsx,js,jsx}'],
+      {
+        cwd: projectDir,
+      },
+    );
 
     let hint = `Create a route handler at app/${routePath}/route.ts`;
     if (existingRoutes.length > 0) {
       // Found a route at a different path - likely the mismatch
       const actualPath = '/' + existingRoutes[0].replace(/^(src\/)?app\//, '').replace(/\/route\.(ts|tsx|js|jsx)$/, '');
-      hint = `Found callback route at ${existingRoutes[0]} but redirect URI points to ${callbackPath}. Either:\n` +
+      hint =
+        `Found callback route at ${existingRoutes[0]} but redirect URI points to ${callbackPath}. Either:\n` +
         `  1. Change NEXT_PUBLIC_WORKOS_REDIRECT_URI to http://localhost:3000${actualPath}\n` +
         `  2. Move the route to app/${routePath}/route.ts`;
     }
@@ -385,12 +389,15 @@ async function validateReactRouterRedirectUri(projectDir: string, issues: Valida
     if (existingRoutes.length > 0) {
       const actualFile = existingRoutes[0];
       // Convert file path back to URL path
-      const actualPath = '/' + actualFile
-        .replace(/^app\/routes\//, '')
-        .replace(/\.(tsx?|jsx?)$/, '')
-        .replace(/\/(index|route)$/, '')
-        .replace(/\./g, '/');
-      hint = `Found callback route at ${actualFile} but redirect URI points to ${callbackPath}. Either:\n` +
+      const actualPath =
+        '/' +
+        actualFile
+          .replace(/^app\/routes\//, '')
+          .replace(/\.(tsx?|jsx?)$/, '')
+          .replace(/\/(index|route)$/, '')
+          .replace(/\./g, '/');
+      hint =
+        `Found callback route at ${actualFile} but redirect URI points to ${callbackPath}. Either:\n` +
         `  1. Change WORKOS_REDIRECT_URI to http://localhost:3000${actualPath}\n` +
         `  2. Move the route to app/routes/${dotPath}.tsx`;
     }
@@ -465,11 +472,14 @@ async function validateTanstackStartRedirectUri(projectDir: string, issues: Vali
     let hint = `Create a route at app/routes/${routePath}.tsx`;
     if (existingRoutes.length > 0) {
       const actualFile = existingRoutes[0];
-      const actualPath = '/' + actualFile
-        .replace(/^app\/routes\//, '')
-        .replace(/\.(tsx?|jsx?)$/, '')
-        .replace(/\/index$/, '');
-      hint = `Found callback route at ${actualFile} but redirect URI points to ${callbackPath}. Either:\n` +
+      const actualPath =
+        '/' +
+        actualFile
+          .replace(/^app\/routes\//, '')
+          .replace(/\.(tsx?|jsx?)$/, '')
+          .replace(/\/index$/, '');
+      hint =
+        `Found callback route at ${actualFile} but redirect URI points to ${callbackPath}. Either:\n` +
         `  1. Change WORKOS_REDIRECT_URI to http://localhost:3000${actualPath}\n` +
         `  2. Move the route to app/routes/${routePath}.tsx`;
     }
@@ -490,7 +500,7 @@ async function validateTanstackStartRedirectUri(projectDir: string, issues: Vali
 async function validateCookiePasswordLength(
   projectDir: string,
   issues: ValidationIssue[],
-  envVarName: string
+  envVarName: string,
 ): Promise<void> {
   const envPath = join(projectDir, '.env.local');
   let envContent: string;
@@ -533,10 +543,7 @@ async function validateCredentialFormats(projectDir: string, issues: ValidationI
   }
 
   // Check API key format (any common variation)
-  const apiKeyPatterns = [
-    /^WORKOS_API_KEY=(.*)$/m,
-    /^NEXT_PUBLIC_WORKOS_API_KEY=(.*)$/m,
-  ];
+  const apiKeyPatterns = [/^WORKOS_API_KEY=(.*)$/m, /^NEXT_PUBLIC_WORKOS_API_KEY=(.*)$/m];
 
   for (const pattern of apiKeyPatterns) {
     const match = envContent.match(pattern);
@@ -554,10 +561,7 @@ async function validateCredentialFormats(projectDir: string, issues: ValidationI
   }
 
   // Check Client ID format
-  const clientIdPatterns = [
-    /^WORKOS_CLIENT_ID=(.*)$/m,
-    /^NEXT_PUBLIC_WORKOS_CLIENT_ID=(.*)$/m,
-  ];
+  const clientIdPatterns = [/^WORKOS_CLIENT_ID=(.*)$/m, /^NEXT_PUBLIC_WORKOS_CLIENT_ID=(.*)$/m];
 
   for (const pattern of clientIdPatterns) {
     const match = envContent.match(pattern);
@@ -581,12 +585,7 @@ async function validateCredentialFormats(projectDir: string, issues: ValidationI
  */
 async function validateNextjsMiddlewarePlacement(projectDir: string, issues: ValidationIssue[]): Promise<void> {
   // Valid locations
-  const validPaths = [
-    'middleware.ts',
-    'middleware.js',
-    'src/middleware.ts',
-    'src/middleware.js',
-  ];
+  const validPaths = ['middleware.ts', 'middleware.js', 'src/middleware.ts', 'src/middleware.js'];
 
   const hasValidMiddleware = validPaths.some((p) => existsSync(join(projectDir, p)));
   if (hasValidMiddleware) {

@@ -8,15 +8,12 @@
  * Before releasing, manually test both modes against a real project:
  *
  * ```bash
- * # Terminal 1: Start local gateway
- * cd packages/llm-gateway && ANTHROPIC_API_KEY=sk-ant-... pnpm dev
- *
- * # Terminal 2: Test CLI mode
+ * # Test CLI mode
  * cd /tmp && npx create-next-app@latest test-app --typescript --yes
- * cd test-app && wizard --local --skip-auth
+ * cd test-app && wizard --skip-auth
  *
- * # Terminal 3: Test Dashboard mode
- * cd /tmp/test-app && wizard dashboard --local --skip-auth
+ * # Test Dashboard mode
+ * cd /tmp/test-app && wizard dashboard --skip-auth
  *
  * # Verify both modes:
  * # - Show same progress steps

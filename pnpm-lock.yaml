@@ -8,13 +8,85 @@ importers:
 
   .:
     dependencies:
+      '@anthropic-ai/claude-agent-sdk':
+        specifier: ~0.2.12
+        version: 0.2.12(zod@4.3.5)
+      '@clack/core':
+        specifier: ^0.5.0
+        version: 0.5.0
+      '@clack/prompts':
+        specifier: 0.11.0
+        version: 0.11.0
+      chalk:
+        specifier: ^5.6.2
+        version: 5.6.2
       diff:
         specifier: ^8.0.3
         version: 8.0.3
+      fast-glob:
+        specifier: ^3.3.3
+        version: 3.3.3
+      ink:
+        specifier: ^6.6.0
+        version: 6.6.0(@types/react@19.2.9)(react@19.2.3)
+      opn:
+        specifier: ^5.4.0
+        version: 5.5.0
+      react:
+        specifier: ^19.2.3
+        version: 19.2.3
+      semver:
+        specifier: ^7.7.3
+        version: 7.7.3
+      uuid:
+        specifier: ^13.0.0
+        version: 13.0.0
+      xstate:
+        specifier: ^5.25.1
+        version: 5.25.1
+      yargs:
+        specifier: ^18.0.0
+        version: 18.0.0
+      zod:
+        specifier: ^4.3.5
+        version: 4.3.5
     devDependencies:
+      '@statelyai/inspect':
+        specifier: ^0.4.0
+        version: 0.4.0(ws@8.19.0)(xstate@5.25.1)
+      '@types/node':
+        specifier: ~22.19.7
+        version: 22.19.7
+      '@types/opn':
+        specifier: 5.1.0
+        version: 5.1.0
+      '@types/react':
+        specifier: ^19.2.9
+        version: 19.2.9
+      '@types/semver':
+        specifier: ^7.7.1
+        version: 7.7.1
+      '@types/yargs':
+        specifier: ^17.0.35
+        version: 17.0.35
+      '@vitest/ui':
+        specifier: ^4.0.17
+        version: 4.0.17(vitest@4.0.17)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
+      prettier:
+        specifier: ^3.8.0
+        version: 3.8.0
+      tsx:
+        specifier: ^4.20.3
+        version: 4.21.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+      vitest:
+        specifier: ^4.0.17
+        version: 4.0.17(@opentelemetry/api@1.9.0)(@types/node@22.19.7)(@vitest/ui@4.0.17)(msw@2.10.4(@types/node@22.19.7)(typescript@5.9.3))(tsx@4.21.0)(yaml@2.7.1)
 
   packages/cli:
     dependencies:

@@ -1,137 +1,157 @@
-# WorkOS AuthKit Wizard
+# @workos/authkit-wizard
 
-AI-powered CLI wizard that automatically integrates WorkOS AuthKit into your application.
+AI-powered CLI that automatically integrates WorkOS AuthKit into web applications.
 
-## Quick Start
-
-```bash
-npx @workos/authkit-wizard
-```
-
-The wizard will:
-- ✅ Auto-detect your framework (Next.js, React, React Router, TanStack Start, Vanilla JS)
-- ✅ Auto-configure WorkOS dashboard (redirect URI, CORS, homepage URL)
-- ✅ Install the appropriate AuthKit SDK
-- ✅ Create authentication routes and middleware
-- ✅ Set up environment variables
-- ✅ Add UI showing login/logout status
-- ✅ Use AI to adapt to your project structure
-
-## Supported Frameworks
-
-| Framework | Package | Server/Client |
-|-----------|---------|---------------|
-| **Next.js** | `@workos-inc/authkit-nextjs` | Server + Client |
-| **React Router** | `@workos-inc/authkit-react-router` | Server + Client |
-| **TanStack Start** | `@workos-inc/authkit-tanstack-start` | Server + Client |
-| **React (SPA)** | `@workos-inc/authkit-react` | Client-only |
-| **Vanilla JS** | `@workos-inc/authkit-js` | Client-only |
-
-## Usage
-
-### Interactive Mode
+## Installation
 
 ```bash
-# Auto-detect framework
+# Run directly with npx (recommended)
 npx @workos/authkit-wizard
 
-# Or specify framework
-npx @workos/authkit-wizard --integration nextjs
+# Or install globally
+npm install -g @workos/authkit-wizard
+authkit-wizard
 ```
 
-The wizard will prompt for:
-- **WorkOS API Key** (hidden for security) - Only for server-side frameworks
-- **WorkOS Client ID** - Required for all frameworks
+## Features
 
-### CI Mode
+- **5 Framework Support:** Next.js, React Router, TanStack Start, React SPA, Vanilla JS
+- **AI-Powered:** Uses Claude to intelligently adapt to your project structure
+- **Security-First:** Masks API keys, redacts from logs, saves to .env.local
+- **Smart Detection:** Auto-detects framework, package manager, router type
+- **Live Documentation:** Fetches latest SDK docs from WorkOS and GitHub
+- **Full Integration:** Creates routes, middleware, environment vars, and UI
+
+## What It Creates
+
+Depending on your framework, the wizard creates:
+
+- ✅ Authentication routes (callback, sign-in, sign-out)
+- ✅ Middleware for route protection
+- ✅ Environment variable configuration
+- ✅ SDK installation with correct package manager
+- ✅ UI components showing login status
+- ✅ User info display (name, email)
+
+## Credentials
+
+Get your credentials from [dashboard.workos.com](https://dashboard.workos.com):
+
+- **API Key** (sk_test_xxx or sk_live_xxx) - For server-side frameworks only
+- **Client ID** (client_xxx) - Required for all frameworks
+
+**Security:** API keys are masked during input and redacted in logs.
+
+## CLI Options
 
 ```bash
-npx @workos/authkit-wizard \
-  --ci \
+authkit-wizard [options] [command]
+
+Commands:
+  dashboard              Run wizard with visual TUI dashboard (experimental)
+  login                  Authenticate with WorkOS via Connect OAuth device flow
+  logout                 Remove stored credentials
+  install-skill          Install AuthKit skills to coding agents (Claude Code, Codex, etc.)
+
+Options:
+  --integration <name>    Framework: nextjs, react, react-router, tanstack-start, vanilla-js
+  --api-key <key>         WorkOS API key (masked in terminal)
+  --client-id <id>        WorkOS Client ID
+  --redirect-uri <uri>    Custom redirect URI (defaults to framework convention)
+  --homepage-url <url>    Custom homepage URL (defaults to http://localhost:{port})
+  --ci                    Non-interactive CI mode
+  --install-dir <path>    Installation directory
+  --debug                 Verbose logging to /tmp/authkit-wizard.log
+  --local                 Use local LLM gateway (development only)
+  --default               Use default options for all prompts (default: true)
+  --skip-auth             Skip authentication check (requires --local)
+
+Environment Variables:
+  WIZARD_TELEMETRY=false  Disable telemetry collection
+```
+
+## Examples
+
+```bash
+# Interactive (recommended)
+npx @workos/authkit-wizard
+
+# Specify framework
+npx @workos/authkit-wizard --integration react-router
+
+# CI mode
+npx @workos/authkit-wizard --ci \
   --integration nextjs \
   --api-key $WORKOS_API_KEY \
-  --client-id $WORKOS_CLIENT_ID \
-  --install-dir .
+  --client-id $WORKOS_CLIENT_ID
 ```
 
-## Options
+## Authentication
 
-| Flag | Description | Env Var |
-|------|-------------|---------|
-| `--integration` | Framework to set up (nextjs, react, etc.) | `WORKOS_WIZARD_INTEGRATION` |
-| `--api-key` | WorkOS API key (sk_xxx) | `WORKOS_WIZARD_API_KEY` |
-| `--client-id` | WorkOS Client ID (client_xxx) | `WORKOS_WIZARD_CLIENT_ID` |
-| `--redirect-uri` | Custom redirect URI for OAuth callback | `WORKOS_WIZARD_REDIRECT_URI` |
-| `--homepage-url` | Custom homepage URL for WorkOS | `WORKOS_WIZARD_HOMEPAGE_URL` |
-| `--ci` | Non-interactive mode for CI/CD | `WORKOS_WIZARD_CI` |
-| `--install-dir` | Directory to install in | `WORKOS_WIZARD_INSTALL_DIR` |
-| `--debug` | Enable verbose logging | `WORKOS_WIZARD_DEBUG` |
-| `--default` | Use defaults for all prompts | `WORKOS_WIZARD_DEFAULT` |
-| `--local` | Use local services (for development) | `WORKOS_WIZARD_LOCAL` |
+The wizard uses WorkOS Connect OAuth device flow for authentication:
 
-## What Gets Created
+```bash
+# Login (opens browser for authentication)
+authkit-wizard login
 
-The wizard creates:
+# Logout (clears stored credentials)
+authkit-wizard logout
+```
 
-### For Next.js (App Router)
-- `app/callback/route.ts` - OAuth callback handler
-- `app/auth/sign-in/route.ts` - Sign-in redirect
-- `app/auth/sign-out/route.ts` - Sign-out handler
-- `middleware.ts` - Route protection with `withAuth()`
-- `.env.local` - Environment variables
-- Updated `app/layout.tsx` or `app/page.tsx` - Login/logout UI
+Credentials are stored in `~/.wizard/credentials.json`. Access tokens are not persisted long-term for security - users re-authenticate when tokens expire.
 
-### For React Router
-- Authentication routes and components
-- Session management
-- Protected route wrappers
-- Login/logout UI
+## How It Works
 
-### For Client-Only (React, Vanilla JS)
-- Client-side authentication setup
-- Login/logout components
-- Session handling
+1. **Detects** your framework and project structure
+2. **Prompts** for WorkOS credentials (API key masked)
+3. **Auto-configures** WorkOS dashboard (redirect URI, CORS, homepage URL)
+4. **Fetches** latest SDK documentation from workos.com
+5. **Uses AI** (Claude) to generate integration code
+6. **Installs** SDK with detected package manager
+7. **Creates** auth routes, middleware, and UI
+8. **Configures** environment variables securely
 
-## Security
+## Telemetry
 
-- **API keys are masked** - Input is hidden in terminal (shows `*****`)
-- **Logs are redacted** - Keys show as `sk_test_...X6Y` in `/tmp/authkit-wizard.log`
-- **Saved to .env.local** - Not committed to git
+The wizard collects anonymous usage telemetry to help improve the product:
 
-## Get Your Credentials
+- Session outcome (success/error/cancelled)
+- Framework detected
+- Duration and step timing
+- Token usage (for capacity planning)
 
-1. Visit [dashboard.workos.com](https://dashboard.workos.com)
-2. Create an application or use existing
-3. Copy your **API Key** (starts with `sk_test_` or `sk_live_`)
-4. Copy your **Client ID** (starts with `client_`)
+No code, credentials, or personal data is collected. Disable with:
+
+```bash
+WIZARD_TELEMETRY=false npx @workos/authkit-wizard
+```
+
+## Logs
+
+Detailed logs (with redacted credentials) are saved to:
+
+```
+/tmp/authkit-wizard.log
+```
+
+Use `--debug` flag for verbose terminal output.
 
 ## Development
 
-This is a PNPM monorepo with 2 packages:
+See the [monorepo root README](../../README.md) for development setup.
 
-- **`packages/cli/`** - The CLI wizard
-- **`packages/llm-gateway/`** - LLM API proxy for local testing
-
-See [DEVELOPMENT.md](./DEVELOPMENT.md) for development setup.
-
-## Architecture
-
-### Local Development
+Build:
 
 ```bash
-# Terminal 1: Start LLM Gateway
-cd packages/llm-gateway
-export ANTHROPIC_API_KEY=sk-ant-...
-pnpm dev
-
-# Terminal 2: Run wizard in your app
-cd /path/to/your/app
-~/path/to/wizard/dist/bin.js --local
+pnpm build
 ```
 
-## Support
+Run locally:
 
-- **Docs:** [workos.com/docs/user-management/authkit](https://workos.com/docs/user-management/authkit)
+```bash
+pnpm dev  # Watch mode
+./dist/bin.js --help
+```
 
 ## License
 

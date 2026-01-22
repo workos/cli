@@ -284,7 +284,10 @@ describe('validateInstallation', () => {
       );
       mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
       // File exists but missing some patterns (warning level)
-      writeFileSync(join(testDir, 'app', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
+      writeFileSync(
+        join(testDir, 'app', 'callback', 'route.ts'),
+        "import { handleAuth } from '@workos-inc/authkit-nextjs';",
+      );
       writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
       writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
 
@@ -315,7 +318,10 @@ describe('validateInstallation', () => {
       );
       // Route exists at DIFFERENT path
       mkdirSync(join(testDir, 'app', 'api', 'auth', 'callback'), { recursive: true });
-      writeFileSync(join(testDir, 'app', 'api', 'auth', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
+      writeFileSync(
+        join(testDir, 'app', 'api', 'auth', 'callback', 'route.ts'),
+        "import { handleAuth } from '@workos-inc/authkit-nextjs';",
+      );
       writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
       writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
 
@@ -337,7 +343,10 @@ describe('validateInstallation', () => {
         'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/api/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       mkdirSync(join(testDir, 'app', 'api', 'auth', 'callback'), { recursive: true });
-      writeFileSync(join(testDir, 'app', 'api', 'auth', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
+      writeFileSync(
+        join(testDir, 'app', 'api', 'auth', 'callback', 'route.ts'),
+        "import { handleAuth } from '@workos-inc/authkit-nextjs';",
+      );
       writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
       writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
 
@@ -360,10 +369,7 @@ describe('validateInstallation', () => {
 
   describe('redirect URI validation (React Router)', () => {
     it('detects redirect URI path mismatch with callback route', async () => {
-      writeFileSync(
-        join(testDir, 'package.json'),
-        JSON.stringify({ dependencies: { 'react-router': '^7.0.0' } }),
-      );
+      writeFileSync(join(testDir, 'package.json'), JSON.stringify({ dependencies: { 'react-router': '^7.0.0' } }));
       // Redirect URI says /auth/callback but route is at /callback
       writeFileSync(
         join(testDir, '.env.local'),
@@ -381,10 +387,7 @@ describe('validateInstallation', () => {
     });
 
     it('passes when redirect URI matches callback route (dot notation)', async () => {
-      writeFileSync(
-        join(testDir, 'package.json'),
-        JSON.stringify({ dependencies: { 'react-router': '^7.0.0' } }),
-      );
+      writeFileSync(join(testDir, 'package.json'), JSON.stringify({ dependencies: { 'react-router': '^7.0.0' } }));
       writeFileSync(
         join(testDir, '.env.local'),
         'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
@@ -412,7 +415,10 @@ describe('validateInstallation', () => {
       );
       // Route at wrong path
       mkdirSync(join(testDir, 'app', 'routes', 'api', 'callback'), { recursive: true });
-      writeFileSync(join(testDir, 'app', 'routes', 'api', 'callback', 'index.tsx'), 'export default function Callback() {}');
+      writeFileSync(
+        join(testDir, 'app', 'routes', 'api', 'callback', 'index.tsx'),
+        'export default function Callback() {}',
+      );
 
       const result = await validateInstallation('tanstack-start', testDir, { runBuild: false });
 
@@ -430,7 +436,10 @@ describe('validateInstallation', () => {
         'WORKOS_API_KEY=sk_test_1234567890123456789012345\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       mkdirSync(join(testDir, 'app', 'routes', 'auth', 'callback'), { recursive: true });
-      writeFileSync(join(testDir, 'app', 'routes', 'auth', 'callback', 'index.tsx'), 'export default function Callback() {}');
+      writeFileSync(
+        join(testDir, 'app', 'routes', 'auth', 'callback', 'index.tsx'),
+        'export default function Callback() {}',
+      );
 
       const result = await validateInstallation('tanstack-start', testDir, { runBuild: false });
 
@@ -450,7 +459,10 @@ describe('validateInstallation', () => {
         'WORKOS_API_KEY=sk_test_key\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=tooshort\n',
       );
       mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
-      writeFileSync(join(testDir, 'app', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
+      writeFileSync(
+        join(testDir, 'app', 'callback', 'route.ts'),
+        "import { handleAuth } from '@workos-inc/authkit-nextjs';",
+      );
       writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
       writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
 
@@ -472,7 +484,10 @@ describe('validateInstallation', () => {
         'WORKOS_API_KEY=sk_test_key\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
-      writeFileSync(join(testDir, 'app', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
+      writeFileSync(
+        join(testDir, 'app', 'callback', 'route.ts'),
+        "import { handleAuth } from '@workos-inc/authkit-nextjs';",
+      );
       writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
       writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
 
@@ -528,7 +543,10 @@ describe('validateInstallation', () => {
         'WORKOS_API_KEY=sk_test_key\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
-      writeFileSync(join(testDir, 'app', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
+      writeFileSync(
+        join(testDir, 'app', 'callback', 'route.ts'),
+        "import { handleAuth } from '@workos-inc/authkit-nextjs';",
+      );
       writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
       writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
 
@@ -553,7 +571,10 @@ describe('validateInstallation', () => {
       );
       // Middleware in wrong location (nested in app/)
       mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
-      writeFileSync(join(testDir, 'app', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
+      writeFileSync(
+        join(testDir, 'app', 'callback', 'route.ts'),
+        "import { handleAuth } from '@workos-inc/authkit-nextjs';",
+      );
       writeFileSync(join(testDir, 'app', 'middleware.ts'), 'export const authkitMiddleware = () => {};');
       writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
 
@@ -574,7 +595,10 @@ describe('validateInstallation', () => {
         'WORKOS_API_KEY=sk_test_key\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
-      writeFileSync(join(testDir, 'app', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
+      writeFileSync(
+        join(testDir, 'app', 'callback', 'route.ts'),
+        "import { handleAuth } from '@workos-inc/authkit-nextjs';",
+      );
       writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
       writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
 
@@ -594,7 +618,10 @@ describe('validateInstallation', () => {
         'WORKOS_API_KEY=sk_test_key\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       mkdirSync(join(testDir, 'src', 'app', 'callback'), { recursive: true });
-      writeFileSync(join(testDir, 'src', 'app', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
+      writeFileSync(
+        join(testDir, 'src', 'app', 'callback', 'route.ts'),
+        "import { handleAuth } from '@workos-inc/authkit-nextjs';",
+      );
       mkdirSync(join(testDir, 'src'), { recursive: true });
       writeFileSync(join(testDir, 'src', 'middleware.ts'), 'export const authkitMiddleware = () => {};');
       writeFileSync(join(testDir, 'src', 'app', 'layout.tsx'), '<AuthKitProvider>');
@@ -631,7 +658,10 @@ describe('validateInstallation', () => {
       );
       writeFileSync(join(testDir, '.env.local'), 'WORKOS_CLIENT_ID=client_test_id\n');
       mkdirSync(join(testDir, 'src'), { recursive: true });
-      writeFileSync(join(testDir, 'src', 'main.tsx'), '<AuthKitProvider clientId="client_test"><App /></AuthKitProvider>');
+      writeFileSync(
+        join(testDir, 'src', 'main.tsx'),
+        '<AuthKitProvider clientId="client_test"><App /></AuthKitProvider>',
+      );
 
       const result = await validateInstallation('react', testDir, { runBuild: false });
 
@@ -673,7 +703,10 @@ describe('validateInstallation', () => {
         'WORKOS_API_KEY=sk_test_key\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
-      writeFileSync(join(testDir, 'app', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
+      writeFileSync(
+        join(testDir, 'app', 'callback', 'route.ts'),
+        "import { handleAuth } from '@workos-inc/authkit-nextjs';",
+      );
       writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
       writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
 
@@ -694,7 +727,10 @@ describe('validateInstallation', () => {
         'WORKOS_API_KEY=sk_test_key\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
-      writeFileSync(join(testDir, 'app', 'callback', 'route.ts'), "import { handleAuth } from '@workos-inc/authkit-nextjs';");
+      writeFileSync(
+        join(testDir, 'app', 'callback', 'route.ts'),
+        "import { handleAuth } from '@workos-inc/authkit-nextjs';",
+      );
       writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
       writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
 
