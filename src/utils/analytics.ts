@@ -147,9 +147,10 @@ export class Analytics {
     const duration = Date.now() - this.sessionStartTime.getTime();
 
     // Filter out null/undefined tags
-    const extraAttributes = Object.fromEntries(
-      Object.entries(this.tags).filter(([, v]) => v != null),
-    ) as Record<string, string | number | boolean>;
+    const extraAttributes = Object.fromEntries(Object.entries(this.tags).filter(([, v]) => v != null)) as Record<
+      string,
+      string | number | boolean
+    >;
 
     const event: SessionEndEvent = {
       type: 'session.end',

@@ -90,7 +90,7 @@ yargs(hideBin(process.argv))
       void import('./src/run.js').then(({ runWizard }) =>
         runWizard(options as unknown as WizardOptions)
           .then(() => process.exit(0))
-          .catch(() => process.exit(1))
+          .catch(() => process.exit(1)),
       );
     },
   )

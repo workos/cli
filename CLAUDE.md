@@ -2,26 +2,25 @@
 
 AI-powered CLI wizard that automatically installs WorkOS AuthKit into web projects.
 
-## Monorepo Structure
+## Project Structure
 
 ```
-packages/
-├── cli/              # Main wizard CLI (@workos/authkit-wizard)
-│   ├── src/
-│   │   ├── run.ts              # Entry point, orchestrates wizard flow
-│   │   ├── lib/
-│   │   │   ├── agent-interface.ts  # Claude Agent SDK integration
-│   │   │   ├── agent-runner.ts     # Builds prompts, runs agent
-│   │   │   ├── config.ts           # Framework detection config
-│   │   │   └── constants.ts        # Integration enum, shared constants
-│   │   ├── dashboard/          # Ink/React TUI components
-│   │   ├── nextjs/             # Next.js wizard agent
-│   │   ├── react/              # React SPA wizard agent
-│   │   ├── react-router/       # React Router wizard agent
-│   │   ├── tanstack-start/     # TanStack Start wizard agent
-│   │   └── vanilla-js/         # Vanilla JS wizard agent
-│   └── settings.config.ts      # App configuration (model, URLs, etc.)
-└── llm-gateway/      # LLM API proxy (authenticates wizard requests)
+wizard/
+├── src/
+│   ├── run.ts              # Entry point, orchestrates wizard flow
+│   ├── lib/
+│   │   ├── agent-interface.ts  # Claude Agent SDK integration
+│   │   ├── agent-runner.ts     # Builds prompts, runs agent
+│   │   ├── config.ts           # Framework detection config
+│   │   └── constants.ts        # Integration enum, shared constants
+│   ├── dashboard/          # Ink/React TUI components
+│   ├── nextjs/             # Next.js wizard agent
+│   ├── react/              # React SPA wizard agent
+│   ├── react-router/       # React Router wizard agent
+│   ├── tanstack-start/     # TanStack Start wizard agent
+│   └── vanilla-js/         # Vanilla JS wizard agent
+├── bin.ts                  # CLI entry point
+└── settings.config.ts      # App configuration (model, URLs, etc.)
 ```
 
 ## Key Architecture
@@ -36,16 +35,21 @@ packages/
 The wizard supports two invocation modes:
 
 ### Regular CLI (default)
+
 ```bash
 wizard
 ```
+
 Streaming text output directly to terminal. Simple, lightweight, good for CI/scripts.
 
 ### TUI Dashboard (subcommand)
+
 ```bash
 wizard dashboard
 ```
+
 Interactive Ink/React interface with real-time panels for:
+
 - Agent thinking/reasoning
 - File changes being made
 - Tool execution status
@@ -64,21 +68,17 @@ The dashboard code lives in `src/dashboard/` and uses `WizardEventEmitter` to re
 ## Commands
 
 ```bash
-pnpm build              # Build all packages
-pnpm wizard:dev         # Dev mode for CLI (build + watch)
-pnpm gateway:dev        # Run local LLM gateway
-pnpm test               # Run tests (in packages/cli)
-pnpm typecheck          # Type check (in packages/cli)
+pnpm build        # Build the project
+pnpm dev          # Dev mode (build + watch + link)
+pnpm test         # Run tests
+pnpm typecheck    # Type check
 ```
 
 ## Testing the Wizard
 
 ```bash
-# Terminal 1: Start local gateway
-cd packages/llm-gateway && ANTHROPIC_API_KEY=sk-ant-... pnpm dev
-
-# Terminal 2: Run wizard in test project
-cd /path/to/test-app && wizard dashboard --local
+# Run wizard in a test project
+cd /path/to/test-app && wizard dashboard
 ```
 
 ## Adding a New Framework
