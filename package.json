@@ -15,7 +15,7 @@
     "sso"
   ],
   "bin": {
-    "wizard": "dist/bin.js"
+    "workos-installer": "dist/bin.js"
   },
   "publishConfig": {
     "access": "public"
