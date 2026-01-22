@@ -1,30 +1,13 @@
-import type { Settings } from './src/lib/settings.js';
+import type { InstallerConfig } from './src/lib/settings.js';
 
-export const settings = {
-  version: '1.0.0',
+export const config = {
   model: 'claude-opus-4-5-20251101',
-  cliAuth: {
-    // Production client ID - override via WORKOS_CLIENT_ID env var for dev/staging
-    clientId: 'client_01KFET29VF2PJV9BHMYJR6753Q',
-    // AuthKit domain for Connect OAuth endpoints - override via WORKOS_AUTHKIT_DOMAIN env var
-    authkitDomain: 'https://classic-jungle-88-staging.authkit.app',
-  },
 
-  gateway: {
-    development: 'https://api.workos.engineer/llm-gateway',
-    production: 'https://llm-gateway.example.com',
-    port: 8000,
-  },
-
-  api: {
-    workos: {
-      development: 'http://localhost:8000',
-      production: 'https://api.workos.com',
-    },
-    dashboard: {
-      development: 'http://localhost:3000',
-      production: 'https://dashboard.workos.com',
-    },
+  // Production defaults - override via env vars for local dev
+  workos: {
+    clientId: 'client_01KFKHSZWK9ADVJV854PDFQCCR',
+    authkitDomain: 'https://signin.workos.com',
+    llmGatewayUrl: 'https://api.workos.com/llm-gateway',
   },
 
   telemetry: {
@@ -32,7 +15,7 @@ export const settings = {
     eventName: 'wizard interaction',
   },
 
-  nodeVersion: '>=18.17.0',
+  nodeVersion: '>=20.20',
 
   logging: {
     logFile: '/tmp/authkit-wizard.log',
@@ -42,7 +25,7 @@ export const settings = {
   documentation: {
     workosDocsUrl: 'https://workos.com/docs/authkit',
     dashboardUrl: 'https://dashboard.workos.com',
-    issuesUrl: 'https://github.com/workos/authkit-wizard/issues',
+    issuesUrl: 'https://github.com/workos/installer/issues',
   },
 
   frameworks: {
@@ -92,4 +75,4 @@ export const settings = {
 ░██    ░██ ░██   ░███    ░██    ░██    ░██ ░██    ░██  ░██   ░██
 ░██    ░██  ░█████░██     ░████ ░██    ░██ ░██     ░██ ░██    ░████    `,
   },
-} as const satisfies Settings;
+} as const satisfies InstallerConfig;

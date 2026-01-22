@@ -20,7 +20,7 @@ wizard/
 │   ├── tanstack-start/     # TanStack Start wizard agent
 │   └── vanilla-js/         # Vanilla JS wizard agent
 ├── bin.ts                  # CLI entry point
-└── settings.config.ts      # App configuration (model, URLs, etc.)
+└── installer.config.ts     # App configuration (model, URLs, etc.)
 ```
 
 ## Key Architecture

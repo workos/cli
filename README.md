@@ -1,4 +1,4 @@
-# @workos/authkit-wizard
+# @workos/installer
 
 AI-powered CLI that automatically integrates WorkOS AuthKit into web applications.
 
@@ -6,11 +6,11 @@ AI-powered CLI that automatically integrates WorkOS AuthKit into web application
 
 ```bash
 # Run directly with npx (recommended)
-npx @workos/authkit-wizard
+npx @workos/installer
 
 # Or install globally
-npm install -g @workos/authkit-wizard
-authkit-wizard
+npm install -g @workos/installer
+wizard
 ```
 
 ## Features
@@ -45,7 +45,7 @@ Get your credentials from [dashboard.workos.com](https://dashboard.workos.com):
 ## CLI Options
 
 ```bash
-authkit-wizard [options] [command]
+wizard [options] [command]
 
 Commands:
   dashboard              Run wizard with visual TUI dashboard (experimental)
@@ -61,7 +61,7 @@ Options:
   --homepage-url <url>    Custom homepage URL (defaults to http://localhost:{port})
   --ci                    Non-interactive CI mode
   --install-dir <path>    Installation directory
-  --debug                 Verbose logging to /tmp/authkit-wizard.log
+  --debug                 Verbose logging to /tmp/wizard.log
   --local                 Use local LLM gateway (development only)
   --default               Use default options for all prompts (default: true)
   --skip-auth             Skip authentication check (requires --local)
@@ -74,13 +74,13 @@ Environment Variables:
 
 ```bash
 # Interactive (recommended)
-npx @workos/authkit-wizard
+npx @workos/installer
 
 # Specify framework
-npx @workos/authkit-wizard --integration react-router
+npx @workos/installer --integration react-router
 
 # CI mode
-npx @workos/authkit-wizard --ci \
+npx @workos/installer --ci \
   --integration nextjs \
   --api-key $WORKOS_API_KEY \
   --client-id $WORKOS_CLIENT_ID
@@ -92,10 +92,10 @@ The wizard uses WorkOS Connect OAuth device flow for authentication:
 
 ```bash
 # Login (opens browser for authentication)
-authkit-wizard login
+wizard login
 
 # Logout (clears stored credentials)
-authkit-wizard logout
+wizard logout
 ```
 
 Credentials are stored in `~/.wizard/credentials.json`. Access tokens are not persisted long-term for security - users re-authenticate when tokens expire.
@@ -123,7 +123,7 @@ The wizard collects anonymous usage telemetry to help improve the product:
 No code, credentials, or personal data is collected. Disable with:
 
 ```bash
-WIZARD_TELEMETRY=false npx @workos/authkit-wizard
+WIZARD_TELEMETRY=false npx @workos/installer
 ```
 
 ## Logs
@@ -131,14 +131,14 @@ WIZARD_TELEMETRY=false npx @workos/authkit-wizard
 Detailed logs (with redacted credentials) are saved to:
 
 ```
-/tmp/authkit-wizard.log
+/tmp/wizard.log
 ```
 
 Use `--debug` flag for verbose terminal output.
 
 ## Development
 
-See the [monorepo root README](../../README.md) for development setup.
+See [DEVELOPMENT.md](./DEVELOPMENT.md) for development setup.
 
 Build:
 

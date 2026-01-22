@@ -1,13 +1,21 @@
 #!/usr/bin/env node
+
+// Load .env.local for local development when --local flag is used
+if (process.argv.includes('--local') || process.env.WIZARD_DEV) {
+  const { config } = await import('dotenv');
+  // bin.ts compiles to dist/bin.js, so go up one level to find .env.local
+  config({ path: new URL('../.env.local', import.meta.url).pathname });
+}
+
 import { satisfies } from 'semver';
 import { red } from './src/utils/logging.js';
-import { getSettings } from './src/lib/settings.js';
+import { getConfig } from './src/lib/settings.js';
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import chalk from 'chalk';
 
-const NODE_VERSION_RANGE = getSettings().nodeVersion;
+const NODE_VERSION_RANGE = getConfig().nodeVersion;
 
 // Have to run this above the other imports because they are importing clack that
 // has the problematic imports.

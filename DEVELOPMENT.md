@@ -30,7 +30,7 @@ wizard/
 │       ├── package-manager.ts    # Package manager detection
 │       └── ...                   # Additional utilities
 ├── bin.ts                    # CLI entry point
-├── settings.config.ts        # App configuration (model, URLs)
+├── installer.config.ts       # App configuration (model, URLs)
 ├── tsconfig.json             # TypeScript config
 └── package.json              # Dependencies and scripts
 ```

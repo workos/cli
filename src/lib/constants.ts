@@ -1,4 +1,4 @@
-import { getSettings } from './settings.js';
+import { getConfig } from './settings.js';
 
 export enum Integration {
   nextjs = 'nextjs',
@@ -44,7 +44,7 @@ export interface Args {
 
 export const IS_DEV = ['test', 'development'].includes(process.env.NODE_ENV ?? '');
 
-const settings = getSettings();
+const settings = getConfig();
 
 export const DEBUG = settings.logging.debugMode;
 export const WORKOS_DOCS_URL = settings.documentation.workosDocsUrl;

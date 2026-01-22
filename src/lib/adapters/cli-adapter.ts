@@ -2,7 +2,7 @@ import type { WizardAdapter, AdapterConfig } from './types.js';
 import type { WizardEventEmitter, WizardEvents } from '../events.js';
 import clack from '../../utils/clack.js';
 import chalk from 'chalk';
-import { getSettings } from '../settings.js';
+import { getConfig } from '../settings.js';
 
 /**
  * CLI adapter that renders wizard events via clack.
@@ -54,9 +54,9 @@ export class CLIAdapter implements WizardAdapter {
     this.isStarted = true;
 
     // Show intro
-    const settings = getSettings();
-    if (settings.branding.showAsciiArt) {
-      console.log(chalk.cyan(settings.branding.asciiArt));
+    const config = getConfig();
+    if (config.branding.showAsciiArt) {
+      console.log(chalk.cyan(config.branding.asciiArt));
       console.log();
     } else {
       clack.intro('Welcome to the WorkOS AuthKit setup wizard');

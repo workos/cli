@@ -1,11 +1,11 @@
-import { IS_DEV } from '../lib/constants.js';
-import { getSettings } from '../lib/settings.js';
+import { getLlmGatewayUrl } from '../lib/settings.js';
 
-const settings = getSettings();
+/**
+ * Get URLs. Env vars override config defaults.
+ */
 
-export const getWorkOSApiUrl = () => (IS_DEV ? settings.api.workos.development : settings.api.workos.production);
+export const getWorkOSApiUrl = () => process.env.WORKOS_API_URL || 'https://api.workos.com';
 
-export const getWorkOSDashboardUrl = () =>
-  IS_DEV ? settings.api.dashboard.development : settings.api.dashboard.production;
+export const getWorkOSDashboardUrl = () => process.env.WORKOS_DASHBOARD_URL || 'https://dashboard.workos.com';
 
-export const getLlmGatewayUrlFromHost = () => (IS_DEV ? settings.gateway.development : settings.gateway.production);
+export const getLlmGatewayUrlFromHost = getLlmGatewayUrl;

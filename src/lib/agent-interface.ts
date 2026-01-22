@@ -11,7 +11,7 @@ import { analytics } from '../utils/analytics.js';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants.js';
 import { LINTING_TOOLS } from './safe-tools.js';
 import { getLlmGatewayUrlFromHost } from '../utils/urls.js';
-import { getSettings } from './settings.js';
+import { getConfig } from './settings.js';
 import { getCredentials, hasCredentials } from './credentials.js';
 import { ensureValidToken } from './token-refresh.js';
 import type { WizardEventEmitter } from './events.js';
@@ -248,11 +248,8 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
   options.emitter?.emit('status', { message: 'Initializing Claude agent...' });
 
   try {
-    // Configure LLM gateway for Claude API calls
-    // Local testing: use localhost LLM gateway
-    // Production: use WorkOS production gateway
-    const settings = getSettings();
-    const gatewayUrl = options.local ? settings.gateway.development : getLlmGatewayUrlFromHost();
+    // Configure LLM gateway for Claude API calls via LLM_GATEWAY_URL env var
+    const gatewayUrl = getLlmGatewayUrlFromHost();
 
     // Check/refresh authentication for production (unless skipping auth)
     if (!options.skipAuth && !options.local) {
@@ -302,7 +299,7 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
           args: ['-y', '@workos/mcp-docs-server'],
         },
       },
-      model: settings.model,
+      model: getConfig().model,
       allowedTools: ['Skill', 'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch'],
     };
 
