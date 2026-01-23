@@ -48,6 +48,19 @@ export interface WizardEvents {
   'credentials:env:scanning': Record<string, never>;
   'credentials:env:found': { source: string; hasApiKey: boolean };
   'credentials:env:notfound': Record<string, never>;
+
+  // Device authorization flow events
+  'device:started': { verificationUri: string; userCode: string; verificationUriComplete: string };
+  'device:polling': Record<string, never>;
+  'device:slowdown': { newIntervalMs: number };
+  'device:success': { email?: string };
+  'device:timeout': Record<string, never>;
+  'device:error': { message: string };
+
+  // Staging credentials API events
+  'staging:fetching': Record<string, never>;
+  'staging:success': Record<string, never>;
+  'staging:error': { message: string; statusCode?: number };
 }
 
 export type WizardEventName = keyof WizardEvents;

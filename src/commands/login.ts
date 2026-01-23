@@ -2,66 +2,7 @@ import open from 'opn';
 import clack from '../utils/clack.js';
 import { saveCredentials, getCredentials, getAccessToken } from '../lib/credentials.js';
 import { getCliAuthClientId, getAuthkitDomain } from '../lib/settings.js';
-
-/**
- * Parse JWT payload
- */
-function parseJwt(token: string): Record<string, unknown> | null {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    return JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8'));
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Extract expiry time from JWT token
- */
-function getJwtExpiry(token: string): number | null {
-  const payload = parseJwt(token);
-  if (!payload || typeof payload.exp !== 'number') return null;
-  return payload.exp * 1000;
-}
-
-const POLL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-
-/**
- * Get Connect OAuth endpoints from AuthKit domain
- */
-function getConnectEndpoints() {
-  const domain = getAuthkitDomain();
-  return {
-    deviceAuthorization: `${domain}/oauth2/device_authorization`,
-    token: `${domain}/oauth2/token`,
-  };
-}
-
-interface DeviceAuthResponse {
-  device_code: string;
-  user_code: string;
-  verification_uri: string;
-  verification_uri_complete: string;
-  expires_in: number;
-  interval: number;
-}
-
-interface ConnectTokenResponse {
-  access_token: string;
-  id_token: string;
-  token_type: string;
-  expires_in: number;
-  refresh_token?: string;
-}
-
-interface AuthErrorResponse {
-  error: string;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+import { startDeviceAuth, DeviceAuthError } from '../lib/device-auth.js';
 
 export async function runLogin(): Promise<void> {
   const clientId = getCliAuthClientId();
@@ -80,105 +21,50 @@ export async function runLogin(): Promise<void> {
 
   clack.log.step('Starting authentication...');
 
-  const endpoints = getConnectEndpoints();
-
-  const authResponse = await fetch(endpoints.deviceAuthorization, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({
-      client_id: clientId,
-    }),
-  });
-
-  if (!authResponse.ok) {
-    clack.log.error(`Failed to start authentication: ${authResponse.status}`);
-    process.exit(1);
-  }
-
-  const deviceAuth = (await authResponse.json()) as DeviceAuthResponse;
-  const pollIntervalMs = (deviceAuth.interval || 5) * 1000;
-
-  clack.log.info(`\nOpen this URL in your browser:\n`);
-  console.log(`  ${deviceAuth.verification_uri}`);
-  console.log(`\nEnter code: ${deviceAuth.user_code}\n`);
-
   try {
-    open(deviceAuth.verification_uri_complete);
-    clack.log.info('Browser opened automatically');
-  } catch {
-    // User can open manually
-  }
+    const { deviceAuth, poll } = await startDeviceAuth({
+      clientId,
+      authkitDomain: getAuthkitDomain(),
+    });
 
-  const spinner = clack.spinner();
-  spinner.start('Waiting for authentication...');
-
-  const startTime = Date.now();
-  let currentInterval = pollIntervalMs;
-
-  while (Date.now() - startTime < POLL_TIMEOUT_MS) {
-    await sleep(currentInterval);
+    clack.log.info(`\nOpen this URL in your browser:\n`);
+    console.log(`  ${deviceAuth.verification_uri}`);
+    console.log(`\nEnter code: ${deviceAuth.user_code}\n`);
 
     try {
-      const tokenResponse = await fetch(endpoints.token, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-          device_code: deviceAuth.device_code,
-          client_id: clientId,
-        }),
-      });
-
-      const data = await tokenResponse.json();
-
-      if (tokenResponse.ok) {
-        const result = data as ConnectTokenResponse;
-
-        // Parse user info from id_token JWT
-        const idTokenPayload = parseJwt(result.id_token);
-        const userId = (idTokenPayload?.sub as string) || 'unknown';
-        const email = (idTokenPayload?.email as string) || undefined;
-
-        // Extract actual expiry from access token JWT, fallback to response or 15 min
-        const jwtExpiry = getJwtExpiry(result.access_token);
-        const expiresAt =
-          jwtExpiry ?? (result.expires_in ? Date.now() + result.expires_in * 1000 : Date.now() + 15 * 60 * 1000);
-
-        const expiresInSec = Math.round((expiresAt - Date.now()) / 1000);
-
-        saveCredentials({
-          accessToken: result.access_token,
-          expiresAt,
-          userId,
-          email,
-        });
-
-        spinner.stop('Authentication successful!');
-        clack.log.success(`Logged in as ${email || userId}`);
-        clack.log.info(`Token expires in ${expiresInSec} seconds`);
-        return;
-      }
-
-      const errorData = data as AuthErrorResponse;
-      if (errorData.error === 'authorization_pending') continue;
-      if (errorData.error === 'slow_down') {
-        currentInterval += 5000;
-        continue;
-      }
-
-      spinner.stop('Authentication failed');
-      clack.log.error(`Authentication error: ${errorData.error}`);
-      process.exit(1);
+      open(deviceAuth.verification_uri_complete);
+      clack.log.info('Browser opened automatically');
     } catch {
-      continue;
+      // User can open manually
     }
-  }
 
-  spinner.stop('Authentication timed out');
-  clack.log.error('Authentication timed out. Please try again.');
-  process.exit(1);
+    const spinner = clack.spinner();
+    spinner.start('Waiting for authentication...');
+
+    const result = await poll();
+
+    const expiresInSec = Math.round((result.expiresAt - Date.now()) / 1000);
+
+    saveCredentials({
+      accessToken: result.accessToken,
+      expiresAt: result.expiresAt,
+      userId: result.userId,
+      email: result.email,
+    });
+
+    spinner.stop('Authentication successful!');
+    clack.log.success(`Logged in as ${result.email || result.userId}`);
+    clack.log.info(`Token expires in ${expiresInSec} seconds`);
+  } catch (error) {
+    if (error instanceof DeviceAuthError) {
+      if (error.message.includes('timed out')) {
+        clack.log.error('Authentication timed out. Please try again.');
+      } else {
+        clack.log.error(`Authentication error: ${error.message}`);
+      }
+    } else {
+      clack.log.error(`Unexpected error: ${error instanceof Error ? error.message : 'Unknown'}`);
+    }
+    process.exit(1);
+  }
 }

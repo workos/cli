@@ -7,6 +7,12 @@ export interface Credentials {
   expiresAt: number;
   userId: string;
   email?: string;
+  // Cached staging credentials
+  staging?: {
+    clientId: string;
+    apiKey: string;
+    fetchedAt: number;
+  };
 }
 
 function getCredentialsDir(): string {
@@ -62,4 +68,31 @@ export function getAccessToken(): string | null {
   if (!creds) return null;
   if (isTokenExpired(creds)) return null;
   return creds.accessToken;
+}
+
+/**
+ * Save staging credentials alongside existing auth credentials.
+ */
+export function saveStagingCredentials(staging: { clientId: string; apiKey: string }): void {
+  const creds = getCredentials();
+  if (!creds) return;
+
+  saveCredentials({
+    ...creds,
+    staging: {
+      ...staging,
+      fetchedAt: Date.now(),
+    },
+  });
+}
+
+/**
+ * Get cached staging credentials if available and auth token is valid.
+ */
+export function getStagingCredentials(): { clientId: string; apiKey: string } | null {
+  const creds = getCredentials();
+  if (!creds?.staging) return null;
+  // Invalidate if access token expired
+  if (isTokenExpired(creds)) return null;
+  return { clientId: creds.staging.clientId, apiKey: creds.staging.apiKey };
 }
