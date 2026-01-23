@@ -40,6 +40,14 @@ export interface WizardEvents {
   'validation:start': { framework: string };
   'validation:issues': { issues: import('./validation/types.js').ValidationIssue[] };
   'validation:complete': { passed: boolean; issueCount: number; durationMs: number };
+
+  // Credential discovery events
+  'credentials:env:detected': { files: string[] };
+  'credentials:env:prompt': { files: string[] };
+  'credentials:env:consent': { approved: boolean };
+  'credentials:env:scanning': Record<string, never>;
+  'credentials:env:found': { source: string; hasApiKey: boolean };
+  'credentials:env:notfound': Record<string, never>;
 }
 
 export type WizardEventName = keyof WizardEvents;
