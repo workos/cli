@@ -3,6 +3,7 @@ import type { WizardEventEmitter, WizardEvents } from '../events.js';
 import clack from '../../utils/clack.js';
 import chalk from 'chalk';
 import { getConfig } from '../settings.js';
+import { ProgressTracker } from '../progress-tracker.js';
 
 /**
  * CLI adapter that renders wizard events via clack.
@@ -16,6 +17,7 @@ export class CLIAdapter implements WizardAdapter {
   private debug: boolean;
   private spinner: ReturnType<typeof clack.spinner> | null = null;
   private isStarted = false;
+  private progress = new ProgressTracker();
 
   // Store bound handlers for cleanup
   private handlers = new Map<string, (...args: unknown[]) => void>();
@@ -56,11 +58,16 @@ export class CLIAdapter implements WizardAdapter {
     // Show intro
     const config = getConfig();
     if (config.branding.showAsciiArt) {
-      console.log(chalk.cyan(config.branding.asciiArt));
+      const art = config.branding.useCompact ? config.branding.compactAsciiArt : config.branding.asciiArt;
+      console.log(chalk.cyan(art));
       console.log();
     } else {
       clack.intro('Welcome to the WorkOS AuthKit setup wizard');
     }
+
+    // Subscribe to state events for progress tracking
+    this.subscribe('state:enter', this.handleStateEnter);
+    this.subscribe('state:exit', this.handleStateExit);
 
     // Subscribe to all events
     this.subscribe('auth:checking', this.handleAuthChecking);
@@ -115,6 +122,18 @@ export class CLIAdapter implements WizardAdapter {
   }
 
   // ===== Event Handlers =====
+
+  private handleStateEnter = ({ state }: WizardEvents['state:enter']): void => {
+    this.progress.enterPhase(state);
+    const indicator = this.progress.getCurrentIndicator();
+    if (indicator) {
+      clack.log.step(chalk.cyan(indicator));
+    }
+  };
+
+  private handleStateExit = ({ state }: WizardEvents['state:exit']): void => {
+    this.progress.exitPhase(state);
+  };
 
   private handleAuthChecking = (): void => {
     clack.log.step('Checking authentication...');

@@ -57,6 +57,8 @@ export const config = {
 
   branding: {
     showAsciiArt: true,
+    useCompact: true,
+    compactAsciiArt: `⚡ WorkOS AuthKit Wizard`,
     asciiArt: `░██       ░██                     ░██         ░██████     ░██████
 ░██       ░██                     ░██        ░██   ░██   ░██   ░██
 ░██  ░██  ░██  ░███████  ░██░████ ░██    ░██░██     ░██ ░██
