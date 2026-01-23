@@ -28,9 +28,9 @@ Check `.env.local` for:
 
 ## Step 3: Install SDK
 
-Detect package manager, install `@workos-inc/authkit-nextjs`.
+Detect package manager, install SDK package from README.
 
-**Verify:** `node_modules/@workos-inc/authkit-nextjs` exists before continuing.
+**Verify:** SDK package exists in node_modules before continuing.
 
 ## Step 4: Version Detection (Decision Tree)
 
@@ -98,9 +98,9 @@ All checks must pass before marking complete.
 - Check: Component has no `'use client'` directive, or
 - Check: Move auth logic to server component/API route
 
-### "Module not found: @workos-inc/authkit-nextjs"
+### "Module not found" for SDK import
 - Check: SDK installed before writing imports
-- Check: `node_modules/@workos-inc/authkit-nextjs` directory exists
+- Check: SDK package directory exists in node_modules
 
 ### "withAuth route not covered by middleware"
 - Check: Middleware/proxy file exists at correct location

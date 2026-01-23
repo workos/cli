@@ -72,7 +72,7 @@ Required in `.env` or `.env.local`:
 
 After implementation, verify:
 
-- [ ] SDK installed: `node_modules/@workos-inc/authkit-react-router` exists
+- [ ] SDK installed in node_modules (package name from README)
 - [ ] Callback route path matches `WORKOS_REDIRECT_URI` path segment
 - [ ] Auth loader/provider on root route (not just child routes)
 - [ ] Build succeeds: `npm run build` exits 0

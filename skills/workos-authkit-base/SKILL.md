@@ -63,7 +63,7 @@ Note: Some frameworks use prefixed variants (e.g., `NEXT_PUBLIC_*`). Check READM
 ## Verification Checklists
 
 ### After Install
-- [ ] `node_modules/@workos-inc/authkit-*` exists
+- [ ] SDK package installed in node_modules
 - [ ] No install errors in output
 
 ### After Callback Route
@@ -86,7 +86,7 @@ Note: Some frameworks use prefixed variants (e.g., `NEXT_PUBLIC_*`). Check READM
 
 ### Module not found
 - [ ] Verify install completed successfully
-- [ ] Check `node_modules/@workos-inc` exists
+- [ ] Verify SDK exists in node_modules
 - [ ] Re-run install if missing
 
 ### Build import errors
