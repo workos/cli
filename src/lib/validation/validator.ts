@@ -124,13 +124,23 @@ async function validateEnvVars(rules: ValidationRules, projectDir: string, issue
   }
 
   for (const rule of rules.envVars) {
-    const pattern = new RegExp(`^${rule.name}=.+`, 'm');
-    if (!pattern.test(envContent)) {
+    // Check primary name and any alternates
+    const varsToCheck = [rule.name, ...(rule.alternates || [])];
+    const found = varsToCheck.some((varName) => {
+      const pattern = new RegExp(`^${varName}=.+`, 'm');
+      return pattern.test(envContent);
+    });
+
+    if (!found) {
+      const hint = rule.alternates
+        ? `Add ${rule.name} (or one of: ${rule.alternates.join(', ')}) to .env.local`
+        : `Add ${rule.name}=your_value to .env.local`;
+
       issues.push({
         type: 'env',
         severity: rule.required === false ? 'warning' : 'error',
         message: `Missing environment variable: ${rule.name}`,
-        hint: `Add ${rule.name}=your_value to .env.local`,
+        hint,
       });
     }
   }

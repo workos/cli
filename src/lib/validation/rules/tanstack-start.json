@@ -1,6 +1,23 @@
 {
   "framework": "tanstack-start",
-  "packages": [{ "name": "@tanstack/react-start", "location": "dependencies" }],
-  "envVars": [{ "name": "WORKOS_API_KEY" }, { "name": "WORKOS_CLIENT_ID" }, { "name": "WORKOS_COOKIE_PASSWORD" }],
-  "files": []
+  "packages": [
+    { "name": "@workos-inc/authkit-tanstack-start", "location": "dependencies" },
+    { "name": "@tanstack/start", "location": "any" }
+  ],
+  "envVars": [
+    { "name": "WORKOS_API_KEY" },
+    { "name": "WORKOS_CLIENT_ID" },
+    { "name": "WORKOS_REDIRECT_URI" },
+    { "name": "WORKOS_COOKIE_PASSWORD" }
+  ],
+  "files": [
+    {
+      "path": "app/routes/**/*callback*.{ts,tsx}",
+      "mustContainAny": ["handleCallback", "@workos-inc/authkit-tanstack-start"]
+    },
+    {
+      "path": "app/**/*.{ts,tsx}",
+      "mustContainAny": ["getUser", "getSignInUrl", "signOut", "createServerFn"]
+    }
+  ]
 }

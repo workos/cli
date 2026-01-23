@@ -24,6 +24,7 @@ export interface PackageRule {
 export interface EnvVarRule {
   name: string;
   required?: boolean; // default: true
+  alternates?: string[]; // alternate env var names (e.g., VITE_WORKOS_CLIENT_ID)
 }
 
 export interface FileRule {
