@@ -4,7 +4,6 @@ import clack from '../../utils/clack.js';
 import chalk from 'chalk';
 import { getConfig } from '../settings.js';
 import { ProgressTracker } from '../progress-tracker.js';
-import { styled } from '../../utils/cli-symbols.js';
 
 /**
  * CLI adapter that renders wizard events via clack.
@@ -79,9 +78,8 @@ export class CLIAdapter implements WizardAdapter {
         this.spinner = null;
       }
       this.stopAgentUpdates();
-      console.log();
-      console.log(styled.warning('Wizard cancelled'));
-      console.log(styled.info('Your project was not modified'));
+      clack.log.warn('Wizard cancelled');
+      clack.outro('Your project was not modified');
       process.exit(0);
     };
     process.on('SIGINT', handleSigInt);
@@ -147,6 +145,13 @@ export class CLIAdapter implements WizardAdapter {
     }
   };
 
+  /** Debug logging - only outputs when debug mode is enabled */
+  private debugLog = (message: string): void => {
+    if (this.debug) {
+      console.log(chalk.dim(`[debug] ${message}`));
+    }
+  };
+
   /**
    * Helper to subscribe and track handlers for cleanup.
    */
@@ -163,10 +168,7 @@ export class CLIAdapter implements WizardAdapter {
 
   private handleStateEnter = ({ state }: WizardEvents['state:enter']): void => {
     this.progress.enterPhase(state);
-    const phase = this.progress.getCurrentPhase();
-    if (phase) {
-      clack.log.step(styled.phase(phase.number, 5, phase.name));
-    }
+    // Phase transitions are silent - success messages indicate progress
   };
 
   private handleStateExit = ({ state }: WizardEvents['state:exit']): void => {
@@ -182,12 +184,12 @@ export class CLIAdapter implements WizardAdapter {
   };
 
   private handleAuthSuccess = (): void => {
-    console.log(styled.success('Authenticated'));
+    clack.log.success('Authenticated');
   };
 
   private handleAuthFailure = ({ message }: WizardEvents['auth:failure']): void => {
-    console.log(styled.error(`Auth failed: ${message}`));
-    console.log(styled.info('Visit https://dashboard.workos.com to verify your account'));
+    clack.log.error(`Auth failed: ${message}`);
+    clack.log.info('Visit https://dashboard.workos.com to verify your account');
   };
 
   private handleDetectionStart = (): void => {
@@ -195,11 +197,11 @@ export class CLIAdapter implements WizardAdapter {
   };
 
   private handleDetectionComplete = ({ integration }: WizardEvents['detection:complete']): void => {
-    this.queueableLog(() => console.log(styled.success(`Detected ${chalk.bold(integration)}`)));
+    this.queueableLog(() => clack.log.success(`Detected ${chalk.bold(integration)}`));
   };
 
   private handleDetectionNone = (): void => {
-    this.queueableLog(() => console.log(styled.warning('Could not detect framework automatically')));
+    this.queueableLog(() => clack.log.warn('Could not detect framework automatically'));
   };
 
   private handleGitChecking = (): void => {
@@ -211,7 +213,7 @@ export class CLIAdapter implements WizardAdapter {
   };
 
   private handleCredentialsFound = (): void => {
-    console.log(styled.success('Found existing WorkOS credentials in .env.local'));
+    clack.log.success('Found existing WorkOS credentials in .env.local');
   };
 
   private handleGitDirty = async ({ files }: WizardEvents['git:dirty']): Promise<void> => {
@@ -297,7 +299,7 @@ export class CLIAdapter implements WizardAdapter {
   };
 
   private handleConfigComplete = (): void => {
-    console.log(styled.success('Environment configured'));
+    clack.log.success('Environment configured');
   };
 
   private handleAgentStart = (): void => {
@@ -330,21 +332,21 @@ export class CLIAdapter implements WizardAdapter {
   private handleValidationIssues = ({ issues }: WizardEvents['validation:issues']): void => {
     for (const issue of issues) {
       if (issue.severity === 'error') {
-        console.log(styled.error(issue.message));
+        clack.log.error(issue.message);
       } else {
-        console.log(styled.warning(issue.message));
+        clack.log.warn(issue.message);
       }
       if (issue.hint) {
-        console.log(styled.info(`Hint: ${issue.hint}`));
+        clack.log.info(`Hint: ${issue.hint}`);
       }
     }
   };
 
   private handleValidationComplete = ({ passed, issueCount }: WizardEvents['validation:complete']): void => {
     if (passed) {
-      console.log(styled.success('Validation passed'));
+      clack.log.success('Validation passed');
     } else {
-      console.log(styled.warning(`Validation found ${issueCount} issue(s)`));
+      clack.log.warn(`Validation found ${issueCount} issue(s)`);
     }
   };
 
@@ -356,23 +358,18 @@ export class CLIAdapter implements WizardAdapter {
       this.spinner = null;
     }
 
-    console.log();
-
     if (success) {
-      console.log(styled.success('WorkOS AuthKit installed!'));
-      console.log();
-      console.log('Next steps:');
-      console.log(styled.bullet('Start dev server to test authentication'));
-      console.log(styled.bullet('Visit WorkOS Dashboard to manage users'));
-      console.log();
-      console.log(styled.info('Docs: https://workos.com/docs/authkit'));
+      clack.log.success('WorkOS AuthKit installed!');
+      clack.log.message('Next steps:');
+      clack.log.message('  • Start dev server to test authentication');
+      clack.log.message('  • Visit WorkOS Dashboard to manage users');
+      clack.outro(chalk.dim('Docs: https://workos.com/docs/authkit'));
     } else {
-      console.log(styled.error('Installation failed'));
+      clack.log.error('Installation failed');
       if (summary) {
-        console.log(styled.info(summary));
+        clack.log.info(summary);
       }
-      console.log();
-      console.log(styled.info('Report issues: https://github.com/workos/installer/issues'));
+      clack.outro(chalk.dim('Report issues: https://github.com/workos/installer/issues'));
     }
   };
 
@@ -383,18 +380,18 @@ export class CLIAdapter implements WizardAdapter {
     }
     this.stopAgentUpdates();
 
-    console.log(styled.error(message));
+    clack.log.error(message);
 
     // Add actionable hints for common errors
     if (message.includes('authentication') || message.includes('auth')) {
-      console.log(styled.info('Try running: wizard logout && wizard'));
+      clack.log.info('Try running: wizard logout && wizard');
     }
     if (message.includes('ENOENT') || message.includes('not found')) {
-      console.log(styled.info('Ensure you are in a project directory'));
+      clack.log.info('Ensure you are in a project directory');
     }
 
     if (stack && this.debug) {
-      console.log(chalk.dim(stack));
+      this.debugLog(stack);
     }
   };
 }

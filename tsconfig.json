@@ -19,7 +19,6 @@
 
     // Interop
     "esModuleInterop": true,
-    "resolveJsonModule": true,
     "skipLibCheck": true,
 
     // ESM module system

@@ -15,6 +15,7 @@ vi.mock('../../../utils/clack.js', () => ({
       warn: vi.fn(),
       error: vi.fn(),
       info: vi.fn(),
+      message: vi.fn(),
     },
     spinner: vi.fn(() => ({
       start: vi.fn(),
@@ -84,11 +85,12 @@ describe('CLIAdapter', () => {
   describe('start', () => {
     it('subscribes to events on start', async () => {
       await adapter.start();
+      const clack = await import('../../../utils/clack.js');
 
-      // Emit auth:success - this one outputs via console.log
+      // Emit auth:success - uses clack.log.success
       emitter.emit('auth:success', {});
 
-      expect(mockConsoleLog).toHaveBeenCalledWith('✓ Authenticated');
+      expect(clack.default.log.success).toHaveBeenCalledWith('Authenticated');
     });
 
     it('shows intro on start', async () => {
@@ -132,13 +134,12 @@ describe('CLIAdapter', () => {
   describe('event handling', () => {
     it('shows detection complete message', async () => {
       await adapter.start();
+      const clack = await import('../../../utils/clack.js');
 
       emitter.emit('detection:complete', { integration: 'nextjs' });
 
-      // Now uses console.log with styled.success
-      expect(mockConsoleLog).toHaveBeenCalled();
-      const calls = mockConsoleLog.mock.calls.flat();
-      expect(calls.some((c) => typeof c === 'string' && c.includes('Detected') && c.includes('nextjs'))).toBe(true);
+      // Uses clack.log.success
+      expect(clack.default.log.success).toHaveBeenCalled();
     });
 
     it('shows spinner on agent:start', async () => {
@@ -223,22 +224,26 @@ describe('CLIAdapter', () => {
 
     it('shows success outro on complete', async () => {
       await adapter.start();
+      const clack = await import('../../../utils/clack.js');
 
       emitter.emit('complete', { success: true, summary: 'All done!' });
 
-      // New completion handler uses styled output, not clack.outro
-      expect(mockConsoleLog).toHaveBeenCalledWith('✓ WorkOS AuthKit installed!');
-      expect(mockConsoleLog).toHaveBeenCalledWith('Next steps:');
+      // Uses clack.log for output
+      expect(clack.default.log.success).toHaveBeenCalledWith('WorkOS AuthKit installed!');
+      expect(clack.default.log.message).toHaveBeenCalledWith('Next steps:');
+      expect(clack.default.outro).toHaveBeenCalled();
     });
 
     it('shows error on failure complete', async () => {
       await adapter.start();
+      const clack = await import('../../../utils/clack.js');
 
       emitter.emit('complete', { success: false, summary: 'Something went wrong' });
 
-      // New completion handler uses styled.error and styled.info
-      expect(mockConsoleLog).toHaveBeenCalledWith('✗ Installation failed');
-      expect(mockConsoleLog).toHaveBeenCalledWith('ℹ Something went wrong');
+      // Uses clack.log for output
+      expect(clack.default.log.error).toHaveBeenCalledWith('Installation failed');
+      expect(clack.default.log.info).toHaveBeenCalledWith('Something went wrong');
+      expect(clack.default.outro).toHaveBeenCalled();
     });
   });
 });
