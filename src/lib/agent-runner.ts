@@ -51,8 +51,13 @@ export async function runAgentWizard(config: FrameworkConfig, options: WizardOpt
   // Get WorkOS credentials (API key optional for client-only SDKs)
   const { apiKey, clientId } = await getOrAskForWorkOSCredentials(options, config.environment.requiresApiKey);
 
+  // Check if caller (state machine) already configured WorkOS environment
+  // If credentials were passed via options, the caller handled config+env writing
+  const callerHandledConfig = Boolean(options.apiKey || options.clientId);
+
   // Auto-configure WorkOS environment (redirect URI, CORS, homepage)
-  if (apiKey && config.environment.requiresApiKey) {
+  // Skip if caller already handled this (prevents duplicate dashboard config output)
+  if (!callerHandledConfig && apiKey && config.environment.requiresApiKey) {
     const port = detectPort(config.metadata.integration, options.installDir);
     await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, port, {
       homepageUrl: options.homepageUrl,
@@ -64,20 +69,22 @@ export async function runAgentWizard(config: FrameworkConfig, options: WizardOpt
   const frameworkContext = config.metadata.gatherContext ? await config.metadata.gatherContext(options) : {};
 
   // Write environment variables to .env.local BEFORE agent runs
-  // This prevents credentials from appearing in agent prompts
-  const port = detectPort(config.metadata.integration, options.installDir);
-  const callbackPath = getCallbackPath(config.metadata.integration);
-  const redirectUri = options.redirectUri || `http://localhost:${port}${callbackPath}`;
+  // Skip if caller already handled this (prevents double-writing)
+  if (!callerHandledConfig) {
+    const port = detectPort(config.metadata.integration, options.installDir);
+    const callbackPath = getCallbackPath(config.metadata.integration);
+    const redirectUri = options.redirectUri || `http://localhost:${port}${callbackPath}`;
 
-  // Next.js requires NEXT_PUBLIC_ prefix for client-side env vars
-  const redirectUriKey =
-    config.metadata.integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
+    // Next.js requires NEXT_PUBLIC_ prefix for client-side env vars
+    const redirectUriKey =
+      config.metadata.integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
 
-  writeEnvLocal(options.installDir, {
-    ...(apiKey ? { WORKOS_API_KEY: apiKey } : {}),
-    WORKOS_CLIENT_ID: clientId,
-    [redirectUriKey]: redirectUri,
-  });
+    writeEnvLocal(options.installDir, {
+      ...(apiKey ? { WORKOS_API_KEY: apiKey } : {}),
+      WORKOS_CLIENT_ID: clientId,
+      [redirectUriKey]: redirectUri,
+    });
+  }
 
   // Set analytics tags from framework context
   const contextTags = config.analytics.getTags(frameworkContext);

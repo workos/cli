@@ -4,6 +4,7 @@ import clack from '../../utils/clack.js';
 import chalk from 'chalk';
 import { getConfig } from '../settings.js';
 import { ProgressTracker } from '../progress-tracker.js';
+import { styled } from '../../utils/cli-symbols.js';
 
 /**
  * CLI adapter that renders wizard events via clack.
@@ -136,31 +137,31 @@ export class CLIAdapter implements WizardAdapter {
   };
 
   private handleAuthChecking = (): void => {
-    clack.log.step('Checking authentication...');
+    // Progress tracker shows phase, minimal output needed
   };
 
   private handleAuthRequired = (): void => {
-    clack.log.step('Authentication required');
+    // Progress tracker shows phase, minimal output needed
   };
 
   private handleAuthSuccess = (): void => {
-    clack.log.success('Authenticated');
+    console.log(styled.success('Authenticated'));
   };
 
   private handleAuthFailure = ({ message }: WizardEvents['auth:failure']): void => {
-    clack.log.error(`Authentication failed: ${message}`);
+    console.log(styled.error(`Authentication failed: ${message}`));
   };
 
   private handleDetectionStart = (): void => {
-    this.queueableLog(() => clack.log.step('Detecting framework...'));
+    // Progress tracker shows phase, no-op here
   };
 
   private handleDetectionComplete = ({ integration }: WizardEvents['detection:complete']): void => {
-    this.queueableLog(() => clack.log.success(`Detected: ${integration}`));
+    this.queueableLog(() => console.log(styled.success(`Detected ${chalk.bold(integration)}`)));
   };
 
   private handleDetectionNone = (): void => {
-    this.queueableLog(() => clack.log.warn('Could not detect framework automatically'));
+    this.queueableLog(() => console.log(styled.warning('Could not detect framework automatically')));
   };
 
   private handleGitChecking = (): void => {
@@ -172,7 +173,7 @@ export class CLIAdapter implements WizardAdapter {
   };
 
   private handleCredentialsFound = (): void => {
-    clack.log.success('Found existing WorkOS credentials in .env.local');
+    console.log(styled.success('Found existing WorkOS credentials in .env.local'));
   };
 
   private handleGitDirty = async ({ files }: WizardEvents['git:dirty']): Promise<void> => {
@@ -254,11 +255,11 @@ export class CLIAdapter implements WizardAdapter {
   };
 
   private handleConfigStart = (): void => {
-    clack.log.step('Configuring environment...');
+    // Progress tracker shows phase, minimal output needed
   };
 
   private handleConfigComplete = (): void => {
-    clack.log.success('Environment configured');
+    console.log(styled.success('Environment configured'));
   };
 
   private handleAgentStart = (): void => {
@@ -276,24 +277,27 @@ export class CLIAdapter implements WizardAdapter {
       this.spinner.stop('Agent completed');
       this.spinner = null;
     }
-    clack.log.step('Validating installation...');
+    // Progress tracker shows phase, minimal output needed
   };
 
   private handleValidationIssues = ({ issues }: WizardEvents['validation:issues']): void => {
     for (const issue of issues) {
-      const prefix = issue.severity === 'error' ? '!' : '?';
-      clack.log.warn(`${prefix} ${issue.message}`);
+      if (issue.severity === 'error') {
+        console.log(styled.error(issue.message));
+      } else {
+        console.log(styled.warning(issue.message));
+      }
       if (issue.hint) {
-        clack.log.info(chalk.dim(`  Hint: ${issue.hint}`));
+        console.log(styled.info(`Hint: ${issue.hint}`));
       }
     }
   };
 
   private handleValidationComplete = ({ passed, issueCount }: WizardEvents['validation:complete']): void => {
     if (passed) {
-      clack.log.success('Validation passed');
+      console.log(styled.success('Validation passed'));
     } else {
-      clack.log.warn(`Validation found ${issueCount} issue(s)`);
+      console.log(styled.warning(`Validation found ${issueCount} issue(s)`));
     }
   };
 

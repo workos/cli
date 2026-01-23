@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { CLIAdapter } from '../cli-adapter.js';
 import { createWizardEventEmitter } from '../../events.js';
 
+// Mock console.log to capture styled output
+const mockConsoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
+
 // Mock clack
 vi.mock('../../../utils/clack.js', () => ({
   default: {
@@ -37,6 +40,27 @@ vi.mock('../../settings.js', () => ({
   })),
 }));
 
+// Mock cli-symbols to avoid chalk color codes in test assertions
+vi.mock('../../../utils/cli-symbols.js', () => ({
+  styled: {
+    success: (text: string) => `✓ ${text}`,
+    error: (text: string) => `✗ ${text}`,
+    warning: (text: string) => `! ${text}`,
+    info: (text: string) => `ℹ ${text}`,
+    action: (text: string) => `→ ${text}`,
+    label: (label: string, value: string) => `${label} ${value}`,
+    phase: (num: number, total: number, name: string) => `[${num}/${total}] ${name}`,
+  },
+  symbols: {
+    success: '✓',
+    error: '✗',
+    warning: '!',
+    info: 'ℹ',
+    arrow: '→',
+    bullet: '•',
+  },
+}));
+
 describe('CLIAdapter', () => {
   let emitter: ReturnType<typeof createWizardEventEmitter>;
   let sendEvent: ReturnType<typeof vi.fn>;
@@ -51,17 +75,17 @@ describe('CLIAdapter', () => {
   afterEach(async () => {
     await adapter.stop();
     vi.clearAllMocks();
+    mockConsoleLog.mockClear();
   });
 
   describe('start', () => {
     it('subscribes to events on start', async () => {
       await adapter.start();
 
-      // Emit an event - handler should be called
-      const clack = await import('../../../utils/clack.js');
-      emitter.emit('auth:checking', {});
+      // Emit auth:success - this one outputs via console.log
+      emitter.emit('auth:success', {});
 
-      expect(clack.default.log.step).toHaveBeenCalledWith('Checking authentication...');
+      expect(mockConsoleLog).toHaveBeenCalledWith('✓ Authenticated');
     });
 
     it('shows intro on start', async () => {
@@ -105,11 +129,13 @@ describe('CLIAdapter', () => {
   describe('event handling', () => {
     it('shows detection complete message', async () => {
       await adapter.start();
-      const clack = await import('../../../utils/clack.js');
 
       emitter.emit('detection:complete', { integration: 'nextjs' });
 
-      expect(clack.default.log.success).toHaveBeenCalledWith('Detected: nextjs');
+      // Now uses console.log with styled.success
+      expect(mockConsoleLog).toHaveBeenCalled();
+      const calls = mockConsoleLog.mock.calls.flat();
+      expect(calls.some((c) => typeof c === 'string' && c.includes('Detected') && c.includes('nextjs'))).toBe(true);
     });
 
     it('shows spinner on agent:start', async () => {
