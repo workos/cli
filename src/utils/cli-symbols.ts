@@ -16,6 +16,8 @@ export const symbols = {
   info: unicode ? 'ℹ' : 'i',
   arrow: unicode ? '→' : '->',
   bullet: unicode ? '•' : '*',
+  progressFilled: unicode ? '▓' : '#',
+  progressEmpty: unicode ? '░' : '-',
 } as const;
 
 /**
@@ -41,8 +43,12 @@ export const styled = {
   /** Label with value, label is dimmed */
   label: (label: string, value: string) => `${chalk.dim(label)} ${value}`,
 
-  /** Phase indicator: [1/5] Phase Name */
-  phase: (num: number, total: number, name: string) => chalk.cyan(`[${num}/${total}] ${name}`),
+  /** Phase indicator with visual progress bar */
+  phase: (num: number, total: number, name: string) => {
+    const filled = symbols.progressFilled.repeat(num);
+    const empty = symbols.progressEmpty.repeat(total - num);
+    return `${chalk.cyan(filled)}${chalk.dim(empty)} ${name}`;
+  },
 
   /** Bullet point for lists */
   bullet: (text: string) => `  ${symbols.bullet} ${text}`,
@@ -59,4 +65,6 @@ export const asciiSymbols = {
   info: 'i',
   arrow: '->',
   bullet: '*',
+  progressFilled: '#',
+  progressEmpty: '-',
 } as const;

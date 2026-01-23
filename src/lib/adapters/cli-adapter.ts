@@ -163,9 +163,9 @@ export class CLIAdapter implements WizardAdapter {
 
   private handleStateEnter = ({ state }: WizardEvents['state:enter']): void => {
     this.progress.enterPhase(state);
-    const indicator = this.progress.getCurrentIndicator();
-    if (indicator) {
-      clack.log.step(chalk.cyan(indicator));
+    const phase = this.progress.getCurrentPhase();
+    if (phase) {
+      clack.log.step(styled.phase(phase.number, 5, phase.name));
     }
   };
 

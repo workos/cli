@@ -83,11 +83,13 @@ describe('cli-symbols', () => {
       expect(result).toContain('Value');
     });
 
-    it('styled.phase produces phase indicator', async () => {
-      const { styled } = await import('../cli-symbols.js');
+    it('styled.phase produces visual progress bar', async () => {
+      const { styled, symbols } = await import('../cli-symbols.js');
       const result = styled.phase(2, 5, 'Installing');
 
-      expect(result).toContain('[2/5]');
+      // Should contain filled and empty progress segments
+      expect(result).toContain(symbols.progressFilled);
+      expect(result).toContain(symbols.progressEmpty);
       expect(result).toContain('Installing');
     });
 

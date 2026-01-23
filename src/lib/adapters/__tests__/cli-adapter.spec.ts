@@ -49,7 +49,7 @@ vi.mock('../../../utils/cli-symbols.js', () => ({
     info: (text: string) => `ℹ ${text}`,
     action: (text: string) => `→ ${text}`,
     label: (label: string, value: string) => `${label} ${value}`,
-    phase: (num: number, total: number, name: string) => `[${num}/${total}] ${name}`,
+    phase: (num: number, total: number, name: string) => `${'▓'.repeat(num)}${'░'.repeat(total - num)} ${name}`,
     bullet: (text: string) => `  • ${text}`,
   },
   symbols: {
@@ -59,6 +59,8 @@ vi.mock('../../../utils/cli-symbols.js', () => ({
     info: 'ℹ',
     arrow: '→',
     bullet: '•',
+    progressFilled: '▓',
+    progressEmpty: '░',
   },
 }));
 
