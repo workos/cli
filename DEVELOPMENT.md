@@ -53,7 +53,7 @@ pnpm dev
 
 # Test locally in another project
 cd /path/to/test/nextjs-app
-wizard dashboard
+workos-installer dashboard
 ```
 
 ## Commands
@@ -122,7 +122,7 @@ export function redactCredentials(obj: any): any {
 
 **Manual testing:**
 
-1. Run wizard in a test app: `wizard dashboard`
+1. Run wizard in a test app: `workos-installer dashboard`
 2. Check logs at `/tmp/authkit-wizard.log`
 3. Verify integration works in test app
 
@@ -141,7 +141,7 @@ export function redactCredentials(obj: any): any {
 **Verbose logs:**
 
 ```bash
-wizard --debug
+workos-installer --debug
 ```
 
 **Check logs:**

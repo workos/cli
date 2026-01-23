@@ -10,7 +10,7 @@ npx @workos/installer
 
 # Or install globally
 npm install -g @workos/installer
-wizard
+workos-installer
 ```
 
 ## Features
@@ -45,10 +45,10 @@ Get your credentials from [dashboard.workos.com](https://dashboard.workos.com):
 ## CLI Options
 
 ```bash
-wizard [options] [command]
+workos-installer [options] [command]
 
 Commands:
-  dashboard              Run wizard with visual TUI dashboard (experimental)
+  dashboard              Run with visual TUI dashboard (experimental)
   login                  Authenticate with WorkOS via Connect OAuth device flow
   logout                 Remove stored credentials
   install-skill          Install AuthKit skills to coding agents (Claude Code, Codex, etc.)
@@ -92,10 +92,10 @@ The wizard uses WorkOS Connect OAuth device flow for authentication:
 
 ```bash
 # Login (opens browser for authentication)
-wizard login
+workos-installer login
 
 # Logout (clears stored credentials)
-wizard logout
+workos-installer logout
 ```
 
 Credentials are stored in `~/.wizard/credentials.json`. Access tokens are not persisted long-term for security - users re-authenticate when tokens expire.
