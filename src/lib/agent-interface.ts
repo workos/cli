@@ -352,7 +352,7 @@ export async function runAgent(
     errorMessage?: string;
   },
   emitter?: WizardEventEmitter,
-): Promise<{ error?: AgentErrorType }> {
+): Promise<{ error?: AgentErrorType; errorMessage?: string }> {
   const {
     spinnerMessage = 'Setting up WorkOS AuthKit...',
     successMessage = 'WorkOS AuthKit integration complete',
@@ -443,21 +443,21 @@ export async function runAgent(
     const outputText = collectedText.join('\n');
 
     // Check for SDK errors first (e.g., API errors, auth failures)
-    // Return error type - caller decides whether to throw or emit events
+    // Return error type + message - caller decides whether to throw or emit events
     if (sdkError) {
       logError('Agent SDK error:', sdkError);
-      return { error: AgentErrorType.EXECUTION_ERROR };
+      return { error: AgentErrorType.EXECUTION_ERROR, errorMessage: sdkError };
     }
 
     // Check for error markers in the agent's output
     if (outputText.includes(AgentSignals.ERROR_MCP_MISSING)) {
       logError('Agent error: MCP_MISSING');
-      return { error: AgentErrorType.MCP_MISSING };
+      return { error: AgentErrorType.MCP_MISSING, errorMessage: 'Could not access WorkOS MCP server' };
     }
 
     if (outputText.includes(AgentSignals.ERROR_RESOURCE_MISSING)) {
       logError('Agent error: RESOURCE_MISSING');
-      return { error: AgentErrorType.RESOURCE_MISSING };
+      return { error: AgentErrorType.RESOURCE_MISSING, errorMessage: 'Could not access setup resource' };
     }
 
     logInfo(`Agent run completed in ${Math.round(durationMs / 1000)}s`);
