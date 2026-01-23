@@ -507,55 +507,6 @@ export function isUsingTypeScript({ installDir }: Pick<WizardOptions, 'installDi
 }
 
 /**
- *
- * Use this function to get project data for the wizard.
- *
- * @param options wizard options
- * @returns project data (token, url)
- */
-/**
- * Check for existing WorkOS credentials without prompting
- * Returns credentials if found, null if prompting is needed
- */
-export function checkExistingCredentials(
-  options: Pick<WizardOptions, 'apiKey' | 'clientId' | 'installDir'>,
-  requireApiKey: boolean = true,
-): { apiKey: string; clientId: string } | null {
-  let apiKey = options.apiKey;
-  let clientId = options.clientId;
-
-  // If credentials provided via CLI, use them
-  if ((!requireApiKey || apiKey) && clientId) {
-    return { apiKey: apiKey || '', clientId };
-  }
-
-  // Check if credentials already exist in .env.local
-  const envPath = join(options.installDir, '.env.local');
-  if (fs.existsSync(envPath)) {
-    try {
-      const envContent = fs.readFileSync(envPath, 'utf-8');
-      const envVars = parseEnvFile(envContent);
-
-      const existingApiKey = envVars.WORKOS_API_KEY;
-      const existingClientId = envVars.WORKOS_CLIENT_ID;
-
-      // Use existing credentials if both are present (or API key not required)
-      if (existingClientId && (!requireApiKey || existingApiKey)) {
-        return {
-          apiKey: existingApiKey || '',
-          clientId: existingClientId,
-        };
-      }
-    } catch (error) {
-      // If we can't read/parse .env.local, return null to prompt
-      debug('Failed to read .env.local:', error);
-    }
-  }
-
-  return null;
-}
-
-/**
  * Get WorkOS credentials (API Key and Client ID) from user or CLI options
  * @param requireApiKey - Whether API key is needed (false for client-only SDKs like React, Vanilla JS)
  */

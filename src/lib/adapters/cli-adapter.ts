@@ -89,20 +89,14 @@ export class CLIAdapter implements WizardAdapter {
     this.subscribe('state:enter', this.handleStateEnter);
     this.subscribe('state:exit', this.handleStateExit);
 
-    // Subscribe to all events
-    this.subscribe('auth:checking', this.handleAuthChecking);
-    this.subscribe('auth:required', this.handleAuthRequired);
+    // Subscribe to events that require UI rendering
     this.subscribe('auth:success', this.handleAuthSuccess);
     this.subscribe('auth:failure', this.handleAuthFailure);
-    this.subscribe('detection:start', this.handleDetectionStart);
     this.subscribe('detection:complete', this.handleDetectionComplete);
     this.subscribe('detection:none', this.handleDetectionNone);
-    this.subscribe('git:checking', this.handleGitChecking);
-    this.subscribe('git:clean', this.handleGitClean);
     this.subscribe('git:dirty', this.handleGitDirty);
     this.subscribe('credentials:found', this.handleCredentialsFound);
     this.subscribe('credentials:request', this.handleCredentialsRequest);
-    this.subscribe('config:start', this.handleConfigStart);
     this.subscribe('config:complete', this.handleConfigComplete);
     this.subscribe('agent:start', this.handleAgentStart);
     this.subscribe('agent:progress', this.handleAgentProgress);
@@ -174,10 +168,6 @@ export class CLIAdapter implements WizardAdapter {
     this.progress.exitPhase(state);
   };
 
-  private handleAuthChecking = (): void => {};
-
-  private handleAuthRequired = (): void => {};
-
   private handleAuthSuccess = (): void => {
     clack.log.success('Authenticated');
   };
@@ -187,22 +177,12 @@ export class CLIAdapter implements WizardAdapter {
     clack.log.info('Visit https://dashboard.workos.com to verify your account');
   };
 
-  private handleDetectionStart = (): void => {};
-
   private handleDetectionComplete = ({ integration }: WizardEvents['detection:complete']): void => {
     this.queueableLog(() => clack.log.success(`Detected ${chalk.bold(integration)}`));
   };
 
   private handleDetectionNone = (): void => {
     this.queueableLog(() => clack.log.warn('Could not detect framework automatically'));
-  };
-
-  private handleGitChecking = (): void => {
-    // Silent - don't clutter output
-  };
-
-  private handleGitClean = (): void => {
-    // Silent - don't clutter output
   };
 
   private handleCredentialsFound = (): void => {
@@ -286,8 +266,6 @@ export class CLIAdapter implements WizardAdapter {
       clientId: clientId as string,
     });
   };
-
-  private handleConfigStart = (): void => {};
 
   private handleConfigComplete = (): void => {
     clack.log.success('Environment configured');

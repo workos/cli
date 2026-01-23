@@ -1,11 +1,3 @@
-// Legacy types - unused in WorkOS wizard
-export type LegacyProjectData = Record<string, unknown>;
-
-export type PreselectedProject = {
-  project: LegacyProjectData;
-  authToken: string;
-};
-
 export type WizardOptions = {
   /**
    * Whether to enable debug mode.

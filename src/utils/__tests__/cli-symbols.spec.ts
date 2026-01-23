@@ -104,17 +104,4 @@ describe('cli-symbols', () => {
       expect(() => styled.phase(0, 0, '')).not.toThrow();
     });
   });
-
-  describe('asciiSymbols', () => {
-    it('exports ASCII fallback symbols', async () => {
-      const { asciiSymbols } = await import('../cli-symbols.js');
-
-      expect(asciiSymbols.success).toBe('+');
-      expect(asciiSymbols.error).toBe('x');
-      expect(asciiSymbols.warning).toBe('!');
-      expect(asciiSymbols.info).toBe('i');
-      expect(asciiSymbols.arrow).toBe('->');
-      expect(asciiSymbols.bullet).toBe('*');
-    });
-  });
 });

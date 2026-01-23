@@ -53,18 +53,3 @@ export const styled = {
   /** Bullet point for lists */
   bullet: (text: string) => `  ${symbols.bullet} ${text}`,
 } as const;
-
-/**
- * ASCII-only symbols for terminals without Unicode support.
- * Exported for testing or explicit ASCII mode.
- */
-export const asciiSymbols = {
-  success: '+',
-  error: 'x',
-  warning: '!',
-  info: 'i',
-  arrow: '->',
-  bullet: '*',
-  progressFilled: '#',
-  progressEmpty: '-',
-} as const;
