@@ -1,8 +1,6 @@
 {
   "framework": "react",
-  "packages": [
-    { "name": "@workos-inc/authkit-react", "location": "dependencies" }
-  ],
+  "packages": [{ "name": "@workos-inc/authkit-react", "location": "dependencies" }],
   "envVars": [
     {
       "name": "WORKOS_CLIENT_ID",

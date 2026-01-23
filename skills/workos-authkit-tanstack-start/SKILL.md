@@ -12,6 +12,7 @@ TaskUpdate: { taskId: "preflight", status: "in_progress" }
 ### 1.1 Verify TanStack Start Project
 
 Check for TanStack Start markers:
+
 - `package.json` has `"@tanstack/start"` dependency
 - `app.config.ts` exists (vinxi config)
 - `app/` directory with route files
@@ -19,6 +20,7 @@ Check for TanStack Start markers:
 ### 1.2 Fetch SDK Documentation
 
 **REQUIRED**: Use WebFetch to read:
+
 ```
 https://github.com/workos/authkit-tanstack-start/blob/main/README.md
 ```
@@ -28,6 +30,7 @@ The README is the source of truth. If this skill conflicts, follow the README.
 ### 1.3 Verify Environment Variables
 
 Read `.env` and confirm:
+
 - `WORKOS_API_KEY` (starts with `sk_`)
 - `WORKOS_CLIENT_ID` (starts with `client_`)
 - `WORKOS_REDIRECT_URI` (valid URL)
@@ -212,25 +215,31 @@ TaskUpdate: { taskId: "verify", status: "completed" }
 ## Error Recovery (TanStack Start Specific)
 
 ### "Module not found: @workos-inc/authkit-tanstack-start"
+
 - **Cause**: SDK not installed before writing imports
 - **Fix**: Run install command, verify `node_modules/@workos-inc/authkit-tanstack-start` exists
 
 ### "createServerFn is not a function"
+
 - **Cause**: Wrong TanStack Start version or import
 - **Fix**: Check `@tanstack/start` version, verify import path
 
 ### Route loader not executing
+
 - **Cause**: Route file not in correct location
 - **Fix**: TanStack uses file-based routing - file path must match URL path
 
 ### Auth user undefined in child routes
+
 - **Cause**: Not accessing from route context
 - **Fix**: Access via `Route.useRouteContext()` from root loader
 
 ### Server function errors
+
 - **Cause**: Mixing client/server code incorrectly
 - **Fix**: Server functions must be defined separately and imported
 
 ### Cookie errors
+
 - **Cause**: `WORKOS_COOKIE_PASSWORD` missing or too short
 - **Fix**: Add 32+ character password to `.env`

@@ -12,6 +12,7 @@ TaskUpdate: { taskId: "preflight", status: "in_progress" }
 ### 1.1 Verify React Project
 
 Check for React SPA markers:
+
 - `package.json` has `"react"` and `"react-dom"` dependencies
 - No `next` dependency (use Next.js skill instead)
 - No `react-router` dependency (use React Router skill instead)
@@ -19,6 +20,7 @@ Check for React SPA markers:
 ### 1.2 Fetch SDK Documentation
 
 **REQUIRED**: Use WebFetch to read:
+
 ```
 https://github.com/workos/authkit-react/blob/main/README.md
 ```
@@ -28,12 +30,14 @@ The README is the source of truth. If this skill conflicts, follow the README.
 ### 1.3 Detect Build Tool
 
 Check for:
+
 - `vite.config.ts` → Vite (use `VITE_` prefix for env vars)
 - `craco.config.js` or default → Create React App (use `REACT_APP_` prefix)
 
 ### 1.4 Verify Environment Variables
 
 Read `.env` or `.env.local` and confirm:
+
 - `VITE_WORKOS_CLIENT_ID` or `REACT_APP_WORKOS_CLIENT_ID`
 - `VITE_WORKOS_REDIRECT_URI` or `REACT_APP_WORKOS_REDIRECT_URI`
 
@@ -182,21 +186,26 @@ TaskUpdate: { taskId: "verify", status: "completed" }
 ## Error Recovery (React SPA Specific)
 
 ### "Module not found: @workos-inc/authkit-react"
+
 - **Cause**: SDK not installed before writing imports
 - **Fix**: Run install command, verify `node_modules/@workos-inc/authkit-react` exists
 
 ### "clientId is required" error
+
 - **Cause**: Environment variable not accessible
 - **Fix**: Check prefix matches build tool (`VITE_` or `REACT_APP_`)
 
 ### Auth state lost on refresh
+
 - **Cause**: Token not persisted
 - **Fix**: SDK handles this via localStorage; check browser dev tools for stored tokens
 
 ### Sign in redirects but callback fails
+
 - **Cause**: Redirect URI mismatch
 - **Fix**: Ensure env var URI exactly matches WorkOS Dashboard configuration
 
 ### useAuth returns undefined
+
 - **Cause**: Component not wrapped in AuthKitProvider
 - **Fix**: Verify provider wraps entire app in entry file

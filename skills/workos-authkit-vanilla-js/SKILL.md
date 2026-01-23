@@ -12,6 +12,7 @@ TaskUpdate: { taskId: "preflight", status: "in_progress" }
 ### 1.1 Verify Vanilla JS Project
 
 Check for vanilla JS markers:
+
 - Has `index.html` file
 - No React, Vue, Angular, etc. in `package.json` (if exists)
 - JavaScript files use standard DOM APIs
@@ -19,6 +20,7 @@ Check for vanilla JS markers:
 ### 1.2 Fetch SDK Documentation
 
 **REQUIRED**: Use WebFetch to read:
+
 ```
 https://github.com/workos/authkit-js/blob/main/README.md
 ```
@@ -28,12 +30,14 @@ The README is the source of truth. If this skill conflicts, follow the README.
 ### 1.3 Detect Project Type
 
 Check for:
+
 - **Bundled**: Has `package.json` with build tool (Vite, webpack, etc.)
 - **CDN/Static**: Plain HTML files with script tags
 
 ### 1.4 Verify Environment Variables / Config
 
 For bundled projects, check `.env`:
+
 - `VITE_WORKOS_CLIENT_ID` or equivalent for build tool
 
 For CDN/static projects, ensure Client ID will be provided in script.
@@ -232,25 +236,31 @@ TaskUpdate: { taskId: "verify", status: "completed" }
 ## Error Recovery (Vanilla JS Specific)
 
 ### "WorkOS is not defined"
+
 - **Cause**: CDN script not loaded
 - **Fix**: Add script tag to `<head>`, ensure it loads before your code
 
 ### "createAuthKit is not a function"
+
 - **Cause**: Wrong import or SDK not installed
 - **Fix**: For npm, verify import path; for CDN, use `WorkOS.createAuthKit`
 
 ### Auth state lost on refresh
+
 - **Cause**: Token not persisted
 - **Fix**: SDK handles via localStorage; check browser dev tools
 
 ### Sign in popup blocked
+
 - **Cause**: Browser blocking popup
 - **Fix**: `signIn()` must be called from user gesture (click handler)
 
 ### "clientId is required" error
+
 - **Cause**: Client ID not provided or undefined
 - **Fix**: Check env var prefix matches build tool, or hardcode for testing
 
 ### CORS errors
+
 - **Cause**: Running from `file://` protocol
 - **Fix**: Use local dev server (`npx serve`, `python -m http.server`, etc.)

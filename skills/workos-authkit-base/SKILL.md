@@ -15,14 +15,14 @@ description: Base template for WorkOS AuthKit integration skills. Defines standa
 
 Every AuthKit integration MUST create these tasks:
 
-| ID | Subject | Blocked By | Active Form |
-|----|---------|------------|-------------|
-| preflight | Pre-flight checks | - | Running pre-flight checks |
-| install | Install SDK package | preflight | Installing SDK |
-| callback | Create callback route | install | Creating callback route |
-| provider | Setup provider/middleware | install | Setting up auth provider |
-| ui | Add authentication UI | callback, provider | Adding auth UI |
-| verify | Verify installation | ui | Verifying installation |
+| ID        | Subject                   | Blocked By         | Active Form               |
+| --------- | ------------------------- | ------------------ | ------------------------- |
+| preflight | Pre-flight checks         | -                  | Running pre-flight checks |
+| install   | Install SDK package       | preflight          | Installing SDK            |
+| callback  | Create callback route     | install            | Creating callback route   |
+| provider  | Setup provider/middleware | install            | Setting up auth provider  |
+| ui        | Add authentication UI     | callback, provider | Adding auth UI            |
+| verify    | Verify installation       | ui                 | Verifying installation    |
 
 **Task Creation Pattern**:
 
@@ -97,6 +97,7 @@ TaskUpdate: { taskId: "verify", addBlockedBy: ["ui"] }
 **Start**: `TaskUpdate: { taskId: "provider", status: "in_progress" }`
 
 Varies by framework:
+
 - **Client-side**: Wrap app with `AuthKitProvider`
 - **Server-side**: Add middleware for session handling
 
@@ -134,32 +135,37 @@ Varies by framework:
 
 ## Error Recovery
 
-### "Module not found: @workos-inc/authkit-*"
+### "Module not found: @workos-inc/authkit-\*"
+
 - **Cause**: SDK not installed
 - **Fix**: Re-run install, verify `node_modules/@workos-inc` exists
 
 ### Build fails with import errors
+
 - **Cause**: Package manager didn't install correctly
 - **Fix**: Delete `node_modules`, run fresh install
 
 ### "Invalid redirect URI" at runtime
+
 - **Cause**: Route path doesn't match `WORKOS_REDIRECT_URI`
 - **Fix**: Read env var, create route at exact path
 
 ### "Cookie password too short"
+
 - **Cause**: `WORKOS_COOKIE_PASSWORD` < 32 chars
 - **Fix**: Generate with `openssl rand -base64 32`
 
 ### Auth state not persisting
+
 - **Cause**: `AuthKitProvider` missing or misconfigured
 - **Fix**: Verify provider wraps entire app in layout
 
 ## Environment Variables Reference
 
-| Variable | Description | Required By |
-|----------|-------------|-------------|
-| `WORKOS_API_KEY` | Server-side API key (sk_xxx) | Server SDKs |
-| `WORKOS_CLIENT_ID` | Public client identifier | All SDKs |
-| `WORKOS_REDIRECT_URI` | OAuth callback URL | Server SDKs |
-| `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | Callback URL (Next.js) | Next.js SDK |
-| `WORKOS_COOKIE_PASSWORD` | 32+ char session secret | Server SDKs |
+| Variable                          | Description                  | Required By |
+| --------------------------------- | ---------------------------- | ----------- |
+| `WORKOS_API_KEY`                  | Server-side API key (sk_xxx) | Server SDKs |
+| `WORKOS_CLIENT_ID`                | Public client identifier     | All SDKs    |
+| `WORKOS_REDIRECT_URI`             | OAuth callback URL           | Server SDKs |
+| `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | Callback URL (Next.js)       | Next.js SDK |
+| `WORKOS_COOKIE_PASSWORD`          | 32+ char session secret      | Server SDKs |

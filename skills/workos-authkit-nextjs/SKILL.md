@@ -12,12 +12,14 @@ TaskUpdate: { taskId: "preflight", status: "in_progress" }
 ### 1.1 Verify Next.js Project
 
 Check for Next.js markers:
+
 - `next.config.js` or `next.config.mjs` exists
 - `package.json` has `"next"` dependency
 
 ### 1.2 Fetch SDK Documentation
 
 **REQUIRED**: Use WebFetch to read:
+
 ```
 https://github.com/workos/authkit-nextjs/blob/main/README.md
 ```
@@ -27,6 +29,7 @@ The README is the source of truth. If this skill conflicts, follow the README.
 ### 1.3 Verify Environment Variables
 
 Read `.env.local` and confirm:
+
 - `WORKOS_API_KEY` (starts with `sk_`)
 - `WORKOS_CLIENT_ID` (starts with `client_`)
 - `NEXT_PUBLIC_WORKOS_REDIRECT_URI` (valid URL)
@@ -72,6 +75,7 @@ TaskUpdate: { taskId: "callback", status: "in_progress" }
 
 Read `NEXT_PUBLIC_WORKOS_REDIRECT_URI` from `.env.local`.
 Extract path:
+
 - `http://localhost:3000/auth/callback` → create at `app/auth/callback/route.ts`
 - `http://localhost:3000/callback` → create at `app/callback/route.ts`
 
@@ -100,6 +104,7 @@ TaskUpdate: { taskId: "provider", status: "in_progress" }
 ### 4.1 Detect Next.js Version
 
 Check `package.json` for Next.js version:
+
 - **v16+**: Use proxy route pattern (no middleware.ts)
 - **v13-15**: Use middleware.ts
 
@@ -218,21 +223,26 @@ TaskUpdate: { taskId: "verify", status: "completed" }
 ## Error Recovery (Next.js Specific)
 
 ### "middleware.ts not found" errors
+
 - **Cause**: Middleware at wrong path
 - **Fix**: Must be at project root or `src/middleware.ts`, NOT in `app/`
 
 ### "Cannot use getUser in client component"
+
 - **Cause**: Using server function in client component
 - **Fix**: Add `'use server'` or fetch via API route
 
-### NEXT_PUBLIC_ prefix issues
+### NEXT*PUBLIC* prefix issues
+
 - **Cause**: Using wrong env var prefix
 - **Fix**: Client-side needs `NEXT_PUBLIC_*`, server-side uses plain names
 
 ### "Module not found: @workos-inc/authkit-nextjs"
+
 - **Cause**: SDK not installed before writing imports
 - **Fix**: Run install command, verify `node_modules/@workos-inc/authkit-nextjs` exists
 
 ### Build fails after adding AuthKitProvider
+
 - **Cause**: Missing client directive or wrong import path
 - **Fix**: Check SDK README for correct import (may be `/components` or `/client`)

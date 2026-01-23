@@ -12,12 +12,14 @@ TaskUpdate: { taskId: "preflight", status: "in_progress" }
 ### 1.1 Verify React Router Project
 
 Check for React Router markers:
+
 - `package.json` has `"react-router"` or `"react-router-dom"` dependency
 - Check version: v6 vs v7
 
 ### 1.2 Fetch SDK Documentation
 
 **REQUIRED**: Use WebFetch to read:
+
 ```
 https://github.com/workos/authkit-react-router/blob/main/README.md
 ```
@@ -28,16 +30,17 @@ The README is the source of truth. If this skill conflicts, follow the README.
 
 Check for mode indicators:
 
-| Mode | Detection | Key Files |
-|------|-----------|-----------|
-| v7 Framework | `react-router.config.ts` exists | Routes in `app/routes/` |
-| v7 Data | `createBrowserRouter` in source | Loaders in route config |
-| v7 Declarative | `<BrowserRouter>` component | Routes as JSX |
-| v6 | package.json version `"6.x"` | Similar to v7 Declarative |
+| Mode           | Detection                       | Key Files                 |
+| -------------- | ------------------------------- | ------------------------- |
+| v7 Framework   | `react-router.config.ts` exists | Routes in `app/routes/`   |
+| v7 Data        | `createBrowserRouter` in source | Loaders in route config   |
+| v7 Declarative | `<BrowserRouter>` component     | Routes as JSX             |
+| v6             | package.json version `"6.x"`    | Similar to v7 Declarative |
 
 ### 1.4 Verify Environment Variables
 
 Read `.env` or `.env.local` and confirm:
+
 - `WORKOS_API_KEY` (starts with `sk_`)
 - `WORKOS_CLIENT_ID` (starts with `client_`)
 - `WORKOS_REDIRECT_URI` (valid URL)
@@ -282,21 +285,26 @@ TaskUpdate: { taskId: "verify", status: "completed" }
 ## Error Recovery (React Router Specific)
 
 ### "Module not found: @workos-inc/authkit-react-router"
+
 - **Cause**: SDK not installed before writing imports
 - **Fix**: Run install command, verify `node_modules/@workos-inc/authkit-react-router` exists
 
 ### "loader is not a function" error
+
 - **Cause**: Using loader pattern in wrong mode
 - **Fix**: Check router mode - loaders only work in Framework/Data modes
 
 ### useAuth returns undefined
+
 - **Cause**: Using hooks without AuthKitProvider
 - **Fix**: Wrap app with AuthKitProvider (Declarative/v6 mode)
 
 ### Callback route 404
+
 - **Cause**: Route path doesn't match redirect URI
 - **Fix**: Extract exact path from `WORKOS_REDIRECT_URI` and create route there
 
 ### Auth state not available in child routes
+
 - **Cause**: Auth loader only on specific routes
 - **Fix**: Add auth loader to root route so all children inherit auth context
