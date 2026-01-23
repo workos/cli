@@ -26,8 +26,6 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
   process.exit(1);
 }
 
-import type { WizardOptions } from './src/utils/types.js';
-import { runWizard } from './src/run.js';
 import { isNonInteractiveEnvironment } from './src/utils/environment.js';
 import clack from './src/utils/clack.js';
 
@@ -95,6 +93,12 @@ const wizardOptions = {
     describe: 'Force install packages even if peer dependency checks fail',
     type: 'boolean' as const,
   },
+  dashboard: {
+    alias: 'd',
+    default: false,
+    describe: 'Run with visual dashboard mode',
+    type: 'boolean' as const,
+  },
 };
 
 yargs(hideBin(process.argv))
@@ -141,85 +145,46 @@ yargs(hideBin(process.argv))
     },
   )
   .command(
-    'dashboard',
-    '[Experimental] Run the wizard with visual dashboard mode',
-    (yargs) => {
-      return yargs.options(wizardOptions);
+    'install',
+    'Install WorkOS AuthKit into your project',
+    (yargs) => yargs.options(wizardOptions),
+    async (argv) => {
+      const { handleInstall } = await import('./src/commands/install.js');
+      await handleInstall(argv);
     },
-    (argv) => {
-      const options = { ...argv, dashboard: true };
-      void import('./src/run.js').then(({ runWizard }) =>
-        runWizard(options as unknown as WizardOptions)
-          .then(() => process.exit(0))
-          .catch(async (err) => {
-            const { getLogFilePath } = await import('./src/utils/debug.js');
-            const logPath = getLogFilePath();
-            if (argv.debug) {
-              console.error('\nWizard failed with error:');
-              console.error(err instanceof Error ? err.stack || err.message : String(err));
-            }
-            if (logPath) {
-              console.error(`\nSee debug logs at: ${logPath}`);
-            }
-            process.exit(1);
-          }),
-      );
+  )
+  .command(
+    'dashboard',
+    false, // hidden from help
+    (yargs) => yargs.options(wizardOptions),
+    async (argv) => {
+      const { handleInstall } = await import('./src/commands/install.js');
+      await handleInstall({ ...argv, dashboard: true });
     },
   )
   .command(
     ['$0'],
-    'Run the WorkOS AuthKit setup wizard',
-    (yargs) => {
-      return yargs.options(wizardOptions);
-    },
-    (argv) => {
-      const options = { ...argv };
-
-      // CI mode validation and TTY check
-      if (options.ci) {
-        // Validate required CI flags
-        if (!options.apiKey) {
-          clack.intro(chalk.inverse(`WorkOS AuthKit Wizard`));
-          clack.log.error('CI mode requires --api-key (WorkOS API key sk_xxx)');
-          process.exit(1);
-        }
-        if (!options.clientId) {
-          clack.intro(chalk.inverse(`WorkOS AuthKit Wizard`));
-          clack.log.error('CI mode requires --client-id (WorkOS Client ID client_xxx)');
-          process.exit(1);
-        }
-        if (!options.installDir) {
-          clack.intro(chalk.inverse(`WorkOS AuthKit Wizard`));
-          clack.log.error('CI mode requires --install-dir (directory to install WorkOS AuthKit in)');
-          process.exit(1);
-        }
-      } else if (isNonInteractiveEnvironment()) {
-        // Original TTY error for non-CI mode
-        clack.intro(chalk.inverse(`WorkOS AuthKit Wizard`));
-        clack.log.error(
-          'This installer requires an interactive terminal (TTY) to run.\n' +
-            'It appears you are running in a non-interactive environment.\n' +
-            'Please run the wizard in an interactive terminal.\n\n' +
-            'For CI/CD environments, use --ci mode:\n' +
-            '  npx @workos/authkit-wizard --ci --api-key sk_xxx --client-id client_xxx',
-        );
-        process.exit(1);
+    'WorkOS AuthKit CLI',
+    (yargs) => yargs,
+    async () => {
+      // Non-TTY: show help
+      if (isNonInteractiveEnvironment()) {
+        yargs(hideBin(process.argv)).showHelp();
+        return;
       }
 
-      void runWizard(options as unknown as WizardOptions)
-        .then(() => process.exit(0))
-        .catch(async (err) => {
-          const { getLogFilePath } = await import('./src/utils/debug.js');
-          const logPath = getLogFilePath();
-          if (options.debug) {
-            console.error('\nWizard failed with error:');
-            console.error(err instanceof Error ? err.stack || err.message : String(err));
-          }
-          if (logPath) {
-            console.error(`\nSee debug logs at: ${logPath}`);
-          }
-          process.exit(1);
-        });
+      // TTY: ask if user wants to run installer
+      const shouldInstall = await clack.confirm({
+        message: 'Run the AuthKit installer?',
+      });
+
+      if (clack.isCancel(shouldInstall) || !shouldInstall) {
+        process.exit(0);
+      }
+
+      const { handleInstall } = await import('./src/commands/install.js');
+      await handleInstall({ dashboard: false } as any);
+      process.exit(0);
     },
   )
   .strict()
