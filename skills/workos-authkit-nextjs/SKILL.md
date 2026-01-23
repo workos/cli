@@ -1,150 +1,115 @@
 ---
 name: workos-authkit-nextjs
-description: Integrate WorkOS AuthKit with Next.js applications. Supports App Router and Pages Router.
+description: Integrate WorkOS AuthKit with Next.js App Router (13+). Server-side rendering required.
 ---
 
 # WorkOS AuthKit for Next.js
 
-## CRITICAL: Follow These Steps Exactly
+## Step 1: Fetch SDK Documentation (BLOCKING)
 
-## Step 1: Fetch SDK Documentation
+**STOP. Do not proceed until complete.**
 
-Use WebFetch to read: https://github.com/workos/authkit-nextjs/blob/main/README.md
+WebFetch: `https://github.com/workos/authkit-nextjs/blob/main/README.md`
 
-The README is the source of truth. If anything in this skill conflicts with the README, follow the README.
+The README is the source of truth. If this skill conflicts with README, follow README.
 
-Report: [STATUS] Reading SDK documentation
+## Step 2: Pre-Flight Validation
 
-## Step 2: Install SDK
+### Project Structure
+- Confirm `next.config.js` or `next.config.mjs` exists
+- Confirm `package.json` contains `"next"` dependency
 
-Detect package manager and install:
+### Environment Variables
+Check `.env.local` for:
+- `WORKOS_API_KEY` - starts with `sk_`
+- `WORKOS_CLIENT_ID` - starts with `client_`
+- `NEXT_PUBLIC_WORKOS_REDIRECT_URI` - valid callback URL
+- `WORKOS_COOKIE_PASSWORD` - 32+ characters
 
-- `pnpm-lock.yaml` → `pnpm add @workos-inc/authkit-nextjs`
-- `yarn.lock` → `yarn add @workos-inc/authkit-nextjs`
-- `package-lock.json` → `npm install @workos-inc/authkit-nextjs`
+## Step 3: Install SDK
 
-Detect package manager (check for lock files):
+Detect package manager, install SDK package from README.
 
-- `package-lock.json` → use `npm install`
-- `pnpm-lock.yaml` → use `pnpm add`
-- `yarn.lock` → use `yarn add`
+**Verify:** SDK package exists in node_modules before continuing.
 
-Run the install command:
+## Step 4: Version Detection (Decision Tree)
+
+Read Next.js version from `package.json`:
+
+```
+Next.js version?
+  |
+  +-- 16+ --> Create proxy.ts at project root
+  |
+  +-- 13-15 --> Create middleware.ts at project root
+```
+
+**Critical:** File MUST be at project root (or `src/` if using src directory). Never in `app/`.
+
+Middleware/proxy code: See README for `authkitMiddleware()` export pattern.
+
+## Step 5: Create Callback Route
+
+Parse `NEXT_PUBLIC_WORKOS_REDIRECT_URI` to determine route path:
+
+```
+URI path          --> Route location
+/auth/callback    --> app/auth/callback/route.ts
+/callback         --> app/callback/route.ts
+```
+
+Use `handleAuth()` from SDK. Do not write custom OAuth logic.
+
+## Step 6: Provider Setup
+
+Wrap app in `AuthKitProvider` in `app/layout.tsx`. See README for import path.
+
+## Step 7: UI Integration
+
+Add auth UI to `app/page.tsx` using SDK functions. See README for `getUser`, `getSignInUrl`, `signOut` usage.
+
+## Verification Checklist
+
+Run these commands to confirm integration:
 
 ```bash
-npm install @workos-inc/authkit-nextjs
+# Check middleware/proxy exists (one should match)
+ls proxy.ts middleware.ts src/proxy.ts src/middleware.ts 2>/dev/null
+
+# Check provider is wrapped
+grep -l "AuthKitProvider" app/layout.tsx
+
+# Check callback route exists
+find app -name "route.ts" -path "*/callback/*"
+
+# Build succeeds
+npm run build
 ```
 
-**Wait for installation to complete** - do not proceed until you see success output.
+All checks must pass before marking complete.
 
-Report: [STATUS] Installing @workos-inc/authkit-nextjs
+## Error Recovery
 
-## Step 3: Create Callback Route
+### "middleware.ts not found"
+- Check: File at project root or `src/`, not inside `app/`
+- Check: Filename matches Next.js version (proxy.ts for 16+, middleware.ts for 13-15)
 
-Read `.env.local` to find `NEXT_PUBLIC_WORKOS_REDIRECT_URI`. The URL path determines the file path:
+### "Cannot use getUser in client component"
+- Check: Component has no `'use client'` directive, or
+- Check: Move auth logic to server component/API route
 
-- URI `http://localhost:3000/auth/callback` → create `app/auth/callback/route.ts`
-- URI `http://localhost:3000/callback` → create `app/callback/route.ts`
+### "Module not found" for SDK import
+- Check: SDK installed before writing imports
+- Check: SDK package directory exists in node_modules
 
-Create the callback route file:
+### "withAuth route not covered by middleware"
+- Check: Middleware/proxy file exists at correct location
+- Check: Matcher config includes the route path
 
-```typescript
-import { handleAuth } from '@workos-inc/authkit-nextjs';
+### Build fails after AuthKitProvider
+- Check: README for correct import path (may be subpath export)
+- Check: No client/server boundary violations
 
-export const GET = handleAuth();
-```
-
-### For Next.js 16+: Create Proxy Route
-
-Create `app/auth/[...proxy]/route.ts` using the exact pattern from the SDK README.
-Report: [STATUS] Creating auth proxy route
-
-### For Next.js < 16: Create Middleware
-
-Create `middleware.ts` at project root using the pattern from the SDK README.
-Report: [STATUS] Creating middleware
-
-### Callback Route
-
-Create `app/callback/route.ts` at the exact path matching `WORKOS_REDIRECT_URI` (check .env.local).
-Use the SDK's `handleAuth()` function - do NOT write custom callback logic.
-Report: [STATUS] Creating callback route at /callback
-
-### Layout Provider
-
-Wrap the app with `<AuthKitProvider>` in `app/layout.tsx`:
-
-- Import: `import { AuthKitProvider } from "@workos-inc/authkit-nextjs/client";`
-- Wrap {children} with the provider
-
-```typescript
-import { AuthKitProvider } from '@workos-inc/authkit-nextjs/components';
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <body>
-        <AuthKitProvider>{children}</AuthKitProvider>
-      </body>
-    </html>
-  );
-}
-```
-
-### API Routes
-
-Create `pages/api/auth/[...auth].ts` using the SDK's handler.
-
-### Callback Route
-
-Create `pages/callback.tsx` or use the API route pattern from the README.
-
-### Session Access
-
-Use `getUser()` in `getServerSideProps` for server-side user access.
-
-Update `app/page.tsx` with authentication UI:
-
-````typescript
-import { withAuth, getSignInUrl, signOut } from '@workos-inc/authkit-nextjs';
-
-1. Import required functions:
-
-   ```typescript
-   import { getUser, getSignInUrl, signOut } from '@workos-inc/authkit-nextjs';
-````
-
-2. Get user in server component:
-
-   ```typescript
-   const user = await getUser();
-   ```
-
-return (
-
-<main>
-<h1>Welcome, {user.firstName || user.email}!</h1>
-<p>{user.email}</p>
-<form action={async () => { 'use server'; await signOut(); }}>
-<button type="submit">Sign Out</button>
-</form>
-</main>
-);
-}
-
-```
-
-Report: [STATUS] Adding authentication UI
-
-## Step 7: Verify
-
-## Step 6: Verify Installation
-
-Before reporting complete:
-
-1. Check that all imports can resolve (no "module not found" errors)
-2. Verify callback route exists at the path in WORKOS_REDIRECT_URI
-3. Verify AuthKitProvider wraps the app in layout.tsx
-
-Report: [STATUS] Integration complete
-```
+### NEXT_PUBLIC_ prefix issues
+- Client components need `NEXT_PUBLIC_*` prefix
+- Server components use plain env var names

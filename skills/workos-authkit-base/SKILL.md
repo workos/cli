@@ -1,68 +1,113 @@
 ---
 name: workos-authkit-base
-description: Shared patterns for WorkOS AuthKit integration. Provides authentication flow overview, UI component patterns, and testing guidance. Use as a foundation when integrating AuthKit with any framework.
+description: Architectural reference for WorkOS AuthKit integrations. Fetch README first for implementation details.
 ---
 
-# WorkOS AuthKit Base Patterns
+# WorkOS AuthKit Base Template
 
-This skill provides shared patterns for integrating WorkOS AuthKit. Framework-specific skills extend this with implementation details.
+## First Action: Fetch README
 
-## CRITICAL FIRST STEP: Package Installation
+Before any implementation, fetch the framework-specific README:
 
-**Before writing ANY code that imports from the SDK:**
+```
+WebFetch: {sdk-package-name} README from npmjs.com or GitHub
+```
 
-1. You MUST install the framework-specific SDK package first
-2. Wait for the installation command to complete successfully
-3. Verify the package exists in `node_modules/` before proceeding
+README is the source of truth for: install commands, imports, API usage, code patterns.
 
-**Failure to install the package will cause "module not found" build errors.**
+## Task Structure (Required)
 
-## Authentication Flow
+| Phase | Task | Blocked By | Purpose |
+|-------|------|------------|---------|
+| 1 | preflight | - | Verify env vars, detect framework |
+| 2 | install | preflight | Install SDK package |
+| 3 | callback | install | Create OAuth callback route |
+| 4 | provider | install | Setup auth context/middleware |
+| 5 | ui | callback, provider | Add sign-in/out UI |
+| 6 | verify | ui | Build confirmation |
 
-1. User clicks "Sign In" → Redirect to WorkOS hosted login
-2. User authenticates → WorkOS redirects to your callback URL
-3. Callback handler exchanges code for session → Sets secure cookie
-4. Subsequent requests include session cookie → Middleware validates
+## Decision Trees
+
+### Package Manager Detection
+
+```
+pnpm-lock.yaml? → pnpm
+yarn.lock? → yarn
+bun.lockb? → bun
+else → npm
+```
+
+### Provider vs Middleware
+
+```
+Client-side framework? → AuthKitProvider wraps app
+Server-side framework? → Middleware handles sessions
+Hybrid (Next.js)? → Both may be needed
+```
+
+### Callback Route Location
+
+Extract path from `WORKOS_REDIRECT_URI` → create route at that exact path.
 
 ## Environment Variables
 
-Your `.env.local` should contain:
+| Variable | Purpose | When Required |
+|----------|---------|---------------|
+| `WORKOS_API_KEY` | Server authentication | Server SDKs |
+| `WORKOS_CLIENT_ID` | Client identification | All SDKs |
+| `WORKOS_REDIRECT_URI` | OAuth callback URL | Server SDKs |
+| `WORKOS_COOKIE_PASSWORD` | Session encryption (32+ chars) | Server SDKs |
 
-- `WORKOS_API_KEY` - Server-side API key (sk_xxx)
-- `WORKOS_CLIENT_ID` - Public client identifier
-- `WORKOS_REDIRECT_URI` - OAuth callback URL
-- `WORKOS_COOKIE_PASSWORD` - 32+ char secret for cookie encryption
+Note: Some frameworks use prefixed variants (e.g., `NEXT_PUBLIC_*`). Check README.
 
-## UI Patterns
+## Verification Checklists
 
-### Sign In Button
+### After Install
+- [ ] SDK package installed in node_modules
+- [ ] No install errors in output
 
-Use the SDK's sign-in URL helper. Do NOT build OAuth URLs manually.
+### After Callback Route
+- [ ] Route file exists at path matching `WORKOS_REDIRECT_URI`
+- [ ] Imports SDK callback handler (not custom OAuth)
 
-### User Display
+### After Provider/Middleware
+- [ ] Provider wraps entire app (client-side)
+- [ ] Middleware configured in correct location (server-side)
 
-When authenticated, show:
+### After UI
+- [ ] Home page shows conditional auth state
+- [ ] Uses SDK functions for sign-in/out URLs
 
-- User's name or email
-- Sign out button using SDK's signOut function
+### Final Verification
+- [ ] Build completes with exit code 0
+- [ ] No import resolution errors
 
-### Protected Routes
+## Error Recovery
 
-Use SDK middleware/guards to protect routes. Do NOT manually check cookies.
+### Module not found
+- [ ] Verify install completed successfully
+- [ ] Verify SDK exists in node_modules
+- [ ] Re-run install if missing
 
-## Testing Checklist
+### Build import errors
+- [ ] Delete `node_modules`, reinstall
+- [ ] Verify package.json has SDK dependency
 
-- [ ] Sign in flow completes without errors
-- [ ] Session persists across page reloads
-- [ ] Sign out clears session
-- [ ] Protected routes redirect unauthenticated users
-- [ ] Callback URL matches WORKOS_REDIRECT_URI exactly
+### Invalid redirect URI
+- [ ] Compare route path to `WORKOS_REDIRECT_URI`
+- [ ] Paths must match exactly
 
-## Common Mistakes to Avoid
+### Cookie password error
+- [ ] Verify `WORKOS_COOKIE_PASSWORD` is 32+ characters
+- [ ] Generate new: `openssl rand -base64 32`
 
-1. **CRITICAL: Not installing the SDK package first** - This causes "module not found" errors. ALWAYS install before writing import statements.
-2. **Custom OAuth code** - Use SDK handlers, not manual implementation
-3. **Hardcoded URLs** - Use environment variables
-4. **Missing cookie password** - Required for session encryption
-5. **Wrong callback path** - Must match dashboard configuration exactly
-6. **Not waiting for package installation** - Run the install command and wait for it to complete before proceeding
+### Auth state not persisting
+- [ ] Verify provider wraps entire app
+- [ ] Check middleware is in correct location
+
+## Critical Rules
+
+1. **Install SDK before writing imports** - never create import statements for uninstalled packages
+2. **Use SDK functions** - never construct OAuth URLs manually
+3. **Follow README patterns** - SDK APIs change between versions
+4. **Extract callback path from env** - don't hardcode `/auth/callback`

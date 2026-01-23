@@ -5,53 +5,100 @@ description: Integrate WorkOS AuthKit with TanStack Start applications. Full-sta
 
 # WorkOS AuthKit for TanStack Start
 
-First, read the shared patterns: [../workos-authkit-base/SKILL.md](../workos-authkit-base/SKILL.md)
+## Decision Tree
 
-## Quick Start
+```
+1. Fetch README (BLOCKING)
+   ├── Extract package name from install command
+   └── README is source of truth for ALL code patterns
 
-1. **Fetch SDK Documentation**
-   Use WebFetch to read: https://github.com/workos/authkit-tanstack-start/blob/main/README.md
+2. Verify TanStack Start project
+   ├── @tanstack/start or @tanstack/react-start in package.json
+   └── app.config.ts exists (vinxi)
 
-2. **Install SDK**
-   ```bash
-   npm install @workos-inc/authkit-tanstack-start
-   ```
+3. Follow README install/setup exactly
+   └── Do not invent commands or patterns
+```
 
-## Integration Steps
+## Fetch SDK Documentation (BLOCKING)
 
-### Server Functions
+**STOP - Do not proceed until complete.**
 
-TanStack Start uses server functions for auth operations.
-Follow the README for setting up:
+WebFetch: `https://github.com/workos/authkit-tanstack-start/blob/main/README.md`
 
-- Auth middleware
-- Session handling
-- User retrieval
+From README, extract:
+1. Package name from install command (e.g., `pnpm add @workos/...`)
+2. Use that exact name for all imports
 
-### Callback Route
+**README overrides this skill if conflict.**
 
-Create a route at the exact path matching `WORKOS_REDIRECT_URI`.
-Use the SDK's handler - do NOT write custom callback logic.
+## Pre-Flight Checklist
 
-### Route Protection
+- [ ] README fetched and package name extracted
+- [ ] `@tanstack/start` or `@tanstack/react-start` in package.json
+- [ ] `app.config.ts` exists
+- [ ] Environment variables set (see below)
 
-Use the SDK's auth utilities to protect routes.
-Check authentication status in route loaders.
+## Environment Variables
 
-## UI Integration
+| Variable | Format | Required |
+|----------|--------|----------|
+| `WORKOS_API_KEY` | `sk_...` | Yes |
+| `WORKOS_CLIENT_ID` | `client_...` | Yes |
+| `WORKOS_REDIRECT_URI` | Full URL | Yes |
+| `WORKOS_COOKIE_PASSWORD` | 32+ chars | Yes |
 
-Update your index route:
+Generate password if missing: `openssl rand -base64 32`
 
-**Logged out:** Sign In button
-**Logged in:** User display + Sign Out button
+## Middleware Configuration (CRITICAL)
 
-Use the SDK's provided functions for sign-in/out URLs.
+**authkitMiddleware MUST be configured or auth will fail.**
 
-## Status Reporting
+Find file with `createRouter` (typically `app/router.tsx` or `app.tsx`).
 
-- [STATUS] Reading SDK documentation
-- [STATUS] Installing @workos-inc/authkit-tanstack-start
-- [STATUS] Creating callback route
-- [STATUS] Setting up auth middleware
-- [STATUS] Adding authentication UI
-- [STATUS] Complete
+### Verification Checklist
+
+- [ ] `authkitMiddleware` imported from SDK package
+- [ ] `middleware: [authkitMiddleware()]` in createRouter config
+- [ ] Array syntax used: `[authkitMiddleware()]` not `authkitMiddleware()`
+
+Verify: `grep "authkitMiddleware" app/router.tsx app.tsx src/router.tsx`
+
+## Logout Route Pattern
+
+Logout requires `signOut()` followed by redirect in a route loader. See README for exact implementation.
+
+## Callback Route
+
+Path must match `WORKOS_REDIRECT_URI`. If URI is `/api/auth/callback`:
+- File: `app/routes/api/auth/callback.tsx`
+- Use `handleAuth()` from SDK - do not write custom OAuth logic
+
+## Error Recovery
+
+### "AuthKit middleware is not configured"
+
+**Cause:** `authkitMiddleware()` not added to router
+**Fix:** Add `middleware: [authkitMiddleware()]` to createRouter config
+**Verify:** `grep "authkitMiddleware" app/router.tsx app.tsx`
+
+### "Module not found" for SDK
+
+**Cause:** Wrong package name or not installed
+**Fix:** Re-read README, extract correct package name, reinstall
+**Verify:** `ls node_modules/` + package name from README
+
+### Callback 404
+
+**Cause:** Route path doesn't match WORKOS_REDIRECT_URI
+**Fix:** File path must mirror URI path under `app/routes/`
+
+### getAuth returns undefined
+
+**Cause:** Middleware not configured
+**Fix:** Same as "AuthKit middleware not configured" above
+
+### "Cookie password too short"
+
+**Cause:** WORKOS_COOKIE_PASSWORD < 32 chars
+**Fix:** `openssl rand -base64 32`, update .env

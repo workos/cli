@@ -1,6 +1,15 @@
 {
   "framework": "vanilla-js",
-  "packages": [],
-  "envVars": [{ "name": "WORKOS_CLIENT_ID" }],
-  "files": []
+  "packages": [{ "name": "@workos-inc/authkit-js", "location": "dependencies", "required": false }],
+  "envVars": [{ "name": "WORKOS_CLIENT_ID", "required": false }],
+  "files": [
+    {
+      "path": "**/*.{html,htm}",
+      "mustContainAny": ["authkit-js", "unpkg.com/@workos-inc"]
+    },
+    {
+      "path": "**/*.{js,ts}",
+      "mustContainAny": ["AuthKit", "createAuthKit", "@workos-inc/authkit-js"]
+    }
+  ]
 }

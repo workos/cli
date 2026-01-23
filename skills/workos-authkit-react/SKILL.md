@@ -1,107 +1,91 @@
 ---
 name: workos-authkit-react
-description: Integrate WorkOS AuthKit with React single-page applications. Client-side only authentication. Use when the project is a React SPA, uses react without Next.js, or mentions React authentication.
+description: Integrate WorkOS AuthKit with React single-page applications. Client-side only authentication. Use when the project is a React SPA without Next.js or React Router.
 ---
 
-# WorkOS AuthKit for React
+# WorkOS AuthKit for React (SPA)
 
-First, read the shared patterns: [../workos-authkit-base/SKILL.md](../workos-authkit-base/SKILL.md)
+## Decision Tree
 
-## CRITICAL: Follow Steps In Order
-
-You MUST complete each step fully before moving to the next.
-
-## Step 1: Fetch SDK Documentation
-
-Use WebFetch to read: https://github.com/workos/authkit-react/blob/main/README.md
-The README is the source of truth - follow it exactly.
-
-Report: [STATUS] Reading SDK documentation
-
-## Step 2: Install SDK Package
-
-**CRITICAL**: The package MUST be installed before writing any code that imports it.
-
-Detect package manager and run install:
-
-```bash
-npm install @workos-inc/authkit-react
+```
+START
+  │
+  ├─► Fetch README (BLOCKING)
+  │   github.com/workos/authkit-react/blob/main/README.md
+  │   README is source of truth. Stop if fetch fails.
+  │
+  ├─► Detect Build Tool
+  │   ├─ vite.config.ts exists? → Vite
+  │   └─ otherwise → Create React App
+  │
+  ├─► Set Env Var Prefix
+  │   ├─ Vite → VITE_WORKOS_CLIENT_ID
+  │   └─ CRA  → REACT_APP_WORKOS_CLIENT_ID
+  │
+  └─► Implement per README
 ```
 
-**Wait for installation to complete** - do not proceed until you see success output.
+## Critical: Build Tool Detection
 
-Report: [STATUS] Installing @workos-inc/authkit-react
+| Marker File | Build Tool | Env Prefix | Access Pattern |
+|-------------|------------|------------|----------------|
+| `vite.config.ts` | Vite | `VITE_` | `import.meta.env.VITE_*` |
+| `craco.config.js` or none | CRA | `REACT_APP_` | `process.env.REACT_APP_*` |
 
-**Verify installation**: Check that `node_modules/@workos-inc/authkit-react` exists before proceeding.
+**Wrong prefix = undefined values at runtime.** This is the #1 integration failure.
 
-## Step 3: Integration Steps
+## Key Clarification: No Callback Route
 
-### AuthKitProvider Setup
+The React SDK handles OAuth callbacks **internally** via AuthKitProvider.
 
-Wrap your app with `AuthKitProvider` from the SDK.
-Get the exact implementation from the README.
+- No server-side callback route needed
+- SDK intercepts redirect URI client-side
+- Token exchange happens automatically
 
-```tsx
-// Example structure - get exact code from README
-import { AuthKitProvider } from '@workos-inc/authkit-react';
+Just ensure redirect URI env var matches WorkOS Dashboard exactly.
 
-function App() {
-  return <AuthKitProvider clientId={process.env.REACT_APP_WORKOS_CLIENT_ID}>{/* Your app */}</AuthKitProvider>;
-}
+## Required Environment Variables
+
+```
+{PREFIX}WORKOS_CLIENT_ID=client_...
+{PREFIX}WORKOS_REDIRECT_URI=http://localhost:5173/callback
 ```
 
-### Environment Variables
+No `WORKOS_API_KEY` needed. Client-side only SDK.
 
-For React SPAs, use:
+## Verification Checklist
 
-- `REACT_APP_WORKOS_CLIENT_ID` (Create React App)
-- `VITE_WORKOS_CLIENT_ID` (Vite)
+- [ ] README fetched and read
+- [ ] Build tool detected correctly
+- [ ] Env var prefix matches build tool
+- [ ] `.env` or `.env.local` has required vars
+- [ ] No `next` dependency (wrong skill)
+- [ ] No `react-router` dependency (wrong skill)
+- [ ] AuthKitProvider wraps app root
+- [ ] `pnpm build` exits 0
 
-Note: No API key needed - client-side only.
+## Error Recovery
 
-### useAuth Hook
+### "clientId is required"
 
-Use the `useAuth()` hook from the SDK for:
+**Cause:** Env var inaccessible (wrong prefix)
 
-- Checking authentication status
-- Getting user information
-- Triggering sign in/out
+Check: Does prefix match build tool? Vite needs `VITE_`, CRA needs `REACT_APP_`.
 
-### Callback Handling
+### Auth state lost on refresh
 
-The React SDK handles OAuth callbacks internally.
-No server-side callback route needed.
+**Cause:** Token persistence issue
 
-## Step 4: UI Integration
+Check: Browser dev tools → Application → Local Storage. SDK stores tokens here automatically.
 
-Update your main component:
+### useAuth returns undefined
 
-1. Import `useAuth` hook:
+**Cause:** Component outside provider tree
 
-   ```typescript
-   import { useAuth } from '@workos-inc/authkit-react';
-   ```
+Check: Entry file (`main.tsx` or `index.tsx`) wraps `<App />` in `<AuthKitProvider>`.
 
-2. Use the hook:
+### Callback redirect fails
 
-   ```typescript
-   const { user, signIn, signOut } = useAuth();
-   ```
+**Cause:** URI mismatch
 
-3. Add UI logic:
-   - **Logged out**: Show "Sign In" button that calls `signIn()`
-   - **Logged in**: Display `user.firstName`, `user.email`, and "Sign Out" button that calls `signOut()`
-
-Follow the exact patterns from the SDK README.
-
-Report: [STATUS] Adding authentication UI
-
-## Step 5: Verify Installation
-
-Before reporting complete:
-
-1. Check that all imports can resolve (no "module not found" errors)
-2. Verify AuthKitProvider wraps the app
-3. Verify environment variable is configured
-
-Report: [STATUS] Integration complete
+Check: Env var redirect URI exactly matches WorkOS Dashboard → Redirects configuration.

@@ -740,4 +740,83 @@ describe('validateInstallation', () => {
       expect(dupIssue).toBeUndefined();
     });
   });
+
+  describe('env var alternates validation', () => {
+    it('passes when alternate env var (VITE_) is present instead of primary', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@workos-inc/authkit-react': '^1.0.0' } }),
+      );
+      // Using VITE_ prefix instead of WORKOS_CLIENT_ID
+      writeFileSync(join(testDir, '.env.local'), 'VITE_WORKOS_CLIENT_ID=client_test_id\n');
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'src', 'main.tsx'),
+        '<AuthKitProvider clientId="client_test"><App /></AuthKitProvider>',
+      );
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      const envIssue = result.issues.find((i) => i.type === 'env' && i.message.includes('WORKOS_CLIENT_ID'));
+      expect(envIssue).toBeUndefined();
+    });
+
+    it('passes when alternate env var (REACT_APP_) is present instead of primary', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@workos-inc/authkit-react': '^1.0.0' } }),
+      );
+      // Using REACT_APP_ prefix instead of WORKOS_CLIENT_ID
+      writeFileSync(join(testDir, '.env.local'), 'REACT_APP_WORKOS_CLIENT_ID=client_test_id\n');
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'src', 'main.tsx'),
+        '<AuthKitProvider clientId="client_test"><App /></AuthKitProvider>',
+      );
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      const envIssue = result.issues.find((i) => i.type === 'env' && i.message.includes('WORKOS_CLIENT_ID'));
+      expect(envIssue).toBeUndefined();
+    });
+
+    it('fails when neither primary nor alternates are present', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@workos-inc/authkit-react': '^1.0.0' } }),
+      );
+      // No WORKOS_CLIENT_ID or any alternate
+      writeFileSync(join(testDir, '.env.local'), 'SOME_OTHER_VAR=value\n');
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'src', 'main.tsx'),
+        '<AuthKitProvider clientId="client_test"><App /></AuthKitProvider>',
+      );
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      const envIssue = result.issues.find((i) => i.type === 'env' && i.message.includes('WORKOS_CLIENT_ID'));
+      expect(envIssue).toBeDefined();
+      expect(envIssue?.severity).toBe('error');
+    });
+
+    it('includes alternates in hint message when missing', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@workos-inc/authkit-react': '^1.0.0' } }),
+      );
+      writeFileSync(join(testDir, '.env.local'), 'SOME_OTHER_VAR=value\n');
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'src', 'main.tsx'),
+        '<AuthKitProvider clientId="client_test"><App /></AuthKitProvider>',
+      );
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      const envIssue = result.issues.find((i) => i.type === 'env' && i.message.includes('WORKOS_CLIENT_ID'));
+      expect(envIssue?.hint).toContain('REACT_APP_WORKOS_CLIENT_ID');
+      expect(envIssue?.hint).toContain('VITE_WORKOS_CLIENT_ID');
+    });
+  });
 });

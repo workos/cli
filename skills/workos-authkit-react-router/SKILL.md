@@ -5,67 +5,102 @@ description: Integrate WorkOS AuthKit with React Router applications. Supports v
 
 # WorkOS AuthKit for React Router
 
-First, read the shared patterns: [../workos-authkit-base/SKILL.md](../workos-authkit-base/SKILL.md)
+## Decision Tree
 
-## Quick Start
+```
+1. Fetch README (BLOCKING)
+2. Detect router mode
+3. Follow README for that mode
+4. Verify with checklist below
+```
 
-1. **Fetch SDK Documentation**
-   Use WebFetch to read: https://github.com/workos/authkit-react-router/blob/main/README.md
+## Phase 1: Fetch SDK Documentation (BLOCKING)
 
-2. **Install SDK**
+**STOP - Do not write any code until this completes.**
 
-   ```bash
-   npm install @workos-inc/authkit-react-router
-   ```
+WebFetch: `https://github.com/workos/authkit-react-router/blob/main/README.md`
 
-3. **Detect Router Mode**
-   - v7 Framework: Has `react-router.config.ts`
-   - v7 Data: Uses `createBrowserRouter` in source files
-   - v7 Declarative: Uses `<BrowserRouter>` component
-   - v6: Check package.json version
+The README is the source of truth. If this skill conflicts with README, **follow the README**.
 
-## Mode-Specific Integration
+## Phase 2: Detect Router Mode
 
-### v7 Framework Mode (with react-router.config.ts)
+| Mode           | Detection Signal                | Key Indicator               |
+| -------------- | ------------------------------- | --------------------------- |
+| v7 Framework   | `react-router.config.ts` exists | Routes in `app/routes/`     |
+| v7 Data        | `createBrowserRouter` in source | Loaders in route config     |
+| v7 Declarative | `<BrowserRouter>` component     | Routes as JSX, no loaders   |
+| v6             | package.json version `"6.x"`    | Similar to v7 Declarative   |
 
-Use loader-based authentication. The SDK provides:
+**Detection order:**
+1. Check for `react-router.config.ts` (Framework mode)
+2. Grep for `createBrowserRouter` (Data mode)
+3. Check package.json version (v6 vs v7)
+4. Default to Declarative if v7 with `<BrowserRouter>`
 
-- `authLoader` for route loaders
-- `handleCallbackRoute` for the callback route
+## Phase 3: Follow README
 
-Create callback route at the exact path matching `WORKOS_REDIRECT_URI`.
+Based on detected mode, apply the corresponding README section. The README contains current API signatures and code patterns.
 
-### v7 Data Mode (createBrowserRouter)
+## Critical Distinctions
 
-Similar to Framework mode but configured in your router setup.
-Use loaders for auth checks.
+### authLoader vs authkitLoader
 
-### v7 Declarative Mode (<BrowserRouter>)
+| Function       | Purpose                          | Where to use            |
+| -------------- | -------------------------------- | ----------------------- |
+| `authLoader`   | OAuth callback handler           | Callback route ONLY     |
+| `authkitLoader`| Fetch user data in routes        | Any route needing auth  |
 
-Use the SDK's React hooks and components.
-Wrap routes with auth checks.
+**Common mistake:** Using `authkitLoader` for callback route. Use `authLoader()`.
 
-### v6 Mode
+### Root Route Requirement
 
-Follow v7 Declarative patterns with version-appropriate APIs.
+Auth loader MUST be on root route for child routes to access auth context.
 
-## Callback Route
+**Wrong:** Auth loader only on `/dashboard`
+**Right:** Auth loader on `/` (root), children inherit context
 
-All modes need a callback route at the path matching `WORKOS_REDIRECT_URI`.
-Use the SDK's callback handler - do NOT write custom OAuth code.
+## Environment Variables
 
-## UI Integration
+Required in `.env` or `.env.local`:
 
-Update your home route component:
+- `WORKOS_API_KEY` - starts with `sk_`
+- `WORKOS_CLIENT_ID` - starts with `client_`
+- `WORKOS_REDIRECT_URI` - full URL (e.g., `http://localhost:3000/auth/callback`)
+- `WORKOS_COOKIE_PASSWORD` - 32+ chars (server modes only)
 
-**Logged out:** Sign In button triggering auth flow
-**Logged in:** User info display + Sign Out button
+## Verification Checklist
 
-## Status Reporting
+After implementation, verify:
 
-- [STATUS] Reading SDK documentation
-- [STATUS] Installing @workos-inc/authkit-react-router
-- [STATUS] Detecting router mode
-- [STATUS] Creating callback route
-- [STATUS] Adding authentication UI
-- [STATUS] Complete
+- [ ] SDK installed in node_modules (package name from README)
+- [ ] Callback route path matches `WORKOS_REDIRECT_URI` path segment
+- [ ] Auth loader/provider on root route (not just child routes)
+- [ ] Build succeeds: `npm run build` exits 0
+- [ ] Correct mode pattern applied (loaders vs hooks)
+
+## Error Recovery
+
+### "loader is not a function"
+
+**Cause:** Using loader pattern in Declarative/v6 mode
+**Fix:** Declarative/v6 modes use `AuthKitProvider` + `useAuth` hook, not loaders
+
+### Auth state not available in child routes
+
+**Cause:** Auth loader missing from root route
+**Fix:** Add `authkitLoader` (or `AuthKitProvider`) to root route so children inherit context
+
+### useAuth returns undefined
+
+**Cause:** Missing `AuthKitProvider` wrapper
+**Fix:** Wrap app with `AuthKitProvider` (required for Declarative/v6 modes)
+
+### Callback route 404
+
+**Cause:** Route path mismatch with `WORKOS_REDIRECT_URI`
+**Fix:** Extract exact path from env var, create route at that path
+
+### "Module not found" for SDK
+
+**Cause:** SDK not installed
+**Fix:** Install SDK, wait for completion, verify `node_modules` before writing imports

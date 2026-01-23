@@ -129,7 +129,8 @@ export async function runAgentWizard(config: FrameworkConfig, options: WizardOpt
   // If agent returned an error, throw so state machine can handle it
   if (agentResult.error) {
     await analytics.shutdown('error');
-    throw new Error(`Agent failed: ${agentResult.error}`);
+    const message = agentResult.errorMessage || agentResult.error;
+    throw new Error(`Agent SDK error: ${message}`);
   }
 
   // Run post-installation validation

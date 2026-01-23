@@ -1,11 +1,20 @@
 {
   "framework": "react",
   "packages": [{ "name": "@workos-inc/authkit-react", "location": "dependencies" }],
-  "envVars": [{ "name": "WORKOS_CLIENT_ID" }],
+  "envVars": [
+    {
+      "name": "WORKOS_CLIENT_ID",
+      "alternates": ["REACT_APP_WORKOS_CLIENT_ID", "VITE_WORKOS_CLIENT_ID"]
+    }
+  ],
   "files": [
     {
+      "path": "src/{main,index,App}.{ts,tsx,js,jsx}",
+      "mustContainAny": ["AuthKitProvider"]
+    },
+    {
       "path": "src/**/*.{ts,tsx,js,jsx}",
-      "mustContainAny": ["AuthKitProvider", "useAuth"]
+      "mustContainAny": ["useAuth", "signIn", "signOut"]
     }
   ]
 }

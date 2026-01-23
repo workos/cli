@@ -65,7 +65,7 @@ export const INTEGRATION_CONFIG = {
     filterFilesRules: '',
     docsUrl: 'https://workos.com/docs/user-management/authkit/tanstack-start',
     defaultChanges:
-      '• Installed @workos/authkit-tanstack-start package\n• Added AuthKit middleware and routes\n• Created authentication components',
+      '• Installed WorkOS AuthKit SDK package\n• Added AuthKit middleware and routes\n• Created authentication components',
     nextSteps:
       '• Use useAuth() hook to access auth state\n• Add protected routes with authentication checks\n• Customize auth UI to match your app',
   },
