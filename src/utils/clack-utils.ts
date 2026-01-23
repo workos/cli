@@ -90,19 +90,18 @@ export function printWelcome(options: { wizardName: string; message?: string }):
   clack.note(welcomeText);
 }
 
-export async function confirmContinueIfNoOrDirtyGitRepo(options: Pick<WizardOptions, 'default' | 'ci'>): Promise<void> {
+export async function confirmContinueIfNoOrDirtyGitRepo(options: Pick<WizardOptions, 'ci'>): Promise<void> {
   return traceStep('check-git-status', async () => {
     if (!isInGitRepo()) {
       // CI mode: auto-continue without git
-      const continueWithoutGit =
-        options.default || options.ci
-          ? true
-          : await abortIfCancelled(
-              clack.confirm({
-                message:
-                  'You are not inside a git repository. The wizard will create and update files. Do you want to continue anyway?',
-              }),
-            );
+      const continueWithoutGit = options.ci
+        ? true
+        : await abortIfCancelled(
+            clack.confirm({
+              message:
+                'You are not inside a git repository. The wizard will create and update files. Do you want to continue anyway?',
+            }),
+          );
 
       analytics.setTag('continue-without-git', continueWithoutGit);
 
@@ -505,55 +504,6 @@ export function isUsingTypeScript({ installDir }: Pick<WizardOptions, 'installDi
   } catch {
     return false;
   }
-}
-
-/**
- *
- * Use this function to get project data for the wizard.
- *
- * @param options wizard options
- * @returns project data (token, url)
- */
-/**
- * Check for existing WorkOS credentials without prompting
- * Returns credentials if found, null if prompting is needed
- */
-export function checkExistingCredentials(
-  options: Pick<WizardOptions, 'apiKey' | 'clientId' | 'installDir'>,
-  requireApiKey: boolean = true,
-): { apiKey: string; clientId: string } | null {
-  let apiKey = options.apiKey;
-  let clientId = options.clientId;
-
-  // If credentials provided via CLI, use them
-  if ((!requireApiKey || apiKey) && clientId) {
-    return { apiKey: apiKey || '', clientId };
-  }
-
-  // Check if credentials already exist in .env.local
-  const envPath = join(options.installDir, '.env.local');
-  if (fs.existsSync(envPath)) {
-    try {
-      const envContent = fs.readFileSync(envPath, 'utf-8');
-      const envVars = parseEnvFile(envContent);
-
-      const existingApiKey = envVars.WORKOS_API_KEY;
-      const existingClientId = envVars.WORKOS_CLIENT_ID;
-
-      // Use existing credentials if both are present (or API key not required)
-      if (existingClientId && (!requireApiKey || existingApiKey)) {
-        return {
-          apiKey: existingApiKey || '',
-          clientId: existingClientId,
-        };
-      }
-    } catch (error) {
-      // If we can't read/parse .env.local, return null to prompt
-      debug('Failed to read .env.local:', error);
-    }
-  }
-
-  return null;
 }
 
 /**

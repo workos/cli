@@ -41,6 +41,8 @@ export interface InstallerConfig {
   branding: {
     showAsciiArt: boolean;
     asciiArt: string;
+    compactAsciiArt: string;
+    useCompact: boolean;
   };
 }
 

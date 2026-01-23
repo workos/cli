@@ -89,6 +89,7 @@ export async function runLogin(): Promise<void> {
     },
     body: new URLSearchParams({
       client_id: clientId,
+      scope: 'openid email',
     }),
   });
 

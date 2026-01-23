@@ -31,11 +31,74 @@ import { runWizard } from './src/run.js';
 import { isNonInteractiveEnvironment } from './src/utils/environment.js';
 import clack from './src/utils/clack.js';
 
-// E2E tests removed - no mock server needed
+// Shared options for wizard commands (default and dashboard)
+const wizardOptions = {
+  debug: {
+    default: false,
+    describe: 'Enable verbose logging',
+    type: 'boolean' as const,
+  },
+  // Hidden dev/automation flags (use env vars)
+  local: {
+    default: false,
+    type: 'boolean' as const,
+    hidden: true,
+  },
+  ci: {
+    default: false,
+    type: 'boolean' as const,
+    hidden: true,
+  },
+  'skip-auth': {
+    default: false,
+    type: 'boolean' as const,
+    hidden: true,
+  },
+  'api-key': {
+    type: 'string' as const,
+    hidden: true,
+  },
+  'client-id': {
+    type: 'string' as const,
+    hidden: true,
+  },
+  inspect: {
+    default: false,
+    type: 'boolean' as const,
+    hidden: true,
+  },
+  // User-facing flags
+  'homepage-url': {
+    describe: 'App homepage URL for WorkOS (defaults to http://localhost:{port})',
+    type: 'string' as const,
+  },
+  'redirect-uri': {
+    describe: 'Redirect URI for WorkOS callback (defaults to framework convention)',
+    type: 'string' as const,
+  },
+  'no-validate': {
+    default: false,
+    describe: 'Skip post-installation validation (includes build check)',
+    type: 'boolean' as const,
+  },
+  'install-dir': {
+    describe: 'Directory to install WorkOS AuthKit in',
+    type: 'string' as const,
+  },
+  integration: {
+    describe: 'Integration to set up',
+    choices: ['nextjs', 'react', 'tanstack-start', 'react-router', 'vanilla-js'] as const,
+    type: 'string' as const,
+  },
+  'force-install': {
+    default: false,
+    describe: 'Force install packages even if peer dependency checks fail',
+    type: 'boolean' as const,
+  },
+};
 
 yargs(hideBin(process.argv))
   .env('WORKOS_WIZARD')
-  .options({})
   .command('login', 'Authenticate with WorkOS', {}, async () => {
     const { runLogin } = await import('./src/commands/login.js');
     await runLogin();
@@ -81,17 +144,7 @@ yargs(hideBin(process.argv))
     'dashboard',
     '[Experimental] Run the wizard with visual dashboard mode',
     (yargs) => {
-      return yargs.options({
-        'install-dir': {
-          describe: 'Directory to install WorkOS AuthKit in\nenv: WORKOS_WIZARD_INSTALL_DIR',
-          type: 'string',
-        },
-        integration: {
-          describe: 'Integration to set up',
-          choices: ['nextjs', 'react', 'tanstack-start', 'react-router', 'vanilla-js'],
-          type: 'string',
-        },
-      });
+      return yargs.options(wizardOptions);
     },
     (argv) => {
       const options = { ...argv, dashboard: true };
@@ -108,84 +161,11 @@ yargs(hideBin(process.argv))
       );
     },
   )
-  .options({
-    debug: {
-      default: false,
-      describe: 'Enable verbose logging\nenv: WORKOS_WIZARD_DEBUG',
-      type: 'boolean',
-    },
-    default: {
-      default: true,
-      describe: 'Use default options for all prompts\nenv: WORKOS_WIZARD_DEFAULT',
-      type: 'boolean',
-    },
-    local: {
-      default: false,
-      describe: 'Use local services (LLM gateway on localhost:8000)\nenv: WORKOS_WIZARD_LOCAL',
-      type: 'boolean',
-    },
-    ci: {
-      default: false,
-      describe: 'Enable CI mode for non-interactive execution\nenv: WORKOS_WIZARD_CI',
-      type: 'boolean',
-    },
-    'skip-auth': {
-      default: false,
-      describe: 'Skip authentication check (requires --local)\nenv: WORKOS_WIZARD_SKIP_AUTH',
-      type: 'boolean',
-    },
-    'api-key': {
-      describe: 'WorkOS API key (sk_xxx)\nenv: WORKOS_WIZARD_API_KEY',
-      type: 'string',
-    },
-    'client-id': {
-      describe: 'WorkOS Client ID (client_xxx)\nenv: WORKOS_WIZARD_CLIENT_ID',
-      type: 'string',
-    },
-    'homepage-url': {
-      describe: 'App homepage URL for WorkOS (defaults to http://localhost:{port})\nenv: WORKOS_WIZARD_HOMEPAGE_URL',
-      type: 'string',
-    },
-    'redirect-uri': {
-      describe: 'Redirect URI for WorkOS callback (defaults to framework convention)\nenv: WORKOS_WIZARD_REDIRECT_URI',
-      type: 'string',
-    },
-    inspect: {
-      default: false,
-      describe: 'Open XState inspector in browser to visualize state machine live',
-      type: 'boolean',
-    },
-    'no-validate': {
-      default: false,
-      describe: 'Skip post-installation validation\nenv: WORKOS_WIZARD_NO_VALIDATE',
-      type: 'boolean',
-    },
-    'no-build': {
-      default: false,
-      describe: 'Skip build verification during validation\nenv: WORKOS_WIZARD_NO_BUILD',
-      type: 'boolean',
-    },
-  })
   .command(
     ['$0'],
     'Run the WorkOS AuthKit setup wizard',
     (yargs) => {
-      return yargs.options({
-        'force-install': {
-          default: false,
-          describe: 'Force install packages even if peer dependency checks fail\nenv: WORKOS_WIZARD_FORCE_INSTALL',
-          type: 'boolean',
-        },
-        'install-dir': {
-          describe: 'Directory to install WorkOS AuthKit in\nenv: WORKOS_WIZARD_INSTALL_DIR',
-          type: 'string',
-        },
-        integration: {
-          describe: 'Integration to set up',
-          choices: ['nextjs', 'react', 'tanstack-start', 'react-router', 'vanilla-js'],
-          type: 'string',
-        },
-      });
+      return yargs.options(wizardOptions);
     },
     (argv) => {
       const options = { ...argv };

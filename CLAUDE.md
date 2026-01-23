@@ -64,6 +64,7 @@ The dashboard code lives in `src/dashboard/` and uses `WizardEventEmitter` to re
 - **Strict TypeScript** - no `as any`, proper typing required
 - **No node-specific APIs** (crypto, fs sync, etc.) unless necessary
 - **Ink + React 19** for TUI dashboard
+- **Never commit the `docs/` directory** - it contains local ideation artifacts
 
 ## Commands
 

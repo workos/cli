@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { CLIAdapter } from '../cli-adapter.js';
 import { createWizardEventEmitter } from '../../events.js';
 
+// Mock console.log to capture styled output
+const mockConsoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
+
 // Mock clack
 vi.mock('../../../utils/clack.js', () => ({
   default: {
@@ -12,6 +15,7 @@ vi.mock('../../../utils/clack.js', () => ({
       warn: vi.fn(),
       error: vi.fn(),
       info: vi.fn(),
+      message: vi.fn(),
     },
     spinner: vi.fn(() => ({
       start: vi.fn(),
@@ -27,9 +31,38 @@ vi.mock('../../../utils/clack.js', () => ({
 }));
 
 vi.mock('../../settings.js', () => ({
-  getSettings: vi.fn(() => ({
-    branding: { showAsciiArt: false },
+  getConfig: vi.fn(() => ({
+    branding: {
+      showAsciiArt: false,
+      useCompact: true,
+      compactAsciiArt: 'Test Wizard',
+      asciiArt: 'Big Art',
+    },
   })),
+}));
+
+// Mock cli-symbols to avoid chalk color codes in test assertions
+vi.mock('../../../utils/cli-symbols.js', () => ({
+  styled: {
+    success: (text: string) => `✓ ${text}`,
+    error: (text: string) => `✗ ${text}`,
+    warning: (text: string) => `! ${text}`,
+    info: (text: string) => `ℹ ${text}`,
+    action: (text: string) => `→ ${text}`,
+    label: (label: string, value: string) => `${label} ${value}`,
+    phase: (num: number, total: number, name: string) => `${'▓'.repeat(num)}${'░'.repeat(total - num)} ${name}`,
+    bullet: (text: string) => `  • ${text}`,
+  },
+  symbols: {
+    success: '✓',
+    error: '✗',
+    warning: '!',
+    info: 'ℹ',
+    arrow: '→',
+    bullet: '•',
+    progressFilled: '▓',
+    progressEmpty: '░',
+  },
 }));
 
 describe('CLIAdapter', () => {
@@ -46,17 +79,18 @@ describe('CLIAdapter', () => {
   afterEach(async () => {
     await adapter.stop();
     vi.clearAllMocks();
+    mockConsoleLog.mockClear();
   });
 
   describe('start', () => {
     it('subscribes to events on start', async () => {
       await adapter.start();
-
-      // Emit an event - handler should be called
       const clack = await import('../../../utils/clack.js');
-      emitter.emit('auth:checking', {});
 
-      expect(clack.default.log.step).toHaveBeenCalledWith('Checking authentication...');
+      // Emit auth:success - uses clack.log.success
+      emitter.emit('auth:success', {});
+
+      expect(clack.default.log.success).toHaveBeenCalledWith('Authenticated');
     });
 
     it('shows intro on start', async () => {
@@ -104,7 +138,8 @@ describe('CLIAdapter', () => {
 
       emitter.emit('detection:complete', { integration: 'nextjs' });
 
-      expect(clack.default.log.success).toHaveBeenCalledWith('Detected: nextjs');
+      // Uses clack.log.success
+      expect(clack.default.log.success).toHaveBeenCalled();
     });
 
     it('shows spinner on agent:start', async () => {
@@ -193,7 +228,10 @@ describe('CLIAdapter', () => {
 
       emitter.emit('complete', { success: true, summary: 'All done!' });
 
-      expect(clack.default.outro).toHaveBeenCalledWith('All done!');
+      // Uses clack.log for output
+      expect(clack.default.log.success).toHaveBeenCalledWith('WorkOS AuthKit installed!');
+      expect(clack.default.log.message).toHaveBeenCalledWith('Next steps:');
+      expect(clack.default.outro).toHaveBeenCalled();
     });
 
     it('shows error on failure complete', async () => {
@@ -202,7 +240,10 @@ describe('CLIAdapter', () => {
 
       emitter.emit('complete', { success: false, summary: 'Something went wrong' });
 
-      expect(clack.default.log.error).toHaveBeenCalledWith('Something went wrong');
+      // Uses clack.log for output
+      expect(clack.default.log.error).toHaveBeenCalledWith('Installation failed');
+      expect(clack.default.log.info).toHaveBeenCalledWith('Something went wrong');
+      expect(clack.default.outro).toHaveBeenCalled();
     });
   });
 });

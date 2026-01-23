@@ -3,6 +3,7 @@ import type { WizardEventEmitter, WizardEvents } from '../events.js';
 import clack from '../../utils/clack.js';
 import chalk from 'chalk';
 import { getConfig } from '../settings.js';
+import { ProgressTracker } from '../progress-tracker.js';
 
 /**
  * CLI adapter that renders wizard events via clack.
@@ -16,6 +17,7 @@ export class CLIAdapter implements WizardAdapter {
   private debug: boolean;
   private spinner: ReturnType<typeof clack.spinner> | null = null;
   private isStarted = false;
+  private progress = new ProgressTracker();
 
   // Store bound handlers for cleanup
   private handlers = new Map<string, (...args: unknown[]) => void>();
@@ -23,6 +25,12 @@ export class CLIAdapter implements WizardAdapter {
   // Queue for logs while prompt is active (parallel state issue)
   private isPromptActive = false;
   private pendingLogs: Array<() => void> = [];
+
+  // SIGINT handler for cleanup
+  private sigIntHandler: (() => void) | null = null;
+
+  // Long-running agent update interval
+  private agentUpdateInterval: NodeJS.Timeout | null = null;
 
   constructor(config: AdapterConfig) {
     this.emitter = config.emitter;
@@ -56,26 +64,39 @@ export class CLIAdapter implements WizardAdapter {
     // Show intro
     const config = getConfig();
     if (config.branding.showAsciiArt) {
-      console.log(chalk.cyan(config.branding.asciiArt));
+      const art = config.branding.useCompact ? config.branding.compactAsciiArt : config.branding.asciiArt;
+      console.log(chalk.cyan(art));
       console.log();
     } else {
       clack.intro('Welcome to the WorkOS AuthKit setup wizard');
     }
 
-    // Subscribe to all events
-    this.subscribe('auth:checking', this.handleAuthChecking);
-    this.subscribe('auth:required', this.handleAuthRequired);
+    // Handle Ctrl+C gracefully
+    const handleSigInt = () => {
+      if (this.spinner) {
+        this.spinner.stop('Cancelled');
+        this.spinner = null;
+      }
+      this.stopAgentUpdates();
+      clack.log.warn('Wizard cancelled');
+      clack.outro('Your project was not modified');
+      process.exit(0);
+    };
+    process.on('SIGINT', handleSigInt);
+    this.sigIntHandler = handleSigInt;
+
+    // Subscribe to state events for progress tracking
+    this.subscribe('state:enter', this.handleStateEnter);
+    this.subscribe('state:exit', this.handleStateExit);
+
+    // Subscribe to events that require UI rendering
     this.subscribe('auth:success', this.handleAuthSuccess);
     this.subscribe('auth:failure', this.handleAuthFailure);
-    this.subscribe('detection:start', this.handleDetectionStart);
     this.subscribe('detection:complete', this.handleDetectionComplete);
     this.subscribe('detection:none', this.handleDetectionNone);
-    this.subscribe('git:checking', this.handleGitChecking);
-    this.subscribe('git:clean', this.handleGitClean);
     this.subscribe('git:dirty', this.handleGitDirty);
     this.subscribe('credentials:found', this.handleCredentialsFound);
     this.subscribe('credentials:request', this.handleCredentialsRequest);
-    this.subscribe('config:start', this.handleConfigStart);
     this.subscribe('config:complete', this.handleConfigComplete);
     this.subscribe('agent:start', this.handleAgentStart);
     this.subscribe('agent:progress', this.handleAgentProgress);
@@ -89,6 +110,15 @@ export class CLIAdapter implements WizardAdapter {
   async stop(): Promise<void> {
     if (!this.isStarted) return;
 
+    // Remove SIGINT handler
+    if (this.sigIntHandler) {
+      process.off('SIGINT', this.sigIntHandler);
+      this.sigIntHandler = null;
+    }
+
+    // Stop agent updates
+    this.stopAgentUpdates();
+
     // Unsubscribe from all events
     for (const [event, handler] of this.handlers) {
       this.emitter.off(event as keyof WizardEvents, handler as never);
@@ -101,6 +131,20 @@ export class CLIAdapter implements WizardAdapter {
 
     this.isStarted = false;
   }
+
+  private stopAgentUpdates = (): void => {
+    if (this.agentUpdateInterval) {
+      clearInterval(this.agentUpdateInterval);
+      this.agentUpdateInterval = null;
+    }
+  };
+
+  /** Debug logging - only outputs when debug mode is enabled */
+  private debugLog = (message: string): void => {
+    if (this.debug) {
+      console.log(chalk.dim(`[debug] ${message}`));
+    }
+  };
 
   /**
    * Helper to subscribe and track handlers for cleanup.
@@ -116,12 +160,12 @@ export class CLIAdapter implements WizardAdapter {
 
   // ===== Event Handlers =====
 
-  private handleAuthChecking = (): void => {
-    clack.log.step('Checking authentication...');
+  private handleStateEnter = ({ state }: WizardEvents['state:enter']): void => {
+    this.progress.enterPhase(state);
   };
 
-  private handleAuthRequired = (): void => {
-    clack.log.step('Authentication required');
+  private handleStateExit = ({ state }: WizardEvents['state:exit']): void => {
+    this.progress.exitPhase(state);
   };
 
   private handleAuthSuccess = (): void => {
@@ -129,27 +173,16 @@ export class CLIAdapter implements WizardAdapter {
   };
 
   private handleAuthFailure = ({ message }: WizardEvents['auth:failure']): void => {
-    clack.log.error(`Authentication failed: ${message}`);
-  };
-
-  private handleDetectionStart = (): void => {
-    this.queueableLog(() => clack.log.step('Detecting framework...'));
+    clack.log.error(`Auth failed: ${message}`);
+    clack.log.info('Visit https://dashboard.workos.com to verify your account');
   };
 
   private handleDetectionComplete = ({ integration }: WizardEvents['detection:complete']): void => {
-    this.queueableLog(() => clack.log.success(`Detected: ${integration}`));
+    this.queueableLog(() => clack.log.success(`Detected ${chalk.bold(integration)}`));
   };
 
   private handleDetectionNone = (): void => {
     this.queueableLog(() => clack.log.warn('Could not detect framework automatically'));
-  };
-
-  private handleGitChecking = (): void => {
-    // Silent - don't clutter output
-  };
-
-  private handleGitClean = (): void => {
-    // Silent - don't clutter output
   };
 
   private handleCredentialsFound = (): void => {
@@ -234,10 +267,6 @@ export class CLIAdapter implements WizardAdapter {
     });
   };
 
-  private handleConfigStart = (): void => {
-    clack.log.step('Configuring environment...');
-  };
-
   private handleConfigComplete = (): void => {
     clack.log.success('Environment configured');
   };
@@ -245,6 +274,14 @@ export class CLIAdapter implements WizardAdapter {
   private handleAgentStart = (): void => {
     this.spinner = clack.spinner();
     this.spinner.start('Running AI agent...');
+
+    // Periodic status updates for long-running operations
+    let dots = 0;
+    this.agentUpdateInterval = setInterval(() => {
+      dots = (dots + 1) % 4;
+      const dotStr = '.'.repeat(dots + 1);
+      this.spinner?.message(`Running AI agent${dotStr}`);
+    }, 2000);
   };
 
   private handleAgentProgress = ({ step, detail }: WizardEvents['agent:progress']): void => {
@@ -253,19 +290,22 @@ export class CLIAdapter implements WizardAdapter {
   };
 
   private handleValidationStart = (): void => {
+    this.stopAgentUpdates();
     if (this.spinner) {
       this.spinner.stop('Agent completed');
       this.spinner = null;
     }
-    clack.log.step('Validating installation...');
   };
 
   private handleValidationIssues = ({ issues }: WizardEvents['validation:issues']): void => {
     for (const issue of issues) {
-      const prefix = issue.severity === 'error' ? '!' : '?';
-      clack.log.warn(`${prefix} ${issue.message}`);
+      if (issue.severity === 'error') {
+        clack.log.error(issue.message);
+      } else {
+        clack.log.warn(issue.message);
+      }
       if (issue.hint) {
-        clack.log.info(chalk.dim(`  Hint: ${issue.hint}`));
+        clack.log.info(`Hint: ${issue.hint}`);
       }
     }
   };
@@ -279,19 +319,25 @@ export class CLIAdapter implements WizardAdapter {
   };
 
   private handleComplete = ({ success, summary }: WizardEvents['complete']): void => {
+    this.stopAgentUpdates();
+
     if (this.spinner) {
-      this.spinner.stop(success ? 'Agent completed' : 'Agent failed');
+      this.spinner.stop(success ? 'Done' : 'Failed');
       this.spinner = null;
     }
 
     if (success) {
-      if (summary) {
-        clack.outro(summary);
-      } else {
-        clack.outro('WorkOS AuthKit integration complete!');
-      }
+      clack.log.success('WorkOS AuthKit installed!');
+      clack.log.message('Next steps:');
+      clack.log.message('  • Start dev server to test authentication');
+      clack.log.message('  • Visit WorkOS Dashboard to manage users');
+      clack.outro(chalk.dim('Docs: https://workos.com/docs/authkit'));
     } else {
-      clack.log.error(summary ?? 'Wizard failed');
+      clack.log.error('Installation failed');
+      if (summary) {
+        clack.log.info(summary);
+      }
+      clack.outro(chalk.dim('Report issues: https://github.com/workos/installer/issues'));
     }
   };
 
@@ -300,10 +346,20 @@ export class CLIAdapter implements WizardAdapter {
       this.spinner.stop('Error');
       this.spinner = null;
     }
+    this.stopAgentUpdates();
 
     clack.log.error(message);
+
+    // Add actionable hints for common errors
+    if (message.includes('authentication') || message.includes('auth')) {
+      clack.log.info('Try running: wizard logout && wizard');
+    }
+    if (message.includes('ENOENT') || message.includes('not found')) {
+      clack.log.info('Ensure you are in a project directory');
+    }
+
     if (stack && this.debug) {
-      console.error(chalk.dim(stack));
+      this.debugLog(stack);
     }
   };
 }
