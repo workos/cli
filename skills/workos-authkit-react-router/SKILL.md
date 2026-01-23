@@ -91,6 +91,8 @@ Extract path (e.g., `http://localhost:3000/auth/callback` → `/auth/callback`)
 
 ### 3.2 Create Callback Route (by mode)
 
+**IMPORTANT**: Use `authLoader` (NOT `authkitLoader`) for the callback route. `authLoader` handles the OAuth callback and redirects. `authkitLoader` is for fetching user data in other routes.
+
 #### v7 Framework Mode
 
 Create `app/routes/auth.callback.tsx`:
