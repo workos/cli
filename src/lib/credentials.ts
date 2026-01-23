@@ -10,7 +10,7 @@ export interface Credentials {
 }
 
 function getCredentialsDir(): string {
-  return path.join(os.homedir(), '.wizard');
+  return path.join(os.homedir(), '.workos');
 }
 
 export function getCredentialsPath(): string {

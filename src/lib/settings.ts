@@ -1,4 +1,4 @@
-import { config } from '../../installer.config.js';
+import { config } from '../../cli.config.js';
 import pkg from '../../package.json' with { type: 'json' };
 
 /**

@@ -1,4 +1,4 @@
-# @workos/installer
+# workos
 
 AI-powered CLI that automatically integrates WorkOS AuthKit into web applications.
 
@@ -6,11 +6,11 @@ AI-powered CLI that automatically integrates WorkOS AuthKit into web application
 
 ```bash
 # Run directly with npx (recommended)
-npx @workos/installer
+npx workos
 
 # Or install globally
-npm install -g @workos/installer
-workos-installer
+npm install -g workos
+workos
 ```
 
 ## Features
@@ -45,7 +45,7 @@ Get your credentials from [dashboard.workos.com](https://dashboard.workos.com):
 ## CLI Options
 
 ```bash
-workos-installer [options] [command]
+workos [options] [command]
 
 Commands:
   dashboard              Run with visual TUI dashboard (experimental)
@@ -66,49 +66,35 @@ Options:
   --debug                 Enable verbose logging
 
 Environment Variables:
-  WIZARD_TELEMETRY=false  Disable telemetry collection
+  WORKOS_TELEMETRY=false  Disable telemetry collection
 ```
 
 ## Examples
 
 ```bash
 # Interactive (recommended)
-npx @workos/installer
+npx workos
 
 # Specify framework
-npx @workos/installer --integration react-router
+npx workos --integration react-router
 
 # With visual dashboard (experimental)
-npx @workos/installer dashboard
+npx workos dashboard
 ```
-
-## CI Mode
-
-For non-interactive CI/CD environments:
-
-```bash
-npx @workos/installer --ci \
-  --integration nextjs \
-  --api-key $WORKOS_API_KEY \
-  --client-id $WORKOS_CLIENT_ID \
-  --install-dir ./my-app
-```
-
-CI mode requires `--api-key`, `--client-id`, and `--install-dir`.
 
 ## Authentication
 
-The wizard uses WorkOS Connect OAuth device flow for authentication:
+The CLI uses WorkOS Connect OAuth device flow for authentication:
 
 ```bash
 # Login (opens browser for authentication)
-workos-installer login
+workos login
 
 # Logout (clears stored credentials)
-workos-installer logout
+workos logout
 ```
 
-Credentials are stored in `~/.wizard/credentials.json`. Access tokens are not persisted long-term for security - users re-authenticate when tokens expire.
+Credentials are stored in `~/.workos/credentials.json`. Access tokens are not persisted long-term for security - users re-authenticate when tokens expire.
 
 ## How It Works
 
@@ -133,7 +119,7 @@ The wizard collects anonymous usage telemetry to help improve the product:
 No code, credentials, or personal data is collected. Disable with:
 
 ```bash
-WIZARD_TELEMETRY=false npx @workos/installer
+WORKOS_TELEMETRY=false npx workos
 ```
 
 ## Logs
@@ -141,7 +127,7 @@ WIZARD_TELEMETRY=false npx @workos/installer
 Detailed logs (with redacted credentials) are saved to:
 
 ```
-~/.workos-installer/logs/wizard-{timestamp}.log
+~/.workos/logs/workos-{timestamp}.log
 ```
 
 Up to 10 session log files are retained. Use `--debug` flag for verbose terminal output.

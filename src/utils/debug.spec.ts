@@ -4,7 +4,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 
 // Create test directory before mocking
-const testDir = mkdtempSync(join(tmpdir(), 'wizard-test-'));
+const testDir = mkdtempSync(join(tmpdir(), 'workos-test-'));
 
 // Mock homedir to use temp directory
 vi.mock('os', async () => {
@@ -40,18 +40,18 @@ describe('debug logging', () => {
     const path = getLogFilePath();
 
     expect(path).toBeTruthy();
-    expect(path).toContain('.workos-installer/logs/wizard-');
+    expect(path).toContain('.workos/logs/workos-');
   });
 
   it('rotates old log files keeping max 10', async () => {
     // Create the logs directory
-    const logsDir = join(testDir, '.workos-installer', 'logs');
+    const logsDir = join(testDir, '.workos', 'logs');
     mkdirSync(logsDir, { recursive: true });
 
     // Create 12 fake log files with timestamps that sort correctly
     for (let i = 0; i < 12; i++) {
       const day = i.toString().padStart(2, '0');
-      writeFileSync(join(logsDir, `wizard-2024-01-${day}T00-00-00.000Z.log`), '');
+      writeFileSync(join(logsDir, `workos-2024-01-${day}T00-00-00.000Z.log`), '');
     }
 
     // Import fresh module
@@ -67,7 +67,7 @@ describe('debug logging', () => {
     const { initLogFile } = await import('./debug.js');
     initLogFile();
 
-    const files = readdirSync(logsDir).filter((f) => f.startsWith('wizard-') && f.endsWith('.log'));
+    const files = readdirSync(logsDir).filter((f) => f.startsWith('workos-') && f.endsWith('.log'));
     expect(files.length).toBe(10);
   });
 

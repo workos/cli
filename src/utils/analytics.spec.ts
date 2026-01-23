@@ -26,20 +26,20 @@ vi.mock('uuid', () => ({
 }));
 
 describe('Analytics', () => {
-  // Need to handle WIZARD_TELEMETRY_ENABLED which is evaluated at import time
-  const originalEnv = process.env.WIZARD_TELEMETRY;
+  // Need to handle WORKOS_TELEMETRY_ENABLED which is evaluated at import time
+  const originalEnv = process.env.WORKOS_TELEMETRY;
 
   beforeEach(() => {
     vi.clearAllMocks();
     // Ensure telemetry is enabled for tests
-    delete process.env.WIZARD_TELEMETRY;
+    delete process.env.WORKOS_TELEMETRY;
   });
 
   afterEach(() => {
     if (originalEnv !== undefined) {
-      process.env.WIZARD_TELEMETRY = originalEnv;
+      process.env.WORKOS_TELEMETRY = originalEnv;
     } else {
-      delete process.env.WIZARD_TELEMETRY;
+      delete process.env.WORKOS_TELEMETRY;
     }
   });
 
@@ -379,7 +379,7 @@ describe('Analytics', () => {
 
   describe('with telemetry disabled', () => {
     beforeEach(async () => {
-      process.env.WIZARD_TELEMETRY = 'false';
+      process.env.WORKOS_TELEMETRY = 'false';
       vi.resetModules();
       vi.doMock('./telemetry-client.js', () => ({
         telemetryClient: {
