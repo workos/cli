@@ -5,7 +5,7 @@
 
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { debug, logToFile, initLogFile, LOG_FILE_PATH } from '../utils/debug.js';
+import { debug, logInfo, logWarn, logError, initLogFile, getLogFilePath } from '../utils/debug.js';
 import type { WizardOptions } from '../utils/types.js';
 import { analytics } from '../utils/analytics.js';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants.js';
@@ -157,7 +157,7 @@ export function wizardCanUseTool(
 
   // Block definitely dangerous operators: ; ` $ ( )
   if (DANGEROUS_OPERATORS.test(command)) {
-    logToFile(`Denying bash command with dangerous operators: ${command}`);
+    logWarn(`Denying bash command with dangerous operators: ${command}`);
     debug(`Denying bash command with dangerous operators: ${command}`);
     analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
       action: 'bash command denied',
@@ -180,7 +180,7 @@ export function wizardCanUseTool(
 
     // Block if base command has pipes or & (multiple chaining)
     if (/[|&]/.test(baseCommand)) {
-      logToFile(`Denying bash command with multiple pipes: ${command}`);
+      logWarn(`Denying bash command with multiple pipes: ${command}`);
       debug(`Denying bash command with multiple pipes: ${command}`);
       analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
         action: 'bash command denied',
@@ -194,7 +194,7 @@ export function wizardCanUseTool(
     }
 
     if (matchesAllowedPrefix(baseCommand)) {
-      logToFile(`Allowing bash command with output limiter: ${command}`);
+      logInfo(`Allowing bash command with output limiter: ${command}`);
       debug(`Allowing bash command with output limiter: ${command}`);
       return { behavior: 'allow', updatedInput: input };
     }
@@ -202,7 +202,7 @@ export function wizardCanUseTool(
 
   // Block remaining pipes and & (not covered by tail/head case above)
   if (/[|&]/.test(normalized)) {
-    logToFile(`Denying bash command with pipe/&: ${command}`);
+    logWarn(`Denying bash command with pipe/&: ${command}`);
     debug(`Denying bash command with pipe/&: ${command}`);
     analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
       action: 'bash command denied',
@@ -217,12 +217,12 @@ export function wizardCanUseTool(
 
   // Check if command starts with any allowed prefix
   if (matchesAllowedPrefix(normalized)) {
-    logToFile(`Allowing bash command: ${command}`);
+    logInfo(`Allowing bash command: ${command}`);
     debug(`Allowing bash command: ${command}`);
     return { behavior: 'allow', updatedInput: input };
   }
 
-  logToFile(`Denying bash command: ${command}`);
+  logWarn(`Denying bash command: ${command}`);
   debug(`Denying bash command: ${command}`);
   analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
     action: 'bash command denied',
@@ -241,8 +241,8 @@ export function wizardCanUseTool(
 export async function initializeAgent(config: AgentConfig, options: WizardOptions): Promise<AgentRunConfig> {
   // Initialize log file for this run
   initLogFile();
-  logToFile('Agent initialization starting');
-  logToFile('Install directory:', options.installDir);
+  logInfo('Agent initialization starting');
+  logInfo('Install directory:', options.installDir);
 
   // Emit status event for adapters to render
   options.emitter?.emit('status', { message: 'Initializing Claude agent...' });
@@ -271,7 +271,7 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
     if (options.skipAuth) {
       delete process.env.ANTHROPIC_AUTH_TOKEN;
       authMode = `skip-auth:${gatewayUrl}`;
-      logToFile('Skipping auth - no token sent to gateway');
+      logInfo('Skipping auth - no token sent to gateway');
     } else {
       const creds = getCredentials();
       if (!creds) {
@@ -279,10 +279,10 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
       }
       process.env.ANTHROPIC_AUTH_TOKEN = creds.accessToken;
       authMode = options.local ? `local-gateway:${gatewayUrl}` : `workos-gateway:${gatewayUrl}`;
-      logToFile('Sending access token to gateway');
+      logInfo('Sending access token to gateway');
     }
 
-    logToFile('Configured LLM gateway:', gatewayUrl);
+    logInfo('Configured LLM gateway:', gatewayUrl);
 
     // Disable experimental betas (like input_examples) that the LLM gateway doesn't support
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
@@ -303,7 +303,7 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
       allowedTools: ['Skill', 'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch'],
     };
 
-    logToFile('Agent config:', {
+    logInfo('Agent config:', {
       workingDirectory: agentRunConfig.workingDirectory,
       gatewayUrl,
       authMode,
@@ -320,14 +320,17 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
     }
 
     // Emit status events for adapters to render
-    options.emitter?.emit('status', { message: `Verbose logs: ${LOG_FILE_PATH}` });
+    const currentLogPath = getLogFilePath();
+    if (currentLogPath) {
+      options.emitter?.emit('status', { message: `Verbose logs: ${currentLogPath}` });
+    }
     options.emitter?.emit('status', { message: "Agent initialized. Let's get cooking!" });
 
     return agentRunConfig;
   } catch (error) {
     // Emit error via emitter for adapters to handle
     options.emitter?.emit('error', { message: `Failed to initialize agent: ${(error as Error).message}` });
-    logToFile('Agent initialization error:', error);
+    logError('Agent initialization error:', error);
     debug('Agent initialization error:', error);
     throw error;
   }
@@ -362,8 +365,8 @@ export async function runAgent(
   emitter?.emit('agent:progress', { step: 'Starting', detail: 'This may take a few minutes. Grab some coffee!' });
   emitter?.emit('agent:progress', { step: spinnerMessage });
 
-  logToFile('Starting agent run');
-  logToFile('Prompt:', prompt);
+  logInfo('Starting agent run');
+  logInfo('Prompt:', prompt);
 
   const startTime = Date.now();
   const collectedText: string[] = [];
@@ -394,7 +397,7 @@ export async function runAgent(
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
     const pluginPath = path.join(__dirname, '../../..');
-    logToFile('Loading plugin from:', pluginPath);
+    logInfo('Loading plugin from:', pluginPath);
 
     const response = query({
       prompt: createPromptStream(),
@@ -405,9 +408,9 @@ export async function runAgent(
         mcpServers: agentConfig.mcpServers,
         env: { ...process.env },
         canUseTool: (toolName: string, input: unknown) => {
-          logToFile('canUseTool called:', { toolName, input });
+          logInfo('canUseTool called:', { toolName, input });
           const result = wizardCanUseTool(toolName, input as Record<string, unknown>);
-          logToFile('canUseTool result:', result);
+          logInfo('canUseTool result:', result);
           return Promise.resolve(result);
         },
         tools: { type: 'preset', preset: 'claude_code' },
@@ -415,7 +418,7 @@ export async function runAgent(
         plugins: [{ type: 'local', path: pluginPath }],
         // Capture stderr from CLI subprocess for debugging
         stderr: (data: string) => {
-          logToFile('CLI stderr:', data);
+          logInfo('CLI stderr:', data);
           if (options.debug) {
             debug('CLI stderr:', data);
           }
@@ -442,22 +445,22 @@ export async function runAgent(
     // Check for SDK errors first (e.g., API errors, auth failures)
     // Return error type - caller decides whether to throw or emit events
     if (sdkError) {
-      logToFile('Agent SDK error:', sdkError);
+      logError('Agent SDK error:', sdkError);
       return { error: AgentErrorType.EXECUTION_ERROR };
     }
 
     // Check for error markers in the agent's output
     if (outputText.includes(AgentSignals.ERROR_MCP_MISSING)) {
-      logToFile('Agent error: MCP_MISSING');
+      logError('Agent error: MCP_MISSING');
       return { error: AgentErrorType.MCP_MISSING };
     }
 
     if (outputText.includes(AgentSignals.ERROR_RESOURCE_MISSING)) {
-      logToFile('Agent error: RESOURCE_MISSING');
+      logError('Agent error: RESOURCE_MISSING');
       return { error: AgentErrorType.RESOURCE_MISSING };
     }
 
-    logToFile(`Agent run completed in ${Math.round(durationMs / 1000)}s`);
+    logInfo(`Agent run completed in ${Math.round(durationMs / 1000)}s`);
     analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
       action: 'agent integration completed',
       duration_ms: durationMs,
@@ -468,7 +471,7 @@ export async function runAgent(
     return {};
   } catch (error) {
     // Don't emit events here - just log and re-throw for state machine to handle
-    logToFile('Agent run failed:', error);
+    logError('Agent run failed:', error);
     debug('Full error:', error);
     throw error;
   }
@@ -484,11 +487,7 @@ function handleSDKMessage(
   collectedText: string[],
   emitter?: WizardEventEmitter,
 ): string | undefined {
-  logToFile(`SDK Message: ${message.type}`, JSON.stringify(message, null, 2));
-
-  if (options.debug) {
-    debug(`SDK Message type: ${message.type}`);
-  }
+  logInfo(`SDK Message: ${message.type}`, JSON.stringify(message, null, 2));
 
   switch (message.type) {
     case 'assistant': {
@@ -533,7 +532,7 @@ function handleSDKMessage(
             const input = block.input as Record<string, unknown>;
 
             // Log tool usage for debugging
-            logToFile(`Tool use: ${toolName}`);
+            logInfo(`Tool use: ${toolName}`);
 
             // Track tool start time for telemetry
             if (toolUseId) {
@@ -638,16 +637,16 @@ function handleSDKMessage(
 
     case 'result': {
       if (message.subtype === 'success') {
-        logToFile('Agent completed successfully');
+        logInfo('Agent completed successfully');
         if (typeof message.result === 'string') {
           collectedText.push(message.result);
         }
       } else {
         // Error result
-        logToFile('Agent error result:', message.subtype);
+        logError('Agent error result:', message.subtype);
         if (message.errors && message.errors.length > 0) {
           for (const err of message.errors) {
-            logToFile('ERROR:', err);
+            logError('ERROR:', err);
             // Emit error event - adapters handle rendering
             emitter?.emit('error', { message: err });
           }
@@ -662,7 +661,7 @@ function handleSDKMessage(
 
     case 'system': {
       if (message.subtype === 'init') {
-        logToFile('Agent session initialized', {
+        logInfo('Agent session initialized', {
           model: message.model,
           tools: message.tools?.length,
           mcpServers: message.mcp_servers,

@@ -25,7 +25,7 @@ vi.mock('node:os', async (importOriginal) => {
 // Mock debug utilities
 vi.mock('../utils/debug.js', () => ({
   debug: vi.fn(),
-  logToFile: vi.fn(),
+  logInfo: vi.fn(),
 }));
 
 // Import after mocks are set up

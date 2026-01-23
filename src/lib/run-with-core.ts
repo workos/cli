@@ -12,7 +12,7 @@ import type { WizardOptions } from '../utils/types.js';
 import type { WizardMachineContext, DetectionOutput, GitCheckOutput, AgentOutput } from './wizard-core.types.js';
 import { Integration } from './constants.js';
 import { parseEnvFile } from '../utils/env-parser.js';
-import { enableDebugLogs, initLogFile, logToFile } from '../utils/debug.js';
+import { enableDebugLogs, initLogFile, logInfo, logError } from '../utils/debug.js';
 
 import { getAccessToken, getCredentials } from './credentials.js';
 import { analytics } from '../utils/analytics.js';
@@ -85,7 +85,7 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
   if (options.debug) {
     enableDebugLogs();
   }
-  logToFile('Wizard starting with options:', {
+  logInfo('Wizard starting with options:', {
     debug: options.debug,
     dashboard: options.dashboard,
     local: options.local,
@@ -293,7 +293,7 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
     });
   } catch (error) {
     wizardStatus = 'error';
-    logToFile('Wizard failed with error:', error instanceof Error ? error.stack || error.message : String(error));
+    logError('Wizard failed with error:', error instanceof Error ? error.stack || error.message : String(error));
     throw error;
   } finally {
     process.off('SIGINT', handleSigint);

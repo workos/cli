@@ -1,51 +1,97 @@
+import { appendFileSync, existsSync, mkdirSync, readdirSync, unlinkSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 import chalk from 'chalk';
-import { appendFileSync } from 'fs';
 import { prepareMessage } from './logging.js';
-import clack from './clack.js';
 import { redactCredentials } from './redact.js';
-import { getConfig } from '../lib/settings.js';
+import clack from './clack.js';
 
 let debugEnabled = false;
+let sessionLogPath: string | null = null;
 
-export const LOG_FILE_PATH = getConfig().logging.logFile;
+const LOG_DIR = join(homedir(), '.workos-installer', 'logs');
+const MAX_LOG_FILES = 10;
 
-/**
- * Initialize the log file with a run header.
- * Call this at the start of each wizard run.
- */
-export function initLogFile() {
-  const header = `\n${'='.repeat(60)}\nWorkOS AuthKit Wizard Run: ${new Date().toISOString()}\n${'='.repeat(60)}\n`;
-  appendFileSync(LOG_FILE_PATH, header);
-}
-
-/**
- * Log a message to the file at /tmp/authkit-wizard.log.
- * Always writes regardless of debug flag.
- * Automatically redacts sensitive credentials.
- */
-export function logToFile(...args: unknown[]) {
-  const timestamp = new Date().toISOString();
-  // Redact sensitive data before logging
-  const redactedArgs = args.map((a) => {
-    if (typeof a === 'object' && a !== null) {
-      return redactCredentials(a);
-    }
-    return a;
-  });
-  const msg = redactedArgs.map((a) => prepareMessage(a)).join(' ');
-  appendFileSync(LOG_FILE_PATH, `[${timestamp}] ${msg}\n`);
-}
-
-export function debug(...args: unknown[]) {
-  if (!debugEnabled) {
-    return;
+function ensureLogDir(): string {
+  if (!existsSync(LOG_DIR)) {
+    mkdirSync(LOG_DIR, { recursive: true });
   }
+  return LOG_DIR;
+}
 
+function getSafeTimestamp(): string {
+  return new Date().toISOString().replace(/:/g, '-');
+}
+
+function rotateLogFiles(): void {
+  try {
+    const dir = ensureLogDir();
+    const files = readdirSync(dir)
+      .filter((f) => f.startsWith('wizard-') && f.endsWith('.log'))
+      .sort();
+
+    const toDelete = files.slice(0, Math.max(0, files.length - MAX_LOG_FILES + 1));
+    for (const file of toDelete) {
+      try {
+        unlinkSync(join(dir, file));
+      } catch {
+        // Ignore deletion failures
+      }
+    }
+  } catch {
+    // Ignore rotation failures
+  }
+}
+
+export function initLogFile(): void {
+  try {
+    rotateLogFiles();
+    const dir = ensureLogDir();
+    const timestamp = getSafeTimestamp();
+    sessionLogPath = join(dir, `wizard-${timestamp}.log`);
+
+    const header = `${'='.repeat(60)}\nWorkOS AuthKit Wizard Run: ${new Date().toISOString()}\n${'='.repeat(60)}\n`;
+    appendFileSync(sessionLogPath, header);
+  } catch {
+    sessionLogPath = null;
+  }
+}
+
+export function getLogFilePath(): string | null {
+  return sessionLogPath;
+}
+
+function writeLog(level: 'INFO' | 'WARN' | 'ERROR', emoji: string, args: unknown[]): void {
+  if (!sessionLogPath) return;
+
+  try {
+    const timestamp = new Date().toISOString();
+    const redactedArgs = args.map((a) => (typeof a === 'object' && a !== null ? redactCredentials(a) : a));
+    const msg = redactedArgs.map((a) => prepareMessage(a)).join(' ');
+    appendFileSync(sessionLogPath, `[${timestamp}] ${emoji} ${level}: ${msg}\n`);
+  } catch {
+    // Ignore write failures
+  }
+}
+
+export function logInfo(...args: unknown[]): void {
+  writeLog('INFO', 'ℹ️ ', args);
+}
+
+export function logWarn(...args: unknown[]): void {
+  writeLog('WARN', '⚠️ ', args);
+}
+
+export function logError(...args: unknown[]): void {
+  writeLog('ERROR', '❌', args);
+}
+
+export function debug(...args: unknown[]): void {
+  if (!debugEnabled) return;
   const msg = args.map((a) => prepareMessage(a)).join(' ');
-
   clack.log.info(chalk.dim(msg));
 }
 
-export function enableDebugLogs() {
+export function enableDebugLogs(): void {
   debugEnabled = true;
 }

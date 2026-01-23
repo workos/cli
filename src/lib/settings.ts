@@ -21,7 +21,6 @@ export interface InstallerConfig {
   };
   nodeVersion: string;
   logging: {
-    logFile: string;
     debugMode: boolean;
   };
   documentation: {

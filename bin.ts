@@ -151,10 +151,15 @@ yargs(hideBin(process.argv))
       void import('./src/run.js').then(({ runWizard }) =>
         runWizard(options as unknown as WizardOptions)
           .then(() => process.exit(0))
-          .catch((err) => {
+          .catch(async (err) => {
+            const { getLogFilePath } = await import('./src/utils/debug.js');
+            const logPath = getLogFilePath();
             if (argv.debug) {
               console.error('\nWizard failed with error:');
               console.error(err instanceof Error ? err.stack || err.message : String(err));
+            }
+            if (logPath) {
+              console.error(`\nSee debug logs at: ${logPath}`);
             }
             process.exit(1);
           }),
@@ -203,10 +208,15 @@ yargs(hideBin(process.argv))
 
       void runWizard(options as unknown as WizardOptions)
         .then(() => process.exit(0))
-        .catch((err) => {
+        .catch(async (err) => {
+          const { getLogFilePath } = await import('./src/utils/debug.js');
+          const logPath = getLogFilePath();
           if (options.debug) {
             console.error('\nWizard failed with error:');
             console.error(err instanceof Error ? err.stack || err.message : String(err));
+          }
+          if (logPath) {
+            console.error(`\nSee debug logs at: ${logPath}`);
           }
           process.exit(1);
         });

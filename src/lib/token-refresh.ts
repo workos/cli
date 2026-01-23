@@ -1,5 +1,5 @@
 import { getCredentials, isTokenExpired, Credentials } from './credentials.js';
-import { logToFile } from '../utils/debug.js';
+import { logInfo } from '../utils/debug.js';
 
 export interface TokenValidationResult {
   success: boolean;
@@ -16,21 +16,21 @@ export async function ensureValidToken(): Promise<TokenValidationResult> {
   const creds = getCredentials();
 
   if (!creds) {
-    logToFile('[ensureValidToken] No credentials found');
+    logInfo('[ensureValidToken] No credentials found');
     return { success: false, error: 'Not authenticated' };
   }
 
-  logToFile(`[ensureValidToken] Token expiresAt: ${new Date(creds.expiresAt).toISOString()}`);
-  logToFile(`[ensureValidToken] Current time: ${new Date().toISOString()}`);
+  logInfo(`[ensureValidToken] Token expiresAt: ${new Date(creds.expiresAt).toISOString()}`);
+  logInfo(`[ensureValidToken] Current time: ${new Date().toISOString()}`);
 
   if (isTokenExpired(creds)) {
-    logToFile('[ensureValidToken] Token expired, re-authentication required');
+    logInfo('[ensureValidToken] Token expired, re-authentication required');
     return {
       success: false,
       error: 'Session expired. Run `wizard login` to re-authenticate.',
     };
   }
 
-  logToFile('[ensureValidToken] Token valid');
+  logInfo('[ensureValidToken] Token valid');
   return { success: true, credentials: creds };
 }
