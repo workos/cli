@@ -1,5 +1,4 @@
 import { createActor, fromPromise } from 'xstate';
-import { createSkyInspector } from '@statelyai/inspect';
 import open from 'opn';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
@@ -223,7 +222,8 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
     },
   });
 
-  let inspector: ReturnType<typeof createSkyInspector> | undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let inspector: { inspect: any } | undefined;
   if (augmentedOptions.inspect) {
     const originalLog = console.log;
     let inspectUrl: string | undefined;
@@ -240,6 +240,8 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
       }
     };
 
+    // Dynamic import - @statelyai/inspect is a devDependency
+    const { createSkyInspector } = await import('@statelyai/inspect');
     inspector = createSkyInspector();
     setTimeout(() => {
       console.log = originalLog;
