@@ -25,7 +25,6 @@
     // ESM module system
     "module": "nodenext",
     "moduleResolution": "nodenext",
-    "target": "ES2022",
 
     // JSX for React/Ink dashboard
     "jsx": "react-jsx",
