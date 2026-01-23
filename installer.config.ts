@@ -18,7 +18,6 @@ export const config = {
   nodeVersion: '>=20.20',
 
   logging: {
-    logFile: '/tmp/authkit-wizard.log',
     debugMode: false,
   },
 
