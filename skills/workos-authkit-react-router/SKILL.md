@@ -9,22 +9,24 @@ description: Integrate WorkOS AuthKit with React Router applications. Supports v
 
 TaskUpdate: { taskId: "preflight", status: "in_progress" }
 
-### 1.1 Verify React Router Project
+### 1.1 Fetch SDK Documentation (BLOCKING)
 
-Check for React Router markers:
+**⛔ STOP - Do not proceed until this step completes.**
 
-- `package.json` has `"react-router"` or `"react-router-dom"` dependency
-- Check version: v6 vs v7
-
-### 1.2 Fetch SDK Documentation
-
-**REQUIRED**: Use WebFetch to read:
+Use WebFetch to read the SDK README:
 
 ```
 https://github.com/workos/authkit-react-router/blob/main/README.md
 ```
 
-The README is the source of truth. If this skill conflicts, follow the README.
+**The README is the source of truth.** If this skill conflicts with the README, **follow the README**. Do not write any code until you have read and understood the current SDK documentation.
+
+### 1.2 Verify React Router Project
+
+Check for React Router markers:
+
+- `package.json` has `"react-router"` or `"react-router-dom"` dependency
+- Check version: v6 vs v7
 
 ### 1.3 Detect Router Mode
 
@@ -94,9 +96,9 @@ Extract path (e.g., `http://localhost:3000/auth/callback` → `/auth/callback`)
 Create `app/routes/auth.callback.tsx`:
 
 ```typescript
-import { handleCallback } from '@workos-inc/authkit-react-router';
+import { authLoader } from '@workos-inc/authkit-react-router';
 
-export const loader = handleCallback;
+export const loader = authLoader();
 ```
 
 #### v7 Data Mode
@@ -104,13 +106,13 @@ export const loader = handleCallback;
 Add to your router configuration:
 
 ```typescript
-import { handleCallback } from '@workos-inc/authkit-react-router';
+import { authLoader } from '@workos-inc/authkit-react-router';
 
 const router = createBrowserRouter([
   // ... other routes
   {
     path: '/auth/callback',
-    loader: handleCallback,
+    loader: authLoader(),
   },
 ]);
 ```
@@ -120,21 +122,17 @@ const router = createBrowserRouter([
 Create `src/routes/AuthCallback.tsx`:
 
 ```typescript
-import { useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { handleCallback } from '@workos-inc/authkit-react-router';
+import { authLoader } from '@workos-inc/authkit-react-router';
+import { redirect } from 'react-router-dom';
 
-export function AuthCallback() {
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-
-  useEffect(() => {
-    handleCallback(searchParams).then(() => navigate('/'));
-  }, [searchParams, navigate]);
-
-  return <div>Authenticating...</div>;
+// Add callback route to your router config
+{
+  path: '/auth/callback',
+  loader: authLoader({ returnPathname: '/' }),
 }
 ```
+
+The SDK handles the callback internally via `authLoader()`. No custom component needed.
 
 **VERIFY**: Callback route exists at path matching `WORKOS_REDIRECT_URI`
 
@@ -209,16 +207,23 @@ TaskUpdate: { taskId: "ui", status: "in_progress" }
 
 ```typescript
 import { useLoaderData } from 'react-router';
-import { getSignInUrl, signOut } from '@workos-inc/authkit-react-router';
+import { getSignInUrl, signOut, authkitLoader } from '@workos-inc/authkit-react-router';
+
+// In your route config, use authkitLoader to get user AND signInUrl
+export const loader = async () => {
+  const { user } = await authkitLoader();
+  const signInUrl = await getSignInUrl();
+  return { user, signInUrl };
+};
 
 export default function Home() {
-  const { user } = useLoaderData();
+  const { user, signInUrl } = useLoaderData();
 
   if (!user) {
     return (
       <main>
         <h1>Welcome</h1>
-        <a href={getSignInUrl()}>Sign In</a>
+        <a href={signInUrl}>Sign In</a>
       </main>
     );
   }

@@ -9,23 +9,25 @@ description: Integrate WorkOS AuthKit with TanStack Start applications. Full-sta
 
 TaskUpdate: { taskId: "preflight", status: "in_progress" }
 
-### 1.1 Verify TanStack Start Project
+### 1.1 Fetch SDK Documentation (BLOCKING)
+
+**⛔ STOP - Do not proceed until this step completes.**
+
+Use WebFetch to read the SDK README:
+
+```
+https://github.com/workos/authkit-tanstack-start/blob/main/README.md
+```
+
+**The README is the source of truth.** If this skill conflicts with the README, **follow the README**. Do not write any code until you have read and understood the current SDK documentation.
+
+### 1.2 Verify TanStack Start Project
 
 Check for TanStack Start markers:
 
 - `package.json` has `"@tanstack/start"` dependency
 - `app.config.ts` exists (vinxi config)
 - `app/` directory with route files
-
-### 1.2 Fetch SDK Documentation
-
-**REQUIRED**: Use WebFetch to read:
-
-```
-https://github.com/workos/authkit-tanstack-start/blob/main/README.md
-```
-
-The README is the source of truth. If this skill conflicts, follow the README.
 
 ### 1.3 Verify Environment Variables
 
@@ -51,18 +53,18 @@ Detect package manager and run:
 
 ```bash
 # pnpm
-pnpm add @workos-inc/authkit-tanstack-start
+pnpm add @workos/authkit-tanstack-react-start
 
 # yarn
-yarn add @workos-inc/authkit-tanstack-start
+yarn add @workos/authkit-tanstack-react-start
 
 # npm
-npm install @workos-inc/authkit-tanstack-start
+npm install @workos/authkit-tanstack-react-start
 ```
 
 **WAIT** for installation to complete.
 
-**VERIFY**: Check `node_modules/@workos-inc/authkit-tanstack-start` exists
+**VERIFY**: Check `node_modules/@workos/authkit-tanstack-react-start` exists
 
 TaskUpdate: { taskId: "install", status: "completed" }
 
@@ -72,30 +74,28 @@ TaskUpdate: { taskId: "install", status: "completed" }
 
 TaskUpdate: { taskId: "callback", status: "in_progress" }
 
-### 3.1 Determine Route Path
+### 3.1 Callback Route Path
 
-Read `WORKOS_REDIRECT_URI` from `.env`.
-Extract path (e.g., `http://localhost:3000/auth/callback` → `/auth/callback`)
+The callback route **must** be at `/api/auth/callback`.
+
+Set `WORKOS_REDIRECT_URI=http://localhost:3000/api/auth/callback` in `.env`.
 
 ### 3.2 Create Callback Route
 
-TanStack Start uses file-based routing. Create route file at matching path.
-
-For `/auth/callback`, create `app/routes/auth/callback.tsx`:
+Create `app/routes/api/auth/callback.tsx`:
 
 ```typescript
 import { createFileRoute } from '@tanstack/react-router';
-import { handleCallback } from '@workos-inc/authkit-tanstack-start';
+import { handleCallbackRoute } from '@workos/authkit-tanstack-react-start';
 
-export const Route = createFileRoute('/auth/callback')({
-  loader: handleCallback,
-  component: () => <div>Authenticating...</div>,
+export const Route = createFileRoute('/api/auth/callback')({
+  loader: handleCallbackRoute(),
 });
 ```
 
-**DO NOT** write custom OAuth callback logic. Use `handleCallback`.
+**DO NOT** write custom OAuth callback logic. Use `handleCallbackRoute()`.
 
-**VERIFY**: Route file exists at path matching `WORKOS_REDIRECT_URI`
+**VERIFY**: Route file exists at `app/routes/api/auth/callback.tsx`
 
 TaskUpdate: { taskId: "callback", status: "completed" }
 
@@ -105,20 +105,19 @@ TaskUpdate: { taskId: "callback", status: "completed" }
 
 TaskUpdate: { taskId: "provider", status: "in_progress" }
 
-### 4.1 Create Auth Server Functions
+### 4.1 Create Logout Route
 
-Create `app/lib/auth.ts`:
+Create `app/routes/logout.tsx`:
 
 ```typescript
-import { createServerFn } from '@tanstack/start';
-import { getUser, signOut as authSignOut } from '@workos-inc/authkit-tanstack-start';
+import { createFileRoute } from '@tanstack/react-router';
+import { signOut } from '@workos/authkit-tanstack-react-start';
 
-export const getAuthUser = createServerFn('GET', async () => {
-  return await getUser();
-});
-
-export const signOut = createServerFn('POST', async () => {
-  await authSignOut();
+export const Route = createFileRoute('/logout')({
+  preload: false,
+  loader: async () => {
+    await signOut();
+  },
 });
 ```
 
@@ -128,11 +127,11 @@ Edit `app/routes/__root.tsx`:
 
 ```typescript
 import { createRootRoute, Outlet } from '@tanstack/react-router';
-import { getAuthUser } from '../lib/auth';
+import { getAuth } from '@workos/authkit-tanstack-react-start';
 
 export const Route = createRootRoute({
   loader: async () => {
-    const user = await getAuthUser();
+    const { user } = await getAuth();
     return { user };
   },
   component: () => <Outlet />,
@@ -154,22 +153,26 @@ TaskUpdate: { taskId: "ui", status: "in_progress" }
 Edit `app/routes/index.tsx`:
 
 ```typescript
-import { createFileRoute } from '@tanstack/react-router';
-import { getSignInUrl } from '@workos-inc/authkit-tanstack-start';
-import { signOut } from '../lib/auth';
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { getAuth, getSignInUrl } from '@workos/authkit-tanstack-react-start';
 
 export const Route = createFileRoute('/')({
+  loader: async () => {
+    const { user } = await getAuth();
+    const signInUrl = await getSignInUrl();
+    return { user, signInUrl };
+  },
   component: Home,
 });
 
 function Home() {
-  const { user } = Route.useRouteContext();
+  const { user, signInUrl } = Route.useLoaderData();
 
   if (!user) {
     return (
       <main>
         <h1>Welcome</h1>
-        <a href={getSignInUrl()}>Sign In</a>
+        <a href={signInUrl}>Sign In</a>
       </main>
     );
   }
@@ -178,15 +181,9 @@ function Home() {
     <main>
       <h1>Welcome, {user.firstName || user.email}</h1>
       <p>{user.email}</p>
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          await signOut();
-          window.location.href = '/';
-        }}
-      >
-        <button type="submit">Sign Out</button>
-      </form>
+      <Link to="/logout" reloadDocument>
+        Sign Out
+      </Link>
     </main>
   );
 }
@@ -214,30 +211,25 @@ TaskUpdate: { taskId: "verify", status: "completed" }
 
 ## Error Recovery (TanStack Start Specific)
 
-### "Module not found: @workos-inc/authkit-tanstack-start"
+### "Module not found: @workos/authkit-tanstack-react-start"
 
 - **Cause**: SDK not installed before writing imports
-- **Fix**: Run install command, verify `node_modules/@workos-inc/authkit-tanstack-start` exists
-
-### "createServerFn is not a function"
-
-- **Cause**: Wrong TanStack Start version or import
-- **Fix**: Check `@tanstack/start` version, verify import path
+- **Fix**: Run install command, verify `node_modules/@workos/authkit-tanstack-react-start` exists
 
 ### Route loader not executing
 
 - **Cause**: Route file not in correct location
-- **Fix**: TanStack uses file-based routing - file path must match URL path
+- **Fix**: TanStack uses file-based routing - `app/routes/api/auth/callback.tsx` → `/api/auth/callback`
 
 ### Auth user undefined in child routes
 
-- **Cause**: Not accessing from route context
-- **Fix**: Access via `Route.useRouteContext()` from root loader
+- **Cause**: Not accessing loader data correctly
+- **Fix**: Use `Route.useLoaderData()` to access data from route's own loader
 
-### Server function errors
+### Sign-in redirects to /api/auth/signin (404)
 
-- **Cause**: Mixing client/server code incorrectly
-- **Fix**: Server functions must be defined separately and imported
+- **Cause**: Using wrong pattern for sign-in URL
+- **Fix**: Call `await getSignInUrl()` in loader, pass URL to component, use `<a href={signInUrl}>`
 
 ### Cookie errors
 

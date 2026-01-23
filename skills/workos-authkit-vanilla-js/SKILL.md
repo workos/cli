@@ -9,23 +9,25 @@ description: Integrate WorkOS AuthKit with vanilla JavaScript applications. No f
 
 TaskUpdate: { taskId: "preflight", status: "in_progress" }
 
-### 1.1 Verify Vanilla JS Project
+### 1.1 Fetch SDK Documentation (BLOCKING)
+
+**⛔ STOP - Do not proceed until this step completes.**
+
+Use WebFetch to read the SDK README:
+
+```
+https://github.com/workos/authkit-js/blob/main/README.md
+```
+
+**The README is the source of truth.** If this skill conflicts with the README, **follow the README**. Do not write any code until you have read and understood the current SDK documentation.
+
+### 1.2 Verify Vanilla JS Project
 
 Check for vanilla JS markers:
 
 - Has `index.html` file
 - No React, Vue, Angular, etc. in `package.json` (if exists)
 - JavaScript files use standard DOM APIs
-
-### 1.2 Fetch SDK Documentation
-
-**REQUIRED**: Use WebFetch to read:
-
-```
-https://github.com/workos/authkit-js/blob/main/README.md
-```
-
-The README is the source of truth. If this skill conflicts, follow the README.
 
 ### 1.3 Detect Project Type
 
@@ -113,22 +115,21 @@ TaskUpdate: { taskId: "provider", status: "in_progress" }
 Create `src/auth.js` or `src/auth.ts`:
 
 ```javascript
-import { createAuthKit } from '@workos-inc/authkit-js';
+import { createClient } from '@workos-inc/authkit-js';
 
 const clientId = import.meta.env.VITE_WORKOS_CLIENT_ID; // adjust for your build tool
 
-export const authkit = createAuthKit({
-  clientId,
-});
-
-// Initialize on page load
-authkit.init();
+// createClient is async - export initialization promise
+export const authkitPromise = createClient(clientId);
 ```
 
 Import in your main entry:
 
 ```javascript
-import { authkit } from './auth';
+import { authkitPromise } from './auth';
+
+// Use with await
+const authkit = await authkitPromise;
 ```
 
 ### 4.2 For CDN/Static Projects
@@ -136,12 +137,12 @@ import { authkit } from './auth';
 Add to your main `<script>`:
 
 ```html
-<script>
-  const authkit = WorkOS.createAuthKit({
-    clientId: 'your_client_id_here',
-  });
+<script type="module">
+  // createClient is async
+  const authkit = await WorkOS.createClient('your_client_id_here');
 
-  authkit.init();
+  // Store globally for use in event handlers
+  window.authkit = authkit;
 </script>
 ```
 
@@ -178,37 +179,42 @@ Add to `index.html`:
 
 ```javascript
 // For bundled projects
-import { authkit } from './auth';
+import { authkitPromise } from './auth';
 
-// Or for CDN, use the global authkit variable
+async function initAuth() {
+  const authkit = await authkitPromise;
 
-async function updateAuthUI() {
-  const user = await authkit.getUser();
+  async function updateAuthUI() {
+    const user = await authkit.getUser();
 
-  document.getElementById('auth-loading').style.display = 'none';
+    document.getElementById('auth-loading').style.display = 'none';
 
-  if (!user) {
-    document.getElementById('auth-signed-out').style.display = 'block';
-    document.getElementById('auth-signed-in').style.display = 'none';
-  } else {
-    document.getElementById('auth-signed-out').style.display = 'none';
-    document.getElementById('auth-signed-in').style.display = 'block';
-    document.getElementById('user-name').textContent = user.firstName || user.email;
-    document.getElementById('user-email').textContent = user.email;
+    if (!user) {
+      document.getElementById('auth-signed-out').style.display = 'block';
+      document.getElementById('auth-signed-in').style.display = 'none';
+    } else {
+      document.getElementById('auth-signed-out').style.display = 'none';
+      document.getElementById('auth-signed-in').style.display = 'block';
+      document.getElementById('user-name').textContent = user.firstName || user.email;
+      document.getElementById('user-email').textContent = user.email;
+    }
   }
+
+  document.getElementById('sign-in-btn').addEventListener('click', () => {
+    authkit.signIn();
+  });
+
+  document.getElementById('sign-out-btn').addEventListener('click', async () => {
+    await authkit.signOut();
+    updateAuthUI();
+  });
+
+  // Initial UI update
+  updateAuthUI();
 }
 
-document.getElementById('sign-in-btn').addEventListener('click', () => {
-  authkit.signIn();
-});
-
-document.getElementById('sign-out-btn').addEventListener('click', async () => {
-  await authkit.signOut();
-  updateAuthUI();
-});
-
 // Initialize on page load
-document.addEventListener('DOMContentLoaded', updateAuthUI);
+document.addEventListener('DOMContentLoaded', initAuth);
 ```
 
 TaskUpdate: { taskId: "ui", status: "completed" }
@@ -240,10 +246,10 @@ TaskUpdate: { taskId: "verify", status: "completed" }
 - **Cause**: CDN script not loaded
 - **Fix**: Add script tag to `<head>`, ensure it loads before your code
 
-### "createAuthKit is not a function"
+### "createClient is not a function"
 
 - **Cause**: Wrong import or SDK not installed
-- **Fix**: For npm, verify import path; for CDN, use `WorkOS.createAuthKit`
+- **Fix**: For npm, verify import path; for CDN, use `WorkOS.createClient`
 
 ### Auth state lost on refresh
 

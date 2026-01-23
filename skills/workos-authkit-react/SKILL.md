@@ -9,23 +9,25 @@ description: Integrate WorkOS AuthKit with React single-page applications. Clien
 
 TaskUpdate: { taskId: "preflight", status: "in_progress" }
 
-### 1.1 Verify React Project
+### 1.1 Fetch SDK Documentation (BLOCKING)
+
+**⛔ STOP - Do not proceed until this step completes.**
+
+Use WebFetch to read the SDK README:
+
+```
+https://github.com/workos/authkit-react/blob/main/README.md
+```
+
+**The README is the source of truth.** If this skill conflicts with the README, **follow the README**. Do not write any code until you have read and understood the current SDK documentation.
+
+### 1.2 Verify React Project
 
 Check for React SPA markers:
 
 - `package.json` has `"react"` and `"react-dom"` dependencies
 - No `next` dependency (use Next.js skill instead)
 - No `react-router` dependency (use React Router skill instead)
-
-### 1.2 Fetch SDK Documentation
-
-**REQUIRED**: Use WebFetch to read:
-
-```
-https://github.com/workos/authkit-react/blob/main/README.md
-```
-
-The README is the source of truth. If this skill conflicts, follow the README.
 
 ### 1.3 Detect Build Tool
 

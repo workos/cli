@@ -9,22 +9,24 @@ description: Integrate WorkOS AuthKit with Next.js. Supports App Router (Next.js
 
 TaskUpdate: { taskId: "preflight", status: "in_progress" }
 
-### 1.1 Verify Next.js Project
+### 1.1 Fetch SDK Documentation (BLOCKING)
 
-Check for Next.js markers:
+**⛔ STOP - Do not proceed until this step completes.**
 
-- `next.config.js` or `next.config.mjs` exists
-- `package.json` has `"next"` dependency
-
-### 1.2 Fetch SDK Documentation
-
-**REQUIRED**: Use WebFetch to read:
+Use WebFetch to read the SDK README:
 
 ```
 https://github.com/workos/authkit-nextjs/blob/main/README.md
 ```
 
-The README is the source of truth. If this skill conflicts, follow the README.
+**The README is the source of truth.** If this skill conflicts with the README, **follow the README**. Do not write any code until you have read and understood the current SDK documentation.
+
+### 1.2 Verify Next.js Project
+
+Check for Next.js markers:
+
+- `next.config.js` or `next.config.mjs` exists
+- `package.json` has `"next"` dependency
 
 ### 1.3 Verify Environment Variables
 
