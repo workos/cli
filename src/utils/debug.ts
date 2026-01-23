@@ -9,7 +9,7 @@ import clack from './clack.js';
 let debugEnabled = false;
 let sessionLogPath: string | null = null;
 
-const LOG_DIR = join(homedir(), '.workos-installer', 'logs');
+const LOG_DIR = join(homedir(), '.workos', 'logs');
 const MAX_LOG_FILES = 10;
 
 function ensureLogDir(): string {
@@ -27,7 +27,7 @@ function rotateLogFiles(): void {
   try {
     const dir = ensureLogDir();
     const files = readdirSync(dir)
-      .filter((f) => f.startsWith('wizard-') && f.endsWith('.log'))
+      .filter((f) => f.startsWith('workos-') && f.endsWith('.log'))
       .sort();
 
     const toDelete = files.slice(0, Math.max(0, files.length - MAX_LOG_FILES + 1));
@@ -48,7 +48,7 @@ export function initLogFile(): void {
     rotateLogFiles();
     const dir = ensureLogDir();
     const timestamp = getSafeTimestamp();
-    sessionLogPath = join(dir, `wizard-${timestamp}.log`);
+    sessionLogPath = join(dir, `workos-${timestamp}.log`);
 
     const header = `${'='.repeat(60)}\nWorkOS AuthKit Wizard Run: ${new Date().toISOString()}\n${'='.repeat(60)}\n`;
     appendFileSync(sessionLogPath, header);

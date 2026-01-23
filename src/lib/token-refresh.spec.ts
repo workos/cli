@@ -35,7 +35,7 @@ const { ensureValidToken } = await import('./token-refresh.js');
 describe('token-refresh', () => {
   beforeEach(() => {
     testDir = mkdtempSync(join(tmpdir(), 'token-refresh-test-'));
-    wizardDir = join(testDir, '.wizard');
+    wizardDir = join(testDir, '.workos');
     credentialsFile = join(wizardDir, 'credentials.json');
     vi.clearAllMocks();
   });

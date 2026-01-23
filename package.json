@@ -1,8 +1,8 @@
 {
-  "name": "@workos/installer",
-  "version": "1.0.0",
+  "name": "workos",
+  "version": "0.1.0",
   "type": "module",
-  "description": "CLI wizard for automatically setting up WorkOS AuthKit in your project",
+  "description": "The Official Workos CLI",
   "keywords": [
     "workos",
     "authkit",
@@ -15,7 +15,7 @@
     "sso"
   ],
   "bin": {
-    "workos-installer": "dist/bin.js"
+    "workos": "dist/bin.js"
   },
   "publishConfig": {
     "access": "public"
@@ -23,7 +23,7 @@
   "files": [
     "dist/bin.*",
     "dist/src",
-    "dist/installer.config.*",
+    "dist/cli.config.*",
     ".claude-plugin",
     "skills",
     "package.json",
@@ -35,7 +35,7 @@
     "definition": "dist/index.d.ts"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "~0.2.17",
+    "@anthropic-ai/claude-agent-sdk": "~0.2.19",
     "@clack/core": "^0.5.0",
     "@clack/prompts": "0.11.0",
     "chalk": "^5.6.2",

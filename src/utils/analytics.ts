@@ -8,7 +8,7 @@ import type {
   AgentToolEvent,
   AgentLLMEvent,
 } from './telemetry-types.js';
-import { WIZARD_TELEMETRY_ENABLED } from '../lib/constants.js';
+import { WORKOS_TELEMETRY_ENABLED } from '../lib/constants.js';
 
 export class Analytics {
   private tags: Record<string, string | boolean | number | null | undefined> = {};
@@ -44,7 +44,7 @@ export class Analytics {
   }
 
   capture(eventName: string, properties?: Record<string, unknown>) {
-    if (!WIZARD_TELEMETRY_ENABLED) return;
+    if (!WORKOS_TELEMETRY_ENABLED) return;
 
     debug(`[Analytics] capture: ${eventName}`, properties);
 
@@ -59,7 +59,7 @@ export class Analytics {
   }
 
   captureException(error: Error, properties: Record<string, unknown> = {}) {
-    if (!WIZARD_TELEMETRY_ENABLED) return;
+    if (!WORKOS_TELEMETRY_ENABLED) return;
 
     debug('[Analytics] captureException:', error.message, properties);
     this.tags['error.type'] = error.name;
@@ -72,7 +72,7 @@ export class Analytics {
   }
 
   sessionStart(mode: 'cli' | 'tui', version: string) {
-    if (!WIZARD_TELEMETRY_ENABLED) return;
+    if (!WORKOS_TELEMETRY_ENABLED) return;
 
     const event: SessionStartEvent = {
       type: 'session.start',
@@ -89,7 +89,7 @@ export class Analytics {
   }
 
   stepCompleted(name: string, durationMs: number, success: boolean, error?: Error) {
-    if (!WIZARD_TELEMETRY_ENABLED) return;
+    if (!WORKOS_TELEMETRY_ENABLED) return;
 
     const event: StepEvent = {
       type: 'step',
@@ -105,7 +105,7 @@ export class Analytics {
   }
 
   toolCalled(toolName: string, durationMs: number, success: boolean) {
-    if (!WIZARD_TELEMETRY_ENABLED) return;
+    if (!WORKOS_TELEMETRY_ENABLED) return;
 
     const event: AgentToolEvent = {
       type: 'agent.tool',
@@ -120,7 +120,7 @@ export class Analytics {
   }
 
   llmRequest(model: string, inputTokens: number, outputTokens: number) {
-    if (!WIZARD_TELEMETRY_ENABLED) return;
+    if (!WORKOS_TELEMETRY_ENABLED) return;
 
     this.totalInputTokens += inputTokens;
     this.totalOutputTokens += outputTokens;
@@ -142,7 +142,7 @@ export class Analytics {
   }
 
   async shutdown(status: 'success' | 'error' | 'cancelled') {
-    if (!WIZARD_TELEMETRY_ENABLED) return;
+    if (!WORKOS_TELEMETRY_ENABLED) return;
 
     const duration = Date.now() - this.sessionStartTime.getTime();
 

@@ -36,7 +36,7 @@ import type { Credentials } from './credentials.js';
 describe('credentials', () => {
   beforeEach(() => {
     testDir = mkdtempSync(join(tmpdir(), 'credentials-test-'));
-    wizardDir = join(testDir, '.wizard');
+    wizardDir = join(testDir, '.workos');
     credentialsFile = join(wizardDir, 'credentials.json');
   });
 
@@ -61,15 +61,15 @@ describe('credentials', () => {
   };
 
   describe('getCredentialsPath', () => {
-    it('returns path in .wizard directory', () => {
+    it('returns path in .workos directory', () => {
       const path = getCredentialsPath();
-      expect(path).toContain('.wizard');
+      expect(path).toContain('.workos');
       expect(path).toContain('credentials.json');
     });
   });
 
   describe('saveCredentials', () => {
-    it('creates .wizard directory if it does not exist', () => {
+    it('creates .workos directory if it does not exist', () => {
       saveCredentials(validCreds);
       expect(existsSync(wizardDir)).toBe(true);
     });

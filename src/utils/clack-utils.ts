@@ -327,7 +327,7 @@ export async function installPackage({
             if (err) {
               // Write a log file so we can better troubleshoot issues
               fs.writeFileSync(
-                join(process.cwd(), `authkit-wizard-installation-error-${Date.now()}.log`),
+                join(process.cwd(), `workos-installation-error-${Date.now()}.log`),
                 JSON.stringify({
                   stdout,
                   stderr,
@@ -349,7 +349,7 @@ export async function installPackage({
           'Encountered the following error during installation:',
           // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
         )}\n\n${e}\n\n${chalk.dim(
-          `The wizard has created an \`authkit-wizard-installation-error-*.log\` file. If you think this issue is caused by the WorkOS AuthKit wizard, create an issue on GitHub and include the log file's content:\n${ISSUES_URL}`,
+          `The wizard has created an \`workos-installation-error-*.log\` file. If you think this issue is caused by the WorkOS AuthKit wizard, create an issue on GitHub and include the log file's content:\n${ISSUES_URL}`,
         )}`,
       );
       await abort();
