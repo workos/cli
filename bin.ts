@@ -173,34 +173,17 @@ yargs(hideBin(process.argv))
         return;
       }
 
-      // TTY: show interactive menu
-      const { showMenu } = await import('./src/commands/menu.js');
-      clack.intro(chalk.inverse('WorkOS AuthKit Wizard'));
-      const selection = await showMenu();
+      // TTY: ask if user wants to run installer
+      const shouldInstall = await clack.confirm({
+        message: 'Run the AuthKit installer?',
+      });
 
-      // Dispatch to selected command
-      switch (selection.command) {
-        case 'install': {
-          const { handleInstall } = await import('./src/commands/install.js');
-          await handleInstall({ dashboard: false } as any);
-          break;
-        }
-        case 'login': {
-          const { runLogin } = await import('./src/commands/login.js');
-          await runLogin();
-          break;
-        }
-        case 'logout': {
-          const { runLogout } = await import('./src/commands/logout.js');
-          await runLogout();
-          break;
-        }
-        case 'install-skill': {
-          const { runInstallSkill } = await import('./src/commands/install-skill.js');
-          await runInstallSkill({});
-          break;
-        }
+      if (clack.isCancel(shouldInstall) || !shouldInstall) {
+        process.exit(0);
       }
+
+      const { handleInstall } = await import('./src/commands/install.js');
+      await handleInstall({ dashboard: false } as any);
       process.exit(0);
     },
   )
