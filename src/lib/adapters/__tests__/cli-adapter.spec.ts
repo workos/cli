@@ -50,6 +50,7 @@ vi.mock('../../../utils/cli-symbols.js', () => ({
     action: (text: string) => `→ ${text}`,
     label: (label: string, value: string) => `${label} ${value}`,
     phase: (num: number, total: number, name: string) => `[${num}/${total}] ${name}`,
+    bullet: (text: string) => `  • ${text}`,
   },
   symbols: {
     success: '✓',
@@ -220,20 +221,22 @@ describe('CLIAdapter', () => {
 
     it('shows success outro on complete', async () => {
       await adapter.start();
-      const clack = await import('../../../utils/clack.js');
 
       emitter.emit('complete', { success: true, summary: 'All done!' });
 
-      expect(clack.default.outro).toHaveBeenCalledWith('All done!');
+      // New completion handler uses styled output, not clack.outro
+      expect(mockConsoleLog).toHaveBeenCalledWith('✓ WorkOS AuthKit installed!');
+      expect(mockConsoleLog).toHaveBeenCalledWith('Next steps:');
     });
 
     it('shows error on failure complete', async () => {
       await adapter.start();
-      const clack = await import('../../../utils/clack.js');
 
       emitter.emit('complete', { success: false, summary: 'Something went wrong' });
 
-      expect(clack.default.log.error).toHaveBeenCalledWith('Something went wrong');
+      // New completion handler uses styled.error and styled.info
+      expect(mockConsoleLog).toHaveBeenCalledWith('✗ Installation failed');
+      expect(mockConsoleLog).toHaveBeenCalledWith('ℹ Something went wrong');
     });
   });
 });

@@ -42,8 +42,10 @@ export const styled = {
   label: (label: string, value: string) => `${chalk.dim(label)} ${value}`,
 
   /** Phase indicator: [1/5] Phase Name */
-  phase: (num: number, total: number, name: string) =>
-    chalk.cyan(`[${num}/${total}] ${name}`),
+  phase: (num: number, total: number, name: string) => chalk.cyan(`[${num}/${total}] ${name}`),
+
+  /** Bullet point for lists */
+  bullet: (text: string) => `  ${symbols.bullet} ${text}`,
 } as const;
 
 /**
