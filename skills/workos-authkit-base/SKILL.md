@@ -1,171 +1,113 @@
 ---
 name: workos-authkit-base
-description: Base template for WorkOS AuthKit integration skills. Defines standard phases, task structure, and verification patterns.
+description: Architectural reference for WorkOS AuthKit integrations. Fetch README first for implementation details.
 ---
 
 # WorkOS AuthKit Base Template
 
-## CRITICAL: Installation Order
+## First Action: Fetch README
 
-1. **Install SDK package FIRST** - before writing ANY import statements
-2. **Wait for install to complete** - verify node_modules exists
-3. **Then write code** - imports will resolve correctly
+Before any implementation, fetch the framework-specific README:
+
+```
+WebFetch: {sdk-package-name} README from npmjs.com or GitHub
+```
+
+README is the source of truth for: install commands, imports, API usage, code patterns.
 
 ## Task Structure (Required)
 
-Every AuthKit integration MUST create these tasks:
+| Phase | Task | Blocked By | Purpose |
+|-------|------|------------|---------|
+| 1 | preflight | - | Verify env vars, detect framework |
+| 2 | install | preflight | Install SDK package |
+| 3 | callback | install | Create OAuth callback route |
+| 4 | provider | install | Setup auth context/middleware |
+| 5 | ui | callback, provider | Add sign-in/out UI |
+| 6 | verify | ui | Build confirmation |
 
-| ID        | Subject                   | Blocked By         | Active Form               |
-| --------- | ------------------------- | ------------------ | ------------------------- |
-| preflight | Pre-flight checks         | -                  | Running pre-flight checks |
-| install   | Install SDK package       | preflight          | Installing SDK            |
-| callback  | Create callback route     | install            | Creating callback route   |
-| provider  | Setup provider/middleware | install            | Setting up auth provider  |
-| ui        | Add authentication UI     | callback, provider | Adding auth UI            |
-| verify    | Verify installation       | ui                 | Verifying installation    |
+## Decision Trees
 
-**Task Creation Pattern**:
+### Package Manager Detection
 
 ```
-TaskCreate: { subject: "Pre-flight checks", description: "Verify framework and env vars", activeForm: "Running pre-flight checks" }
-TaskCreate: { subject: "Install SDK package", description: "Install @workos-inc/authkit-{framework}", activeForm: "Installing SDK" }
-TaskCreate: { subject: "Create callback route", description: "Create OAuth callback at REDIRECT_URI path", activeForm: "Creating callback route" }
-TaskCreate: { subject: "Setup provider/middleware", description: "Configure auth context", activeForm: "Setting up auth provider" }
-TaskCreate: { subject: "Add authentication UI", description: "Add sign-in/out to home page", activeForm: "Adding auth UI" }
-TaskCreate: { subject: "Verify installation", description: "Run build and confirm success", activeForm: "Verifying installation" }
-
-// Set dependencies
-TaskUpdate: { taskId: "install", addBlockedBy: ["preflight"] }
-TaskUpdate: { taskId: "callback", addBlockedBy: ["install"] }
-TaskUpdate: { taskId: "provider", addBlockedBy: ["install"] }
-TaskUpdate: { taskId: "ui", addBlockedBy: ["callback", "provider"] }
-TaskUpdate: { taskId: "verify", addBlockedBy: ["ui"] }
+pnpm-lock.yaml? → pnpm
+yarn.lock? → yarn
+bun.lockb? → bun
+else → npm
 ```
 
-## Phase 1: Pre-Flight Checks
+### Provider vs Middleware
 
-**Start**: `TaskUpdate: { taskId: "preflight", status: "in_progress" }`
+```
+Client-side framework? → AuthKitProvider wraps app
+Server-side framework? → Middleware handles sessions
+Hybrid (Next.js)? → Both may be needed
+```
 
-1. Verify framework marker exists
-2. Read `.env.local` and confirm required vars:
-   - `WORKOS_API_KEY` (server-side SDKs)
-   - `WORKOS_CLIENT_ID`
-   - `WORKOS_REDIRECT_URI` or `NEXT_PUBLIC_WORKOS_REDIRECT_URI`
-   - `WORKOS_COOKIE_PASSWORD` (32+ chars)
-3. Create all tasks (see Task Structure above)
+### Callback Route Location
 
-**Report**: `[STATUS] Pre-flight checks passed`
+Extract path from `WORKOS_REDIRECT_URI` → create route at that exact path.
 
-**VERIFY**: All env vars present, framework detected
-**Complete**: `TaskUpdate: { taskId: "preflight", status: "completed" }`
+## Environment Variables
 
-## Phase 2: SDK Installation
+| Variable | Purpose | When Required |
+|----------|---------|---------------|
+| `WORKOS_API_KEY` | Server authentication | Server SDKs |
+| `WORKOS_CLIENT_ID` | Client identification | All SDKs |
+| `WORKOS_REDIRECT_URI` | OAuth callback URL | Server SDKs |
+| `WORKOS_COOKIE_PASSWORD` | Session encryption (32+ chars) | Server SDKs |
 
-**Start**: `TaskUpdate: { taskId: "install", status: "in_progress" }`
+Note: Some frameworks use prefixed variants (e.g., `NEXT_PUBLIC_*`). Check README.
 
-1. Detect package manager:
-   - `pnpm-lock.yaml` → `pnpm add`
-   - `yarn.lock` → `yarn add`
-   - `bun.lockb` → `bun add`
-   - `package-lock.json` or default → `npm install`
+## Verification Checklists
 
-2. Run install command (framework skill provides package name)
+### After Install
+- [ ] `node_modules/@workos-inc/authkit-*` exists
+- [ ] No install errors in output
 
-3. **WAIT** for command to complete
+### After Callback Route
+- [ ] Route file exists at path matching `WORKOS_REDIRECT_URI`
+- [ ] Imports SDK callback handler (not custom OAuth)
 
-**Report**: `[STATUS] SDK installed`
+### After Provider/Middleware
+- [ ] Provider wraps entire app (client-side)
+- [ ] Middleware configured in correct location (server-side)
 
-**VERIFY**: `ls node_modules/@workos-inc/authkit-{framework}` succeeds
-**Complete**: `TaskUpdate: { taskId: "install", status: "completed" }`
+### After UI
+- [ ] Home page shows conditional auth state
+- [ ] Uses SDK functions for sign-in/out URLs
 
-## Phase 3: Callback Route Creation
-
-**Start**: `TaskUpdate: { taskId: "callback", status: "in_progress" }`
-
-1. Read redirect URI from `.env.local`
-2. Extract URL path (e.g., `http://localhost:3000/auth/callback` → `/auth/callback`)
-3. Create route file at framework-appropriate path
-4. Use SDK's callback handler (NOT custom OAuth code)
-
-**Report**: `[STATUS] Callback route created at {path}`
-
-**VERIFY**: Route file exists and contains SDK import
-**Complete**: `TaskUpdate: { taskId: "callback", status: "completed" }`
-
-## Phase 4: Provider/Middleware Setup
-
-**Start**: `TaskUpdate: { taskId: "provider", status: "in_progress" }`
-
-Varies by framework:
-
-- **Client-side**: Wrap app with `AuthKitProvider`
-- **Server-side**: Add middleware for session handling
-
-**Report**: `[STATUS] Provider/middleware configured`
-
-**VERIFY**: Pattern exists in target file
-**Complete**: `TaskUpdate: { taskId: "provider", status: "completed" }`
-
-## Phase 5: UI Integration & Verification
-
-**Start**: `TaskUpdate: { taskId: "ui", status: "in_progress" }`
-
-1. Update home page:
-   - **Logged out**: Show "Sign In" button
-   - **Logged in**: Show user info + "Sign Out" button
-
-2. Use SDK functions (NOT manual OAuth URLs)
-
-**Report**: `[STATUS] Auth UI added`
-
-**Complete**: `TaskUpdate: { taskId: "ui", status: "completed" }`
-
-**Start verification**: `TaskUpdate: { taskId: "verify", status: "in_progress" }`
-
-3. Run build to verify compilation:
-   ```bash
-   {pkg-manager} run build
-   ```
-
-**VERIFY**: Build exits with code 0
-
-**Report**: `[STATUS] Integration complete`
-
-**Complete**: `TaskUpdate: { taskId: "verify", status: "completed" }`
+### Final Verification
+- [ ] Build completes with exit code 0
+- [ ] No import resolution errors
 
 ## Error Recovery
 
-### "Module not found: @workos-inc/authkit-\*"
+### Module not found
+- [ ] Verify install completed successfully
+- [ ] Check `node_modules/@workos-inc` exists
+- [ ] Re-run install if missing
 
-- **Cause**: SDK not installed
-- **Fix**: Re-run install, verify `node_modules/@workos-inc` exists
+### Build import errors
+- [ ] Delete `node_modules`, reinstall
+- [ ] Verify package.json has SDK dependency
 
-### Build fails with import errors
+### Invalid redirect URI
+- [ ] Compare route path to `WORKOS_REDIRECT_URI`
+- [ ] Paths must match exactly
 
-- **Cause**: Package manager didn't install correctly
-- **Fix**: Delete `node_modules`, run fresh install
-
-### "Invalid redirect URI" at runtime
-
-- **Cause**: Route path doesn't match `WORKOS_REDIRECT_URI`
-- **Fix**: Read env var, create route at exact path
-
-### "Cookie password too short"
-
-- **Cause**: `WORKOS_COOKIE_PASSWORD` < 32 chars
-- **Fix**: Generate with `openssl rand -base64 32`
+### Cookie password error
+- [ ] Verify `WORKOS_COOKIE_PASSWORD` is 32+ characters
+- [ ] Generate new: `openssl rand -base64 32`
 
 ### Auth state not persisting
+- [ ] Verify provider wraps entire app
+- [ ] Check middleware is in correct location
 
-- **Cause**: `AuthKitProvider` missing or misconfigured
-- **Fix**: Verify provider wraps entire app in layout
+## Critical Rules
 
-## Environment Variables Reference
-
-| Variable                          | Description                  | Required By |
-| --------------------------------- | ---------------------------- | ----------- |
-| `WORKOS_API_KEY`                  | Server-side API key (sk_xxx) | Server SDKs |
-| `WORKOS_CLIENT_ID`                | Public client identifier     | All SDKs    |
-| `WORKOS_REDIRECT_URI`             | OAuth callback URL           | Server SDKs |
-| `NEXT_PUBLIC_WORKOS_REDIRECT_URI` | Callback URL (Next.js)       | Next.js SDK |
-| `WORKOS_COOKIE_PASSWORD`          | 32+ char session secret      | Server SDKs |
+1. **Install SDK before writing imports** - never create import statements for uninstalled packages
+2. **Use SDK functions** - never construct OAuth URLs manually
+3. **Follow README patterns** - SDK APIs change between versions
+4. **Extract callback path from env** - don't hardcode `/auth/callback`
