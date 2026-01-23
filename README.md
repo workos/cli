@@ -52,19 +52,18 @@ Commands:
   login                  Authenticate with WorkOS via Connect OAuth device flow
   logout                 Remove stored credentials
   install-skill          Install AuthKit skills to coding agents (Claude Code, Codex, etc.)
+    --list, -l           List available skills without installing
+    --skill, -s          Install specific skill(s)
+    --agent, -a          Target agent(s): claude-code, codex, cursor, goose
 
 Options:
   --integration <name>    Framework: nextjs, react, react-router, tanstack-start, vanilla-js
-  --api-key <key>         WorkOS API key (masked in terminal)
-  --client-id <id>        WorkOS Client ID
   --redirect-uri <uri>    Custom redirect URI (defaults to framework convention)
   --homepage-url <url>    Custom homepage URL (defaults to http://localhost:{port})
-  --ci                    Non-interactive CI mode
   --install-dir <path>    Installation directory
-  --debug                 Verbose logging to /tmp/wizard.log
-  --local                 Use local LLM gateway (development only)
-  --default               Use default options for all prompts (default: true)
-  --skip-auth             Skip authentication check (requires --local)
+  --no-validate           Skip post-installation validation (includes build check)
+  --force-install         Force install packages even if peer dependency checks fail
+  --debug                 Enable verbose logging
 
 Environment Variables:
   WIZARD_TELEMETRY=false  Disable telemetry collection
@@ -79,12 +78,23 @@ npx @workos/installer
 # Specify framework
 npx @workos/installer --integration react-router
 
-# CI mode
+# With visual dashboard (experimental)
+npx @workos/installer dashboard
+```
+
+## CI Mode
+
+For non-interactive CI/CD environments:
+
+```bash
 npx @workos/installer --ci \
   --integration nextjs \
   --api-key $WORKOS_API_KEY \
-  --client-id $WORKOS_CLIENT_ID
+  --client-id $WORKOS_CLIENT_ID \
+  --install-dir ./my-app
 ```
+
+CI mode requires `--api-key`, `--client-id`, and `--install-dir`.
 
 ## Authentication
 
@@ -131,10 +141,10 @@ WIZARD_TELEMETRY=false npx @workos/installer
 Detailed logs (with redacted credentials) are saved to:
 
 ```
-/tmp/wizard.log
+~/.workos-installer/logs/wizard-{timestamp}.log
 ```
 
-Use `--debug` flag for verbose terminal output.
+Up to 10 session log files are retained. Use `--debug` flag for verbose terminal output.
 
 ## Development
 
