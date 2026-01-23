@@ -24,7 +24,6 @@ type Args = {
   dashboard?: boolean;
   inspect?: boolean;
   noValidate?: boolean;
-  noBuild?: boolean;
 };
 
 /**
@@ -49,7 +48,6 @@ function buildOptions(argv: Args): WizardOptions {
     debug: merged.debug ?? false,
     forceInstall: merged.forceInstall ?? false,
     installDir,
-    default: merged.default ?? false,
     local: merged.local ?? false,
     ci: merged.ci ?? false,
     skipAuth: merged.skipAuth ?? false,
@@ -61,7 +59,6 @@ function buildOptions(argv: Args): WizardOptions {
     integration: merged.integration,
     inspect: merged.inspect ?? false,
     noValidate: merged.noValidate ?? false,
-    noBuild: merged.noBuild ?? false,
     emitter: createWizardEventEmitter(), // Will be replaced in runWithCore
   };
 }

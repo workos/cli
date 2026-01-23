@@ -28,11 +28,6 @@ export type WizardOptions = {
   installDir: string;
 
   /**
-   * Whether to select the default option for all questions automatically.
-   */
-  default: boolean;
-
-  /**
    * Whether to use local services (LLM gateway on localhost:8000)
    */
   local: boolean;
@@ -90,14 +85,9 @@ export type WizardOptions = {
   inspect?: boolean;
 
   /**
-   * Skip post-installation validation
+   * Skip post-installation validation (includes build check)
    */
   noValidate?: boolean;
-
-  /**
-   * Skip build validation during post-installation
-   */
-  noBuild?: boolean;
 };
 
 export interface Feature {

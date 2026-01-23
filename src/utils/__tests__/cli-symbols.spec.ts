@@ -1,8 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 
-// Store original env
 const originalTERM = process.env.TERM;
-const originalPlatform = process.platform;
 
 describe('cli-symbols', () => {
   afterEach(() => {

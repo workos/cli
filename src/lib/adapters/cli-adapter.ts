@@ -168,20 +168,15 @@ export class CLIAdapter implements WizardAdapter {
 
   private handleStateEnter = ({ state }: WizardEvents['state:enter']): void => {
     this.progress.enterPhase(state);
-    // Phase transitions are silent - success messages indicate progress
   };
 
   private handleStateExit = ({ state }: WizardEvents['state:exit']): void => {
     this.progress.exitPhase(state);
   };
 
-  private handleAuthChecking = (): void => {
-    // Progress tracker shows phase, minimal output needed
-  };
+  private handleAuthChecking = (): void => {};
 
-  private handleAuthRequired = (): void => {
-    // Progress tracker shows phase, minimal output needed
-  };
+  private handleAuthRequired = (): void => {};
 
   private handleAuthSuccess = (): void => {
     clack.log.success('Authenticated');
@@ -192,9 +187,7 @@ export class CLIAdapter implements WizardAdapter {
     clack.log.info('Visit https://dashboard.workos.com to verify your account');
   };
 
-  private handleDetectionStart = (): void => {
-    // Progress tracker shows phase, no-op here
-  };
+  private handleDetectionStart = (): void => {};
 
   private handleDetectionComplete = ({ integration }: WizardEvents['detection:complete']): void => {
     this.queueableLog(() => clack.log.success(`Detected ${chalk.bold(integration)}`));
@@ -294,9 +287,7 @@ export class CLIAdapter implements WizardAdapter {
     });
   };
 
-  private handleConfigStart = (): void => {
-    // Progress tracker shows phase, minimal output needed
-  };
+  private handleConfigStart = (): void => {};
 
   private handleConfigComplete = (): void => {
     clack.log.success('Environment configured');
@@ -326,7 +317,6 @@ export class CLIAdapter implements WizardAdapter {
       this.spinner.stop('Agent completed');
       this.spinner = null;
     }
-    // Progress tracker shows phase, minimal output needed
   };
 
   private handleValidationIssues = ({ issues }: WizardEvents['validation:issues']): void => {

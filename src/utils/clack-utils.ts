@@ -90,19 +90,18 @@ export function printWelcome(options: { wizardName: string; message?: string }):
   clack.note(welcomeText);
 }
 
-export async function confirmContinueIfNoOrDirtyGitRepo(options: Pick<WizardOptions, 'default' | 'ci'>): Promise<void> {
+export async function confirmContinueIfNoOrDirtyGitRepo(options: Pick<WizardOptions, 'ci'>): Promise<void> {
   return traceStep('check-git-status', async () => {
     if (!isInGitRepo()) {
       // CI mode: auto-continue without git
-      const continueWithoutGit =
-        options.default || options.ci
-          ? true
-          : await abortIfCancelled(
-              clack.confirm({
-                message:
-                  'You are not inside a git repository. The wizard will create and update files. Do you want to continue anyway?',
-              }),
-            );
+      const continueWithoutGit = options.ci
+        ? true
+        : await abortIfCancelled(
+            clack.confirm({
+              message:
+                'You are not inside a git repository. The wizard will create and update files. Do you want to continue anyway?',
+            }),
+          );
 
       analytics.setTag('continue-without-git', continueWithoutGit);
 
