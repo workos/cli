@@ -1,6 +1,12 @@
 import type { WizardEventEmitter } from './events.js';
 import type { WizardOptions } from '../utils/types.js';
 import type { Integration } from './constants.js';
+import type { DeviceAuthResponse } from './device-auth.js';
+
+/**
+ * How credentials were obtained.
+ */
+export type CredentialSource = 'cli' | 'env' | 'stored' | 'device' | 'manual';
 
 /**
  * Context passed to the wizard state machine.
@@ -21,6 +27,22 @@ export interface WizardMachineContext {
   gitDirtyFiles: string[];
   /** Error that caused failure (if any) */
   error: Error | undefined;
+
+  /** How credentials were obtained */
+  credentialSource?: CredentialSource;
+
+  /** Device auth state for UI */
+  deviceAuth?: {
+    verificationUri: string;
+    verificationUriComplete: string;
+    userCode: string;
+  };
+
+  /** Whether user consented to env scanning */
+  envScanConsent?: boolean;
+
+  /** Discovered env files (before consent) */
+  envFilesDetected?: string[];
 }
 
 /**
@@ -41,7 +63,11 @@ export type WizardMachineEvent =
   | { type: 'GIT_CONFIRMED' }
   | { type: 'GIT_CANCELLED' }
   | { type: 'CREDENTIALS_SUBMITTED'; apiKey: string; clientId: string }
-  | { type: 'CANCEL' };
+  | { type: 'CANCEL' }
+  | { type: 'ENV_SCAN_APPROVED' }
+  | { type: 'ENV_SCAN_DECLINED' }
+  | { type: 'DEVICE_AUTH_STARTED'; deviceAuth: DeviceAuthResponse }
+  | { type: 'RETRY_AUTH' };
 
 /**
  * Output from the detection actor.

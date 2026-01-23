@@ -27,7 +27,7 @@ vi.mock('../../../utils/clack.js', () => ({
 }));
 
 vi.mock('../../settings.js', () => ({
-  getSettings: vi.fn(() => ({
+  getConfig: vi.fn(() => ({
     branding: { showAsciiArt: false },
   })),
 }));

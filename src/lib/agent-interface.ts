@@ -667,6 +667,11 @@ function handleSDKMessage(
           tools: message.tools?.length,
           mcpServers: message.mcp_servers,
         });
+        // Emit status so user knows we're waiting for API response
+        emitter?.emit('agent:progress', { step: 'Waiting for API response...' });
+        if (options.debug) {
+          debug('Agent initialized, waiting for API response from gateway...');
+        }
       }
       break;
     }

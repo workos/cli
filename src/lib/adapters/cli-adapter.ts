@@ -75,10 +75,21 @@ export class CLIAdapter implements WizardAdapter {
     this.subscribe('git:dirty', this.handleGitDirty);
     this.subscribe('credentials:found', this.handleCredentialsFound);
     this.subscribe('credentials:request', this.handleCredentialsRequest);
+    this.subscribe('credentials:env:prompt', this.handleEnvScanPrompt);
+    this.subscribe('credentials:env:scanning', this.handleEnvScanning);
+    this.subscribe('credentials:env:found', this.handleEnvCredentialsFound);
+    this.subscribe('device:started', this.handleDeviceStarted);
+    this.subscribe('device:polling', this.handleDevicePolling);
+    this.subscribe('device:success', this.handleDeviceSuccess);
+    this.subscribe('device:error', this.handleDeviceError);
+    this.subscribe('staging:fetching', this.handleStagingFetching);
+    this.subscribe('staging:success', this.handleStagingSuccess);
+    this.subscribe('staging:error', this.handleStagingError);
     this.subscribe('config:start', this.handleConfigStart);
     this.subscribe('config:complete', this.handleConfigComplete);
     this.subscribe('agent:start', this.handleAgentStart);
     this.subscribe('agent:progress', this.handleAgentProgress);
+    this.subscribe('agent:failure', this.handleAgentFailure);
     this.subscribe('validation:start', this.handleValidationStart);
     this.subscribe('validation:issues', this.handleValidationIssues);
     this.subscribe('validation:complete', this.handleValidationComplete);
@@ -295,6 +306,18 @@ export class CLIAdapter implements WizardAdapter {
     }
   };
 
+  private handleAgentFailure = ({ message, stack }: WizardEvents['agent:failure']): void => {
+    if (this.spinner) {
+      this.spinner.stop('Agent failed');
+      this.spinner = null;
+    }
+
+    clack.log.error(`Agent error: ${message}`);
+    if (stack && this.debug) {
+      console.error(chalk.dim(stack));
+    }
+  };
+
   private handleError = ({ message, stack }: WizardEvents['error']): void => {
     if (this.spinner) {
       this.spinner.stop('Error');
@@ -305,5 +328,74 @@ export class CLIAdapter implements WizardAdapter {
     if (stack && this.debug) {
       console.error(chalk.dim(stack));
     }
+  };
+
+  // ===== Credential Resolution Handlers =====
+
+  private handleEnvScanPrompt = async ({ files }: WizardEvents['credentials:env:prompt']): Promise<void> => {
+    const fileList = files.join(', ');
+    this.isPromptActive = true;
+    const approved = await clack.confirm({
+      message: `Found ${fileList}. Check for existing WorkOS credentials?`,
+      initialValue: true,
+    });
+    this.isPromptActive = false;
+    this.flushPendingLogs();
+
+    if (clack.isCancel(approved)) {
+      this.sendEvent({ type: 'ENV_SCAN_DECLINED' });
+    } else {
+      this.sendEvent({ type: approved ? 'ENV_SCAN_APPROVED' : 'ENV_SCAN_DECLINED' });
+    }
+  };
+
+  private handleEnvScanning = (): void => {
+    clack.log.step('Scanning for WorkOS credentials...');
+  };
+
+  private handleEnvCredentialsFound = ({ source, hasApiKey }: WizardEvents['credentials:env:found']): void => {
+    const msg = hasApiKey
+      ? `Found credentials in ${source}`
+      : `Found Client ID in ${source} (no API key)`;
+    clack.log.success(msg);
+  };
+
+  private handleDeviceStarted = ({ verificationUri, userCode }: WizardEvents['device:started']): void => {
+    clack.log.info(`\nOpen this URL in your browser:\n  ${chalk.cyan(verificationUri)}`);
+    clack.log.info(`Enter code: ${chalk.bold(userCode)}\n`);
+    this.spinner = clack.spinner();
+    this.spinner.start('Waiting for authorization...');
+  };
+
+  private handleDevicePolling = (): void => {
+    // Just keep spinner going, no message change needed
+  };
+
+  private handleDeviceSuccess = (): void => {
+    if (this.spinner) {
+      this.spinner.stop('Authorized');
+      this.spinner = null;
+    }
+    clack.log.success('Successfully authenticated');
+  };
+
+  private handleDeviceError = ({ message }: WizardEvents['device:error']): void => {
+    if (this.spinner) {
+      this.spinner.stop('Failed');
+      this.spinner = null;
+    }
+    clack.log.error(`Device authorization failed: ${message}`);
+  };
+
+  private handleStagingFetching = (): void => {
+    clack.log.step('Fetching your WorkOS credentials...');
+  };
+
+  private handleStagingSuccess = (): void => {
+    clack.log.success('Retrieved staging credentials');
+  };
+
+  private handleStagingError = ({ message }: WizardEvents['staging:error']): void => {
+    clack.log.error(`Failed to fetch credentials: ${message}`);
   };
 }

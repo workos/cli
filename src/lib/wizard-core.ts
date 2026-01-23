@@ -6,8 +6,12 @@ import type {
   DetectionOutput,
   GitCheckOutput,
   AgentOutput,
+  CredentialSource,
 } from './wizard-core.types.js';
 import type { WizardOptions } from '../utils/types.js';
+import type { EnvFileInfo, DiscoveryResult } from './credential-discovery.js';
+import type { DeviceAuthResponse } from './device-auth.js';
+import type { WizardEventEmitter } from './events.js';
 
 export const wizardMachine = setup({
   types: {
@@ -134,6 +138,44 @@ export const wizardMachine = setup({
       context.emitter.emit('error', { message, stack: context.error?.stack });
       context.emitter.emit('complete', { success: false, summary: message });
     },
+
+    // Credential resolution actions
+    emitEnvScanPrompt: ({ context }) => {
+      context.emitter.emit('credentials:env:prompt', {
+        files: context.envFilesDetected ?? [],
+      });
+    },
+    emitEnvScanning: ({ context }) => {
+      context.emitter.emit('credentials:env:scanning', {});
+    },
+    emitEnvCredentialsFound: ({ context }) => {
+      context.emitter.emit('credentials:env:found', {
+        source: '.env',
+        hasApiKey: Boolean(context.credentials?.apiKey),
+      });
+    },
+    emitDeviceAuthStart: () => {
+      // Event emitted by actor when it has verification URL
+    },
+    emitDeviceAuthSuccess: ({ context }) => {
+      context.emitter.emit('device:success', {
+        email: undefined, // Email comes from device auth result
+      });
+    },
+    emitDeviceAuthError: ({ context }) => {
+      const message = context.error?.message ?? 'Device authorization failed';
+      context.emitter.emit('device:error', { message });
+    },
+    emitStagingFetching: ({ context }) => {
+      context.emitter.emit('staging:fetching', {});
+    },
+    emitStagingSuccess: ({ context }) => {
+      context.emitter.emit('staging:success', {});
+    },
+    emitStagingError: ({ context }) => {
+      const message = context.error?.message ?? 'Failed to fetch staging credentials';
+      context.emitter.emit('staging:error', { message });
+    },
   },
 
   guards: {
@@ -158,6 +200,23 @@ export const wizardMachine = setup({
     }),
     runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => {
       throw new Error('runAgent not implemented - provide via machine.provide()');
+    }),
+
+    // Credential resolution actors
+    detectEnvFiles: fromPromise<EnvFileInfo, { installDir: string }>(async () => {
+      throw new Error('detectEnvFiles not implemented - provide via machine.provide()');
+    }),
+    scanEnvFiles: fromPromise<DiscoveryResult, { installDir: string }>(async () => {
+      throw new Error('scanEnvFiles not implemented - provide via machine.provide()');
+    }),
+    checkStoredAuth: fromPromise<boolean, void>(async () => {
+      throw new Error('checkStoredAuth not implemented - provide via machine.provide()');
+    }),
+    runDeviceAuth: fromPromise<{ deviceAuth: DeviceAuthResponse }, { emitter: WizardEventEmitter }>(async () => {
+      throw new Error('runDeviceAuth not implemented - provide via machine.provide()');
+    }),
+    fetchStagingCredentials: fromPromise<{ clientId: string; apiKey: string }, void>(async () => {
+      throw new Error('fetchStagingCredentials not implemented - provide via machine.provide()');
     }),
   },
 }).createMachine({
@@ -318,26 +377,182 @@ export const wizardMachine = setup({
 
     gatheringCredentials: {
       entry: [{ type: 'emitStateEnter', params: { state: 'gatheringCredentials' } }],
-      initial: 'checking',
+      initial: 'checkingCliFlags',
+
       states: {
-        checking: {
+        // Step 1: Check CLI flags (highest priority)
+        checkingCliFlags: {
           always: [
             {
               target: '#wizard.configuring',
               guard: 'hasCredentials',
-              actions: ['emitCredentialsFound', { type: 'emitStateExit', params: { state: 'gatheringCredentials' } }],
+              actions: [
+                assign({ credentialSource: (): CredentialSource => 'cli' }),
+                'emitCredentialsFound',
+                { type: 'emitStateExit', params: { state: 'gatheringCredentials' } },
+              ],
             },
-            {
-              target: 'prompting',
-            },
+            { target: 'detectingEnvFiles' },
           ],
         },
-        prompting: {
+
+        // Step 2: Check if env files exist (don't read yet)
+        detectingEnvFiles: {
+          invoke: {
+            id: 'detectEnvFiles',
+            src: 'detectEnvFiles',
+            input: ({ context }) => ({ installDir: context.options.installDir }),
+            onDone: [
+              {
+                target: 'promptingEnvScan',
+                guard: ({ event }) => (event.output as EnvFileInfo).exists,
+                actions: assign({
+                  envFilesDetected: ({ event }) => (event.output as EnvFileInfo).files,
+                }),
+              },
+              { target: 'checkingStoredAuth' },
+            ],
+            onError: {
+              target: 'checkingStoredAuth', // Non-fatal, continue
+            },
+          },
+        },
+
+        // Step 3: Ask user for consent to scan env files
+        promptingEnvScan: {
+          entry: ['emitEnvScanPrompt'],
+          on: {
+            ENV_SCAN_APPROVED: {
+              target: 'scanningEnvFiles',
+              actions: assign({ envScanConsent: () => true }),
+            },
+            ENV_SCAN_DECLINED: {
+              target: 'checkingStoredAuth',
+              actions: assign({ envScanConsent: () => false }),
+            },
+          },
+        },
+
+        // Step 4: Scan env files for credentials (with consent)
+        scanningEnvFiles: {
+          entry: ['emitEnvScanning'],
+          invoke: {
+            id: 'scanEnvFiles',
+            src: 'scanEnvFiles',
+            input: ({ context }) => ({ installDir: context.options.installDir }),
+            onDone: [
+              {
+                target: '#wizard.configuring',
+                guard: ({ event }) => (event.output as DiscoveryResult).found,
+                actions: [
+                  assign({
+                    credentials: ({ event }) => {
+                      const result = event.output as DiscoveryResult;
+                      return { clientId: result.clientId!, apiKey: result.apiKey ?? '' };
+                    },
+                    credentialSource: (): CredentialSource => 'env',
+                  }),
+                  'emitEnvCredentialsFound',
+                  { type: 'emitStateExit', params: { state: 'gatheringCredentials' } },
+                ],
+              },
+              { target: 'checkingStoredAuth' },
+            ],
+            onError: {
+              target: 'checkingStoredAuth',
+            },
+          },
+        },
+
+        // Step 5: Check for stored auth token
+        checkingStoredAuth: {
+          invoke: {
+            id: 'checkStoredAuth',
+            src: 'checkStoredAuth',
+            onDone: [
+              {
+                target: 'fetchingStagingCredentials',
+                guard: ({ event }) => event.output === true,
+              },
+              { target: 'runningDeviceAuth' },
+            ],
+            onError: {
+              target: 'runningDeviceAuth',
+            },
+          },
+        },
+
+        // Step 6: Run device authorization flow
+        runningDeviceAuth: {
+          entry: ['emitDeviceAuthStart'],
+          invoke: {
+            id: 'runDeviceAuth',
+            src: 'runDeviceAuth',
+            input: ({ context }) => ({ emitter: context.emitter }),
+            onDone: {
+              target: 'fetchingStagingCredentials',
+              actions: [
+                'emitDeviceAuthSuccess',
+                assign({
+                  deviceAuth: ({ event }) => {
+                    const da = event.output.deviceAuth;
+                    return {
+                      verificationUri: da.verification_uri,
+                      verificationUriComplete: da.verification_uri_complete,
+                      userCode: da.user_code,
+                    };
+                  },
+                }),
+              ],
+            },
+            onError: [
+              {
+                target: 'promptingManual',
+                actions: ['assignError', 'emitDeviceAuthError'],
+              },
+            ],
+          },
+        },
+
+        // Step 7: Fetch staging credentials from API
+        fetchingStagingCredentials: {
+          entry: ['emitStagingFetching'],
+          invoke: {
+            id: 'fetchStagingCredentials',
+            src: 'fetchStagingCredentials',
+            onDone: {
+              target: '#wizard.configuring',
+              actions: [
+                assign({
+                  credentials: ({ event }) => event.output,
+                  credentialSource: ({ context }): CredentialSource =>
+                    context.deviceAuth ? 'device' : 'stored',
+                }),
+                'emitStagingSuccess',
+                { type: 'emitStateExit', params: { state: 'gatheringCredentials' } },
+              ],
+            },
+            onError: {
+              target: 'promptingManual',
+              actions: ['assignError', 'emitStagingError'],
+            },
+          },
+        },
+
+        // Step 8: Manual fallback
+        promptingManual: {
           entry: ['emitCredentialsGathering'],
           on: {
             CREDENTIALS_SUBMITTED: {
               target: '#wizard.configuring',
-              actions: ['assignCredentials', { type: 'emitStateExit', params: { state: 'gatheringCredentials' } }],
+              actions: [
+                'assignCredentials',
+                assign({ credentialSource: (): CredentialSource => 'manual' }),
+                { type: 'emitStateExit', params: { state: 'gatheringCredentials' } },
+              ],
+            },
+            RETRY_AUTH: {
+              target: 'runningDeviceAuth',
             },
             CANCEL: {
               target: '#wizard.cancelled',

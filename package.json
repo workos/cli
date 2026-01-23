@@ -71,7 +71,7 @@
   "scripts": {
     "clean": "rm -rf ./dist",
     "prebuild": "pnpm clean",
-    "build:watch": "pnpm tsc -w",
+    "build:watch": "pnpm tsc -w --preserveWatchOutput",
     "build": "pnpm tsc",
     "postbuild": "chmod +x ./dist/bin.js && cp -r scripts/** dist",
     "lint": "prettier --check \"{lib,src,test}/**/*.ts\"",

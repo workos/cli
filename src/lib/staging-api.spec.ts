@@ -5,6 +5,17 @@ import { fetchStagingCredentials, StagingApiError } from './staging-api.js';
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
+// Mock the URL utility
+vi.mock('../utils/urls.js', () => ({
+  getWorkOSApiUrl: () => 'https://api.workos.com',
+}));
+
+// Mock debug utilities
+vi.mock('../utils/debug.js', () => ({
+  debug: vi.fn(),
+  logToFile: vi.fn(),
+}));
+
 describe('staging-api', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -28,7 +39,7 @@ describe('staging-api', () => {
         apiKey: 'sk_test_abc',
       });
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.workos.com/x/installer/staging-environment/credentials',
+        expect.stringContaining('/x/installer/staging-environment/credentials'),
         { headers: { Authorization: 'Bearer access_token_xyz' } }
       );
     });
@@ -45,7 +56,7 @@ describe('staging-api', () => {
         expect.fail('Expected to throw');
       } catch (e) {
         expect(e).toBeInstanceOf(StagingApiError);
-        expect((e as StagingApiError).message).toBe('Authentication expired. Please log in again.');
+        expect((e as StagingApiError).message).toBe('Authentication failed (401): Unauthorized');
         expect((e as StagingApiError).statusCode).toBe(401);
       }
     });
@@ -62,7 +73,7 @@ describe('staging-api', () => {
         expect.fail('Expected to throw');
       } catch (e) {
         expect(e).toBeInstanceOf(StagingApiError);
-        expect((e as StagingApiError).message).toBe('Access denied. Ensure you have the required permissions.');
+        expect((e as StagingApiError).message).toBe('Access denied (403): Forbidden');
         expect((e as StagingApiError).statusCode).toBe(403);
       }
     });

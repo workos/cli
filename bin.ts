@@ -36,6 +36,11 @@ import clack from './src/utils/clack.js';
 yargs(hideBin(process.argv))
   .env('WORKOS_WIZARD')
   .options({})
+  .command('config', 'Show current configuration and environment variables', {}, async () => {
+    const { printDebugConfig } = await import('./src/lib/debug-config.js');
+    printDebugConfig();
+    process.exit(0);
+  })
   .command('login', 'Authenticate with WorkOS', {}, async () => {
     const { runLogin } = await import('./src/commands/login.js');
     await runLogin();

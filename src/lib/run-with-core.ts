@@ -14,7 +14,12 @@ import { Integration } from './constants.js';
 import { parseEnvFile } from '../utils/env-parser.js';
 import { enableDebugLogs, initLogFile, logToFile } from '../utils/debug.js';
 
-import { getAccessToken, getCredentials } from './credentials.js';
+import { getAccessToken, getCredentials, saveCredentials, getStagingCredentials, saveStagingCredentials } from './credentials.js';
+import { checkForEnvFiles, discoverCredentials } from './credential-discovery.js';
+import type { EnvFileInfo, DiscoveryResult } from './credential-discovery.js';
+import { requestDeviceCode, pollForToken, type DeviceAuthResponse } from './device-auth.js';
+import { fetchStagingCredentials } from './staging-api.js';
+import { getCliAuthClientId, getAuthkitDomain } from './settings.js';
 import { analytics } from '../utils/analytics.js';
 import { getVersion } from './settings.js';
 import { getLlmGatewayUrlFromHost } from '../utils/urls.js';
@@ -219,6 +224,88 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
             error: error instanceof Error ? error : new Error(String(error)),
           };
         }
+      }),
+
+      // Credential resolution actors
+      detectEnvFiles: fromPromise<EnvFileInfo, { installDir: string }>(async ({ input }) => {
+        return checkForEnvFiles(input.installDir);
+      }),
+
+      scanEnvFiles: fromPromise<DiscoveryResult, { installDir: string }>(async ({ input }) => {
+        return discoverCredentials(input.installDir);
+      }),
+
+      checkStoredAuth: fromPromise<boolean, void>(async () => {
+        const token = getAccessToken();
+        return token !== null;
+      }),
+
+      runDeviceAuth: fromPromise<{ deviceAuth: DeviceAuthResponse }, { emitter: typeof emitter }>(async ({ input }) => {
+        const clientId = getCliAuthClientId();
+        const authkitDomain = getAuthkitDomain();
+
+        const deviceAuth = await requestDeviceCode({
+          clientId,
+          authkitDomain,
+        });
+
+        // Emit device started event with verification info
+        input.emitter.emit('device:started', {
+          verificationUri: deviceAuth.verification_uri,
+          verificationUriComplete: deviceAuth.verification_uri_complete,
+          userCode: deviceAuth.user_code,
+        });
+
+        // Open browser
+        import('opn').then(({ default: open }) => {
+          open(deviceAuth.verification_uri_complete).catch(() => {});
+        });
+
+        const result = await pollForToken(deviceAuth.device_code, {
+          clientId,
+          authkitDomain,
+          interval: deviceAuth.interval,
+          onPoll: () => input.emitter.emit('device:polling', {}),
+          onSlowDown: (newInterval) => input.emitter.emit('device:slowdown', { newIntervalMs: newInterval }),
+        });
+
+        // Save the auth token
+        logToFile('Device auth result:', {
+          accessTokenPrefix: result.accessToken?.substring(0, 50),
+          expiresAt: result.expiresAt,
+          userId: result.userId,
+          email: result.email,
+        });
+        saveCredentials({
+          accessToken: result.accessToken,
+          expiresAt: result.expiresAt,
+          userId: result.userId,
+          email: result.email,
+        });
+
+        return { deviceAuth };
+      }),
+
+      fetchStagingCredentials: fromPromise<{ clientId: string; apiKey: string }, void>(async () => {
+        // Check cached staging credentials first
+        const cached = getStagingCredentials();
+        if (cached) {
+          logToFile('Using cached staging credentials');
+          return cached;
+        }
+
+        // Fetch fresh from API
+        const creds = getCredentials();
+        logToFile('Staging API - credentials object:', JSON.stringify(creds, null, 2));
+        const token = creds?.accessToken;
+        logToFile('Staging API - token available:', !!token);
+        logToFile('Staging API - token prefix:', token?.substring(0, 50) + '...');
+        logToFile('Staging API - token expired?:', creds ? Date.now() >= creds.expiresAt : 'no creds');
+        if (!token) throw new Error('No access token available');
+
+        const staging = await fetchStagingCredentials(token);
+        saveStagingCredentials(staging);
+        return staging;
       }),
     },
   });

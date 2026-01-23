@@ -50,6 +50,9 @@ export class DashboardAdapter implements WizardAdapter {
     this.emitter.on('confirm:response', this.handleConfirmResponse);
     this.emitter.on('credentials:response', this.handleCredentialsResponse);
 
+    // Credential resolution events
+    this.emitter.on('credentials:env:consent', this.handleEnvScanConsent);
+
     // Track completion for post-exit summary
     this.emitter.on('complete', this.handleComplete);
   }
@@ -67,6 +70,7 @@ export class DashboardAdapter implements WizardAdapter {
     // Unsubscribe from events
     this.emitter.off('confirm:response', this.handleConfirmResponse);
     this.emitter.off('credentials:response', this.handleCredentialsResponse);
+    this.emitter.off('credentials:env:consent', this.handleEnvScanConsent);
     this.emitter.off('complete', this.handleComplete);
 
     // Run cleanup (unmount Ink, exit fullscreen)
@@ -108,5 +112,12 @@ export class DashboardAdapter implements WizardAdapter {
    */
   private handleCredentialsResponse = ({ apiKey, clientId }: { apiKey: string; clientId: string }): void => {
     this.sendEvent({ type: 'CREDENTIALS_SUBMITTED', apiKey, clientId });
+  };
+
+  /**
+   * Handle env scan consent response from Dashboard.
+   */
+  private handleEnvScanConsent = ({ approved }: { approved: boolean }): void => {
+    this.sendEvent({ type: approved ? 'ENV_SCAN_APPROVED' : 'ENV_SCAN_DECLINED' });
   };
 }
