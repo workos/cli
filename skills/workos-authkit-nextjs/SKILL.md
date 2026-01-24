@@ -41,10 +41,14 @@ Next.js version?
   |
   +-- 16+ --> Create proxy.ts at project root
   |
-  +-- 13-15 --> Create middleware.ts at project root
+  +-- 15   --> Create middleware.ts (cookies() is async - handlers must await)
+  |
+  +-- 13-14 --> Create middleware.ts (cookies() is sync)
 ```
 
 **Critical:** File MUST be at project root (or `src/` if using src directory). Never in `app/`.
+
+**Next.js 15+ async note:** All route handlers and middleware accessing cookies must be async and properly await cookie operations. This is a breaking change from Next.js 14.
 
 Middleware/proxy code: See README for `authkitMiddleware()` export pattern.
 
@@ -59,6 +63,17 @@ URI path          --> Route location
 ```
 
 Use `handleAuth()` from SDK. Do not write custom OAuth logic.
+
+**CRITICAL for Next.js 15+:** The route handler MUST be async and properly await handleAuth():
+
+```typescript
+// CORRECT - Next.js 15+ requires async route handlers
+export const GET = handleAuth();
+
+// If handleAuth returns a function, ensure it's awaited in request context
+```
+
+Check README for exact usage. If build fails with "cookies outside request scope", the handler is likely missing async/await.
 
 ## Step 6: Provider Setup
 
@@ -89,6 +104,17 @@ npm run build
 All checks must pass before marking complete.
 
 ## Error Recovery
+
+### "cookies was called outside a request scope" (Next.js 15+)
+**Most common cause:** Route handler not properly async or missing await.
+
+Fix for callback route:
+1. Check that `handleAuth()` is exported directly: `export const GET = handleAuth();`
+2. If using custom wrapper, ensure it's `async` and awaits any cookie operations
+3. Verify authkit-nextjs SDK version supports Next.js 15+ (check README for compatibility)
+4. **Never** call `cookies()` at module level - only inside request handlers
+
+This error causes OAuth codes to expire ("invalid_grant"), so fix the handler first.
 
 ### "middleware.ts not found"
 - Check: File at project root or `src/`, not inside `app/`
