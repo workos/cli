@@ -12,19 +12,18 @@ describe('credential-discovery', () => {
   });
 
   afterEach(() => {
-    // Clean up test directory
     try {
       const files = ['.env', '.env.local', '.env.development', '.env.development.local'];
       for (const f of files) {
         try {
           unlinkSync(join(testDir, f));
         } catch {
-          // ignore
+          // noop
         }
       }
       rmdirSync(testDir);
     } catch {
-      // ignore cleanup errors
+      // noop
     }
   });
 
@@ -119,7 +118,6 @@ WORKOS_API_KEY=sk_live_secretkey123
     });
 
     it('returns first file with valid clientId (priority order)', async () => {
-      // .env.local has higher priority than .env
       writeFileSync(join(testDir, '.env'), 'WORKOS_CLIENT_ID=client_from_dotenv');
       writeFileSync(join(testDir, '.env.local'), 'WORKOS_CLIENT_ID=client_from_local');
 
@@ -138,7 +136,6 @@ WORKOS_API_KEY=sk_live_secretkey123
     });
 
     it('ignores API key without valid client ID', async () => {
-      // API key alone is not enough - need clientId
       writeFileSync(join(testDir, '.env.local'), 'WORKOS_API_KEY=sk_test_key_value');
 
       const result = await discoverCredentials(testDir);

@@ -33,7 +33,7 @@ export async function checkForEnvFiles(projectDir: string): Promise<EnvFileInfo>
       await fs.access(filePath, fs.constants.R_OK);
       foundFiles.push(fileName);
     } catch {
-      // File doesn't exist or not readable
+      // continue
     }
   }
 
@@ -107,7 +107,7 @@ export async function discoverCredentials(projectDir: string): Promise<Discovery
         };
       }
     } catch {
-      // File not readable or doesn't exist, continue to next
+      // continue
     }
   }
 

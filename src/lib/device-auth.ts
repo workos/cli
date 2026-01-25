@@ -132,7 +132,6 @@ export async function pollForToken(
         }),
       });
     } catch {
-      // Network error - continue polling
       continue;
     }
 
@@ -174,34 +173,3 @@ function parseTokenResponse(data: TokenResponse): DeviceAuthResult {
   };
 }
 
-/**
- * Run the complete device authorization flow.
- * Requests a device code, opens the browser, and polls for the token.
- *
- * @returns DeviceAuthResult with tokens and user info
- * @throws DeviceAuthError on failure or timeout
- */
-export async function runDeviceAuthFlow(options: DeviceAuthOptions): Promise<{
-  result: DeviceAuthResult;
-  deviceAuth: DeviceAuthResponse;
-}> {
-  const deviceAuth = await requestDeviceCode(options);
-
-  // Open browser asynchronously (fire and forget)
-  import('opn')
-    .then(({ default: open }) => {
-      open(deviceAuth.verification_uri_complete).catch(() => {
-        // User can open manually
-      });
-    })
-    .catch(() => {
-      // opn not available
-    });
-
-  const result = await pollForToken(deviceAuth.device_code, {
-    ...options,
-    interval: deviceAuth.interval,
-  });
-
-  return { result, deviceAuth };
-}

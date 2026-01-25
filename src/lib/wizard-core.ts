@@ -89,8 +89,8 @@ export const wizardMachine = setup({
     emitEnvNotFound: ({ context }) => {
       context.emitter.emit('credentials:env:notfound', {});
     },
-    emitDeviceAuthStart: ({ context }) => {
-      // Event emitted by actor when it has verification URL
+    emitDeviceAuthStart: () => {
+      // Emitted by actor when it has verification URL
     },
     emitDeviceAuthSuccess: ({ context }) => {
       context.emitter.emit('device:success', { email: undefined });
