@@ -27,10 +27,10 @@ START
 
 ## Critical: Build Tool Detection
 
-| Marker File | Build Tool | Env Prefix | Access Pattern |
-|-------------|------------|------------|----------------|
-| `vite.config.ts` | Vite | `VITE_` | `import.meta.env.VITE_*` |
-| `craco.config.js` or none | CRA | `REACT_APP_` | `process.env.REACT_APP_*` |
+| Marker File               | Build Tool | Env Prefix   | Access Pattern            |
+| ------------------------- | ---------- | ------------ | ------------------------- |
+| `vite.config.ts`          | Vite       | `VITE_`      | `import.meta.env.VITE_*`  |
+| `craco.config.js` or none | CRA        | `REACT_APP_` | `process.env.REACT_APP_*` |
 
 **Wrong prefix = undefined values at runtime.** This is the #1 integration failure.
 

@@ -5,6 +5,8 @@
  * Requires an access token with 'staging-environment:credentials:read' scope.
  */
 
+import { logInfo, logError } from '../utils/debug.js';
+
 export interface StagingCredentials {
   clientId: string;
   apiKey: string;
@@ -34,14 +36,17 @@ export async function fetchStagingCredentials(accessToken: string): Promise<Stag
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
+  logInfo('[staging-api] Fetching credentials from:', STAGING_API_URL);
   try {
     const res = await fetch(STAGING_API_URL, {
       headers: { Authorization: `Bearer ${accessToken}` },
       signal: controller.signal,
     });
 
+    logInfo('[staging-api] Response status:', res.status);
     if (!res.ok) {
       const text = await res.text().catch(() => '');
+      logError('[staging-api] Error response:', res.status, text);
 
       if (res.status === 401) {
         throw new StagingApiError('Authentication expired. Please log in again.', 401);
@@ -63,18 +68,20 @@ export async function fetchStagingCredentials(accessToken: string): Promise<Stag
     const apiKey = data.apiKey || data.api_key;
 
     if (!clientId || !apiKey) {
+      logError('[staging-api] Invalid response: missing credentials');
       throw new StagingApiError('Invalid response: missing clientId or apiKey');
     }
 
+    logInfo('[staging-api] Credentials fetched successfully');
     return { clientId, apiKey };
   } catch (error) {
     if (error instanceof StagingApiError) throw error;
     if (error instanceof Error && error.name === 'AbortError') {
+      logError('[staging-api] Request timed out');
       throw new StagingApiError('Request timed out. Check your network connection.');
     }
-    throw new StagingApiError(
-      `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`,
-    );
+    logError('[staging-api] Network error:', error instanceof Error ? error.message : 'Unknown');
+    throw new StagingApiError(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
   } finally {
     clearTimeout(timeoutId);
   }

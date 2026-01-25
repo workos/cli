@@ -29,6 +29,7 @@ Has package.json with build tool (Vite, webpack, Parcel)?
 ### Step 4: Implement Per README
 
 Follow README examples for:
+
 - Client initialization
 - Sign in/out handlers
 - User state management
@@ -56,20 +57,21 @@ const authkit = await createClient(clientId);
 ## Environment Variables
 
 **Bundled projects only:**
+
 - Vite: `VITE_WORKOS_CLIENT_ID`
 - Webpack: `REACT_APP_WORKOS_CLIENT_ID` or custom
 - No `WORKOS_API_KEY` needed (client-side SDK)
 
 ## Error Recovery
 
-| Error | Cause | Fix |
-|-------|-------|-----|
-| `WorkOS is not defined` | CDN not loaded | Add script to `<head>` before your code |
-| `createClient is not a function` | Wrong import | npm: check import path; CDN: use `WorkOS.createClient` |
-| `clientId is required` | Undefined env var | Check env prefix matches build tool |
-| CORS errors | `file://` protocol | Use local dev server (`npx serve`) |
-| Popup blocked | Not user gesture | Call `signIn()` only from click handler |
-| Auth state lost | Token not persisted | Check localStorage in dev tools |
+| Error                            | Cause               | Fix                                                    |
+| -------------------------------- | ------------------- | ------------------------------------------------------ |
+| `WorkOS is not defined`          | CDN not loaded      | Add script to `<head>` before your code                |
+| `createClient is not a function` | Wrong import        | npm: check import path; CDN: use `WorkOS.createClient` |
+| `clientId is required`           | Undefined env var   | Check env prefix matches build tool                    |
+| CORS errors                      | `file://` protocol  | Use local dev server (`npx serve`)                     |
+| Popup blocked                    | Not user gesture    | Call `signIn()` only from click handler                |
+| Auth state lost                  | Token not persisted | Check localStorage in dev tools                        |
 
 ## Task Flow
 

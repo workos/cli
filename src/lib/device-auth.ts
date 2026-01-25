@@ -5,6 +5,8 @@
  * Extracted from login.ts for reuse in wizard credential gathering.
  */
 
+import { logInfo, logError } from '../utils/debug.js';
+
 export interface DeviceAuthResponse {
   device_code: string;
   user_code: string;
@@ -85,8 +87,10 @@ function getJwtExpiry(token: string): number | null {
  */
 export async function requestDeviceCode(options: DeviceAuthOptions): Promise<DeviceAuthResponse> {
   const scopes = options.scopes ?? DEFAULT_SCOPES;
+  const url = `${options.authkitDomain}/oauth2/device_authorization`;
 
-  const res = await fetch(`${options.authkitDomain}/oauth2/device_authorization`, {
+  logInfo('[device-auth] Requesting device code from:', url);
+  const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -95,12 +99,16 @@ export async function requestDeviceCode(options: DeviceAuthOptions): Promise<Dev
     }),
   });
 
+  logInfo('[device-auth] Device code response status:', res.status);
   if (!res.ok) {
     const text = await res.text();
+    logError('[device-auth] Device authorization failed:', res.status, text);
     throw new DeviceAuthError(`Device authorization failed: ${res.status} ${text}`);
   }
 
-  return res.json() as Promise<DeviceAuthResponse>;
+  const data = (await res.json()) as DeviceAuthResponse;
+  logInfo('[device-auth] Device code received, user_code:', data.user_code);
+  return data;
 }
 
 /**
@@ -114,13 +122,14 @@ export async function pollForToken(
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const startTime = Date.now();
   let pollInterval = options.interval * 1000;
+  const tokenUrl = `${options.authkitDomain}/oauth2/token`;
 
+  logInfo('[device-auth] Starting token polling, timeout:', timeoutMs);
   while (Date.now() - startTime < timeoutMs) {
     await sleep(pollInterval);
     options.onPoll?.();
 
     let res: Response;
-    const tokenUrl = `${options.authkitDomain}/oauth2/token`;
     try {
       res = await fetch(tokenUrl, {
         method: 'POST',
@@ -131,7 +140,8 @@ export async function pollForToken(
           client_id: options.clientId,
         }),
       });
-    } catch {
+    } catch (err) {
+      logInfo('[device-auth] Token poll network error, retrying');
       continue;
     }
 
@@ -139,10 +149,13 @@ export async function pollForToken(
     try {
       data = await res.json();
     } catch {
+      logError('[device-auth] Invalid JSON response from auth server');
       throw new DeviceAuthError('Invalid response from auth server');
     }
 
+    logInfo('[device-auth] Token poll response:', res.status, (data as AuthErrorResponse)?.error ?? 'success');
     if (res.ok) {
+      logInfo('[device-auth] Token received successfully');
       return parseTokenResponse(data as TokenResponse);
     }
 
@@ -154,13 +167,16 @@ export async function pollForToken(
 
     if (errorData.error === 'slow_down') {
       pollInterval += 5000;
+      logInfo('[device-auth] Slowing down, new interval:', pollInterval);
       options.onSlowDown?.(pollInterval);
       continue;
     }
 
+    logError('[device-auth] Token error:', errorData.error);
     throw new DeviceAuthError(`Token error: ${errorData.error}`);
   }
 
+  logError('[device-auth] Authentication timed out');
   throw new DeviceAuthError('Authentication timed out after 5 minutes');
 }
 
@@ -176,4 +192,3 @@ function parseTokenResponse(data: TokenResponse): DeviceAuthResult {
     email: idPayload?.email as string | undefined,
   };
 }
-

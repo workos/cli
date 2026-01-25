@@ -24,14 +24,15 @@ The README is the source of truth. If this skill conflicts with README, **follow
 
 ## Phase 2: Detect Router Mode
 
-| Mode           | Detection Signal                | Key Indicator               |
-| -------------- | ------------------------------- | --------------------------- |
-| v7 Framework   | `react-router.config.ts` exists | Routes in `app/routes/`     |
-| v7 Data        | `createBrowserRouter` in source | Loaders in route config     |
-| v7 Declarative | `<BrowserRouter>` component     | Routes as JSX, no loaders   |
-| v6             | package.json version `"6.x"`    | Similar to v7 Declarative   |
+| Mode           | Detection Signal                | Key Indicator             |
+| -------------- | ------------------------------- | ------------------------- |
+| v7 Framework   | `react-router.config.ts` exists | Routes in `app/routes/`   |
+| v7 Data        | `createBrowserRouter` in source | Loaders in route config   |
+| v7 Declarative | `<BrowserRouter>` component     | Routes as JSX, no loaders |
+| v6             | package.json version `"6.x"`    | Similar to v7 Declarative |
 
 **Detection order:**
+
 1. Check for `react-router.config.ts` (Framework mode)
 2. Grep for `createBrowserRouter` (Data mode)
 3. Check package.json version (v6 vs v7)
@@ -45,10 +46,10 @@ Based on detected mode, apply the corresponding README section. The README conta
 
 ### authLoader vs authkitLoader
 
-| Function       | Purpose                          | Where to use            |
-| -------------- | -------------------------------- | ----------------------- |
-| `authLoader`   | OAuth callback handler           | Callback route ONLY     |
-| `authkitLoader`| Fetch user data in routes        | Any route needing auth  |
+| Function        | Purpose                   | Where to use           |
+| --------------- | ------------------------- | ---------------------- |
+| `authLoader`    | OAuth callback handler    | Callback route ONLY    |
+| `authkitLoader` | Fetch user data in routes | Any route needing auth |
 
 **Common mistake:** Using `authkitLoader` for callback route. Use `authLoader()`.
 

@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { logInfo } from '../utils/debug.js';
 
 export interface DiscoveryResult {
   found: boolean;
@@ -25,6 +26,7 @@ const WORKOS_API_KEY_PATTERN = /^WORKOS_API_KEY=["']?([^"'\s#]+)["']?/m;
  * Returns which files were found so the UI can prompt for consent.
  */
 export async function checkForEnvFiles(projectDir: string): Promise<EnvFileInfo> {
+  logInfo('[credential-discovery] Checking for env files in:', projectDir);
   const foundFiles: string[] = [];
 
   for (const fileName of ENV_FILE_NAMES) {
@@ -37,6 +39,7 @@ export async function checkForEnvFiles(projectDir: string): Promise<EnvFileInfo>
     }
   }
 
+  logInfo('[credential-discovery] Found env files:', foundFiles);
   return {
     exists: foundFiles.length > 0,
     files: foundFiles,
@@ -87,6 +90,7 @@ export function isValidApiKey(value: string): boolean {
  * Returns first complete match (both clientId and apiKey preferred, but clientId-only is valid).
  */
 export async function discoverCredentials(projectDir: string): Promise<DiscoveryResult> {
+  logInfo('[credential-discovery] Scanning env files for WorkOS credentials');
   for (const fileName of ENV_FILE_NAMES) {
     const filePath = path.join(projectDir, fileName);
 
@@ -96,8 +100,15 @@ export async function discoverCredentials(projectDir: string): Promise<Discovery
       const clientIdValid = result.clientId && isValidClientId(result.clientId);
       const apiKeyValid = result.apiKey && isValidApiKey(result.apiKey);
 
-      // Need at least clientId to be useful
+      if (result.clientId && !clientIdValid) {
+        logInfo('[credential-discovery] Invalid clientId format in', fileName);
+      }
+      if (result.apiKey && !apiKeyValid) {
+        logInfo('[credential-discovery] Invalid apiKey format in', fileName);
+      }
+
       if (clientIdValid) {
+        logInfo('[credential-discovery] Found valid credentials in', fileName);
         return {
           found: true,
           source: 'env',
@@ -111,5 +122,6 @@ export async function discoverCredentials(projectDir: string): Promise<Discovery
     }
   }
 
+  logInfo('[credential-discovery] No valid credentials found');
   return { found: false };
 }

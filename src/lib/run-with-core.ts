@@ -13,7 +13,13 @@ import { Integration } from './constants.js';
 import { parseEnvFile } from '../utils/env-parser.js';
 import { enableDebugLogs, initLogFile, logInfo, logError } from '../utils/debug.js';
 
-import { getAccessToken, getCredentials, saveCredentials, getStagingCredentials, saveStagingCredentials } from './credentials.js';
+import {
+  getAccessToken,
+  getCredentials,
+  saveCredentials,
+  getStagingCredentials,
+  saveStagingCredentials,
+} from './credentials.js';
 import { checkForEnvFiles, discoverCredentials } from './credential-discovery.js';
 import { requestDeviceCode, pollForToken } from './device-auth.js';
 import { fetchStagingCredentials } from './staging-api.js';
