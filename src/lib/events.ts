@@ -30,6 +30,22 @@ export interface WizardEvents {
   'git:dirty:cancelled': Record<string, never>;
   'credentials:gathering': { requiresApiKey: boolean };
   'credentials:found': Record<string, never>;
+  // Credential discovery events
+  'credentials:env:detected': { files: string[] };
+  'credentials:env:prompt': { files: string[] };
+  'credentials:env:scanning': Record<string, never>;
+  'credentials:env:found': { sourcePath: string };
+  'credentials:env:notfound': Record<string, never>;
+  // Device auth events
+  'device:started': { verificationUri: string; verificationUriComplete: string; userCode: string };
+  'device:polling': Record<string, never>;
+  'device:success': { email?: string };
+  'device:timeout': Record<string, never>;
+  'device:error': { message: string };
+  // Staging API events
+  'staging:fetching': Record<string, never>;
+  'staging:success': Record<string, never>;
+  'staging:error': { message: string; statusCode?: number };
   'config:start': Record<string, never>;
   'config:complete': Record<string, never>;
   'agent:start': Record<string, never>;

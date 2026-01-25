@@ -2,11 +2,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
+export interface StagingCache {
+  clientId: string;
+  apiKey: string;
+  fetchedAt: number;
+}
+
 export interface Credentials {
   accessToken: string;
   expiresAt: number;
   userId: string;
   email?: string;
+  staging?: StagingCache;
 }
 
 function getCredentialsDir(): string {
@@ -62,4 +69,33 @@ export function getAccessToken(): string | null {
   if (!creds) return null;
   if (isTokenExpired(creds)) return null;
   return creds.accessToken;
+}
+
+/**
+ * Save staging credentials to the credential cache.
+ * Staging credentials are tied to the access token lifecycle.
+ */
+export function saveStagingCredentials(staging: { clientId: string; apiKey: string }): void {
+  const creds = getCredentials();
+  if (!creds) return;
+
+  saveCredentials({
+    ...creds,
+    staging: {
+      ...staging,
+      fetchedAt: Date.now(),
+    },
+  });
+}
+
+/**
+ * Get cached staging credentials if available and access token is still valid.
+ * Returns null if no cached credentials or if access token has expired.
+ */
+export function getStagingCredentials(): { clientId: string; apiKey: string } | null {
+  const creds = getCredentials();
+  if (!creds?.staging) return null;
+  // Invalidate staging credentials when access token expires
+  if (isTokenExpired(creds)) return null;
+  return { clientId: creds.staging.clientId, apiKey: creds.staging.apiKey };
 }
