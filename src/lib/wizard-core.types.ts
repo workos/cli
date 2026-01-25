@@ -43,6 +43,8 @@ export interface WizardMachineContext {
   envScanConsent?: boolean;
   /** Env files detected in project (before consent) */
   envFilesDetected?: string[];
+  /** Path to env file where credentials were found */
+  envCredentialPath?: string;
 }
 
 /**

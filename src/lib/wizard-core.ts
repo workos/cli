@@ -84,7 +84,7 @@ export const wizardMachine = setup({
       context.emitter.emit('credentials:env:scanning', {});
     },
     emitEnvCredentialsFound: ({ context }) => {
-      context.emitter.emit('credentials:env:found', { sourcePath: '.env' });
+      context.emitter.emit('credentials:env:found', { sourcePath: context.envCredentialPath ?? '.env' });
     },
     emitEnvNotFound: ({ context }) => {
       context.emitter.emit('credentials:env:notfound', {});
@@ -469,6 +469,7 @@ export const wizardMachine = setup({
                       return { clientId: result.clientId!, apiKey: result.apiKey };
                     },
                     credentialSource: () => 'env' as CredentialSource,
+                    envCredentialPath: ({ event }) => (event.output as DiscoveryResult).sourcePath,
                   }),
                   'emitEnvCredentialsFound',
                   { type: 'emitStateExit', params: { state: 'gatheringCredentials' } },

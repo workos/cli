@@ -135,8 +135,12 @@ export async function pollForToken(
       continue;
     }
 
-    // Read JSON once before branching
-    const data = await res.json();
+    let data;
+    try {
+      data = await res.json();
+    } catch {
+      throw new DeviceAuthError('Invalid response from auth server');
+    }
 
     if (res.ok) {
       return parseTokenResponse(data as TokenResponse);
