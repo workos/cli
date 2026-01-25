@@ -62,15 +62,23 @@ export function getLogFilePath(): string | null {
 }
 
 function writeLog(level: 'INFO' | 'WARN' | 'ERROR', emoji: string, args: unknown[]): void {
-  if (!sessionLogPath) return;
+  const redactedArgs = args.map((a) => (typeof a === 'object' && a !== null ? redactCredentials(a) : a));
+  const msg = redactedArgs.map((a) => prepareMessage(a)).join(' ');
 
-  try {
-    const timestamp = new Date().toISOString();
-    const redactedArgs = args.map((a) => (typeof a === 'object' && a !== null ? redactCredentials(a) : a));
-    const msg = redactedArgs.map((a) => prepareMessage(a)).join(' ');
-    appendFileSync(sessionLogPath, `[${timestamp}] ${emoji} ${level}: ${msg}\n`);
-  } catch {
-    // Ignore write failures
+  // Write to console if debug enabled
+  if (debugEnabled) {
+    const color = level === 'ERROR' ? chalk.red : level === 'WARN' ? chalk.yellow : chalk.dim;
+    clack.log.info(color(`${emoji} ${msg}`));
+  }
+
+  // Write to log file
+  if (sessionLogPath) {
+    try {
+      const timestamp = new Date().toISOString();
+      appendFileSync(sessionLogPath, `[${timestamp}] ${emoji} ${level}: ${msg}\n`);
+    } catch {
+      // Ignore write failures
+    }
   }
 }
 

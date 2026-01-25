@@ -22,7 +22,7 @@ import {
 } from './credentials.js';
 import { checkForEnvFiles, discoverCredentials } from './credential-discovery.js';
 import { requestDeviceCode, pollForToken } from './device-auth.js';
-import { fetchStagingCredentials } from './staging-api.js';
+import { fetchStagingCredentials as fetchStagingCredentialsApi } from './staging-api.js';
 import { getCliAuthClientId, getAuthkitDomain } from './settings.js';
 import { analytics } from '../utils/analytics.js';
 import { getVersion } from './settings.js';
@@ -299,7 +299,7 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
         const token = getAccessToken();
         if (!token) throw new Error('No access token available');
 
-        const staging = await fetchStagingCredentials(token);
+        const staging = await fetchStagingCredentialsApi(token);
         saveStagingCredentials(staging);
         return staging;
       }),
