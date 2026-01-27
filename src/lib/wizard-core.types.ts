@@ -1,6 +1,16 @@
 import type { WizardEventEmitter } from './events.js';
 import type { WizardOptions } from '../utils/types.js';
 import type { Integration } from './constants.js';
+import type { DeviceAuthResponse } from './device-auth.js';
+import type { EnvFileInfo, DiscoveryResult } from './credential-discovery.js';
+
+export type { EnvFileInfo, DiscoveryResult };
+export type { DeviceAuthResponse };
+
+/**
+ * How credentials were resolved.
+ */
+export type CredentialSource = 'cli' | 'env' | 'stored' | 'device' | 'manual';
 
 /**
  * Context passed to the wizard state machine.
@@ -14,13 +24,27 @@ export interface WizardMachineContext {
   /** Detected or selected framework integration */
   integration: Integration | undefined;
   /** WorkOS credentials gathered from user */
-  credentials: { apiKey: string; clientId: string } | undefined;
+  credentials: { apiKey?: string; clientId: string } | undefined;
   /** Whether git working directory is clean */
   gitIsClean: boolean;
   /** List of dirty git files (if any) */
   gitDirtyFiles: string[];
   /** Error that caused failure (if any) */
   error: Error | undefined;
+  /** How credentials were resolved */
+  credentialSource?: CredentialSource;
+  /** Device auth state for UI display */
+  deviceAuth?: {
+    verificationUri: string;
+    verificationUriComplete: string;
+    userCode: string;
+  };
+  /** Whether user consented to env file scanning */
+  envScanConsent?: boolean;
+  /** Env files detected in project (before consent) */
+  envFilesDetected?: string[];
+  /** Path to env file where credentials were found */
+  envCredentialPath?: string;
 }
 
 /**
@@ -41,7 +65,11 @@ export type WizardMachineEvent =
   | { type: 'GIT_CONFIRMED' }
   | { type: 'GIT_CANCELLED' }
   | { type: 'CREDENTIALS_SUBMITTED'; apiKey: string; clientId: string }
-  | { type: 'CANCEL' };
+  | { type: 'CANCEL' }
+  // Credential discovery events
+  | { type: 'ENV_SCAN_APPROVED' }
+  | { type: 'ENV_SCAN_DECLINED' }
+  | { type: 'RETRY_AUTH' };
 
 /**
  * Output from the detection actor.

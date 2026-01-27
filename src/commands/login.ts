@@ -89,7 +89,7 @@ export async function runLogin(): Promise<void> {
     },
     body: new URLSearchParams({
       client_id: clientId,
-      scope: 'openid email',
+      scope: 'openid email staging-environment:credentials:read',
     }),
   });
 

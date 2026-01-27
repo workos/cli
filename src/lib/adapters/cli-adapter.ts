@@ -97,6 +97,12 @@ export class CLIAdapter implements WizardAdapter {
     this.subscribe('git:dirty', this.handleGitDirty);
     this.subscribe('credentials:found', this.handleCredentialsFound);
     this.subscribe('credentials:request', this.handleCredentialsRequest);
+    this.subscribe('credentials:env:prompt', this.handleEnvScanPrompt);
+    this.subscribe('device:started', this.handleDeviceStarted);
+    this.subscribe('device:success', this.handleDeviceSuccess);
+    this.subscribe('staging:fetching', this.handleStagingFetching);
+    this.subscribe('staging:success', this.handleStagingSuccess);
+    this.subscribe('credentials:env:found', this.handleEnvCredentialsFound);
     this.subscribe('config:complete', this.handleConfigComplete);
     this.subscribe('agent:start', this.handleAgentStart);
     this.subscribe('agent:progress', this.handleAgentProgress);
@@ -187,6 +193,58 @@ export class CLIAdapter implements WizardAdapter {
 
   private handleCredentialsFound = (): void => {
     clack.log.success('Found existing WorkOS credentials in .env.local');
+  };
+
+  private handleEnvScanPrompt = async ({ files }: WizardEvents['credentials:env:prompt']): Promise<void> => {
+    this.isPromptActive = true;
+    const fileList = files.length === 1 ? files[0] : files.slice(0, 2).join(', ');
+    const confirmed = await clack.confirm({
+      message: `Found ${fileList}. Check for existing WorkOS credentials?`,
+      initialValue: true,
+    });
+    this.isPromptActive = false;
+    this.flushPendingLogs();
+
+    if (clack.isCancel(confirmed)) {
+      this.sendEvent({ type: 'ENV_SCAN_DECLINED' });
+    } else if (confirmed) {
+      this.sendEvent({ type: 'ENV_SCAN_APPROVED' });
+    } else {
+      this.sendEvent({ type: 'ENV_SCAN_DECLINED' });
+    }
+  };
+
+  private handleDeviceStarted = ({ verificationUri, userCode }: WizardEvents['device:started']): void => {
+    clack.log.info(`\nOpen this URL in your browser:\n`);
+    console.log(`  ${chalk.cyan(verificationUri)}`);
+    console.log(`\nEnter code: ${chalk.bold(userCode)}\n`);
+
+    this.spinner = clack.spinner();
+    this.spinner.start('Waiting for authentication...');
+  };
+
+  private handleDeviceSuccess = (): void => {
+    // Spinner will be stopped by handleStagingFetching
+  };
+
+  private handleStagingFetching = (): void => {
+    if (this.spinner) {
+      this.spinner.stop('Authenticated');
+    }
+    this.spinner = clack.spinner();
+    this.spinner.start('Fetching your WorkOS credentials...');
+  };
+
+  private handleStagingSuccess = (): void => {
+    if (this.spinner) {
+      this.spinner.stop('Credentials fetched');
+      this.spinner = null;
+    }
+    clack.log.success('WorkOS credentials retrieved automatically');
+  };
+
+  private handleEnvCredentialsFound = ({ sourcePath }: WizardEvents['credentials:env:found']): void => {
+    clack.log.success(`Found existing WorkOS credentials in ${sourcePath}`);
   };
 
   private handleGitDirty = async ({ files }: WizardEvents['git:dirty']): Promise<void> => {

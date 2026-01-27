@@ -100,6 +100,8 @@ export class DashboardAdapter implements WizardAdapter {
   private handleConfirmResponse = ({ id, confirmed }: { id: string; confirmed: boolean }): void => {
     if (id === 'git-status') {
       this.sendEvent({ type: confirmed ? 'GIT_CONFIRMED' : 'GIT_CANCELLED' });
+    } else if (id === 'env-scan') {
+      this.sendEvent({ type: confirmed ? 'ENV_SCAN_APPROVED' : 'ENV_SCAN_DECLINED' });
     }
   };
 

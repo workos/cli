@@ -13,7 +13,17 @@ import { Integration } from './constants.js';
 import { parseEnvFile } from '../utils/env-parser.js';
 import { enableDebugLogs, initLogFile, logInfo, logError } from '../utils/debug.js';
 
-import { getAccessToken, getCredentials } from './credentials.js';
+import {
+  getAccessToken,
+  getCredentials,
+  saveCredentials,
+  getStagingCredentials,
+  saveStagingCredentials,
+} from './credentials.js';
+import { checkForEnvFiles, discoverCredentials } from './credential-discovery.js';
+import { requestDeviceCode, pollForToken } from './device-auth.js';
+import { fetchStagingCredentials as fetchStagingCredentialsApi } from './staging-api.js';
+import { getCliAuthClientId, getAuthkitDomain } from './settings.js';
 import { analytics } from '../utils/analytics.js';
 import { getVersion } from './settings.js';
 import { getLlmGatewayUrlFromHost } from '../utils/urls.js';
@@ -218,6 +228,80 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
             error: error instanceof Error ? error : new Error(String(error)),
           };
         }
+      }),
+
+      // Credential discovery actors
+      detectEnvFiles: fromPromise(async ({ input }) => {
+        return checkForEnvFiles(input.installDir);
+      }),
+
+      scanEnvFiles: fromPromise(async ({ input }) => {
+        return discoverCredentials(input.installDir);
+      }),
+
+      checkStoredAuth: fromPromise(async () => {
+        const token = getAccessToken();
+        return token !== null;
+      }),
+
+      runDeviceAuth: fromPromise(async ({ input }) => {
+        const clientId = getCliAuthClientId();
+        const authkitDomain = getAuthkitDomain();
+
+        if (!clientId) {
+          throw new Error('CLI auth not configured. Set WORKOS_CLI_CLIENT_ID environment variable.');
+        }
+
+        const deviceAuth = await requestDeviceCode({
+          clientId,
+          authkitDomain,
+        });
+
+        // Emit device started event with verification info
+        input.emitter.emit('device:started', {
+          verificationUri: deviceAuth.verification_uri,
+          verificationUriComplete: deviceAuth.verification_uri_complete,
+          userCode: deviceAuth.user_code,
+        });
+
+        // Open browser
+        try {
+          const { default: openFn } = await import('opn');
+          await openFn(deviceAuth.verification_uri_complete);
+        } catch {
+          // User can open manually
+        }
+
+        const result = await pollForToken(deviceAuth.device_code, {
+          clientId,
+          authkitDomain,
+          interval: deviceAuth.interval,
+          onPoll: () => input.emitter.emit('device:polling', {}),
+        });
+
+        // Save the auth token
+        saveCredentials({
+          accessToken: result.accessToken,
+          expiresAt: result.expiresAt,
+          userId: result.userId,
+          email: result.email,
+        });
+
+        return { result, deviceAuth };
+      }),
+
+      fetchStagingCredentials: fromPromise(async () => {
+        // Check cached staging credentials first
+        const cached = getStagingCredentials();
+        if (cached) return cached;
+
+        // Fetch fresh from API
+        const token = getAccessToken();
+        if (!token) throw new Error('No access token available');
+
+        const staging = await fetchStagingCredentialsApi(token);
+        saveStagingCredentials(staging);
+        return staging;
       }),
     },
   });

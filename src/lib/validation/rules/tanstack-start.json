@@ -1,7 +1,11 @@
 {
   "framework": "tanstack-start",
   "packages": [
-    { "name": "@workos/authkit-tanstack-react-start", "location": "dependencies", "alternates": ["@workos-inc/authkit-tanstack-start"] },
+    {
+      "name": "@workos/authkit-tanstack-react-start",
+      "location": "dependencies",
+      "alternates": ["@workos-inc/authkit-tanstack-start"]
+    },
     { "name": "@tanstack/start", "location": "any", "alternates": ["@tanstack/react-start"] }
   ],
   "envVars": [

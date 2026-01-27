@@ -27,6 +27,7 @@ description: Integrate WorkOS AuthKit with TanStack Start applications. Full-sta
 WebFetch: `https://github.com/workos/authkit-tanstack-start/blob/main/README.md`
 
 From README, extract:
+
 1. Package name from install command (e.g., `pnpm add @workos/...`)
 2. Use that exact name for all imports
 
@@ -41,12 +42,12 @@ From README, extract:
 
 ## Environment Variables
 
-| Variable | Format | Required |
-|----------|--------|----------|
-| `WORKOS_API_KEY` | `sk_...` | Yes |
-| `WORKOS_CLIENT_ID` | `client_...` | Yes |
-| `WORKOS_REDIRECT_URI` | Full URL | Yes |
-| `WORKOS_COOKIE_PASSWORD` | 32+ chars | Yes |
+| Variable                 | Format       | Required |
+| ------------------------ | ------------ | -------- |
+| `WORKOS_API_KEY`         | `sk_...`     | Yes      |
+| `WORKOS_CLIENT_ID`       | `client_...` | Yes      |
+| `WORKOS_REDIRECT_URI`    | Full URL     | Yes      |
+| `WORKOS_COOKIE_PASSWORD` | 32+ chars    | Yes      |
 
 Generate password if missing: `openssl rand -base64 32`
 
@@ -71,6 +72,7 @@ Logout requires `signOut()` followed by redirect in a route loader. See README f
 ## Callback Route
 
 Path must match `WORKOS_REDIRECT_URI`. If URI is `/api/auth/callback`:
+
 - File: `app/routes/api/auth/callback.tsx`
 - Use `handleAuth()` from SDK - do not write custom OAuth logic
 

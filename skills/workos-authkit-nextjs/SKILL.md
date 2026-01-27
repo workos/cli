@@ -16,11 +16,14 @@ The README is the source of truth. If this skill conflicts with README, follow R
 ## Step 2: Pre-Flight Validation
 
 ### Project Structure
+
 - Confirm `next.config.js` or `next.config.mjs` exists
 - Confirm `package.json` contains `"next"` dependency
 
 ### Environment Variables
+
 Check `.env.local` for:
+
 - `WORKOS_API_KEY` - starts with `sk_`
 - `WORKOS_CLIENT_ID` - starts with `client_`
 - `NEXT_PUBLIC_WORKOS_REDIRECT_URI` - valid callback URL
@@ -106,9 +109,11 @@ All checks must pass before marking complete.
 ## Error Recovery
 
 ### "cookies was called outside a request scope" (Next.js 15+)
+
 **Most common cause:** Route handler not properly async or missing await.
 
 Fix for callback route:
+
 1. Check that `handleAuth()` is exported directly: `export const GET = handleAuth();`
 2. If using custom wrapper, ensure it's `async` and awaits any cookie operations
 3. Verify authkit-nextjs SDK version supports Next.js 15+ (check README for compatibility)
@@ -117,25 +122,31 @@ Fix for callback route:
 This error causes OAuth codes to expire ("invalid_grant"), so fix the handler first.
 
 ### "middleware.ts not found"
+
 - Check: File at project root or `src/`, not inside `app/`
 - Check: Filename matches Next.js version (proxy.ts for 16+, middleware.ts for 13-15)
 
 ### "Cannot use getUser in client component"
+
 - Check: Component has no `'use client'` directive, or
 - Check: Move auth logic to server component/API route
 
 ### "Module not found" for SDK import
+
 - Check: SDK installed before writing imports
 - Check: SDK package directory exists in node_modules
 
 ### "withAuth route not covered by middleware"
+
 - Check: Middleware/proxy file exists at correct location
 - Check: Matcher config includes the route path
 
 ### Build fails after AuthKitProvider
+
 - Check: README for correct import path (may be subpath export)
 - Check: No client/server boundary violations
 
-### NEXT_PUBLIC_ prefix issues
+### NEXT*PUBLIC* prefix issues
+
 - Client components need `NEXT_PUBLIC_*` prefix
 - Server components use plain env var names

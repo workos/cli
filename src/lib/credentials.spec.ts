@@ -30,6 +30,8 @@ const {
   isTokenExpired,
   getAccessToken,
   getCredentialsPath,
+  saveStagingCredentials,
+  getStagingCredentials,
 } = await import('./credentials.js');
 import type { Credentials } from './credentials.js';
 
@@ -184,6 +186,71 @@ describe('credentials', () => {
       };
       saveCredentials(expiredCreds);
       expect(getAccessToken()).toBeNull();
+    });
+  });
+
+  describe('saveStagingCredentials', () => {
+    it('saves staging credentials to existing credentials', () => {
+      saveCredentials(validCreds);
+
+      saveStagingCredentials({ clientId: 'client_staging', apiKey: 'sk_staging' });
+
+      const creds = getCredentials();
+      expect(creds?.staging).toBeDefined();
+      expect(creds?.staging?.clientId).toBe('client_staging');
+      expect(creds?.staging?.apiKey).toBe('sk_staging');
+      expect(creds?.staging?.fetchedAt).toBeGreaterThan(0);
+    });
+
+    it('does nothing if no credentials exist', () => {
+      saveStagingCredentials({ clientId: 'client_x', apiKey: 'sk_x' });
+      expect(getCredentials()).toBeNull();
+    });
+
+    it('overwrites existing staging credentials', () => {
+      saveCredentials({
+        ...validCreds,
+        staging: { clientId: 'old_client', apiKey: 'old_key', fetchedAt: 1000 },
+      });
+
+      saveStagingCredentials({ clientId: 'new_client', apiKey: 'new_key' });
+
+      const creds = getCredentials();
+      expect(creds?.staging?.clientId).toBe('new_client');
+      expect(creds?.staging?.apiKey).toBe('new_key');
+    });
+  });
+
+  describe('getStagingCredentials', () => {
+    it('returns null when no credentials exist', () => {
+      expect(getStagingCredentials()).toBeNull();
+    });
+
+    it('returns null when credentials exist but no staging cache', () => {
+      saveCredentials(validCreds);
+      expect(getStagingCredentials()).toBeNull();
+    });
+
+    it('returns staging credentials when cached and token not expired', () => {
+      saveCredentials({
+        ...validCreds,
+        staging: { clientId: 'client_cached', apiKey: 'sk_cached', fetchedAt: Date.now() },
+      });
+
+      const result = getStagingCredentials();
+
+      expect(result).toEqual({ clientId: 'client_cached', apiKey: 'sk_cached' });
+    });
+
+    it('returns null when token is expired (invalidates staging cache)', () => {
+      const expiredCreds: Credentials = {
+        ...validCreds,
+        expiresAt: Date.now() - 1000,
+        staging: { clientId: 'client_x', apiKey: 'sk_x', fetchedAt: Date.now() },
+      };
+      saveCredentials(expiredCreds);
+
+      expect(getStagingCredentials()).toBeNull();
     });
   });
 });
