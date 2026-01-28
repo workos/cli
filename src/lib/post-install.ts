@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { getCurrentBranch, getDefaultBranch, hasGhCli, getUncommittedFiles } from '../utils/git-utils.js';
+import { getDefaultBranch, getUncommittedFiles } from '../utils/git-utils.js';
 
 export interface PostInstallContext {
   installDir: string;
