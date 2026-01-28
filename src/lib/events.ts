@@ -56,6 +56,14 @@ export interface WizardEvents {
   'validation:start': { framework: string };
   'validation:issues': { issues: import('./validation/types.js').ValidationIssue[] };
   'validation:complete': { passed: boolean; issueCount: number; durationMs: number };
+
+  // Branch check events
+  'branch:checking': Record<string, never>;
+  'branch:protected': { branch: string };
+  'branch:prompt': { branch: string };
+  'branch:created': { branch: string };
+  'branch:create:failed': { error: string };
+  'branch:skipped': Record<string, never>;
 }
 
 export type WizardEventName = keyof WizardEvents;

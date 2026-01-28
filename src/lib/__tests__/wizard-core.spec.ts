@@ -4,7 +4,13 @@ import { wizardMachine } from '../wizard-core.js';
 import { createWizardEventEmitter } from '../events.js';
 import { Integration } from '../constants.js';
 import type { WizardOptions } from '../../utils/types.js';
-import type { DetectionOutput, GitCheckOutput, AgentOutput, WizardMachineContext } from '../wizard-core.types.js';
+import type {
+  DetectionOutput,
+  GitCheckOutput,
+  AgentOutput,
+  WizardMachineContext,
+  BranchCheckOutput,
+} from '../wizard-core.types.js';
 
 function createTestActor(overrides?: Partial<WizardOptions>) {
   const emitter = createWizardEventEmitter();
@@ -31,6 +37,13 @@ function createTestActor(overrides?: Partial<WizardOptions>) {
       checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => ({
         isClean: true,
         files: [],
+      })),
+      checkBranch: fromPromise<BranchCheckOutput, void>(async () => ({
+        branch: 'main',
+        isProtected: false,
+      })),
+      createBranch: fromPromise<{ branch: string }, { name: string; fallbackName: string }>(async ({ input }) => ({
+        branch: input.name,
       })),
       configureEnvironment: fromPromise<void, { context: WizardMachineContext }>(async () => {}),
       runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => ({
@@ -70,24 +83,24 @@ describe('WizardCore State Machine', () => {
       const { actor } = createTestActor({ skipAuth: true });
       actor.start();
       actor.send({ type: 'START' });
-      // Should go directly to preparing (parallel state)
+      // Should go directly to preparing (parallel state with detection, gitCheck, and branchCheck)
       expect(actor.getSnapshot().value).toEqual({
-        preparing: { detection: 'running', gitCheck: 'running' },
+        preparing: { detection: 'running', gitCheck: 'running', branchCheck: 'running' },
       });
       actor.stop();
     });
   });
 
   describe('parallel states', () => {
-    it('runs detection and git check in parallel', async () => {
+    it('runs detection, git check, and branch check in parallel', async () => {
       const { actor } = createTestActor({ skipAuth: true });
       actor.start();
       actor.send({ type: 'START' });
 
-      // Both should be running
+      // All three should be running in parallel
       const snapshot = actor.getSnapshot();
       expect(snapshot.value).toEqual({
-        preparing: { detection: 'running', gitCheck: 'running' },
+        preparing: { detection: 'running', gitCheck: 'running', branchCheck: 'running' },
       });
       actor.stop();
     });
@@ -146,6 +159,13 @@ describe('WizardCore State Machine', () => {
             isClean: true,
             files: [],
           })),
+          checkBranch: fromPromise<BranchCheckOutput, void>(async () => ({
+            branch: 'main',
+            isProtected: false,
+          })),
+          createBranch: fromPromise<{ branch: string }, { name: string; fallbackName: string }>(async ({ input }) => ({
+            branch: input.name,
+          })),
           configureEnvironment: fromPromise<void, { context: WizardMachineContext }>(async () => {}),
           runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => ({
             success: true,
@@ -198,6 +218,13 @@ describe('WizardCore State Machine', () => {
           checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => ({
             isClean: false,
             files: ['file1.ts', 'file2.ts'],
+          })),
+          checkBranch: fromPromise<BranchCheckOutput, void>(async () => ({
+            branch: 'feature-branch',
+            isProtected: false,
+          })),
+          createBranch: fromPromise<{ branch: string }, { name: string; fallbackName: string }>(async ({ input }) => ({
+            branch: input.name,
           })),
           configureEnvironment: fromPromise<void, { context: WizardMachineContext }>(async () => {}),
           runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => ({
@@ -259,6 +286,13 @@ describe('WizardCore State Machine', () => {
             isClean: false,
             files: ['file1.ts'],
           })),
+          checkBranch: fromPromise<BranchCheckOutput, void>(async () => ({
+            branch: 'feature-branch',
+            isProtected: false,
+          })),
+          createBranch: fromPromise<{ branch: string }, { name: string; fallbackName: string }>(async ({ input }) => ({
+            branch: input.name,
+          })),
           configureEnvironment: fromPromise<void, { context: WizardMachineContext }>(async () => {}),
           runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => ({
             success: true,
@@ -308,6 +342,13 @@ describe('WizardCore State Machine', () => {
           checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => ({
             isClean: true,
             files: [],
+          })),
+          checkBranch: fromPromise<BranchCheckOutput, void>(async () => ({
+            branch: 'feature-branch',
+            isProtected: false,
+          })),
+          createBranch: fromPromise<{ branch: string }, { name: string; fallbackName: string }>(async ({ input }) => ({
+            branch: input.name,
           })),
           configureEnvironment: fromPromise<void, { context: WizardMachineContext }>(async () => {}),
           runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => ({
@@ -368,6 +409,13 @@ describe('WizardCore State Machine', () => {
           checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => ({
             isClean: true,
             files: [],
+          })),
+          checkBranch: fromPromise<BranchCheckOutput, void>(async () => ({
+            branch: 'feature-branch',
+            isProtected: false,
+          })),
+          createBranch: fromPromise<{ branch: string }, { name: string; fallbackName: string }>(async ({ input }) => ({
+            branch: input.name,
           })),
           configureEnvironment: fromPromise<void, { context: WizardMachineContext }>(async () => {}),
           runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => ({

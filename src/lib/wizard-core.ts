@@ -9,6 +9,7 @@ import type {
   EnvFileInfo,
   DiscoveryResult,
   CredentialSource,
+  BranchCheckOutput,
 } from './wizard-core.types.js';
 import type { WizardOptions } from '../utils/types.js';
 import type { DeviceAuthResult, DeviceAuthResponse } from './device-auth.js';
@@ -66,6 +67,32 @@ export const wizardMachine = setup({
     emitGitCancelled: ({ context }) => {
       context.emitter.emit('git:dirty:cancelled', {});
     },
+    emitBranchChecking: ({ context }) => {
+      context.emitter.emit('branch:checking', {});
+    },
+    emitBranchProtected: ({ context }) => {
+      if (context.currentBranch) {
+        context.emitter.emit('branch:protected', { branch: context.currentBranch });
+        context.emitter.emit('branch:prompt', { branch: context.currentBranch });
+      }
+    },
+    emitBranchCreated: ({ context }, params: { branch: string }) => {
+      context.emitter.emit('branch:created', { branch: params.branch });
+    },
+    emitBranchCreateFailed: ({ context }) => {
+      const message = context.error?.message ?? 'Failed to create branch';
+      context.emitter.emit('branch:create:failed', { error: message });
+    },
+    assignBranchResult: assign({
+      currentBranch: ({ event }) => {
+        const doneEvent = event as unknown as { output: BranchCheckOutput };
+        return doneEvent.output?.branch ?? undefined;
+      },
+      isProtectedBranch: ({ event }) => {
+        const doneEvent = event as unknown as { output: BranchCheckOutput };
+        return doneEvent.output?.isProtected ?? false;
+      },
+    }),
     emitCredentialsGathering: ({ context }) => {
       const requiresApiKey = ['nextjs', 'tanstack-start', 'react-router'].includes(context.integration ?? '');
       context.emitter.emit('credentials:gathering', { requiresApiKey });
@@ -221,6 +248,13 @@ export const wizardMachine = setup({
     fetchStagingCredentials: fromPromise<StagingCredentials, void>(async () => {
       throw new Error('fetchStagingCredentials not implemented - provide via machine.provide()');
     }),
+    // Branch check actors
+    checkBranch: fromPromise<BranchCheckOutput, void>(async () => {
+      throw new Error('checkBranch not implemented - provide via machine.provide()');
+    }),
+    createBranch: fromPromise<{ branch: string }, { name: string; fallbackName: string }>(async () => {
+      throw new Error('createBranch not implemented - provide via machine.provide()');
+    }),
   },
 }).createMachine({
   id: 'wizard',
@@ -353,6 +387,73 @@ export const wizardMachine = setup({
                 GIT_CANCELLED: {
                   target: '#wizard.cancelled',
                   actions: ['emitGitCancelled'],
+                },
+              },
+            },
+            done: {
+              type: 'final',
+            },
+          },
+        },
+        branchCheck: {
+          initial: 'running',
+          states: {
+            running: {
+              entry: ['emitBranchChecking'],
+              invoke: {
+                id: 'checkBranch',
+                src: 'checkBranch',
+                onDone: [
+                  {
+                    target: 'awaitingConfirmation',
+                    guard: ({ event }) => (event.output as BranchCheckOutput).isProtected,
+                    actions: ['assignBranchResult', 'emitBranchProtected'],
+                  },
+                  {
+                    target: 'done',
+                    actions: ['assignBranchResult'],
+                  },
+                ],
+                onError: {
+                  // Branch check failure is non-fatal
+                  target: 'done',
+                },
+              },
+            },
+            awaitingConfirmation: {
+              on: {
+                BRANCH_CREATE: {
+                  target: 'creating',
+                },
+                BRANCH_CONTINUE: {
+                  target: 'done',
+                },
+                BRANCH_CANCEL: {
+                  target: '#wizard.cancelled',
+                },
+              },
+            },
+            creating: {
+              invoke: {
+                id: 'createBranch',
+                src: 'createBranch',
+                input: () => ({
+                  name: 'feat/add-workos-authkit',
+                  fallbackName: `feat/add-workos-authkit-${Date.now()}`,
+                }),
+                onDone: {
+                  target: 'done',
+                  actions: [
+                    {
+                      type: 'emitBranchCreated',
+                      params: ({ event }) => ({ branch: (event.output as { branch: string }).branch }),
+                    },
+                  ],
+                },
+                onError: {
+                  // Branch creation failure is non-fatal
+                  target: 'done',
+                  actions: ['assignError', 'emitBranchCreateFailed'],
                 },
               },
             },

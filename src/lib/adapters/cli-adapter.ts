@@ -111,6 +111,9 @@ export class CLIAdapter implements WizardAdapter {
     this.subscribe('validation:complete', this.handleValidationComplete);
     this.subscribe('complete', this.handleComplete);
     this.subscribe('error', this.handleError);
+    // Branch check events
+    this.subscribe('branch:prompt', this.handleBranchPrompt);
+    this.subscribe('branch:created', this.handleBranchCreated);
   }
 
   async stop(): Promise<void> {
@@ -419,5 +422,31 @@ export class CLIAdapter implements WizardAdapter {
     if (stack && this.debug) {
       this.debugLog(stack);
     }
+  };
+
+  private handleBranchPrompt = async ({ branch }: WizardEvents['branch:prompt']): Promise<void> => {
+    this.isPromptActive = true;
+    const choice = await clack.select({
+      message: `You are on ${chalk.bold(branch)}. Create a feature branch?`,
+      options: [
+        { value: 'create', label: 'Create feat/add-workos-authkit' },
+        { value: 'continue', label: 'Continue on current branch' },
+        { value: 'cancel', label: 'Cancel' },
+      ],
+    });
+    this.isPromptActive = false;
+    this.flushPendingLogs();
+
+    if (clack.isCancel(choice) || choice === 'cancel') {
+      this.sendEvent({ type: 'BRANCH_CANCEL' });
+    } else if (choice === 'create') {
+      this.sendEvent({ type: 'BRANCH_CREATE' });
+    } else {
+      this.sendEvent({ type: 'BRANCH_CONTINUE' });
+    }
+  };
+
+  private handleBranchCreated = ({ branch }: WizardEvents['branch:created']): void => {
+    this.queueableLog(() => clack.log.success(`Created branch ${chalk.bold(branch)}`));
   };
 }
