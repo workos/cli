@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execSync, execFileSync } from 'node:child_process';
 
 const PROTECTED_BRANCHES = ['main', 'master', 'develop'];
 
@@ -26,12 +26,12 @@ export function isProtectedBranch(branch: string): boolean {
 }
 
 export function createBranch(name: string): void {
-  execSync(`git checkout -b ${name}`, { stdio: 'ignore' });
+  execFileSync('git', ['checkout', '-b', name], { stdio: 'ignore' });
 }
 
 export function branchExists(name: string): boolean {
   try {
-    execSync(`git rev-parse --verify ${name}`, { stdio: 'ignore' });
+    execFileSync('git', ['rev-parse', '--verify', name], { stdio: 'ignore' });
     return true;
   } catch {
     return false;

@@ -12,6 +12,30 @@ import type {
   BranchCheckOutput,
 } from '../wizard-core.types.js';
 
+// Shared mock actors for reuse across tests
+const baseMockActors = {
+  checkAuthentication: fromPromise<boolean, { options: WizardOptions }>(async () => true),
+  detectIntegration: fromPromise<DetectionOutput, { options: WizardOptions }>(async () => ({
+    integration: Integration.nextjs,
+  })),
+  checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => ({
+    isClean: true,
+    files: [],
+  })),
+  checkBranch: fromPromise<BranchCheckOutput, void>(async () => ({
+    branch: 'main',
+    isProtected: false,
+  })),
+  createBranch: fromPromise<{ branch: string }, { name: string; fallbackName: string }>(async ({ input }) => ({
+    branch: input.name,
+  })),
+  configureEnvironment: fromPromise<void, { context: WizardMachineContext }>(async () => {}),
+  runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => ({
+    success: true,
+    summary: 'Done!',
+  })),
+};
+
 function createTestActor(overrides?: Partial<WizardOptions>) {
   const emitter = createWizardEventEmitter();
   const options: WizardOptions = {
@@ -29,28 +53,7 @@ function createTestActor(overrides?: Partial<WizardOptions>) {
 
   // Provide mock implementations for actors
   const machine = wizardMachine.provide({
-    actors: {
-      checkAuthentication: fromPromise<boolean, { options: WizardOptions }>(async () => true),
-      detectIntegration: fromPromise<DetectionOutput, { options: WizardOptions }>(async () => ({
-        integration: Integration.nextjs,
-      })),
-      checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => ({
-        isClean: true,
-        files: [],
-      })),
-      checkBranch: fromPromise<BranchCheckOutput, void>(async () => ({
-        branch: 'main',
-        isProtected: false,
-      })),
-      createBranch: fromPromise<{ branch: string }, { name: string; fallbackName: string }>(async ({ input }) => ({
-        branch: input.name,
-      })),
-      configureEnvironment: fromPromise<void, { context: WizardMachineContext }>(async () => {}),
-      runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => ({
-        success: true,
-        summary: 'Done!',
-      })),
-    },
+    actors: baseMockActors,
   });
 
   const actor = createActor(machine, {
@@ -149,27 +152,10 @@ describe('WizardCore State Machine', () => {
 
       const errorMachine = wizardMachine.provide({
         actors: {
+          ...baseMockActors,
           checkAuthentication: fromPromise<boolean, { options: WizardOptions }>(async () => {
             throw new Error('Auth failed');
           }),
-          detectIntegration: fromPromise<DetectionOutput, { options: WizardOptions }>(async () => ({
-            integration: Integration.nextjs,
-          })),
-          checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => ({
-            isClean: true,
-            files: [],
-          })),
-          checkBranch: fromPromise<BranchCheckOutput, void>(async () => ({
-            branch: 'main',
-            isProtected: false,
-          })),
-          createBranch: fromPromise<{ branch: string }, { name: string; fallbackName: string }>(async ({ input }) => ({
-            branch: input.name,
-          })),
-          configureEnvironment: fromPromise<void, { context: WizardMachineContext }>(async () => {}),
-          runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => ({
-            success: true,
-          })),
         },
       });
 
@@ -211,24 +197,10 @@ describe('WizardCore State Machine', () => {
 
       const dirtyMachine = wizardMachine.provide({
         actors: {
-          checkAuthentication: fromPromise<boolean, { options: WizardOptions }>(async () => true),
-          detectIntegration: fromPromise<DetectionOutput, { options: WizardOptions }>(async () => ({
-            integration: Integration.nextjs,
-          })),
+          ...baseMockActors,
           checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => ({
             isClean: false,
             files: ['file1.ts', 'file2.ts'],
-          })),
-          checkBranch: fromPromise<BranchCheckOutput, void>(async () => ({
-            branch: 'feature-branch',
-            isProtected: false,
-          })),
-          createBranch: fromPromise<{ branch: string }, { name: string; fallbackName: string }>(async ({ input }) => ({
-            branch: input.name,
-          })),
-          configureEnvironment: fromPromise<void, { context: WizardMachineContext }>(async () => {}),
-          runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => ({
-            success: true,
           })),
         },
       });
@@ -278,24 +250,10 @@ describe('WizardCore State Machine', () => {
 
       const dirtyMachine = wizardMachine.provide({
         actors: {
-          checkAuthentication: fromPromise<boolean, { options: WizardOptions }>(async () => true),
-          detectIntegration: fromPromise<DetectionOutput, { options: WizardOptions }>(async () => ({
-            integration: Integration.nextjs,
-          })),
+          ...baseMockActors,
           checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => ({
             isClean: false,
             files: ['file1.ts'],
-          })),
-          checkBranch: fromPromise<BranchCheckOutput, void>(async () => ({
-            branch: 'feature-branch',
-            isProtected: false,
-          })),
-          createBranch: fromPromise<{ branch: string }, { name: string; fallbackName: string }>(async ({ input }) => ({
-            branch: input.name,
-          })),
-          configureEnvironment: fromPromise<void, { context: WizardMachineContext }>(async () => {}),
-          runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => ({
-            success: true,
           })),
         },
       });
@@ -335,22 +293,7 @@ describe('WizardCore State Machine', () => {
 
       const machine = wizardMachine.provide({
         actors: {
-          checkAuthentication: fromPromise<boolean, { options: WizardOptions }>(async () => true),
-          detectIntegration: fromPromise<DetectionOutput, { options: WizardOptions }>(async () => ({
-            integration: Integration.nextjs,
-          })),
-          checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => ({
-            isClean: true,
-            files: [],
-          })),
-          checkBranch: fromPromise<BranchCheckOutput, void>(async () => ({
-            branch: 'feature-branch',
-            isProtected: false,
-          })),
-          createBranch: fromPromise<{ branch: string }, { name: string; fallbackName: string }>(async ({ input }) => ({
-            branch: input.name,
-          })),
-          configureEnvironment: fromPromise<void, { context: WizardMachineContext }>(async () => {}),
+          ...baseMockActors,
           runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => ({
             success: true,
             summary: 'AuthKit installed successfully!',
@@ -401,27 +344,7 @@ describe('WizardCore State Machine', () => {
       };
 
       const machine = wizardMachine.provide({
-        actors: {
-          checkAuthentication: fromPromise<boolean, { options: WizardOptions }>(async () => true),
-          detectIntegration: fromPromise<DetectionOutput, { options: WizardOptions }>(async () => ({
-            integration: Integration.nextjs,
-          })),
-          checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => ({
-            isClean: true,
-            files: [],
-          })),
-          checkBranch: fromPromise<BranchCheckOutput, void>(async () => ({
-            branch: 'feature-branch',
-            isProtected: false,
-          })),
-          createBranch: fromPromise<{ branch: string }, { name: string; fallbackName: string }>(async ({ input }) => ({
-            branch: input.name,
-          })),
-          configureEnvironment: fromPromise<void, { context: WizardMachineContext }>(async () => {}),
-          runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => ({
-            success: true,
-          })),
-        },
+        actors: baseMockActors,
       });
 
       const actor = createActor(machine, {

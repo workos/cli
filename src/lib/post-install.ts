@@ -4,17 +4,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getDefaultBranch, getUncommittedFiles } from '../utils/git-utils.js';
 
-export interface PostInstallContext {
-  installDir: string;
-  integration: string;
-  commitMessage?: string;
-  prDescription?: string;
-  prUrl?: string;
-}
-
-/**
- * Detect uncommitted changes in the working directory.
- */
 export function detectChanges(): { hasChanges: boolean; files: string[] } {
   const files = getUncommittedFiles();
   return { hasChanges: files.length > 0, files };
@@ -29,7 +18,7 @@ export function pushBranch(cwd: string): void {
   execFileSync('git', ['push', '-u', 'origin', 'HEAD'], { cwd, stdio: 'pipe' });
 }
 
-export async function createPullRequest(title: string, body: string, cwd: string): Promise<string> {
+export function createPullRequest(title: string, body: string, cwd: string): string {
   const baseBranch = getDefaultBranch();
   const tmpFile = join(tmpdir(), `pr-body-${Date.now()}.md`);
   writeFileSync(tmpFile, body, 'utf-8');

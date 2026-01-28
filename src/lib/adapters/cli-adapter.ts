@@ -162,6 +162,13 @@ export class CLIAdapter implements WizardAdapter {
     }
   };
 
+  private stopSpinner(message: string): void {
+    if (this.spinner) {
+      this.spinner.stop(message);
+      this.spinner = null;
+    }
+  }
+
   /** Debug logging - only outputs when debug mode is enabled */
   private debugLog = (message: string): void => {
     if (this.debug) {
@@ -222,13 +229,9 @@ export class CLIAdapter implements WizardAdapter {
     this.isPromptActive = false;
     this.flushPendingLogs();
 
-    if (clack.isCancel(confirmed)) {
-      this.sendEvent({ type: 'ENV_SCAN_DECLINED' });
-    } else if (confirmed) {
-      this.sendEvent({ type: 'ENV_SCAN_APPROVED' });
-    } else {
-      this.sendEvent({ type: 'ENV_SCAN_DECLINED' });
-    }
+    this.sendEvent({
+      type: clack.isCancel(confirmed) || !confirmed ? 'ENV_SCAN_DECLINED' : 'ENV_SCAN_APPROVED',
+    });
   };
 
   private handleDeviceStarted = ({ verificationUri, userCode }: WizardEvents['device:started']): void => {
@@ -253,10 +256,7 @@ export class CLIAdapter implements WizardAdapter {
   };
 
   private handleStagingSuccess = (): void => {
-    if (this.spinner) {
-      this.spinner.stop('Credentials fetched');
-      this.spinner = null;
-    }
+    this.stopSpinner('Credentials fetched');
     clack.log.success('WorkOS credentials retrieved automatically');
   };
 
@@ -279,13 +279,9 @@ export class CLIAdapter implements WizardAdapter {
     this.isPromptActive = false;
     this.flushPendingLogs();
 
-    if (clack.isCancel(confirmed)) {
-      this.sendEvent({ type: 'GIT_CANCELLED' });
-    } else if (confirmed) {
-      this.sendEvent({ type: 'GIT_CONFIRMED' });
-    } else {
-      this.sendEvent({ type: 'GIT_CANCELLED' });
-    }
+    this.sendEvent({
+      type: clack.isCancel(confirmed) || !confirmed ? 'GIT_CANCELLED' : 'GIT_CONFIRMED',
+    });
   };
 
   private handleCredentialsRequest = async ({ requiresApiKey }: WizardEvents['credentials:request']): Promise<void> => {
@@ -366,10 +362,7 @@ export class CLIAdapter implements WizardAdapter {
 
   private handleValidationStart = (): void => {
     this.stopAgentUpdates();
-    if (this.spinner) {
-      this.spinner.stop('Agent completed');
-      this.spinner = null;
-    }
+    this.stopSpinner('Agent completed');
   };
 
   private handleValidationIssues = ({ issues }: WizardEvents['validation:issues']): void => {
@@ -395,11 +388,7 @@ export class CLIAdapter implements WizardAdapter {
 
   private handleComplete = ({ success, summary }: WizardEvents['complete']): void => {
     this.stopAgentUpdates();
-
-    if (this.spinner) {
-      this.spinner.stop(success ? 'Done' : 'Failed');
-      this.spinner = null;
-    }
+    this.stopSpinner(success ? 'Done' : 'Failed');
 
     if (success) {
       clack.log.success('WorkOS AuthKit installed!');
@@ -417,10 +406,7 @@ export class CLIAdapter implements WizardAdapter {
   };
 
   private handleError = ({ message, stack }: WizardEvents['error']): void => {
-    if (this.spinner) {
-      this.spinner.stop('Error');
-      this.spinner = null;
-    }
+    this.stopSpinner('Error');
     this.stopAgentUpdates();
 
     clack.log.error(message);
@@ -479,13 +465,9 @@ export class CLIAdapter implements WizardAdapter {
     this.isPromptActive = false;
     this.flushPendingLogs();
 
-    if (clack.isCancel(confirmed)) {
-      this.sendEvent({ type: 'COMMIT_DECLINED' });
-    } else if (confirmed) {
-      this.sendEvent({ type: 'COMMIT_APPROVED' });
-    } else {
-      this.sendEvent({ type: 'COMMIT_DECLINED' });
-    }
+    this.sendEvent({
+      type: clack.isCancel(confirmed) || !confirmed ? 'COMMIT_DECLINED' : 'COMMIT_APPROVED',
+    });
   };
 
   private handleCommitGenerating = (): void => {
@@ -494,18 +476,12 @@ export class CLIAdapter implements WizardAdapter {
   };
 
   private handleCommitSuccess = ({ message }: WizardEvents['postinstall:commit:success']): void => {
-    if (this.spinner) {
-      this.spinner.stop('Committed');
-      this.spinner = null;
-    }
+    this.stopSpinner('Committed');
     clack.log.success(`Committed: ${chalk.dim(message)}`);
   };
 
   private handleCommitFailed = ({ error }: WizardEvents['postinstall:commit:failed']): void => {
-    if (this.spinner) {
-      this.spinner.stop('Commit failed');
-      this.spinner = null;
-    }
+    this.stopSpinner('Commit failed');
     clack.log.error(`Commit failed: ${error}`);
   };
 
@@ -518,13 +494,9 @@ export class CLIAdapter implements WizardAdapter {
     this.isPromptActive = false;
     this.flushPendingLogs();
 
-    if (clack.isCancel(confirmed)) {
-      this.sendEvent({ type: 'PR_DECLINED' });
-    } else if (confirmed) {
-      this.sendEvent({ type: 'PR_APPROVED' });
-    } else {
-      this.sendEvent({ type: 'PR_DECLINED' });
-    }
+    this.sendEvent({
+      type: clack.isCancel(confirmed) || !confirmed ? 'PR_DECLINED' : 'PR_APPROVED',
+    });
   };
 
   private handlePrGenerating = (): void => {
@@ -542,26 +514,17 @@ export class CLIAdapter implements WizardAdapter {
   };
 
   private handlePrSuccess = ({ url }: WizardEvents['postinstall:pr:success']): void => {
-    if (this.spinner) {
-      this.spinner.stop('PR created');
-      this.spinner = null;
-    }
+    this.stopSpinner('PR created');
     clack.log.success(`Pull request created: ${chalk.cyan(url)}`);
   };
 
   private handlePrFailed = ({ error }: WizardEvents['postinstall:pr:failed']): void => {
-    if (this.spinner) {
-      this.spinner.stop('PR creation failed');
-      this.spinner = null;
-    }
+    this.stopSpinner('PR creation failed');
     clack.log.error(`PR creation failed: ${error}`);
   };
 
   private handlePushFailed = ({ error }: WizardEvents['postinstall:push:failed']): void => {
-    if (this.spinner) {
-      this.spinner.stop('Push failed');
-      this.spinner = null;
-    }
+    this.stopSpinner('Push failed');
     clack.log.error(`Push failed: ${error}`);
   };
 

@@ -231,9 +231,6 @@ export const wizardMachine = setup({
         return doneEvent.output;
       },
     }),
-    assignDefaultCommitMessage: assign({
-      commitMessage: ({ context }) => `feat: add WorkOS AuthKit integration for ${context.integration ?? 'project'}`,
-    }),
     emitCommitting: ({ context }) => {
       context.emitter.emit('postinstall:commit:committing', { message: context.commitMessage ?? '' });
     },
@@ -254,12 +251,6 @@ export const wizardMachine = setup({
       prDescription: ({ event }) => {
         const doneEvent = event as unknown as { output: string };
         return doneEvent.output;
-      },
-    }),
-    assignDefaultPrDescription: assign({
-      prDescription: ({ context }) => {
-        const files = context.changedFiles ?? [];
-        return `## Summary\nAdded WorkOS AuthKit integration for ${context.integration ?? 'project'}.\n\n## Changes\n${files.map((f) => `- ${f}`).join('\n')}\n\n## Documentation\nhttps://workos.com/docs/user-management`;
       },
     }),
     emitPushing: ({ context }) => {
@@ -925,10 +916,6 @@ export const wizardMachine = setup({
               target: 'committing',
               actions: ['assignCommitMessage'],
             },
-            onError: {
-              target: 'committing',
-              actions: ['assignDefaultCommitMessage'],
-            },
           },
         },
 
@@ -986,10 +973,6 @@ export const wizardMachine = setup({
             onDone: {
               target: 'pushing',
               actions: ['assignPrDescription'],
-            },
-            onError: {
-              target: 'pushing',
-              actions: ['assignDefaultPrDescription'],
             },
           },
         },
