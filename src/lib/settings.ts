@@ -1,11 +1,10 @@
-import { config } from '../../cli.config.js';
-import pkg from '../../package.json' with { type: 'json' };
+import { config, version } from '../../cli.config.js';
 
 /**
  * Get version from package.json
  */
 export function getVersion(): string {
-  return pkg.version;
+  return version;
 }
 
 export interface InstallerConfig {

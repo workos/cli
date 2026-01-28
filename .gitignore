@@ -15,6 +15,9 @@ pnpm-debug.log
 dist/
 coverage/
 
+# Generated
+src/version.ts
+
 .eslintcache
 .vscode/launch.json
 .env

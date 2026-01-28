@@ -1,4 +1,5 @@
 import type { InstallerConfig } from './src/lib/settings.js';
+export { version } from './src/version.js';
 
 export const config = {
   model: 'claude-opus-4-5-20251101',
