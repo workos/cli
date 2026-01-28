@@ -6,7 +6,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-01-28
+## [0.2.1] - 2026-01-28
+
+### Fixed
+
+- Generate version at build time instead of importing package.json (fixes ERR_MODULE_NOT_FOUND)
+- Auto-commit and PR creation after wizard completion (#21)
+- Auto-fetch WorkOS credentials via device auth (#20)
+- Branch protection detection in wizard flow
+
+## [0.2.0] - 2026-01-28 [DEPRECATED]
 
 ### Added
 
@@ -38,7 +47,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Framework auto-detection
 - Skill-based architecture for framework-specific installation
 
-[Unreleased]: https://github.com/workos/wizard/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/workos/wizard/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/workos/wizard/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/workos/wizard/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/workos/wizard/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/workos/wizard/compare/v0.1.0...v0.1.1
