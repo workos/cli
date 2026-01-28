@@ -35,11 +35,10 @@ export async function createPullRequest(title: string, body: string, cwd: string
   writeFileSync(tmpFile, body, 'utf-8');
 
   try {
-    return execFileSync(
-      'gh',
-      ['pr', 'create', '--title', title, '--body-file', tmpFile, '--base', baseBranch],
-      { cwd, stdio: ['ignore', 'pipe', 'pipe'] },
-    )
+    return execFileSync('gh', ['pr', 'create', '--title', title, '--body-file', tmpFile, '--base', baseBranch], {
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
       .toString()
       .trim();
   } finally {

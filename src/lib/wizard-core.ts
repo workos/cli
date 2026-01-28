@@ -1045,10 +1045,7 @@ export const wizardMachine = setup({
 
     complete: {
       type: 'final',
-      entry: [
-        { type: 'emitStateEnter', params: { state: 'complete' } },
-        'emitComplete',
-      ],
+      entry: [{ type: 'emitStateEnter', params: { state: 'complete' } }, 'emitComplete'],
     },
 
     cancelled: {
