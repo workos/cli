@@ -8,7 +8,13 @@ import { CLIAdapter } from './adapters/cli-adapter.js';
 import { DashboardAdapter } from './adapters/dashboard-adapter.js';
 import type { WizardAdapter } from './adapters/types.js';
 import type { WizardOptions } from '../utils/types.js';
-import type { WizardMachineContext, DetectionOutput, GitCheckOutput, AgentOutput } from './wizard-core.types.js';
+import type {
+  WizardMachineContext,
+  DetectionOutput,
+  GitCheckOutput,
+  AgentOutput,
+  BranchCheckOutput,
+} from './wizard-core.types.js';
 import { Integration } from './constants.js';
 import { parseEnvFile } from '../utils/env-parser.js';
 import { enableDebugLogs, initLogFile, logInfo, logError } from '../utils/debug.js';
@@ -29,6 +35,18 @@ import { getVersion } from './settings.js';
 import { getLlmGatewayUrlFromHost } from '../utils/urls.js';
 import { runLogin } from '../commands/login.js';
 import { isInGitRepo, getUncommittedOrUntrackedFiles } from '../utils/clack-utils.js';
+import {
+  getCurrentBranch,
+  isProtectedBranch,
+  createBranch as createGitBranch,
+  branchExists,
+  hasGhCli,
+} from '../utils/git-utils.js';
+import { detectChanges, stageAndCommit, pushBranch as pushGitBranch, createPullRequest } from './post-install.js';
+import {
+  generateCommitMessage as generateCommitMessageAi,
+  generatePrDescription as generatePrDescriptionAi,
+} from './ai-content.js';
 import { INTEGRATION_CONFIG, INTEGRATION_ORDER } from './config.js';
 import { autoConfigureWorkOSEnvironment } from './workos-management.js';
 import { detectPort, getCallbackPath } from './port-detection.js';
@@ -302,6 +320,52 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
         const staging = await fetchStagingCredentialsApi(token);
         saveStagingCredentials(staging);
         return staging;
+      }),
+
+      // Branch check actors
+      checkBranch: fromPromise<BranchCheckOutput, void>(async () => {
+        const branch = getCurrentBranch();
+        if (!branch) {
+          return { branch: null, isProtected: false };
+        }
+        return {
+          branch,
+          isProtected: isProtectedBranch(branch),
+        };
+      }),
+
+      createBranch: fromPromise<{ branch: string }, { name: string; fallbackName: string }>(async ({ input }) => {
+        const { name, fallbackName } = input;
+        const targetBranch = branchExists(name) ? fallbackName : name;
+        createGitBranch(targetBranch);
+        return { branch: targetBranch };
+      }),
+
+      // Post-install actors
+      detectChanges: fromPromise<{ hasChanges: boolean; files: string[] }, void>(async () => {
+        return detectChanges();
+      }),
+
+      generateCommitMessage: fromPromise<string, { integration: string; files: string[] }>(async ({ input }) => {
+        return generateCommitMessageAi(input.integration, input.files);
+      }),
+
+      commitChanges: fromPromise<void, { message: string; cwd: string }>(async ({ input }) => {
+        stageAndCommit(input.message, input.cwd);
+      }),
+
+      generatePrDescription: fromPromise<string, { integration: string; files: string[]; commitMessage: string }>(
+        async ({ input }) => {
+          return generatePrDescriptionAi(input.integration, input.files, input.commitMessage);
+        },
+      ),
+
+      pushBranch: fromPromise<void, { cwd: string }>(async ({ input }) => {
+        pushGitBranch(input.cwd);
+      }),
+
+      createPr: fromPromise<string, { title: string; body: string; cwd: string }>(async ({ input }) => {
+        return createPullRequest(input.title, input.body, input.cwd);
       }),
     },
   });

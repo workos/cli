@@ -102,6 +102,13 @@ export class DashboardAdapter implements WizardAdapter {
       this.sendEvent({ type: confirmed ? 'GIT_CONFIRMED' : 'GIT_CANCELLED' });
     } else if (id === 'env-scan') {
       this.sendEvent({ type: confirmed ? 'ENV_SCAN_APPROVED' : 'ENV_SCAN_DECLINED' });
+    } else if (id === 'branch-check') {
+      // For dashboard, confirmed=true means create branch, false means continue on current
+      this.sendEvent({ type: confirmed ? 'BRANCH_CREATE' : 'BRANCH_CONTINUE' });
+    } else if (id === 'commit') {
+      this.sendEvent({ type: confirmed ? 'COMMIT_APPROVED' : 'COMMIT_DECLINED' });
+    } else if (id === 'pr') {
+      this.sendEvent({ type: confirmed ? 'PR_APPROVED' : 'PR_DECLINED' });
     }
   };
 

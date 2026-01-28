@@ -24,6 +24,7 @@ type Args = {
   dashboard?: boolean;
   inspect?: boolean;
   noValidate?: boolean;
+  noCommit?: boolean;
 };
 
 /**
@@ -59,6 +60,7 @@ function buildOptions(argv: Args): WizardOptions {
     integration: merged.integration,
     inspect: merged.inspect ?? false,
     noValidate: merged.noValidate ?? false,
+    noCommit: merged.noCommit ?? false,
     emitter: createWizardEventEmitter(), // Will be replaced in runWithCore
   };
 }

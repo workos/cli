@@ -45,6 +45,20 @@ export interface WizardMachineContext {
   envFilesDetected?: string[];
   /** Path to env file where credentials were found */
   envCredentialPath?: string;
+  /** Current git branch name */
+  currentBranch?: string;
+  /** Whether current branch is protected */
+  isProtectedBranch?: boolean;
+  /** Files changed during agent execution (for post-install) */
+  changedFiles?: string[];
+  /** AI-generated commit message */
+  commitMessage?: string;
+  /** AI-generated PR description */
+  prDescription?: string;
+  /** URL of created PR */
+  prUrl?: string;
+  /** Summary message from agent execution */
+  agentSummary?: string;
 }
 
 /**
@@ -69,7 +83,16 @@ export type WizardMachineEvent =
   // Credential discovery events
   | { type: 'ENV_SCAN_APPROVED' }
   | { type: 'ENV_SCAN_DECLINED' }
-  | { type: 'RETRY_AUTH' };
+  | { type: 'RETRY_AUTH' }
+  // Branch check events
+  | { type: 'BRANCH_CREATE' }
+  | { type: 'BRANCH_CONTINUE' }
+  | { type: 'BRANCH_CANCEL' }
+  // Post-install events
+  | { type: 'COMMIT_APPROVED' }
+  | { type: 'COMMIT_DECLINED' }
+  | { type: 'PR_APPROVED' }
+  | { type: 'PR_DECLINED' };
 
 /**
  * Output from the detection actor.
@@ -93,4 +116,12 @@ export interface AgentOutput {
   success: boolean;
   summary?: string;
   error?: Error;
+}
+
+/**
+ * Output from the branch check actor.
+ */
+export interface BranchCheckOutput {
+  branch: string | null;
+  isProtected: boolean;
 }

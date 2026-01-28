@@ -111,6 +111,23 @@ export class CLIAdapter implements WizardAdapter {
     this.subscribe('validation:complete', this.handleValidationComplete);
     this.subscribe('complete', this.handleComplete);
     this.subscribe('error', this.handleError);
+    // Branch check events
+    this.subscribe('branch:prompt', this.handleBranchPrompt);
+    this.subscribe('branch:created', this.handleBranchCreated);
+
+    // Post-install events
+    this.subscribe('postinstall:changes', this.handlePostInstallChanges);
+    this.subscribe('postinstall:commit:prompt', this.handleCommitPrompt);
+    this.subscribe('postinstall:commit:generating', this.handleCommitGenerating);
+    this.subscribe('postinstall:commit:success', this.handleCommitSuccess);
+    this.subscribe('postinstall:commit:failed', this.handleCommitFailed);
+    this.subscribe('postinstall:pr:prompt', this.handlePrPrompt);
+    this.subscribe('postinstall:pr:generating', this.handlePrGenerating);
+    this.subscribe('postinstall:pr:pushing', this.handlePrPushing);
+    this.subscribe('postinstall:pr:success', this.handlePrSuccess);
+    this.subscribe('postinstall:pr:failed', this.handlePrFailed);
+    this.subscribe('postinstall:push:failed', this.handlePushFailed);
+    this.subscribe('postinstall:manual', this.handleManualInstructions);
   }
 
   async stop(): Promise<void> {
@@ -144,6 +161,13 @@ export class CLIAdapter implements WizardAdapter {
       this.agentUpdateInterval = null;
     }
   };
+
+  private stopSpinner(message: string): void {
+    if (this.spinner) {
+      this.spinner.stop(message);
+      this.spinner = null;
+    }
+  }
 
   /** Debug logging - only outputs when debug mode is enabled */
   private debugLog = (message: string): void => {
@@ -205,13 +229,9 @@ export class CLIAdapter implements WizardAdapter {
     this.isPromptActive = false;
     this.flushPendingLogs();
 
-    if (clack.isCancel(confirmed)) {
-      this.sendEvent({ type: 'ENV_SCAN_DECLINED' });
-    } else if (confirmed) {
-      this.sendEvent({ type: 'ENV_SCAN_APPROVED' });
-    } else {
-      this.sendEvent({ type: 'ENV_SCAN_DECLINED' });
-    }
+    this.sendEvent({
+      type: clack.isCancel(confirmed) || !confirmed ? 'ENV_SCAN_DECLINED' : 'ENV_SCAN_APPROVED',
+    });
   };
 
   private handleDeviceStarted = ({ verificationUri, userCode }: WizardEvents['device:started']): void => {
@@ -236,10 +256,7 @@ export class CLIAdapter implements WizardAdapter {
   };
 
   private handleStagingSuccess = (): void => {
-    if (this.spinner) {
-      this.spinner.stop('Credentials fetched');
-      this.spinner = null;
-    }
+    this.stopSpinner('Credentials fetched');
     clack.log.success('WorkOS credentials retrieved automatically');
   };
 
@@ -262,13 +279,9 @@ export class CLIAdapter implements WizardAdapter {
     this.isPromptActive = false;
     this.flushPendingLogs();
 
-    if (clack.isCancel(confirmed)) {
-      this.sendEvent({ type: 'GIT_CANCELLED' });
-    } else if (confirmed) {
-      this.sendEvent({ type: 'GIT_CONFIRMED' });
-    } else {
-      this.sendEvent({ type: 'GIT_CANCELLED' });
-    }
+    this.sendEvent({
+      type: clack.isCancel(confirmed) || !confirmed ? 'GIT_CANCELLED' : 'GIT_CONFIRMED',
+    });
   };
 
   private handleCredentialsRequest = async ({ requiresApiKey }: WizardEvents['credentials:request']): Promise<void> => {
@@ -349,10 +362,7 @@ export class CLIAdapter implements WizardAdapter {
 
   private handleValidationStart = (): void => {
     this.stopAgentUpdates();
-    if (this.spinner) {
-      this.spinner.stop('Agent completed');
-      this.spinner = null;
-    }
+    this.stopSpinner('Agent completed');
   };
 
   private handleValidationIssues = ({ issues }: WizardEvents['validation:issues']): void => {
@@ -378,11 +388,7 @@ export class CLIAdapter implements WizardAdapter {
 
   private handleComplete = ({ success, summary }: WizardEvents['complete']): void => {
     this.stopAgentUpdates();
-
-    if (this.spinner) {
-      this.spinner.stop(success ? 'Done' : 'Failed');
-      this.spinner = null;
-    }
+    this.stopSpinner(success ? 'Done' : 'Failed');
 
     if (success) {
       clack.log.success('WorkOS AuthKit installed!');
@@ -400,10 +406,7 @@ export class CLIAdapter implements WizardAdapter {
   };
 
   private handleError = ({ message, stack }: WizardEvents['error']): void => {
-    if (this.spinner) {
-      this.spinner.stop('Error');
-      this.spinner = null;
-    }
+    this.stopSpinner('Error');
     this.stopAgentUpdates();
 
     clack.log.error(message);
@@ -419,5 +422,114 @@ export class CLIAdapter implements WizardAdapter {
     if (stack && this.debug) {
       this.debugLog(stack);
     }
+  };
+
+  private handleBranchPrompt = async ({ branch }: WizardEvents['branch:prompt']): Promise<void> => {
+    this.isPromptActive = true;
+    const choice = await clack.select({
+      message: `You are on ${chalk.bold(branch)}. Create a feature branch?`,
+      options: [
+        { value: 'create', label: 'Create feat/add-workos-authkit' },
+        { value: 'continue', label: 'Continue on current branch' },
+        { value: 'cancel', label: 'Cancel' },
+      ],
+    });
+    this.isPromptActive = false;
+    this.flushPendingLogs();
+
+    if (clack.isCancel(choice) || choice === 'cancel') {
+      this.sendEvent({ type: 'BRANCH_CANCEL' });
+    } else if (choice === 'create') {
+      this.sendEvent({ type: 'BRANCH_CREATE' });
+    } else {
+      this.sendEvent({ type: 'BRANCH_CONTINUE' });
+    }
+  };
+
+  private handleBranchCreated = ({ branch }: WizardEvents['branch:created']): void => {
+    this.queueableLog(() => clack.log.success(`Created branch ${chalk.bold(branch)}`));
+  };
+
+  // ===== Post-install Event Handlers =====
+
+  private handlePostInstallChanges = ({ files }: WizardEvents['postinstall:changes']): void => {
+    this.debugLog(`Post-install: ${files.length} changed files detected`);
+  };
+
+  private handleCommitPrompt = async (): Promise<void> => {
+    this.isPromptActive = true;
+    const confirmed = await clack.confirm({
+      message: 'Commit the changes?',
+      initialValue: true,
+    });
+    this.isPromptActive = false;
+    this.flushPendingLogs();
+
+    this.sendEvent({
+      type: clack.isCancel(confirmed) || !confirmed ? 'COMMIT_DECLINED' : 'COMMIT_APPROVED',
+    });
+  };
+
+  private handleCommitGenerating = (): void => {
+    this.spinner = clack.spinner();
+    this.spinner.start('Generating commit message...');
+  };
+
+  private handleCommitSuccess = ({ message }: WizardEvents['postinstall:commit:success']): void => {
+    this.stopSpinner('Committed');
+    clack.log.success(`Committed: ${chalk.dim(message)}`);
+  };
+
+  private handleCommitFailed = ({ error }: WizardEvents['postinstall:commit:failed']): void => {
+    this.stopSpinner('Commit failed');
+    clack.log.error(`Commit failed: ${error}`);
+  };
+
+  private handlePrPrompt = async (): Promise<void> => {
+    this.isPromptActive = true;
+    const confirmed = await clack.confirm({
+      message: 'Create a pull request?',
+      initialValue: true,
+    });
+    this.isPromptActive = false;
+    this.flushPendingLogs();
+
+    this.sendEvent({
+      type: clack.isCancel(confirmed) || !confirmed ? 'PR_DECLINED' : 'PR_APPROVED',
+    });
+  };
+
+  private handlePrGenerating = (): void => {
+    this.spinner = clack.spinner();
+    this.spinner.start('Generating PR description...');
+  };
+
+  private handlePrPushing = (): void => {
+    if (this.spinner) {
+      this.spinner.message('Pushing to remote...');
+    } else {
+      this.spinner = clack.spinner();
+      this.spinner.start('Pushing to remote...');
+    }
+  };
+
+  private handlePrSuccess = ({ url }: WizardEvents['postinstall:pr:success']): void => {
+    this.stopSpinner('PR created');
+    clack.log.success(`Pull request created: ${chalk.cyan(url)}`);
+  };
+
+  private handlePrFailed = ({ error }: WizardEvents['postinstall:pr:failed']): void => {
+    this.stopSpinner('PR creation failed');
+    clack.log.error(`PR creation failed: ${error}`);
+  };
+
+  private handlePushFailed = ({ error }: WizardEvents['postinstall:push:failed']): void => {
+    this.stopSpinner('Push failed');
+    clack.log.error(`Push failed: ${error}`);
+  };
+
+  private handleManualInstructions = ({ instructions }: WizardEvents['postinstall:manual']): void => {
+    clack.log.info('GitHub CLI not found. Manual steps:');
+    console.log(chalk.dim(instructions));
   };
 }

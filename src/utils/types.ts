@@ -80,6 +80,11 @@ export type WizardOptions = {
    * Skip post-installation validation (includes build check)
    */
   noValidate?: boolean;
+
+  /**
+   * Skip post-install commit and PR workflow
+   */
+  noCommit?: boolean;
 };
 
 export interface Feature {
