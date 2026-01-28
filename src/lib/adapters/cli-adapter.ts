@@ -114,6 +114,20 @@ export class CLIAdapter implements WizardAdapter {
     // Branch check events
     this.subscribe('branch:prompt', this.handleBranchPrompt);
     this.subscribe('branch:created', this.handleBranchCreated);
+
+    // Post-install events
+    this.subscribe('postinstall:changes', this.handlePostInstallChanges);
+    this.subscribe('postinstall:commit:prompt', this.handleCommitPrompt);
+    this.subscribe('postinstall:commit:generating', this.handleCommitGenerating);
+    this.subscribe('postinstall:commit:success', this.handleCommitSuccess);
+    this.subscribe('postinstall:commit:failed', this.handleCommitFailed);
+    this.subscribe('postinstall:pr:prompt', this.handlePrPrompt);
+    this.subscribe('postinstall:pr:generating', this.handlePrGenerating);
+    this.subscribe('postinstall:pr:pushing', this.handlePrPushing);
+    this.subscribe('postinstall:pr:success', this.handlePrSuccess);
+    this.subscribe('postinstall:pr:failed', this.handlePrFailed);
+    this.subscribe('postinstall:push:failed', this.handlePushFailed);
+    this.subscribe('postinstall:manual', this.handleManualInstructions);
   }
 
   async stop(): Promise<void> {
@@ -448,5 +462,111 @@ export class CLIAdapter implements WizardAdapter {
 
   private handleBranchCreated = ({ branch }: WizardEvents['branch:created']): void => {
     this.queueableLog(() => clack.log.success(`Created branch ${chalk.bold(branch)}`));
+  };
+
+  // ===== Post-install Event Handlers =====
+
+  private handlePostInstallChanges = ({ files }: WizardEvents['postinstall:changes']): void => {
+    this.debugLog(`Post-install: ${files.length} changed files detected`);
+  };
+
+  private handleCommitPrompt = async (): Promise<void> => {
+    this.isPromptActive = true;
+    const confirmed = await clack.confirm({
+      message: 'Commit the changes?',
+      initialValue: true,
+    });
+    this.isPromptActive = false;
+    this.flushPendingLogs();
+
+    if (clack.isCancel(confirmed)) {
+      this.sendEvent({ type: 'COMMIT_DECLINED' });
+    } else if (confirmed) {
+      this.sendEvent({ type: 'COMMIT_APPROVED' });
+    } else {
+      this.sendEvent({ type: 'COMMIT_DECLINED' });
+    }
+  };
+
+  private handleCommitGenerating = (): void => {
+    this.spinner = clack.spinner();
+    this.spinner.start('Generating commit message...');
+  };
+
+  private handleCommitSuccess = ({ message }: WizardEvents['postinstall:commit:success']): void => {
+    if (this.spinner) {
+      this.spinner.stop('Committed');
+      this.spinner = null;
+    }
+    clack.log.success(`Committed: ${chalk.dim(message)}`);
+  };
+
+  private handleCommitFailed = ({ error }: WizardEvents['postinstall:commit:failed']): void => {
+    if (this.spinner) {
+      this.spinner.stop('Commit failed');
+      this.spinner = null;
+    }
+    clack.log.error(`Commit failed: ${error}`);
+  };
+
+  private handlePrPrompt = async (): Promise<void> => {
+    this.isPromptActive = true;
+    const confirmed = await clack.confirm({
+      message: 'Create a pull request?',
+      initialValue: true,
+    });
+    this.isPromptActive = false;
+    this.flushPendingLogs();
+
+    if (clack.isCancel(confirmed)) {
+      this.sendEvent({ type: 'PR_DECLINED' });
+    } else if (confirmed) {
+      this.sendEvent({ type: 'PR_APPROVED' });
+    } else {
+      this.sendEvent({ type: 'PR_DECLINED' });
+    }
+  };
+
+  private handlePrGenerating = (): void => {
+    this.spinner = clack.spinner();
+    this.spinner.start('Generating PR description...');
+  };
+
+  private handlePrPushing = (): void => {
+    if (this.spinner) {
+      this.spinner.message('Pushing to remote...');
+    } else {
+      this.spinner = clack.spinner();
+      this.spinner.start('Pushing to remote...');
+    }
+  };
+
+  private handlePrSuccess = ({ url }: WizardEvents['postinstall:pr:success']): void => {
+    if (this.spinner) {
+      this.spinner.stop('PR created');
+      this.spinner = null;
+    }
+    clack.log.success(`Pull request created: ${chalk.cyan(url)}`);
+  };
+
+  private handlePrFailed = ({ error }: WizardEvents['postinstall:pr:failed']): void => {
+    if (this.spinner) {
+      this.spinner.stop('PR creation failed');
+      this.spinner = null;
+    }
+    clack.log.error(`PR creation failed: ${error}`);
+  };
+
+  private handlePushFailed = ({ error }: WizardEvents['postinstall:push:failed']): void => {
+    if (this.spinner) {
+      this.spinner.stop('Push failed');
+      this.spinner = null;
+    }
+    clack.log.error(`Push failed: ${error}`);
+  };
+
+  private handleManualInstructions = ({ instructions }: WizardEvents['postinstall:manual']): void => {
+    clack.log.info('GitHub CLI not found. Manual steps:');
+    console.log(chalk.dim(instructions));
   };
 }

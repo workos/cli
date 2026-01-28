@@ -14,6 +14,8 @@ import type {
 import type { WizardOptions } from '../utils/types.js';
 import type { DeviceAuthResult, DeviceAuthResponse } from './device-auth.js';
 import type { StagingCredentials } from './staging-api.js';
+import { getManualPrInstructions } from './post-install.js';
+import { hasGhCli } from '../utils/git-utils.js';
 
 export const wizardMachine = setup({
   types: {
@@ -204,6 +206,94 @@ export const wizardMachine = setup({
       context.emitter.emit('error', { message, stack: context.error?.stack });
       context.emitter.emit('complete', { success: false, summary: message });
     },
+    // Post-install actions
+    assignChangedFiles: assign({
+      changedFiles: ({ event }) => {
+        const doneEvent = event as unknown as { output: { hasChanges: boolean; files: string[] } };
+        return doneEvent.output?.files ?? [];
+      },
+    }),
+    emitChangesDetected: ({ context }) => {
+      context.emitter.emit('postinstall:changes', { files: context.changedFiles ?? [] });
+    },
+    emitNoChanges: ({ context }) => {
+      context.emitter.emit('postinstall:nochanges', {});
+    },
+    emitCommitPrompt: ({ context }) => {
+      context.emitter.emit('postinstall:commit:prompt', {});
+    },
+    emitGeneratingCommitMessage: ({ context }) => {
+      context.emitter.emit('postinstall:commit:generating', {});
+    },
+    assignCommitMessage: assign({
+      commitMessage: ({ event }) => {
+        const doneEvent = event as unknown as { output: string };
+        return doneEvent.output;
+      },
+    }),
+    assignDefaultCommitMessage: assign({
+      commitMessage: ({ context }) => `feat: add WorkOS AuthKit integration for ${context.integration ?? 'project'}`,
+    }),
+    emitCommitting: ({ context }) => {
+      context.emitter.emit('postinstall:commit:committing', { message: context.commitMessage ?? '' });
+    },
+    emitCommitSuccess: ({ context }) => {
+      context.emitter.emit('postinstall:commit:success', { message: context.commitMessage ?? '' });
+    },
+    emitCommitFailed: ({ context }) => {
+      const message = context.error?.message ?? 'Commit failed';
+      context.emitter.emit('postinstall:commit:failed', { error: message });
+    },
+    emitPrPrompt: ({ context }) => {
+      context.emitter.emit('postinstall:pr:prompt', {});
+    },
+    emitGeneratingPrDescription: ({ context }) => {
+      context.emitter.emit('postinstall:pr:generating', {});
+    },
+    assignPrDescription: assign({
+      prDescription: ({ event }) => {
+        const doneEvent = event as unknown as { output: string };
+        return doneEvent.output;
+      },
+    }),
+    assignDefaultPrDescription: assign({
+      prDescription: ({ context }) => {
+        const files = context.changedFiles ?? [];
+        return `## Summary\nAdded WorkOS AuthKit integration for ${context.integration ?? 'project'}.\n\n## Changes\n${files.map((f) => `- ${f}`).join('\n')}\n\n## Documentation\nhttps://workos.com/docs/user-management`;
+      },
+    }),
+    emitPushing: ({ context }) => {
+      context.emitter.emit('postinstall:pr:pushing', {});
+    },
+    emitPushFailed: ({ context }) => {
+      const message = context.error?.message ?? 'Push failed';
+      context.emitter.emit('postinstall:push:failed', { error: message });
+    },
+    emitCreatingPr: ({ context }) => {
+      context.emitter.emit('postinstall:pr:creating', {});
+    },
+    assignPrUrl: assign({
+      prUrl: ({ event }) => {
+        const doneEvent = event as unknown as { output: string };
+        return doneEvent.output;
+      },
+    }),
+    emitPrCreated: ({ context }) => {
+      context.emitter.emit('postinstall:pr:success', { url: context.prUrl ?? '' });
+    },
+    emitPrFailed: ({ context }) => {
+      const message = context.error?.message ?? 'PR creation failed';
+      context.emitter.emit('postinstall:pr:failed', { error: message });
+    },
+    emitManualInstructions: ({ context }) => {
+      const branch = context.currentBranch ?? 'HEAD';
+      const instructions = getManualPrInstructions(branch);
+      context.emitter.emit('postinstall:manual', { instructions });
+    },
+    emitComplete: ({ context }) => {
+      const summary = context.agentSummary ?? 'WorkOS AuthKit installed successfully!';
+      context.emitter.emit('complete', { success: true, summary });
+    },
   },
 
   guards: {
@@ -211,6 +301,8 @@ export const wizardMachine = setup({
     gitIsClean: ({ context }) => context.gitIsClean === true,
     hasCredentials: ({ context }) => context.options.apiKey !== undefined && context.options.clientId !== undefined,
     hasIntegration: ({ context }) => context.integration !== undefined,
+    shouldSkipPostInstall: ({ context }) => context.options.noCommit === true,
+    hasGhCli: () => hasGhCli(),
   },
 
   actors: {
@@ -254,6 +346,27 @@ export const wizardMachine = setup({
     }),
     createBranch: fromPromise<{ branch: string }, { name: string; fallbackName: string }>(async () => {
       throw new Error('createBranch not implemented - provide via machine.provide()');
+    }),
+    // Post-install actors
+    detectChanges: fromPromise<{ hasChanges: boolean; files: string[] }, void>(async () => {
+      throw new Error('detectChanges not implemented - provide via machine.provide()');
+    }),
+    generateCommitMessage: fromPromise<string, { integration: string; files: string[] }>(async () => {
+      throw new Error('generateCommitMessage not implemented - provide via machine.provide()');
+    }),
+    commitChanges: fromPromise<void, { message: string; cwd: string }>(async () => {
+      throw new Error('commitChanges not implemented - provide via machine.provide()');
+    }),
+    generatePrDescription: fromPromise<string, { integration: string; files: string[]; commitMessage: string }>(
+      async () => {
+        throw new Error('generatePrDescription not implemented - provide via machine.provide()');
+      },
+    ),
+    pushBranch: fromPromise<void, { cwd: string }>(async () => {
+      throw new Error('pushBranch not implemented - provide via machine.provide()');
+    }),
+    createPr: fromPromise<string, { title: string; body: string; cwd: string }>(async () => {
+      throw new Error('createPr not implemented - provide via machine.provide()');
     }),
   },
 }).createMachine({
@@ -710,27 +823,46 @@ export const wizardMachine = setup({
         id: 'runAgent',
         src: 'runAgent',
         input: ({ context }) => ({ context }),
-        onDone: {
-          target: 'complete',
-          actions: [
-            ({ context, event }) => {
+        onDone: [
+          {
+            target: 'error',
+            guard: ({ event }) => {
               const output = event.output as AgentOutput;
-              if (output.success) {
-                context.emitter.emit('agent:success', { summary: output.summary });
-                context.emitter.emit('complete', { success: true, summary: output.summary });
-              } else {
+              return !output.success;
+            },
+            actions: [
+              ({ context, event }) => {
+                const output = event.output as AgentOutput;
                 context.emitter.emit('agent:failure', {
                   message: output.error?.message ?? 'Agent failed',
                 });
-                context.emitter.emit('complete', {
-                  success: false,
-                  summary: output.error?.message,
-                });
-              }
-            },
-            { type: 'emitStateExit', params: { state: 'runningAgent' } },
-          ],
-        },
+              },
+              assign({
+                error: ({ event }) => {
+                  const output = event.output as AgentOutput;
+                  return output.error ?? new Error('Agent failed');
+                },
+              }),
+              { type: 'emitStateExit', params: { state: 'runningAgent' } },
+            ],
+          },
+          {
+            target: 'postInstall',
+            actions: [
+              assign({
+                agentSummary: ({ event }) => {
+                  const output = event.output as AgentOutput;
+                  return output.summary;
+                },
+              }),
+              ({ context, event }) => {
+                const output = event.output as AgentOutput;
+                context.emitter.emit('agent:success', { summary: output.summary });
+              },
+              { type: 'emitStateExit', params: { state: 'runningAgent' } },
+            ],
+          },
+        ],
         onError: {
           target: 'error',
           actions: ['assignError', 'emitAgentFailure', { type: 'emitStateExit', params: { state: 'runningAgent' } }],
@@ -738,9 +870,185 @@ export const wizardMachine = setup({
       },
     },
 
+    postInstall: {
+      initial: 'checking',
+      entry: [{ type: 'emitStateEnter', params: { state: 'postInstall' } }],
+      states: {
+        checking: {
+          always: [
+            {
+              target: '#wizard.complete',
+              guard: 'shouldSkipPostInstall',
+            },
+            { target: 'detectingChanges' },
+          ],
+        },
+
+        detectingChanges: {
+          invoke: {
+            id: 'detectChanges',
+            src: 'detectChanges',
+            onDone: [
+              {
+                target: 'promptingCommit',
+                guard: ({ event }) => (event.output as { hasChanges: boolean; files: string[] }).hasChanges,
+                actions: ['assignChangedFiles', 'emitChangesDetected'],
+              },
+              {
+                target: 'done',
+                actions: ['emitNoChanges'],
+              },
+            ],
+            onError: { target: 'done' },
+          },
+        },
+
+        promptingCommit: {
+          entry: ['emitCommitPrompt'],
+          on: {
+            COMMIT_APPROVED: { target: 'generatingCommitMessage' },
+            COMMIT_DECLINED: { target: 'done' },
+            CANCEL: { target: '#wizard.cancelled' },
+          },
+        },
+
+        generatingCommitMessage: {
+          entry: ['emitGeneratingCommitMessage'],
+          invoke: {
+            id: 'generateCommitMessage',
+            src: 'generateCommitMessage',
+            input: ({ context }) => ({
+              integration: context.integration ?? 'project',
+              files: context.changedFiles ?? [],
+            }),
+            onDone: {
+              target: 'committing',
+              actions: ['assignCommitMessage'],
+            },
+            onError: {
+              target: 'committing',
+              actions: ['assignDefaultCommitMessage'],
+            },
+          },
+        },
+
+        committing: {
+          entry: ['emitCommitting'],
+          invoke: {
+            id: 'commitChanges',
+            src: 'commitChanges',
+            input: ({ context }) => ({
+              message: context.commitMessage ?? '',
+              cwd: context.options.installDir,
+            }),
+            onDone: {
+              target: 'checkingGhCli',
+              actions: ['emitCommitSuccess'],
+            },
+            onError: {
+              target: 'done',
+              actions: ['assignError', 'emitCommitFailed'],
+            },
+          },
+        },
+
+        checkingGhCli: {
+          always: [
+            {
+              target: 'promptingPr',
+              guard: 'hasGhCli',
+            },
+            {
+              target: 'showingManualInstructions',
+            },
+          ],
+        },
+
+        promptingPr: {
+          entry: ['emitPrPrompt'],
+          on: {
+            PR_APPROVED: { target: 'generatingPrDescription' },
+            PR_DECLINED: { target: 'done' },
+            CANCEL: { target: '#wizard.cancelled' },
+          },
+        },
+
+        generatingPrDescription: {
+          entry: ['emitGeneratingPrDescription'],
+          invoke: {
+            id: 'generatePrDescription',
+            src: 'generatePrDescription',
+            input: ({ context }) => ({
+              integration: context.integration ?? 'project',
+              files: context.changedFiles ?? [],
+              commitMessage: context.commitMessage ?? '',
+            }),
+            onDone: {
+              target: 'pushing',
+              actions: ['assignPrDescription'],
+            },
+            onError: {
+              target: 'pushing',
+              actions: ['assignDefaultPrDescription'],
+            },
+          },
+        },
+
+        pushing: {
+          entry: ['emitPushing'],
+          invoke: {
+            id: 'pushBranch',
+            src: 'pushBranch',
+            input: ({ context }) => ({ cwd: context.options.installDir }),
+            onDone: { target: 'creatingPr' },
+            onError: {
+              target: 'showingManualInstructions',
+              actions: ['assignError', 'emitPushFailed'],
+            },
+          },
+        },
+
+        creatingPr: {
+          entry: ['emitCreatingPr'],
+          invoke: {
+            id: 'createPr',
+            src: 'createPr',
+            input: ({ context }) => ({
+              title: context.commitMessage ?? '',
+              body: context.prDescription ?? '',
+              cwd: context.options.installDir,
+            }),
+            onDone: {
+              target: 'done',
+              actions: ['assignPrUrl', 'emitPrCreated'],
+            },
+            onError: {
+              target: 'done',
+              actions: ['assignError', 'emitPrFailed'],
+            },
+          },
+        },
+
+        showingManualInstructions: {
+          entry: ['emitManualInstructions'],
+          always: { target: 'done' },
+        },
+
+        done: {
+          type: 'final',
+        },
+      },
+      onDone: {
+        target: 'complete',
+      },
+    },
+
     complete: {
       type: 'final',
-      entry: { type: 'emitStateEnter', params: { state: 'complete' } },
+      entry: [
+        { type: 'emitStateEnter', params: { state: 'complete' } },
+        'emitComplete',
+      ],
     },
 
     cancelled: {

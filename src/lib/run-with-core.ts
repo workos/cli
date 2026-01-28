@@ -40,7 +40,13 @@ import {
   isProtectedBranch,
   createBranch as createGitBranch,
   branchExists,
+  hasGhCli,
 } from '../utils/git-utils.js';
+import { detectChanges, stageAndCommit, pushBranch as pushGitBranch, createPullRequest } from './post-install.js';
+import {
+  generateCommitMessage as generateCommitMessageAi,
+  generatePrDescription as generatePrDescriptionAi,
+} from './ai-content.js';
 import { INTEGRATION_CONFIG, INTEGRATION_ORDER } from './config.js';
 import { autoConfigureWorkOSEnvironment } from './workos-management.js';
 import { detectPort, getCallbackPath } from './port-detection.js';
@@ -333,6 +339,33 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
         const targetBranch = branchExists(name) ? fallbackName : name;
         createGitBranch(targetBranch);
         return { branch: targetBranch };
+      }),
+
+      // Post-install actors
+      detectChanges: fromPromise<{ hasChanges: boolean; files: string[] }, void>(async () => {
+        return detectChanges();
+      }),
+
+      generateCommitMessage: fromPromise<string, { integration: string; files: string[] }>(async ({ input }) => {
+        return generateCommitMessageAi(input.integration, input.files);
+      }),
+
+      commitChanges: fromPromise<void, { message: string; cwd: string }>(async ({ input }) => {
+        stageAndCommit(input.message, input.cwd);
+      }),
+
+      generatePrDescription: fromPromise<string, { integration: string; files: string[]; commitMessage: string }>(
+        async ({ input }) => {
+          return generatePrDescriptionAi(input.integration, input.files, input.commitMessage);
+        },
+      ),
+
+      pushBranch: fromPromise<void, { cwd: string }>(async ({ input }) => {
+        pushGitBranch(input.cwd);
+      }),
+
+      createPr: fromPromise<string, { title: string; body: string; cwd: string }>(async ({ input }) => {
+        return createPullRequest(input.title, input.body, input.cwd);
       }),
     },
   });
