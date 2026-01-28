@@ -25,20 +25,10 @@ export function isProtectedBranch(branch: string): boolean {
   return PROTECTED_BRANCHES.includes(branch);
 }
 
-/**
- * Create and checkout a new branch.
- * Security: The name parameter is controlled by code (hardcoded strings),
- * not user input, so shell injection is not a concern.
- */
 export function createBranch(name: string): void {
   execSync(`git checkout -b ${name}`, { stdio: 'ignore' });
 }
 
-/**
- * Check if a branch exists locally.
- * Security: The name parameter is controlled by code (hardcoded strings),
- * not user input, so shell injection is not a concern.
- */
 export function branchExists(name: string): boolean {
   try {
     execSync(`git rev-parse --verify ${name}`, { stdio: 'ignore' });

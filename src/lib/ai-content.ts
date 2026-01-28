@@ -23,9 +23,7 @@ export async function generateCommitMessage(integration: string, files: string[]
     if (text.type === 'text') {
       return text.text.trim();
     }
-  } catch {
-    // Fall through to default
-  }
+  } catch {}
 
   return `feat: add WorkOS AuthKit integration for ${integration}`;
 }
@@ -65,9 +63,7 @@ Keep it concise. Markdown format.`,
     if (text.type === 'text') {
       return text.text.trim();
     }
-  } catch {
-    // Fall through to default
-  }
+  } catch {}
 
   return `## Summary
 Added WorkOS AuthKit integration for ${integration}.
