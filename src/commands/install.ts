@@ -63,12 +63,7 @@ export async function handleInstall(argv: ArgumentsCamelCase<InstallArgs>): Prom
   } catch (err) {
     const { getLogFilePath } = await import('../utils/debug.js');
     const logPath = getLogFilePath();
-    const errorMessage = err instanceof Error ? err.message : String(err);
 
-    // Always show the error message
-    clack.log.error(errorMessage);
-
-    // Show stack trace in debug mode
     if (options.debug && err instanceof Error && err.stack) {
       console.error(err.stack);
     }

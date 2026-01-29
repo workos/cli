@@ -248,41 +248,65 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
   options.emitter?.emit('status', { message: 'Initializing Claude agent...' });
 
   try {
-    // Configure LLM gateway for Claude API calls via LLM_GATEWAY_URL env var
-    const gatewayUrl = getLlmGatewayUrlFromHost();
-
-    // Check/refresh authentication for production (unless skipping auth)
-    if (!options.skipAuth && !options.local) {
-      if (!hasCredentials()) {
-        throw new Error('Not authenticated. Run `wizard login` to authenticate.');
-      }
-
-      const refreshResult = await ensureValidToken();
-      if (!refreshResult.success) {
-        throw new Error(refreshResult.error || 'Authentication failed');
-      }
-    }
-
-    // Set gateway URL
-    process.env.ANTHROPIC_BASE_URL = gatewayUrl;
-
-    // Only send access token if not skipping auth
     let authMode: string;
-    if (options.skipAuth) {
-      delete process.env.ANTHROPIC_AUTH_TOKEN;
-      authMode = `skip-auth:${gatewayUrl}`;
-      logInfo('Skipping auth - no token sent to gateway');
-    } else {
-      const creds = getCredentials();
-      if (!creds) {
-        throw new Error('Not authenticated. Run `wizard login` to authenticate.');
-      }
-      process.env.ANTHROPIC_AUTH_TOKEN = creds.accessToken;
-      authMode = options.local ? `local-gateway:${gatewayUrl}` : `workos-gateway:${gatewayUrl}`;
-      logInfo('Sending access token to gateway');
-    }
 
-    logInfo('Configured LLM gateway:', gatewayUrl);
+    if (options.direct) {
+      // Direct mode: use user's Anthropic API key, skip gateway
+      if (!process.env.ANTHROPIC_API_KEY) {
+        throw new Error(
+          'Direct mode requires ANTHROPIC_API_KEY environment variable.\n' +
+            'Set it with: export ANTHROPIC_API_KEY=sk-ant-...\n' +
+            'Get your key at: https://console.anthropic.com/settings/keys',
+        );
+      }
+
+      // Don't set ANTHROPIC_BASE_URL - SDK defaults to api.anthropic.com
+      delete process.env.ANTHROPIC_BASE_URL;
+      delete process.env.ANTHROPIC_AUTH_TOKEN;
+      authMode = 'direct:api.anthropic.com';
+      logInfo('Direct mode: using ANTHROPIC_API_KEY, bypassing llm-gateway');
+
+      // Set analytics tag for direct mode
+      analytics.setTag('api_mode', 'direct');
+    } else {
+      // Gateway mode (existing behavior)
+      const gatewayUrl = getLlmGatewayUrlFromHost();
+
+      // Check/refresh authentication for production (unless skipping auth)
+      if (!options.skipAuth && !options.local) {
+        if (!hasCredentials()) {
+          throw new Error('Not authenticated. Run `wizard login` to authenticate.');
+        }
+
+        const refreshResult = await ensureValidToken();
+        if (!refreshResult.success) {
+          throw new Error(refreshResult.error || 'Authentication failed');
+        }
+      }
+
+      // Set gateway URL
+      process.env.ANTHROPIC_BASE_URL = gatewayUrl;
+
+      // Only send access token if not skipping auth
+      if (options.skipAuth) {
+        delete process.env.ANTHROPIC_AUTH_TOKEN;
+        authMode = `skip-auth:${gatewayUrl}`;
+        logInfo('Skipping auth - no token sent to gateway');
+      } else {
+        const creds = getCredentials();
+        if (!creds) {
+          throw new Error('Not authenticated. Run `wizard login` to authenticate.');
+        }
+        process.env.ANTHROPIC_AUTH_TOKEN = creds.accessToken;
+        authMode = options.local ? `local-gateway:${gatewayUrl}` : `workos-gateway:${gatewayUrl}`;
+        logInfo('Sending access token to gateway');
+      }
+
+      logInfo('Configured LLM gateway:', gatewayUrl);
+
+      // Set analytics tag for gateway mode
+      analytics.setTag('api_mode', 'gateway');
+    }
 
     // Disable experimental betas (like input_examples) that the LLM gateway doesn't support
     process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
@@ -303,21 +327,9 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
       allowedTools: ['Skill', 'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch'],
     };
 
-    logInfo('Agent config:', {
-      workingDirectory: agentRunConfig.workingDirectory,
-      gatewayUrl,
-      authMode,
-      useMcp: false,
-    });
-
-    if (options.debug) {
-      debug('Agent config:', {
-        workingDirectory: agentRunConfig.workingDirectory,
-        gatewayUrl,
-        authMode,
-        useMcp: false,
-      });
-    }
+    const configInfo = { workingDirectory: agentRunConfig.workingDirectory, authMode, useMcp: false };
+    logInfo('Agent config:', configInfo);
+    debug('Agent config:', configInfo);
 
     // Emit status events for adapters to render
     const currentLogPath = getLogFilePath();
@@ -328,10 +340,7 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
 
     return agentRunConfig;
   } catch (error) {
-    // Emit error via emitter for adapters to handle
-    options.emitter?.emit('error', { message: `Failed to initialize agent: ${(error as Error).message}` });
     logError('Agent initialization error:', error);
-    debug('Agent initialization error:', error);
     throw error;
   }
 }
