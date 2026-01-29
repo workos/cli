@@ -327,19 +327,9 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
       allowedTools: ['Skill', 'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch'],
     };
 
-    logInfo('Agent config:', {
-      workingDirectory: agentRunConfig.workingDirectory,
-      authMode,
-      useMcp: false,
-    });
-
-    if (options.debug) {
-      debug('Agent config:', {
-        workingDirectory: agentRunConfig.workingDirectory,
-        authMode,
-        useMcp: false,
-      });
-    }
+    const configInfo = { workingDirectory: agentRunConfig.workingDirectory, authMode, useMcp: false };
+    logInfo('Agent config:', configInfo);
+    debug('Agent config:', configInfo);
 
     // Emit status events for adapters to render
     const currentLogPath = getLogFilePath();
@@ -350,10 +340,7 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
 
     return agentRunConfig;
   } catch (error) {
-    // Don't emit here - let caller (state machine) handle error display
-    // Just log for debugging purposes
     logError('Agent initialization error:', error);
-    debug('Agent initialization error:', error);
     throw error;
   }
 }
