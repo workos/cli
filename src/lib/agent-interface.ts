@@ -350,8 +350,8 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
 
     return agentRunConfig;
   } catch (error) {
-    // Emit error via emitter for adapters to handle
-    options.emitter?.emit('error', { message: `Failed to initialize agent: ${(error as Error).message}` });
+    // Don't emit here - let caller (state machine) handle error display
+    // Just log for debugging purposes
     logError('Agent initialization error:', error);
     debug('Agent initialization error:', error);
     throw error;

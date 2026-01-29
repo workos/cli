@@ -158,7 +158,7 @@ export const wizardMachine = setup({
       const message = context.error?.message ?? 'Agent execution failed';
       const stack = context.error?.stack;
       context.emitter.emit('agent:failure', { message, stack });
-      context.emitter.emit('complete', { success: false, summary: message });
+      context.emitter.emit('complete', { success: false }); // Don't repeat error as summary
     },
     assignDetectionResult: assign({
       integration: ({ event }) => {
@@ -204,7 +204,7 @@ export const wizardMachine = setup({
     emitError: ({ context }) => {
       const message = context.error?.message ?? 'An unexpected error occurred';
       context.emitter.emit('error', { message, stack: context.error?.stack });
-      context.emitter.emit('complete', { success: false, summary: message });
+      context.emitter.emit('complete', { success: false }); // Don't repeat error as summary
     },
     // Post-install actions
     assignChangedFiles: assign({

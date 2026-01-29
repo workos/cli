@@ -61,14 +61,12 @@ export async function handleInstall(argv: ArgumentsCamelCase<InstallArgs>): Prom
     await runWizard(options as unknown as WizardOptions);
     process.exit(0);
   } catch (err) {
+    // Error was already displayed by state machine's error handler
+    // Just show debug log path and exit
     const { getLogFilePath } = await import('../utils/debug.js');
     const logPath = getLogFilePath();
-    const errorMessage = err instanceof Error ? err.message : String(err);
 
-    // Always show the error message
-    clack.log.error(errorMessage);
-
-    // Show stack trace in debug mode
+    // Show stack trace in debug mode only
     if (options.debug && err instanceof Error && err.stack) {
       console.error(err.stack);
     }
