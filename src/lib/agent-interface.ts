@@ -474,7 +474,15 @@ export async function runAgent(
         cwd: agentConfig.workingDirectory,
         permissionMode: 'acceptEdits',
         mcpServers: agentConfig.mcpServers,
-        env: { ...process.env },
+        env: {
+          PATH: process.env.PATH,
+          HOME: process.env.HOME,
+          ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
+          ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+          ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN,
+          CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS,
+          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC,
+        },
         canUseTool: (toolName: string, input: unknown) => {
           logInfo('canUseTool called:', { toolName, input });
           const result = wizardCanUseTool(toolName, input as Record<string, unknown>);
