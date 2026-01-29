@@ -85,6 +85,12 @@ export type WizardOptions = {
    * Skip post-install commit and PR workflow
    */
   noCommit?: boolean;
+
+  /**
+   * Direct mode - bypass llm-gateway and use user's own Anthropic API key.
+   * Requires ANTHROPIC_API_KEY environment variable.
+   */
+  direct?: boolean;
 };
 
 export interface Feature {

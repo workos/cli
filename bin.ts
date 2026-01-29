@@ -31,6 +31,12 @@ import clack from './src/utils/clack.js';
 
 // Shared options for wizard commands (default and dashboard)
 const wizardOptions = {
+  direct: {
+    alias: 'D',
+    default: false,
+    describe: 'Use your own Anthropic API key (bypass llm-gateway)',
+    type: 'boolean' as const,
+  },
   debug: {
     default: false,
     describe: 'Enable verbose logging',

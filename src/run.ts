@@ -25,6 +25,7 @@ type Args = {
   inspect?: boolean;
   noValidate?: boolean;
   noCommit?: boolean;
+  direct?: boolean;
 };
 
 /**
@@ -61,6 +62,7 @@ function buildOptions(argv: Args): WizardOptions {
     inspect: merged.inspect ?? false,
     noValidate: merged.noValidate ?? false,
     noCommit: merged.noCommit ?? false,
+    direct: merged.direct ?? false,
     emitter: createWizardEventEmitter(), // Will be replaced in runWithCore
   };
 }
