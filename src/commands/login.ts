@@ -89,7 +89,7 @@ export async function runLogin(): Promise<void> {
     },
     body: new URLSearchParams({
       client_id: clientId,
-      scope: 'openid email staging-environment:credentials:read',
+      scope: 'openid email staging-environment:credentials:read offline_access',
     }),
   });
 
@@ -156,6 +156,7 @@ export async function runLogin(): Promise<void> {
           expiresAt,
           userId,
           email,
+          refreshToken: result.refresh_token,
         });
 
         spinner.stop('Authentication successful!');

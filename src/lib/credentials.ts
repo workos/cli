@@ -14,6 +14,7 @@ export interface Credentials {
   userId: string;
   email?: string;
   staging?: StagingCache;
+  refreshToken?: string;
 }
 
 function getCredentialsDir(): string {
@@ -98,4 +99,39 @@ export function getStagingCredentials(): { clientId: string; apiKey: string } | 
   // Invalidate staging credentials when access token expires
   if (isTokenExpired(creds)) return null;
   return { clientId: creds.staging.clientId, apiKey: creds.staging.apiKey };
+}
+
+/**
+ * Atomically update tokens in credentials file.
+ * Uses write-to-temp + rename pattern for atomic updates.
+ */
+export function updateTokens(accessToken: string, expiresAt: number, refreshToken?: string): void {
+  const creds = getCredentials();
+  if (!creds) {
+    throw new Error('No existing credentials to update');
+  }
+
+  const updated: Credentials = {
+    ...creds,
+    accessToken,
+    expiresAt,
+    ...(refreshToken && { refreshToken }),
+  };
+
+  // Atomic write: temp file + rename
+  const credPath = getCredentialsPath();
+  const tempPath = `${credPath}.${crypto.randomUUID()}.tmp`;
+
+  try {
+    fs.writeFileSync(tempPath, JSON.stringify(updated, null, 2), { mode: 0o600 });
+    fs.renameSync(tempPath, credPath);
+  } catch (error) {
+    // Clean up temp file if rename failed
+    try {
+      fs.unlinkSync(tempPath);
+    } catch {
+      // Ignore cleanup errors
+    }
+    throw error;
+  }
 }
