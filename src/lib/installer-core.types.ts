@@ -1,5 +1,5 @@
-import type { WizardEventEmitter } from './events.js';
-import type { WizardOptions } from '../utils/types.js';
+import type { InstallerEventEmitter } from './events.js';
+import type { InstallerOptions } from '../utils/types.js';
 import type { Integration } from './constants.js';
 import type { DeviceAuthResponse } from './device-auth.js';
 import type { EnvFileInfo, DiscoveryResult } from './credential-discovery.js';
@@ -16,11 +16,11 @@ export type CredentialSource = 'cli' | 'env' | 'stored' | 'device' | 'manual';
  * Context passed to the wizard state machine.
  * Contains all data needed throughout the wizard flow.
  */
-export interface WizardMachineContext {
+export interface InstallerMachineContext {
   /** Event emitter for UI communication */
-  emitter: WizardEventEmitter;
+  emitter: InstallerEventEmitter;
   /** CLI options from command line args */
-  options: WizardOptions;
+  options: InstallerOptions;
   /** Detected or selected framework integration */
   integration: Integration | undefined;
   /** WorkOS credentials gathered from user */
@@ -65,15 +65,15 @@ export interface WizardMachineContext {
  * Input provided when creating the machine actor.
  * These values initialize the context.
  */
-export interface WizardMachineInput {
-  emitter: WizardEventEmitter;
-  options: WizardOptions;
+export interface InstallerMachineInput {
+  emitter: InstallerEventEmitter;
+  options: InstallerOptions;
 }
 
 /**
  * All events the wizard machine can receive.
  */
-export type WizardMachineEvent =
+export type InstallerMachineEvent =
   | { type: 'START' }
   | { type: 'SKIP_AUTH' }
   | { type: 'GIT_CONFIRMED' }

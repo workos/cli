@@ -251,10 +251,7 @@ describe('ensure-auth', () => {
 
       await ensureAuthenticated();
 
-      expect(mockRefreshAccessToken).toHaveBeenCalledWith(
-        'https://auth.test.com',
-        'test_client_id',
-      );
+      expect(mockRefreshAccessToken).toHaveBeenCalledWith('https://auth.test.com', 'test_client_id');
     });
   });
 });

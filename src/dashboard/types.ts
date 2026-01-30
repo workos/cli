@@ -1,8 +1,8 @@
-import type { WizardEventEmitter, WizardEvents } from '../lib/events.js';
+import type { InstallerEventEmitter, InstallerEvents } from '../lib/events.js';
 
 export interface DashboardProps {
-  emitter: WizardEventEmitter;
+  emitter: InstallerEventEmitter;
 }
 
 // Re-export for convenience
-export type { WizardEvents, WizardEventEmitter };
+export type { InstallerEvents, InstallerEventEmitter };

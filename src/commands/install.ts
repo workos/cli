@@ -1,5 +1,5 @@
-import type { WizardOptions } from '../utils/types.js';
-import { runWizard } from '../run.js';
+import type { InstallerOptions } from '../utils/types.js';
+import { runInstaller } from '../run.js';
 import { isNonInteractiveEnvironment } from '../utils/environment.js';
 import clack from '../utils/clack.js';
 import chalk from 'chalk';
@@ -58,7 +58,7 @@ export async function handleInstall(argv: ArgumentsCamelCase<InstallArgs>): Prom
   }
 
   try {
-    await runWizard(options as unknown as WizardOptions);
+    await runInstaller(options as unknown as InstallerOptions);
     process.exit(0);
   } catch (err) {
     const { getLogFilePath } = await import('../utils/debug.js');

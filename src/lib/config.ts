@@ -1,13 +1,13 @@
 import { getPackageDotJson } from '../utils/clack-utils.js';
 import { hasPackageInstalled } from '../utils/package-json.js';
-import type { WizardOptions } from '../utils/types.js';
+import type { InstallerOptions } from '../utils/types.js';
 import { Integration } from './constants.js';
 
 type IntegrationConfig = {
   name: string;
   filterPatterns: string[];
   ignorePatterns: string[];
-  detect: (options: Pick<WizardOptions, 'installDir'>) => Promise<boolean>;
+  detect: (options: Pick<InstallerOptions, 'installDir'>) => Promise<boolean>;
   generateFilesRules: string;
   filterFilesRules: string;
   docsUrl: string;

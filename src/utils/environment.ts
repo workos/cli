@@ -1,5 +1,5 @@
 import { getPackageDotJson } from './clack-utils.js';
-import type { WizardOptions } from './types.js';
+import type { InstallerOptions } from './types.js';
 import fg from 'fast-glob';
 import { IS_DEV } from '../lib/constants.js';
 
@@ -29,7 +29,7 @@ export function readEnvironment(): Record<string, unknown> {
   return result;
 }
 
-export async function detectEnvVarPrefix(options: WizardOptions): Promise<string> {
+export async function detectEnvVarPrefix(options: InstallerOptions): Promise<string> {
   const packageJson = await getPackageDotJson(options);
 
   const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };

@@ -4,13 +4,13 @@ import { analytics } from '../utils/analytics.js';
 import clack from '../utils/clack.js';
 import { getPackageDotJson, getUncommittedOrUntrackedFiles, isInGitRepo } from '../utils/clack-utils.js';
 import { hasPackageInstalled } from '../utils/package-json.js';
-import type { WizardOptions } from '../utils/types.js';
+import type { InstallerOptions } from '../utils/types.js';
 import * as childProcess from 'node:child_process';
 
 export async function runPrettierStep({
   installDir,
   integration,
-}: Pick<WizardOptions, 'installDir'> & {
+}: Pick<InstallerOptions, 'installDir'> & {
   integration: Integration;
 }): Promise<void> {
   return traceStep('run-prettier', async () => {

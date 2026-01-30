@@ -1,7 +1,7 @@
 /* Simplified Next.js wizard using Claude Agent SDK with WorkOS MCP */
-import type { WizardOptions } from '../utils/types.js';
+import type { InstallerOptions } from '../utils/types.js';
 import { enableDebugLogs } from '../utils/debug.js';
-import { runAgentWizard } from '../lib/agent-runner.js';
+import { runAgentInstaller } from '../lib/agent-runner.js';
 import { Integration } from '../lib/constants.js';
 import { getPackageVersion } from '../utils/package-json.js';
 import { getPackageDotJson } from '../utils/clack-utils.js';
@@ -22,7 +22,7 @@ const NEXTJS_AGENT_CONFIG = {
     docsUrl: 'https://workos.com/docs/user-management/authkit/nextjs',
     unsupportedVersionDocsUrl: 'https://workos.com/docs/user-management/authkit/nextjs',
     skillName: 'workos-authkit-nextjs',
-    gatherContext: async (options: WizardOptions) => {
+    gatherContext: async (options: InstallerOptions) => {
       const router = await getNextJsRouter(options);
       return { router };
     },
@@ -85,7 +85,7 @@ const NEXTJS_AGENT_CONFIG = {
  * Next.js wizard powered by the universal agent runner.
  * @returns Summary of what was done, or empty string if version check fails
  */
-export async function runNextjsWizardAgent(options: WizardOptions): Promise<string> {
+export async function runNextjsInstallerAgent(options: InstallerOptions): Promise<string> {
   if (options.debug) {
     enableDebugLogs();
   }
@@ -108,5 +108,5 @@ export async function runNextjsWizardAgent(options: WizardOptions): Promise<stri
     }
   }
 
-  return runAgentWizard(NEXTJS_AGENT_CONFIG, options);
+  return runAgentInstaller(NEXTJS_AGENT_CONFIG, options);
 }

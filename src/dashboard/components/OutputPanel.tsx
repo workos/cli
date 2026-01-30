@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text, useStdout, useInput } from 'ink';
-import type { WizardEventEmitter } from '../../lib/events.js';
+import type { InstallerEventEmitter } from '../../lib/events.js';
 import { InlinePrompt } from './InlinePrompt.js';
 
 interface OutputPanelProps {
-  emitter: WizardEventEmitter;
+  emitter: InstallerEventEmitter;
   maxLines?: number;
   focused?: boolean;
   height?: number;

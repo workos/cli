@@ -1,11 +1,11 @@
-import type { WizardEventEmitter } from '../events.js';
+import type { InstallerEventEmitter } from '../events.js';
 
 /**
  * Configuration passed to adapter constructors.
  */
 export interface AdapterConfig {
   /** Event emitter to subscribe to */
-  emitter: WizardEventEmitter;
+  emitter: InstallerEventEmitter;
 
   /**
    * Callback to send events back to the machine.
@@ -24,7 +24,7 @@ export interface AdapterConfig {
  * into framework-specific UI rendering. They don't control flow—
  * they react to it.
  */
-export interface WizardAdapter {
+export interface InstallerAdapter {
   /**
    * Start the adapter.
    * - Subscribe to emitter events
@@ -40,5 +40,5 @@ export interface WizardAdapter {
   stop(): Promise<void>;
 
   /** The emitter this adapter subscribes to */
-  readonly emitter: WizardEventEmitter;
+  readonly emitter: InstallerEventEmitter;
 }

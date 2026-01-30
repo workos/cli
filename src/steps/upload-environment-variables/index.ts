@@ -3,7 +3,7 @@ import { traceStep } from '../../telemetry.js';
 import { analytics } from '../../utils/analytics.js';
 import clack from '../../utils/clack.js';
 import { abortIfCancelled } from '../../utils/clack-utils.js';
-import type { WizardOptions } from '../../utils/types.js';
+import type { InstallerOptions } from '../../utils/types.js';
 import { EnvironmentProvider } from './EnvironmentProvider.js';
 import { VercelEnvironmentProvider } from './providers/vercel.js';
 
@@ -14,7 +14,7 @@ export const uploadEnvironmentVariablesStep = async (
     options,
   }: {
     integration: Integration;
-    options: WizardOptions;
+    options: InstallerOptions;
   },
 ): Promise<string[]> => {
   const providers: EnvironmentProvider[] = [new VercelEnvironmentProvider(options)];

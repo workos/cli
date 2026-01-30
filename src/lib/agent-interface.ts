@@ -6,7 +6,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { debug, logInfo, logWarn, logError, initLogFile, getLogFilePath } from '../utils/debug.js';
-import type { WizardOptions } from '../utils/types.js';
+import type { InstallerOptions } from '../utils/types.js';
 import { analytics } from '../utils/analytics.js';
 import { WIZARD_INTERACTION_EVENT_NAME } from './constants.js';
 import { LINTING_TOOLS } from './safe-tools.js';
@@ -14,7 +14,7 @@ import { getLlmGatewayUrlFromHost } from '../utils/urls.js';
 import { getConfig } from './settings.js';
 import { getCredentials, hasCredentials } from './credentials.js';
 import { ensureValidToken } from './token-refresh.js';
-import type { WizardEventEmitter } from './events.js';
+import type { InstallerEventEmitter } from './events.js';
 import { startCredentialProxy, type CredentialProxyHandle } from './credential-proxy.js';
 import { getAuthkitDomain, getCliAuthClientId } from './settings.js';
 
@@ -244,7 +244,7 @@ export function wizardCanUseTool(
 /**
  * Initialize agent configuration for the LLM gateway
  */
-export async function initializeAgent(config: AgentConfig, options: WizardOptions): Promise<AgentRunConfig> {
+export async function initializeAgent(config: AgentConfig, options: InstallerOptions): Promise<AgentRunConfig> {
   // Initialize log file for this run
   initLogFile();
   logInfo('Agent initialization starting');
@@ -417,13 +417,13 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
 export async function runAgent(
   agentConfig: AgentRunConfig,
   prompt: string,
-  options: WizardOptions,
+  options: InstallerOptions,
   config?: {
     spinnerMessage?: string;
     successMessage?: string;
     errorMessage?: string;
   },
-  emitter?: WizardEventEmitter,
+  emitter?: InstallerEventEmitter,
 ): Promise<{ error?: AgentErrorType; errorMessage?: string }> {
   const {
     spinnerMessage = 'Setting up WorkOS AuthKit...',
@@ -568,9 +568,9 @@ export async function runAgent(
  */
 function handleSDKMessage(
   message: SDKMessage,
-  options: WizardOptions,
+  options: InstallerOptions,
   collectedText: string[],
-  emitter?: WizardEventEmitter,
+  emitter?: InstallerEventEmitter,
 ): string | undefined {
   logInfo(`SDK Message: ${message.type}`, JSON.stringify(message, null, 2));
 

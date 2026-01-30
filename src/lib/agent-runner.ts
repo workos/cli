@@ -1,6 +1,6 @@
 import { SPINNER_MESSAGE, type FrameworkConfig } from './framework-config.js';
 import { validateInstallation } from './validation/index.js';
-import type { WizardOptions } from '../utils/types.js';
+import type { InstallerOptions } from '../utils/types.js';
 import {
   ensurePackageIsInstalled,
   getOrAskForWorkOSCredentials,
@@ -21,7 +21,7 @@ import { writeEnvLocal } from './env-writer.js';
  *
  * @returns A detailed summary of what was done and next steps
  */
-export async function runAgentWizard(config: FrameworkConfig, options: WizardOptions): Promise<string> {
+export async function runAgentInstaller(config: FrameworkConfig, options: InstallerOptions): Promise<string> {
   // Emit status for UI adapters to render
   options.emitter?.emit('status', {
     message: `Setting up WorkOS AuthKit for ${config.metadata.name}`,

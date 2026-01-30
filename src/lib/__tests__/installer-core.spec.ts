@@ -1,21 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import { createActor, fromPromise } from 'xstate';
-import { wizardMachine } from '../wizard-core.js';
-import { createWizardEventEmitter } from '../events.js';
+import { installerMachine } from '../installer-core.js';
+import { createInstallerEventEmitter } from '../events.js';
 import { Integration } from '../constants.js';
-import type { WizardOptions } from '../../utils/types.js';
+import type { InstallerOptions } from '../../utils/types.js';
 import type {
   DetectionOutput,
   GitCheckOutput,
   AgentOutput,
-  WizardMachineContext,
+  InstallerMachineContext,
   BranchCheckOutput,
-} from '../wizard-core.types.js';
+} from '../installer-core.types.js';
 
 // Shared mock actors for reuse across tests
 const baseMockActors = {
-  checkAuthentication: fromPromise<boolean, { options: WizardOptions }>(async () => true),
-  detectIntegration: fromPromise<DetectionOutput, { options: WizardOptions }>(async () => ({
+  checkAuthentication: fromPromise<boolean, { options: InstallerOptions }>(async () => true),
+  detectIntegration: fromPromise<DetectionOutput, { options: InstallerOptions }>(async () => ({
     integration: Integration.nextjs,
   })),
   checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => ({
@@ -29,16 +29,16 @@ const baseMockActors = {
   createBranch: fromPromise<{ branch: string }, { name: string; fallbackName: string }>(async ({ input }) => ({
     branch: input.name,
   })),
-  configureEnvironment: fromPromise<void, { context: WizardMachineContext }>(async () => {}),
-  runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => ({
+  configureEnvironment: fromPromise<void, { context: InstallerMachineContext }>(async () => {}),
+  runAgent: fromPromise<AgentOutput, { context: InstallerMachineContext }>(async () => ({
     success: true,
     summary: 'Done!',
   })),
 };
 
-function createTestActor(overrides?: Partial<WizardOptions>) {
-  const emitter = createWizardEventEmitter();
-  const options: WizardOptions = {
+function createTestActor(overrides?: Partial<InstallerOptions>) {
+  const emitter = createInstallerEventEmitter();
+  const options: InstallerOptions = {
     debug: false,
     forceInstall: false,
     installDir: '/test/project',
@@ -52,7 +52,7 @@ function createTestActor(overrides?: Partial<WizardOptions>) {
   };
 
   // Provide mock implementations for actors
-  const machine = wizardMachine.provide({
+  const machine = installerMachine.provide({
     actors: baseMockActors,
   });
 
@@ -63,7 +63,7 @@ function createTestActor(overrides?: Partial<WizardOptions>) {
   return { actor, emitter, options };
 }
 
-describe('WizardCore State Machine', () => {
+describe('InstallerCore State Machine', () => {
   describe('initial state', () => {
     it('starts in idle state', () => {
       const { actor } = createTestActor();
@@ -137,8 +137,8 @@ describe('WizardCore State Machine', () => {
 
   describe('error handling', () => {
     it('transitions to error state on auth failure', async () => {
-      const emitter = createWizardEventEmitter();
-      const options: WizardOptions = {
+      const emitter = createInstallerEventEmitter();
+      const options: InstallerOptions = {
         debug: false,
         forceInstall: false,
         installDir: '/test/project',
@@ -150,10 +150,10 @@ describe('WizardCore State Machine', () => {
         emitter,
       };
 
-      const errorMachine = wizardMachine.provide({
+      const errorMachine = installerMachine.provide({
         actors: {
           ...baseMockActors,
-          checkAuthentication: fromPromise<boolean, { options: WizardOptions }>(async () => {
+          checkAuthentication: fromPromise<boolean, { options: InstallerOptions }>(async () => {
             throw new Error('Auth failed');
           }),
         },
@@ -182,8 +182,8 @@ describe('WizardCore State Machine', () => {
 
   describe('git confirmation flow', () => {
     it('waits for confirmation when git is dirty', async () => {
-      const emitter = createWizardEventEmitter();
-      const options: WizardOptions = {
+      const emitter = createInstallerEventEmitter();
+      const options: InstallerOptions = {
         debug: false,
         forceInstall: false,
         installDir: '/test/project',
@@ -195,7 +195,7 @@ describe('WizardCore State Machine', () => {
         emitter,
       };
 
-      const dirtyMachine = wizardMachine.provide({
+      const dirtyMachine = installerMachine.provide({
         actors: {
           ...baseMockActors,
           checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => ({
@@ -235,8 +235,8 @@ describe('WizardCore State Machine', () => {
     });
 
     it('cancels wizard when user declines git confirmation', async () => {
-      const emitter = createWizardEventEmitter();
-      const options: WizardOptions = {
+      const emitter = createInstallerEventEmitter();
+      const options: InstallerOptions = {
         debug: false,
         forceInstall: false,
         installDir: '/test/project',
@@ -248,7 +248,7 @@ describe('WizardCore State Machine', () => {
         emitter,
       };
 
-      const dirtyMachine = wizardMachine.provide({
+      const dirtyMachine = installerMachine.provide({
         actors: {
           ...baseMockActors,
           checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => ({
@@ -276,8 +276,8 @@ describe('WizardCore State Machine', () => {
 
   describe('full flow', () => {
     it('completes the full wizard flow with provided credentials', async () => {
-      const emitter = createWizardEventEmitter();
-      const options: WizardOptions = {
+      const emitter = createInstallerEventEmitter();
+      const options: InstallerOptions = {
         debug: false,
         forceInstall: false,
         installDir: '/test/project',
@@ -291,10 +291,10 @@ describe('WizardCore State Machine', () => {
         clientId: 'client_123',
       };
 
-      const machine = wizardMachine.provide({
+      const machine = installerMachine.provide({
         actors: {
           ...baseMockActors,
-          runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => ({
+          runAgent: fromPromise<AgentOutput, { context: InstallerMachineContext }>(async () => ({
             success: true,
             summary: 'AuthKit installed successfully!',
           })),
@@ -329,8 +329,8 @@ describe('WizardCore State Machine', () => {
     });
 
     it('handles credentials submission flow', async () => {
-      const emitter = createWizardEventEmitter();
-      const options: WizardOptions = {
+      const emitter = createInstallerEventEmitter();
+      const options: InstallerOptions = {
         debug: false,
         forceInstall: false,
         installDir: '/test/project',
@@ -343,7 +343,7 @@ describe('WizardCore State Machine', () => {
         // No credentials provided - should wait for CREDENTIALS_SUBMITTED
       };
 
-      const machine = wizardMachine.provide({
+      const machine = installerMachine.provide({
         actors: baseMockActors,
       });
 

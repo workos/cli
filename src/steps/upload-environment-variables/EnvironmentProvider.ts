@@ -1,11 +1,11 @@
-import type { WizardOptions } from '../../utils/types.js';
+import type { InstallerOptions } from '../../utils/types.js';
 
 export abstract class EnvironmentProvider {
-  protected options: WizardOptions;
+  protected options: InstallerOptions;
 
   abstract name: string;
 
-  constructor(options: WizardOptions) {
+  constructor(options: InstallerOptions) {
     this.options = options;
   }
 

@@ -10,7 +10,7 @@ import { parseEnvFile } from './env-parser.js';
 import { type PackageDotJson, hasPackageInstalled } from './package-json.js';
 import { type PackageManager, detectAllPackageManagers, packageManagers, NPM as npm } from './package-manager.js';
 import { fulfillsVersionRange } from './semver.js';
-import type { Feature, WizardOptions } from './types.js';
+import type { Feature, InstallerOptions } from './types.js';
 import { getPackageVersion } from './package-json.js';
 import { ISSUES_URL, type Integration } from '../lib/constants.js';
 import { analytics } from './analytics.js';
@@ -90,7 +90,7 @@ export function printWelcome(options: { wizardName: string; message?: string }):
   clack.note(welcomeText);
 }
 
-export async function confirmContinueIfNoOrDirtyGitRepo(options: Pick<WizardOptions, 'ci'>): Promise<void> {
+export async function confirmContinueIfNoOrDirtyGitRepo(options: Pick<InstallerOptions, 'ci'>): Promise<void> {
   return traceStep('check-git-status', async () => {
     if (!isInGitRepo()) {
       // CI mode: auto-continue without git
@@ -238,7 +238,7 @@ export async function confirmContinueIfPackageVersionNotSupported({
   });
 }
 
-export async function isReact19Installed({ installDir }: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+export async function isReact19Installed({ installDir }: Pick<InstallerOptions, 'installDir'>): Promise<boolean> {
   try {
     const packageJson = await getPackageDotJson({ installDir });
     const reactVersion = getPackageVersion('react', packageJson);
@@ -386,7 +386,7 @@ export async function ensurePackageIsInstalled(
   packageJson: PackageDotJson,
   packageId: string,
   packageName: string,
-  options?: Pick<WizardOptions, 'dashboard'>,
+  options?: Pick<InstallerOptions, 'dashboard'>,
 ): Promise<void> {
   return traceStep('ensure-package-installed', async () => {
     const installed = hasPackageInstalled(packageId, packageJson);
@@ -413,7 +413,7 @@ export async function ensurePackageIsInstalled(
   });
 }
 
-export async function getPackageDotJson({ installDir }: Pick<WizardOptions, 'installDir'>): Promise<PackageDotJson> {
+export async function getPackageDotJson({ installDir }: Pick<InstallerOptions, 'installDir'>): Promise<PackageDotJson> {
   const packageJsonFileContents = await fs.promises.readFile(join(installDir, 'package.json'), 'utf8').catch(() => {
     clack.log.error('Could not find package.json. Make sure to run the wizard in the root of your app!');
     return abort();
@@ -435,7 +435,7 @@ export async function getPackageDotJson({ installDir }: Pick<WizardOptions, 'ins
 
 export async function updatePackageDotJson(
   packageDotJson: PackageDotJson,
-  { installDir }: Pick<WizardOptions, 'installDir'>,
+  { installDir }: Pick<InstallerOptions, 'installDir'>,
 ): Promise<void> {
   try {
     await fs.promises.writeFile(
@@ -455,7 +455,7 @@ export async function updatePackageDotJson(
 }
 
 export async function getPackageManager(
-  options: Pick<WizardOptions, 'installDir'> & { ci?: boolean },
+  options: Pick<InstallerOptions, 'installDir'> & { ci?: boolean },
 ): Promise<PackageManager> {
   const detectedPackageManagers = detectAllPackageManagers({
     installDir: options.installDir,
@@ -498,7 +498,7 @@ export async function getPackageManager(
   return selectedPackageManager as PackageManager;
 }
 
-export function isUsingTypeScript({ installDir }: Pick<WizardOptions, 'installDir'>) {
+export function isUsingTypeScript({ installDir }: Pick<InstallerOptions, 'installDir'>) {
   try {
     return fs.existsSync(join(installDir, 'tsconfig.json'));
   } catch {
@@ -511,7 +511,7 @@ export function isUsingTypeScript({ installDir }: Pick<WizardOptions, 'installDi
  * @param requireApiKey - Whether API key is needed (false for client-only SDKs like React, Vanilla JS)
  */
 export async function getOrAskForWorkOSCredentials(
-  _options: Pick<WizardOptions, 'ci' | 'apiKey' | 'clientId' | 'installDir' | 'dashboard'>,
+  _options: Pick<InstallerOptions, 'ci' | 'apiKey' | 'clientId' | 'installDir' | 'dashboard'>,
   requireApiKey: boolean = true,
 ): Promise<{
   apiKey: string;

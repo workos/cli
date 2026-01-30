@@ -1,8 +1,8 @@
 import { setup, assign, fromPromise, type ActorRefFrom } from 'xstate';
 import type {
-  WizardMachineContext,
-  WizardMachineInput,
-  WizardMachineEvent,
+  InstallerMachineContext,
+  InstallerMachineInput,
+  InstallerMachineEvent,
   DetectionOutput,
   GitCheckOutput,
   AgentOutput,
@@ -10,18 +10,18 @@ import type {
   DiscoveryResult,
   CredentialSource,
   BranchCheckOutput,
-} from './wizard-core.types.js';
-import type { WizardOptions } from '../utils/types.js';
+} from './installer-core.types.js';
+import type { InstallerOptions } from '../utils/types.js';
 import type { DeviceAuthResult, DeviceAuthResponse } from './device-auth.js';
 import type { StagingCredentials } from './staging-api.js';
 import { getManualPrInstructions } from './post-install.js';
 import { hasGhCli } from '../utils/git-utils.js';
 
-export const wizardMachine = setup({
+export const installerMachine = setup({
   types: {
-    context: {} as WizardMachineContext,
-    input: {} as WizardMachineInput,
-    events: {} as WizardMachineEvent,
+    context: {} as InstallerMachineContext,
+    input: {} as InstallerMachineInput,
+    events: {} as InstallerMachineEvent,
   },
 
   actions: {
@@ -297,19 +297,19 @@ export const wizardMachine = setup({
   },
 
   actors: {
-    checkAuthentication: fromPromise<boolean, { options: WizardOptions }>(async () => {
+    checkAuthentication: fromPromise<boolean, { options: InstallerOptions }>(async () => {
       throw new Error('checkAuthentication not implemented - provide via machine.provide()');
     }),
-    detectIntegration: fromPromise<DetectionOutput, { options: WizardOptions }>(async () => {
+    detectIntegration: fromPromise<DetectionOutput, { options: InstallerOptions }>(async () => {
       throw new Error('detectIntegration not implemented - provide via machine.provide()');
     }),
     checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => {
       throw new Error('checkGitStatus not implemented - provide via machine.provide()');
     }),
-    configureEnvironment: fromPromise<void, { context: WizardMachineContext }>(async () => {
+    configureEnvironment: fromPromise<void, { context: InstallerMachineContext }>(async () => {
       throw new Error('configureEnvironment not implemented - provide via machine.provide()');
     }),
-    runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => {
+    runAgent: fromPromise<AgentOutput, { context: InstallerMachineContext }>(async () => {
       throw new Error('runAgent not implemented - provide via machine.provide()');
     }),
     // Credential discovery actors
@@ -324,7 +324,7 @@ export const wizardMachine = setup({
     }),
     runDeviceAuth: fromPromise<
       { result: DeviceAuthResult; deviceAuth: DeviceAuthResponse },
-      { emitter: WizardMachineContext['emitter'] }
+      { emitter: InstallerMachineContext['emitter'] }
     >(async () => {
       throw new Error('runDeviceAuth not implemented - provide via machine.provide()');
     }),
@@ -1043,5 +1043,5 @@ export const wizardMachine = setup({
   },
 });
 
-export type WizardMachine = typeof wizardMachine;
-export type WizardActor = ActorRefFrom<typeof wizardMachine>;
+export type InstallerMachine = typeof installerMachine;
+export type InstallerActor = ActorRefFrom<typeof installerMachine>;

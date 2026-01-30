@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { CLIAdapter } from '../cli-adapter.js';
-import { createWizardEventEmitter } from '../../events.js';
+import { createInstallerEventEmitter } from '../../events.js';
 
 // Mock console.log to capture styled output
 const mockConsoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -66,12 +66,12 @@ vi.mock('../../../utils/cli-symbols.js', () => ({
 }));
 
 describe('CLIAdapter', () => {
-  let emitter: ReturnType<typeof createWizardEventEmitter>;
+  let emitter: ReturnType<typeof createInstallerEventEmitter>;
   let sendEvent: ReturnType<typeof vi.fn>;
   let adapter: CLIAdapter;
 
   beforeEach(() => {
-    emitter = createWizardEventEmitter();
+    emitter = createInstallerEventEmitter();
     sendEvent = vi.fn();
     adapter = new CLIAdapter({ emitter, sendEvent });
   });

@@ -1,8 +1,8 @@
 /* React SPA wizard using Claude Agent SDK */
-import type { WizardOptions } from '../utils/types.js';
+import type { InstallerOptions } from '../utils/types.js';
 import type { FrameworkConfig } from '../lib/framework-config.js';
 import { enableDebugLogs } from '../utils/debug.js';
-import { runAgentWizard } from '../lib/agent-runner.js';
+import { runAgentInstaller } from '../lib/agent-runner.js';
 import { Integration } from '../lib/constants.js';
 
 const REACT_AGENT_CONFIG: FrameworkConfig = {
@@ -48,10 +48,10 @@ const REACT_AGENT_CONFIG: FrameworkConfig = {
   },
 };
 
-export async function runReactWizardAgent(options: WizardOptions): Promise<string> {
+export async function runReactInstallerAgent(options: InstallerOptions): Promise<string> {
   if (options.debug) {
     enableDebugLogs();
   }
 
-  return runAgentWizard(REACT_AGENT_CONFIG, options);
+  return runAgentInstaller(REACT_AGENT_CONFIG, options);
 }

@@ -1,11 +1,11 @@
-import { createWizardEventEmitter, type WizardEventName, type WizardEvents } from '../events.js';
+import { createInstallerEventEmitter, type InstallerEventName, type InstallerEvents } from '../events.js';
 
 /**
  * Captured event with type and payload.
  */
-export interface CapturedEvent<K extends WizardEventName = WizardEventName> {
+export interface CapturedEvent<K extends InstallerEventName = InstallerEventName> {
   type: K;
-  payload: WizardEvents[K];
+  payload: InstallerEvents[K];
   timestamp: number;
 }
 
@@ -14,11 +14,11 @@ export interface CapturedEvent<K extends WizardEventName = WizardEventName> {
  * Records all events emitted through the emitter.
  */
 export function createEventCapture() {
-  const emitter = createWizardEventEmitter();
+  const emitter = createInstallerEventEmitter();
   const events: CapturedEvent[] = [];
 
   // All event types to capture
-  const eventTypes: WizardEventName[] = [
+  const eventTypes: InstallerEventName[] = [
     'status',
     'output',
     'complete',
@@ -57,7 +57,7 @@ export function createEventCapture() {
 
   // Subscribe to all event types
   for (const type of eventTypes) {
-    emitter.on(type, (payload: WizardEvents[typeof type]) => {
+    emitter.on(type, (payload: InstallerEvents[typeof type]) => {
       events.push({
         type,
         payload,
@@ -77,7 +77,7 @@ export function createEventCapture() {
     getEventTypes: () => events.map((e) => e.type),
 
     /** Get events of a specific type */
-    getEventsOfType: <K extends WizardEventName>(type: K): CapturedEvent<K>[] =>
+    getEventsOfType: <K extends InstallerEventName>(type: K): CapturedEvent<K>[] =>
       events.filter((e): e is CapturedEvent<K> => e.type === type),
 
     /** Clear captured events */
@@ -95,8 +95,8 @@ export function createEventCapture() {
  * Returns match result with diff info if different.
  */
 export function compareEventSequences(
-  seq1: WizardEventName[],
-  seq2: WizardEventName[],
+  seq1: InstallerEventName[],
+  seq2: InstallerEventName[],
 ): { match: boolean; diff?: string } {
   // Check lengths
   if (seq1.length !== seq2.length) {
@@ -128,7 +128,7 @@ export function compareEventSequences(
  * Filter out non-deterministic events for comparison.
  * Some events (like timestamps) shouldn't affect sequence equality.
  */
-export function filterDeterministicEvents(events: WizardEventName[]): WizardEventName[] {
+export function filterDeterministicEvents(events: InstallerEventName[]): InstallerEventName[] {
   // Currently all events are deterministic, but this could filter
   // things like progress events with variable timing
   return events;

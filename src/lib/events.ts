@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 
-export interface WizardEvents {
+export interface InstallerEvents {
   status: { message: string };
   output: { text: string; isError?: boolean };
   'file:write': { path: string; content: string };
@@ -83,26 +83,26 @@ export interface WizardEvents {
   'postinstall:manual': { instructions: string };
 }
 
-export type WizardEventName = keyof WizardEvents;
+export type InstallerEventName = keyof InstallerEvents;
 
-export class WizardEventEmitter extends EventEmitter {
-  emit<K extends WizardEventName>(event: K, payload: WizardEvents[K]): boolean {
+export class InstallerEventEmitter extends EventEmitter {
+  emit<K extends InstallerEventName>(event: K, payload: InstallerEvents[K]): boolean {
     return super.emit(event, payload);
   }
 
-  on<K extends WizardEventName>(event: K, listener: (payload: WizardEvents[K]) => void): this {
+  on<K extends InstallerEventName>(event: K, listener: (payload: InstallerEvents[K]) => void): this {
     return super.on(event, listener);
   }
 
-  off<K extends WizardEventName>(event: K, listener: (payload: WizardEvents[K]) => void): this {
+  off<K extends InstallerEventName>(event: K, listener: (payload: InstallerEvents[K]) => void): this {
     return super.off(event, listener);
   }
 
-  once<K extends WizardEventName>(event: K, listener: (payload: WizardEvents[K]) => void): this {
+  once<K extends InstallerEventName>(event: K, listener: (payload: InstallerEvents[K]) => void): this {
     return super.once(event, listener);
   }
 }
 
-export function createWizardEventEmitter(): WizardEventEmitter {
-  return new WizardEventEmitter();
+export function createInstallerEventEmitter(): InstallerEventEmitter {
+  return new InstallerEventEmitter();
 }

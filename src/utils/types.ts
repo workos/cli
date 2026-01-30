@@ -1,4 +1,4 @@
-export type WizardOptions = {
+export type InstallerOptions = {
   /**
    * Whether to enable debug mode.
    */
@@ -64,7 +64,7 @@ export type WizardOptions = {
   /**
    * Event emitter for dashboard mode
    */
-  emitter?: import('../lib/events.js').WizardEventEmitter;
+  emitter?: import('../lib/events.js').InstallerEventEmitter;
 
   /**
    * Pre-selected framework integration (bypasses detection)

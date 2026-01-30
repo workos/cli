@@ -1,8 +1,8 @@
 /* TanStack Start wizard using Claude Agent SDK */
-import type { WizardOptions } from '../utils/types.js';
+import type { InstallerOptions } from '../utils/types.js';
 import type { FrameworkConfig } from '../lib/framework-config.js';
 import { enableDebugLogs } from '../utils/debug.js';
-import { runAgentWizard } from '../lib/agent-runner.js';
+import { runAgentInstaller } from '../lib/agent-runner.js';
 import { Integration } from '../lib/constants.js';
 import { getPackageVersion } from '../utils/package-json.js';
 
@@ -50,10 +50,10 @@ const TANSTACK_START_AGENT_CONFIG: FrameworkConfig = {
   },
 };
 
-export async function runTanstackStartWizardAgent(options: WizardOptions): Promise<string> {
+export async function runTanstackStartInstallerAgent(options: InstallerOptions): Promise<string> {
   if (options.debug) {
     enableDebugLogs();
   }
 
-  return runAgentWizard(TANSTACK_START_AGENT_CONFIG, options);
+  return runAgentInstaller(TANSTACK_START_AGENT_CONFIG, options);
 }
