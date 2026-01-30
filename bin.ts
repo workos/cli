@@ -14,6 +14,7 @@ import { getConfig } from './src/lib/settings.js';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import chalk from 'chalk';
+import { ensureAuthenticated } from './src/lib/ensure-auth.js';
 
 const NODE_VERSION_RANGE = getConfig().nodeVersion;
 
@@ -30,6 +31,20 @@ import { isNonInteractiveEnvironment } from './src/utils/environment.js';
 import clack from './src/utils/clack.js';
 
 // Shared options for wizard commands (default and dashboard)
+/**
+ * Wrap a command handler with authentication check.
+ * Ensures valid auth before executing the handler.
+ * Respects --skip-auth flag for CI/testing.
+ */
+function withAuth<T>(handler: (argv: T) => Promise<void>): (argv: T) => Promise<void> {
+  return async (argv: T) => {
+    if (!(argv as { skipAuth?: boolean }).skipAuth) {
+      await ensureAuthenticated();
+    }
+    await handler(argv);
+  };
+}
+
 const wizardOptions = {
   direct: {
     alias: 'D',
@@ -141,32 +156,32 @@ yargs(hideBin(process.argv))
           description: 'Target specific agent(s): claude-code, codex, cursor, goose',
         });
     },
-    async (argv) => {
+    withAuth(async (argv) => {
       const { runInstallSkill } = await import('./src/commands/install-skill.js');
       await runInstallSkill({
         list: argv.list as boolean | undefined,
         skill: argv.skill as string[] | undefined,
         agent: argv.agent as string[] | undefined,
       });
-    },
+    }),
   )
   .command(
     'install',
     'Install WorkOS AuthKit into your project',
     (yargs) => yargs.options(wizardOptions),
-    async (argv) => {
+    withAuth(async (argv) => {
       const { handleInstall } = await import('./src/commands/install.js');
       await handleInstall(argv);
-    },
+    }),
   )
   .command(
     'dashboard',
     false, // hidden from help
     (yargs) => yargs.options(wizardOptions),
-    async (argv) => {
+    withAuth(async (argv) => {
       const { handleInstall } = await import('./src/commands/install.js');
       await handleInstall({ ...argv, dashboard: true });
-    },
+    }),
   )
   .command(
     ['$0'],
@@ -187,6 +202,9 @@ yargs(hideBin(process.argv))
       if (clack.isCancel(shouldInstall) || !shouldInstall) {
         process.exit(0);
       }
+
+      // Auth check happens HERE, after user confirms
+      await ensureAuthenticated();
 
       const { handleInstall } = await import('./src/commands/install.js');
       await handleInstall({ dashboard: false } as any);
