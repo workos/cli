@@ -1,5 +1,5 @@
 import type { Integration } from './constants.js';
-import type { WizardOptions } from '../utils/types.js';
+import type { InstallerOptions } from '../utils/types.js';
 
 /**
  * Configuration interface for framework-specific agent integrations.
@@ -38,7 +38,7 @@ export interface FrameworkMetadata {
    * For Next.js: detects router type
    * For React Native: detects Expo vs bare
    */
-  gatherContext?: (options: WizardOptions) => Promise<Record<string, any>>;
+  gatherContext?: (options: InstallerOptions) => Promise<Record<string, any>>;
 
   /**
    * Name of the framework-specific skill for agent integration.
@@ -123,7 +123,7 @@ export interface UIConfig {
  * Generate welcome message from framework name
  */
 export function getWelcomeMessage(frameworkName: string): string {
-  return `WorkOS AuthKit ${frameworkName} wizard (agent-powered)`;
+  return `WorkOS AuthKit ${frameworkName} installer (agent-powered)`;
 }
 
 /**

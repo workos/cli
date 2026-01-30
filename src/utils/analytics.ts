@@ -24,7 +24,7 @@ export class Analytics {
   constructor() {
     this.sessionId = uuidv4();
     this.sessionStartTime = new Date();
-    this.tags = { $app_name: 'authkit-wizard' };
+    this.tags = { $app_name: 'authkit-installer' };
   }
 
   setDistinctId(distinctId: string) {
@@ -79,8 +79,8 @@ export class Analytics {
       sessionId: this.sessionId,
       timestamp: this.sessionStartTime.toISOString(),
       attributes: {
-        'wizard.version': version,
-        'wizard.mode': mode,
+        'installer.version': version,
+        'installer.mode': mode,
         'workos.user_id': this.distinctId,
       },
     };
@@ -157,11 +157,11 @@ export class Analytics {
       sessionId: this.sessionId,
       timestamp: new Date().toISOString(),
       attributes: {
-        'wizard.outcome': status,
-        'wizard.duration_ms': duration,
-        'wizard.agent.iterations': this.agentIterations,
-        'wizard.agent.tokens.input': this.totalInputTokens,
-        'wizard.agent.tokens.output': this.totalOutputTokens,
+        'installer.outcome': status,
+        'installer.duration_ms': duration,
+        'installer.agent.iterations': this.agentIterations,
+        'installer.agent.tokens.input': this.totalInputTokens,
+        'installer.agent.tokens.output': this.totalOutputTokens,
         ...extraAttributes,
       },
     };

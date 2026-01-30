@@ -1,5 +1,5 @@
-import type { WizardOptions } from '../utils/types.js';
-import { runWizard } from '../run.js';
+import type { InstallerOptions } from '../utils/types.js';
+import { runInstaller } from '../run.js';
 import { isNonInteractiveEnvironment } from '../utils/environment.js';
 import clack from '../utils/clack.js';
 import chalk from 'chalk';
@@ -31,34 +31,34 @@ export async function handleInstall(argv: ArgumentsCamelCase<InstallArgs>): Prom
   // CI mode validation
   if (options.ci) {
     if (!options.apiKey) {
-      clack.intro(chalk.inverse('WorkOS AuthKit Wizard'));
+      clack.intro(chalk.inverse('WorkOS AuthKit Installer'));
       clack.log.error('CI mode requires --api-key (WorkOS API key sk_xxx)');
       process.exit(1);
     }
     if (!options.clientId) {
-      clack.intro(chalk.inverse('WorkOS AuthKit Wizard'));
+      clack.intro(chalk.inverse('WorkOS AuthKit Installer'));
       clack.log.error('CI mode requires --client-id (WorkOS Client ID client_xxx)');
       process.exit(1);
     }
     if (!options.installDir) {
-      clack.intro(chalk.inverse('WorkOS AuthKit Wizard'));
+      clack.intro(chalk.inverse('WorkOS AuthKit Installer'));
       clack.log.error('CI mode requires --install-dir (directory to install WorkOS AuthKit in)');
       process.exit(1);
     }
   } else if (isNonInteractiveEnvironment()) {
-    clack.intro(chalk.inverse('WorkOS AuthKit Wizard'));
+    clack.intro(chalk.inverse('WorkOS AuthKit Installer'));
     clack.log.error(
       'This installer requires an interactive terminal (TTY) to run.\n' +
         'It appears you are running in a non-interactive environment.\n' +
-        'Please run the wizard in an interactive terminal.\n\n' +
+        'Please run the installer in an interactive terminal.\n\n' +
         'For CI/CD environments, use --ci mode:\n' +
-        '  wizard install --ci --api-key sk_xxx --client-id client_xxx',
+        '  workos install --ci --api-key sk_xxx --client-id client_xxx',
     );
     process.exit(1);
   }
 
   try {
-    await runWizard(options as unknown as WizardOptions);
+    await runInstaller(options as unknown as InstallerOptions);
     process.exit(0);
   } catch (err) {
     const { getLogFilePath } = await import('../utils/debug.js');

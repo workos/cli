@@ -23,10 +23,10 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createActor, fromPromise } from 'xstate';
-import { wizardMachine } from '../wizard-core.js';
+import { installerMachine } from '../installer-core.js';
 import { createEventCapture, compareEventSequences, filterDeterministicEvents } from './test-utils.js';
-import type { WizardOptions } from '../../utils/types.js';
-import type { DetectionOutput, GitCheckOutput, AgentOutput, WizardMachineContext } from '../wizard-core.types.js';
+import type { InstallerOptions } from '../../utils/types.js';
+import type { DetectionOutput, GitCheckOutput, AgentOutput, InstallerMachineContext } from '../installer-core.types.js';
 import { Integration } from '../constants.js';
 
 /**
@@ -37,16 +37,16 @@ import { Integration } from '../constants.js';
  */
 function createMockActors() {
   return {
-    checkAuthentication: fromPromise<boolean, { options: WizardOptions }>(async () => true),
-    detectIntegration: fromPromise<DetectionOutput, { options: WizardOptions }>(async () => ({
+    checkAuthentication: fromPromise<boolean, { options: InstallerOptions }>(async () => true),
+    detectIntegration: fromPromise<DetectionOutput, { options: InstallerOptions }>(async () => ({
       integration: Integration.nextjs,
     })),
     checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => ({
       isClean: true,
       files: [],
     })),
-    configureEnvironment: fromPromise<void, { context: WizardMachineContext }>(async () => {}),
-    runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => ({
+    configureEnvironment: fromPromise<void, { context: InstallerMachineContext }>(async () => {}),
+    runAgent: fromPromise<AgentOutput, { context: InstallerMachineContext }>(async () => ({
       success: true,
       summary: 'Done!',
     })),
@@ -56,7 +56,7 @@ function createMockActors() {
 /**
  * Creates test options with the given overrides.
  */
-function createTestOptions(overrides?: Partial<WizardOptions>): WizardOptions {
+function createTestOptions(overrides?: Partial<InstallerOptions>): InstallerOptions {
   return {
     debug: false,
     forceInstall: false,
@@ -70,18 +70,18 @@ function createTestOptions(overrides?: Partial<WizardOptions>): WizardOptions {
     apiKey: 'sk_test_123',
     clientId: 'client_test_123',
     ...overrides,
-  } as WizardOptions;
+  } as InstallerOptions;
 }
 
 /**
  * Runs the machine to completion and returns captured events.
  */
 async function runMachineToCompletion(
-  options: WizardOptions,
+  options: InstallerOptions,
   mockActors: ReturnType<typeof createMockActors>,
   capture: ReturnType<typeof createEventCapture>,
 ): Promise<void> {
-  const machineWithActors = wizardMachine.provide({
+  const machineWithActors = installerMachine.provide({
     actors: mockActors,
   });
 
@@ -160,7 +160,7 @@ describe('Event Sequence Parity', () => {
       const cliCapture = createEventCapture();
       const cliOptions = createTestOptions({ dashboard: false, skipAuth: true });
 
-      const machineWithActors = wizardMachine.provide({
+      const machineWithActors = installerMachine.provide({
         actors: dirtyMockActors,
       });
 
@@ -200,7 +200,7 @@ describe('Event Sequence Parity', () => {
       const dashCapture = createEventCapture();
       const dashOptions = createTestOptions({ dashboard: true, skipAuth: true });
 
-      const dashMachine = wizardMachine.provide({
+      const dashMachine = installerMachine.provide({
         actors: dashMockActors,
       });
 
@@ -299,14 +299,14 @@ describe('Event Sequence Parity', () => {
     it('emits exactly one complete event on agent failure', async () => {
       const failingActors = {
         ...createMockActors(),
-        runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => ({
+        runAgent: fromPromise<AgentOutput, { context: InstallerMachineContext }>(async () => ({
           success: false,
           error: new Error('Agent failed'),
         })),
       };
 
       const capture = createEventCapture();
-      const machineWithActors = wizardMachine.provide({
+      const machineWithActors = installerMachine.provide({
         actors: failingActors,
       });
 
@@ -331,14 +331,14 @@ describe('Event Sequence Parity', () => {
     it('emits exactly one agent:failure event on failure', async () => {
       const failingActors = {
         ...createMockActors(),
-        runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => ({
+        runAgent: fromPromise<AgentOutput, { context: InstallerMachineContext }>(async () => ({
           success: false,
           error: new Error('Agent failed'),
         })),
       };
 
       const capture = createEventCapture();
-      const machineWithActors = wizardMachine.provide({
+      const machineWithActors = installerMachine.provide({
         actors: failingActors,
       });
 

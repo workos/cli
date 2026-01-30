@@ -2,7 +2,7 @@ import { execSync, spawn, spawnSync } from 'child_process';
 import { EnvironmentProvider } from '../EnvironmentProvider.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import type { WizardOptions } from '../../../utils/types.js';
+import type { InstallerOptions } from '../../../utils/types.js';
 import clack from '../../../utils/clack.js';
 import chalk from 'chalk';
 import { analytics } from '../../../utils/analytics.js';
@@ -11,7 +11,7 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
   name = 'Vercel';
   environments = ['production', 'preview', 'development'];
 
-  constructor(options: WizardOptions) {
+  constructor(options: InstallerOptions) {
     super(options);
   }
 

@@ -6,15 +6,15 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { debug, logInfo, logWarn, logError, initLogFile, getLogFilePath } from '../utils/debug.js';
-import type { WizardOptions } from '../utils/types.js';
+import type { InstallerOptions } from '../utils/types.js';
 import { analytics } from '../utils/analytics.js';
-import { WIZARD_INTERACTION_EVENT_NAME } from './constants.js';
+import { INSTALLER_INTERACTION_EVENT_NAME } from './constants.js';
 import { LINTING_TOOLS } from './safe-tools.js';
 import { getLlmGatewayUrlFromHost } from '../utils/urls.js';
 import { getConfig } from './settings.js';
 import { getCredentials, hasCredentials } from './credentials.js';
 import { ensureValidToken } from './token-refresh.js';
-import type { WizardEventEmitter } from './events.js';
+import type { InstallerEventEmitter } from './events.js';
 import { startCredentialProxy, type CredentialProxyHandle } from './credential-proxy.js';
 import { getAuthkitDomain, getCliAuthClientId } from './settings.js';
 
@@ -59,11 +59,11 @@ export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
  */
 export enum AgentErrorType {
   /** Agent could not access the WorkOS MCP server */
-  MCP_MISSING = 'WIZARD_MCP_MISSING',
+  MCP_MISSING = 'INSTALLER_MCP_MISSING',
   /** Agent could not access the setup resource */
-  RESOURCE_MISSING = 'WIZARD_RESOURCE_MISSING',
+  RESOURCE_MISSING = 'INSTALLER_RESOURCE_MISSING',
   /** Agent execution failed (API error, auth error, etc.) */
-  EXECUTION_ERROR = 'WIZARD_EXECUTION_ERROR',
+  EXECUTION_ERROR = 'INSTALLER_EXECUTION_ERROR',
 }
 
 export type AgentConfig = {
@@ -150,7 +150,7 @@ function matchesAllowedPrefix(command: string): boolean {
  * - Piping to tail/head for output limiting is allowed
  * - Stderr redirection (2>&1) is allowed
  */
-export function wizardCanUseTool(
+export function installerCanUseTool(
   toolName: string,
   input: Record<string, unknown>,
 ): { behavior: 'allow'; updatedInput: Record<string, unknown> } | { behavior: 'deny'; message: string } {
@@ -165,7 +165,7 @@ export function wizardCanUseTool(
   if (DANGEROUS_OPERATORS.test(command)) {
     logWarn(`Denying bash command with dangerous operators: ${command}`);
     debug(`Denying bash command with dangerous operators: ${command}`);
-    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+    analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
       action: 'bash command denied',
       reason: 'dangerous operators',
       command,
@@ -188,7 +188,7 @@ export function wizardCanUseTool(
     if (/[|&]/.test(baseCommand)) {
       logWarn(`Denying bash command with multiple pipes: ${command}`);
       debug(`Denying bash command with multiple pipes: ${command}`);
-      analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+      analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
         action: 'bash command denied',
         reason: 'multiple pipes',
         command,
@@ -210,7 +210,7 @@ export function wizardCanUseTool(
   if (/[|&]/.test(normalized)) {
     logWarn(`Denying bash command with pipe/&: ${command}`);
     debug(`Denying bash command with pipe/&: ${command}`);
-    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+    analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
       action: 'bash command denied',
       reason: 'disallowed pipe',
       command,
@@ -230,7 +230,7 @@ export function wizardCanUseTool(
 
   logWarn(`Denying bash command: ${command}`);
   debug(`Denying bash command: ${command}`);
-  analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+  analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
     action: 'bash command denied',
     reason: 'not in allowlist',
     command,
@@ -244,7 +244,7 @@ export function wizardCanUseTool(
 /**
  * Initialize agent configuration for the LLM gateway
  */
-export async function initializeAgent(config: AgentConfig, options: WizardOptions): Promise<AgentRunConfig> {
+export async function initializeAgent(config: AgentConfig, options: InstallerOptions): Promise<AgentRunConfig> {
   // Initialize log file for this run
   initLogFile();
   logInfo('Agent initialization starting');
@@ -289,16 +289,16 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
       // Check/refresh authentication for production (unless skipping auth)
       if (!options.skipAuth && !options.local) {
         if (!hasCredentials()) {
-          throw new Error('Not authenticated. Run `wizard login` to authenticate.');
+          throw new Error('Not authenticated. Run `workos login` to authenticate.');
         }
 
         const creds = getCredentials();
         if (!creds) {
-          throw new Error('Not authenticated. Run `wizard login` to authenticate.');
+          throw new Error('Not authenticated. Run `workos login` to authenticate.');
         }
 
         // Check if we have refresh token capability and proxy is not disabled
-        if (creds.refreshToken && process.env.WIZARD_DISABLE_PROXY !== '1') {
+        if (creds.refreshToken && process.env.INSTALLER_DISABLE_PROXY !== '1') {
           // Start credential proxy with lazy refresh
           logInfo('[agent-interface] Starting credential proxy with lazy refresh...');
           const appConfig = getConfig();
@@ -315,7 +315,7 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
               onRefreshExpired: () => {
                 logError('[agent-interface] Session expired, refresh token invalid');
                 options.emitter?.emit('error', {
-                  message: 'Session expired. Run `wizard login` to re-authenticate.',
+                  message: 'Session expired. Run `workos login` to re-authenticate.',
                 });
               },
             },
@@ -332,12 +332,12 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
           // No refresh token OR proxy disabled - fall back to old behavior (5 min limit)
           if (!creds.refreshToken) {
             logWarn('[agent-interface] No refresh token available, session limited to 5 minutes');
-            logWarn('[agent-interface] Run `wizard login` to enable extended sessions');
+            logWarn('[agent-interface] Run `workos login` to enable extended sessions');
             options.emitter?.emit('status', {
-              message: 'Note: Run `wizard login` to enable extended sessions',
+              message: 'Note: Run `workos login` to enable extended sessions',
             });
           } else {
-            logWarn('[agent-interface] Proxy disabled via WIZARD_DISABLE_PROXY');
+            logWarn('[agent-interface] Proxy disabled via INSTALLER_DISABLE_PROXY');
           }
 
           const refreshResult = await ensureValidToken();
@@ -417,13 +417,13 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
 export async function runAgent(
   agentConfig: AgentRunConfig,
   prompt: string,
-  options: WizardOptions,
+  options: InstallerOptions,
   config?: {
     spinnerMessage?: string;
     successMessage?: string;
     errorMessage?: string;
   },
-  emitter?: WizardEventEmitter,
+  emitter?: InstallerEventEmitter,
 ): Promise<{ error?: AgentErrorType; errorMessage?: string }> {
   const {
     spinnerMessage = 'Setting up WorkOS AuthKit...',
@@ -481,7 +481,7 @@ export async function runAgent(
         env: agentConfig.sdkEnv,
         canUseTool: (toolName: string, input: unknown) => {
           logInfo('canUseTool called:', { toolName, input });
-          const result = wizardCanUseTool(toolName, input as Record<string, unknown>);
+          const result = installerCanUseTool(toolName, input as Record<string, unknown>);
           logInfo('canUseTool result:', result);
           return Promise.resolve(result);
         },
@@ -533,7 +533,7 @@ export async function runAgent(
     }
 
     logInfo(`Agent run completed in ${Math.round(durationMs / 1000)}s`);
-    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+    analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
       action: 'agent integration completed',
       duration_ms: durationMs,
       duration_seconds: Math.round(durationMs / 1000),
@@ -551,7 +551,7 @@ export async function runAgent(
     if (activeProxyHandle) {
       logInfo('[agent-interface] Stopping credential proxy');
 
-      analytics.capture('wizard.proxy', {
+      analytics.capture('installer.proxy', {
         action: 'stop',
         port: activeProxyHandle.port,
       });
@@ -568,9 +568,9 @@ export async function runAgent(
  */
 function handleSDKMessage(
   message: SDKMessage,
-  options: WizardOptions,
+  options: InstallerOptions,
   collectedText: string[],
-  emitter?: WizardEventEmitter,
+  emitter?: InstallerEventEmitter,
 ): string | undefined {
   logInfo(`SDK Message: ${message.type}`, JSON.stringify(message, null, 2));
 

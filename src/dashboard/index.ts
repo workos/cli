@@ -1,7 +1,7 @@
-import type { WizardEventEmitter } from '../lib/events.js';
+import type { InstallerEventEmitter } from '../lib/events.js';
 
 export interface DashboardOptions {
-  emitter: WizardEventEmitter;
+  emitter: InstallerEventEmitter;
 }
 
 let cleanup: (() => void) | null = null;

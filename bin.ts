@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Load .env.local for local development when --local flag is used
-if (process.argv.includes('--local') || process.env.WIZARD_DEV) {
+if (process.argv.includes('--local') || process.env.INSTALLER_DEV) {
   const { config } = await import('dotenv');
   // bin.ts compiles to dist/bin.js, so go up one level to find .env.local
   config({ path: new URL('../.env.local', import.meta.url).pathname });
@@ -22,7 +22,7 @@ const NODE_VERSION_RANGE = getConfig().nodeVersion;
 // has the problematic imports.
 if (!satisfies(process.version, NODE_VERSION_RANGE)) {
   red(
-    `WorkOS AuthKit wizard requires Node.js ${NODE_VERSION_RANGE}. You are using Node.js ${process.version}. Please upgrade your Node.js version.`,
+    `WorkOS AuthKit installer requires Node.js ${NODE_VERSION_RANGE}. You are using Node.js ${process.version}. Please upgrade your Node.js version.`,
   );
   process.exit(1);
 }
@@ -45,7 +45,7 @@ function withAuth<T>(handler: (argv: T) => Promise<void>): (argv: T) => Promise<
   };
 }
 
-const wizardOptions = {
+const installerOptions = {
   direct: {
     alias: 'D',
     default: false,
@@ -123,7 +123,7 @@ const wizardOptions = {
 };
 
 yargs(hideBin(process.argv))
-  .env('WORKOS_WIZARD')
+  .env('WORKOS_INSTALLER')
   .command('login', 'Authenticate with WorkOS', {}, async () => {
     const { runLogin } = await import('./src/commands/login.js');
     await runLogin();
@@ -168,7 +168,7 @@ yargs(hideBin(process.argv))
   .command(
     'install',
     'Install WorkOS AuthKit into your project',
-    (yargs) => yargs.options(wizardOptions),
+    (yargs) => yargs.options(installerOptions),
     withAuth(async (argv) => {
       const { handleInstall } = await import('./src/commands/install.js');
       await handleInstall(argv);
@@ -177,7 +177,7 @@ yargs(hideBin(process.argv))
   .command(
     'dashboard',
     false, // hidden from help
-    (yargs) => yargs.options(wizardOptions),
+    (yargs) => yargs.options(installerOptions),
     withAuth(async (argv) => {
       const { handleInstall } = await import('./src/commands/install.js');
       await handleInstall({ ...argv, dashboard: true });

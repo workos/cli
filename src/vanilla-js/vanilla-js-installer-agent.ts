@@ -1,8 +1,8 @@
 /* Vanilla JS wizard using Claude Agent SDK */
-import type { WizardOptions } from '../utils/types.js';
+import type { InstallerOptions } from '../utils/types.js';
 import type { FrameworkConfig } from '../lib/framework-config.js';
 import { enableDebugLogs } from '../utils/debug.js';
-import { runAgentWizard } from '../lib/agent-runner.js';
+import { runAgentInstaller } from '../lib/agent-runner.js';
 import { Integration } from '../lib/constants.js';
 
 const VANILLA_JS_AGENT_CONFIG: FrameworkConfig = {
@@ -48,10 +48,10 @@ const VANILLA_JS_AGENT_CONFIG: FrameworkConfig = {
   },
 };
 
-export async function runVanillaJsWizardAgent(options: WizardOptions): Promise<string> {
+export async function runVanillaJsInstallerAgent(options: InstallerOptions): Promise<string> {
   if (options.debug) {
     enableDebugLogs();
   }
 
-  return runAgentWizard(VANILLA_JS_AGENT_CONFIG, options);
+  return runAgentInstaller(VANILLA_JS_AGENT_CONFIG, options);
 }

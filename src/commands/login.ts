@@ -74,7 +74,7 @@ export async function runLogin(): Promise<void> {
   if (getAccessToken()) {
     const creds = getCredentials();
     clack.log.info(`Already logged in as ${creds?.email ?? 'unknown'}`);
-    clack.log.info('Run `wizard logout` to log out');
+    clack.log.info('Run `workos logout` to log out');
     return;
   }
 

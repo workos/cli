@@ -1,5 +1,5 @@
-import type { WizardAdapter, AdapterConfig } from './types.js';
-import type { WizardEventEmitter, WizardEvents } from '../events.js';
+import type { InstallerAdapter, AdapterConfig } from './types.js';
+import type { InstallerEventEmitter, InstallerEvents } from '../events.js';
 import clack from '../../utils/clack.js';
 import chalk from 'chalk';
 import { getConfig } from '../settings.js';
@@ -8,11 +8,11 @@ import { ProgressTracker } from '../progress-tracker.js';
 /**
  * CLI adapter that renders wizard events via clack.
  *
- * Subscribes to WizardEventEmitter and translates events into
+ * Subscribes to InstallerEventEmitter and translates events into
  * clack UI operations (logs, spinners, prompts).
  */
-export class CLIAdapter implements WizardAdapter {
-  readonly emitter: WizardEventEmitter;
+export class CLIAdapter implements InstallerAdapter {
+  readonly emitter: InstallerEventEmitter;
   private sendEvent: AdapterConfig['sendEvent'];
   private debug: boolean;
   private spinner: ReturnType<typeof clack.spinner> | null = null;
@@ -68,7 +68,7 @@ export class CLIAdapter implements WizardAdapter {
       console.log(chalk.cyan(art));
       console.log();
     } else {
-      clack.intro('Welcome to the WorkOS AuthKit setup wizard');
+      clack.intro('Welcome to the WorkOS AuthKit installer');
     }
 
     // Handle Ctrl+C gracefully
@@ -78,7 +78,7 @@ export class CLIAdapter implements WizardAdapter {
         this.spinner = null;
       }
       this.stopAgentUpdates();
-      clack.log.warn('Wizard cancelled');
+      clack.log.warn('Installer cancelled');
       clack.outro('Your project was not modified');
       process.exit(0);
     };
@@ -144,7 +144,7 @@ export class CLIAdapter implements WizardAdapter {
 
     // Unsubscribe from all events
     for (const [event, handler] of this.handlers) {
-      this.emitter.off(event as keyof WizardEvents, handler as never);
+      this.emitter.off(event as keyof InstallerEvents, handler as never);
     }
     this.handlers.clear();
 
@@ -179,9 +179,9 @@ export class CLIAdapter implements WizardAdapter {
   /**
    * Helper to subscribe and track handlers for cleanup.
    */
-  private subscribe<K extends keyof WizardEvents>(
+  private subscribe<K extends keyof InstallerEvents>(
     event: K,
-    handler: (payload: WizardEvents[K]) => void | Promise<void>,
+    handler: (payload: InstallerEvents[K]) => void | Promise<void>,
   ): void {
     const boundHandler = handler.bind(this);
     this.handlers.set(event, boundHandler as (...args: unknown[]) => void);
@@ -190,11 +190,11 @@ export class CLIAdapter implements WizardAdapter {
 
   // ===== Event Handlers =====
 
-  private handleStateEnter = ({ state }: WizardEvents['state:enter']): void => {
+  private handleStateEnter = ({ state }: InstallerEvents['state:enter']): void => {
     this.progress.enterPhase(state);
   };
 
-  private handleStateExit = ({ state }: WizardEvents['state:exit']): void => {
+  private handleStateExit = ({ state }: InstallerEvents['state:exit']): void => {
     this.progress.exitPhase(state);
   };
 
@@ -202,12 +202,12 @@ export class CLIAdapter implements WizardAdapter {
     clack.log.success('Authenticated');
   };
 
-  private handleAuthFailure = ({ message }: WizardEvents['auth:failure']): void => {
+  private handleAuthFailure = ({ message }: InstallerEvents['auth:failure']): void => {
     clack.log.error(`Auth failed: ${message}`);
     clack.log.info('Visit https://dashboard.workos.com to verify your account');
   };
 
-  private handleDetectionComplete = ({ integration }: WizardEvents['detection:complete']): void => {
+  private handleDetectionComplete = ({ integration }: InstallerEvents['detection:complete']): void => {
     this.queueableLog(() => clack.log.success(`Detected ${chalk.bold(integration)}`));
   };
 
@@ -219,7 +219,7 @@ export class CLIAdapter implements WizardAdapter {
     clack.log.success('Found existing WorkOS credentials in .env.local');
   };
 
-  private handleEnvScanPrompt = async ({ files }: WizardEvents['credentials:env:prompt']): Promise<void> => {
+  private handleEnvScanPrompt = async ({ files }: InstallerEvents['credentials:env:prompt']): Promise<void> => {
     this.isPromptActive = true;
     const fileList = files.length === 1 ? files[0] : files.slice(0, 2).join(', ');
     const confirmed = await clack.confirm({
@@ -234,7 +234,7 @@ export class CLIAdapter implements WizardAdapter {
     });
   };
 
-  private handleDeviceStarted = ({ verificationUri, userCode }: WizardEvents['device:started']): void => {
+  private handleDeviceStarted = ({ verificationUri, userCode }: InstallerEvents['device:started']): void => {
     clack.log.info(`\nOpen this URL in your browser:\n`);
     console.log(`  ${chalk.cyan(verificationUri)}`);
     console.log(`\nEnter code: ${chalk.bold(userCode)}\n`);
@@ -260,11 +260,11 @@ export class CLIAdapter implements WizardAdapter {
     clack.log.success('WorkOS credentials retrieved automatically');
   };
 
-  private handleEnvCredentialsFound = ({ sourcePath }: WizardEvents['credentials:env:found']): void => {
+  private handleEnvCredentialsFound = ({ sourcePath }: InstallerEvents['credentials:env:found']): void => {
     clack.log.success(`Found existing WorkOS credentials in ${sourcePath}`);
   };
 
-  private handleGitDirty = async ({ files }: WizardEvents['git:dirty']): Promise<void> => {
+  private handleGitDirty = async ({ files }: InstallerEvents['git:dirty']): Promise<void> => {
     clack.log.warn('You have uncommitted or untracked files:');
     files.slice(0, 5).forEach((f) => clack.log.info(chalk.dim(`  ${f}`)));
     if (files.length > 5) {
@@ -284,7 +284,9 @@ export class CLIAdapter implements WizardAdapter {
     });
   };
 
-  private handleCredentialsRequest = async ({ requiresApiKey }: WizardEvents['credentials:request']): Promise<void> => {
+  private handleCredentialsRequest = async ({
+    requiresApiKey,
+  }: InstallerEvents['credentials:request']): Promise<void> => {
     clack.log.step(`Get your credentials from ${chalk.cyan('https://dashboard.workos.com')}`);
 
     const clientId = await clack.text({
@@ -355,7 +357,7 @@ export class CLIAdapter implements WizardAdapter {
     }, 2000);
   };
 
-  private handleAgentProgress = ({ step, detail }: WizardEvents['agent:progress']): void => {
+  private handleAgentProgress = ({ step, detail }: InstallerEvents['agent:progress']): void => {
     const message = detail ? `${step}: ${detail}` : step;
     this.spinner?.message(message);
   };
@@ -365,7 +367,7 @@ export class CLIAdapter implements WizardAdapter {
     this.stopSpinner('Agent completed');
   };
 
-  private handleValidationIssues = ({ issues }: WizardEvents['validation:issues']): void => {
+  private handleValidationIssues = ({ issues }: InstallerEvents['validation:issues']): void => {
     for (const issue of issues) {
       if (issue.severity === 'error') {
         clack.log.error(issue.message);
@@ -378,7 +380,7 @@ export class CLIAdapter implements WizardAdapter {
     }
   };
 
-  private handleValidationComplete = ({ passed, issueCount }: WizardEvents['validation:complete']): void => {
+  private handleValidationComplete = ({ passed, issueCount }: InstallerEvents['validation:complete']): void => {
     if (passed) {
       clack.log.success('Validation passed');
     } else {
@@ -386,7 +388,7 @@ export class CLIAdapter implements WizardAdapter {
     }
   };
 
-  private handleComplete = ({ success, summary }: WizardEvents['complete']): void => {
+  private handleComplete = ({ success, summary }: InstallerEvents['complete']): void => {
     this.stopAgentUpdates();
     this.stopSpinner(success ? 'Done' : 'Failed');
 
@@ -405,7 +407,7 @@ export class CLIAdapter implements WizardAdapter {
     }
   };
 
-  private handleError = ({ message, stack }: WizardEvents['error']): void => {
+  private handleError = ({ message, stack }: InstallerEvents['error']): void => {
     this.stopSpinner('Error');
     this.stopAgentUpdates();
 
@@ -413,7 +415,7 @@ export class CLIAdapter implements WizardAdapter {
 
     // Add actionable hints for common errors
     if (message.includes('authentication') || message.includes('auth')) {
-      clack.log.info('Try running: wizard logout && wizard');
+      clack.log.info('Try running: workos logout && workos install');
     }
     if (message.includes('ENOENT') || message.includes('not found')) {
       clack.log.info('Ensure you are in a project directory');
@@ -424,7 +426,7 @@ export class CLIAdapter implements WizardAdapter {
     }
   };
 
-  private handleBranchPrompt = async ({ branch }: WizardEvents['branch:prompt']): Promise<void> => {
+  private handleBranchPrompt = async ({ branch }: InstallerEvents['branch:prompt']): Promise<void> => {
     this.isPromptActive = true;
     const choice = await clack.select({
       message: `You are on ${chalk.bold(branch)}. Create a feature branch?`,
@@ -446,13 +448,13 @@ export class CLIAdapter implements WizardAdapter {
     }
   };
 
-  private handleBranchCreated = ({ branch }: WizardEvents['branch:created']): void => {
+  private handleBranchCreated = ({ branch }: InstallerEvents['branch:created']): void => {
     this.queueableLog(() => clack.log.success(`Created branch ${chalk.bold(branch)}`));
   };
 
   // ===== Post-install Event Handlers =====
 
-  private handlePostInstallChanges = ({ files }: WizardEvents['postinstall:changes']): void => {
+  private handlePostInstallChanges = ({ files }: InstallerEvents['postinstall:changes']): void => {
     this.debugLog(`Post-install: ${files.length} changed files detected`);
   };
 
@@ -475,12 +477,12 @@ export class CLIAdapter implements WizardAdapter {
     this.spinner.start('Generating commit message...');
   };
 
-  private handleCommitSuccess = ({ message }: WizardEvents['postinstall:commit:success']): void => {
+  private handleCommitSuccess = ({ message }: InstallerEvents['postinstall:commit:success']): void => {
     this.stopSpinner('Committed');
     clack.log.success(`Committed: ${chalk.dim(message)}`);
   };
 
-  private handleCommitFailed = ({ error }: WizardEvents['postinstall:commit:failed']): void => {
+  private handleCommitFailed = ({ error }: InstallerEvents['postinstall:commit:failed']): void => {
     this.stopSpinner('Commit failed');
     clack.log.error(`Commit failed: ${error}`);
   };
@@ -513,22 +515,22 @@ export class CLIAdapter implements WizardAdapter {
     }
   };
 
-  private handlePrSuccess = ({ url }: WizardEvents['postinstall:pr:success']): void => {
+  private handlePrSuccess = ({ url }: InstallerEvents['postinstall:pr:success']): void => {
     this.stopSpinner('PR created');
     clack.log.success(`Pull request created: ${chalk.cyan(url)}`);
   };
 
-  private handlePrFailed = ({ error }: WizardEvents['postinstall:pr:failed']): void => {
+  private handlePrFailed = ({ error }: InstallerEvents['postinstall:pr:failed']): void => {
     this.stopSpinner('PR creation failed');
     clack.log.error(`PR creation failed: ${error}`);
   };
 
-  private handlePushFailed = ({ error }: WizardEvents['postinstall:push:failed']): void => {
+  private handlePushFailed = ({ error }: InstallerEvents['postinstall:push:failed']): void => {
     this.stopSpinner('Push failed');
     clack.log.error(`Push failed: ${error}`);
   };
 
-  private handleManualInstructions = ({ instructions }: WizardEvents['postinstall:manual']): void => {
+  private handleManualInstructions = ({ instructions }: InstallerEvents['postinstall:manual']): void => {
     clack.log.info('GitHub CLI not found. Manual steps:');
     console.log(chalk.dim(instructions));
   };

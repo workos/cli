@@ -73,7 +73,7 @@ export async function refreshAccessToken(authkitDomain: string, clientId: string
       if (errorData.error === 'invalid_grant') {
         return {
           success: false,
-          error: 'Session expired. Run `wizard login` to re-authenticate.',
+          error: 'Session expired. Run `workos login` to re-authenticate.',
           errorType: 'invalid_grant',
         };
       }

@@ -24,7 +24,7 @@ workos
 
 ## What It Creates
 
-Depending on your framework, the wizard creates:
+Depending on your framework, the installer creates:
 
 - ✅ Authentication routes (callback, sign-in, sign-out)
 - ✅ Middleware for route protection
@@ -109,7 +109,7 @@ Credentials are stored in `~/.workos/credentials.json`. Access tokens are not pe
 
 ## Telemetry
 
-The wizard collects anonymous usage telemetry to help improve the product:
+The installer collects anonymous usage telemetry to help improve the product:
 
 - Session outcome (success/error/cancelled)
 - Framework detected

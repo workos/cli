@@ -6,7 +6,7 @@ import type { Credentials } from './credentials.js';
 
 // Create a mock home directory for all tests
 let testDir: string;
-let wizardDir: string;
+let installerDir: string;
 let credentialsFile: string;
 
 // Mock os.homedir BEFORE importing modules
@@ -53,8 +53,8 @@ const { ensureAuthenticated } = await import('./ensure-auth.js');
 describe('ensure-auth', () => {
   beforeEach(() => {
     testDir = mkdtempSync(join(tmpdir(), 'ensure-auth-test-'));
-    wizardDir = join(testDir, '.workos');
-    credentialsFile = join(wizardDir, 'credentials.json');
+    installerDir = join(testDir, '.workos');
+    credentialsFile = join(installerDir, 'credentials.json');
     vi.clearAllMocks();
   });
 
@@ -63,8 +63,8 @@ describe('ensure-auth', () => {
     if (existsSync(credentialsFile)) {
       unlinkSync(credentialsFile);
     }
-    if (existsSync(wizardDir)) {
-      rmdirSync(wizardDir);
+    if (existsSync(installerDir)) {
+      rmdirSync(installerDir);
     }
     if (existsSync(testDir)) {
       rmdirSync(testDir);
@@ -119,7 +119,7 @@ describe('ensure-auth', () => {
     it('triggers login when credentials file is invalid JSON', async () => {
       // Create invalid credentials file
       const { mkdirSync } = await import('node:fs');
-      mkdirSync(wizardDir, { recursive: true });
+      mkdirSync(installerDir, { recursive: true });
       writeFileSync(credentialsFile, 'not valid json');
 
       mockRunLogin.mockImplementation(() => {
@@ -251,10 +251,7 @@ describe('ensure-auth', () => {
 
       await ensureAuthenticated();
 
-      expect(mockRefreshAccessToken).toHaveBeenCalledWith(
-        'https://auth.test.com',
-        'test_client_id',
-      );
+      expect(mockRefreshAccessToken).toHaveBeenCalledWith('https://auth.test.com', 'test_client_id');
     });
   });
 });

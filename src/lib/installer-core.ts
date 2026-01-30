@@ -1,8 +1,8 @@
 import { setup, assign, fromPromise, type ActorRefFrom } from 'xstate';
 import type {
-  WizardMachineContext,
-  WizardMachineInput,
-  WizardMachineEvent,
+  InstallerMachineContext,
+  InstallerMachineInput,
+  InstallerMachineEvent,
   DetectionOutput,
   GitCheckOutput,
   AgentOutput,
@@ -10,18 +10,18 @@ import type {
   DiscoveryResult,
   CredentialSource,
   BranchCheckOutput,
-} from './wizard-core.types.js';
-import type { WizardOptions } from '../utils/types.js';
+} from './installer-core.types.js';
+import type { InstallerOptions } from '../utils/types.js';
 import type { DeviceAuthResult, DeviceAuthResponse } from './device-auth.js';
 import type { StagingCredentials } from './staging-api.js';
 import { getManualPrInstructions } from './post-install.js';
 import { hasGhCli } from '../utils/git-utils.js';
 
-export const wizardMachine = setup({
+export const installerMachine = setup({
   types: {
-    context: {} as WizardMachineContext,
-    input: {} as WizardMachineInput,
-    events: {} as WizardMachineEvent,
+    context: {} as InstallerMachineContext,
+    input: {} as InstallerMachineInput,
+    events: {} as InstallerMachineEvent,
   },
 
   actions: {
@@ -199,7 +199,7 @@ export const wizardMachine = setup({
     }),
 
     emitCancelled: ({ context }) => {
-      context.emitter.emit('complete', { success: false, summary: 'Wizard cancelled by user' });
+      context.emitter.emit('complete', { success: false, summary: 'Installer cancelled by user' });
     },
     emitError: ({ context }) => {
       const message = context.error?.message ?? 'An unexpected error occurred';
@@ -297,19 +297,19 @@ export const wizardMachine = setup({
   },
 
   actors: {
-    checkAuthentication: fromPromise<boolean, { options: WizardOptions }>(async () => {
+    checkAuthentication: fromPromise<boolean, { options: InstallerOptions }>(async () => {
       throw new Error('checkAuthentication not implemented - provide via machine.provide()');
     }),
-    detectIntegration: fromPromise<DetectionOutput, { options: WizardOptions }>(async () => {
+    detectIntegration: fromPromise<DetectionOutput, { options: InstallerOptions }>(async () => {
       throw new Error('detectIntegration not implemented - provide via machine.provide()');
     }),
     checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => {
       throw new Error('checkGitStatus not implemented - provide via machine.provide()');
     }),
-    configureEnvironment: fromPromise<void, { context: WizardMachineContext }>(async () => {
+    configureEnvironment: fromPromise<void, { context: InstallerMachineContext }>(async () => {
       throw new Error('configureEnvironment not implemented - provide via machine.provide()');
     }),
-    runAgent: fromPromise<AgentOutput, { context: WizardMachineContext }>(async () => {
+    runAgent: fromPromise<AgentOutput, { context: InstallerMachineContext }>(async () => {
       throw new Error('runAgent not implemented - provide via machine.provide()');
     }),
     // Credential discovery actors
@@ -324,7 +324,7 @@ export const wizardMachine = setup({
     }),
     runDeviceAuth: fromPromise<
       { result: DeviceAuthResult; deviceAuth: DeviceAuthResponse },
-      { emitter: WizardMachineContext['emitter'] }
+      { emitter: InstallerMachineContext['emitter'] }
     >(async () => {
       throw new Error('runDeviceAuth not implemented - provide via machine.provide()');
     }),
@@ -361,7 +361,7 @@ export const wizardMachine = setup({
     }),
   },
 }).createMachine({
-  id: 'wizard',
+  id: 'installer',
   initial: 'idle',
 
   context: ({ input }) => ({
@@ -489,7 +489,7 @@ export const wizardMachine = setup({
                   actions: ['emitGitConfirmed'],
                 },
                 GIT_CANCELLED: {
-                  target: '#wizard.cancelled',
+                  target: '#installer.cancelled',
                   actions: ['emitGitCancelled'],
                 },
               },
@@ -533,7 +533,7 @@ export const wizardMachine = setup({
                   target: 'done',
                 },
                 BRANCH_CANCEL: {
-                  target: '#wizard.cancelled',
+                  target: '#installer.cancelled',
                 },
               },
             },
@@ -591,7 +591,7 @@ export const wizardMachine = setup({
         checkingCliFlags: {
           always: [
             {
-              target: '#wizard.configuring',
+              target: '#installer.configuring',
               guard: 'hasCredentials',
               actions: [
                 assign({ credentialSource: () => 'cli' as CredentialSource }),
@@ -647,7 +647,7 @@ export const wizardMachine = setup({
               actions: assign({ envScanConsent: () => false }),
             },
             CANCEL: {
-              target: '#wizard.cancelled',
+              target: '#installer.cancelled',
               actions: { type: 'emitStateExit', params: { state: 'gatheringCredentials' } },
             },
           },
@@ -662,7 +662,7 @@ export const wizardMachine = setup({
             input: ({ context }) => ({ installDir: context.options.installDir }),
             onDone: [
               {
-                target: '#wizard.configuring',
+                target: '#installer.configuring',
                 guard: ({ event }) => {
                   const result = event.output as DiscoveryResult;
                   return result.found && !!result.clientId;
@@ -746,7 +746,7 @@ export const wizardMachine = setup({
             id: 'fetchStagingCredentials',
             src: 'fetchStagingCredentials',
             onDone: {
-              target: '#wizard.configuring',
+              target: '#installer.configuring',
               actions: [
                 assign({
                   credentials: ({ event }) => {
@@ -772,7 +772,7 @@ export const wizardMachine = setup({
           entry: ['emitCredentialsGathering'],
           on: {
             CREDENTIALS_SUBMITTED: {
-              target: '#wizard.configuring',
+              target: '#installer.configuring',
               actions: [
                 'assignCredentials',
                 assign({ credentialSource: () => 'manual' as CredentialSource }),
@@ -783,7 +783,7 @@ export const wizardMachine = setup({
               target: 'runningDeviceAuth',
             },
             CANCEL: {
-              target: '#wizard.cancelled',
+              target: '#installer.cancelled',
               actions: { type: 'emitStateExit', params: { state: 'gatheringCredentials' } },
             },
           },
@@ -868,7 +868,7 @@ export const wizardMachine = setup({
         checking: {
           always: [
             {
-              target: '#wizard.complete',
+              target: '#installer.complete',
               guard: 'shouldSkipPostInstall',
             },
             { target: 'detectingChanges' },
@@ -899,7 +899,7 @@ export const wizardMachine = setup({
           on: {
             COMMIT_APPROVED: { target: 'generatingCommitMessage' },
             COMMIT_DECLINED: { target: 'done' },
-            CANCEL: { target: '#wizard.cancelled' },
+            CANCEL: { target: '#installer.cancelled' },
           },
         },
 
@@ -956,7 +956,7 @@ export const wizardMachine = setup({
           on: {
             PR_APPROVED: { target: 'generatingPrDescription' },
             PR_DECLINED: { target: 'done' },
-            CANCEL: { target: '#wizard.cancelled' },
+            CANCEL: { target: '#installer.cancelled' },
           },
         },
 
@@ -1043,5 +1043,5 @@ export const wizardMachine = setup({
   },
 });
 
-export type WizardMachine = typeof wizardMachine;
-export type WizardActor = ActorRefFrom<typeof wizardMachine>;
+export type InstallerMachine = typeof installerMachine;
+export type InstallerActor = ActorRefFrom<typeof installerMachine>;

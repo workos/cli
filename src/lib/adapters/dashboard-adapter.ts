@@ -1,5 +1,5 @@
-import type { WizardAdapter, AdapterConfig } from './types.js';
-import type { WizardEventEmitter, WizardEvents } from '../events.js';
+import type { InstallerAdapter, AdapterConfig } from './types.js';
+import type { InstallerEventEmitter, InstallerEvents } from '../events.js';
 import chalk from 'chalk';
 
 /**
@@ -8,8 +8,8 @@ import chalk from 'chalk';
  * Wraps the existing Dashboard component and passes the emitter to it.
  * The Dashboard component already handles most event rendering internally.
  */
-export class DashboardAdapter implements WizardAdapter {
-  readonly emitter: WizardEventEmitter;
+export class DashboardAdapter implements InstallerAdapter {
+  readonly emitter: InstallerEventEmitter;
   private sendEvent: AdapterConfig['sendEvent'];
   private cleanup: (() => void) | null = null;
   private isStarted = false;
@@ -57,7 +57,7 @@ export class DashboardAdapter implements WizardAdapter {
   /**
    * Capture completion data for display after exit.
    */
-  private handleComplete = ({ success, summary }: WizardEvents['complete']): void => {
+  private handleComplete = ({ success, summary }: InstallerEvents['complete']): void => {
     this.completionData = { success, summary };
   };
 

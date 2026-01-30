@@ -13,7 +13,7 @@ export const config = {
 
   telemetry: {
     enabled: true,
-    eventName: 'wizard interaction',
+    eventName: 'installer interaction',
   },
 
   proxy: {
@@ -63,7 +63,7 @@ export const config = {
   branding: {
     showAsciiArt: true,
     useCompact: false,
-    compactAsciiArt: `⚡ WorkOS AuthKit Wizard`,
+    compactAsciiArt: `⚡ WorkOS AuthKit Installer`,
     asciiArt: `░██       ░██                     ░██         ░██████     ░██████
 ░██       ░██                     ░██        ░██   ░██   ░██   ░██
 ░██  ░██  ░██  ░███████  ░██░████ ░██    ░██░██     ░██ ░██

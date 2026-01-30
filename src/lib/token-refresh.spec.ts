@@ -6,7 +6,7 @@ import type { Credentials } from './credentials.js';
 
 // Create a mock home directory for all tests
 let testDir: string;
-let wizardDir: string;
+let installerDir: string;
 let credentialsFile: string;
 
 // Mock os.homedir BEFORE importing credentials module
@@ -35,8 +35,8 @@ const { ensureValidToken } = await import('./token-refresh.js');
 describe('token-refresh', () => {
   beforeEach(() => {
     testDir = mkdtempSync(join(tmpdir(), 'token-refresh-test-'));
-    wizardDir = join(testDir, '.workos');
-    credentialsFile = join(wizardDir, 'credentials.json');
+    installerDir = join(testDir, '.workos');
+    credentialsFile = join(installerDir, 'credentials.json');
     vi.clearAllMocks();
   });
 
@@ -45,8 +45,8 @@ describe('token-refresh', () => {
     if (existsSync(credentialsFile)) {
       unlinkSync(credentialsFile);
     }
-    if (existsSync(wizardDir)) {
-      rmdirSync(wizardDir);
+    if (existsSync(installerDir)) {
+      rmdirSync(installerDir);
     }
     if (existsSync(testDir)) {
       rmdirSync(testDir);
@@ -89,7 +89,7 @@ describe('token-refresh', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('Session expired');
-      expect(result.error).toContain('wizard login');
+      expect(result.error).toContain('workos login');
     });
 
     it('preserves credentials on valid token', async () => {

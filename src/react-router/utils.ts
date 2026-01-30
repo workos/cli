@@ -3,7 +3,7 @@ import fg from 'fast-glob';
 import { abortIfCancelled, getPackageDotJson } from '../utils/clack-utils.js';
 import clack from '../utils/clack.js';
 import { getVersionBucket } from '../utils/semver.js';
-import type { WizardOptions } from '../utils/types.js';
+import type { InstallerOptions } from '../utils/types.js';
 import { IGNORE_PATTERNS, Integration } from '../lib/constants.js';
 import { getPackageVersion } from '../utils/package-json.js';
 import chalk from 'chalk';
@@ -28,7 +28,7 @@ export function getReactRouterVersionBucket(version: string | undefined): string
 /**
  * Check if react-router.config.ts exists (indicates framework mode - React Router v7)
  */
-async function hasReactRouterConfig({ installDir }: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+async function hasReactRouterConfig({ installDir }: Pick<InstallerOptions, 'installDir'>): Promise<boolean> {
   const configMatches = await fg('**/react-router.config.@(ts|js|tsx|jsx)', {
     dot: true,
     cwd: installDir,
@@ -41,7 +41,7 @@ async function hasReactRouterConfig({ installDir }: Pick<WizardOptions, 'install
 /**
  * Search for createBrowserRouter usage in source files
  */
-async function hasCreateBrowserRouter({ installDir }: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+async function hasCreateBrowserRouter({ installDir }: Pick<InstallerOptions, 'installDir'>): Promise<boolean> {
   const sourceFiles = await fg('**/*.@(ts|tsx|js|jsx)', {
     dot: true,
     cwd: installDir,
@@ -69,7 +69,7 @@ async function hasCreateBrowserRouter({ installDir }: Pick<WizardOptions, 'insta
 /**
  * Search for declarative BrowserRouter usage
  */
-async function hasDeclarativeRouter({ installDir }: Pick<WizardOptions, 'installDir'>): Promise<boolean> {
+async function hasDeclarativeRouter({ installDir }: Pick<InstallerOptions, 'installDir'>): Promise<boolean> {
   const sourceFiles = await fg('**/*.@(ts|tsx|js|jsx)', {
     dot: true,
     cwd: installDir,
@@ -101,7 +101,7 @@ async function hasDeclarativeRouter({ installDir }: Pick<WizardOptions, 'install
 /**
  * Detect React Router mode
  */
-export async function getReactRouterMode(options: WizardOptions): Promise<ReactRouterMode> {
+export async function getReactRouterMode(options: InstallerOptions): Promise<ReactRouterMode> {
   const { installDir } = options;
 
   // First, get the React Router version

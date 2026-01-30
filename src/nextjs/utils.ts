@@ -2,7 +2,7 @@ import fg from 'fast-glob';
 import { abortIfCancelled } from '../utils/clack-utils.js';
 import clack from '../utils/clack.js';
 import { getVersionBucket } from '../utils/semver.js';
-import type { WizardOptions } from '../utils/types.js';
+import type { InstallerOptions } from '../utils/types.js';
 import { IGNORE_PATTERNS, Integration } from '../lib/constants.js';
 
 export function getNextJsVersionBucket(version: string | undefined): string {
@@ -14,7 +14,7 @@ export enum NextJsRouter {
   PAGES_ROUTER = 'pages-router',
 }
 
-export async function getNextJsRouter({ installDir }: Pick<WizardOptions, 'installDir'>): Promise<NextJsRouter> {
+export async function getNextJsRouter({ installDir }: Pick<InstallerOptions, 'installDir'>): Promise<NextJsRouter> {
   const pagesMatches = await fg('**/pages/_app.@(ts|tsx|js|jsx)', {
     dot: true,
     cwd: installDir,

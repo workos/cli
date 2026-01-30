@@ -1,8 +1,8 @@
 import { readEnvironment } from './utils/environment.js';
 import { runWithCore } from './lib/run-with-core.js';
-import type { WizardOptions } from './utils/types.js';
+import type { InstallerOptions } from './utils/types.js';
 import type { Integration } from './lib/constants.js';
-import { createWizardEventEmitter } from './lib/events.js';
+import { createInstallerEventEmitter } from './lib/events.js';
 import path from 'path';
 import { EventEmitter } from 'events';
 
@@ -32,15 +32,15 @@ type Args = {
  * Main entry point for the wizard CLI.
  * Builds options from args and delegates to the core.
  */
-export async function runWizard(argv: Args): Promise<void> {
+export async function runInstaller(argv: Args): Promise<void> {
   const options = buildOptions(argv);
   await runWithCore(options);
 }
 
 /**
- * Build WizardOptions from CLI args and environment.
+ * Build InstallerOptions from CLI args and environment.
  */
-function buildOptions(argv: Args): WizardOptions {
+function buildOptions(argv: Args): InstallerOptions {
   const envArgs = readEnvironment();
   const merged = { ...argv, ...envArgs };
 
@@ -63,7 +63,7 @@ function buildOptions(argv: Args): WizardOptions {
     noValidate: merged.noValidate ?? false,
     noCommit: merged.noCommit ?? false,
     direct: merged.direct ?? false,
-    emitter: createWizardEventEmitter(), // Will be replaced in runWithCore
+    emitter: createInstallerEventEmitter(), // Will be replaced in runWithCore
   };
 }
 

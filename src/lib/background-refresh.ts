@@ -68,7 +68,7 @@ export function startBackgroundRefresh(options: BackgroundRefreshOptions): Backg
 
     logInfo('[background-refresh] Token needs refresh, initiating...');
 
-    analytics.capture('wizard.token.refresh', {
+    analytics.capture('installer.token.refresh', {
       action: 'refresh_attempt',
       trigger: 'proactive',
       time_until_expiry_ms: creds.expiresAt - Date.now(),
@@ -88,7 +88,7 @@ export function startBackgroundRefresh(options: BackgroundRefreshOptions): Backg
         `[background-refresh] Token refreshed in ${durationMs}ms, new expiry: ${new Date(result.expiresAt).toISOString()}`,
       );
 
-      analytics.capture('wizard.token.refresh', {
+      analytics.capture('installer.token.refresh', {
         action: 'refresh_success',
         duration_ms: durationMs,
         token_rotated: !!result.refreshToken,
@@ -100,7 +100,7 @@ export function startBackgroundRefresh(options: BackgroundRefreshOptions): Backg
 
       logError(`[background-refresh] Refresh failed: ${result.error}`);
 
-      analytics.capture('wizard.token.refresh', {
+      analytics.capture('installer.token.refresh', {
         action: 'refresh_failure',
         error_type: result.errorType || 'unknown',
         error_message: result.error || 'Unknown error',

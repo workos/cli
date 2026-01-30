@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Box, Text, useStdout, useInput } from 'ink';
-import type { WizardEventEmitter } from '../../lib/events.js';
+import type { InstallerEventEmitter } from '../../lib/events.js';
 import { WelcomeArt } from './WelcomeArt.js';
 import {
   computeDiff,
@@ -14,7 +14,7 @@ import {
 } from '../lib/diff-utils.js';
 
 interface DiffPanelProps {
-  emitter: WizardEventEmitter;
+  emitter: InstallerEventEmitter;
   focused?: boolean;
   height?: number;
 }

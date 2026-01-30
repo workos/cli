@@ -50,7 +50,7 @@ export function initLogFile(): void {
     const timestamp = getSafeTimestamp();
     sessionLogPath = join(dir, `workos-${timestamp}.log`);
 
-    const header = `${'='.repeat(60)}\nWorkOS AuthKit Wizard Run: ${new Date().toISOString()}\n${'='.repeat(60)}\n`;
+    const header = `${'='.repeat(60)}\nWorkOS AuthKit Installer Run: ${new Date().toISOString()}\n${'='.repeat(60)}\n`;
     appendFileSync(sessionLogPath, header);
   } catch {
     sessionLogPath = null;

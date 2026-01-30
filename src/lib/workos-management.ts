@@ -1,5 +1,5 @@
 import type { Integration } from './constants.js';
-import { WIZARD_INTERACTION_EVENT_NAME } from './constants.js';
+import { INSTALLER_INTERACTION_EVENT_NAME } from './constants.js';
 import { analytics } from '../utils/analytics.js';
 import clack from '../utils/clack.js';
 import { getCallbackPath } from './port-detection.js';
@@ -145,7 +145,7 @@ export async function autoConfigureWorkOSEnvironment(
 
     const results: AutoConfigResult = { redirectUri, corsOrigin, homepageUrl };
 
-    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+    analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
       action: 'workos environment auto-configured',
       integration,
       port,
@@ -185,7 +185,7 @@ export async function autoConfigureWorkOSEnvironment(
 
     clack.log.info('You can configure these settings manually in the WorkOS dashboard.');
 
-    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+    analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
       action: 'workos environment auto-config failed',
       integration,
       error: message,

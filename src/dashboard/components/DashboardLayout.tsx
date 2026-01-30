@@ -7,7 +7,7 @@ import { DiffPanel } from './DiffPanel.js';
 import { AnimatedLogo } from './AnimatedLogo.js';
 import { CredentialsForm } from './CredentialsForm.js';
 import { ConfirmPrompt } from './ConfirmPrompt.js';
-import type { WizardEventEmitter } from '../../lib/events.js';
+import type { InstallerEventEmitter } from '../../lib/events.js';
 
 type FocusedPanel = 'changes' | 'output';
 
@@ -19,7 +19,7 @@ interface ConfirmRequest {
 }
 
 interface DashboardLayoutProps {
-  emitter: WizardEventEmitter;
+  emitter: InstallerEventEmitter;
   focusedPanel?: FocusedPanel;
   confirmRequest?: ConfirmRequest | null;
   onConfirm?: (confirmed: boolean) => void;

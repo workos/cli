@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { CLIAdapter } from '../cli-adapter.js';
-import { createWizardEventEmitter } from '../../events.js';
+import { createInstallerEventEmitter } from '../../events.js';
 
 // Mock console.log to capture styled output
 const mockConsoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -35,7 +35,7 @@ vi.mock('../../settings.js', () => ({
     branding: {
       showAsciiArt: false,
       useCompact: true,
-      compactAsciiArt: 'Test Wizard',
+      compactAsciiArt: 'Test Installer',
       asciiArt: 'Big Art',
     },
   })),
@@ -66,12 +66,12 @@ vi.mock('../../../utils/cli-symbols.js', () => ({
 }));
 
 describe('CLIAdapter', () => {
-  let emitter: ReturnType<typeof createWizardEventEmitter>;
+  let emitter: ReturnType<typeof createInstallerEventEmitter>;
   let sendEvent: ReturnType<typeof vi.fn>;
   let adapter: CLIAdapter;
 
   beforeEach(() => {
-    emitter = createWizardEventEmitter();
+    emitter = createInstallerEventEmitter();
     sendEvent = vi.fn();
     adapter = new CLIAdapter({ emitter, sendEvent });
   });
@@ -97,7 +97,7 @@ describe('CLIAdapter', () => {
       const clack = await import('../../../utils/clack.js');
       await adapter.start();
 
-      expect(clack.default.intro).toHaveBeenCalledWith('Welcome to the WorkOS AuthKit setup wizard');
+      expect(clack.default.intro).toHaveBeenCalledWith('Welcome to the WorkOS AuthKit installer');
     });
 
     it('is idempotent', async () => {

@@ -1,5 +1,5 @@
 /**
- * Telemetry event types for wizard → gateway communication.
+ * Telemetry event types for installer → gateway communication.
  * The gateway converts these to OTel format.
  */
 
@@ -13,8 +13,8 @@ export interface TelemetryEvent {
 export interface SessionStartEvent extends TelemetryEvent {
   type: 'session.start';
   attributes: {
-    'wizard.version': string;
-    'wizard.mode': 'cli' | 'tui';
+    'installer.version': string;
+    'installer.mode': 'cli' | 'tui';
     'workos.user_id'?: string;
     'workos.org_id'?: string;
   };
@@ -23,8 +23,8 @@ export interface SessionStartEvent extends TelemetryEvent {
 export interface SessionEndEvent extends TelemetryEvent {
   type: 'session.end';
   attributes: {
-    'wizard.outcome': 'success' | 'error' | 'cancelled';
-    'wizard.duration_ms': number;
+    'installer.outcome': 'success' | 'error' | 'cancelled';
+    'installer.duration_ms': number;
   } & Record<string, string | number | boolean>;
 }
 

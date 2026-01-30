@@ -1,6 +1,6 @@
 import { SPINNER_MESSAGE, type FrameworkConfig } from './framework-config.js';
 import { validateInstallation } from './validation/index.js';
-import type { WizardOptions } from '../utils/types.js';
+import type { InstallerOptions } from '../utils/types.js';
 import {
   ensurePackageIsInstalled,
   getOrAskForWorkOSCredentials,
@@ -8,7 +8,7 @@ import {
   isUsingTypeScript,
 } from '../utils/clack-utils.js';
 import { analytics } from '../utils/analytics.js';
-import { WIZARD_INTERACTION_EVENT_NAME } from './constants.js';
+import { INSTALLER_INTERACTION_EVENT_NAME } from './constants.js';
 import { initializeAgent, runAgent } from './agent-interface.js';
 import { uploadEnvironmentVariablesStep } from '../steps/index.js';
 import { autoConfigureWorkOSEnvironment } from './workos-management.js';
@@ -21,7 +21,7 @@ import { writeEnvLocal } from './env-writer.js';
  *
  * @returns A detailed summary of what was done and next steps
  */
-export async function runAgentWizard(config: FrameworkConfig, options: WizardOptions): Promise<string> {
+export async function runAgentInstaller(config: FrameworkConfig, options: InstallerOptions): Promise<string> {
   // Emit status for UI adapters to render
   options.emitter?.emit('status', {
     message: `Setting up WorkOS AuthKit for ${config.metadata.name}`,
@@ -43,7 +43,7 @@ export async function runAgentWizard(config: FrameworkConfig, options: WizardOpt
     analytics.setTag(`${config.metadata.integration}-version`, versionBucket);
   }
 
-  analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+  analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
     action: 'started agent integration',
     integration: config.metadata.integration,
   });
@@ -285,7 +285,7 @@ function buildCompletionSummary(
   }
 
   lines.push('');
-  lines.push('Note: This wizard uses an LLM agent to analyze and modify your project. Please review the changes made.');
+  lines.push('Note: This installer uses an LLM agent to analyze and modify your project. Please review the changes made.');
 
   return lines.join('\n');
 }

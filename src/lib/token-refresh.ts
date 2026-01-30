@@ -27,7 +27,7 @@ export async function ensureValidToken(): Promise<TokenValidationResult> {
     logInfo('[ensureValidToken] Token expired, re-authentication required');
     return {
       success: false,
-      error: 'Session expired. Run `wizard login` to re-authenticate.',
+      error: 'Session expired. Run `workos login` to re-authenticate.',
     };
   }
 
