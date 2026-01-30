@@ -33,7 +33,6 @@ import { getCliAuthClientId, getAuthkitDomain } from './settings.js';
 import { analytics } from '../utils/analytics.js';
 import { getVersion } from './settings.js';
 import { getLlmGatewayUrlFromHost } from '../utils/urls.js';
-import { runLogin } from '../commands/login.js';
 import { isInGitRepo, getUncommittedOrUntrackedFiles } from '../utils/clack-utils.js';
 import {
   getCurrentBranch,
@@ -149,24 +148,13 @@ export async function runWithCore(options: WizardOptions): Promise<void> {
     actors: {
       checkAuthentication: fromPromise(async () => {
         const token = getAccessToken();
-        if (token) {
-          // Set telemetry from existing credentials
-          const creds = getCredentials();
-          if (creds) {
-            analytics.setAccessToken(creds.accessToken);
-            analytics.setDistinctId(creds.userId);
-          }
-          return true;
+        if (!token) {
+          // This should rarely happen since bin.ts handles auth first
+          // But keep as safety net for programmatic usage
+          throw new Error('Not authenticated. Run `wizard login` first.');
         }
 
-        await runLogin();
-
-        const newToken = getAccessToken();
-        if (!newToken) {
-          throw new Error('Authentication failed. Please try again.');
-        }
-
-        // Set telemetry after fresh login
+        // Set telemetry from existing credentials
         const creds = getCredentials();
         if (creds) {
           analytics.setAccessToken(creds.accessToken);
