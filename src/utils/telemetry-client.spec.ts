@@ -10,6 +10,12 @@ vi.mock('./debug.js', () => ({
   debug: vi.fn(),
 }));
 
+// Mock credentials module
+const mockGetCredentials = vi.fn();
+vi.mock('../lib/credentials.js', () => ({
+  getCredentials: () => mockGetCredentials(),
+}));
+
 // Import after mocks are set up
 const { TelemetryClient } = await import('./telemetry-client.js');
 
@@ -20,6 +26,8 @@ describe('TelemetryClient', () => {
     client = new TelemetryClient();
     mockFetch.mockReset();
     mockFetch.mockResolvedValue({ ok: true });
+    mockGetCredentials.mockReset();
+    mockGetCredentials.mockReturnValue(null); // Default: no credentials
   });
 
   afterEach(() => {
@@ -39,7 +47,7 @@ describe('TelemetryClient', () => {
   });
 
   describe('setAccessToken', () => {
-    it('includes Authorization header when token is set', async () => {
+    it('uses cached token as fallback when no fresh credentials', async () => {
       client.setGatewayUrl('http://localhost:8000');
       client.setAccessToken('my-secret-token');
       client.queueEvent({ type: 'session.start', sessionId: '123', timestamp: new Date().toISOString() });
@@ -51,6 +59,24 @@ describe('TelemetryClient', () => {
         expect.objectContaining({
           headers: expect.objectContaining({
             Authorization: 'Bearer my-secret-token',
+          }),
+        }),
+      );
+    });
+
+    it('prefers fresh credentials over cached token', async () => {
+      mockGetCredentials.mockReturnValue({ accessToken: 'fresh-token' });
+      client.setGatewayUrl('http://localhost:8000');
+      client.setAccessToken('stale-cached-token');
+      client.queueEvent({ type: 'session.start', sessionId: '123', timestamp: new Date().toISOString() });
+
+      await client.flush();
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: 'Bearer fresh-token',
           }),
         }),
       );
