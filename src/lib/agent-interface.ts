@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import { debug, logInfo, logWarn, logError, initLogFile, getLogFilePath } from '../utils/debug.js';
 import type { InstallerOptions } from '../utils/types.js';
 import { analytics } from '../utils/analytics.js';
-import { WIZARD_INTERACTION_EVENT_NAME } from './constants.js';
+import { INSTALLER_INTERACTION_EVENT_NAME } from './constants.js';
 import { LINTING_TOOLS } from './safe-tools.js';
 import { getLlmGatewayUrlFromHost } from '../utils/urls.js';
 import { getConfig } from './settings.js';
@@ -59,11 +59,11 @@ export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
  */
 export enum AgentErrorType {
   /** Agent could not access the WorkOS MCP server */
-  MCP_MISSING = 'WIZARD_MCP_MISSING',
+  MCP_MISSING = 'INSTALLER_MCP_MISSING',
   /** Agent could not access the setup resource */
-  RESOURCE_MISSING = 'WIZARD_RESOURCE_MISSING',
+  RESOURCE_MISSING = 'INSTALLER_RESOURCE_MISSING',
   /** Agent execution failed (API error, auth error, etc.) */
-  EXECUTION_ERROR = 'WIZARD_EXECUTION_ERROR',
+  EXECUTION_ERROR = 'INSTALLER_EXECUTION_ERROR',
 }
 
 export type AgentConfig = {
@@ -150,7 +150,7 @@ function matchesAllowedPrefix(command: string): boolean {
  * - Piping to tail/head for output limiting is allowed
  * - Stderr redirection (2>&1) is allowed
  */
-export function wizardCanUseTool(
+export function installerCanUseTool(
   toolName: string,
   input: Record<string, unknown>,
 ): { behavior: 'allow'; updatedInput: Record<string, unknown> } | { behavior: 'deny'; message: string } {
@@ -165,7 +165,7 @@ export function wizardCanUseTool(
   if (DANGEROUS_OPERATORS.test(command)) {
     logWarn(`Denying bash command with dangerous operators: ${command}`);
     debug(`Denying bash command with dangerous operators: ${command}`);
-    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+    analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
       action: 'bash command denied',
       reason: 'dangerous operators',
       command,
@@ -188,7 +188,7 @@ export function wizardCanUseTool(
     if (/[|&]/.test(baseCommand)) {
       logWarn(`Denying bash command with multiple pipes: ${command}`);
       debug(`Denying bash command with multiple pipes: ${command}`);
-      analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+      analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
         action: 'bash command denied',
         reason: 'multiple pipes',
         command,
@@ -210,7 +210,7 @@ export function wizardCanUseTool(
   if (/[|&]/.test(normalized)) {
     logWarn(`Denying bash command with pipe/&: ${command}`);
     debug(`Denying bash command with pipe/&: ${command}`);
-    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+    analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
       action: 'bash command denied',
       reason: 'disallowed pipe',
       command,
@@ -230,7 +230,7 @@ export function wizardCanUseTool(
 
   logWarn(`Denying bash command: ${command}`);
   debug(`Denying bash command: ${command}`);
-  analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+  analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
     action: 'bash command denied',
     reason: 'not in allowlist',
     command,
@@ -481,7 +481,7 @@ export async function runAgent(
         env: agentConfig.sdkEnv,
         canUseTool: (toolName: string, input: unknown) => {
           logInfo('canUseTool called:', { toolName, input });
-          const result = wizardCanUseTool(toolName, input as Record<string, unknown>);
+          const result = installerCanUseTool(toolName, input as Record<string, unknown>);
           logInfo('canUseTool result:', result);
           return Promise.resolve(result);
         },
@@ -533,7 +533,7 @@ export async function runAgent(
     }
 
     logInfo(`Agent run completed in ${Math.round(durationMs / 1000)}s`);
-    analytics.capture(WIZARD_INTERACTION_EVENT_NAME, {
+    analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
       action: 'agent integration completed',
       duration_ms: durationMs,
       duration_seconds: Math.round(durationMs / 1000),

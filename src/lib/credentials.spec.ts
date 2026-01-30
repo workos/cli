@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 
 // Create a mock home directory for all tests
 let testDir: string;
-let wizardDir: string;
+let installerDir: string;
 let credentialsFile: string;
 
 // Mock os.homedir BEFORE importing credentials module
@@ -38,8 +38,8 @@ import type { Credentials } from './credentials.js';
 describe('credentials', () => {
   beforeEach(() => {
     testDir = mkdtempSync(join(tmpdir(), 'credentials-test-'));
-    wizardDir = join(testDir, '.workos');
-    credentialsFile = join(wizardDir, 'credentials.json');
+    installerDir = join(testDir, '.workos');
+    credentialsFile = join(installerDir, 'credentials.json');
   });
 
   afterEach(() => {
@@ -47,8 +47,8 @@ describe('credentials', () => {
     if (existsSync(credentialsFile)) {
       unlinkSync(credentialsFile);
     }
-    if (existsSync(wizardDir)) {
-      rmdirSync(wizardDir);
+    if (existsSync(installerDir)) {
+      rmdirSync(installerDir);
     }
     if (existsSync(testDir)) {
       rmdirSync(testDir);
@@ -73,7 +73,7 @@ describe('credentials', () => {
   describe('saveCredentials', () => {
     it('creates .workos directory if it does not exist', () => {
       saveCredentials(validCreds);
-      expect(existsSync(wizardDir)).toBe(true);
+      expect(existsSync(installerDir)).toBe(true);
     });
 
     it('creates credentials file', () => {
@@ -100,7 +100,7 @@ describe('credentials', () => {
 
     it('creates directory with 700 permissions', () => {
       saveCredentials(validCreds);
-      const stats = statSync(wizardDir);
+      const stats = statSync(installerDir);
       const mode = stats.mode & 0o777;
       expect(mode).toBe(0o700);
     });

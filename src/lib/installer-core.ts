@@ -361,7 +361,7 @@ export const installerMachine = setup({
     }),
   },
 }).createMachine({
-  id: 'wizard',
+  id: 'installer',
   initial: 'idle',
 
   context: ({ input }) => ({
@@ -489,7 +489,7 @@ export const installerMachine = setup({
                   actions: ['emitGitConfirmed'],
                 },
                 GIT_CANCELLED: {
-                  target: '#wizard.cancelled',
+                  target: '#installer.cancelled',
                   actions: ['emitGitCancelled'],
                 },
               },
@@ -533,7 +533,7 @@ export const installerMachine = setup({
                   target: 'done',
                 },
                 BRANCH_CANCEL: {
-                  target: '#wizard.cancelled',
+                  target: '#installer.cancelled',
                 },
               },
             },
@@ -591,7 +591,7 @@ export const installerMachine = setup({
         checkingCliFlags: {
           always: [
             {
-              target: '#wizard.configuring',
+              target: '#installer.configuring',
               guard: 'hasCredentials',
               actions: [
                 assign({ credentialSource: () => 'cli' as CredentialSource }),
@@ -647,7 +647,7 @@ export const installerMachine = setup({
               actions: assign({ envScanConsent: () => false }),
             },
             CANCEL: {
-              target: '#wizard.cancelled',
+              target: '#installer.cancelled',
               actions: { type: 'emitStateExit', params: { state: 'gatheringCredentials' } },
             },
           },
@@ -662,7 +662,7 @@ export const installerMachine = setup({
             input: ({ context }) => ({ installDir: context.options.installDir }),
             onDone: [
               {
-                target: '#wizard.configuring',
+                target: '#installer.configuring',
                 guard: ({ event }) => {
                   const result = event.output as DiscoveryResult;
                   return result.found && !!result.clientId;
@@ -746,7 +746,7 @@ export const installerMachine = setup({
             id: 'fetchStagingCredentials',
             src: 'fetchStagingCredentials',
             onDone: {
-              target: '#wizard.configuring',
+              target: '#installer.configuring',
               actions: [
                 assign({
                   credentials: ({ event }) => {
@@ -772,7 +772,7 @@ export const installerMachine = setup({
           entry: ['emitCredentialsGathering'],
           on: {
             CREDENTIALS_SUBMITTED: {
-              target: '#wizard.configuring',
+              target: '#installer.configuring',
               actions: [
                 'assignCredentials',
                 assign({ credentialSource: () => 'manual' as CredentialSource }),
@@ -783,7 +783,7 @@ export const installerMachine = setup({
               target: 'runningDeviceAuth',
             },
             CANCEL: {
-              target: '#wizard.cancelled',
+              target: '#installer.cancelled',
               actions: { type: 'emitStateExit', params: { state: 'gatheringCredentials' } },
             },
           },
@@ -868,7 +868,7 @@ export const installerMachine = setup({
         checking: {
           always: [
             {
-              target: '#wizard.complete',
+              target: '#installer.complete',
               guard: 'shouldSkipPostInstall',
             },
             { target: 'detectingChanges' },
@@ -899,7 +899,7 @@ export const installerMachine = setup({
           on: {
             COMMIT_APPROVED: { target: 'generatingCommitMessage' },
             COMMIT_DECLINED: { target: 'done' },
-            CANCEL: { target: '#wizard.cancelled' },
+            CANCEL: { target: '#installer.cancelled' },
           },
         },
 
@@ -956,7 +956,7 @@ export const installerMachine = setup({
           on: {
             PR_APPROVED: { target: 'generatingPrDescription' },
             PR_DECLINED: { target: 'done' },
-            CANCEL: { target: '#wizard.cancelled' },
+            CANCEL: { target: '#installer.cancelled' },
           },
         },
 

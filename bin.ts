@@ -45,7 +45,7 @@ function withAuth<T>(handler: (argv: T) => Promise<void>): (argv: T) => Promise<
   };
 }
 
-const wizardOptions = {
+const installerOptions = {
   direct: {
     alias: 'D',
     default: false,
@@ -168,7 +168,7 @@ yargs(hideBin(process.argv))
   .command(
     'install',
     'Install WorkOS AuthKit into your project',
-    (yargs) => yargs.options(wizardOptions),
+    (yargs) => yargs.options(installerOptions),
     withAuth(async (argv) => {
       const { handleInstall } = await import('./src/commands/install.js');
       await handleInstall(argv);
@@ -177,7 +177,7 @@ yargs(hideBin(process.argv))
   .command(
     'dashboard',
     false, // hidden from help
-    (yargs) => yargs.options(wizardOptions),
+    (yargs) => yargs.options(installerOptions),
     withAuth(async (argv) => {
       const { handleInstall } = await import('./src/commands/install.js');
       await handleInstall({ ...argv, dashboard: true });
