@@ -29,6 +29,7 @@
     "jsx": "react-jsx",
 
     // Output
+    "rootDir": "./src",
     "outDir": "./dist",
 
     // JSON imports with import attributes
@@ -43,6 +44,6 @@
     "types": ["node"],
     "typeRoots": ["./node_modules/@types", "./types"]
   },
-  "include": ["bin.ts", "src/**/*", "types/**/*"],
+  "include": ["src/**/*", "types/**/*"],
   "exclude": ["node_modules", "dist", "**/*.spec.ts"]
 }

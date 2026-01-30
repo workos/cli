@@ -8,13 +8,13 @@ if (process.argv.includes('--local') || process.env.INSTALLER_DEV) {
 }
 
 import { satisfies } from 'semver';
-import { red } from './src/utils/logging.js';
-import { getConfig } from './src/lib/settings.js';
+import { red } from './utils/logging.js';
+import { getConfig } from './lib/settings.js';
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import chalk from 'chalk';
-import { ensureAuthenticated } from './src/lib/ensure-auth.js';
+import { ensureAuthenticated } from './lib/ensure-auth.js';
 
 const NODE_VERSION_RANGE = getConfig().nodeVersion;
 
@@ -27,8 +27,8 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
   process.exit(1);
 }
 
-import { isNonInteractiveEnvironment } from './src/utils/environment.js';
-import clack from './src/utils/clack.js';
+import { isNonInteractiveEnvironment } from './utils/environment.js';
+import clack from './utils/clack.js';
 
 // Shared options for wizard commands (default and dashboard)
 /**
@@ -125,12 +125,12 @@ const installerOptions = {
 yargs(hideBin(process.argv))
   .env('WORKOS_INSTALLER')
   .command('login', 'Authenticate with WorkOS', {}, async () => {
-    const { runLogin } = await import('./src/commands/login.js');
+    const { runLogin } = await import('./commands/login.js');
     await runLogin();
     process.exit(0);
   })
   .command('logout', 'Remove stored credentials', {}, async () => {
-    const { runLogout } = await import('./src/commands/logout.js');
+    const { runLogout } = await import('./commands/logout.js');
     await runLogout();
   })
   .command(
@@ -157,7 +157,7 @@ yargs(hideBin(process.argv))
         });
     },
     withAuth(async (argv) => {
-      const { runInstallSkill } = await import('./src/commands/install-skill.js');
+      const { runInstallSkill } = await import('./commands/install-skill.js');
       await runInstallSkill({
         list: argv.list as boolean | undefined,
         skill: argv.skill as string[] | undefined,
@@ -170,7 +170,7 @@ yargs(hideBin(process.argv))
     'Install WorkOS AuthKit into your project',
     (yargs) => yargs.options(installerOptions),
     withAuth(async (argv) => {
-      const { handleInstall } = await import('./src/commands/install.js');
+      const { handleInstall } = await import('./commands/install.js');
       await handleInstall(argv);
     }),
   )
@@ -179,7 +179,7 @@ yargs(hideBin(process.argv))
     false, // hidden from help
     (yargs) => yargs.options(installerOptions),
     withAuth(async (argv) => {
-      const { handleInstall } = await import('./src/commands/install.js');
+      const { handleInstall } = await import('./commands/install.js');
       await handleInstall({ ...argv, dashboard: true });
     }),
   )
@@ -206,7 +206,7 @@ yargs(hideBin(process.argv))
       // Auth check happens HERE, after user confirms
       await ensureAuthenticated();
 
-      const { handleInstall } = await import('./src/commands/install.js');
+      const { handleInstall } = await import('./commands/install.js');
       await handleInstall({ dashboard: false } as any);
       process.exit(0);
     },
