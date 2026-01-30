@@ -15,6 +15,8 @@ import { getConfig } from './settings.js';
 import { getCredentials, hasCredentials } from './credentials.js';
 import { ensureValidToken } from './token-refresh.js';
 import type { WizardEventEmitter } from './events.js';
+import { startCredentialProxy, type CredentialProxyHandle } from './credential-proxy.js';
+import { getAuthkitDomain, getCliAuthClientId } from './settings.js';
 
 // File content cache for computing edit diffs
 const fileContentCache = new Map<string, string>();
@@ -22,6 +24,9 @@ const fileContentCache = new Map<string, string>();
 const pendingReads = new Map<string, string>();
 // Track tool start times by tool_use_id for telemetry
 const pendingToolCalls = new Map<string, { toolName: string; startTime: number }>();
+
+// Module-level variable to track proxy handle for cleanup
+let activeProxyHandle: CredentialProxyHandle | null = null;
 
 // Dynamic import cache for ESM module
 let _sdkModule: any = null;
@@ -75,6 +80,7 @@ type AgentRunConfig = {
   mcpServers: McpServersConfig;
   model: string;
   allowedTools: string[];
+  sdkEnv: Record<string, string | undefined>;
 };
 
 /**
@@ -249,6 +255,14 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
 
   try {
     let authMode: string;
+    // Build SDK env without mutating process.env
+    const sdkEnv: Record<string, string | undefined> = {
+      ...process.env,
+      // Disable experimental betas (like input_examples) that the LLM gateway doesn't support
+      CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
+      // Disable SDK telemetry - our gateway doesn't proxy /api/event_logging/batch
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 'true',
+    };
 
     if (options.direct) {
       // Direct mode: use user's Anthropic API key, skip gateway
@@ -260,9 +274,9 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
         );
       }
 
-      // Don't set ANTHROPIC_BASE_URL - SDK defaults to api.anthropic.com
-      delete process.env.ANTHROPIC_BASE_URL;
-      delete process.env.ANTHROPIC_AUTH_TOKEN;
+      // SDK defaults to api.anthropic.com when no base URL set
+      delete sdkEnv.ANTHROPIC_BASE_URL;
+      delete sdkEnv.ANTHROPIC_AUTH_TOKEN;
       authMode = 'direct:api.anthropic.com';
       logInfo('Direct mode: using ANTHROPIC_API_KEY, bypassing llm-gateway');
 
@@ -278,41 +292,83 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
           throw new Error('Not authenticated. Run `wizard login` to authenticate.');
         }
 
-        const refreshResult = await ensureValidToken();
-        if (!refreshResult.success) {
-          throw new Error(refreshResult.error || 'Authentication failed');
-        }
-      }
-
-      // Set gateway URL
-      process.env.ANTHROPIC_BASE_URL = gatewayUrl;
-
-      // Only send access token if not skipping auth
-      if (options.skipAuth) {
-        delete process.env.ANTHROPIC_AUTH_TOKEN;
-        authMode = `skip-auth:${gatewayUrl}`;
-        logInfo('Skipping auth - no token sent to gateway');
-      } else {
         const creds = getCredentials();
         if (!creds) {
           throw new Error('Not authenticated. Run `wizard login` to authenticate.');
         }
-        process.env.ANTHROPIC_AUTH_TOKEN = creds.accessToken;
-        authMode = options.local ? `local-gateway:${gatewayUrl}` : `workos-gateway:${gatewayUrl}`;
-        logInfo('Sending access token to gateway');
+
+        // Check if we have refresh token capability and proxy is not disabled
+        if (creds.refreshToken && process.env.WIZARD_DISABLE_PROXY !== '1') {
+          // Start credential proxy with lazy refresh
+          logInfo('[agent-interface] Starting credential proxy with lazy refresh...');
+          const appConfig = getConfig();
+
+          activeProxyHandle = await startCredentialProxy({
+            upstreamUrl: gatewayUrl,
+            refresh: {
+              authkitDomain: getAuthkitDomain(),
+              clientId: getCliAuthClientId(),
+              refreshThresholdMs: appConfig.proxy.refreshThresholdMs,
+              onRefreshSuccess: () => {
+                options.emitter?.emit('status', { message: 'Session extended' });
+              },
+              onRefreshExpired: () => {
+                logError('[agent-interface] Session expired, refresh token invalid');
+                options.emitter?.emit('error', {
+                  message: 'Session expired. Run `wizard login` to re-authenticate.',
+                });
+              },
+            },
+          });
+
+          // Point SDK at proxy instead of direct gateway
+          sdkEnv.ANTHROPIC_BASE_URL = activeProxyHandle.url;
+          logInfo(`[agent-interface] Using credential proxy at ${activeProxyHandle.url}`);
+
+          // Proxy handles auth, so we don't set ANTHROPIC_AUTH_TOKEN
+          delete sdkEnv.ANTHROPIC_AUTH_TOKEN;
+          authMode = `proxy:${activeProxyHandle.url}→${gatewayUrl}`;
+        } else {
+          // No refresh token OR proxy disabled - fall back to old behavior (5 min limit)
+          if (!creds.refreshToken) {
+            logWarn('[agent-interface] No refresh token available, session limited to 5 minutes');
+            logWarn('[agent-interface] Run `wizard login` to enable extended sessions');
+            options.emitter?.emit('status', {
+              message: 'Note: Run `wizard login` to enable extended sessions',
+            });
+          } else {
+            logWarn('[agent-interface] Proxy disabled via WIZARD_DISABLE_PROXY');
+          }
+
+          const refreshResult = await ensureValidToken();
+          if (!refreshResult.success) {
+            throw new Error(refreshResult.error || 'Authentication failed');
+          }
+
+          sdkEnv.ANTHROPIC_BASE_URL = gatewayUrl;
+          sdkEnv.ANTHROPIC_AUTH_TOKEN = creds.accessToken;
+          authMode = options.local ? `local-gateway:${gatewayUrl}` : `workos-gateway:${gatewayUrl}`;
+          logInfo('Sending access token to gateway (legacy mode)');
+        }
+      } else if (options.skipAuth) {
+        // Skip auth mode - direct to gateway without auth
+        sdkEnv.ANTHROPIC_BASE_URL = gatewayUrl;
+        delete sdkEnv.ANTHROPIC_AUTH_TOKEN;
+        authMode = `skip-auth:${gatewayUrl}`;
+        logInfo('Skipping auth - no token sent to gateway');
+      } else {
+        // Local mode without auth
+        sdkEnv.ANTHROPIC_BASE_URL = gatewayUrl;
+        delete sdkEnv.ANTHROPIC_AUTH_TOKEN;
+        authMode = `local-gateway:${gatewayUrl}`;
+        logInfo('Local mode - no token sent to gateway');
       }
 
-      logInfo('Configured LLM gateway:', gatewayUrl);
+      logInfo('Configured LLM gateway:', sdkEnv.ANTHROPIC_BASE_URL);
 
       // Set analytics tag for gateway mode
-      analytics.setTag('api_mode', 'gateway');
+      analytics.setTag('api_mode', activeProxyHandle ? 'gateway-proxy' : 'gateway');
     }
-
-    // Disable experimental betas (like input_examples) that the LLM gateway doesn't support
-    process.env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS = 'true';
-
-    // Disable SDK telemetry - our gateway doesn't proxy /api/event_logging/batch
-    process.env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = 'true';
 
     // Configure WorkOS MCP docs server for accessing WorkOS documentation
     const agentRunConfig: AgentRunConfig = {
@@ -325,6 +381,7 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
       },
       model: getConfig().model,
       allowedTools: ['Skill', 'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch'],
+      sdkEnv,
     };
 
     const configInfo = { workingDirectory: agentRunConfig.workingDirectory, authMode, useMcp: false };
@@ -340,6 +397,12 @@ export async function initializeAgent(config: AgentConfig, options: WizardOption
 
     return agentRunConfig;
   } catch (error) {
+    // Clean up proxy if initialization fails
+    if (activeProxyHandle) {
+      logInfo('[agent-interface] Cleaning up proxy after init error');
+      await activeProxyHandle.stop();
+      activeProxyHandle = null;
+    }
     logError('Agent initialization error:', error);
     throw error;
   }
@@ -415,7 +478,7 @@ export async function runAgent(
         cwd: agentConfig.workingDirectory,
         permissionMode: 'acceptEdits',
         mcpServers: agentConfig.mcpServers,
-        env: { ...process.env },
+        env: agentConfig.sdkEnv,
         canUseTool: (toolName: string, input: unknown) => {
           logInfo('canUseTool called:', { toolName, input });
           const result = wizardCanUseTool(toolName, input as Record<string, unknown>);
@@ -483,6 +546,19 @@ export async function runAgent(
     logError('Agent run failed:', error);
     debug('Full error:', error);
     throw error;
+  } finally {
+    // Always clean up proxy when agent run completes
+    if (activeProxyHandle) {
+      logInfo('[agent-interface] Stopping credential proxy');
+
+      analytics.capture('wizard.proxy', {
+        action: 'stop',
+        port: activeProxyHandle.port,
+      });
+
+      await activeProxyHandle.stop();
+      activeProxyHandle = null;
+    }
   }
 }
 
@@ -687,4 +763,11 @@ function handleSDKMessage(
       break;
   }
   return undefined;
+}
+
+/**
+ * Get the active proxy handle (for testing/debugging).
+ */
+export function getActiveProxyHandle(): CredentialProxyHandle | null {
+  return activeProxyHandle;
 }

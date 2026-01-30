@@ -31,6 +31,7 @@ export interface DeviceAuthResult {
   expiresAt: number;
   userId: string;
   email?: string;
+  refreshToken?: string;
 }
 
 interface TokenResponse {
@@ -53,7 +54,7 @@ export class DeviceAuthError extends Error {
 }
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-const DEFAULT_SCOPES = ['openid', 'email', 'staging-environment:credentials:read'];
+const DEFAULT_SCOPES = ['openid', 'email', 'staging-environment:credentials:read', 'offline_access'];
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -190,5 +191,6 @@ function parseTokenResponse(data: TokenResponse): DeviceAuthResult {
     expiresAt: jwtExpiry ?? (data.expires_in ? Date.now() + data.expires_in * 1000 : Date.now() + 15 * 60 * 1000),
     userId: String(idPayload?.sub ?? 'unknown'),
     email: idPayload?.email as string | undefined,
+    refreshToken: data.refresh_token,
   };
 }

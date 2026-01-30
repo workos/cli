@@ -16,6 +16,11 @@ export const config = {
     eventName: 'wizard interaction',
   },
 
+  proxy: {
+    // Refresh token when it expires within this window (default: 1 minute)
+    refreshThresholdMs: 60_000,
+  },
+
   nodeVersion: '>=20.20',
 
   logging: {

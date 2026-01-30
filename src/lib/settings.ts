@@ -18,6 +18,9 @@ export interface InstallerConfig {
     enabled: boolean;
     eventName: string;
   };
+  proxy: {
+    refreshThresholdMs: number;
+  };
   nodeVersion: string;
   logging: {
     debugMode: boolean;

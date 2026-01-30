@@ -1,5 +1,6 @@
 import { debug } from './debug.js';
 import type { TelemetryEvent, TelemetryRequest } from './telemetry-types.js';
+import { getCredentials } from '../lib/credentials.js';
 
 /**
  * HTTP client that queues telemetry events and flushes them to the gateway.
@@ -35,8 +36,11 @@ export class TelemetryClient {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    if (this.accessToken) {
-      headers['Authorization'] = `Bearer ${this.accessToken}`;
+    // Read fresh credentials to handle token refresh mid-session
+    const freshCreds = getCredentials();
+    const token = freshCreds?.accessToken ?? this.accessToken;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
     }
 
     const controller = new AbortController();
