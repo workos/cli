@@ -70,7 +70,7 @@ async function doRefresh(): Promise<boolean> {
 
   logInfo('[credential-proxy] Starting token refresh...');
 
-  analytics.capture('wizard.token.refresh', {
+  analytics.capture('installer.token.refresh', {
     action: 'refresh_attempt',
     trigger: 'lazy',
   });
@@ -88,7 +88,7 @@ async function doRefresh(): Promise<boolean> {
       `[credential-proxy] Token refreshed in ${durationMs}ms, expires: ${new Date(result.expiresAt).toISOString()}`,
     );
 
-    analytics.capture('wizard.token.refresh', {
+    analytics.capture('installer.token.refresh', {
       action: 'refresh_success',
       duration_ms: durationMs,
       token_rotated: !!result.refreshToken,
@@ -102,7 +102,7 @@ async function doRefresh(): Promise<boolean> {
 
   logError(`[credential-proxy] Refresh failed: ${result.error}`);
 
-  analytics.capture('wizard.token.refresh', {
+  analytics.capture('installer.token.refresh', {
     action: 'refresh_failure',
     error_type: result.errorType || 'unknown',
     error_message: result.error || 'Unknown error',
@@ -223,7 +223,7 @@ export async function startCredentialProxy(options: CredentialProxyOptions): Pro
   }
 
   // Telemetry for proxy start
-  analytics.capture('wizard.proxy', {
+  analytics.capture('installer.proxy', {
     action: 'start',
     port,
     refresh_enabled: !!refreshConfig,
@@ -258,7 +258,7 @@ async function handleRequest(
     res.end(
       JSON.stringify({
         error: 'credentials_unavailable',
-        message: 'Not authenticated. Run `wizard login` first.',
+        message: 'Not authenticated. Run `workos login` first.',
       }),
     );
     return;

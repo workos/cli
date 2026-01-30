@@ -29,7 +29,7 @@ export const uploadEnvironmentVariablesStep = async (
   }
 
   if (!provider) {
-    analytics.capture('wizard interaction', {
+    analytics.capture('installer interaction', {
       action: 'not uploading environment variables',
       reason: 'no environment provider found',
       integration,
@@ -57,7 +57,7 @@ export const uploadEnvironmentVariablesStep = async (
   );
 
   if (!upload) {
-    analytics.capture('wizard interaction', {
+    analytics.capture('installer interaction', {
       action: 'not uploading environment variables',
       reason: 'user declined to upload',
       provider: provider.name,
@@ -70,7 +70,7 @@ export const uploadEnvironmentVariablesStep = async (
     return await provider.uploadEnvVars(envVars);
   });
 
-  analytics.capture('wizard interaction', {
+  analytics.capture('installer interaction', {
     action: 'uploaded environment variables',
     provider: provider.name,
     integration,

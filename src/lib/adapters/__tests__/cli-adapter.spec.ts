@@ -35,7 +35,7 @@ vi.mock('../../settings.js', () => ({
     branding: {
       showAsciiArt: false,
       useCompact: true,
-      compactAsciiArt: 'Test Wizard',
+      compactAsciiArt: 'Test Installer',
       asciiArt: 'Big Art',
     },
   })),
@@ -97,7 +97,7 @@ describe('CLIAdapter', () => {
       const clack = await import('../../../utils/clack.js');
       await adapter.start();
 
-      expect(clack.default.intro).toHaveBeenCalledWith('Welcome to the WorkOS AuthKit setup wizard');
+      expect(clack.default.intro).toHaveBeenCalledWith('Welcome to the WorkOS AuthKit installer');
     });
 
     it('is idempotent', async () => {

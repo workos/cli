@@ -199,7 +199,7 @@ export const installerMachine = setup({
     }),
 
     emitCancelled: ({ context }) => {
-      context.emitter.emit('complete', { success: false, summary: 'Wizard cancelled by user' });
+      context.emitter.emit('complete', { success: false, summary: 'Installer cancelled by user' });
     },
     emitError: ({ context }) => {
       const message = context.error?.message ?? 'An unexpected error occurred';

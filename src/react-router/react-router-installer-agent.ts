@@ -111,10 +111,10 @@ export async function runReactRouterInstallerAgent(options: InstallerOptions): P
         REACT_ROUTER_AGENT_CONFIG.metadata.unsupportedVersionDocsUrl ?? REACT_ROUTER_AGENT_CONFIG.metadata.docsUrl;
 
       clack.log.warn(
-        `Sorry: the wizard can't help you with React Router ${reactRouterVersion}. Upgrade to React Router ${MINIMUM_REACT_ROUTER_VERSION} or later, or check out the manual setup guide.`,
+        `Sorry: the installer can't help you with React Router ${reactRouterVersion}. Upgrade to React Router ${MINIMUM_REACT_ROUTER_VERSION} or later, or check out the manual setup guide.`,
       );
       clack.log.info(`Setup React Router manually: ${chalk.cyan(docsUrl)}`);
-      clack.outro('WorkOS AuthKit wizard will see you next time!');
+      clack.outro('WorkOS AuthKit installer will see you next time!');
       return '';
     }
   }

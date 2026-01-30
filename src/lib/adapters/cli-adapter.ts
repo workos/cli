@@ -68,7 +68,7 @@ export class CLIAdapter implements InstallerAdapter {
       console.log(chalk.cyan(art));
       console.log();
     } else {
-      clack.intro('Welcome to the WorkOS AuthKit setup wizard');
+      clack.intro('Welcome to the WorkOS AuthKit installer');
     }
 
     // Handle Ctrl+C gracefully
@@ -78,7 +78,7 @@ export class CLIAdapter implements InstallerAdapter {
         this.spinner = null;
       }
       this.stopAgentUpdates();
-      clack.log.warn('Wizard cancelled');
+      clack.log.warn('Installer cancelled');
       clack.outro('Your project was not modified');
       process.exit(0);
     };
@@ -415,7 +415,7 @@ export class CLIAdapter implements InstallerAdapter {
 
     // Add actionable hints for common errors
     if (message.includes('authentication') || message.includes('auth')) {
-      clack.log.info('Try running: wizard logout && wizard');
+      clack.log.info('Try running: workos logout && workos install');
     }
     if (message.includes('ENOENT') || message.includes('not found')) {
       clack.log.info('Ensure you are in a project directory');

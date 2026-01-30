@@ -289,16 +289,16 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
       // Check/refresh authentication for production (unless skipping auth)
       if (!options.skipAuth && !options.local) {
         if (!hasCredentials()) {
-          throw new Error('Not authenticated. Run `wizard login` to authenticate.');
+          throw new Error('Not authenticated. Run `workos login` to authenticate.');
         }
 
         const creds = getCredentials();
         if (!creds) {
-          throw new Error('Not authenticated. Run `wizard login` to authenticate.');
+          throw new Error('Not authenticated. Run `workos login` to authenticate.');
         }
 
         // Check if we have refresh token capability and proxy is not disabled
-        if (creds.refreshToken && process.env.WIZARD_DISABLE_PROXY !== '1') {
+        if (creds.refreshToken && process.env.INSTALLER_DISABLE_PROXY !== '1') {
           // Start credential proxy with lazy refresh
           logInfo('[agent-interface] Starting credential proxy with lazy refresh...');
           const appConfig = getConfig();
@@ -315,7 +315,7 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
               onRefreshExpired: () => {
                 logError('[agent-interface] Session expired, refresh token invalid');
                 options.emitter?.emit('error', {
-                  message: 'Session expired. Run `wizard login` to re-authenticate.',
+                  message: 'Session expired. Run `workos login` to re-authenticate.',
                 });
               },
             },
@@ -332,12 +332,12 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
           // No refresh token OR proxy disabled - fall back to old behavior (5 min limit)
           if (!creds.refreshToken) {
             logWarn('[agent-interface] No refresh token available, session limited to 5 minutes');
-            logWarn('[agent-interface] Run `wizard login` to enable extended sessions');
+            logWarn('[agent-interface] Run `workos login` to enable extended sessions');
             options.emitter?.emit('status', {
-              message: 'Note: Run `wizard login` to enable extended sessions',
+              message: 'Note: Run `workos login` to enable extended sessions',
             });
           } else {
-            logWarn('[agent-interface] Proxy disabled via WIZARD_DISABLE_PROXY');
+            logWarn('[agent-interface] Proxy disabled via INSTALLER_DISABLE_PROXY');
           }
 
           const refreshResult = await ensureValidToken();
@@ -551,7 +551,7 @@ export async function runAgent(
     if (activeProxyHandle) {
       logInfo('[agent-interface] Stopping credential proxy');
 
-      analytics.capture('wizard.proxy', {
+      analytics.capture('installer.proxy', {
         action: 'stop',
         port: activeProxyHandle.port,
       });

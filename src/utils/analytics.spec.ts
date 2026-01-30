@@ -187,8 +187,8 @@ describe('Analytics', () => {
             type: 'session.start',
             sessionId: 'test-session-id-123',
             attributes: expect.objectContaining({
-              'wizard.version': '2.0.0',
-              'wizard.mode': 'tui',
+              'installer.version': '2.0.0',
+              'installer.mode': 'tui',
             }),
           }),
         );
@@ -217,7 +217,7 @@ describe('Analytics', () => {
             type: 'session.end',
             sessionId: 'test-session-id-123',
             attributes: expect.objectContaining({
-              'wizard.outcome': 'success',
+              'installer.outcome': 'success',
             }),
           }),
         );
@@ -229,7 +229,7 @@ describe('Analytics', () => {
         await analytics.shutdown('success');
 
         const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'session.end')[0];
-        expect(event.attributes['wizard.duration_ms']).toBeGreaterThanOrEqual(0);
+        expect(event.attributes['installer.duration_ms']).toBeGreaterThanOrEqual(0);
       });
 
       it('flushes events to telemetry client', async () => {
@@ -243,7 +243,7 @@ describe('Analytics', () => {
         expect(mockQueueEvent).toHaveBeenCalledWith(
           expect.objectContaining({
             attributes: expect.objectContaining({
-              'wizard.outcome': 'error',
+              'installer.outcome': 'error',
             }),
           }),
         );
@@ -255,7 +255,7 @@ describe('Analytics', () => {
         expect(mockQueueEvent).toHaveBeenCalledWith(
           expect.objectContaining({
             attributes: expect.objectContaining({
-              'wizard.outcome': 'cancelled',
+              'installer.outcome': 'cancelled',
             }),
           }),
         );
@@ -358,8 +358,8 @@ describe('Analytics', () => {
         await analytics.shutdown('success');
 
         const sessionEnd = mockQueueEvent.mock.calls.find((c) => c[0].type === 'session.end')[0];
-        expect(sessionEnd.attributes['wizard.agent.tokens.input']).toBe(1800);
-        expect(sessionEnd.attributes['wizard.agent.tokens.output']).toBe(800);
+        expect(sessionEnd.attributes['installer.agent.tokens.input']).toBe(1800);
+        expect(sessionEnd.attributes['installer.agent.tokens.output']).toBe(800);
       });
     });
 
@@ -372,7 +372,7 @@ describe('Analytics', () => {
         await analytics.shutdown('success');
 
         const sessionEnd = mockQueueEvent.mock.calls.find((c) => c[0].type === 'session.end')[0];
-        expect(sessionEnd.attributes['wizard.agent.iterations']).toBe(3);
+        expect(sessionEnd.attributes['installer.agent.iterations']).toBe(3);
       });
     });
   });

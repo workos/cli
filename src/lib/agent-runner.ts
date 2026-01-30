@@ -285,7 +285,7 @@ function buildCompletionSummary(
   }
 
   lines.push('');
-  lines.push('Note: This wizard uses an LLM agent to analyze and modify your project. Please review the changes made.');
+  lines.push('Note: This installer uses an LLM agent to analyze and modify your project. Please review the changes made.');
 
   return lines.join('\n');
 }

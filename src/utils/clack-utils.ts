@@ -50,7 +50,7 @@ export interface CliSetupConfigContent {
 export async function abort(message?: string, status?: number): Promise<never> {
   await analytics.shutdown('cancelled');
 
-  clack.outro(message ?? 'Wizard setup cancelled.');
+  clack.outro(message ?? 'Installer setup cancelled.');
   return process.exit(status ?? 1);
 }
 
@@ -68,7 +68,7 @@ export async function abortIfCancelled<T>(
     const docsUrl = integration ? INTEGRATION_CONFIG[integration].docsUrl : 'https://workos.com/docs/user-management';
 
     clack.cancel(
-      `Wizard setup cancelled. You can read the documentation for ${
+      `Installer setup cancelled. You can read the documentation for ${
         integration ?? 'WorkOS AuthKit'
       } at ${chalk.cyan(docsUrl)} to continue with the setup manually.`,
     );
@@ -99,7 +99,7 @@ export async function confirmContinueIfNoOrDirtyGitRepo(options: Pick<InstallerO
         : await abortIfCancelled(
             clack.confirm({
               message:
-                'You are not inside a git repository. The wizard will create and update files. Do you want to continue anyway?',
+                'You are not inside a git repository. The installer will create and update files. Do you want to continue anyway?',
             }),
           );
 
@@ -126,7 +126,7 @@ export async function confirmContinueIfNoOrDirtyGitRepo(options: Pick<InstallerO
 
 ${uncommittedOrUntrackedFiles.join('\n')}
 
-The wizard will create and update files.`,
+The installer will create and update files.`,
       );
       const continueWithDirtyRepo = await abortIfCancelled(
         clack.confirm({
@@ -224,7 +224,7 @@ export async function confirmContinueIfPackageVersionNotSupported({
   ${packageId}@${packageVersion}`,
     );
 
-    clack.note(note ?? `Please upgrade to ${acceptableVersions} if you wish to use the WorkOS AuthKit wizard.`);
+    clack.note(note ?? `Please upgrade to ${acceptableVersions} if you wish to use the WorkOS AuthKit installer.`);
     const continueWithUnsupportedVersion = await abortIfCancelled(
       clack.confirm({
         message: 'Do you want to continue anyway?',
@@ -349,7 +349,7 @@ export async function installPackage({
           'Encountered the following error during installation:',
           // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
         )}\n\n${e}\n\n${chalk.dim(
-          `The wizard has created an \`workos-installation-error-*.log\` file. If you think this issue is caused by the WorkOS AuthKit wizard, create an issue on GitHub and include the log file's content:\n${ISSUES_URL}`,
+          `The installer has created an \`workos-installation-error-*.log\` file. If you think this issue is caused by the WorkOS AuthKit installer, create an issue on GitHub and include the log file's content:\n${ISSUES_URL}`,
         )}`,
       );
       await abort();
@@ -361,7 +361,7 @@ export async function installPackage({
       )} with ${chalk.bold(pkgManager.label)}.`,
     );
 
-    analytics.capture('wizard interaction', {
+    analytics.capture('installer interaction', {
       action: 'package installed',
       package_name: packageName,
       package_manager: pkgManager.name,
@@ -415,7 +415,7 @@ export async function ensurePackageIsInstalled(
 
 export async function getPackageDotJson({ installDir }: Pick<InstallerOptions, 'installDir'>): Promise<PackageDotJson> {
   const packageJsonFileContents = await fs.promises.readFile(join(installDir, 'package.json'), 'utf8').catch(() => {
-    clack.log.error('Could not find package.json. Make sure to run the wizard in the root of your app!');
+    clack.log.error('Could not find package.json. Make sure to run the installer in the root of your app!');
     return abort();
   });
 

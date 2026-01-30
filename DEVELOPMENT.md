@@ -3,26 +3,26 @@
 ## Project Structure
 
 ```
-wizard/
+installer/
 ├── src/
 │   ├── run.ts                # Entry point
 │   ├── lib/
 │   │   ├── agent-runner.ts       # Core agent execution
 │   │   ├── agent-interface.ts    # SDK interface
-│   │   ├── wizard-core.ts        # Headless wizard core
+│   │   ├── installer-core.ts     # Headless installer core
 │   │   ├── config.ts             # Framework detection config
 │   │   ├── framework-config.ts   # Framework definitions
 │   │   ├── constants.ts          # Integration types
-│   │   ├── events.ts             # WizardEventEmitter
+│   │   ├── events.ts             # InstallerEventEmitter
 │   │   └── adapters/             # CLI and dashboard adapters
 │   ├── commands/                 # Subcommands (install-skill, login, logout)
-│   ├── steps/                    # Wizard step implementations
+│   ├── steps/                    # Installer step implementations
 │   ├── dashboard/                # Ink/React TUI components
-│   ├── nextjs/                   # Next.js wizard agent
-│   ├── react/                    # React SPA wizard agent
-│   ├── react-router/             # React Router wizard agent
-│   ├── tanstack-start/           # TanStack Start wizard agent
-│   ├── vanilla-js/               # Vanilla JS wizard agent
+│   ├── nextjs/                   # Next.js installer agent
+│   ├── react/                    # React SPA installer agent
+│   ├── react-router/             # React Router installer agent
+│   ├── tanstack-start/           # TanStack Start installer agent
+│   ├── vanilla-js/               # Vanilla JS installer agent
 │   └── utils/
 │       ├── clack-utils.ts        # CLI prompts
 │       ├── debug.ts              # Logging with redaction
@@ -87,18 +87,18 @@ pnpm test:watch
 
 ### Adding a New Framework
 
-1. Create `src/your-framework/your-framework-wizard-agent.ts`
+1. Create `src/your-framework/your-framework-installer-agent.ts`
 2. Define `FrameworkConfig` with metadata, detection, environment, UI
-3. Export `runYourFrameworkWizardAgent(options)` function
+3. Export `runYourFrameworkInstallerAgent(options)` function
 4. Add to `Integration` enum in `lib/constants.ts`
 5. Add detection logic to `lib/config.ts`
 6. Wire up in `run.ts`
 
-See `nextjs/nextjs-wizard-agent.ts` as reference.
+See `nextjs/nextjs-installer-agent.ts` as reference.
 
 ### Updating Integration Instructions
 
-The wizard prompt in `agent-runner.ts` tells Claude to:
+The installer prompt in `agent-runner.ts` tells Claude to:
 
 1. Fetch live docs from workos.com
 2. Fetch SDK README from GitHub/npm
@@ -122,8 +122,8 @@ export function redactCredentials(obj: any): any {
 
 **Manual testing:**
 
-1. Run wizard in a test app: `workos-installer dashboard`
-2. Check logs at `/tmp/authkit-wizard.log`
+1. Run installer in a test app: `workos dashboard`
+2. Check logs at `~/.workos/logs/workos-{timestamp}.log`
 3. Verify integration works in test app
 
 **What to test:**
@@ -147,7 +147,7 @@ workos-installer --debug
 **Check logs:**
 
 ```bash
-tail -f /tmp/authkit-wizard.log
+tail -f ~/.workos/logs/workos-{timestamp}.log
 ```
 
 ## Questions?

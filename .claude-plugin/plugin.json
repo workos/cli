@@ -1,5 +1,5 @@
 {
-  "name": "workos-authkit-wizard",
+  "name": "workos-authkit-installer",
   "version": "1.0.0",
   "description": "WorkOS AuthKit integration skills for multiple frameworks",
   "author": {
@@ -7,7 +7,7 @@
     "url": "https://workos.com"
   },
   "homepage": "https://workos.com/docs/user-management/authkit",
-  "repository": "https://github.com/workos/authkit-wizard",
+  "repository": "https://github.com/workos/authkit-installer",
   "license": "MIT",
-  "keywords": ["workos", "authkit", "authentication", "wizard"]
+  "keywords": ["workos", "authkit", "authentication", "installer", "install"]
 }

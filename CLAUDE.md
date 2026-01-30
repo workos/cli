@@ -1,24 +1,24 @@
-# wizard
+# installer
 
-AI-powered CLI wizard that automatically installs WorkOS AuthKit into web projects.
+AI-powered CLI installer that automatically installs WorkOS AuthKit into web projects.
 
 ## Project Structure
 
 ```
-wizard/
+installer/
 ├── src/
-│   ├── run.ts              # Entry point, orchestrates wizard flow
+│   ├── run.ts              # Entry point, orchestrates installer flow
 │   ├── lib/
 │   │   ├── agent-interface.ts  # Claude Agent SDK integration
 │   │   ├── agent-runner.ts     # Builds prompts, runs agent
 │   │   ├── config.ts           # Framework detection config
 │   │   └── constants.ts        # Integration enum, shared constants
 │   ├── dashboard/          # Ink/React TUI components
-│   ├── nextjs/             # Next.js wizard agent
-│   ├── react/              # React SPA wizard agent
-│   ├── react-router/       # React Router wizard agent
-│   ├── tanstack-start/     # TanStack Start wizard agent
-│   └── vanilla-js/         # Vanilla JS wizard agent
+│   ├── nextjs/             # Next.js installer agent
+│   ├── react/              # React SPA installer agent
+│   ├── react-router/       # React Router installer agent
+│   ├── tanstack-start/     # TanStack Start installer agent
+│   └── vanilla-js/         # Vanilla JS installer agent
 ├── bin.ts                  # CLI entry point
 └── cli.config.ts           # App configuration (model, URLs, etc.)
 ```
@@ -26,18 +26,18 @@ wizard/
 ## Key Architecture
 
 - **Claude Agent SDK**: Uses `@anthropic-ai/claude-agent-sdk` to run Claude as an agent with tool access
-- **Event Emitter**: `WizardEventEmitter` bridges agent execution ↔ TUI for real-time updates
+- **Event Emitter**: `InstallerEventEmitter` bridges agent execution ↔ TUI for real-time updates
 - **Framework Detection**: Each integration has a `detect()` function in `config.ts`
-- **Permission Hook**: `wizardCanUseTool()` in `agent-interface.ts` restricts Bash to safe commands only
+- **Permission Hook**: `installerCanUseTool()` in `agent-interface.ts` restricts Bash to safe commands only
 
 ## CLI Modes
 
-The wizard supports two invocation modes:
+The installer supports two invocation modes:
 
 ### Regular CLI (default)
 
 ```bash
-wizard
+workos install
 ```
 
 Streaming text output directly to terminal. Simple, lightweight, good for CI/scripts.
@@ -45,7 +45,7 @@ Streaming text output directly to terminal. Simple, lightweight, good for CI/scr
 ### TUI Dashboard (subcommand)
 
 ```bash
-wizard dashboard
+workos dashboard
 ```
 
 Interactive Ink/React interface with real-time panels for:
@@ -55,7 +55,7 @@ Interactive Ink/React interface with real-time panels for:
 - Tool execution status
 - Progress indicators
 
-The dashboard code lives in `src/dashboard/` and uses `WizardEventEmitter` to receive updates from the agent.
+The dashboard code lives in `src/dashboard/` and uses `InstallerEventEmitter` to receive updates from the agent.
 
 ## Tech Constraints
 
@@ -75,16 +75,16 @@ pnpm test         # Run tests
 pnpm typecheck    # Type check
 ```
 
-## Testing the Wizard
+## Testing the Installer
 
 ```bash
-# Run wizard in a test project
-cd /path/to/test-app && wizard dashboard
+# Run installer in a test project
+cd /path/to/test-app && workos dashboard
 ```
 
 ## Adding a New Framework
 
-1. Create `src/{framework}/{framework}-wizard-agent.ts`
+1. Create `src/{framework}/{framework}-installer-agent.ts`
 2. Add to `Integration` enum in `lib/constants.ts`
 3. Add detection logic in `lib/config.ts`
 4. Wire up in `run.ts` switch statement

@@ -16,7 +16,7 @@ export function isNonInteractiveEnvironment(): boolean {
 }
 
 export function readEnvironment(): Record<string, unknown> {
-  const prefix = 'WORKOS_WIZARD_';
+  const prefix = 'WORKOS_INSTALLER_';
   const result: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(process.env)) {

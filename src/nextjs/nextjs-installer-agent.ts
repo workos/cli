@@ -100,10 +100,10 @@ export async function runNextjsInstallerAgent(options: InstallerOptions): Promis
       const docsUrl = NEXTJS_AGENT_CONFIG.metadata.unsupportedVersionDocsUrl ?? NEXTJS_AGENT_CONFIG.metadata.docsUrl;
 
       clack.log.warn(
-        `Sorry: the wizard can't help you with Next.js ${nextVersion}. Upgrade to Next.js ${MINIMUM_NEXTJS_VERSION} or later, or check out the manual setup guide.`,
+        `Sorry: the installer can't help you with Next.js ${nextVersion}. Upgrade to Next.js ${MINIMUM_NEXTJS_VERSION} or later, or check out the manual setup guide.`,
       );
       clack.log.info(`Setup Next.js manually: ${chalk.cyan(docsUrl)}`);
-      clack.outro('WorkOS AuthKit wizard will see you next time!');
+      clack.outro('WorkOS AuthKit installer will see you next time!');
       return '';
     }
   }

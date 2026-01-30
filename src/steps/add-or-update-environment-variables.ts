@@ -77,7 +77,7 @@ export async function addOrUpdateEnvironmentVariablesStep({
           )}. Please update them manually.`,
         );
 
-        analytics.capture('wizard interaction', {
+        analytics.capture('installer interaction', {
           action: 'failed to update environment variables',
           integration,
           error: error instanceof Error ? error.message : 'Unknown error',
@@ -105,7 +105,7 @@ export async function addOrUpdateEnvironmentVariablesStep({
           )} with environment variables. Please add them manually.`,
         );
 
-        analytics.capture('wizard interaction', {
+        analytics.capture('installer interaction', {
           action: 'failed to create environment variables',
           integration,
           error: error instanceof Error ? error.message : 'Unknown error',
@@ -143,7 +143,7 @@ export async function addOrUpdateEnvironmentVariablesStep({
             `Failed to update ${chalk.bold.cyan('.gitignore')} to include ${chalk.bold.cyan(envFileName)}.`,
           );
 
-          analytics.capture('wizard interaction', {
+          analytics.capture('installer interaction', {
             action: 'failed to update gitignore',
             integration,
             error: error instanceof Error ? error.message : 'Unknown error',
@@ -168,7 +168,7 @@ export async function addOrUpdateEnvironmentVariablesStep({
       } catch (error) {
         clack.log.warning(`Failed to create ${chalk.bold.cyan('.gitignore')} with environment files.`);
 
-        analytics.capture('wizard interaction', {
+        analytics.capture('installer interaction', {
           action: 'failed to create gitignore',
           integration,
           error: error instanceof Error ? error.message : 'Unknown error',
@@ -182,7 +182,7 @@ export async function addOrUpdateEnvironmentVariablesStep({
       }
     }
 
-    analytics.capture('wizard interaction', {
+    analytics.capture('installer interaction', {
       action: 'added environment variables',
       integration,
     });
