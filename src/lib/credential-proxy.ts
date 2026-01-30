@@ -84,7 +84,9 @@ async function doRefresh(): Promise<boolean> {
     consecutiveFailures = 0;
     const durationMs = Date.now() - startTime;
 
-    logInfo(`[credential-proxy] Token refreshed in ${durationMs}ms, expires: ${new Date(result.expiresAt).toISOString()}`);
+    logInfo(
+      `[credential-proxy] Token refreshed in ${durationMs}ms, expires: ${new Date(result.expiresAt).toISOString()}`,
+    );
 
     analytics.capture('wizard.token.refresh', {
       action: 'refresh_success',
@@ -141,9 +143,11 @@ async function ensureValidCredentials(thresholdMs: number): Promise<Credentials 
     logWarn('[credential-proxy] Token expired, waiting for refresh...');
 
     if (!refreshPromise) {
-      refreshPromise = doRefresh().then(() => {}).finally(() => {
-        refreshPromise = null;
-      });
+      refreshPromise = doRefresh()
+        .then(() => {})
+        .finally(() => {
+          refreshPromise = null;
+        });
     }
 
     await refreshPromise;
@@ -155,9 +159,11 @@ async function ensureValidCredentials(thresholdMs: number): Promise<Credentials 
     logInfo(`[credential-proxy] Token expires in ${Math.round(timeUntilExpiry / 1000)}s, triggering refresh`);
 
     if (!refreshPromise) {
-      refreshPromise = doRefresh().then(() => {}).finally(() => {
-        refreshPromise = null;
-      });
+      refreshPromise = doRefresh()
+        .then(() => {})
+        .finally(() => {
+          refreshPromise = null;
+        });
     }
     // Don't await - fire and forget, use current (still valid) token
   }
@@ -259,8 +265,11 @@ async function handleRequest(
   }
 
   // Build upstream request options
-  const upstreamPath = req.url || '/';
-  const upstreamUrl = new URL(upstreamPath, upstream);
+  // Concatenate paths properly - URL() would replace the base path with absolute paths
+  const requestPath = req.url || '/';
+  const basePath = upstream.pathname.replace(/\/$/, ''); // Remove trailing slash
+  const fullPath = basePath + requestPath;
+  const upstreamUrl = new URL(fullPath, upstream.origin);
 
   const headers: http.OutgoingHttpHeaders = {};
 
@@ -286,10 +295,16 @@ async function handleRequest(
   headers['authorization'] = `Bearer ${creds.accessToken}`;
   headers['host'] = upstream.host;
 
+  // Strip beta=true query param - WorkOS LLM gateway doesn't support it
+  const searchParams = new URLSearchParams(upstreamUrl.search);
+  searchParams.delete('beta');
+  const queryString = searchParams.toString();
+  const finalPath = upstreamUrl.pathname + (queryString ? `?${queryString}` : '');
+
   const requestOptions: http.RequestOptions = {
     hostname: upstream.hostname,
     port: upstream.port || (useHttps ? 443 : 80),
-    path: upstreamUrl.pathname + upstreamUrl.search,
+    path: finalPath,
     method: req.method,
     headers,
     timeout: 120_000, // 2 minute timeout
