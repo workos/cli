@@ -69,6 +69,21 @@ The dashboard code lives in `src/dashboard/` and uses `InstallerEventEmitter` to
 - **Ink + React 19** for TUI dashboard
 - **Never commit the `docs/` directory** - it contains local ideation artifacts
 
+## Commit Conventions
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) - release-please auto-generates changelog from these.
+
+```
+feat: add new feature        → minor version bump, appears in changelog
+fix: correct bug             → patch version bump, appears in changelog
+docs: update readme          → no version bump
+chore: update deps           → no version bump
+refactor: restructure code   → no version bump
+refactor!: breaking change   → major version bump (or minor if pre-1.0)
+```
+
+Breaking changes: add `!` after type (e.g., `feat!:`) or include `BREAKING CHANGE:` in body.
+
 ## Commands
 
 ```bash
