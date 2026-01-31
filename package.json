@@ -56,12 +56,13 @@
     "@types/react": "^19.2.9",
     "@types/semver": "^7.7.1",
     "@types/yargs": "^17.0.35",
-    "@vitest/ui": "^4.0.17",
+    "@vitest/coverage-v8": "^4.0.18",
+    "@vitest/ui": "^4.0.18",
     "dotenv": "^17.2.3",
     "prettier": "^3.8.0",
     "tsx": "^4.20.3",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.17"
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=20.20"
@@ -79,6 +80,7 @@
     "dev": "pnpm build && pnpm link --global && pnpm build:watch",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit"
   },
   "author": "WorkOS",
