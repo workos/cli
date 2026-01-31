@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1](https://github.com/workos/cli/compare/v0.3.0...v0.3.1) (2026-01-31)
+
+
+### Bug Fixes
+
+* trigger npm publish when release-please creates a release ([#31](https://github.com/workos/cli/issues/31)) ([c68f990](https://github.com/workos/cli/commit/c68f99015009d100b27b4905150ec22de4af6776))
+
 ## [0.3.0](https://github.com/workos/cli/compare/v0.2.1...v0.3.0) (2026-01-31)
 
 
