@@ -3,6 +3,10 @@
   "version": "0.3.1",
   "type": "module",
   "description": "The Official Workos CLI",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/workos/cli"
+  },
   "keywords": [
     "workos",
     "authkit",
