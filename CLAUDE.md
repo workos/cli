@@ -7,20 +7,23 @@ AI-powered CLI installer that automatically installs WorkOS AuthKit into web pro
 ```
 installer/
 ├── src/
+│   ├── bin.ts              # CLI entry point
+│   ├── cli.config.ts       # App configuration (model, URLs, etc.)
 │   ├── run.ts              # Entry point, orchestrates installer flow
 │   ├── lib/
 │   │   ├── agent-interface.ts  # Claude Agent SDK integration
 │   │   ├── agent-runner.ts     # Builds prompts, runs agent
 │   │   ├── config.ts           # Framework detection config
-│   │   └── constants.ts        # Integration enum, shared constants
+│   │   ├── constants.ts        # Integration enum, shared constants
+│   │   ├── credential-proxy.ts # Token refresh proxy for long sessions
+│   │   └── ensure-auth.ts      # Startup auth guard with token refresh
 │   ├── dashboard/          # Ink/React TUI components
 │   ├── nextjs/             # Next.js installer agent
 │   ├── react/              # React SPA installer agent
 │   ├── react-router/       # React Router installer agent
 │   ├── tanstack-start/     # TanStack Start installer agent
 │   └── vanilla-js/         # Vanilla JS installer agent
-├── bin.ts                  # CLI entry point
-└── cli.config.ts           # App configuration (model, URLs, etc.)
+└── ...
 ```
 
 ## Key Architecture

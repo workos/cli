@@ -5,6 +5,8 @@
 ```
 installer/
 ├── src/
+│   ├── bin.ts                # CLI entry point
+│   ├── cli.config.ts         # App configuration (model, URLs)
 │   ├── run.ts                # Entry point
 │   ├── lib/
 │   │   ├── agent-runner.ts       # Core agent execution
@@ -14,6 +16,9 @@ installer/
 │   │   ├── framework-config.ts   # Framework definitions
 │   │   ├── constants.ts          # Integration types
 │   │   ├── events.ts             # InstallerEventEmitter
+│   │   ├── credential-proxy.ts   # Token refresh proxy for long sessions
+│   │   ├── ensure-auth.ts        # Startup auth guard
+│   │   ├── background-refresh.ts # Background token refresh
 │   │   └── adapters/             # CLI and dashboard adapters
 │   ├── commands/                 # Subcommands (install-skill, login, logout)
 │   ├── steps/                    # Installer step implementations
@@ -29,8 +34,6 @@ installer/
 │       ├── redact.ts             # Credential redaction
 │       ├── package-manager.ts    # Package manager detection
 │       └── ...                   # Additional utilities
-├── bin.ts                    # CLI entry point
-├── installer.config.ts       # App configuration (model, URLs)
 ├── tsconfig.json             # TypeScript config
 └── package.json              # Dependencies and scripts
 ```
@@ -53,7 +56,7 @@ pnpm dev
 
 # Test locally in another project
 cd /path/to/test/nextjs-app
-workos-installer dashboard
+workos dashboard
 ```
 
 ## Commands
@@ -141,7 +144,7 @@ export function redactCredentials(obj: any): any {
 **Verbose logs:**
 
 ```bash
-workos-installer --debug
+workos --debug
 ```
 
 **Check logs:**
