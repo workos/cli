@@ -342,17 +342,18 @@ export const installerMachine = setup({
     detectChanges: fromPromise<{ hasChanges: boolean; files: string[] }, void>(async () => {
       throw new Error('detectChanges not implemented - provide via machine.provide()');
     }),
-    generateCommitMessage: fromPromise<string, { integration: string; files: string[] }>(async () => {
+    generateCommitMessage: fromPromise<string, { integration: string; files: string[]; direct?: boolean }>(async () => {
       throw new Error('generateCommitMessage not implemented - provide via machine.provide()');
     }),
     commitChanges: fromPromise<void, { message: string; cwd: string }>(async () => {
       throw new Error('commitChanges not implemented - provide via machine.provide()');
     }),
-    generatePrDescription: fromPromise<string, { integration: string; files: string[]; commitMessage: string }>(
-      async () => {
-        throw new Error('generatePrDescription not implemented - provide via machine.provide()');
-      },
-    ),
+    generatePrDescription: fromPromise<
+      string,
+      { integration: string; files: string[]; commitMessage: string; direct?: boolean }
+    >(async () => {
+      throw new Error('generatePrDescription not implemented - provide via machine.provide()');
+    }),
     pushBranch: fromPromise<void, { cwd: string }>(async () => {
       throw new Error('pushBranch not implemented - provide via machine.provide()');
     }),
@@ -911,6 +912,7 @@ export const installerMachine = setup({
             input: ({ context }) => ({
               integration: context.integration ?? 'project',
               files: context.changedFiles ?? [],
+              direct: context.options.direct,
             }),
             onDone: {
               target: 'committing',
@@ -969,6 +971,7 @@ export const installerMachine = setup({
               integration: context.integration ?? 'project',
               files: context.changedFiles ?? [],
               commitMessage: context.commitMessage ?? '',
+              direct: context.options.direct,
             }),
             onDone: {
               target: 'pushing',
