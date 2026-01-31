@@ -21,9 +21,7 @@
     "access": "public"
   },
   "files": [
-    "dist/bin.*",
-    "dist/src",
-    "dist/cli.config.*",
+    "dist",
     ".claude-plugin",
     "skills",
     "package.json",
@@ -58,12 +56,13 @@
     "@types/react": "^19.2.9",
     "@types/semver": "^7.7.1",
     "@types/yargs": "^17.0.35",
-    "@vitest/ui": "^4.0.17",
+    "@vitest/coverage-v8": "^4.0.18",
+    "@vitest/ui": "^4.0.18",
     "dotenv": "^17.2.3",
     "prettier": "^3.8.0",
     "tsx": "^4.20.3",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.17"
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=20.20"
@@ -71,7 +70,7 @@
   "packageManager": "pnpm@10.23.0+sha512.21c4e5698002ade97e4efe8b8b4a89a8de3c85a37919f957e7a0f30f38fbc5bbdd05980ffe29179b2fb6e6e691242e098d945d1601772cad0fef5fb6411e2a4b",
   "scripts": {
     "clean": "rm -rf ./dist",
-    "prebuild": "echo \"export const version = '$(node -p \"require('./package.json').version\")';\" > src/version.ts && pnpm clean",
+    "prebuild": "pnpm clean",
     "build:watch": "pnpm tsc -w",
     "build": "pnpm tsc",
     "postbuild": "chmod +x ./dist/bin.js && cp -r scripts/** dist",
@@ -81,6 +80,7 @@
     "dev": "pnpm build && pnpm link --global && pnpm build:watch",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit"
   },
   "author": "WorkOS",

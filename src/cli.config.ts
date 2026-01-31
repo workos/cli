@@ -1,5 +1,7 @@
-import type { InstallerConfig } from './src/lib/settings.js';
-export { version } from './src/version.js';
+import type { InstallerConfig } from './lib/settings.js';
+import pkg from '../package.json' with { type: 'json' };
+
+export const version = pkg.version;
 
 export const config = {
   model: 'claude-opus-4-5-20251101',

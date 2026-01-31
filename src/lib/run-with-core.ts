@@ -334,19 +334,22 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         return detectChanges();
       }),
 
-      generateCommitMessage: fromPromise<string, { integration: string; files: string[] }>(async ({ input }) => {
-        return generateCommitMessageAi(input.integration, input.files);
-      }),
+      generateCommitMessage: fromPromise<string, { integration: string; files: string[]; direct?: boolean }>(
+        async ({ input }) => {
+          return generateCommitMessageAi(input.integration, input.files, { direct: input.direct });
+        },
+      ),
 
       commitChanges: fromPromise<void, { message: string; cwd: string }>(async ({ input }) => {
         stageAndCommit(input.message, input.cwd);
       }),
 
-      generatePrDescription: fromPromise<string, { integration: string; files: string[]; commitMessage: string }>(
-        async ({ input }) => {
-          return generatePrDescriptionAi(input.integration, input.files, input.commitMessage);
-        },
-      ),
+      generatePrDescription: fromPromise<
+        string,
+        { integration: string; files: string[]; commitMessage: string; direct?: boolean }
+      >(async ({ input }) => {
+        return generatePrDescriptionAi(input.integration, input.files, input.commitMessage, { direct: input.direct });
+      }),
 
       pushBranch: fromPromise<void, { cwd: string }>(async ({ input }) => {
         pushGitBranch(input.cwd);

@@ -1,4 +1,4 @@
-import { config, version } from '../../cli.config.js';
+import { config, version } from '../cli.config.js';
 
 /**
  * Get version from package.json

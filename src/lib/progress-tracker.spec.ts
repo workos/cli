@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ProgressTracker, PHASES } from '../progress-tracker.js';
+import { ProgressTracker, PHASES } from './progress-tracker.js';
 
 describe('ProgressTracker', () => {
   let tracker: ProgressTracker;
