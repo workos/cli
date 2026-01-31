@@ -4,26 +4,17 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.2](https://github.com/workos/cli/compare/v0.3.1...v0.3.2) (2026-01-31)
-
-
-### Bug Fixes
-
-* add repository URL for npm provenance publishing ([#33](https://github.com/workos/cli/issues/33)) ([e02d6d5](https://github.com/workos/cli/commit/e02d6d59c52be1a39308d6380eae625a4240705f))
-
-## [0.3.1](https://github.com/workos/cli/compare/v0.3.0...v0.3.1) (2026-01-31)
-
-
-### Bug Fixes
-
-* trigger npm publish when release-please creates a release ([#31](https://github.com/workos/cli/issues/31)) ([c68f990](https://github.com/workos/cli/commit/c68f99015009d100b27b4905150ec22de4af6776))
-
-## [0.3.0](https://github.com/workos/cli/compare/v0.2.1...v0.3.0) (2026-01-31)
+## [0.3.2](https://github.com/workos/cli/compare/v0.2.1...v0.3.2) (2026-01-31)
 
 
 ### ⚠ BREAKING CHANGES
 
 * Environment variables, analytics keys, and CLI messages renamed.
+  - `WIZARD_DEV` → `INSTALLER_DEV`
+  - `WIZARD_DISABLE_PROXY` → `INSTALLER_DISABLE_PROXY`
+  - `WORKOS_WIZARD_*` → `WORKOS_INSTALLER_*`
+  - Analytics keys renamed from `wizard.*` to `installer.*`
+  - CLI messages now reference "installer" instead of "wizard"
 
 ### Features
 
@@ -35,30 +26,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Bug Fixes
 
+* add repository URL for npm provenance publishing ([#33](https://github.com/workos/cli/issues/33)) ([e02d6d5](https://github.com/workos/cli/commit/e02d6d59c52be1a39308d6380eae625a4240705f))
+* trigger npm publish when release-please creates a release ([#31](https://github.com/workos/cli/issues/31)) ([c68f990](https://github.com/workos/cli/commit/c68f99015009d100b27b4905150ec22de4af6776))
 * use v0.x.x tag format instead of workos-v0.x.x ([#30](https://github.com/workos/cli/issues/30)) ([67b21ba](https://github.com/workos/cli/commit/67b21ba4bb435335369492413a0af4bbd71db4ac))
 
 
 ### Code Refactoring
 
 * rename Wizard to Installer ([#26](https://github.com/workos/cli/issues/26)) ([fcef664](https://github.com/workos/cli/commit/fcef6648da50ed478f4d44885f85d1f75e721c54))
-
-## [Unreleased]
-
-### Breaking Changes
-
-- **Renamed "Wizard" to "Installer"** throughout the codebase
-  - Environment variables renamed:
-    - `WIZARD_DEV` → `INSTALLER_DEV`
-    - `WIZARD_DISABLE_PROXY` → `INSTALLER_DISABLE_PROXY`
-    - `WORKOS_WIZARD_*` → `WORKOS_INSTALLER_*`
-  - Analytics keys renamed from `wizard.*` to `installer.*`
-  - CLI messages now reference "installer" instead of "wizard"
-  - Plugin name changed to `workos-authkit-installer`
-
-### Changed
-
-- Internal type/interface renames (no user impact)
-- Internal function renames (no user impact)
 
 ## [0.2.1] - 2026-01-28
 
