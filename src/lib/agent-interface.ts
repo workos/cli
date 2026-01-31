@@ -465,10 +465,10 @@ export async function runAgent(
     };
 
     // Load plugin with bundled skills
-    // Path from dist/src/lib/ back to package root
+    // Path from dist/lib/ back to package root
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
-    const pluginPath = path.join(__dirname, '../../..');
+    const pluginPath = path.join(__dirname, '../..');
     logInfo('Loading plugin from:', pluginPath);
 
     const response = query({
