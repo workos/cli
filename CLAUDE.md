@@ -7,20 +7,23 @@ AI-powered CLI installer that automatically installs WorkOS AuthKit into web pro
 ```
 installer/
 ├── src/
+│   ├── bin.ts              # CLI entry point
+│   ├── cli.config.ts       # App configuration (model, URLs, etc.)
 │   ├── run.ts              # Entry point, orchestrates installer flow
 │   ├── lib/
 │   │   ├── agent-interface.ts  # Claude Agent SDK integration
 │   │   ├── agent-runner.ts     # Builds prompts, runs agent
 │   │   ├── config.ts           # Framework detection config
-│   │   └── constants.ts        # Integration enum, shared constants
+│   │   ├── constants.ts        # Integration enum, shared constants
+│   │   ├── credential-proxy.ts # Token refresh proxy for long sessions
+│   │   └── ensure-auth.ts      # Startup auth guard with token refresh
 │   ├── dashboard/          # Ink/React TUI components
 │   ├── nextjs/             # Next.js installer agent
 │   ├── react/              # React SPA installer agent
 │   ├── react-router/       # React Router installer agent
 │   ├── tanstack-start/     # TanStack Start installer agent
 │   └── vanilla-js/         # Vanilla JS installer agent
-├── bin.ts                  # CLI entry point
-└── cli.config.ts           # App configuration (model, URLs, etc.)
+└── ...
 ```
 
 ## Key Architecture
@@ -65,6 +68,21 @@ The dashboard code lives in `src/dashboard/` and uses `InstallerEventEmitter` to
 - **No node-specific APIs** (crypto, fs sync, etc.) unless necessary
 - **Ink + React 19** for TUI dashboard
 - **Never commit the `docs/` directory** - it contains local ideation artifacts
+
+## Commit Conventions
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) - release-please auto-generates changelog from these.
+
+```
+feat: add new feature        → minor version bump, appears in changelog
+fix: correct bug             → patch version bump, appears in changelog
+docs: update readme          → no version bump
+chore: update deps           → no version bump
+refactor: restructure code   → no version bump
+refactor!: breaking change   → major version bump (or minor if pre-1.0)
+```
+
+Breaking changes: add `!` after type (e.g., `feat!:`) or include `BREAKING CHANGE:` in body.
 
 ## Commands
 

@@ -57,6 +57,7 @@ Commands:
     --agent, -a          Target agent(s): claude-code, codex, cursor, goose
 
 Options:
+  --direct, -D            Use your own Anthropic API key (bypass llm-gateway)
   --integration <name>    Framework: nextjs, react, react-router, tanstack-start, vanilla-js
   --redirect-uri <uri>    Custom redirect URI (defaults to framework convention)
   --homepage-url <url>    Custom homepage URL (defaults to http://localhost:{port})
