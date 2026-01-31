@@ -23,11 +23,11 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createActor, fromPromise } from 'xstate';
-import { installerMachine } from '../installer-core.js';
-import { createEventCapture, compareEventSequences, filterDeterministicEvents } from './test-utils.js';
-import type { InstallerOptions } from '../../utils/types.js';
-import type { DetectionOutput, GitCheckOutput, AgentOutput, InstallerMachineContext } from '../installer-core.types.js';
-import { Integration } from '../constants.js';
+import { installerMachine } from './installer-core.js';
+import { createEventCapture, compareEventSequences, filterDeterministicEvents } from './installer-core.test-utils.js';
+import type { InstallerOptions } from '../utils/types.js';
+import type { DetectionOutput, GitCheckOutput, AgentOutput, InstallerMachineContext } from './installer-core.types.js';
+import { Integration } from './constants.js';
 
 /**
  * Creates mock actor implementations for testing.

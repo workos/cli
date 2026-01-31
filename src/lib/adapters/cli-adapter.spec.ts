@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { CLIAdapter } from '../cli-adapter.js';
-import { createInstallerEventEmitter } from '../../events.js';
+import { CLIAdapter } from './cli-adapter.js';
+import { createInstallerEventEmitter } from '../events.js';
 
 // Mock console.log to capture styled output
 const mockConsoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
 
 // Mock clack
-vi.mock('../../../utils/clack.js', () => ({
+vi.mock('../../utils/clack.js', () => ({
   default: {
     intro: vi.fn(),
     log: {
@@ -30,7 +30,7 @@ vi.mock('../../../utils/clack.js', () => ({
   },
 }));
 
-vi.mock('../../settings.js', () => ({
+vi.mock('../settings.js', () => ({
   getConfig: vi.fn(() => ({
     branding: {
       showAsciiArt: false,
@@ -42,7 +42,7 @@ vi.mock('../../settings.js', () => ({
 }));
 
 // Mock cli-symbols to avoid chalk color codes in test assertions
-vi.mock('../../../utils/cli-symbols.js', () => ({
+vi.mock('../../utils/cli-symbols.js', () => ({
   styled: {
     success: (text: string) => `✓ ${text}`,
     error: (text: string) => `✗ ${text}`,
@@ -85,7 +85,7 @@ describe('CLIAdapter', () => {
   describe('start', () => {
     it('subscribes to events on start', async () => {
       await adapter.start();
-      const clack = await import('../../../utils/clack.js');
+      const clack = await import('../../utils/clack.js');
 
       // Emit auth:success - uses clack.log.success
       emitter.emit('auth:success', {});
@@ -94,14 +94,14 @@ describe('CLIAdapter', () => {
     });
 
     it('shows intro on start', async () => {
-      const clack = await import('../../../utils/clack.js');
+      const clack = await import('../../utils/clack.js');
       await adapter.start();
 
       expect(clack.default.intro).toHaveBeenCalledWith('Welcome to the WorkOS AuthKit installer');
     });
 
     it('is idempotent', async () => {
-      const clack = await import('../../../utils/clack.js');
+      const clack = await import('../../utils/clack.js');
       await adapter.start();
       await adapter.start(); // Second call should be no-op
 
@@ -114,7 +114,7 @@ describe('CLIAdapter', () => {
       await adapter.start();
       await adapter.stop();
 
-      const clack = await import('../../../utils/clack.js');
+      const clack = await import('../../utils/clack.js');
       vi.clearAllMocks();
 
       // Emit an event - handler should NOT be called
@@ -134,7 +134,7 @@ describe('CLIAdapter', () => {
   describe('event handling', () => {
     it('shows detection complete message', async () => {
       await adapter.start();
-      const clack = await import('../../../utils/clack.js');
+      const clack = await import('../../utils/clack.js');
 
       emitter.emit('detection:complete', { integration: 'nextjs' });
 
@@ -144,7 +144,7 @@ describe('CLIAdapter', () => {
 
     it('shows spinner on agent:start', async () => {
       await adapter.start();
-      const clack = await import('../../../utils/clack.js');
+      const clack = await import('../../utils/clack.js');
 
       emitter.emit('agent:start', {});
 
@@ -153,7 +153,7 @@ describe('CLIAdapter', () => {
 
     it('updates spinner on agent:progress', async () => {
       await adapter.start();
-      const clack = await import('../../../utils/clack.js');
+      const clack = await import('../../utils/clack.js');
       const spinnerMock = {
         start: vi.fn(),
         stop: vi.fn(),
@@ -169,7 +169,7 @@ describe('CLIAdapter', () => {
 
     it('sends GIT_CONFIRMED on confirm', async () => {
       await adapter.start();
-      const clack = await import('../../../utils/clack.js');
+      const clack = await import('../../utils/clack.js');
       vi.mocked(clack.default.confirm).mockResolvedValue(true);
 
       emitter.emit('git:dirty', { files: ['file1.ts'] });
@@ -182,7 +182,7 @@ describe('CLIAdapter', () => {
 
     it('sends GIT_CANCELLED on decline', async () => {
       await adapter.start();
-      const clack = await import('../../../utils/clack.js');
+      const clack = await import('../../utils/clack.js');
       vi.mocked(clack.default.confirm).mockResolvedValue(false);
 
       emitter.emit('git:dirty', { files: ['file1.ts'] });
@@ -194,7 +194,7 @@ describe('CLIAdapter', () => {
 
     it('sends CREDENTIALS_SUBMITTED on credentials form', async () => {
       await adapter.start();
-      const clack = await import('../../../utils/clack.js');
+      const clack = await import('../../utils/clack.js');
       vi.mocked(clack.default.text).mockResolvedValueOnce('client_123'); // clientId
       vi.mocked(clack.default.password).mockResolvedValueOnce('sk_test'); // apiKey (now uses password input)
 
@@ -211,7 +211,7 @@ describe('CLIAdapter', () => {
 
     it('sends CANCEL when credentials form is cancelled', async () => {
       await adapter.start();
-      const clack = await import('../../../utils/clack.js');
+      const clack = await import('../../utils/clack.js');
       vi.mocked(clack.default.isCancel).mockReturnValue(true);
       vi.mocked(clack.default.text).mockResolvedValue(Symbol('cancel'));
 
@@ -224,7 +224,7 @@ describe('CLIAdapter', () => {
 
     it('shows success outro on complete', async () => {
       await adapter.start();
-      const clack = await import('../../../utils/clack.js');
+      const clack = await import('../../utils/clack.js');
 
       emitter.emit('complete', { success: true, summary: 'All done!' });
 
@@ -236,7 +236,7 @@ describe('CLIAdapter', () => {
 
     it('shows error on failure complete', async () => {
       await adapter.start();
-      const clack = await import('../../../utils/clack.js');
+      const clack = await import('../../utils/clack.js');
 
       emitter.emit('complete', { success: false, summary: 'Something went wrong' });
 

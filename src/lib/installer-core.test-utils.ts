@@ -1,4 +1,4 @@
-import { createInstallerEventEmitter, type InstallerEventName, type InstallerEvents } from '../events.js';
+import { createInstallerEventEmitter, type InstallerEventName, type InstallerEvents } from './events.js';
 
 /**
  * Captured event with type and payload.

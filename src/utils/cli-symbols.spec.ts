@@ -18,7 +18,7 @@ describe('cli-symbols', () => {
       // Non-Windows, non-Linux console = Unicode supported
       process.env.TERM = 'xterm-256color';
 
-      const { symbols } = await import('../cli-symbols.js');
+      const { symbols } = await import('./cli-symbols.js');
 
       // On macOS/Linux with normal terminal, should be Unicode
       expect(symbols.success).toBe('✓');
@@ -30,14 +30,14 @@ describe('cli-symbols', () => {
     });
 
     it('exports warning symbol as ! (same in both modes)', async () => {
-      const { symbols } = await import('../cli-symbols.js');
+      const { symbols } = await import('./cli-symbols.js');
       expect(symbols.warning).toBe('!');
     });
   });
 
   describe('styled', () => {
     it('styled.success produces string with checkmark', async () => {
-      const { styled } = await import('../cli-symbols.js');
+      const { styled } = await import('./cli-symbols.js');
       const result = styled.success('Test message');
 
       // Should contain the success symbol and the message
@@ -45,14 +45,14 @@ describe('cli-symbols', () => {
     });
 
     it('styled.error produces string with X', async () => {
-      const { styled } = await import('../cli-symbols.js');
+      const { styled } = await import('./cli-symbols.js');
       const result = styled.error('Error message');
 
       expect(result).toContain('Error message');
     });
 
     it('styled.warning produces string with !', async () => {
-      const { styled } = await import('../cli-symbols.js');
+      const { styled } = await import('./cli-symbols.js');
       const result = styled.warning('Warning message');
 
       expect(result).toContain('Warning message');
@@ -60,21 +60,21 @@ describe('cli-symbols', () => {
     });
 
     it('styled.info produces string with info symbol', async () => {
-      const { styled } = await import('../cli-symbols.js');
+      const { styled } = await import('./cli-symbols.js');
       const result = styled.info('Info message');
 
       expect(result).toContain('Info message');
     });
 
     it('styled.action produces string with arrow', async () => {
-      const { styled } = await import('../cli-symbols.js');
+      const { styled } = await import('./cli-symbols.js');
       const result = styled.action('Action message');
 
       expect(result).toContain('Action message');
     });
 
     it('styled.label produces label-value pair', async () => {
-      const { styled } = await import('../cli-symbols.js');
+      const { styled } = await import('./cli-symbols.js');
       const result = styled.label('Key:', 'Value');
 
       expect(result).toContain('Key:');
@@ -82,7 +82,7 @@ describe('cli-symbols', () => {
     });
 
     it('styled.phase produces visual progress bar', async () => {
-      const { styled, symbols } = await import('../cli-symbols.js');
+      const { styled, symbols } = await import('./cli-symbols.js');
       const result = styled.phase(2, 5, 'Installing');
 
       // Should contain filled and empty progress segments
@@ -92,7 +92,7 @@ describe('cli-symbols', () => {
     });
 
     it('styled functions handle empty strings', async () => {
-      const { styled } = await import('../cli-symbols.js');
+      const { styled } = await import('./cli-symbols.js');
 
       // Should not throw on empty strings
       expect(() => styled.success('')).not.toThrow();

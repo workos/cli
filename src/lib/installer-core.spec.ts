@@ -1,16 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { createActor, fromPromise } from 'xstate';
-import { installerMachine } from '../installer-core.js';
-import { createInstallerEventEmitter } from '../events.js';
-import { Integration } from '../constants.js';
-import type { InstallerOptions } from '../../utils/types.js';
+import { installerMachine } from './installer-core.js';
+import { createInstallerEventEmitter } from './events.js';
+import { Integration } from './constants.js';
+import type { InstallerOptions } from '../utils/types.js';
 import type {
   DetectionOutput,
   GitCheckOutput,
   AgentOutput,
   InstallerMachineContext,
   BranchCheckOutput,
-} from '../installer-core.types.js';
+} from './installer-core.types.js';
 
 // Shared mock actors for reuse across tests
 const baseMockActors = {
