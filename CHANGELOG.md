@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2](https://github.com/workos/cli/compare/v0.3.1...v0.3.2) (2026-01-31)
+
+
+### Bug Fixes
+
+* add repository URL for npm provenance publishing ([#33](https://github.com/workos/cli/issues/33)) ([e02d6d5](https://github.com/workos/cli/commit/e02d6d59c52be1a39308d6380eae625a4240705f))
+
 ## [0.3.1](https://github.com/workos/cli/compare/v0.3.0...v0.3.1) (2026-01-31)
 
 
