@@ -3,6 +3,7 @@ import { parseArgs, printHelp } from './cli.js';
 import { runEvals } from './runner.js';
 import { printMatrix, printJson } from './reporter.js';
 import { listRuns, loadRun, compareRuns } from './history.js';
+import { listLogs, showLog } from './log-commands.js';
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
@@ -33,6 +34,16 @@ async function main() {
         const run1 = await loadRun(id1);
         const run2 = await loadRun(id2);
         compareRuns(run1, run2);
+        break;
+      }
+
+      case 'logs': {
+        await listLogs();
+        break;
+      }
+
+      case 'show': {
+        await showLog(options.logFile!);
         break;
       }
 

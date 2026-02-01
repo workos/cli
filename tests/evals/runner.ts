@@ -6,6 +6,7 @@ import { VanillaGrader } from './graders/vanilla.grader.js';
 import { saveResults } from './history.js';
 import { ParallelRunner } from './parallel-runner.js';
 import { renderDashboard } from './dashboard/index.js';
+import { LogWriter } from './log-writer.js';
 import type { EvalResult, EvalOptions, Grader } from './types.js';
 
 interface Scenario {
@@ -46,6 +47,7 @@ export interface ExtendedEvalOptions extends EvalOptions {
   keepOnFail?: boolean;
   retry?: number;
   noDashboard?: boolean;
+  debug?: boolean;
 }
 
 export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult[]> {
@@ -62,6 +64,18 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
     keep: options.keep,
     keepOnFail: options.keepOnFail,
     concurrency: options.sequential ? 1 : undefined,
+  });
+
+  // Initialize log writer
+  const logWriter = new LogWriter({
+    concurrency: runner.getConcurrency(),
+    cliFlags: {
+      framework: options.framework,
+      state: options.state,
+      verbose: options.verbose,
+      debug: options.debug,
+      retry: options.retry,
+    },
   });
 
   // Determine output mode: dashboard for TTY, logging otherwise
@@ -84,12 +98,17 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
   // Print summary
   printSummary(results);
 
+  // Print log file location
+  console.log(`\nDetailed log: ${logWriter.getFilePath()}`);
+
+  logWriter.cleanup();
+
   // Save results
   const filepath = await saveResults(results, {
     framework: options.framework,
     state: options.state,
   });
-  console.log(`\nResults saved to: ${filepath}`);
+  console.log(`Results saved to: ${filepath}`);
 
   return results;
 }

@@ -1,5 +1,5 @@
 import pLimit from 'p-limit';
-import type { EvalResult, Grader, GradeCheck } from './types.js';
+import type { EvalResult, Grader, GradeCheck, ToolCall } from './types.js';
 import { FixtureManager } from './fixture-manager.js';
 import { AgentExecutor } from './agent-executor.js';
 import { detectConcurrency } from './concurrency.js';
@@ -89,6 +89,7 @@ export class ParallelRunner {
     console.log(`Starting: ${scenarioName}`);
 
     let lastResult: EvalResult | null = null;
+    let lastToolCalls: ToolCall[] = [];
     let attempt = 0;
 
     while (attempt < this.options.maxAttempts && !this.isShuttingDown) {
@@ -114,6 +115,7 @@ export class ParallelRunner {
       });
 
       this.activeFixtures.add(fixtureManager);
+      lastToolCalls = []; // Reset for this attempt
 
       try {
         const workDir = await fixtureManager.setup();
@@ -122,6 +124,7 @@ export class ParallelRunner {
           verbose: this.options.verbose,
         });
         const agentResult = await executor.run();
+        lastToolCalls = agentResult.toolCalls;
 
         const grader = new scenario.grader(workDir);
         const gradeResult = await grader.grade();
@@ -145,6 +148,8 @@ export class ParallelRunner {
             duration: lastResult.duration,
             attempt,
             checks: gradeResult.checks,
+            toolCalls: agentResult.toolCalls,
+            agentOutput: agentResult.output,
           });
           break;
         }
@@ -183,6 +188,8 @@ export class ParallelRunner {
         attempt: lastResult.attempts ?? 1,
         checks: lastResult.checks,
         error: lastResult.error,
+        toolCalls: lastToolCalls,
+        agentOutput: lastResult.agentOutput,
       });
     }
 

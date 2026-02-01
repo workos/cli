@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import type { GradeCheck } from './types.js';
+import type { GradeCheck, ToolCall } from './types.js';
 
 export interface ScenarioEvent {
   scenario: string;
@@ -17,6 +17,8 @@ export interface ScenarioCompleteEvent extends ScenarioEvent {
   attempt: number;
   checks?: GradeCheck[];
   error?: string;
+  toolCalls?: ToolCall[];
+  agentOutput?: string;
 }
 
 export interface RunProgressEvent {

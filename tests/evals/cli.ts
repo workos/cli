@@ -11,8 +11,9 @@ export interface CliOptions {
   noRetry: boolean;
   sequential: boolean;
   noDashboard: boolean;
-  command?: 'run' | 'history' | 'compare';
+  command?: 'run' | 'history' | 'compare' | 'logs' | 'show';
   compareIds?: [string, string];
+  logFile?: string;
 }
 
 const FRAMEWORKS = ['nextjs', 'react', 'react-router', 'tanstack-start', 'vanilla-js'];
@@ -41,6 +42,17 @@ export function parseArgs(args: string[]): CliOptions {
   if (args[0] === 'compare' && args.length >= 3) {
     options.command = 'compare';
     options.compareIds = [args[1], args[2]];
+    return options;
+  }
+
+  if (args[0] === 'logs') {
+    options.command = 'logs';
+    return options;
+  }
+
+  if (args[0] === 'show' && args[1]) {
+    options.command = 'show';
+    options.logFile = args[1];
     return options;
   }
 
@@ -99,6 +111,8 @@ Commands:
   run (default)       Run evaluations
   history             List recent eval runs
   compare <id1> <id2> Compare two eval runs
+  logs                List recent detailed log files
+  show <file>         Display formatted log summary
 
 Options:
   --framework=<name>  Run only scenarios for this framework

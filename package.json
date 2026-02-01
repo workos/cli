@@ -89,7 +89,9 @@
     "typecheck": "tsc --noEmit",
     "eval": "tsx tests/evals/index.ts",
     "eval:history": "tsx tests/evals/index.ts history",
-    "eval:compare": "tsx tests/evals/index.ts compare"
+    "eval:compare": "tsx tests/evals/index.ts compare",
+    "eval:logs": "tsx tests/evals/index.ts logs",
+    "eval:show": "tsx tests/evals/index.ts show"
   },
   "author": "WorkOS",
   "license": "MIT"
