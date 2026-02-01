@@ -122,6 +122,7 @@ export class ParallelRunner {
 
         const executor = new AgentExecutor(workDir, scenario.framework, {
           verbose: this.options.verbose,
+          scenarioName,
         });
         const agentResult = await executor.run();
         lastToolCalls = agentResult.toolCalls;

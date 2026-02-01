@@ -15,6 +15,7 @@ export interface AgentResult {
 
 export interface AgentExecutorOptions {
   verbose?: boolean;
+  scenarioName?: string;
 }
 
 // Skill name mapping for each framework
@@ -44,8 +45,9 @@ export class AgentExecutor {
     const toolCalls: ToolCall[] = [];
     const collectedOutput: string[] = [];
 
+    const label = this.options.scenarioName ? `[${this.options.scenarioName}]` : '';
     if (this.options.verbose) {
-      console.log(`  Initializing agent for ${integration}...`);
+      console.log(`${label} Initializing agent for ${integration}...`);
     }
 
     // Write .env.local with credentials (agent configures redirect URI per framework)
@@ -99,7 +101,7 @@ export class AgentExecutor {
 
       // Process message stream
       for await (const message of response) {
-        this.handleMessage(message, toolCalls, collectedOutput);
+        this.handleMessage(message, toolCalls, collectedOutput, label);
       }
 
       return {
@@ -135,7 +137,7 @@ Use the \`${skillName}\` skill to integrate WorkOS AuthKit into this application
 Begin by invoking the ${skillName} skill.`;
   }
 
-  private handleMessage(message: any, toolCalls: ToolCall[], collectedOutput: string[]): void {
+  private handleMessage(message: any, toolCalls: ToolCall[], collectedOutput: string[], label: string): void {
     if (message.type === 'assistant') {
       const content = message.message?.content;
       if (Array.isArray(content)) {
@@ -144,7 +146,7 @@ Begin by invoking the ${skillName} skill.`;
           if (block.type === 'text' && typeof block.text === 'string') {
             collectedOutput.push(block.text);
             if (this.options.verbose) {
-              console.log(`  Agent: ${block.text.slice(0, 100)}...`);
+              console.log(`${label} Agent: ${block.text.slice(0, 100)}...`);
             }
           }
           // Capture tool calls
@@ -155,7 +157,7 @@ Begin by invoking the ${skillName} skill.`;
             };
             toolCalls.push(call);
             if (this.options.verbose) {
-              console.log(`  Tool: ${block.name}`);
+              console.log(`${label} Tool: ${block.name}`);
             }
           }
         }
