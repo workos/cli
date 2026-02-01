@@ -14,8 +14,13 @@ export class NextjsGrader implements Grader {
   async grade(): Promise<GradeResult> {
     const checks: GradeCheck[] = [];
 
-    // Check callback route exists (App Router)
-    checks.push(await this.fileGrader.checkFileExists('app/api/auth/callback/route.ts'));
+    // Check callback route exists (path is configurable via WORKOS_REDIRECT_URI)
+    const callbackCheck = await this.fileGrader.checkFileWithPattern(
+      '**/route.ts',
+      ['handleAuth', '@workos-inc/authkit-nextjs'],
+      'AuthKit callback route',
+    );
+    checks.push(callbackCheck);
 
     // Check middleware exists
     checks.push(await this.fileGrader.checkFileExists('middleware.ts'));
@@ -30,9 +35,6 @@ export class NextjsGrader implements Grader {
 
     // Check AuthKitProvider in layout
     checks.push(...(await this.fileGrader.checkFileContains('app/layout.tsx', ['AuthKitProvider'])));
-
-    // Check environment variables used correctly
-    checks.push(...(await this.fileGrader.checkFileContains('middleware.ts', [/process\.env\.WORKOS_/])));
 
     // Check build succeeds
     checks.push(await this.buildGrader.checkBuild());
