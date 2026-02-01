@@ -1,23 +1,25 @@
 #!/usr/bin/env node
+import { parseArgs, printHelp } from './cli.js';
 import { runEvals } from './runner.js';
+import { printMatrix, printJson } from './reporter.js';
 
 async function main() {
-  const args = process.argv.slice(2);
+  const options = parseArgs(process.argv.slice(2));
 
-  // Parse basic flags (expand in Phase 2)
-  const options = {
-    framework: args.find((a) => a.startsWith('--framework='))?.split('=')[1],
-    verbose: args.includes('--verbose'),
-  };
+  if (options.help) {
+    printHelp();
+    process.exit(0);
+  }
 
   try {
     const results = await runEvals(options);
 
-    // Print summary
-    const passed = results.filter((r) => r.passed).length;
-    console.log(`\n${passed}/${results.length} scenarios passed`);
+    if (options.json) {
+      printJson(results);
+    } else {
+      printMatrix(results);
+    }
 
-    // Exit code
     process.exit(results.every((r) => r.passed) ? 0 : 1);
   } catch (error) {
     console.error('Eval failed:', error);
