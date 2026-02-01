@@ -48,11 +48,10 @@ export class AgentExecutor {
       console.log(`  Initializing agent for ${integration}...`);
     }
 
-    // Write .env.local to fixture directory
+    // Write .env.local with credentials (agent configures redirect URI per framework)
     writeEnvLocal(this.workDir, {
       WORKOS_API_KEY: this.credentials.workosApiKey,
       WORKOS_CLIENT_ID: this.credentials.workosClientId,
-      WORKOS_REDIRECT_URI: 'http://localhost:3000/callback',
     });
 
     // Build prompt
@@ -129,7 +128,6 @@ export class AgentExecutor {
 The following environment variables have been configured in .env.local:
 - WORKOS_API_KEY
 - WORKOS_CLIENT_ID
-- WORKOS_REDIRECT_URI
 
 ## Your Task
 Use the \`${skillName}\` skill to integrate WorkOS AuthKit into this application.

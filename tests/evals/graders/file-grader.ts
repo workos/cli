@@ -1,6 +1,6 @@
 import { access, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { glob } from 'fast-glob';
+import fg from 'fast-glob';
 import type { GradeCheck } from '../types.js';
 
 export class FileGrader {
@@ -49,7 +49,7 @@ export class FileGrader {
     contentPatterns: (string | RegExp)[],
     description: string,
   ): Promise<GradeCheck> {
-    const files = await glob(globPattern, { cwd: this.workDir, absolute: true });
+    const files = await fg(globPattern, { cwd: this.workDir, absolute: true });
 
     for (const file of files) {
       try {
