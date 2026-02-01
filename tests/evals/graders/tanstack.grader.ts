@@ -2,6 +2,18 @@ import { FileGrader } from './file-grader.js';
 import { BuildGrader } from './build-grader.js';
 import type { Grader, GradeResult, GradeCheck } from '../types.js';
 
+/**
+ * TanStack Start Grader
+ *
+ * SDK: @workos/authkit-tanstack-react-start
+ * Docs: https://github.com/workos/authkit-tanstack-start
+ *
+ * Key patterns:
+ * - Directory: src/ (v1.132+) or app/ (legacy)
+ * - Middleware: authkitMiddleware() in start.ts
+ * - Callback: handleCallbackRoute() in api/auth/callback route
+ * - Provider: AuthKitProvider is OPTIONAL (only for client hooks)
+ */
 export class TanstackGrader implements Grader {
   private fileGrader: FileGrader;
   private buildGrader: BuildGrader;
@@ -14,36 +26,34 @@ export class TanstackGrader implements Grader {
   async grade(): Promise<GradeResult> {
     const checks: GradeCheck[] = [];
 
-    // Check auth callback route
-    const callbackRoute = await this.fileGrader.checkFileExists('app/routes/auth/callback.tsx');
-    if (!callbackRoute.passed) {
-      // Try alternate pattern
-      checks.push(await this.fileGrader.checkFileExists('app/routes/callback.tsx'));
-    } else {
-      checks.push(callbackRoute);
-    }
+    // Check middleware setup (CRITICAL - required for auth to work)
+    // Can be in src/start.ts, app/start.ts, or router files
+    checks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '{src,app}/**/*.{ts,tsx}',
+        ['authkitMiddleware', '@workos/authkit-tanstack-react-start'],
+        'authkitMiddleware configured with correct SDK',
+      ),
+    );
 
-    // Check server functions for auth
-    const serverAuth = await this.fileGrader.checkFileExists('app/server/auth.ts');
-    if (!serverAuth.passed) {
-      // Try alternate locations
-      checks.push(await this.fileGrader.checkFileExists('app/lib/auth.ts'));
-    } else {
-      checks.push(serverAuth);
-    }
+    // Check callback route exists with handleCallbackRoute
+    // Supports both nested (api/auth/callback.tsx) and flat (api.auth.callback.tsx) route patterns
+    checks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '{src,app}/routes/**/*callback*.tsx',
+        ['handleCallbackRoute', '@workos/authkit-tanstack-react-start'],
+        'Callback route with handleCallbackRoute',
+      ),
+    );
 
-    // Check auth server function content
-    const authContent = await this.checkAuthServerContent();
-    checks.push(...authContent);
-
-    // Check provider setup in root
-    const rootProviderChecks = await this.fileGrader.checkFileContains('app/routes/__root.tsx', ['AuthKitProvider']);
-    if (!rootProviderChecks.every((c) => c.passed)) {
-      // Try alternate root location
-      checks.push(...(await this.fileGrader.checkFileContains('app/root.tsx', ['AuthKitProvider'])));
-    } else {
-      checks.push(...rootProviderChecks);
-    }
+    // Check for auth usage (getAuth, signOut, etc.) somewhere in routes
+    checks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '{src,app}/routes/**/*.tsx',
+        [/@workos\/authkit-tanstack-react-start/],
+        'SDK usage in routes',
+      ),
+    );
 
     // Check build succeeds
     checks.push(await this.buildGrader.checkBuild());
@@ -52,20 +62,5 @@ export class TanstackGrader implements Grader {
       passed: checks.every((c) => c.passed),
       checks,
     };
-  }
-
-  private async checkAuthServerContent(): Promise<GradeCheck[]> {
-    // Try primary location
-    const primaryChecks = await this.fileGrader.checkFileContains('app/server/auth.ts', [
-      '@workos-inc/authkit',
-      'createServerFn',
-    ]);
-
-    if (primaryChecks.every((c) => c.passed)) {
-      return primaryChecks;
-    }
-
-    // Try alternate location
-    return this.fileGrader.checkFileContains('app/lib/auth.ts', ['@workos-inc/authkit', 'createServerFn']);
   }
 }
