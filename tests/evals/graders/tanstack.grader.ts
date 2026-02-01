@@ -37,14 +37,10 @@ export class TanstackGrader implements Grader {
     checks.push(...authContent);
 
     // Check provider setup in root
-    const rootProviderChecks = await this.fileGrader.checkFileContains('app/routes/__root.tsx', [
-      'AuthKitProvider',
-    ]);
+    const rootProviderChecks = await this.fileGrader.checkFileContains('app/routes/__root.tsx', ['AuthKitProvider']);
     if (!rootProviderChecks.every((c) => c.passed)) {
       // Try alternate root location
-      checks.push(
-        ...(await this.fileGrader.checkFileContains('app/root.tsx', ['AuthKitProvider']))
-      );
+      checks.push(...(await this.fileGrader.checkFileContains('app/root.tsx', ['AuthKitProvider'])));
     } else {
       checks.push(...rootProviderChecks);
     }
@@ -70,9 +66,6 @@ export class TanstackGrader implements Grader {
     }
 
     // Try alternate location
-    return this.fileGrader.checkFileContains('app/lib/auth.ts', [
-      '@workos-inc/authkit',
-      'createServerFn',
-    ]);
+    return this.fileGrader.checkFileContains('app/lib/auth.ts', ['@workos-inc/authkit', 'createServerFn']);
   }
 }

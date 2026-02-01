@@ -23,9 +23,7 @@ async function main() {
         console.log('Recent eval runs:');
         for (const run of runs.slice(0, 10)) {
           const data = await loadRun(run.replace('.json', ''));
-          console.log(
-            `  ${run.replace('.json', '')} - ${data.summary.passed}/${data.summary.total} passed`
-          );
+          console.log(`  ${run.replace('.json', '')} - ${data.summary.passed}/${data.summary.total} passed`);
         }
         break;
       }

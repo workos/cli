@@ -22,10 +22,7 @@ export class FileGrader {
     }
   }
 
-  async checkFileContains(
-    relativePath: string,
-    patterns: (string | RegExp)[]
-  ): Promise<GradeCheck[]> {
+  async checkFileContains(relativePath: string, patterns: (string | RegExp)[]): Promise<GradeCheck[]> {
     const fullPath = join(this.workDir, relativePath);
     const checks: GradeCheck[] = [];
 
@@ -41,10 +38,7 @@ export class FileGrader {
     }
 
     for (const pattern of patterns) {
-      const matches =
-        typeof pattern === 'string'
-          ? content.includes(pattern)
-          : pattern.test(content);
+      const matches = typeof pattern === 'string' ? content.includes(pattern) : pattern.test(content);
 
       checks.push({
         name: `Pattern in ${relativePath}: ${pattern}`,

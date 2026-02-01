@@ -10,8 +10,7 @@ function App() {
   return (
     <div>
       <nav>
-        <Link to="/">Home</Link> | <Link to="/about">About</Link> |{' '}
-        <Link to="/dashboard">Dashboard</Link>
+        <Link to="/">Home</Link> | <Link to="/about">About</Link> | <Link to="/dashboard">Dashboard</Link>
         {isAuthenticated ? (
           <button onClick={() => logout()}>Logout</button>
         ) : (

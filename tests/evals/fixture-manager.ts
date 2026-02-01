@@ -14,7 +14,7 @@ export class FixtureManager {
   constructor(
     private framework: string,
     private state: string,
-    options: FixtureOptions = {}
+    options: FixtureOptions = {},
   ) {
     this.options = options;
   }
@@ -24,12 +24,7 @@ export class FixtureManager {
     this.tempDir = await mkdtemp(join(tmpdir(), `eval-${this.framework}-`));
 
     // Copy fixture files
-    const fixtureSource = join(
-      process.cwd(),
-      'tests/fixtures',
-      this.framework,
-      this.state
-    );
+    const fixtureSource = join(process.cwd(), 'tests/fixtures', this.framework, this.state);
 
     await cp(fixtureSource, this.tempDir, { recursive: true });
 

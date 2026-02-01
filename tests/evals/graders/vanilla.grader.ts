@@ -27,9 +27,7 @@ export class VanillaGrader implements Grader {
     checks.push(await this.fileGrader.checkFileExists('auth.js'));
 
     // Check auth script content
-    checks.push(
-      ...(await this.fileGrader.checkFileContains('auth.js', ['workos', 'getAuthorizationUrl']))
-    );
+    checks.push(...(await this.fileGrader.checkFileContains('auth.js', ['workos', 'getAuthorizationUrl'])));
 
     // Check index.html includes auth
     checks.push(...(await this.fileGrader.checkFileContains('index.html', [/auth\.js|workos/i])));

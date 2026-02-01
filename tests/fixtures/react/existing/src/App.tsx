@@ -7,8 +7,7 @@ function App() {
   return (
     <div>
       <nav>
-        <Link to="/">Home</Link> | <Link to="/about">About</Link> |{' '}
-        <Link to="/dashboard">Dashboard</Link>
+        <Link to="/">Home</Link> | <Link to="/about">About</Link> | <Link to="/dashboard">Dashboard</Link>
       </nav>
       <Routes>
         <Route path="/" element={<Home />} />

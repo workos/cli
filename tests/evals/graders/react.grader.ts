@@ -16,10 +16,7 @@ export class ReactGrader implements Grader {
 
     // Check AuthKitProvider wrapper exists
     checks.push(
-      ...(await this.fileGrader.checkFileContains('src/main.tsx', [
-        'AuthKitProvider',
-        '@workos-inc/authkit-react',
-      ]))
+      ...(await this.fileGrader.checkFileContains('src/main.tsx', ['AuthKitProvider', '@workos-inc/authkit-react'])),
     );
 
     // Check callback component exists
@@ -36,9 +33,7 @@ export class ReactGrader implements Grader {
 
     // Check environment config
     checks.push(
-      ...(await this.fileGrader.checkFileContains('src/main.tsx', [
-        /VITE_WORKOS_CLIENT_ID|import\.meta\.env/,
-      ]))
+      ...(await this.fileGrader.checkFileContains('src/main.tsx', [/VITE_WORKOS_CLIENT_ID|import\.meta\.env/])),
     );
 
     // Check build succeeds

@@ -51,9 +51,7 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
   const maxAttempts = (options.retry ?? 2) + 1;
 
   const scenarios = SCENARIOS.filter(
-    (s) =>
-      (!options.framework || s.framework === options.framework) &&
-      (!options.state || s.state === options.state)
+    (s) => (!options.framework || s.framework === options.framework) && (!options.state || s.state === options.state),
   );
 
   for (const scenario of scenarios) {
@@ -117,9 +115,7 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
       results.push(lastResult);
       const status = lastResult.passed ? '✓ PASSED' : '✗ FAILED';
       const attemptInfo =
-        lastResult.attempts && lastResult.attempts > 1
-          ? ` (attempt ${lastResult.attempts}/${maxAttempts})`
-          : '';
+        lastResult.attempts && lastResult.attempts > 1 ? ` (attempt ${lastResult.attempts}/${maxAttempts})` : '';
       console.log(`${status}${attemptInfo}`);
 
       if (!lastResult.passed && !options.verbose) {

@@ -16,11 +16,7 @@ export interface ExecOptions {
  * Execute a command without throwing on non-zero exit codes.
  * Returns { status, stdout, stderr } for all outcomes.
  */
-export function execFileNoThrow(
-  command: string,
-  args: string[],
-  options: ExecOptions = {}
-): Promise<ExecResult> {
+export function execFileNoThrow(command: string, args: string[], options: ExecOptions = {}): Promise<ExecResult> {
   return new Promise((resolve) => {
     const child = spawn(command, args, {
       cwd: options.cwd,

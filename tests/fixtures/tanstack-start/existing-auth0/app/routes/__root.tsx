@@ -22,8 +22,7 @@ function RootComponent() {
           }}
         >
           <nav>
-            <Link to="/">Home</Link> | <Link to="/about">About</Link> |{' '}
-            <Link to="/dashboard">Dashboard</Link>
+            <Link to="/">Home</Link> | <Link to="/about">About</Link> | <Link to="/dashboard">Dashboard</Link>
           </nav>
           <Outlet />
         </Auth0Provider>

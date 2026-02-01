@@ -19,19 +19,19 @@ pnpm eval --framework=react --state=existing-auth0
 
 The framework tests 15 scenarios (5 frameworks × 3 project states):
 
-| State | Description |
-|-------|-------------|
-| `fresh` | Minimal scaffold from `create-*` tools |
-| `existing` | Project with routes, components, custom config |
+| State            | Description                                          |
+| ---------------- | ---------------------------------------------------- |
+| `fresh`          | Minimal scaffold from `create-*` tools               |
+| `existing`       | Project with routes, components, custom config       |
 | `existing-auth0` | Project with Auth0 authentication already integrated |
 
-| Framework | Skill | Key Checks |
-|-----------|-------|------------|
-| `nextjs` | workos-authkit-nextjs | middleware.ts, callback route, AuthKitProvider |
-| `react` | workos-authkit-react | AuthKitProvider, callback component, useAuth |
-| `react-router` | workos-authkit-react-router | Auth loader, protected routes |
-| `tanstack-start` | workos-authkit-tanstack-start | Server functions, callback route |
-| `vanilla-js` | workos-authkit-vanilla-js | Auth script, callback page |
+| Framework        | Skill                         | Key Checks                                     |
+| ---------------- | ----------------------------- | ---------------------------------------------- |
+| `nextjs`         | workos-authkit-nextjs         | middleware.ts, callback route, AuthKitProvider |
+| `react`          | workos-authkit-react          | AuthKitProvider, callback component, useAuth   |
+| `react-router`   | workos-authkit-react-router   | Auth loader, protected routes                  |
+| `tanstack-start` | workos-authkit-tanstack-start | Server functions, callback route               |
+| `vanilla-js`     | workos-authkit-vanilla-js     | Auth script, callback page                     |
 
 ## CLI Options
 
@@ -91,6 +91,7 @@ pnpm eval:compare 2024-01-15T10-30-00 2024-01-16T14-45-00
    - Basic app structure
 
 3. Verify fixture works standalone:
+
    ```bash
    cd tests/fixtures/{framework}/{state}
    pnpm install
@@ -104,6 +105,7 @@ pnpm eval:compare 2024-01-15T10-30-00 2024-01-16T14-45-00
 Graders live in `tests/evals/graders/{framework}.grader.ts`.
 
 Each grader implements:
+
 ```typescript
 interface Grader {
   grade(): Promise<GradeResult>;
@@ -111,10 +113,12 @@ interface Grader {
 ```
 
 Use the helper classes:
+
 - `FileGrader` - Check file existence and content patterns
 - `BuildGrader` - Run build commands and check exit codes
 
 Example:
+
 ```typescript
 const checks: GradeCheck[] = [];
 
@@ -122,20 +126,20 @@ const checks: GradeCheck[] = [];
 checks.push(await this.fileGrader.checkFileExists('middleware.ts'));
 
 // File must contain patterns
-checks.push(...await this.fileGrader.checkFileContains('middleware.ts', [
-  '@workos-inc/authkit',
-  'authkitMiddleware',
-]));
+checks.push(
+  ...(await this.fileGrader.checkFileContains('middleware.ts', ['@workos-inc/authkit', 'authkitMiddleware'])),
+);
 
 // Build must succeed
 checks.push(await this.buildGrader.checkBuild());
 
-return { passed: checks.every(c => c.passed), checks };
+return { passed: checks.every((c) => c.passed), checks };
 ```
 
 ## Results Storage
 
 Results are saved to `tests/eval-results/`:
+
 - Each run creates `{timestamp}.json`
 - `latest.json` symlinks to most recent
 - Use `pnpm eval:history` to list runs
@@ -146,6 +150,7 @@ Results are saved to `tests/eval-results/`:
 ### "pnpm install failed"
 
 The fixture's dependencies may have version conflicts. Check:
+
 ```bash
 cd tests/fixtures/{framework}/{state}
 pnpm install
@@ -154,6 +159,7 @@ pnpm install
 ### "Build failed" but files look correct
 
 The agent may have created correct files but with syntax errors. Use `--keep-on-fail` to inspect:
+
 ```bash
 pnpm eval --framework=nextjs --keep-on-fail
 # Then run build manually in temp dir to see full error
@@ -162,6 +168,7 @@ pnpm eval --framework=nextjs --keep-on-fail
 ### Flaky passes/failures
 
 LLM responses vary. Use `--retry=3` for more attempts:
+
 ```bash
 pnpm eval --retry=3
 ```

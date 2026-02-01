@@ -33,7 +33,7 @@ export class AgentExecutor {
   constructor(
     private workDir: string,
     private framework: string,
-    options: AgentExecutorOptions = {}
+    options: AgentExecutorOptions = {},
   ) {
     this.options = options;
     this.credentials = loadCredentials();
@@ -137,11 +137,7 @@ Use the \`${skillName}\` skill to integrate WorkOS AuthKit into this application
 Begin by invoking the ${skillName} skill.`;
   }
 
-  private handleMessage(
-    message: any,
-    toolCalls: ToolCall[],
-    collectedOutput: string[]
-  ): void {
+  private handleMessage(message: any, toolCalls: ToolCall[], collectedOutput: string[]): void {
     if (message.type === 'assistant') {
       const content = message.message?.content;
       if (Array.isArray(content)) {

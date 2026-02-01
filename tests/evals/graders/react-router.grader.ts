@@ -34,9 +34,7 @@ export class ReactRouterGrader implements Grader {
     checks.push(...authRoutePatterns);
 
     // Check protected route wrapper or middleware
-    const hasProtectedRoute = await this.fileGrader.checkFileExists(
-      'app/components/ProtectedRoute.tsx'
-    );
+    const hasProtectedRoute = await this.fileGrader.checkFileExists('app/components/ProtectedRoute.tsx');
     if (!hasProtectedRoute.passed) {
       // Try alternate locations
       checks.push(await this.fileGrader.checkFileExists('app/utils/auth.ts'));

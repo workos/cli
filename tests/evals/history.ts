@@ -22,7 +22,7 @@ export interface EvalRun {
 
 export async function saveResults(
   results: EvalResult[],
-  options: { framework?: string; state?: string }
+  options: { framework?: string; state?: string },
 ): Promise<string> {
   // Ensure results directory exists
   await mkdir(RESULTS_DIR, { recursive: true });
@@ -59,8 +59,7 @@ export async function saveResults(
 }
 
 export async function loadRun(id: string): Promise<EvalRun> {
-  const filepath =
-    id === 'latest' ? join(RESULTS_DIR, 'latest.json') : join(RESULTS_DIR, `${id}.json`);
+  const filepath = id === 'latest' ? join(RESULTS_DIR, 'latest.json') : join(RESULTS_DIR, `${id}.json`);
 
   const content = await readFile(filepath, 'utf-8');
   return JSON.parse(content);
@@ -82,12 +81,8 @@ export function compareRuns(run1: EvalRun, run2: EvalRun): void {
   console.log(`\nComparing ${run1.id} vs ${run2.id}\n`);
 
   console.log('Summary:');
-  console.log(
-    `  Run 1: ${run1.summary.passed}/${run1.summary.total} (${(run1.summary.passRate * 100).toFixed(1)}%)`
-  );
-  console.log(
-    `  Run 2: ${run2.summary.passed}/${run2.summary.total} (${(run2.summary.passRate * 100).toFixed(1)}%)`
-  );
+  console.log(`  Run 1: ${run1.summary.passed}/${run1.summary.total} (${(run1.summary.passRate * 100).toFixed(1)}%)`);
+  console.log(`  Run 2: ${run2.summary.passed}/${run2.summary.total} (${(run2.summary.passRate * 100).toFixed(1)}%)`);
 
   const diff = run2.summary.passRate - run1.summary.passRate;
   const trend = diff > 0 ? '↑' : diff < 0 ? '↓' : '→';

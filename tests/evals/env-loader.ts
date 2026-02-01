@@ -19,7 +19,7 @@ export function loadCredentials(): EvalCredentials {
     throw new Error(
       'ANTHROPIC_API_KEY not found.\n' +
         'Copy .env.local.example to .env.local and add your key:\n' +
-        '  ANTHROPIC_API_KEY=sk-ant-...'
+        '  ANTHROPIC_API_KEY=sk-ant-...',
     );
   }
 
