@@ -5,6 +5,7 @@ export interface CliOptions {
   debug: boolean;
   json: boolean;
   help: boolean;
+  keep: boolean;
   keepOnFail: boolean;
   retry: number;
   noRetry: boolean;
@@ -21,6 +22,7 @@ export function parseArgs(args: string[]): CliOptions {
     debug: false,
     json: false,
     help: false,
+    keep: false,
     keepOnFail: false,
     retry: 2,
     noRetry: false,
@@ -51,6 +53,8 @@ export function parseArgs(args: string[]): CliOptions {
       options.keepOnFail = true;
     } else if (arg === '--json') {
       options.json = true;
+    } else if (arg === '--keep') {
+      options.keep = true;
     } else if (arg === '--keep-on-fail') {
       options.keepOnFail = true;
     } else if (arg === '--no-retry') {
@@ -98,6 +102,8 @@ Options:
   --verbose, -v       Show detailed output including agent tool calls
 
   --debug             Extra verbose, preserve temp dirs on failure
+
+  --keep              Always preserve temp directory (for manual testing)
 
   --keep-on-fail      Don't cleanup temp directory when scenario fails
 

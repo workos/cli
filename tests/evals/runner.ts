@@ -42,6 +42,7 @@ const SCENARIOS: Scenario[] = [
 ];
 
 export interface ExtendedEvalOptions extends EvalOptions {
+  keep?: boolean;
   keepOnFail?: boolean;
   retry?: number;
 }
@@ -103,10 +104,11 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
           attempts: attempt,
         };
       } finally {
-        if (!options.keepOnFail || lastResult?.passed) {
-          await fixtureManager.cleanup();
-        } else {
+        const shouldKeep = options.keep || (options.keepOnFail && !lastResult?.passed);
+        if (shouldKeep) {
           console.log(`  Temp directory preserved: ${fixtureManager.getTempDir()}`);
+        } else {
+          await fixtureManager.cleanup();
         }
       }
     }

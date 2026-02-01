@@ -42,6 +42,7 @@ async function main() {
           framework: options.framework,
           state: options.state,
           verbose: options.verbose,
+          keep: options.keep,
           keepOnFail: options.keepOnFail,
           retry: options.retry,
         });
