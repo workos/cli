@@ -86,7 +86,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
-    "eval": "tsx tests/evals/index.ts"
+    "eval": "tsx tests/evals/index.ts",
+    "eval:history": "tsx tests/evals/index.ts history",
+    "eval:compare": "tsx tests/evals/index.ts compare"
   },
   "author": "WorkOS",
   "license": "MIT"

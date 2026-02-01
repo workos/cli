@@ -6,11 +6,20 @@ export interface AgentResult {
   toolCalls: Array<{ tool: string; args: unknown; result: unknown }>;
 }
 
+export interface AgentExecutorOptions {
+  verbose?: boolean;
+}
+
 export class AgentExecutor {
+  private options: AgentExecutorOptions;
+
   constructor(
     private workDir: string,
-    private framework: string
-  ) {}
+    private framework: string,
+    options: AgentExecutorOptions = {}
+  ) {
+    this.options = options;
+  }
 
   async run(): Promise<AgentResult> {
     const toolCalls: AgentResult['toolCalls'] = [];

@@ -22,6 +22,7 @@ export interface EvalResult {
   checks?: GradeCheck[];
   agentOutput?: string;
   error?: string;
+  attempts?: number;
 }
 
 export interface EvalOptions {

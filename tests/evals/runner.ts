@@ -5,7 +5,8 @@ import { ReactGrader } from './graders/react.grader.js';
 import { ReactRouterGrader } from './graders/react-router.grader.js';
 import { TanstackGrader } from './graders/tanstack.grader.js';
 import { VanillaGrader } from './graders/vanilla.grader.js';
-import type { EvalResult, EvalOptions, Grader } from './types.js';
+import { saveResults } from './history.js';
+import type { EvalResult, EvalOptions, Grader, GradeCheck } from './types.js';
 
 interface Scenario {
   framework: string;
@@ -40,8 +41,14 @@ const SCENARIOS: Scenario[] = [
   { framework: 'vanilla-js', state: 'existing-auth0', grader: VanillaGrader },
 ];
 
-export async function runEvals(options: EvalOptions): Promise<EvalResult[]> {
+export interface ExtendedEvalOptions extends EvalOptions {
+  keepOnFail?: boolean;
+  retry?: number;
+}
+
+export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult[]> {
   const results: EvalResult[] = [];
+  const maxAttempts = (options.retry ?? 2) + 1;
 
   const scenarios = SCENARIOS.filter(
     (s) =>
@@ -51,49 +58,101 @@ export async function runEvals(options: EvalOptions): Promise<EvalResult[]> {
 
   for (const scenario of scenarios) {
     console.log(`\nRunning: ${scenario.framework}/${scenario.state}`);
-    const startTime = Date.now();
 
-    const fixtureManager = new FixtureManager(scenario.framework, scenario.state);
+    let lastResult: EvalResult | null = null;
+    let attempt = 0;
 
-    try {
-      // Setup fixture in temp directory
-      const workDir = await fixtureManager.setup();
+    while (attempt < maxAttempts) {
+      attempt++;
+      if (attempt > 1) {
+        console.log(`  Retry attempt ${attempt}/${maxAttempts}...`);
+      }
 
-      // Run agent against fixture
-      const executor = new AgentExecutor(workDir, scenario.framework);
-      const agentResult = await executor.run();
-
-      // Grade the result
-      const grader = new scenario.grader(workDir);
-      const gradeResult = await grader.grade();
-
-      results.push({
-        scenario: `${scenario.framework}/${scenario.state}`,
-        passed: gradeResult.passed,
-        duration: Date.now() - startTime,
-        checks: gradeResult.checks,
-        agentOutput: agentResult.output,
+      const startTime = Date.now();
+      const fixtureManager = new FixtureManager(scenario.framework, scenario.state, {
+        keepOnFail: options.keepOnFail,
       });
 
-      console.log(gradeResult.passed ? '✓ PASSED' : '✗ FAILED');
+      try {
+        const workDir = await fixtureManager.setup();
 
-      if (!gradeResult.passed) {
-        for (const check of gradeResult.checks.filter((c) => !c.passed)) {
-          console.log(`  - ${check.name}: ${check.message}`);
+        const executor = new AgentExecutor(workDir, scenario.framework, {
+          verbose: options.verbose,
+        });
+        const agentResult = await executor.run();
+
+        const grader = new scenario.grader(workDir);
+        const gradeResult = await grader.grade();
+
+        lastResult = {
+          scenario: `${scenario.framework}/${scenario.state}`,
+          passed: gradeResult.passed,
+          duration: Date.now() - startTime,
+          checks: gradeResult.checks,
+          agentOutput: agentResult.output,
+          attempts: attempt,
+        };
+
+        if (gradeResult.passed) {
+          break; // Success, no more retries needed
+        }
+      } catch (error) {
+        lastResult = {
+          scenario: `${scenario.framework}/${scenario.state}`,
+          passed: false,
+          duration: Date.now() - startTime,
+          error: error instanceof Error ? error.message : String(error),
+          attempts: attempt,
+        };
+      } finally {
+        if (!options.keepOnFail || lastResult?.passed) {
+          await fixtureManager.cleanup();
+        } else {
+          console.log(`  Temp directory preserved: ${fixtureManager.getTempDir()}`);
         }
       }
-    } catch (error) {
-      results.push({
-        scenario: `${scenario.framework}/${scenario.state}`,
-        passed: false,
-        duration: Date.now() - startTime,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      console.log('✗ ERROR:', error);
-    } finally {
-      await fixtureManager.cleanup();
+    }
+
+    if (lastResult) {
+      results.push(lastResult);
+      const status = lastResult.passed ? '✓ PASSED' : '✗ FAILED';
+      const attemptInfo =
+        lastResult.attempts && lastResult.attempts > 1
+          ? ` (attempt ${lastResult.attempts}/${maxAttempts})`
+          : '';
+      console.log(`${status}${attemptInfo}`);
+
+      if (!lastResult.passed && !options.verbose) {
+        printFailureDetails(lastResult, false);
+      } else if (!lastResult.passed && options.verbose) {
+        printFailureDetails(lastResult, true);
+      }
     }
   }
 
+  // Save results (skip in json mode since caller handles output)
+  const filepath = await saveResults(results, {
+    framework: options.framework,
+    state: options.state,
+  });
+  console.log(`\nResults saved to: ${filepath}`);
+
   return results;
+}
+
+function printFailureDetails(result: EvalResult, verbose: boolean): void {
+  if (result.error) {
+    console.log(`  Error: ${result.error}`);
+  } else if (result.checks) {
+    const failedChecks = result.checks.filter((c: GradeCheck) => !c.passed);
+    for (const check of failedChecks) {
+      console.log(`  - ${check.name}: ${check.message}`);
+      if (verbose && check.expected) {
+        console.log(`    Expected: ${check.expected}`);
+      }
+      if (verbose && check.actual) {
+        console.log(`    Actual: ${check.actual}`);
+      }
+    }
+  }
 }

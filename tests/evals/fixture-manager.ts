@@ -3,13 +3,21 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileNoThrow } from '../../src/utils/exec-file.js';
 
+export interface FixtureOptions {
+  keepOnFail?: boolean;
+}
+
 export class FixtureManager {
   private tempDir: string | null = null;
+  private options: FixtureOptions;
 
   constructor(
     private framework: string,
-    private state: string
-  ) {}
+    private state: string,
+    options: FixtureOptions = {}
+  ) {
+    this.options = options;
+  }
 
   async setup(): Promise<string> {
     // Create temp directory

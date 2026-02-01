@@ -2,8 +2,14 @@ export interface CliOptions {
   framework?: string;
   state?: string;
   verbose: boolean;
+  debug: boolean;
   json: boolean;
   help: boolean;
+  keepOnFail: boolean;
+  retry: number;
+  noRetry: boolean;
+  command?: 'run' | 'history' | 'compare';
+  compareIds?: [string, string];
 }
 
 const FRAMEWORKS = ['nextjs', 'react', 'react-router', 'tanstack-start', 'vanilla-js'];
@@ -12,17 +18,45 @@ const STATES = ['fresh', 'existing', 'existing-auth0'];
 export function parseArgs(args: string[]): CliOptions {
   const options: CliOptions = {
     verbose: false,
+    debug: false,
     json: false,
     help: false,
+    keepOnFail: false,
+    retry: 2,
+    noRetry: false,
   };
+
+  // Check for subcommands
+  if (args[0] === 'history') {
+    options.command = 'history';
+    return options;
+  }
+
+  if (args[0] === 'compare' && args.length >= 3) {
+    options.command = 'compare';
+    options.compareIds = [args[1], args[2]];
+    return options;
+  }
+
+  options.command = 'run';
 
   for (const arg of args) {
     if (arg === '--help' || arg === '-h') {
       options.help = true;
     } else if (arg === '--verbose' || arg === '-v') {
       options.verbose = true;
+    } else if (arg === '--debug') {
+      options.debug = true;
+      options.verbose = true;
+      options.keepOnFail = true;
     } else if (arg === '--json') {
       options.json = true;
+    } else if (arg === '--keep-on-fail') {
+      options.keepOnFail = true;
+    } else if (arg === '--no-retry') {
+      options.noRetry = true;
+    } else if (arg.startsWith('--retry=')) {
+      options.retry = parseInt(arg.split('=')[1], 10);
     } else if (arg.startsWith('--framework=')) {
       const framework = arg.split('=')[1];
       if (!FRAMEWORKS.includes(framework)) {
@@ -38,12 +72,21 @@ export function parseArgs(args: string[]): CliOptions {
     }
   }
 
+  if (options.noRetry) {
+    options.retry = 0;
+  }
+
   return options;
 }
 
 export function printHelp(): void {
   console.log(`
-Usage: pnpm eval [options]
+Usage: pnpm eval [command] [options]
+
+Commands:
+  run (default)       Run evaluations
+  history             List recent eval runs
+  compare <id1> <id2> Compare two eval runs
 
 Options:
   --framework=<name>  Run only scenarios for this framework
@@ -53,6 +96,14 @@ Options:
                       Valid: ${STATES.join(', ')}
 
   --verbose, -v       Show detailed output including agent tool calls
+
+  --debug             Extra verbose, preserve temp dirs on failure
+
+  --keep-on-fail      Don't cleanup temp directory when scenario fails
+
+  --retry=<n>         Number of retry attempts (default: 2)
+
+  --no-retry          Disable retries
 
   --json              Output results as JSON (for scripting)
 
@@ -64,5 +115,9 @@ Examples:
   pnpm eval --state=fresh             # Run only fresh app scenarios
   pnpm eval --framework=react --state=existing-auth0
                                       # Run specific scenario
+  pnpm eval --debug                   # Verbose output, keep failed dirs
+  pnpm eval --retry=3                 # More retry attempts
+  pnpm eval:history                   # List recent runs
+  pnpm eval:compare <id1> <id2>       # Compare two runs
 `);
 }
