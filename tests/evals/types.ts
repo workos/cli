@@ -29,6 +29,7 @@ export interface EvalOptions {
   framework?: string;
   state?: string;
   verbose?: boolean;
+  sequential?: boolean;
 }
 
 export interface ToolCall {

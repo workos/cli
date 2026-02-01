@@ -1,12 +1,12 @@
-import { FixtureManager } from './fixture-manager.js';
-import { AgentExecutor } from './agent-executor.js';
 import { NextjsGrader } from './graders/nextjs.grader.js';
 import { ReactGrader } from './graders/react.grader.js';
 import { ReactRouterGrader } from './graders/react-router.grader.js';
 import { TanstackGrader } from './graders/tanstack.grader.js';
 import { VanillaGrader } from './graders/vanilla.grader.js';
 import { saveResults } from './history.js';
-import type { EvalResult, EvalOptions, Grader, GradeCheck } from './types.js';
+import { ParallelRunner } from './parallel-runner.js';
+import { renderDashboard } from './dashboard/index.js';
+import type { EvalResult, EvalOptions, Grader } from './types.js';
 
 interface Scenario {
   framework: string;
@@ -45,90 +45,46 @@ export interface ExtendedEvalOptions extends EvalOptions {
   keep?: boolean;
   keepOnFail?: boolean;
   retry?: number;
+  noDashboard?: boolean;
 }
 
 export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult[]> {
-  const results: EvalResult[] = [];
-  const maxAttempts = (options.retry ?? 2) + 1;
-
   const scenarios = SCENARIOS.filter(
     (s) => (!options.framework || s.framework === options.framework) && (!options.state || s.state === options.state),
   );
 
-  for (const scenario of scenarios) {
-    console.log(`\nRunning: ${scenario.framework}/${scenario.state}`);
+  const maxAttempts = (options.retry ?? 2) + 1;
 
-    let lastResult: EvalResult | null = null;
-    let attempt = 0;
+  // Use ParallelRunner for execution
+  const runner = new ParallelRunner(scenarios, {
+    maxAttempts,
+    verbose: options.verbose,
+    keep: options.keep,
+    keepOnFail: options.keepOnFail,
+    concurrency: options.sequential ? 1 : undefined,
+  });
 
-    while (attempt < maxAttempts) {
-      attempt++;
-      if (attempt > 1) {
-        console.log(`  Retry attempt ${attempt}/${maxAttempts}...`);
-      }
+  // Determine output mode: dashboard for TTY, logging otherwise
+  const useDashboard = !options.noDashboard && process.stdout.isTTY;
 
-      const startTime = Date.now();
-      const fixtureManager = new FixtureManager(scenario.framework, scenario.state, {
-        keepOnFail: options.keepOnFail,
-      });
-
-      try {
-        const workDir = await fixtureManager.setup();
-
-        const executor = new AgentExecutor(workDir, scenario.framework, {
-          verbose: options.verbose,
-        });
-        const agentResult = await executor.run();
-
-        const grader = new scenario.grader(workDir);
-        const gradeResult = await grader.grade();
-
-        lastResult = {
-          scenario: `${scenario.framework}/${scenario.state}`,
-          passed: gradeResult.passed,
-          duration: Date.now() - startTime,
-          checks: gradeResult.checks,
-          agentOutput: agentResult.output,
-          attempts: attempt,
-        };
-
-        if (gradeResult.passed) {
-          break; // Success, no more retries needed
-        }
-      } catch (error) {
-        lastResult = {
-          scenario: `${scenario.framework}/${scenario.state}`,
-          passed: false,
-          duration: Date.now() - startTime,
-          error: error instanceof Error ? error.message : String(error),
-          attempts: attempt,
-        };
-      } finally {
-        const shouldKeep = options.keep || (options.keepOnFail && !lastResult?.passed);
-        if (shouldKeep) {
-          console.log(`  Temp directory preserved: ${fixtureManager.getTempDir()}`);
-        } else {
-          await fixtureManager.cleanup();
-        }
-      }
-    }
-
-    if (lastResult) {
-      results.push(lastResult);
-      const status = lastResult.passed ? '✓ PASSED' : '✗ FAILED';
-      const attemptInfo =
-        lastResult.attempts && lastResult.attempts > 1 ? ` (attempt ${lastResult.attempts}/${maxAttempts})` : '';
-      console.log(`${status}${attemptInfo}`);
-
-      if (!lastResult.passed && !options.verbose) {
-        printFailureDetails(lastResult, false);
-      } else if (!lastResult.passed && options.verbose) {
-        printFailureDetails(lastResult, true);
-      }
-    }
+  let dashboard: { unmount: () => void } | null = null;
+  if (useDashboard) {
+    dashboard = renderDashboard({
+      scenarios: scenarios.map((s) => ({ framework: s.framework, state: s.state })),
+      concurrency: runner.getConcurrency(),
+    });
   }
 
-  // Save results (skip in json mode since caller handles output)
+  const results = await runner.run();
+
+  if (dashboard) {
+    dashboard.unmount();
+  }
+
+  // Print summary
+  printSummary(results);
+
+  // Save results
   const filepath = await saveResults(results, {
     framework: options.framework,
     state: options.state,
@@ -138,19 +94,18 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
   return results;
 }
 
-function printFailureDetails(result: EvalResult, verbose: boolean): void {
-  if (result.error) {
-    console.log(`  Error: ${result.error}`);
-  } else if (result.checks) {
-    const failedChecks = result.checks.filter((c: GradeCheck) => !c.passed);
-    for (const check of failedChecks) {
-      console.log(`  - ${check.name}: ${check.message}`);
-      if (verbose && check.expected) {
-        console.log(`    Expected: ${check.expected}`);
-      }
-      if (verbose && check.actual) {
-        console.log(`    Actual: ${check.actual}`);
-      }
+function printSummary(results: EvalResult[]): void {
+  const passed = results.filter((r) => r.passed).length;
+  const failed = results.length - passed;
+
+  console.log('\n' + '─'.repeat(50));
+  console.log(`Summary: ${passed}/${results.length} passed, ${failed} failed`);
+
+  if (failed > 0) {
+    console.log('\nFailed scenarios:');
+    for (const result of results.filter((r) => !r.passed)) {
+      const attempts = result.attempts && result.attempts > 1 ? ` (${result.attempts} attempts)` : '';
+      console.log(`  ✗ ${result.scenario}${attempts}`);
     }
   }
 }

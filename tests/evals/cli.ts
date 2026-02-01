@@ -9,6 +9,8 @@ export interface CliOptions {
   keepOnFail: boolean;
   retry: number;
   noRetry: boolean;
+  sequential: boolean;
+  noDashboard: boolean;
   command?: 'run' | 'history' | 'compare';
   compareIds?: [string, string];
 }
@@ -26,6 +28,8 @@ export function parseArgs(args: string[]): CliOptions {
     keepOnFail: false,
     retry: 2,
     noRetry: false,
+    sequential: false,
+    noDashboard: false,
   };
 
   // Check for subcommands
@@ -73,6 +77,10 @@ export function parseArgs(args: string[]): CliOptions {
         throw new Error(`Unknown state: ${state}. Valid: ${STATES.join(', ')}`);
       }
       options.state = state;
+    } else if (arg === '--sequential') {
+      options.sequential = true;
+    } else if (arg === '--no-dashboard') {
+      options.noDashboard = true;
     }
   }
 
@@ -110,6 +118,10 @@ Options:
   --retry=<n>         Number of retry attempts (default: 2)
 
   --no-retry          Disable retries
+
+  --sequential        Run scenarios sequentially (disable parallelism)
+
+  --no-dashboard      Disable live dashboard, use sequential logging
 
   --json              Output results as JSON (for scripting)
 

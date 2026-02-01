@@ -20,8 +20,9 @@ export class FixtureManager {
   }
 
   async setup(): Promise<string> {
-    // Create temp directory
-    this.tempDir = await mkdtemp(join(tmpdir(), `eval-${this.framework}-`));
+    // Create temp directory with random suffix for parallel safety
+    const suffix = Math.random().toString(36).substring(2, 8);
+    this.tempDir = await mkdtemp(join(tmpdir(), `eval-${this.framework}-${this.state}-${suffix}-`));
 
     // Copy fixture files
     const fixtureSource = join(process.cwd(), 'tests/fixtures', this.framework, this.state);
