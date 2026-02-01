@@ -63,6 +63,7 @@
     "@vitest/coverage-v8": "^4.0.18",
     "@vitest/ui": "^4.0.18",
     "dotenv": "^17.2.3",
+    "p-limit": "^7.2.0",
     "prettier": "^3.8.0",
     "tsx": "^4.20.3",
     "typescript": "^5.9.3",
