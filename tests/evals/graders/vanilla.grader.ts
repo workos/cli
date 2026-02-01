@@ -4,6 +4,19 @@ import { FileGrader } from './file-grader.js';
 import { BuildGrader } from './build-grader.js';
 import type { Grader, GradeResult, GradeCheck } from '../types.js';
 
+/**
+ * Vanilla JS Grader
+ *
+ * SDK: @workos-inc/authkit-js
+ * Docs: https://github.com/workos/authkit-js
+ *
+ * Key patterns:
+ * - Bundled: import { createClient } from '@workos-inc/authkit-js'
+ * - CDN: WorkOS.createClient from script tag
+ * - Async init: const authkit = await createClient(clientId)
+ * - Methods: authkit.signIn(), authkit.signOut(), authkit.getUser()
+ * - NO callback route needed - SDK handles OAuth internally
+ */
 export class VanillaGrader implements Grader {
   private fileGrader: FileGrader;
   private buildGrader: BuildGrader;
@@ -18,19 +31,43 @@ export class VanillaGrader implements Grader {
   async grade(): Promise<GradeResult> {
     const checks: GradeCheck[] = [];
 
-    // Check callback page exists
-    const callbackHtml = await this.fileGrader.checkFileExists('callback.html');
-    const callbackJs = await this.fileGrader.checkFileExists('callback.js');
-    checks.push(callbackHtml.passed ? callbackHtml : callbackJs);
+    // Check SDK integration - either bundled import or CDN script
+    // Bundled: import from '@workos-inc/authkit-js'
+    // CDN: WorkOS.createClient
+    checks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.{js,ts,html}',
+        [/@workos-inc\/authkit-js|WorkOS\.createClient|workos.*createClient/i],
+        'AuthKit JS SDK integration',
+      ),
+    );
 
-    // Check auth script
-    checks.push(await this.fileGrader.checkFileExists('auth.js'));
+    // Check createClient usage (the core initialization pattern)
+    checks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.{js,ts}',
+        ['createClient'],
+        'createClient initialization',
+      ),
+    );
 
-    // Check auth script content
-    checks.push(...(await this.fileGrader.checkFileContains('auth.js', ['workos', 'getAuthorizationUrl'])));
+    // Check for auth methods usage (signIn, signOut, or getUser)
+    checks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.{js,ts}',
+        [/signIn|signOut|getUser|getAccessToken/],
+        'Auth method usage',
+      ),
+    );
 
-    // Check index.html includes auth
-    checks.push(...(await this.fileGrader.checkFileContains('index.html', [/auth\.js|workos/i])));
+    // Check index.html exists and references auth script or module
+    checks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '*.html',
+        [/<script/i],
+        'HTML with script reference',
+      ),
+    );
 
     // Vanilla JS may not have build step - check if build script exists
     const hasBuildScript = await this.checkHasBuildScript();
