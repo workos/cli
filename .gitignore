@@ -28,3 +28,6 @@ src/version.ts
 .idea
 *.sublime-*
 dist/
+
+# Eval results
+tests/eval-results/
