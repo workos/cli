@@ -30,3 +30,10 @@ export interface EvalOptions {
   state?: string;
   verbose?: boolean;
 }
+
+export interface ToolCall {
+  tool: string;
+  input: Record<string, unknown>;
+  output?: string;
+  durationMs?: number;
+}
