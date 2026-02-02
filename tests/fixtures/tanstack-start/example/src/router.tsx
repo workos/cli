@@ -1,5 +1,5 @@
-import { createRouter } from '@tanstack/react-router'
-import { routeTree } from './routeTree.gen'
+import { createRouter } from '@tanstack/react-router';
+import { routeTree } from './routeTree.gen';
 
 export const getRouter = () => {
   const router = createRouter({
@@ -7,7 +7,7 @@ export const getRouter = () => {
     context: {},
     scrollRestoration: true,
     defaultPreloadStaleTime: 0,
-  })
+  });
 
-  return router
-}
+  return router;
+};

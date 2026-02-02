@@ -1,8 +1,8 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/')({
   component: Home,
-})
+});
 
 function Home() {
   return (
@@ -13,5 +13,5 @@ function Home() {
         <Link to="/dashboard">Go to Dashboard</Link>
       </nav>
     </div>
-  )
+  );
 }
