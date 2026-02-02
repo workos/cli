@@ -20,7 +20,7 @@ export function printMatrix(results: EvalResult[]): void {
     });
 
     const name = framework.padEnd(15);
-    console.log(`│ ${name} │${cells[0]}│${cells[1]}     │`);
+    console.log(`│ ${name} │ ${cells[0]} │ ${cells[1]}       │`);
   }
 
   console.log('└─────────────────┴─────────┴───────────────┘');
