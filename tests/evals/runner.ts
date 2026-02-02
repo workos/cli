@@ -116,6 +116,7 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
 
   // Print summary
   printSummary(results);
+  printLatencySummary(results);
 
   // Validate against success criteria
   const validation = validateResults(results);
@@ -159,6 +160,57 @@ function printSummary(results: EvalResult[]): void {
       console.log(`  ✗ ${result.scenario}${attempts}`);
     }
   }
+}
+
+function printLatencySummary(results: EvalResult[]): void {
+  const withLatency = results.filter((r) => r.latencyMetrics);
+  if (withLatency.length === 0) return;
+
+  // Extract metrics
+  const ttfts = withLatency
+    .map((r) => r.latencyMetrics!.ttftMs)
+    .filter((t): t is number => t !== null)
+    .sort((a, b) => a - b);
+
+  const durations = withLatency.map((r) => r.latencyMetrics!.totalDurationMs).sort((a, b) => a - b);
+
+  console.log('\nLatency Summary:');
+  console.log('─'.repeat(40));
+
+  if (ttfts.length > 0) {
+    console.log(
+      `  TTFT:     p50=${percentile(ttfts, 50)}ms, p95=${percentile(ttfts, 95)}ms, max=${ttfts[ttfts.length - 1]}ms`,
+    );
+  }
+
+  console.log(
+    `  Duration: p50=${percentile(durations, 50)}ms, p95=${percentile(durations, 95)}ms, max=${durations[durations.length - 1]}ms`,
+  );
+
+  // Aggregate tool breakdown across all runs
+  const toolTotals = new Map<string, { durationMs: number; count: number }>();
+  for (const result of withLatency) {
+    for (const tool of result.latencyMetrics!.toolBreakdown || []) {
+      const existing = toolTotals.get(tool.tool) || { durationMs: 0, count: 0 };
+      toolTotals.set(tool.tool, {
+        durationMs: existing.durationMs + tool.durationMs,
+        count: existing.count + tool.count,
+      });
+    }
+  }
+
+  if (toolTotals.size > 0) {
+    console.log('\nTool Time Breakdown (total across all scenarios):');
+    const sorted = Array.from(toolTotals.entries()).sort((a, b) => b[1].durationMs - a[1].durationMs);
+    for (const [tool, data] of sorted.slice(0, 5)) {
+      console.log(`  ${tool}: ${(data.durationMs / 1000).toFixed(1)}s (${data.count} calls)`);
+    }
+  }
+}
+
+function percentile(sorted: number[], p: number): number {
+  const index = Math.ceil((p / 100) * sorted.length) - 1;
+  return sorted[Math.max(0, index)];
 }
 
 function printValidationSummary(validation: ValidationResult): void {
