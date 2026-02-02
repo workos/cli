@@ -63,6 +63,7 @@
     "@vitest/coverage-v8": "^4.0.18",
     "@vitest/ui": "^4.0.18",
     "dotenv": "^17.2.3",
+    "p-limit": "^7.2.0",
     "prettier": "^3.8.0",
     "tsx": "^4.20.3",
     "typescript": "^5.9.3",
@@ -71,7 +72,7 @@
   "engines": {
     "node": ">=20.20"
   },
-  "packageManager": "pnpm@10.23.0+sha512.21c4e5698002ade97e4efe8b8b4a89a8de3c85a37919f957e7a0f30f38fbc5bbdd05980ffe29179b2fb6e6e691242e098d945d1601772cad0fef5fb6411e2a4b",
+  "packageManager": "pnpm@10.28.2",
   "scripts": {
     "clean": "rm -rf ./dist",
     "prebuild": "pnpm clean",
@@ -85,7 +86,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "eval": "tsx tests/evals/index.ts",
+    "eval:history": "tsx tests/evals/index.ts history",
+    "eval:compare": "tsx tests/evals/index.ts compare",
+    "eval:logs": "tsx tests/evals/index.ts logs",
+    "eval:show": "tsx tests/evals/index.ts show"
   },
   "author": "WorkOS",
   "license": "MIT"

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard - Vanilla JS App</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <nav>
+      <a href="/">Home</a> | <a href="/about.html">About</a> | <a href="/dashboard.html">Dashboard</a>
+      <span id="auth-buttons">
+        <button id="login-btn" style="display: none">Login</button>
+        <button id="logout-btn" style="display: none">Logout</button>
+      </span>
+    </nav>
+    <div id="app">
+      <h1>Dashboard</h1>
+      <div id="dashboard-content">
+        <p>Loading...</p>
+      </div>
+    </div>
+    <script type="module" src="/dashboard.js"></script>
+  </body>
+</html>

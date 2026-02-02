@@ -1,0 +1,6 @@
+# Ignore artifacts from running fixtures locally
+node_modules/
+pnpm-lock.yaml
+.vinxi/
+.output/
+dist/
