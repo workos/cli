@@ -18,25 +18,39 @@ interface Scenario {
 }
 
 const SCENARIOS: Scenario[] = [
-  // Next.js
+  // Next.js (5 states)
   { framework: 'nextjs', state: 'example', grader: NextjsGrader },
   { framework: 'nextjs', state: 'example-auth0', grader: NextjsGrader },
+  { framework: 'nextjs', state: 'partial-install', grader: NextjsGrader },
+  { framework: 'nextjs', state: 'typescript-strict', grader: NextjsGrader },
+  { framework: 'nextjs', state: 'conflicting-middleware', grader: NextjsGrader },
 
-  // React SPA
+  // React SPA (5 states)
   { framework: 'react', state: 'example', grader: ReactGrader },
   { framework: 'react', state: 'example-auth0', grader: ReactGrader },
+  { framework: 'react', state: 'partial-install', grader: ReactGrader },
+  { framework: 'react', state: 'typescript-strict', grader: ReactGrader },
+  { framework: 'react', state: 'conflicting-auth', grader: ReactGrader },
 
-  // React Router
+  // React Router (5 states)
   { framework: 'react-router', state: 'example', grader: ReactRouterGrader },
   { framework: 'react-router', state: 'example-auth0', grader: ReactRouterGrader },
+  { framework: 'react-router', state: 'partial-install', grader: ReactRouterGrader },
+  { framework: 'react-router', state: 'typescript-strict', grader: ReactRouterGrader },
+  { framework: 'react-router', state: 'conflicting-middleware', grader: ReactRouterGrader },
 
-  // TanStack Start
+  // TanStack Start (5 states)
   { framework: 'tanstack-start', state: 'example', grader: TanstackGrader },
   { framework: 'tanstack-start', state: 'example-auth0', grader: TanstackGrader },
+  { framework: 'tanstack-start', state: 'partial-install', grader: TanstackGrader },
+  { framework: 'tanstack-start', state: 'typescript-strict', grader: TanstackGrader },
+  { framework: 'tanstack-start', state: 'conflicting-middleware', grader: TanstackGrader },
 
-  // Vanilla JS
+  // Vanilla JS (4 states - no TypeScript)
   { framework: 'vanilla-js', state: 'example', grader: VanillaGrader },
   { framework: 'vanilla-js', state: 'example-auth0', grader: VanillaGrader },
+  { framework: 'vanilla-js', state: 'partial-install', grader: VanillaGrader },
+  { framework: 'vanilla-js', state: 'conflicting-auth', grader: VanillaGrader },
 ];
 
 export interface ExtendedEvalOptions extends EvalOptions {
