@@ -78,33 +78,57 @@ export const GET = handleAuth();
 
 Check README for exact usage. If build fails with "cookies outside request scope", the handler is likely missing async/await.
 
-## Step 6: Provider Setup
+## Step 6: Provider Setup (REQUIRED)
 
-Wrap app in `AuthKitProvider` in `app/layout.tsx`. See README for import path.
+**CRITICAL:** You MUST wrap the app in `AuthKitProvider` in `app/layout.tsx`.
+
+This is required for:
+- Client-side auth state via `useAuth()` hook
+- Consistent auth UX across client/server boundaries
+- Proper migration from Auth0 (which uses client-side auth)
+
+```tsx
+// app/layout.tsx
+import { AuthKitProvider } from '@workos-inc/authkit-nextjs';
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <AuthKitProvider>{children}</AuthKitProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+Check README for exact import path - it may be a subpath export like `@workos-inc/authkit-nextjs/components`.
+
+**Do NOT skip this step** even if using server-side auth patterns elsewhere.
 
 ## Step 7: UI Integration
 
 Add auth UI to `app/page.tsx` using SDK functions. See README for `getUser`, `getSignInUrl`, `signOut` usage.
 
-## Verification Checklist
+## Verification Checklist (ALL MUST PASS)
 
-Run these commands to confirm integration:
+Run these commands to confirm integration. **Do not mark complete until all pass:**
 
 ```bash
-# Check middleware/proxy exists (one should match)
+# 1. Check middleware/proxy exists (one should match)
 ls proxy.ts middleware.ts src/proxy.ts src/middleware.ts 2>/dev/null
 
-# Check provider is wrapped
-grep -l "AuthKitProvider" app/layout.tsx
+# 2. CRITICAL: Check AuthKitProvider is in layout (REQUIRED)
+grep "AuthKitProvider" app/layout.tsx || echo "FAIL: AuthKitProvider missing from layout"
 
-# Check callback route exists
+# 3. Check callback route exists
 find app -name "route.ts" -path "*/callback/*"
 
-# Build succeeds
+# 4. Build succeeds
 npm run build
 ```
 
-All checks must pass before marking complete.
+**If check #2 fails:** Go back to Step 6 and add AuthKitProvider. This is not optional.
 
 ## Error Recovery
 
