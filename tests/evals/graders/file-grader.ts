@@ -54,9 +54,7 @@ export class FileGrader {
     for (const file of files) {
       try {
         const content = await readFile(file, 'utf-8');
-        const allMatch = contentPatterns.every((p) =>
-          typeof p === 'string' ? content.includes(p) : p.test(content),
-        );
+        const allMatch = contentPatterns.every((p) => (typeof p === 'string' ? content.includes(p) : p.test(content)));
         if (allMatch) {
           const relativePath = file.replace(this.workDir + '/', '');
           return {

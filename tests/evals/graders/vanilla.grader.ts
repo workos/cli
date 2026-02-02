@@ -44,11 +44,7 @@ export class VanillaGrader implements Grader {
 
     // Check createClient usage (the core initialization pattern)
     checks.push(
-      await this.fileGrader.checkFileWithPattern(
-        '**/*.{js,ts}',
-        ['createClient'],
-        'createClient initialization',
-      ),
+      await this.fileGrader.checkFileWithPattern('**/*.{js,ts}', ['createClient'], 'createClient initialization'),
     );
 
     // Check for auth methods usage (signIn, signOut, or getUser)
@@ -61,13 +57,7 @@ export class VanillaGrader implements Grader {
     );
 
     // Check index.html exists and references auth script or module
-    checks.push(
-      await this.fileGrader.checkFileWithPattern(
-        '*.html',
-        [/<script/i],
-        'HTML with script reference',
-      ),
-    );
+    checks.push(await this.fileGrader.checkFileWithPattern('*.html', [/<script/i], 'HTML with script reference'));
 
     // Vanilla JS may not have build step - check if build script exists
     const hasBuildScript = await this.checkHasBuildScript();
