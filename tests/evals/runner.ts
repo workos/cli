@@ -7,7 +7,9 @@ import { saveResults } from './history.js';
 import { ParallelRunner } from './parallel-runner.js';
 import { renderDashboard } from './dashboard/index.js';
 import { LogWriter } from './log-writer.js';
-import type { EvalResult, EvalOptions, Grader } from './types.js';
+import { validateResults, type ValidationResult } from './success-criteria.js';
+import { captureVersionMetadata } from './versioning.js';
+import type { EvalResult, EvalOptions, EvalResultMetadata, Grader } from './types.js';
 
 interface Scenario {
   framework: string;
@@ -43,9 +45,17 @@ export interface ExtendedEvalOptions extends EvalOptions {
   retry?: number;
   noDashboard?: boolean;
   debug?: boolean;
+  noFail?: boolean;
 }
 
 export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult[]> {
+  // Capture version metadata at start
+  const versionMeta = await captureVersionMetadata();
+  const metadata: EvalResultMetadata = {
+    ...versionMeta,
+    timestamp: new Date().toISOString(),
+  };
+
   const scenarios = SCENARIOS.filter(
     (s) => (!options.framework || s.framework === options.framework) && (!options.state || s.state === options.state),
   );
@@ -93,17 +103,30 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
   // Print summary
   printSummary(results);
 
+  // Validate against success criteria
+  const validation = validateResults(results);
+  printValidationSummary(validation);
+
   // Print log file location
   console.log(`\nDetailed log: ${logWriter.getFilePath()}`);
 
   logWriter.cleanup();
 
-  // Save results
-  const filepath = await saveResults(results, {
-    framework: options.framework,
-    state: options.state,
-  });
+  // Save results with metadata
+  const filepath = await saveResults(
+    results,
+    {
+      framework: options.framework,
+      state: options.state,
+    },
+    metadata,
+  );
   console.log(`Results saved to: ${filepath}`);
+
+  // Exit with error if thresholds not met (unless --no-fail)
+  if (!validation.passed && !options.noFail) {
+    process.exitCode = 1;
+  }
 
   return results;
 }
@@ -122,4 +145,23 @@ function printSummary(results: EvalResult[]): void {
       console.log(`  ✗ ${result.scenario}${attempts}`);
     }
   }
+}
+
+function printValidationSummary(validation: ValidationResult): void {
+  console.log('\n' + '═'.repeat(50));
+  if (validation.passed) {
+    console.log('✓ PASS: All success criteria met');
+  } else {
+    console.log('✗ FAIL: Success criteria not met');
+    for (const failure of validation.failures) {
+      console.log(`  - ${failure}`);
+    }
+  }
+  console.log(
+    `\nFirst-attempt: ${(validation.actual.firstAttemptPassRate * 100).toFixed(1)}% (required: ${validation.criteria.firstAttemptPassRate * 100}%)`,
+  );
+  console.log(
+    `With-retry:    ${(validation.actual.withRetryPassRate * 100).toFixed(1)}% (required: ${validation.criteria.withRetryPassRate * 100}%)`,
+  );
+  console.log('═'.repeat(50));
 }

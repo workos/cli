@@ -11,6 +11,7 @@ export interface CliOptions {
   noRetry: boolean;
   sequential: boolean;
   noDashboard: boolean;
+  noFail: boolean;
   command?: 'run' | 'history' | 'compare' | 'logs' | 'show';
   compareIds?: [string, string];
   logFile?: string;
@@ -31,6 +32,7 @@ export function parseArgs(args: string[]): CliOptions {
     noRetry: false,
     sequential: false,
     noDashboard: false,
+    noFail: false,
   };
 
   // Check for subcommands
@@ -93,6 +95,8 @@ export function parseArgs(args: string[]): CliOptions {
       options.sequential = true;
     } else if (arg === '--no-dashboard') {
       options.noDashboard = true;
+    } else if (arg === '--no-fail') {
+      options.noFail = true;
     }
   }
 
@@ -136,6 +140,8 @@ Options:
   --sequential        Run scenarios sequentially (disable parallelism)
 
   --no-dashboard      Disable live dashboard, use sequential logging
+
+  --no-fail           Exit 0 even if success criteria thresholds not met
 
   --json              Output results as JSON (for scripting)
 
