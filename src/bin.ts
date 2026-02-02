@@ -15,6 +15,7 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import chalk from 'chalk';
 import { ensureAuthenticated } from './lib/ensure-auth.js';
+import { checkForUpdates } from './lib/version-check.js';
 
 const NODE_VERSION_RANGE = getConfig().nodeVersion;
 
@@ -121,6 +122,9 @@ const installerOptions = {
     type: 'boolean' as const,
   },
 };
+
+// Check for updates (blocks up to 500ms)
+await checkForUpdates();
 
 yargs(hideBin(process.argv))
   .env('WORKOS_INSTALLER')
