@@ -39,6 +39,11 @@ export class FixtureManager {
       throw new Error(`pnpm install failed: ${result.stderr}`);
     }
 
+    // Initialize git repo for diff capture (quality grading)
+    await execFileNoThrow('git', ['init'], { cwd: this.tempDir });
+    await execFileNoThrow('git', ['add', '-A'], { cwd: this.tempDir });
+    await execFileNoThrow('git', ['commit', '-m', 'initial', '--no-gpg-sign'], { cwd: this.tempDir });
+
     return this.tempDir;
   }
 
