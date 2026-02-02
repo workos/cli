@@ -12,18 +12,17 @@ pnpm eval
 pnpm eval --framework=nextjs
 
 # Run specific scenario
-pnpm eval --framework=react --state=existing-auth0
+pnpm eval --framework=react --state=example-auth0
 ```
 
 ## Test Matrix
 
-The framework tests 15 scenarios (5 frameworks × 3 project states):
+The framework tests 10 scenarios (5 frameworks × 2 project states):
 
-| State            | Description                                          |
-| ---------------- | ---------------------------------------------------- |
-| `fresh`          | Minimal scaffold from `create-*` tools               |
-| `existing`       | Project with routes, components, custom config       |
-| `existing-auth0` | Project with Auth0 authentication already integrated |
+| State           | Description                                          |
+| --------------- | ---------------------------------------------------- |
+| `example`       | Project with routes, components, custom config       |
+| `example-auth0` | Project with Auth0 authentication already integrated |
 
 | Framework        | Skill                         | Key Checks                                     |
 | ---------------- | ----------------------------- | ---------------------------------------------- |
@@ -52,13 +51,13 @@ The framework tests 15 scenarios (5 frameworks × 3 project states):
 ### 1. Inspect the failure details
 
 ```bash
-pnpm eval --framework=react --state=existing-auth0 --verbose
+pnpm eval --framework=react --state=example-auth0 --verbose
 ```
 
 ### 2. Preserve the temp directory
 
 ```bash
-pnpm eval --framework=react --state=existing-auth0 --keep-on-fail
+pnpm eval --framework=react --state=example-auth0 --keep-on-fail
 # Output will show: "Temp directory preserved: /tmp/eval-react-xxxxx"
 ```
 

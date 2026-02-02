@@ -1,5 +1,6 @@
-import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
-import appCss from '../styles.css?url'
+import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router';
+import { Auth0Provider } from '@auth0/auth0-react';
+import appCss from '../styles.css?url';
 
 export const Route = createRootRoute({
   head: () => ({
@@ -11,7 +12,7 @@ export const Route = createRootRoute({
     links: [{ rel: 'stylesheet', href: appCss }],
   }),
   shellComponent: RootDocument,
-})
+});
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
@@ -20,9 +21,17 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        {children}
+        <Auth0Provider
+          domain="your-tenant.auth0.com"
+          clientId="your-client-id"
+          authorizationParams={{
+            redirect_uri: typeof window !== 'undefined' ? window.location.origin : '',
+          }}
+        >
+          {children}
+        </Auth0Provider>
         <Scripts />
       </body>
     </html>
-  )
+  );
 }

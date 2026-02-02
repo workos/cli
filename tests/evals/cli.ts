@@ -17,7 +17,7 @@ export interface CliOptions {
 }
 
 const FRAMEWORKS = ['nextjs', 'react', 'react-router', 'tanstack-start', 'vanilla-js'];
-const STATES = ['fresh', 'existing', 'existing-auth0'];
+const STATES = ['example', 'example-auth0'];
 
 export function parseArgs(args: string[]): CliOptions {
   const options: CliOptions = {
@@ -142,10 +142,10 @@ Options:
   --help, -h          Show this help message
 
 Examples:
-  pnpm eval                           # Run all 15 scenarios
+  pnpm eval                           # Run all 10 scenarios
   pnpm eval --framework=nextjs        # Run only Next.js scenarios
-  pnpm eval --state=fresh             # Run only fresh app scenarios
-  pnpm eval --framework=react --state=existing-auth0
+  pnpm eval --state=example           # Run only example app scenarios
+  pnpm eval --framework=react --state=example-auth0
                                       # Run specific scenario
   pnpm eval --debug                   # Verbose output, keep failed dirs
   pnpm eval --retry=3                 # More retry attempts

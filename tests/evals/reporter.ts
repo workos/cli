@@ -1,15 +1,15 @@
 import type { EvalResult } from './types.js';
 
 const FRAMEWORKS = ['nextjs', 'react', 'react-router', 'tanstack-start', 'vanilla-js'];
-const STATES = ['fresh', 'existing', 'existing-auth0'];
+const STATES = ['example', 'example-auth0'];
 
 export function printMatrix(results: EvalResult[]): void {
   const resultMap = new Map(results.map((r) => [r.scenario, r]));
 
   // Header
-  console.log('\n┌─────────────────┬─────────┬──────────┬───────────────┐');
-  console.log('│ Framework       │  Fresh  │ Existing │ Existing+Auth │');
-  console.log('├─────────────────┼─────────┼──────────┼───────────────┤');
+  console.log('\n┌─────────────────┬─────────┬───────────────┐');
+  console.log('│ Framework       │ Example │ Example+Auth0 │');
+  console.log('├─────────────────┼─────────┼───────────────┤');
 
   for (const framework of FRAMEWORKS) {
     const cells = STATES.map((state) => {
@@ -20,10 +20,10 @@ export function printMatrix(results: EvalResult[]): void {
     });
 
     const name = framework.padEnd(15);
-    console.log(`│ ${name} │${cells[0]}│${cells[1]}  │${cells[2]}     │`);
+    console.log(`│ ${name} │${cells[0]}│${cells[1]}     │`);
   }
 
-  console.log('└─────────────────┴─────────┴──────────┴───────────────┘');
+  console.log('└─────────────────┴─────────┴───────────────┘');
 
   // Summary
   const passed = results.filter((r) => r.passed).length;

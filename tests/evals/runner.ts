@@ -17,29 +17,24 @@ interface Scenario {
 
 const SCENARIOS: Scenario[] = [
   // Next.js
-  { framework: 'nextjs', state: 'fresh', grader: NextjsGrader },
-  { framework: 'nextjs', state: 'existing', grader: NextjsGrader },
-  { framework: 'nextjs', state: 'existing-auth0', grader: NextjsGrader },
+  { framework: 'nextjs', state: 'example', grader: NextjsGrader },
+  { framework: 'nextjs', state: 'example-auth0', grader: NextjsGrader },
 
   // React SPA
-  { framework: 'react', state: 'fresh', grader: ReactGrader },
-  { framework: 'react', state: 'existing', grader: ReactGrader },
-  { framework: 'react', state: 'existing-auth0', grader: ReactGrader },
+  { framework: 'react', state: 'example', grader: ReactGrader },
+  { framework: 'react', state: 'example-auth0', grader: ReactGrader },
 
   // React Router
-  { framework: 'react-router', state: 'fresh', grader: ReactRouterGrader },
-  { framework: 'react-router', state: 'existing', grader: ReactRouterGrader },
-  { framework: 'react-router', state: 'existing-auth0', grader: ReactRouterGrader },
+  { framework: 'react-router', state: 'example', grader: ReactRouterGrader },
+  { framework: 'react-router', state: 'example-auth0', grader: ReactRouterGrader },
 
   // TanStack Start
-  { framework: 'tanstack-start', state: 'fresh', grader: TanstackGrader },
-  { framework: 'tanstack-start', state: 'existing', grader: TanstackGrader },
-  { framework: 'tanstack-start', state: 'existing-auth0', grader: TanstackGrader },
+  { framework: 'tanstack-start', state: 'example', grader: TanstackGrader },
+  { framework: 'tanstack-start', state: 'example-auth0', grader: TanstackGrader },
 
   // Vanilla JS
-  { framework: 'vanilla-js', state: 'fresh', grader: VanillaGrader },
-  { framework: 'vanilla-js', state: 'existing', grader: VanillaGrader },
-  { framework: 'vanilla-js', state: 'existing-auth0', grader: VanillaGrader },
+  { framework: 'vanilla-js', state: 'example', grader: VanillaGrader },
+  { framework: 'vanilla-js', state: 'example-auth0', grader: VanillaGrader },
 ];
 
 export interface ExtendedEvalOptions extends EvalOptions {
