@@ -38,10 +38,10 @@ export class ReactRouterGrader implements Grader {
     );
 
     // Check authkitLoader usage in some route for auth state
-    // Can be root route or any protected route
+    // Can be root route (app/root.tsx in Framework mode) or any protected route
     checks.push(
       await this.fileGrader.checkFileWithPattern(
-        '{app,src}/routes/**/*.{ts,tsx}',
+        '{app,src}/{root,routes/**/*}.{ts,tsx}',
         ['authkitLoader', '@workos-inc/authkit-react-router'],
         'authkitLoader for auth state in routes',
       ),
