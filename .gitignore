@@ -31,3 +31,4 @@ dist/
 
 # Eval results
 tests/eval-results/
+.next/
