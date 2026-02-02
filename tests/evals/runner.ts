@@ -9,6 +9,8 @@ import { renderDashboard } from './dashboard/index.js';
 import { LogWriter } from './log-writer.js';
 import { validateResults, type ValidationResult } from './success-criteria.js';
 import { captureVersionMetadata } from './versioning.js';
+import { QualityGrader } from './graders/quality-grader.js';
+import { loadCredentials } from './env-loader.js';
 import type { EvalResult, EvalOptions, EvalResultMetadata, Grader } from './types.js';
 
 interface Scenario {
@@ -60,6 +62,7 @@ export interface ExtendedEvalOptions extends EvalOptions {
   noDashboard?: boolean;
   debug?: boolean;
   noFail?: boolean;
+  quality?: boolean;
 }
 
 export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult[]> {
@@ -112,6 +115,27 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
 
   if (dashboard) {
     dashboard.unmount();
+  }
+
+  // Quality grading (optional, only for passing scenarios with diffs)
+  if (options.quality) {
+    const credentials = loadCredentials();
+    const qualityGrader = new QualityGrader(credentials.anthropicApiKey);
+
+    console.log('\nRunning quality grading on passing scenarios...');
+
+    for (const result of results) {
+      if (result.passed && result.diff) {
+        const framework = result.scenario.split('/')[0];
+        result.qualityGrade = await qualityGrader.grade(result.diff, framework);
+
+        if (result.qualityGrade) {
+          console.log(`  ${result.scenario}: ${result.qualityGrade.score}/5`);
+        }
+      }
+    }
+
+    printQualitySummary(results);
   }
 
   // Print summary
@@ -230,4 +254,28 @@ function printValidationSummary(validation: ValidationResult): void {
     `With-retry:    ${(validation.actual.withRetryPassRate * 100).toFixed(1)}% (required: ${validation.criteria.withRetryPassRate * 100}%)`,
   );
   console.log('═'.repeat(50));
+}
+
+function printQualitySummary(results: EvalResult[]): void {
+  const withQuality = results.filter((r) => r.qualityGrade);
+  if (withQuality.length === 0) return;
+
+  console.log('\nQuality Summary:');
+  console.log('─'.repeat(40));
+
+  // Average by dimension
+  const dimensionSums = { codeStyle: 0, minimalism: 0, errorHandling: 0, idiomatic: 0 };
+  for (const result of withQuality) {
+    for (const [dim, score] of Object.entries(result.qualityGrade!.dimensions)) {
+      dimensionSums[dim as keyof typeof dimensionSums] += score;
+    }
+  }
+
+  for (const [dim, sum] of Object.entries(dimensionSums)) {
+    const avg = sum / withQuality.length;
+    console.log(`  ${dim}: ${avg.toFixed(1)}/5`);
+  }
+
+  const overallAvg = withQuality.reduce((sum, r) => sum + r.qualityGrade!.score, 0) / withQuality.length;
+  console.log(`\n  Overall: ${overallAvg.toFixed(1)}/5`);
 }

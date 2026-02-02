@@ -4,6 +4,26 @@ import { FixtureManager } from './fixture-manager.js';
 import { AgentExecutor } from './agent-executor.js';
 import { detectConcurrency } from './concurrency.js';
 import { evalEvents } from './events.js';
+import { execFileNoThrow } from '../../src/utils/exec-file.js';
+
+async function captureGitDiff(workDir: string): Promise<string> {
+  const result = await execFileNoThrow('git', ['diff', 'HEAD'], {
+    cwd: workDir,
+    timeout: 5000,
+  });
+
+  if (result.status === 0) {
+    return result.stdout;
+  }
+
+  // Fallback: get status if diff fails
+  const statusResult = await execFileNoThrow('git', ['status', '--porcelain'], {
+    cwd: workDir,
+    timeout: 5000,
+  });
+
+  return statusResult.stdout || '';
+}
 
 interface Scenario {
   framework: string;
@@ -130,6 +150,9 @@ export class ParallelRunner {
         const grader = new scenario.grader(workDir);
         const gradeResult = await grader.grade();
 
+        // Capture diff for quality grading (only on pass to avoid wasted effort)
+        const diff = gradeResult.passed ? await captureGitDiff(workDir) : undefined;
+
         lastResult = {
           scenario: scenarioName,
           passed: gradeResult.passed,
@@ -138,6 +161,7 @@ export class ParallelRunner {
           agentOutput: agentResult.output,
           attempts: attempt,
           latencyMetrics: agentResult.latencyMetrics,
+          diff,
         };
 
         if (gradeResult.passed) {

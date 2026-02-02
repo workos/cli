@@ -12,6 +12,7 @@ export interface CliOptions {
   sequential: boolean;
   noDashboard: boolean;
   noFail: boolean;
+  quality: boolean;
   command?: 'run' | 'history' | 'compare' | 'logs' | 'show';
   compareIds?: [string, string];
   logFile?: string;
@@ -33,6 +34,7 @@ export function parseArgs(args: string[]): CliOptions {
     sequential: false,
     noDashboard: false,
     noFail: false,
+    quality: false,
   };
 
   // Check for subcommands
@@ -97,6 +99,8 @@ export function parseArgs(args: string[]): CliOptions {
       options.noDashboard = true;
     } else if (arg === '--no-fail') {
       options.noFail = true;
+    } else if (arg === '--quality' || arg === '-q') {
+      options.quality = true;
     }
   }
 
@@ -142,6 +146,8 @@ Options:
   --no-dashboard      Disable live dashboard, use sequential logging
 
   --no-fail           Exit 0 even if success criteria thresholds not met
+
+  --quality, -q       Enable LLM-based quality grading (adds cost/time)
 
   --json              Output results as JSON (for scripting)
 

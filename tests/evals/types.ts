@@ -25,6 +25,7 @@ export interface EvalResult {
   attempts?: number;
   latencyMetrics?: LatencyMetrics;
   qualityGrade?: QualityGrade;
+  diff?: string;
 }
 
 export interface EvalOptions {
