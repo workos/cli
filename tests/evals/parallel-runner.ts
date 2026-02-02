@@ -137,6 +137,7 @@ export class ParallelRunner {
           checks: gradeResult.checks,
           agentOutput: agentResult.output,
           attempts: attempt,
+          latencyMetrics: agentResult.latencyMetrics,
         };
 
         if (gradeResult.passed) {
