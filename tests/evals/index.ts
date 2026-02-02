@@ -56,6 +56,10 @@ async function main() {
           keep: options.keep,
           keepOnFail: options.keepOnFail,
           retry: options.retry,
+          sequential: options.sequential,
+          noDashboard: options.noDashboard,
+          debug: options.debug,
+          noFail: options.noFail,
         });
 
         if (options.json) {
@@ -63,8 +67,6 @@ async function main() {
         } else {
           printMatrix(results);
         }
-
-        process.exit(results.every((r) => r.passed) ? 0 : 1);
       }
     }
   } catch (error) {
