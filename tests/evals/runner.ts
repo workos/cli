@@ -131,6 +131,11 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
 
         if (result.qualityGrade) {
           console.log(`  ${result.scenario}: ${result.qualityGrade.score}/5`);
+          if (options.verbose) {
+            for (const line of result.qualityGrade.reasoning.split('\n')) {
+              console.log(`    ${line}`);
+            }
+          }
         }
       }
     }
