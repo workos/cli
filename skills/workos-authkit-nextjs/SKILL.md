@@ -55,6 +55,45 @@ Next.js version?
 
 Middleware/proxy code: See README for `authkitMiddleware()` export pattern.
 
+### Existing Middleware (IMPORTANT)
+
+If `middleware.ts` already exists with custom logic (rate limiting, logging, headers, etc.), use the **`authkit()` composable function** instead of `authkitMiddleware`.
+
+**Pattern for composing with existing middleware:**
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { authkit, handleAuthkitHeaders } from '@workos-inc/authkit-nextjs';
+
+export default async function middleware(request: NextRequest) {
+  // 1. Get auth session and headers from AuthKit
+  const { session, headers, authorizationUrl } = await authkit(request);
+  const { pathname } = request.nextUrl;
+
+  // 2. === YOUR EXISTING MIDDLEWARE LOGIC ===
+  // Rate limiting, logging, custom headers, etc.
+  const rateLimitResult = checkRateLimit(request);
+  if (!rateLimitResult.allowed) {
+    return new NextResponse('Too Many Requests', { status: 429 });
+  }
+
+  // 3. Protect routes - redirect to auth if needed
+  if (pathname.startsWith('/dashboard') && !session.user && authorizationUrl) {
+    return handleAuthkitHeaders(request, headers, { redirect: authorizationUrl });
+  }
+
+  // 4. Continue with AuthKit headers properly handled
+  return handleAuthkitHeaders(request, headers);
+}
+```
+
+**Key functions:**
+- `authkit(request)` - Returns `{ session, headers, authorizationUrl }` for composition
+- `handleAuthkitHeaders(request, headers, options?)` - Ensures AuthKit headers pass through correctly
+- For rewrites, use `partitionAuthkitHeaders()` and `applyResponseHeaders()` (see README)
+
+**Critical:** Always return via `handleAuthkitHeaders()` to ensure `withAuth()` works in pages.
+
 ## Step 5: Create Callback Route
 
 Parse `NEXT_PUBLIC_WORKOS_REDIRECT_URI` to determine route path:

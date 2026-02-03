@@ -25,13 +25,27 @@ export class NextjsGrader implements Grader {
     // Check middleware exists
     checks.push(await this.fileGrader.checkFileExists('middleware.ts'));
 
-    // Check middleware imports authkit
-    checks.push(
-      ...(await this.fileGrader.checkFileContains('middleware.ts', [
-        '@workos-inc/authkit-nextjs',
-        'authkitMiddleware',
-      ])),
-    );
+    // Check middleware imports authkit SDK
+    const sdkImportChecks = await this.fileGrader.checkFileContains('middleware.ts', ['@workos-inc/authkit-nextjs']);
+    checks.push(...sdkImportChecks);
+
+    // Check for authkit integration: authkitMiddleware OR (authkit + handleAuthkitHeaders)
+    const middlewareChecks = await this.fileGrader.checkFileContains('middleware.ts', ['authkitMiddleware']);
+    const composableChecks = await this.fileGrader.checkFileContains('middleware.ts', ['authkit(', 'handleAuthkitHeaders']);
+
+    const usesAuthkitMiddleware = middlewareChecks.every((c) => c.passed);
+    const usesComposable = composableChecks.every((c) => c.passed);
+
+    const authkitCheck: GradeCheck = {
+      name: 'AuthKit middleware integration',
+      passed: usesAuthkitMiddleware || usesComposable,
+      message: usesAuthkitMiddleware
+        ? 'Uses authkitMiddleware'
+        : usesComposable
+          ? 'Uses authkit() composable with handleAuthkitHeaders'
+          : 'Missing authkitMiddleware or authkit() composable integration',
+    };
+    checks.push(authkitCheck);
 
     // Check AuthKitProvider in layout
     checks.push(...(await this.fileGrader.checkFileContains('app/layout.tsx', ['AuthKitProvider'])));
