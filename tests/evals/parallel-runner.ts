@@ -6,38 +6,20 @@ import { detectConcurrency } from './concurrency.js';
 import { evalEvents } from './events.js';
 import { execFileNoThrow } from '../../src/utils/exec-file.js';
 
-// Max diff size (~50k chars ≈ 12k tokens, well under Haiku's limit)
-const MAX_DIFF_CHARS = 50000;
-
 async function captureGitDiff(workDir: string): Promise<string> {
-  // Exclude node_modules, lock files, build outputs, and other large generated files
-  const excludes = [
-    ':!node_modules',
-    ':!pnpm-lock.yaml',
-    ':!package-lock.json',
-    ':!yarn.lock',
-    ':!.pnpm-store',
-    ':!.next',
-    ':!dist',
-    ':!build',
-    ':!.vinxi',
-    ':!.output',
-  ];
-  const result = await execFileNoThrow('git', ['diff', 'HEAD', '--', '.', ...excludes], {
+  // Only include source files - skip build outputs, configs, lock files
+  const sourcePatterns = ['*.ts', '*.tsx', '*.js', '*.jsx'];
+  const result = await execFileNoThrow('git', ['diff', 'HEAD', '--', ...sourcePatterns], {
     cwd: workDir,
     timeout: 5000,
   });
 
   if (result.status === 0 && result.stdout) {
-    // Truncate if too large
-    if (result.stdout.length > MAX_DIFF_CHARS) {
-      return result.stdout.slice(0, MAX_DIFF_CHARS) + '\n\n[... diff truncated ...]';
-    }
     return result.stdout;
   }
 
-  // Fallback: get status if diff fails
-  const statusResult = await execFileNoThrow('git', ['status', '--porcelain'], {
+  // Fallback: list changed source files
+  const statusResult = await execFileNoThrow('git', ['status', '--porcelain', '--', ...sourcePatterns], {
     cwd: workDir,
     timeout: 5000,
   });
