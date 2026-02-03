@@ -2,8 +2,10 @@
 import { parseArgs, printHelp } from './cli.js';
 import { runEvals } from './runner.js';
 import { printMatrix, printJson } from './reporter.js';
-import { listRuns, loadRun, compareRuns } from './history.js';
+import { loadRun } from './history.js';
 import { listLogs, showLog } from './log-commands.js';
+import { diffRuns, printDiff } from './commands/diff.js';
+import { listHistory, pruneHistory } from './commands/history.js';
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
@@ -16,24 +18,22 @@ async function main() {
   try {
     switch (options.command) {
       case 'history': {
-        const runs = await listRuns();
-        if (runs.length === 0) {
-          console.log('No eval runs found. Run `pnpm eval` first.');
-          break;
-        }
-        console.log('Recent eval runs:');
-        for (const run of runs.slice(0, 10)) {
-          const data = await loadRun(run.replace('.json', ''));
-          console.log(`  ${run.replace('.json', '')} - ${data.summary.passed}/${data.summary.total} passed`);
-        }
+        await listHistory(options.limit || 10);
         break;
       }
 
+      case 'diff':
       case 'compare': {
         const [id1, id2] = options.compareIds!;
         const run1 = await loadRun(id1);
         const run2 = await loadRun(id2);
-        compareRuns(run1, run2);
+        const diff = diffRuns(run1, run2);
+        printDiff(diff, id1, id2);
+        break;
+      }
+
+      case 'prune': {
+        await pruneHistory(options.pruneKeep || 10);
         break;
       }
 
