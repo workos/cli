@@ -7,10 +7,12 @@ import { evalEvents } from './events.js';
 import { execFileNoThrow } from '../../src/utils/exec-file.js';
 
 async function captureGitDiff(workDir: string): Promise<string> {
-  const result = await execFileNoThrow('git', ['diff', 'HEAD'], {
-    cwd: workDir,
-    timeout: 5000,
-  });
+  // Exclude node_modules, lock files, and other large generated files
+  const result = await execFileNoThrow(
+    'git',
+    ['diff', 'HEAD', '--', '.', ':!node_modules', ':!pnpm-lock.yaml', ':!package-lock.json', ':!yarn.lock'],
+    { cwd: workDir, timeout: 5000 },
+  );
 
   if (result.status === 0) {
     return result.stdout;
