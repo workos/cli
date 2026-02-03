@@ -25,7 +25,23 @@ export interface EvalResult {
   attempts?: number;
   latencyMetrics?: LatencyMetrics;
   qualityGrade?: QualityGrade;
-  diff?: string;
+  /** Key integration files for quality grading (replaces raw diff) */
+  keyFiles?: Map<string, string>;
+}
+
+/** Input for quality grading - structured data instead of raw diff */
+export interface QualityInput {
+  framework: string;
+  /** Map of relative file paths to their contents */
+  keyFiles: Map<string, string>;
+  metadata: {
+    filesCreated: string[];
+    filesModified: string[];
+    /** Summary like "12 writes, 3 reads, 2 bash" */
+    toolCallSummary: string;
+    /** Check names that passed, e.g. ["middleware exists", "build succeeds"] */
+    checksPassed: string[];
+  };
 }
 
 export interface EvalOptions {

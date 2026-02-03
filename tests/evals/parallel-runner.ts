@@ -4,29 +4,7 @@ import { FixtureManager } from './fixture-manager.js';
 import { AgentExecutor } from './agent-executor.js';
 import { detectConcurrency } from './concurrency.js';
 import { evalEvents } from './events.js';
-import { execFileNoThrow } from '../../src/utils/exec-file.js';
-
-async function captureGitDiff(workDir: string): Promise<string> {
-  // Only include source files, exclude node_modules
-  const result = await execFileNoThrow(
-    'git',
-    ['diff', 'HEAD', '--', '*.ts', '*.tsx', '*.js', '*.jsx', ':!node_modules'],
-    { cwd: workDir, timeout: 5000 },
-  );
-
-  if (result.status === 0 && result.stdout) {
-    return result.stdout;
-  }
-
-  // Fallback: list changed source files
-  const statusResult = await execFileNoThrow(
-    'git',
-    ['status', '--porcelain', '--', '*.ts', '*.tsx', '*.js', '*.jsx', ':!node_modules'],
-    { cwd: workDir, timeout: 5000 },
-  );
-
-  return statusResult.stdout || '';
-}
+import { collectKeyFiles } from './graders/collect-key-files.js';
 
 interface Scenario {
   framework: string;
@@ -153,8 +131,10 @@ export class ParallelRunner {
         const grader = new scenario.grader(workDir);
         const gradeResult = await grader.grade();
 
-        // Capture diff for quality grading (only on pass to avoid wasted effort)
-        const diff = gradeResult.passed ? await captureGitDiff(workDir) : undefined;
+        // Collect key files for quality grading (only on pass to avoid wasted effort)
+        const keyFiles = gradeResult.passed
+          ? await collectKeyFiles(workDir, scenario.framework)
+          : undefined;
 
         lastResult = {
           scenario: scenarioName,
@@ -164,7 +144,7 @@ export class ParallelRunner {
           agentOutput: agentResult.output,
           attempts: attempt,
           latencyMetrics: agentResult.latencyMetrics,
-          diff,
+          keyFiles,
         };
 
         if (gradeResult.passed) {
