@@ -7,22 +7,23 @@ import { evalEvents } from './events.js';
 import { execFileNoThrow } from '../../src/utils/exec-file.js';
 
 async function captureGitDiff(workDir: string): Promise<string> {
-  // Only include source files - skip build outputs, configs, lock files
-  const sourcePatterns = ['*.ts', '*.tsx', '*.js', '*.jsx'];
-  const result = await execFileNoThrow('git', ['diff', 'HEAD', '--', ...sourcePatterns], {
-    cwd: workDir,
-    timeout: 5000,
-  });
+  // Only include source files, exclude node_modules
+  const result = await execFileNoThrow(
+    'git',
+    ['diff', 'HEAD', '--', '*.ts', '*.tsx', '*.js', '*.jsx', ':!node_modules'],
+    { cwd: workDir, timeout: 5000 },
+  );
 
   if (result.status === 0 && result.stdout) {
     return result.stdout;
   }
 
   // Fallback: list changed source files
-  const statusResult = await execFileNoThrow('git', ['status', '--porcelain', '--', ...sourcePatterns], {
-    cwd: workDir,
-    timeout: 5000,
-  });
+  const statusResult = await execFileNoThrow(
+    'git',
+    ['status', '--porcelain', '--', '*.ts', '*.tsx', '*.js', '*.jsx', ':!node_modules'],
+    { cwd: workDir, timeout: 5000 },
+  );
 
   return statusResult.stdout || '';
 }
