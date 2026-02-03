@@ -1,12 +1,12 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { useAuth0 } from '@auth0/auth0-react'
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { useAuth0 } from '@auth0/auth0-react';
 
 export const Route = createFileRoute('/')({
   component: Home,
-})
+});
 
 function Home() {
-  const { isAuthenticated, loginWithRedirect, logout, user } = useAuth0()
+  const { isAuthenticated, loginWithRedirect, logout, user } = useAuth0();
 
   return (
     <div className="container">
@@ -25,5 +25,5 @@ function Home() {
         <button onClick={() => loginWithRedirect()}>Log In</button>
       )}
     </div>
-  )
+  );
 }

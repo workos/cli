@@ -43,6 +43,7 @@ From README, extract:
 ## Directory Structure Detection
 
 **Modern TanStack Start (v1.132+)** uses `src/`:
+
 ```
 src/
 ├── start.ts              # Middleware config (CRITICAL)
@@ -54,6 +55,7 @@ src/
 ```
 
 **Legacy (vinxi-based)** uses `app/`:
+
 ```
 app/
 ├── start.ts or router.tsx
@@ -62,6 +64,7 @@ app/
 ```
 
 **Detection:**
+
 ```bash
 ls src/routes 2>/dev/null && echo "Modern (src/)" || echo "Legacy (app/)"
 ```
@@ -94,6 +97,7 @@ export default {
 ```
 
 Alternative pattern with createStart:
+
 ```typescript
 import { createStart } from '@tanstack/react-start';
 import { authkitMiddleware } from '@workos/authkit-tanstack-react-start';
@@ -132,6 +136,7 @@ export const Route = createFileRoute('/api/auth/callback')({
 ```
 
 **Key points:**
+
 - Use `handleCallbackRoute()` - do not write custom OAuth logic
 - Route path string must match the URI path exactly
 - This is a server-only route (no component needed)
@@ -221,6 +226,7 @@ function Profile() {
 
 **Cause:** Route file path doesn't match WORKOS_REDIRECT_URI
 **Fix:**
+
 - URI `/api/auth/callback` → file `src/routes/api.auth.callback.tsx` (flat) or `app/routes/api/auth/callback.tsx` (nested)
 - Route path string in `createFileRoute()` must match exactly
 
@@ -242,6 +248,7 @@ function Profile() {
 ## SDK Exports Reference
 
 **Server (main export):**
+
 - `authkitMiddleware()` - Request middleware
 - `handleCallbackRoute()` - OAuth callback handler
 - `getAuth()` - Get current session
@@ -250,6 +257,7 @@ function Profile() {
 - `switchToOrganization()` - Change org context
 
 **Client (`/client` subpath):**
+
 - `AuthKitProvider` - Context provider
 - `useAuth()` - Auth state hook
 - `useAccessToken()` - Token management

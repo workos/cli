@@ -1,6 +1,6 @@
 import { writeFile, readFile, readdir, symlink, unlink, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { EvalResult } from './types.js';
+import type { EvalResult, EvalResultMetadata } from './types.js';
 
 const RESULTS_DIR = join(process.cwd(), 'tests/eval-results');
 
@@ -18,11 +18,13 @@ export interface EvalRun {
     state?: string;
   };
   results: EvalResult[];
+  metadata?: EvalResultMetadata;
 }
 
 export async function saveResults(
   results: EvalResult[],
   options: { framework?: string; state?: string },
+  metadata?: EvalResultMetadata,
 ): Promise<string> {
   // Ensure results directory exists
   await mkdir(RESULTS_DIR, { recursive: true });
@@ -42,6 +44,7 @@ export async function saveResults(
     },
     options,
     results,
+    metadata,
   };
 
   await writeFile(filepath, JSON.stringify(run, null, 2));

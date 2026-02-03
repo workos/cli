@@ -1,11 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useApp } from 'ink';
-import {
-  evalEvents,
-  type ScenarioStartEvent,
-  type ScenarioCompleteEvent,
-  type RunProgressEvent,
-} from '../events.js';
+import { evalEvents, type ScenarioStartEvent, type ScenarioCompleteEvent, type RunProgressEvent } from '../events.js';
 import { Header } from './Header.js';
 import { ScenarioRow } from './ScenarioRow.js';
 

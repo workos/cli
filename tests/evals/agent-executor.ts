@@ -4,13 +4,15 @@ import { Integration } from '../../src/lib/constants.js';
 import { loadCredentials } from './env-loader.js';
 import { writeEnvLocal } from '../../src/lib/env-writer.js';
 import { getConfig } from '../../src/lib/settings.js';
-import type { ToolCall } from './types.js';
+import { LatencyTracker } from './latency-tracker.js';
+import type { ToolCall, LatencyMetrics } from './types.js';
 
 export interface AgentResult {
   success: boolean;
   output: string;
   toolCalls: ToolCall[];
   error?: string;
+  latencyMetrics?: LatencyMetrics;
 }
 
 export interface AgentExecutorOptions {
@@ -30,6 +32,7 @@ const SKILL_NAMES: Record<Integration, string> = {
 export class AgentExecutor {
   private options: AgentExecutorOptions;
   private credentials: ReturnType<typeof loadCredentials>;
+  private latencyTracker: LatencyTracker;
 
   constructor(
     private workDir: string,
@@ -38,6 +41,7 @@ export class AgentExecutor {
   ) {
     this.options = options;
     this.credentials = loadCredentials();
+    this.latencyTracker = new LatencyTracker();
   }
 
   async run(): Promise<AgentResult> {
@@ -49,6 +53,9 @@ export class AgentExecutor {
     if (this.options.verbose) {
       console.log(`${label} Initializing agent for ${integration}...`);
     }
+
+    // Start latency tracking
+    this.latencyTracker.start();
 
     // Write .env.local with credentials (agent configures redirect URI per framework)
     writeEnvLocal(this.workDir, {
@@ -104,16 +111,20 @@ export class AgentExecutor {
         this.handleMessage(message, toolCalls, collectedOutput, label);
       }
 
+      const latencyMetrics = this.latencyTracker.finish();
       return {
         success: true,
         output: collectedOutput.join('\n'),
         toolCalls,
+        latencyMetrics,
       };
     } catch (error) {
+      const latencyMetrics = this.latencyTracker.finish();
       return {
         success: false,
         output: collectedOutput.join('\n'),
         toolCalls,
+        latencyMetrics,
         error: error instanceof Error ? error.message : String(error),
       };
     }
@@ -139,18 +150,23 @@ Begin by invoking the ${skillName} skill.`;
 
   private handleMessage(message: any, toolCalls: ToolCall[], collectedOutput: string[], label: string): void {
     if (message.type === 'assistant') {
+      // End any in-progress tool call when we get a new assistant message
+      this.latencyTracker.endToolCall();
+
       const content = message.message?.content;
       if (Array.isArray(content)) {
         for (const block of content) {
-          // Capture text output
+          // Capture text output and track TTFT
           if (block.type === 'text' && typeof block.text === 'string') {
+            this.latencyTracker.recordFirstContent();
             collectedOutput.push(block.text);
             if (this.options.verbose) {
               console.log(`${label} Agent: ${block.text.slice(0, 100)}...`);
             }
           }
-          // Capture tool calls
+          // Capture tool calls and start timing
           if (block.type === 'tool_use') {
+            this.latencyTracker.startToolCall(block.name);
             const call: ToolCall = {
               tool: block.name,
               input: block.input as Record<string, unknown>,
@@ -165,6 +181,13 @@ Begin by invoking the ${skillName} skill.`;
     }
 
     if (message.type === 'result') {
+      // Capture token usage from result
+      if (message.usage) {
+        this.latencyTracker.recordTokens(
+          message.usage.input_tokens ?? 0,
+          message.usage.output_tokens ?? 0,
+        );
+      }
       if (message.subtype !== 'success' && message.errors?.length > 0) {
         collectedOutput.push(`Error: ${message.errors.join(', ')}`);
       }

@@ -11,9 +11,13 @@ export interface CliOptions {
   noRetry: boolean;
   sequential: boolean;
   noDashboard: boolean;
-  command?: 'run' | 'history' | 'compare' | 'logs' | 'show';
+  noFail: boolean;
+  quality: boolean;
+  command?: 'run' | 'history' | 'compare' | 'diff' | 'prune' | 'logs' | 'show';
   compareIds?: [string, string];
   logFile?: string;
+  limit?: number;
+  pruneKeep?: number;
 }
 
 const FRAMEWORKS = ['nextjs', 'react', 'react-router', 'tanstack-start', 'vanilla-js'];
@@ -31,17 +35,37 @@ export function parseArgs(args: string[]): CliOptions {
     noRetry: false,
     sequential: false,
     noDashboard: false,
+    noFail: false,
+    quality: false,
   };
 
   // Check for subcommands
   if (args[0] === 'history') {
     options.command = 'history';
+    // Parse --limit=N option
+    for (const arg of args.slice(1)) {
+      if (arg.startsWith('--limit=')) {
+        options.limit = parseInt(arg.split('=')[1], 10);
+      }
+    }
     return options;
   }
 
-  if (args[0] === 'compare' && args.length >= 3) {
-    options.command = 'compare';
+  // Support both 'compare' (legacy) and 'diff' (new)
+  if ((args[0] === 'compare' || args[0] === 'diff') && args.length >= 3) {
+    options.command = 'diff';
     options.compareIds = [args[1], args[2]];
+    return options;
+  }
+
+  if (args[0] === 'prune') {
+    options.command = 'prune';
+    // Parse --keep=N option
+    for (const arg of args.slice(1)) {
+      if (arg.startsWith('--keep=')) {
+        options.pruneKeep = parseInt(arg.split('=')[1], 10);
+      }
+    }
     return options;
   }
 
@@ -93,6 +117,10 @@ export function parseArgs(args: string[]): CliOptions {
       options.sequential = true;
     } else if (arg === '--no-dashboard') {
       options.noDashboard = true;
+    } else if (arg === '--no-fail') {
+      options.noFail = true;
+    } else if (arg === '--quality' || arg === '-q') {
+      options.quality = true;
     }
   }
 
@@ -109,8 +137,9 @@ Usage: pnpm eval [command] [options]
 
 Commands:
   run (default)       Run evaluations
-  history             List recent eval runs
-  compare <id1> <id2> Compare two eval runs
+  history             List recent eval runs (--limit=N)
+  diff <id1> <id2>    Compare two eval runs with correlation analysis
+  prune               Delete old results (--keep=N, default 10)
   logs                List recent detailed log files
   show <file>         Display formatted log summary
 
@@ -137,6 +166,10 @@ Options:
 
   --no-dashboard      Disable live dashboard, use sequential logging
 
+  --no-fail           Exit 0 even if success criteria thresholds not met
+
+  --quality, -q       Enable LLM-based quality grading (adds cost/time)
+
   --json              Output results as JSON (for scripting)
 
   --help, -h          Show this help message
@@ -150,6 +183,8 @@ Examples:
   pnpm eval --debug                   # Verbose output, keep failed dirs
   pnpm eval --retry=3                 # More retry attempts
   pnpm eval:history                   # List recent runs
-  pnpm eval:compare <id1> <id2>       # Compare two runs
+  pnpm eval:history --limit=20        # Show more runs
+  pnpm eval:diff <id1> <id2>          # Compare two runs
+  pnpm eval:prune --keep=5            # Keep only 5 most recent runs
 `);
 }

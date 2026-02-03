@@ -1,12 +1,12 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { useAuth0, withAuthenticationRequired } from '@auth0/auth0-react'
+import { createFileRoute } from '@tanstack/react-router';
+import { useAuth0, withAuthenticationRequired } from '@auth0/auth0-react';
 
 export const Route = createFileRoute('/dashboard')({
   component: withAuthenticationRequired(Dashboard),
-})
+});
 
 function Dashboard() {
-  const { user } = useAuth0()
+  const { user } = useAuth0();
 
   return (
     <div className="container">
@@ -23,5 +23,5 @@ function Dashboard() {
         </div>
       </div>
     </div>
-  )
+  );
 }

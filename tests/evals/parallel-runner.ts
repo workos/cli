@@ -4,6 +4,7 @@ import { FixtureManager } from './fixture-manager.js';
 import { AgentExecutor } from './agent-executor.js';
 import { detectConcurrency } from './concurrency.js';
 import { evalEvents } from './events.js';
+import { collectKeyFiles } from './graders/collect-key-files.js';
 
 interface Scenario {
   framework: string;
@@ -130,6 +131,11 @@ export class ParallelRunner {
         const grader = new scenario.grader(workDir);
         const gradeResult = await grader.grade();
 
+        // Collect key files for quality grading (only on pass to avoid wasted effort)
+        const keyFiles = gradeResult.passed
+          ? await collectKeyFiles(workDir, scenario.framework)
+          : undefined;
+
         lastResult = {
           scenario: scenarioName,
           passed: gradeResult.passed,
@@ -137,6 +143,8 @@ export class ParallelRunner {
           checks: gradeResult.checks,
           agentOutput: agentResult.output,
           attempts: attempt,
+          latencyMetrics: agentResult.latencyMetrics,
+          keyFiles,
         };
 
         if (gradeResult.passed) {
