@@ -55,6 +55,45 @@ Next.js version?
 
 Middleware/proxy code: See README for `authkitMiddleware()` export pattern.
 
+### Existing Middleware (IMPORTANT)
+
+If `middleware.ts` already exists with custom logic (rate limiting, logging, headers, etc.), use the **`authkit()` composable function** instead of `authkitMiddleware`.
+
+**Pattern for composing with existing middleware:**
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { authkit, handleAuthkitHeaders } from '@workos-inc/authkit-nextjs';
+
+export default async function middleware(request: NextRequest) {
+  // 1. Get auth session and headers from AuthKit
+  const { session, headers, authorizationUrl } = await authkit(request);
+  const { pathname } = request.nextUrl;
+
+  // 2. === YOUR EXISTING MIDDLEWARE LOGIC ===
+  // Rate limiting, logging, custom headers, etc.
+  const rateLimitResult = checkRateLimit(request);
+  if (!rateLimitResult.allowed) {
+    return new NextResponse('Too Many Requests', { status: 429 });
+  }
+
+  // 3. Protect routes - redirect to auth if needed
+  if (pathname.startsWith('/dashboard') && !session.user && authorizationUrl) {
+    return handleAuthkitHeaders(request, headers, { redirect: authorizationUrl });
+  }
+
+  // 4. Continue with AuthKit headers properly handled
+  return handleAuthkitHeaders(request, headers);
+}
+```
+
+**Key functions:**
+- `authkit(request)` - Returns `{ session, headers, authorizationUrl }` for composition
+- `handleAuthkitHeaders(request, headers, options?)` - Ensures AuthKit headers pass through correctly
+- For rewrites, use `partitionAuthkitHeaders()` and `applyResponseHeaders()` (see README)
+
+**Critical:** Always return via `handleAuthkitHeaders()` to ensure `withAuth()` works in pages.
+
 ## Step 5: Create Callback Route
 
 Parse `NEXT_PUBLIC_WORKOS_REDIRECT_URI` to determine route path:
@@ -78,33 +117,57 @@ export const GET = handleAuth();
 
 Check README for exact usage. If build fails with "cookies outside request scope", the handler is likely missing async/await.
 
-## Step 6: Provider Setup
+## Step 6: Provider Setup (REQUIRED)
 
-Wrap app in `AuthKitProvider` in `app/layout.tsx`. See README for import path.
+**CRITICAL:** You MUST wrap the app in `AuthKitProvider` in `app/layout.tsx`.
+
+This is required for:
+- Client-side auth state via `useAuth()` hook
+- Consistent auth UX across client/server boundaries
+- Proper migration from Auth0 (which uses client-side auth)
+
+```tsx
+// app/layout.tsx
+import { AuthKitProvider } from '@workos-inc/authkit-nextjs';
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <AuthKitProvider>{children}</AuthKitProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+Check README for exact import path - it may be a subpath export like `@workos-inc/authkit-nextjs/components`.
+
+**Do NOT skip this step** even if using server-side auth patterns elsewhere.
 
 ## Step 7: UI Integration
 
 Add auth UI to `app/page.tsx` using SDK functions. See README for `getUser`, `getSignInUrl`, `signOut` usage.
 
-## Verification Checklist
+## Verification Checklist (ALL MUST PASS)
 
-Run these commands to confirm integration:
+Run these commands to confirm integration. **Do not mark complete until all pass:**
 
 ```bash
-# Check middleware/proxy exists (one should match)
+# 1. Check middleware/proxy exists (one should match)
 ls proxy.ts middleware.ts src/proxy.ts src/middleware.ts 2>/dev/null
 
-# Check provider is wrapped
-grep -l "AuthKitProvider" app/layout.tsx
+# 2. CRITICAL: Check AuthKitProvider is in layout (REQUIRED)
+grep "AuthKitProvider" app/layout.tsx || echo "FAIL: AuthKitProvider missing from layout"
 
-# Check callback route exists
+# 3. Check callback route exists
 find app -name "route.ts" -path "*/callback/*"
 
-# Build succeeds
+# 4. Build succeeds
 npm run build
 ```
 
-All checks must pass before marking complete.
+**If check #2 fails:** Go back to Step 6 and add AuthKitProvider. This is not optional.
 
 ## Error Recovery
 
