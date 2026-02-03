@@ -32,6 +32,7 @@ This fixture has an existing custom AuthProvider with user preferences, roles, a
 This is a realistic scenario - many apps have custom auth before adopting a third-party solution. The agent should recognize this and propose a migration strategy rather than simply replacing.
 
 Ideal approaches:
+
 1. Wrap existing AuthProvider with AuthKitProvider
 2. Migrate user data from custom auth to AuthKit user profile
 3. Create adapter that maps AuthKit user to existing User type

@@ -36,7 +36,7 @@ export const QUALITY_RUBRICS = {
     name: 'Idiomatic',
     description: 'Follows framework best practices and patterns',
     scale: {
-      1: "Anti-patterns: uses deprecated APIs, ignores framework conventions",
+      1: 'Anti-patterns: uses deprecated APIs, ignores framework conventions',
       2: "Suboptimal: works but doesn't follow recommended patterns",
       3: 'Acceptable: functional, follows basic patterns',
       4: 'Good: uses recommended patterns and APIs',

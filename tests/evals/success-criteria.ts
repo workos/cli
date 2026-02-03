@@ -33,10 +33,7 @@ export interface ValidationResult {
  * Validate eval results against success criteria thresholds.
  * Returns detailed breakdown of pass/fail status with actionable messages.
  */
-export function validateResults(
-  results: EvalResult[],
-  criteria: SuccessCriteria = DEFAULT_CRITERIA,
-): ValidationResult {
+export function validateResults(results: EvalResult[], criteria: SuccessCriteria = DEFAULT_CRITERIA): ValidationResult {
   const firstAttemptPassed = results.filter((r) => r.attempts === 1 && r.passed).length;
   const totalPassed = results.filter((r) => r.passed).length;
 
@@ -46,12 +43,12 @@ export function validateResults(
   const failures: string[] = [];
   if (firstAttemptRate < criteria.firstAttemptPassRate) {
     failures.push(
-      `First-attempt pass rate ${(firstAttemptRate * 100).toFixed(1)}% < ${(criteria.firstAttemptPassRate * 100)}% required`,
+      `First-attempt pass rate ${(firstAttemptRate * 100).toFixed(1)}% < ${criteria.firstAttemptPassRate * 100}% required`,
     );
   }
   if (withRetryRate < criteria.withRetryPassRate) {
     failures.push(
-      `With-retry pass rate ${(withRetryRate * 100).toFixed(1)}% < ${(criteria.withRetryPassRate * 100)}% required`,
+      `With-retry pass rate ${(withRetryRate * 100).toFixed(1)}% < ${criteria.withRetryPassRate * 100}% required`,
     );
   }
 

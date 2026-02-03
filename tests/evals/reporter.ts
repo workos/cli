@@ -18,7 +18,14 @@ export function printMatrix(results: EvalResult[]): void {
   const states = [...new Set(results.map((r) => r.scenario.split('/')[1]))];
 
   // Sort states in logical order
-  const stateOrder = ['example', 'example-auth0', 'partial-install', 'typescript-strict', 'conflicting-middleware', 'conflicting-auth'];
+  const stateOrder = [
+    'example',
+    'example-auth0',
+    'partial-install',
+    'typescript-strict',
+    'conflicting-middleware',
+    'conflicting-auth',
+  ];
   states.sort((a, b) => stateOrder.indexOf(a) - stateOrder.indexOf(b));
 
   // Build dynamic table

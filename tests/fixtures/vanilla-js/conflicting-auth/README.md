@@ -33,6 +33,7 @@ This fixture has an existing custom authentication module with localStorage-base
 This is a realistic scenario - many vanilla JS apps have custom auth before adopting a third-party solution. The agent should recognize this and propose a migration strategy.
 
 Ideal approaches:
+
 1. Replace custom auth with AuthKit but preserve the listener pattern
 2. Migrate user preferences to AuthKit user profile
 3. Update requireAuth to use AuthKit session checking

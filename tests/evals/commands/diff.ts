@@ -110,10 +110,7 @@ function findScenarioChanges(
   return { regressions, improvements, unchanged };
 }
 
-function calculateLatencyChanges(
-  run1: EvalRun,
-  run2: EvalRun,
-): DiffResult['latencyChanges'] | undefined {
+function calculateLatencyChanges(run1: EvalRun, run2: EvalRun): DiffResult['latencyChanges'] | undefined {
   const latencies1 = run1.results.map((r) => r.latencyMetrics).filter(Boolean) as LatencyMetrics[];
   const latencies2 = run2.results.map((r) => r.latencyMetrics).filter(Boolean) as LatencyMetrics[];
 
@@ -134,10 +131,7 @@ function calculateLatencyChanges(
   };
 }
 
-function calculateQualityChanges(
-  run1: EvalRun,
-  run2: EvalRun,
-): DiffResult['qualityChanges'] | undefined {
+function calculateQualityChanges(run1: EvalRun, run2: EvalRun): DiffResult['qualityChanges'] | undefined {
   const grades1 = run1.results.map((r) => r.qualityGrade).filter(Boolean) as QualityGrade[];
   const grades2 = run2.results.map((r) => r.qualityGrade).filter(Boolean) as QualityGrade[];
 
@@ -173,9 +167,7 @@ function determineLikelyCauses(
   if (passRateDelta.withRetry < -0.05) {
     // >5% drop
     for (const change of skillChanges) {
-      const relatedRegressions = scenarioChanges.regressions.filter((s) =>
-        s.startsWith(change.framework),
-      );
+      const relatedRegressions = scenarioChanges.regressions.filter((s) => s.startsWith(change.framework));
       if (relatedRegressions.length > 0) {
         causes.push(
           `${change.framework} skill changed (${change.oldHash.slice(0, 8)} → ${change.newHash.slice(0, 8)}) ` +
@@ -212,9 +204,7 @@ export function printDiff(diff: DiffResult, run1Id: string, run2Id: string): voi
   if (diff.skillChanges.length > 0) {
     console.log(chalk.bold('\nSkill Version Changes:'));
     for (const change of diff.skillChanges) {
-      console.log(
-        `  ${change.framework}: ${change.oldHash.slice(0, 8)} → ${change.newHash.slice(0, 8)}`,
-      );
+      console.log(`  ${change.framework}: ${change.oldHash.slice(0, 8)} → ${change.newHash.slice(0, 8)}`);
     }
   }
 
@@ -260,8 +250,7 @@ export function printDiff(diff: DiffResult, run1Id: string, run2Id: string): voi
   }
 
   // Summary
-  const totalChanges =
-    diff.scenarioChanges.regressions.length + diff.scenarioChanges.improvements.length;
+  const totalChanges = diff.scenarioChanges.regressions.length + diff.scenarioChanges.improvements.length;
   if (totalChanges === 0 && diff.skillChanges.length === 0) {
     console.log(chalk.gray('\nNo significant changes between runs.'));
   }

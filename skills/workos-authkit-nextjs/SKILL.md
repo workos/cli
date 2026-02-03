@@ -88,6 +88,7 @@ export default async function middleware(request: NextRequest) {
 ```
 
 **Key functions:**
+
 - `authkit(request)` - Returns `{ session, headers, authorizationUrl }` for composition
 - `handleAuthkitHeaders(request, headers, options?)` - Ensures AuthKit headers pass through correctly
 - For rewrites, use `partitionAuthkitHeaders()` and `applyResponseHeaders()` (see README)
@@ -122,6 +123,7 @@ Check README for exact usage. If build fails with "cookies outside request scope
 **CRITICAL:** You MUST wrap the app in `AuthKitProvider` in `app/layout.tsx`.
 
 This is required for:
+
 - Client-side auth state via `useAuth()` hook
 - Consistent auth UX across client/server boundaries
 - Proper migration from Auth0 (which uses client-side auth)

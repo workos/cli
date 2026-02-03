@@ -306,7 +306,5 @@ function buildToolCallSummary(result: EvalResult): string {
     return 'No tool call data';
   }
 
-  return breakdown
-    .map((t) => `${t.count} ${t.tool}`)
-    .join(', ');
+  return breakdown.map((t) => `${t.count} ${t.tool}`).join(', ');
 }

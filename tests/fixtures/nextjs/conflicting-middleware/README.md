@@ -9,7 +9,7 @@ This fixture has existing middleware with rate limiting and custom header inject
 - Detect existing middleware.ts
 - Integrate authkitMiddleware while PRESERVING:
   - Rate limiting logic
-  - Custom header injection (X-App-Version, X-Request-Id, X-RateLimit-*)
+  - Custom header injection (X-App-Version, X-Request-Id, X-RateLimit-\*)
   - Request logging
 - Combine the matcher configurations appropriately
 
@@ -30,6 +30,7 @@ This fixture has existing middleware with rate limiting and custom header inject
 This is a critical edge case. Many production apps have existing middleware for security, monitoring, or custom logic. The agent should compose middleware rather than overwrite.
 
 Ideal solution patterns:
+
 1. Chain middlewares: Call authkitMiddleware first, then apply custom logic
 2. Wrap middlewares: Create a composed middleware function
 3. Conditional routing: Apply different middleware based on path

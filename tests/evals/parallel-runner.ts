@@ -132,9 +132,7 @@ export class ParallelRunner {
         const gradeResult = await grader.grade();
 
         // Collect key files for quality grading (only on pass to avoid wasted effort)
-        const keyFiles = gradeResult.passed
-          ? await collectKeyFiles(workDir, scenario.framework)
-          : undefined;
+        const keyFiles = gradeResult.passed ? await collectKeyFiles(workDir, scenario.framework) : undefined;
 
         lastResult = {
           scenario: scenarioName,

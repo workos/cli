@@ -38,23 +38,22 @@ export async function listHistory(limit: number = 10): Promise<void> {
       const scenarios = `${run.summary.passed}/${run.summary.total}`;
       const avgDuration =
         run.results.length > 0
-          ? Math.round(run.results.reduce((s, r) => s + r.duration, 0) / run.results.length / 1000) +
-            's'
+          ? Math.round(run.results.reduce((s, r) => s + r.duration, 0) / run.results.length / 1000) + 's'
           : 'N/A';
 
       const color = run.summary.passRate >= 0.9 ? chalk.green : chalk.red;
       const id = run.id.padEnd(32);
 
-      console.log(
-        `  ${id}  ${color(passRate.padEnd(10))} ${scenarios.padEnd(11)} ${avgDuration}`,
-      );
+      console.log(`  ${id}  ${color(passRate.padEnd(10))} ${scenarios.padEnd(11)} ${avgDuration}`);
     } catch {
       const id = file.replace('.json', '').padEnd(32);
       console.log(`  ${id}  ${chalk.gray('(unable to read)')}`);
     }
   }
 
-  const totalRuns = files.filter((f) => f.endsWith('.json') && f !== 'latest.json' && !f.startsWith('eval-run-')).length;
+  const totalRuns = files.filter(
+    (f) => f.endsWith('.json') && f !== 'latest.json' && !f.startsWith('eval-run-'),
+  ).length;
   console.log(`\n  Showing ${runFiles.length} of ${totalRuns} runs. Use --limit=N for more.`);
 }
 

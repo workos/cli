@@ -13,10 +13,7 @@ import { QUALITY_KEY_FILES } from '../quality-key-files.js';
  * @param framework - The framework name (e.g., 'nextjs', 'react')
  * @returns Map of relative file paths to their contents
  */
-export async function collectKeyFiles(
-  workDir: string,
-  framework: string,
-): Promise<Map<string, string>> {
+export async function collectKeyFiles(workDir: string, framework: string): Promise<Map<string, string>> {
   const patterns = QUALITY_KEY_FILES[framework];
   if (!patterns) {
     return new Map();

@@ -14,8 +14,7 @@ function App() {
         {isAuthenticated && (
           <>
             {' '}
-            | <span>Welcome, {user?.name}</span> |{' '}
-            <button onClick={() => logout()}>Logout</button>
+            | <span>Welcome, {user?.name}</span> | <button onClick={() => logout()}>Logout</button>
           </>
         )}
       </nav>

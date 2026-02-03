@@ -183,10 +183,7 @@ Begin by invoking the ${skillName} skill.`;
     if (message.type === 'result') {
       // Capture token usage from result
       if (message.usage) {
-        this.latencyTracker.recordTokens(
-          message.usage.input_tokens ?? 0,
-          message.usage.output_tokens ?? 0,
-        );
+        this.latencyTracker.recordTokens(message.usage.input_tokens ?? 0, message.usage.output_tokens ?? 0);
       }
       if (message.subtype !== 'success' && message.errors?.length > 0) {
         collectedOutput.push(`Error: ${message.errors.join(', ')}`);

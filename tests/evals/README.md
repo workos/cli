@@ -30,21 +30,21 @@ Use `--no-fail` to run without exit code validation.
 
 **Scenarios: 24 total (5 frameworks × 4-5 states)**
 
-| State                    | Description                       |
-| ------------------------ | --------------------------------- |
-| `example`                | Clean project, no existing auth   |
-| `example-auth0`          | Project with Auth0 to migrate     |
-| `partial-install`        | Half-completed AuthKit attempt    |
-| `typescript-strict`      | Strict TypeScript configuration   |
-| `conflicting-middleware` | Existing middleware to merge      |
+| State                    | Description                     |
+| ------------------------ | ------------------------------- |
+| `example`                | Clean project, no existing auth |
+| `example-auth0`          | Project with Auth0 to migrate   |
+| `partial-install`        | Half-completed AuthKit attempt  |
+| `typescript-strict`      | Strict TypeScript configuration |
+| `conflicting-middleware` | Existing middleware to merge    |
 
-| Framework        | Skill                         | Key Checks                                      |
-| ---------------- | ----------------------------- | ----------------------------------------------- |
-| `nextjs`         | workos-authkit-nextjs         | middleware.ts, callback route, AuthKitProvider  |
-| `react`          | workos-authkit-react          | AuthKitProvider, callback component, useAuth    |
-| `react-router`   | workos-authkit-react-router   | Auth loader, protected routes                   |
-| `tanstack-start` | workos-authkit-tanstack-start | Server functions, callback route                |
-| `vanilla-js`     | workos-authkit-vanilla-js     | Auth script, callback page                      |
+| Framework        | Skill                         | Key Checks                                     |
+| ---------------- | ----------------------------- | ---------------------------------------------- |
+| `nextjs`         | workos-authkit-nextjs         | middleware.ts, callback route, AuthKitProvider |
+| `react`          | workos-authkit-react          | AuthKitProvider, callback component, useAuth   |
+| `react-router`   | workos-authkit-react-router   | Auth loader, protected routes                  |
+| `tanstack-start` | workos-authkit-tanstack-start | Server functions, callback route               |
+| `vanilla-js`     | workos-authkit-vanilla-js     | Auth script, callback page                     |
 
 ## CLI Options
 
@@ -68,12 +68,12 @@ Use `--no-fail` to run without exit code validation.
 
 When enabled with `--quality`, passing scenarios are graded on:
 
-| Dimension      | Description                         |
-| -------------- | ----------------------------------- |
-| Code Style     | Adherence to project conventions    |
-| Minimalism     | Changes are focused, no extras      |
-| Error Handling | Proper error handling and messages  |
-| Idiomatic      | Follows framework best practices    |
+| Dimension      | Description                        |
+| -------------- | ---------------------------------- |
+| Code Style     | Adherence to project conventions   |
+| Minimalism     | Changes are focused, no extras     |
+| Error Handling | Proper error handling and messages |
+| Idiomatic      | Follows framework best practices   |
 
 Each dimension scored 1-5. See `quality-rubrics.ts` for detailed rubrics.
 
