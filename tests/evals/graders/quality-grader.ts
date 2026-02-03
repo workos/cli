@@ -49,6 +49,7 @@ export class QualityGrader {
 
     const keyFilesText = formatKeyFilesForPrompt(input.keyFiles);
 
+    // Chain-of-thought before scoring improves grading accuracy (Anthropic best practice)
     return `You are evaluating code written by an AI agent installing WorkOS AuthKit into a ${input.framework} project.
 
 ## Key Integration Files
@@ -65,44 +66,51 @@ ${keyFilesText}
 ${rubricText}
 
 ## Instructions
-1. Analyze the key integration files above
-2. For each dimension, provide a score from 1-5 based on the rubric
-3. Provide brief reasoning for each score
+First, analyze the code thoroughly in <thinking> tags. For each dimension, examine the code and determine the appropriate score based on the rubric. Consider specific examples from the code.
 
-Respond with valid JSON in this exact format:
+Then, output your final scores as JSON.
+
+<thinking>
+[Analyze each dimension here - what patterns do you see? What's done well? What could be better?]
+</thinking>
+
 {
-  "codeStyle": { "score": <1-5>, "reason": "<brief explanation>" },
-  "minimalism": { "score": <1-5>, "reason": "<brief explanation>" },
-  "errorHandling": { "score": <1-5>, "reason": "<brief explanation>" },
-  "idiomatic": { "score": <1-5>, "reason": "<brief explanation>" }
-}
-
-Output only the JSON, no additional text.`;
+  "codeStyle": <1-5>,
+  "minimalism": <1-5>,
+  "errorHandling": <1-5>,
+  "idiomatic": <1-5>
+}`;
   }
 
   private parseResponse(text: string): QualityGrade | null {
     try {
-      // Extract JSON from response (handle markdown code blocks)
+      // Extract chain-of-thought reasoning from <thinking> tags
+      const thinkingMatch = text.match(/<thinking>([\s\S]*?)<\/thinking>/);
+      const reasoning = thinkingMatch?.[1]?.trim() || 'No reasoning provided';
+
+      // Extract JSON scores (after thinking block)
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) return null;
 
-      const parsed = JSON.parse(jsonMatch[0]) as Record<
-        string,
-        { score?: unknown; reason?: string }
-      >;
+      const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+
+      // Handle both formats: direct scores or nested { score: n }
+      const getScore = (val: unknown): number => {
+        if (typeof val === 'number') return val;
+        if (typeof val === 'object' && val !== null && 'score' in val) {
+          return (val as { score: unknown }).score as number;
+        }
+        return 3;
+      };
 
       const dimensions = {
-        codeStyle: this.clampScore(parsed.codeStyle?.score),
-        minimalism: this.clampScore(parsed.minimalism?.score),
-        errorHandling: this.clampScore(parsed.errorHandling?.score),
-        idiomatic: this.clampScore(parsed.idiomatic?.score),
+        codeStyle: this.clampScore(getScore(parsed.codeStyle)),
+        minimalism: this.clampScore(getScore(parsed.minimalism)),
+        errorHandling: this.clampScore(getScore(parsed.errorHandling)),
+        idiomatic: this.clampScore(getScore(parsed.idiomatic)),
       };
 
       const score = Object.values(dimensions).reduce((a, b) => a + b, 0) / 4;
-
-      const reasoning = QUALITY_DIMENSIONS.map(
-        (dim) => `${QUALITY_RUBRICS[dim].name}: ${parsed[dim]?.reason || 'No reason provided'}`,
-      ).join('\n');
 
       return {
         score: Math.round(score * 10) / 10,
