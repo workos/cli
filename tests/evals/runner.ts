@@ -11,7 +11,7 @@ import { validateResults, type ValidationResult } from './success-criteria.js';
 import { captureVersionMetadata } from './versioning.js';
 import { QualityGrader } from './graders/quality-grader.js';
 import { loadCredentials } from './env-loader.js';
-import type { EvalResult, EvalOptions, EvalResultMetadata, Grader } from './types.js';
+import type { EvalResult, EvalOptions, EvalResultMetadata, Grader, QualityInput } from './types.js';
 
 interface Scenario {
   framework: string;
@@ -117,7 +117,7 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
     dashboard.unmount();
   }
 
-  // Quality grading (optional, only for passing scenarios with diffs)
+  // Quality grading (optional, only for passing scenarios with key files)
   if (options.quality) {
     const credentials = loadCredentials();
     const qualityGrader = new QualityGrader(credentials.anthropicApiKey);
@@ -125,9 +125,22 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
     console.log('\nRunning quality grading on passing scenarios...');
 
     for (const result of results) {
-      if (result.passed && result.diff) {
+      if (result.passed && result.keyFiles && result.keyFiles.size > 0) {
         const framework = result.scenario.split('/')[0];
-        result.qualityGrade = await qualityGrader.grade(result.diff, framework);
+
+        // Build metadata from result
+        const qualityInput: QualityInput = {
+          framework,
+          keyFiles: result.keyFiles,
+          metadata: {
+            filesCreated: [], // Could be extracted from tool calls if tracked
+            filesModified: [], // Could be extracted from tool calls if tracked
+            toolCallSummary: buildToolCallSummary(result),
+            checksPassed: result.checks?.filter((c) => c.passed).map((c) => c.name) || [],
+          },
+        };
+
+        result.qualityGrade = await qualityGrader.grade(qualityInput);
 
         if (result.qualityGrade) {
           console.log(`  ${result.scenario}: ${result.qualityGrade.score}/5`);
@@ -283,4 +296,17 @@ function printQualitySummary(results: EvalResult[]): void {
 
   const overallAvg = withQuality.reduce((sum, r) => sum + r.qualityGrade!.score, 0) / withQuality.length;
   console.log(`\n  Overall: ${overallAvg.toFixed(1)}/5`);
+}
+
+function buildToolCallSummary(result: EvalResult): string {
+  // We don't have tool call data on EvalResult currently,
+  // but latencyMetrics.toolBreakdown has aggregate counts
+  const breakdown = result.latencyMetrics?.toolBreakdown;
+  if (!breakdown || breakdown.length === 0) {
+    return 'No tool call data';
+  }
+
+  return breakdown
+    .map((t) => `${t.count} ${t.tool}`)
+    .join(', ');
 }

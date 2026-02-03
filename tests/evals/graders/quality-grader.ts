@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { QUALITY_RUBRICS, QUALITY_DIMENSIONS, type QualityDimension } from '../quality-rubrics.js';
-import type { QualityGrade } from '../types.js';
+import { QUALITY_RUBRICS, QUALITY_DIMENSIONS } from '../quality-rubrics.js';
+import type { QualityGrade, QualityInput } from '../types.js';
+import { formatKeyFilesForPrompt } from './collect-key-files.js';
 
 const QUALITY_MODEL = 'claude-3-5-haiku-20241022';
 
@@ -11,12 +12,12 @@ export class QualityGrader {
     this.client = new Anthropic({ apiKey });
   }
 
-  async grade(diff: string, framework: string): Promise<QualityGrade | null> {
-    if (!diff || diff.trim().length === 0) {
+  async grade(input: QualityInput): Promise<QualityGrade | null> {
+    if (input.keyFiles.size === 0) {
       return null;
     }
 
-    const prompt = this.buildPrompt(diff, framework);
+    const prompt = this.buildPrompt(input);
 
     try {
       const response = await this.client.messages.create({
@@ -37,7 +38,7 @@ export class QualityGrader {
     }
   }
 
-  private buildPrompt(diff: string, framework: string): string {
+  private buildPrompt(input: QualityInput): string {
     const rubricText = QUALITY_DIMENSIONS.map((dim) => {
       const rubric = QUALITY_RUBRICS[dim];
       const scaleText = Object.entries(rubric.scale)
@@ -46,18 +47,25 @@ export class QualityGrader {
       return `### ${rubric.name}\n${rubric.description}\n${scaleText}`;
     }).join('\n\n');
 
-    return `You are evaluating code changes made by an AI agent installing WorkOS AuthKit into a ${framework} project.
+    const keyFilesText = formatKeyFilesForPrompt(input.keyFiles);
 
-## Code Changes (git diff)
-\`\`\`diff
-${diff}
-\`\`\`
+    return `You are evaluating code written by an AI agent installing WorkOS AuthKit into a ${input.framework} project.
+
+## Key Integration Files
+
+${keyFilesText}
+
+## Installation Metadata
+- Files created: ${input.metadata.filesCreated.join(', ') || 'None'}
+- Files modified: ${input.metadata.filesModified.join(', ') || 'None'}
+- Tool activity: ${input.metadata.toolCallSummary}
+- Checks passed: ${input.metadata.checksPassed.join(', ') || 'None'}
 
 ## Grading Rubrics
 ${rubricText}
 
 ## Instructions
-1. Analyze the code changes above
+1. Analyze the key integration files above
 2. For each dimension, provide a score from 1-5 based on the rubric
 3. Provide brief reasoning for each score
 
