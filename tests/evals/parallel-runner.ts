@@ -10,12 +10,23 @@ import { execFileNoThrow } from '../../src/utils/exec-file.js';
 const MAX_DIFF_CHARS = 50000;
 
 async function captureGitDiff(workDir: string): Promise<string> {
-  // Exclude node_modules, lock files, and other large generated files
-  const result = await execFileNoThrow(
-    'git',
-    ['diff', 'HEAD', '--', '.', ':!node_modules', ':!pnpm-lock.yaml', ':!package-lock.json', ':!yarn.lock', ':!.pnpm-store'],
-    { cwd: workDir, timeout: 5000 },
-  );
+  // Exclude node_modules, lock files, build outputs, and other large generated files
+  const excludes = [
+    ':!node_modules',
+    ':!pnpm-lock.yaml',
+    ':!package-lock.json',
+    ':!yarn.lock',
+    ':!.pnpm-store',
+    ':!.next',
+    ':!dist',
+    ':!build',
+    ':!.vinxi',
+    ':!.output',
+  ];
+  const result = await execFileNoThrow('git', ['diff', 'HEAD', '--', '.', ...excludes], {
+    cwd: workDir,
+    timeout: 5000,
+  });
 
   if (result.status === 0 && result.stdout) {
     // Truncate if too large
