@@ -10,6 +10,7 @@ import { Entry } from '@napi-rs/keyring';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { logWarn } from '../utils/debug.js';
 
 export interface StagingCache {
   clientId: string;
@@ -53,7 +54,8 @@ function readFromFile(): Credentials | null {
   try {
     const content = fs.readFileSync(getCredentialsPath(), 'utf-8');
     return JSON.parse(content);
-  } catch {
+  } catch (error) {
+    logWarn('Failed to read credentials file:', error);
     return null;
   }
 }
@@ -84,7 +86,8 @@ function readFromKeyring(): Credentials | null {
     const data = entry.getPassword();
     if (!data) return null;
     return JSON.parse(data);
-  } catch {
+  } catch (error) {
+    logWarn('Failed to read from keyring:', error);
     return null;
   }
 }
@@ -94,7 +97,8 @@ function writeToKeyring(creds: Credentials): boolean {
     const entry = getKeyringEntry();
     entry.setPassword(JSON.stringify(creds));
     return true;
-  } catch {
+  } catch (error) {
+    logWarn('Failed to write to keyring:', error);
     return false;
   }
 }
@@ -103,18 +107,21 @@ function deleteFromKeyring(): void {
   try {
     const entry = getKeyringEntry();
     entry.deletePassword();
-  } catch {
-    // Might not exist
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (!msg.includes('not found') && !msg.includes('No such')) {
+      logWarn('Failed to delete from keyring:', error);
+    }
   }
 }
 
 function showFallbackWarning(): void {
   if (fallbackWarningShown || forceInsecureStorage) return;
   fallbackWarningShown = true;
-  console.warn(
-    '\n⚠ Unable to store credentials in system keyring. Using file storage.\n' +
-      '  Credentials saved to ~/.workos/credentials.json\n' +
-      '  Use --insecure-storage to suppress this warning.\n',
+  logWarn(
+    'Unable to store credentials in system keyring. Using file storage.',
+    'Credentials saved to ~/.workos/credentials.json',
+    'Use --insecure-storage to suppress this warning.',
   );
 }
 

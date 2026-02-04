@@ -26,6 +26,7 @@ vi.mock('node:os', async (importOriginal) => {
 vi.mock('../utils/debug.js', () => ({
   logInfo: vi.fn(),
   logError: vi.fn(),
+  logWarn: vi.fn(),
 }));
 
 // Mock settings

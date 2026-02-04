@@ -209,8 +209,8 @@ yargs(hideBin(process.argv))
   .command(
     ['$0'],
     'WorkOS AuthKit CLI',
-    (yargs) => yargs,
-    async () => {
+    (yargs) => yargs.options(insecureStorageOption),
+    async (argv) => {
       // Non-TTY: show help
       if (isNonInteractiveEnvironment()) {
         yargs(hideBin(process.argv)).showHelp();
@@ -227,6 +227,7 @@ yargs(hideBin(process.argv))
       }
 
       // Auth check happens HERE, after user confirms
+      await applyInsecureStorage(argv.insecureStorage);
       await ensureAuthenticated();
 
       const { handleInstall } = await import('./commands/install.js');

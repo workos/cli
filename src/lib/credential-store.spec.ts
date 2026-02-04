@@ -3,6 +3,11 @@ import { existsSync, readFileSync, unlinkSync, mkdtempSync, rmdirSync, writeFile
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
+// Mock debug utilities BEFORE anything that imports credential-store
+vi.mock('../utils/debug.js', () => ({
+  logWarn: vi.fn(),
+}));
+
 // Create a mock home directory for all tests
 let testDir: string;
 let installerDir: string;
