@@ -1,7 +1,8 @@
 import open from 'opn';
 import clack from '../utils/clack.js';
-import { saveCredentials, getCredentials, getAccessToken } from '../lib/credentials.js';
+import { saveCredentials, getCredentials, getAccessToken, isTokenExpired, updateTokens } from '../lib/credentials.js';
 import { getCliAuthClientId, getAuthkitDomain } from '../lib/settings.js';
+import { refreshAccessToken } from '../lib/token-refresh-client.js';
 
 /**
  * Parse JWT payload
@@ -71,11 +72,30 @@ export async function runLogin(): Promise<void> {
     process.exit(1);
   }
 
+  // Check if already logged in with valid token
   if (getAccessToken()) {
     const creds = getCredentials();
     clack.log.info(`Already logged in as ${creds?.email ?? 'unknown'}`);
     clack.log.info('Run `workos logout` to log out');
     return;
+  }
+
+  // Try to refresh if we have expired credentials with a refresh token
+  const existingCreds = getCredentials();
+  if (existingCreds?.refreshToken && isTokenExpired(existingCreds)) {
+    try {
+      const authkitDomain = getAuthkitDomain();
+      const result = await refreshAccessToken(authkitDomain, clientId);
+      if (result.accessToken && result.expiresAt) {
+        updateTokens(result.accessToken, result.expiresAt, result.refreshToken);
+        clack.log.info(`Already logged in as ${existingCreds.email ?? 'unknown'}`);
+        clack.log.info('(Session refreshed)');
+        clack.log.info('Run `workos logout` to log out');
+        return;
+      }
+    } catch {
+      // Refresh failed, proceed with fresh login
+    }
   }
 
   clack.log.step('Starting authentication...');

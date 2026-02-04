@@ -3,6 +3,11 @@ import { existsSync, readFileSync, unlinkSync, mkdtempSync, rmdirSync, statSync,
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
+// Mock debug utilities BEFORE anything that imports credential-store
+vi.mock('../utils/debug.js', () => ({
+  logWarn: vi.fn(),
+}));
+
 // Create a mock home directory for all tests
 let testDir: string;
 let installerDir: string;
@@ -32,6 +37,7 @@ const {
   getCredentialsPath,
   saveStagingCredentials,
   getStagingCredentials,
+  setInsecureStorage,
 } = await import('./credentials.js');
 import type { Credentials } from './credentials.js';
 
@@ -40,6 +46,8 @@ describe('credentials', () => {
     testDir = mkdtempSync(join(tmpdir(), 'credentials-test-'));
     installerDir = join(testDir, '.workos');
     credentialsFile = join(installerDir, 'credentials.json');
+    // Force file-based storage for these tests (tests file storage behavior)
+    setInsecureStorage(true);
   });
 
   afterEach(() => {

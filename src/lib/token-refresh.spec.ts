@@ -26,10 +26,11 @@ vi.mock('node:os', async (importOriginal) => {
 vi.mock('../utils/debug.js', () => ({
   debug: vi.fn(),
   logInfo: vi.fn(),
+  logWarn: vi.fn(),
 }));
 
 // Import after mocks are set up
-const { saveCredentials, clearCredentials } = await import('./credentials.js');
+const { saveCredentials, clearCredentials, setInsecureStorage } = await import('./credentials.js');
 const { ensureValidToken } = await import('./token-refresh.js');
 
 describe('token-refresh', () => {
@@ -38,6 +39,8 @@ describe('token-refresh', () => {
     installerDir = join(testDir, '.workos');
     credentialsFile = join(installerDir, 'credentials.json');
     vi.clearAllMocks();
+    // Force file-based storage for these tests
+    setInsecureStorage(true);
   });
 
   afterEach(() => {

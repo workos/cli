@@ -31,7 +31,23 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
 import { isNonInteractiveEnvironment } from './utils/environment.js';
 import clack from './utils/clack.js';
 
-// Shared options for wizard commands (default and dashboard)
+/** Apply insecure storage flag if set */
+async function applyInsecureStorage(insecureStorage?: boolean): Promise<void> {
+  if (insecureStorage) {
+    const { setInsecureStorage } = await import('./lib/credentials.js');
+    setInsecureStorage(true);
+  }
+}
+
+/** Shared insecure-storage option for commands that access credentials */
+const insecureStorageOption = {
+  'insecure-storage': {
+    default: false,
+    describe: 'Store credentials in plaintext file instead of system keyring',
+    type: 'boolean' as const,
+  },
+} as const;
+
 /**
  * Wrap a command handler with authentication check.
  * Ensures valid auth before executing the handler.
@@ -39,9 +55,9 @@ import clack from './utils/clack.js';
  */
 function withAuth<T>(handler: (argv: T) => Promise<void>): (argv: T) => Promise<void> {
   return async (argv: T) => {
-    if (!(argv as { skipAuth?: boolean }).skipAuth) {
-      await ensureAuthenticated();
-    }
+    const typedArgv = argv as { skipAuth?: boolean; insecureStorage?: boolean };
+    await applyInsecureStorage(typedArgv.insecureStorage);
+    if (!typedArgv.skipAuth) await ensureAuthenticated();
     await handler(argv);
   };
 }
@@ -58,6 +74,7 @@ const installerOptions = {
     describe: 'Enable verbose logging',
     type: 'boolean' as const,
   },
+  ...insecureStorageOption,
   // Hidden dev/automation flags (use env vars)
   local: {
     default: false,
@@ -128,12 +145,14 @@ await checkForUpdates();
 
 yargs(hideBin(process.argv))
   .env('WORKOS_INSTALLER')
-  .command('login', 'Authenticate with WorkOS', {}, async () => {
+  .command('login', 'Authenticate with WorkOS', insecureStorageOption, async (argv) => {
+    await applyInsecureStorage(argv.insecureStorage);
     const { runLogin } = await import('./commands/login.js');
     await runLogin();
     process.exit(0);
   })
-  .command('logout', 'Remove stored credentials', {}, async () => {
+  .command('logout', 'Remove stored credentials', insecureStorageOption, async (argv) => {
+    await applyInsecureStorage(argv.insecureStorage);
     const { runLogout } = await import('./commands/logout.js');
     await runLogout();
   })
@@ -190,8 +209,8 @@ yargs(hideBin(process.argv))
   .command(
     ['$0'],
     'WorkOS AuthKit CLI',
-    (yargs) => yargs,
-    async () => {
+    (yargs) => yargs.options(insecureStorageOption),
+    async (argv) => {
       // Non-TTY: show help
       if (isNonInteractiveEnvironment()) {
         yargs(hideBin(process.argv)).showHelp();
@@ -208,6 +227,7 @@ yargs(hideBin(process.argv))
       }
 
       // Auth check happens HERE, after user confirms
+      await applyInsecureStorage(argv.insecureStorage);
       await ensureAuthenticated();
 
       const { handleInstall } = await import('./commands/install.js');
