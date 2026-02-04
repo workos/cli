@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0](https://github.com/workos/cli/compare/v0.3.3...v0.4.0) (2026-02-04)
+
+
+### Features
+
+* secure keyring credential storage ([#41](https://github.com/workos/cli/issues/41)) ([7d33735](https://github.com/workos/cli/commit/7d337357a791f840ecb68602db05fc6356f62aac))
+
+
+### Bug Fixes
+
+* remove bump-patch-for-minor-pre-major so feat: bumps minor ([654cb75](https://github.com/workos/cli/commit/654cb75dfb2dcdcd9bf7ebd8c759e4cc6e8e2720))
+
 ## [0.3.3](https://github.com/workos/cli/compare/v0.3.2...v0.3.3) (2026-02-03)
 
 
