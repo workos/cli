@@ -32,6 +32,7 @@ const {
   getCredentialsPath,
   saveStagingCredentials,
   getStagingCredentials,
+  setInsecureStorage,
 } = await import('./credentials.js');
 import type { Credentials } from './credentials.js';
 
@@ -40,6 +41,8 @@ describe('credentials', () => {
     testDir = mkdtempSync(join(tmpdir(), 'credentials-test-'));
     installerDir = join(testDir, '.workos');
     credentialsFile = join(installerDir, 'credentials.json');
+    // Force file-based storage for these tests (tests file storage behavior)
+    setInsecureStorage(true);
   });
 
   afterEach(() => {

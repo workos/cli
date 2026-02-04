@@ -1,59 +1,25 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
+/**
+ * Credential types and utilities.
+ * Storage implementation delegated to credential-store.ts
+ */
 
-export interface StagingCache {
-  clientId: string;
-  apiKey: string;
-  fetchedAt: number;
-}
+// Re-export types from credential-store (canonical definitions)
+export type { StagingCache, Credentials } from './credential-store.js';
 
-export interface Credentials {
-  accessToken: string;
-  expiresAt: number;
-  userId: string;
-  email?: string;
-  staging?: StagingCache;
-  refreshToken?: string;
-}
+// Re-export storage functions from credential-store
+export {
+  hasCredentials,
+  getCredentials,
+  saveCredentials,
+  clearCredentials,
+  updateTokens,
+  getCredentialsPath,
+  setInsecureStorage,
+} from './credential-store.js';
 
-function getCredentialsDir(): string {
-  return path.join(os.homedir(), '.workos');
-}
-
-export function getCredentialsPath(): string {
-  return path.join(getCredentialsDir(), 'credentials.json');
-}
-
-export function hasCredentials(): boolean {
-  return fs.existsSync(getCredentialsPath());
-}
-
-export function getCredentials(): Credentials | null {
-  if (!hasCredentials()) return null;
-  try {
-    const content = fs.readFileSync(getCredentialsPath(), 'utf-8');
-    return JSON.parse(content);
-  } catch {
-    return null;
-  }
-}
-
-export function saveCredentials(creds: Credentials): void {
-  const dir = getCredentialsDir();
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  }
-  fs.writeFileSync(getCredentialsPath(), JSON.stringify(creds, null, 2), {
-    mode: 0o600,
-  });
-}
-
-export function clearCredentials(): void {
-  if (hasCredentials()) {
-    fs.unlinkSync(getCredentialsPath());
-  }
-}
+// Import for use in local functions
+import type { Credentials } from './credential-store.js';
+import { getCredentials, saveCredentials } from './credential-store.js';
 
 /**
  * Check if token is actually expired (hard expiry check).
@@ -99,39 +65,4 @@ export function getStagingCredentials(): { clientId: string; apiKey: string } | 
   // Invalidate staging credentials when access token expires
   if (isTokenExpired(creds)) return null;
   return { clientId: creds.staging.clientId, apiKey: creds.staging.apiKey };
-}
-
-/**
- * Atomically update tokens in credentials file.
- * Uses write-to-temp + rename pattern for atomic updates.
- */
-export function updateTokens(accessToken: string, expiresAt: number, refreshToken?: string): void {
-  const creds = getCredentials();
-  if (!creds) {
-    throw new Error('No existing credentials to update');
-  }
-
-  const updated: Credentials = {
-    ...creds,
-    accessToken,
-    expiresAt,
-    ...(refreshToken && { refreshToken }),
-  };
-
-  // Atomic write: temp file + rename
-  const credPath = getCredentialsPath();
-  const tempPath = `${credPath}.${crypto.randomUUID()}.tmp`;
-
-  try {
-    fs.writeFileSync(tempPath, JSON.stringify(updated, null, 2), { mode: 0o600 });
-    fs.renameSync(tempPath, credPath);
-  } catch (error) {
-    // Clean up temp file if rename failed
-    try {
-      fs.unlinkSync(tempPath);
-    } catch {
-      // Ignore cleanup errors
-    }
-    throw error;
-  }
 }

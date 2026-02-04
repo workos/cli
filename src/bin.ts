@@ -39,7 +39,15 @@ import clack from './utils/clack.js';
  */
 function withAuth<T>(handler: (argv: T) => Promise<void>): (argv: T) => Promise<void> {
   return async (argv: T) => {
-    if (!(argv as { skipAuth?: boolean }).skipAuth) {
+    const typedArgv = argv as { skipAuth?: boolean; insecureStorage?: boolean };
+
+    // Set storage mode before any auth operations
+    if (typedArgv.insecureStorage) {
+      const { setInsecureStorage } = await import('./lib/credentials.js');
+      setInsecureStorage(true);
+    }
+
+    if (!typedArgv.skipAuth) {
       await ensureAuthenticated();
     }
     await handler(argv);
@@ -56,6 +64,11 @@ const installerOptions = {
   debug: {
     default: false,
     describe: 'Enable verbose logging',
+    type: 'boolean' as const,
+  },
+  'insecure-storage': {
+    default: false,
+    describe: 'Store credentials in plaintext file instead of system keyring',
     type: 'boolean' as const,
   },
   // Hidden dev/automation flags (use env vars)
@@ -128,15 +141,45 @@ await checkForUpdates();
 
 yargs(hideBin(process.argv))
   .env('WORKOS_INSTALLER')
-  .command('login', 'Authenticate with WorkOS', {}, async () => {
-    const { runLogin } = await import('./commands/login.js');
-    await runLogin();
-    process.exit(0);
-  })
-  .command('logout', 'Remove stored credentials', {}, async () => {
-    const { runLogout } = await import('./commands/logout.js');
-    await runLogout();
-  })
+  .command(
+    'login',
+    'Authenticate with WorkOS',
+    {
+      'insecure-storage': {
+        default: false,
+        describe: 'Store credentials in plaintext file instead of system keyring',
+        type: 'boolean' as const,
+      },
+    },
+    async (argv) => {
+      if (argv.insecureStorage) {
+        const { setInsecureStorage } = await import('./lib/credentials.js');
+        setInsecureStorage(true);
+      }
+      const { runLogin } = await import('./commands/login.js');
+      await runLogin();
+      process.exit(0);
+    },
+  )
+  .command(
+    'logout',
+    'Remove stored credentials',
+    {
+      'insecure-storage': {
+        default: false,
+        describe: 'Store credentials in plaintext file instead of system keyring',
+        type: 'boolean' as const,
+      },
+    },
+    async (argv) => {
+      if (argv.insecureStorage) {
+        const { setInsecureStorage } = await import('./lib/credentials.js');
+        setInsecureStorage(true);
+      }
+      const { runLogout } = await import('./commands/logout.js');
+      await runLogout();
+    },
+  )
   .command(
     'install-skill',
     'Install bundled AuthKit skills to coding agents',
