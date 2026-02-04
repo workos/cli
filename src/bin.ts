@@ -31,7 +31,23 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
 import { isNonInteractiveEnvironment } from './utils/environment.js';
 import clack from './utils/clack.js';
 
-// Shared options for wizard commands (default and dashboard)
+/** Apply insecure storage flag if set */
+async function applyInsecureStorage(insecureStorage?: boolean): Promise<void> {
+  if (insecureStorage) {
+    const { setInsecureStorage } = await import('./lib/credentials.js');
+    setInsecureStorage(true);
+  }
+}
+
+/** Shared insecure-storage option for commands that access credentials */
+const insecureStorageOption = {
+  'insecure-storage': {
+    default: false,
+    describe: 'Store credentials in plaintext file instead of system keyring',
+    type: 'boolean' as const,
+  },
+} as const;
+
 /**
  * Wrap a command handler with authentication check.
  * Ensures valid auth before executing the handler.
@@ -40,15 +56,8 @@ import clack from './utils/clack.js';
 function withAuth<T>(handler: (argv: T) => Promise<void>): (argv: T) => Promise<void> {
   return async (argv: T) => {
     const typedArgv = argv as { skipAuth?: boolean; insecureStorage?: boolean };
-
-    if (typedArgv.insecureStorage) {
-      const { setInsecureStorage } = await import('./lib/credentials.js');
-      setInsecureStorage(true);
-    }
-
-    if (!typedArgv.skipAuth) {
-      await ensureAuthenticated();
-    }
+    await applyInsecureStorage(typedArgv.insecureStorage);
+    if (!typedArgv.skipAuth) await ensureAuthenticated();
     await handler(argv);
   };
 }
@@ -65,11 +74,7 @@ const installerOptions = {
     describe: 'Enable verbose logging',
     type: 'boolean' as const,
   },
-  'insecure-storage': {
-    default: false,
-    describe: 'Store credentials in plaintext file instead of system keyring',
-    type: 'boolean' as const,
-  },
+  ...insecureStorageOption,
   // Hidden dev/automation flags (use env vars)
   local: {
     default: false,
@@ -140,45 +145,17 @@ await checkForUpdates();
 
 yargs(hideBin(process.argv))
   .env('WORKOS_INSTALLER')
-  .command(
-    'login',
-    'Authenticate with WorkOS',
-    {
-      'insecure-storage': {
-        default: false,
-        describe: 'Store credentials in plaintext file instead of system keyring',
-        type: 'boolean' as const,
-      },
-    },
-    async (argv) => {
-      if (argv.insecureStorage) {
-        const { setInsecureStorage } = await import('./lib/credentials.js');
-        setInsecureStorage(true);
-      }
-      const { runLogin } = await import('./commands/login.js');
-      await runLogin();
-      process.exit(0);
-    },
-  )
-  .command(
-    'logout',
-    'Remove stored credentials',
-    {
-      'insecure-storage': {
-        default: false,
-        describe: 'Store credentials in plaintext file instead of system keyring',
-        type: 'boolean' as const,
-      },
-    },
-    async (argv) => {
-      if (argv.insecureStorage) {
-        const { setInsecureStorage } = await import('./lib/credentials.js');
-        setInsecureStorage(true);
-      }
-      const { runLogout } = await import('./commands/logout.js');
-      await runLogout();
-    },
-  )
+  .command('login', 'Authenticate with WorkOS', insecureStorageOption, async (argv) => {
+    await applyInsecureStorage(argv.insecureStorage);
+    const { runLogin } = await import('./commands/login.js');
+    await runLogin();
+    process.exit(0);
+  })
+  .command('logout', 'Remove stored credentials', insecureStorageOption, async (argv) => {
+    await applyInsecureStorage(argv.insecureStorage);
+    const { runLogout } = await import('./commands/logout.js');
+    await runLogout();
+  })
   .command(
     'install-skill',
     'Install bundled AuthKit skills to coding agents',

@@ -108,17 +108,6 @@ function deleteFromKeyring(): void {
   }
 }
 
-function isKeyringAvailable(): boolean {
-  try {
-    const entry = new Entry(SERVICE_NAME, '__probe__');
-    entry.setPassword('test');
-    entry.deletePassword();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function showFallbackWarning(): void {
   if (fallbackWarningShown || forceInsecureStorage) return;
   fallbackWarningShown = true;
@@ -137,21 +126,15 @@ export function hasCredentials(): boolean {
 }
 
 export function getCredentials(): Credentials | null {
-  if (forceInsecureStorage) {
-    return readFromFile();
-  }
+  if (forceInsecureStorage) return readFromFile();
 
   const keyringCreds = readFromKeyring();
-  if (keyringCreds) {
-    return keyringCreds;
-  }
+  if (keyringCreds) return keyringCreds;
 
   const fileCreds = readFromFile();
   if (fileCreds) {
-    if (writeToKeyring(fileCreds)) {
-      deleteFile();
-      return fileCreds;
-    }
+    // Migrate file creds to keyring if possible
+    if (writeToKeyring(fileCreds)) deleteFile();
     return fileCreds;
   }
 
@@ -159,18 +142,14 @@ export function getCredentials(): Credentials | null {
 }
 
 export function saveCredentials(creds: Credentials): void {
-  if (forceInsecureStorage) {
-    writeToFile(creds);
-    return;
-  }
+  if (forceInsecureStorage) return writeToFile(creds);
 
   if (writeToKeyring(creds)) {
     deleteFile();
-    return;
+  } else {
+    showFallbackWarning();
+    writeToFile(creds);
   }
-
-  showFallbackWarning();
-  writeToFile(creds);
 }
 
 export function clearCredentials(): void {
