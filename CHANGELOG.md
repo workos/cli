@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4](https://github.com/workos/cli/compare/v0.4.3...v0.4.4) (2026-02-04)
+
+
+### Bug Fixes
+
+* strip _authToken from npmrc to force OIDC auth ([8b11ceb](https://github.com/workos/cli/commit/8b11ceb49cc0fce09b98198366e43c694b557df8))
+
 ## [0.4.3](https://github.com/workos/cli/compare/v0.4.2...v0.4.3) (2026-02-04)
 
 
