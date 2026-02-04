@@ -19,7 +19,10 @@ vi.mock('@napi-rs/keyring', () => ({
   Entry: class MockEntry {
     private key: string;
 
-    constructor(private service: string, private account: string) {
+    constructor(
+      private service: string,
+      private account: string,
+    ) {
       this.key = `${service}:${account}`;
     }
 
@@ -261,9 +264,7 @@ describe('credential-store', () => {
     });
 
     it('throws when no credentials exist', () => {
-      expect(() => updateTokens('token', Date.now())).toThrow(
-        'No existing credentials to update',
-      );
+      expect(() => updateTokens('token', Date.now())).toThrow('No existing credentials to update');
     });
   });
 

@@ -142,7 +142,7 @@ function showFallbackWarning(): void {
   console.warn(
     '\n⚠ Unable to store credentials in system keyring. Using file storage.\n' +
       '  Credentials saved to ~/.workos/credentials.json\n' +
-      '  Use --insecure-storage to suppress this warning.\n'
+      '  Use --insecure-storage to suppress this warning.\n',
   );
 }
 
@@ -218,11 +218,7 @@ export function clearCredentials(): void {
 /**
  * Update tokens atomically.
  */
-export function updateTokens(
-  accessToken: string,
-  expiresAt: number,
-  refreshToken?: string
-): void {
+export function updateTokens(accessToken: string, expiresAt: number, refreshToken?: string): void {
   const creds = getCredentials();
   if (!creds) {
     throw new Error('No existing credentials to update');
