@@ -34,6 +34,7 @@ jobs:
         run: pnpm build
 
       - name: Publish
-        env:
-          NPM_TAG: ${{ github.event.release.prerelease && 'next' || 'latest' }}
-        run: pnpm publish --tag "$NPM_TAG" --access public --no-git-checks --provenance
+        run: |
+          unset NODE_AUTH_TOKEN
+          NPM_TAG="${{ github.event.release.prerelease && 'next' || 'latest' }}"
+          pnpm publish --tag "$NPM_TAG" --access public --no-git-checks --provenance
