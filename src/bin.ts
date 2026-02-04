@@ -41,7 +41,6 @@ function withAuth<T>(handler: (argv: T) => Promise<void>): (argv: T) => Promise<
   return async (argv: T) => {
     const typedArgv = argv as { skipAuth?: boolean; insecureStorage?: boolean };
 
-    // Set storage mode before any auth operations
     if (typedArgv.insecureStorage) {
       const { setInsecureStorage } = await import('./lib/credentials.js');
       setInsecureStorage(true);

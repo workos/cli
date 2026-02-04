@@ -11,8 +11,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-// Inline the Credentials type to avoid circular dependency with credentials.ts
-// The canonical type definition lives in credentials.ts
 export interface StagingCache {
   clientId: string;
   apiKey: string;
@@ -31,19 +29,12 @@ export interface Credentials {
 const SERVICE_NAME = 'workos-cli';
 const ACCOUNT_NAME = 'credentials';
 
-// Track if we've already shown the fallback warning this session
 let fallbackWarningShown = false;
-
-// Global flag set by CLI argument parsing
 let forceInsecureStorage = false;
 
 export function setInsecureStorage(value: boolean): void {
   forceInsecureStorage = value;
 }
-
-// ============================================================================
-// File Storage (fallback)
-// ============================================================================
 
 function getCredentialsDir(): string {
   return path.join(os.homedir(), '.workos');
@@ -83,10 +74,6 @@ function deleteFile(): void {
   }
 }
 
-// ============================================================================
-// Keyring Storage
-// ============================================================================
-
 function getKeyringEntry(): Entry {
   return new Entry(SERVICE_NAME, ACCOUNT_NAME);
 }
@@ -117,7 +104,7 @@ function deleteFromKeyring(): void {
     const entry = getKeyringEntry();
     entry.deletePassword();
   } catch {
-    // Ignore errors - might not exist
+    // Might not exist
   }
 }
 
@@ -132,10 +119,6 @@ function isKeyringAvailable(): boolean {
   }
 }
 
-// ============================================================================
-// Unified API
-// ============================================================================
-
 function showFallbackWarning(): void {
   if (fallbackWarningShown || forceInsecureStorage) return;
   fallbackWarningShown = true;
@@ -146,9 +129,6 @@ function showFallbackWarning(): void {
   );
 }
 
-/**
- * Check if credentials exist (in keyring or file).
- */
 export function hasCredentials(): boolean {
   if (forceInsecureStorage) {
     return fileExists();
@@ -156,68 +136,48 @@ export function hasCredentials(): boolean {
   return readFromKeyring() !== null || fileExists();
 }
 
-/**
- * Get credentials from keyring or file.
- * Handles migration from file to keyring.
- */
 export function getCredentials(): Credentials | null {
   if (forceInsecureStorage) {
     return readFromFile();
   }
 
-  // Try keyring first
   const keyringCreds = readFromKeyring();
   if (keyringCreds) {
     return keyringCreds;
   }
 
-  // Check for file credentials (migration case)
   const fileCreds = readFromFile();
   if (fileCreds) {
-    // Attempt to migrate to keyring
     if (writeToKeyring(fileCreds)) {
-      deleteFile(); // Clean up after successful migration
+      deleteFile();
       return fileCreds;
     }
-    // Keyring unavailable, keep using file
     return fileCreds;
   }
 
   return null;
 }
 
-/**
- * Save credentials to keyring (with file fallback).
- */
 export function saveCredentials(creds: Credentials): void {
   if (forceInsecureStorage) {
     writeToFile(creds);
     return;
   }
 
-  // Try keyring first
   if (writeToKeyring(creds)) {
-    // Also delete any old file to avoid confusion
     deleteFile();
     return;
   }
 
-  // Fallback to file
   showFallbackWarning();
   writeToFile(creds);
 }
 
-/**
- * Clear credentials from both keyring and file.
- */
 export function clearCredentials(): void {
   deleteFromKeyring();
   deleteFile();
 }
 
-/**
- * Update tokens atomically.
- */
 export function updateTokens(accessToken: string, expiresAt: number, refreshToken?: string): void {
   const creds = getCredentials();
   if (!creds) {
@@ -234,5 +194,4 @@ export function updateTokens(accessToken: string, expiresAt: number, refreshToke
   saveCredentials(updated);
 }
 
-// Re-export utility functions that don't depend on storage backend
 export { getCredentialsPath };
