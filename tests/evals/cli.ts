@@ -21,7 +21,14 @@ export interface CliOptions {
 }
 
 const FRAMEWORKS = ['nextjs', 'react', 'react-router', 'tanstack-start', 'vanilla-js'];
-const STATES = ['example', 'example-auth0'];
+const STATES = [
+  'example',
+  'example-auth0',
+  'partial-install',
+  'typescript-strict',
+  'conflicting-middleware',
+  'conflicting-auth',
+];
 
 export function parseArgs(args: string[]): CliOptions {
   const options: CliOptions = {

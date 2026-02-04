@@ -139,6 +139,20 @@ export function redactCredentials(obj: any): any {
 - Environment variables
 - UI components
 
+## Evaluations
+
+Automated eval framework for testing installer skills across frameworks and project states.
+
+```bash
+pnpm eval                    # Run all scenarios
+pnpm eval --framework=nextjs # Single framework
+pnpm eval --quality          # Include LLM quality grading
+pnpm eval:history            # List recent runs
+pnpm eval:diff <id1> <id2>   # Compare runs
+```
+
+See [tests/evals/README.md](./tests/evals/README.md) for full documentation.
+
 ## Debugging
 
 **Verbose logs:**

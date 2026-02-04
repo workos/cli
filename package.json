@@ -89,7 +89,8 @@
     "typecheck": "tsc --noEmit",
     "eval": "tsx tests/evals/index.ts",
     "eval:history": "tsx tests/evals/index.ts history",
-    "eval:compare": "tsx tests/evals/index.ts compare",
+    "eval:diff": "tsx tests/evals/index.ts diff",
+    "eval:prune": "tsx tests/evals/index.ts prune",
     "eval:logs": "tsx tests/evals/index.ts logs",
     "eval:show": "tsx tests/evals/index.ts show"
   },
