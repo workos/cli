@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2](https://github.com/workos/cli/compare/v0.4.1...v0.4.2) (2026-02-04)
+
+
+### Bug Fixes
+
+* remove registry-url to enable OIDC trusted publishing ([efdbd80](https://github.com/workos/cli/commit/efdbd804e2a96f5ff79ca4747e557af57102a56e))
+
+
+### Reverts
+
+* remove empty NODE_AUTH_TOKEN override ([9aca30a](https://github.com/workos/cli/commit/9aca30a83aa1910ad4e19300762f9dca432f5f78))
+
 ## [0.4.1](https://github.com/workos/cli/compare/v0.4.0...v0.4.1) (2026-02-04)
 
 
