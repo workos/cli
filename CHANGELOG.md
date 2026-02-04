@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3](https://github.com/workos/cli/compare/v0.4.2...v0.4.3) (2026-02-04)
+
+
+### Bug Fixes
+
+* remove environment to prevent org secret injection ([4c3e673](https://github.com/workos/cli/commit/4c3e6735d834cb93dc2293d3bc6b39c7a604873d))
+
 ## [0.4.2](https://github.com/workos/cli/compare/v0.4.1...v0.4.2) (2026-02-04)
 
 
