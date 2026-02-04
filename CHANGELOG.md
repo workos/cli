@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1](https://github.com/workos/cli/compare/v0.4.0...v0.4.1) (2026-02-04)
+
+
+### Bug Fixes
+
+* override org NODE_AUTH_TOKEN to enable trusted publishing ([dd31ec5](https://github.com/workos/cli/commit/dd31ec598de03f477ea7a11593b57696089a3b4f))
+
 ## [0.4.0](https://github.com/workos/cli/compare/v0.3.3...v0.4.0) (2026-02-04)
 
 
