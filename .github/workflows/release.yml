@@ -34,5 +34,4 @@ jobs:
       - name: Publish
         env:
           NPM_TAG: ${{ github.event.release.prerelease && 'next' || 'latest' }}
-          NODE_AUTH_TOKEN: ''
         run: pnpm publish --tag "$NPM_TAG" --access public --no-git-checks --provenance
