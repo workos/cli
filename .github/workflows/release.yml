@@ -24,6 +24,9 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           cache: pnpm
 
+      - name: Remove token auth from npmrc (use OIDC instead)
+        run: sed -i '/_authToken/d' ~/.npmrc
+
       - name: Install
         run: pnpm install
 
