@@ -40,13 +40,6 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
   );
   console.log(`   Base URL:         ${report.environment.baseUrl} ${Chalk.green('✓')}`);
 
-  // Redirect URI
-  if (report.environment.redirectUri) {
-    console.log('');
-    console.log('Redirect URI');
-    console.log(`   Code:             ${report.environment.redirectUri}`);
-  }
-
   // Connectivity & Credential Validation
   console.log('');
   console.log('Connectivity');
