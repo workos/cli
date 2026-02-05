@@ -78,13 +78,12 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
     console.log(`   Status:           ${Chalk.dim(report.dashboardError)}`);
   }
 
-  // Expected Redirect URI (can't verify against dashboard - no list API)
+  // Redirect URI (can't verify against dashboard - no list API)
   if (report.redirectUris?.codeUri) {
     console.log('');
-    console.log('Redirect URI');
-    const sourceLabel = report.redirectUris.source === 'inferred' ? Chalk.dim(' (inferred)') : '';
-    console.log(`   Expected:         ${report.redirectUris.codeUri}${sourceLabel}`);
-    console.log(`   ${Chalk.dim('Verify this is configured in your WorkOS dashboard')}`);
+    const source = report.redirectUris.source === 'inferred' ? 'Inferred' : 'Configured';
+    console.log(`Redirect URI (${source})`);
+    console.log(`   ${report.redirectUris.codeUri}`);
   }
 
   // Verbose mode additions
