@@ -1,4 +1,4 @@
-import type { DashboardSettings, DoctorOptions, RedirectUriComparison, EnvironmentRaw } from '../types.js';
+import type { DashboardSettings, DashboardFetchResult, DoctorOptions, RedirectUriComparison, EnvironmentRaw } from '../types.js';
 
 const WORKOS_API_URL = 'https://api.workos.com';
 
@@ -12,27 +12,27 @@ export async function checkDashboardSettings(
   options: DoctorOptions,
   apiKeyType: 'staging' | 'production' | null,
   raw: EnvironmentRaw,
-): Promise<DashboardSettings | null> {
+): Promise<DashboardFetchResult> {
   // Never call API with production keys
   if (apiKeyType === 'production') {
-    return null;
+    return { settings: null, error: 'Skipped (production API key)' };
   }
 
   if (options.skipApi) {
-    return null;
+    return { settings: null, error: 'Skipped (--skip-api)' };
   }
 
   const apiKey = raw.apiKey;
   if (!apiKey) {
-    return null;
+    return { settings: null, error: 'No API key configured' };
   }
 
   try {
     const settings = await fetchDashboardSettings(apiKey, raw.baseUrl);
-    return settings;
-  } catch {
-    // Fail silently - dashboard data is supplementary
-    return null;
+    return { settings };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return { settings: null, error: message };
   }
 }
 
@@ -100,6 +100,14 @@ async function fetchDashboardSettings(apiKey: string, baseUrlOverride: string | 
       signal: controller.signal,
     });
 
+    // Check for auth errors on first request
+    if (redirectUrisResponse.status === 401) {
+      throw new Error('Invalid API key (401)');
+    }
+    if (redirectUrisResponse.status === 403) {
+      throw new Error('API key lacks permissions (403)');
+    }
+
     let redirectUris: string[] = [];
     if (redirectUrisResponse.ok) {
       const data = (await redirectUrisResponse.json()) as { data?: { uri: string }[] };
@@ -149,15 +157,50 @@ async function fetchDashboardSettings(apiKey: string, baseUrlOverride: string | 
       mfa,
       organizationCount,
     };
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error('Request timeout (10s)');
+    }
+    throw err;
   } finally {
     clearTimeout(timeoutId);
   }
 }
 
+/**
+ * Normalize a URI for comparison:
+ * - Remove trailing slashes
+ * - Normalize localhost variants (127.0.0.1 → localhost)
+ * - Lowercase the host portion
+ */
+function normalizeUri(uri: string): string {
+  try {
+    const url = new URL(uri);
+    // Normalize localhost variants
+    if (url.hostname === '127.0.0.1' || url.hostname === '[::1]') {
+      url.hostname = 'localhost';
+    }
+    // Lowercase hostname (but preserve path case for compatibility)
+    url.hostname = url.hostname.toLowerCase();
+    // Remove trailing slash from pathname (unless it's just "/")
+    if (url.pathname.length > 1 && url.pathname.endsWith('/')) {
+      url.pathname = url.pathname.slice(0, -1);
+    }
+    return url.toString();
+  } catch {
+    // If URL parsing fails, return as-is for exact match fallback
+    return uri;
+  }
+}
+
 export function compareRedirectUris(codeUri: string | null, dashboardUris: string[]): RedirectUriComparison {
-  return {
-    codeUri,
-    dashboardUris,
-    match: codeUri ? dashboardUris.includes(codeUri) : false,
-  };
+  if (!codeUri) {
+    return { codeUri, dashboardUris, match: false };
+  }
+
+  const normalizedCode = normalizeUri(codeUri);
+  const normalizedDashboard = dashboardUris.map(normalizeUri);
+  const match = normalizedDashboard.includes(normalizedCode);
+
+  return { codeUri, dashboardUris, match };
 }

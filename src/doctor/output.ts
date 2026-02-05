@@ -81,6 +81,10 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
     console.log(`   Session Timeout:  ${report.dashboardSettings.sessionTimeout ?? 'Default'}`);
     console.log(`   MFA:              ${formatMfa(report.dashboardSettings.mfa)}`);
     console.log(`   Organizations:    ${report.dashboardSettings.organizationCount} configured`);
+  } else if (report.dashboardError) {
+    console.log('');
+    console.log('Dashboard Settings');
+    console.log(`   Status:           ${Chalk.dim(report.dashboardError)}`);
   }
 
   // Redirect URI comparison

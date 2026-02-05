@@ -29,11 +29,11 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
   const credentialValidation = await validateCredentials(environment.apiKeyType, envRaw, options.skipApi);
 
   // Dashboard settings (only for staging, non-blocking)
-  const dashboardSettings = await checkDashboardSettings(options, environment.apiKeyType, envRaw);
+  const dashboardResult = await checkDashboardSettings(options, environment.apiKeyType, envRaw);
 
   // Compare redirect URIs if we have dashboard data
-  const redirectUris = dashboardSettings
-    ? compareRedirectUris(environment.redirectUri, dashboardSettings.redirectUris)
+  const redirectUris = dashboardResult.settings
+    ? compareRedirectUris(environment.redirectUri, dashboardResult.settings.redirectUris)
     : undefined;
 
   // Build partial report
@@ -50,7 +50,8 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     environment,
     connectivity,
     credentialValidation: credentialValidation ?? undefined,
-    dashboardSettings: dashboardSettings ?? undefined,
+    dashboardSettings: dashboardResult.settings ?? undefined,
+    dashboardError: dashboardResult.settings ? undefined : dashboardResult.error,
     redirectUris,
   };
 

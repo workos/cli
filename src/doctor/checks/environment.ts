@@ -1,10 +1,12 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { parse as parseDotenv } from 'dotenv';
 import type { EnvironmentInfo, EnvironmentCheckResult, DoctorOptions } from '../types.js';
 
 /**
  * Load environment variables from project's .env files.
  * Priority: .env.local > .env (matching Next.js/Vite conventions)
+ * Uses dotenv parser for proper handling of quotes, multiline, exports, etc.
  */
 function loadProjectEnv(installDir: string): Record<string, string> {
   const env: Record<string, string> = {};
@@ -17,22 +19,8 @@ function loadProjectEnv(installDir: string): Record<string, string> {
     if (existsSync(filePath)) {
       try {
         const content = readFileSync(filePath, 'utf-8');
-        for (const line of content.split('\n')) {
-          const trimmed = line.trim();
-          // Skip comments and empty lines
-          if (!trimmed || trimmed.startsWith('#')) continue;
-
-          const eqIndex = trimmed.indexOf('=');
-          if (eqIndex > 0) {
-            const key = trimmed.slice(0, eqIndex).trim();
-            let value = trimmed.slice(eqIndex + 1).trim();
-            // Remove surrounding quotes if present
-            if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-              value = value.slice(1, -1);
-            }
-            env[key] = value;
-          }
-        }
+        const parsed = parseDotenv(content);
+        Object.assign(env, parsed);
       } catch {
         // Ignore read errors
       }

@@ -77,6 +77,11 @@ export interface CredentialValidation {
   error?: string;
 }
 
+export interface DashboardFetchResult {
+  settings: DashboardSettings | null;
+  error?: string;
+}
+
 export interface DoctorReport {
   version: string;
   timestamp: string;
@@ -90,6 +95,7 @@ export interface DoctorReport {
   environment: EnvironmentInfo;
   connectivity: ConnectivityInfo;
   dashboardSettings?: DashboardSettings;
+  dashboardError?: string;
   redirectUris?: RedirectUriComparison;
   credentialValidation?: CredentialValidation;
   issues: Issue[];

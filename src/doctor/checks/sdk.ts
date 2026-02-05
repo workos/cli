@@ -96,12 +96,24 @@ async function fetchLatestVersion(packageName: string): Promise<string | null> {
 }
 
 function isVersionOutdated(current: string, latest: string): boolean {
-  // Strip semver range prefixes (^, ~, etc.)
-  const cleanCurrent = current.replace(/^[\^~>=<]+/, '');
+  // Strip semver range prefixes (^, ~, etc.) and workspace protocol
+  const cleanCurrent = current.replace(/^[\^~>=<]+/, '').replace(/^workspace:\*?/, '');
   const cleanLatest = latest.replace(/^[\^~>=<]+/, '');
 
-  const [currMajor, currMinor, currPatch] = cleanCurrent.split('.').map(Number);
-  const [latMajor, latMinor, latPatch] = cleanLatest.split('.').map(Number);
+  // Handle prerelease: "1.0.0-beta.1" → "1.0.0", "-beta.1"
+  const [currBase] = cleanCurrent.split('-');
+  const [latBase] = cleanLatest.split('-');
+
+  const currParts = currBase.split('.').map(Number);
+  const latParts = latBase.split('.').map(Number);
+
+  // If we got NaN values, we can't reliably compare - assume not outdated
+  if (currParts.some(isNaN) || latParts.some(isNaN)) {
+    return false;
+  }
+
+  const [currMajor = 0, currMinor = 0, currPatch = 0] = currParts;
+  const [latMajor = 0, latMinor = 0, latPatch = 0] = latParts;
 
   if (latMajor > currMajor) return true;
   if (latMajor === currMajor && latMinor > currMinor) return true;
