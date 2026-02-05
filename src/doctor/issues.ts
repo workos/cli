@@ -98,20 +98,8 @@ export function detectIssues(report: Omit<DoctorReport, 'issues' | 'summary'>): 
     });
   }
 
-  // Redirect URI mismatch (warning only - might be intentional or dashboard data incomplete)
-  if (report.redirectUris && !report.redirectUris.match && report.redirectUris.codeUri) {
-    issues.push({
-      code: 'REDIRECT_URI_MISMATCH',
-      severity: 'warning',
-      message: 'Redirect URI not found in dashboard',
-      details: {
-        code: report.redirectUris.codeUri,
-        dashboard: report.redirectUris.dashboardUris,
-      },
-      remediation: `Verify "${report.redirectUris.codeUri}" is in your WorkOS dashboard redirect URIs`,
-      docsUrl: ISSUE_DEFINITIONS.REDIRECT_URI_MISMATCH.docsUrl,
-    });
-  }
+  // Note: Redirect URI mismatch detection disabled - WorkOS API doesn't expose
+  // a public endpoint to list configured redirect URIs for verification
 
   // Production key warning (no dashboard data)
   if (report.environment.apiKeyType === 'production' && !report.dashboardSettings) {

@@ -85,22 +85,13 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
     console.log(`   Status:           ${Chalk.dim(report.dashboardError)}`);
   }
 
-  // Redirect URI comparison
-  if (report.redirectUris) {
+  // Expected Redirect URI (can't verify against dashboard - no list API)
+  if (report.redirectUris?.codeUri) {
     console.log('');
-    console.log('Redirect URIs');
-    const sourceLabel = report.redirectUris.source === 'inferred' ? Chalk.dim(' (inferred from framework)') : '';
-    console.log(`   Expected:         ${report.redirectUris.codeUri ?? Chalk.dim('Unknown')}${sourceLabel}`);
-    if (report.redirectUris.dashboardUris.length > 0) {
-      console.log(`   Dashboard:        ${report.redirectUris.dashboardUris[0]}`);
-      for (const uri of report.redirectUris.dashboardUris.slice(1)) {
-        console.log(`                     ${uri}`);
-      }
-    } else {
-      console.log(`   Dashboard:        ${Chalk.dim('None configured')}`);
-    }
-    const matchStatus = report.redirectUris.match ? Chalk.green('✓ Match found') : Chalk.yellow('? No match');
-    console.log(`   Status:           ${matchStatus}`);
+    console.log('Redirect URI');
+    const sourceLabel = report.redirectUris.source === 'inferred' ? Chalk.dim(' (inferred)') : '';
+    console.log(`   Expected:         ${report.redirectUris.codeUri}${sourceLabel}`);
+    console.log(`   ${Chalk.dim('Verify this is configured in your WorkOS dashboard')}`);
   }
 
   // Verbose mode additions

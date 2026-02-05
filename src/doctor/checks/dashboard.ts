@@ -94,24 +94,23 @@ async function fetchDashboardSettings(apiKey: string, baseUrlOverride: string | 
   const timeoutId = setTimeout(() => controller.abort(), 10000);
 
   try {
-    // Fetch redirect URIs
-    const redirectUrisResponse = await fetch(`${baseUrl}/redirect_uris`, {
+    // Note: WorkOS API doesn't expose a public endpoint to list redirect URIs
+    // The management API only supports creating them (POST), not listing (GET)
+    // We skip redirect URI fetching - the installer creates them but can't verify them
+    const redirectUris: string[] = [];
+
+    // Validate API key by making a lightweight call
+    const orgsCheckResponse = await fetch(`${baseUrl}/organizations?limit=1`, {
       headers: { Authorization: `Bearer ${apiKey}` },
       signal: controller.signal,
     });
 
-    // Check for auth errors on first request
-    if (redirectUrisResponse.status === 401) {
+    // Check for auth errors
+    if (orgsCheckResponse.status === 401) {
       throw new Error('Invalid API key (401)');
     }
-    if (redirectUrisResponse.status === 403) {
+    if (orgsCheckResponse.status === 403) {
       throw new Error('API key lacks permissions (403)');
-    }
-
-    let redirectUris: string[] = [];
-    if (redirectUrisResponse.ok) {
-      const data = (await redirectUrisResponse.json()) as { data?: { uri: string }[] };
-      redirectUris = data.data?.map((r) => r.uri) ?? [];
     }
 
     // Fetch environment settings
