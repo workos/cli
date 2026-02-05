@@ -33,3 +33,4 @@ dist/
 tests/eval-results/
 .next/
 .react-router/
+.codex
