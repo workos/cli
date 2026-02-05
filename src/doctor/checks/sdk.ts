@@ -2,20 +2,39 @@ import { getPackageDotJson } from '../../utils/clack-utils.js';
 import { hasPackageInstalled, getPackageVersion } from '../../utils/package-json.js';
 import type { DoctorOptions, SdkInfo } from '../types.js';
 
+// AuthKit SDKs - check newer @workos/* scope first, then legacy @workos-inc/*
 const SDK_PACKAGES = [
+  // New @workos/* scope
+  '@workos/authkit-nextjs',
+  '@workos/authkit-tanstack-react-start',
+  '@workos/authkit-react-router',
+  '@workos/authkit-remix',
+  '@workos/authkit-sveltekit',
+  '@workos/authkit-react',
+  '@workos/authkit-js',
+  // Legacy @workos-inc/* scope
   '@workos-inc/authkit-nextjs',
   '@workos-inc/authkit-remix',
   '@workos-inc/authkit-react-router',
-  '@workos-inc/authkit-tanstack-start',
+  '@workos-inc/authkit-react',
+  '@workos-inc/authkit-js',
   '@workos-inc/node',
-  'workos', // legacy
+  'workos', // very old legacy
 ] as const;
 
 const AUTHKIT_PACKAGES = new Set([
+  '@workos/authkit-nextjs',
+  '@workos/authkit-tanstack-react-start',
+  '@workos/authkit-react-router',
+  '@workos/authkit-remix',
+  '@workos/authkit-sveltekit',
+  '@workos/authkit-react',
+  '@workos/authkit-js',
   '@workos-inc/authkit-nextjs',
   '@workos-inc/authkit-remix',
   '@workos-inc/authkit-react-router',
-  '@workos-inc/authkit-tanstack-start',
+  '@workos-inc/authkit-react',
+  '@workos-inc/authkit-js',
 ]);
 
 export async function checkSdk(options: DoctorOptions): Promise<SdkInfo> {

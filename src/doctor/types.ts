@@ -32,16 +32,48 @@ export interface RuntimeInfo {
 export interface EnvironmentInfo {
   apiKeyConfigured: boolean;
   apiKeyType: 'staging' | 'production' | null;
-  clientId: string | null; // truncated
+  clientId: string | null; // truncated for display
   redirectUri: string | null;
   cookieDomain: string | null;
   baseUrl: string | null;
+}
+
+/** Internal environment data - not included in report output */
+export interface EnvironmentRaw {
+  apiKey: string | null;
+  clientId: string | null;
+  baseUrl: string | null;
+}
+
+export interface EnvironmentCheckResult {
+  info: EnvironmentInfo;
+  raw: EnvironmentRaw;
 }
 
 export interface ConnectivityInfo {
   apiReachable: boolean;
   latencyMs: number | null;
   tlsValid: boolean;
+  error?: string;
+}
+
+export interface DashboardSettings {
+  redirectUris: string[];
+  authMethods: string[];
+  sessionTimeout: string | null;
+  mfa: 'optional' | 'required' | 'disabled' | null;
+  organizationCount: number;
+}
+
+export interface RedirectUriComparison {
+  codeUri: string | null;
+  dashboardUris: string[];
+  match: boolean;
+}
+
+export interface CredentialValidation {
+  valid: boolean;
+  clientIdMatch: boolean;
   error?: string;
 }
 
@@ -57,6 +89,9 @@ export interface DoctorReport {
   framework: FrameworkInfo;
   environment: EnvironmentInfo;
   connectivity: ConnectivityInfo;
+  dashboardSettings?: DashboardSettings;
+  redirectUris?: RedirectUriComparison;
+  credentialValidation?: CredentialValidation;
   issues: Issue[];
   summary: {
     errors: number;
@@ -69,4 +104,6 @@ export interface DoctorOptions {
   installDir: string;
   verbose?: boolean;
   skipApi?: boolean;
+  json?: boolean;
+  copy?: boolean;
 }

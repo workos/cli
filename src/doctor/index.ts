@@ -3,7 +3,12 @@ import { checkFramework } from './checks/framework.js';
 import { checkRuntime } from './checks/runtime.js';
 import { checkEnvironment } from './checks/environment.js';
 import { checkConnectivity } from './checks/connectivity.js';
+import { checkDashboardSettings, compareRedirectUris, validateCredentials } from './checks/dashboard.js';
 import { detectIssues } from './issues.js';
+import { formatReport } from './output.js';
+import { formatReportAsJson } from './json-output.js';
+import { copyToClipboard } from './clipboard.js';
+import Chalk from 'chalk';
 import type { DoctorOptions, DoctorReport } from './types.js';
 
 const DOCTOR_VERSION = '1.0.0';
@@ -17,8 +22,19 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     checkConnectivity(options),
   ]);
 
-  // Environment check is synchronous
-  const environment = checkEnvironment();
+  // Environment check - loads project's .env/.env.local files
+  const { info: environment, raw: envRaw } = checkEnvironment(options);
+
+  // Validate credentials against API (staging only)
+  const credentialValidation = await validateCredentials(environment.apiKeyType, envRaw, options.skipApi);
+
+  // Dashboard settings (only for staging, non-blocking)
+  const dashboardSettings = await checkDashboardSettings(options, environment.apiKeyType, envRaw);
+
+  // Compare redirect URIs if we have dashboard data
+  const redirectUris = dashboardSettings
+    ? compareRedirectUris(environment.redirectUri, dashboardSettings.redirectUris)
+    : undefined;
 
   // Build partial report
   const partialReport = {
@@ -33,6 +49,9 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     framework,
     environment,
     connectivity,
+    credentialValidation: credentialValidation ?? undefined,
+    dashboardSettings: dashboardSettings ?? undefined,
+    redirectUris,
   };
 
   // Detect issues based on collected data
@@ -55,5 +74,30 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
   return report;
 }
 
+export async function outputReport(report: DoctorReport, options: DoctorOptions): Promise<void> {
+  if (options.json) {
+    const json = formatReportAsJson(report);
+    console.log(json);
+
+    if (options.copy) {
+      const success = await copyToClipboard(json);
+      if (success) {
+        console.error('(Copied to clipboard)');
+      }
+    }
+  } else {
+    formatReport(report, { verbose: options.verbose });
+
+    if (options.copy) {
+      const json = formatReportAsJson(report);
+      const success = await copyToClipboard(json);
+      if (success) {
+        console.log(Chalk.dim('Report copied to clipboard'));
+      }
+    }
+  }
+}
+
 export { formatReport } from './output.js';
+export { formatReportAsJson } from './json-output.js';
 export type { DoctorReport, DoctorOptions } from './types.js';

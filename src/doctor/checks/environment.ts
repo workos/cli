@@ -1,19 +1,71 @@
-import type { EnvironmentInfo } from '../types.js';
+import { readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+import type { EnvironmentInfo, EnvironmentCheckResult, DoctorOptions } from '../types.js';
 
-export function checkEnvironment(): EnvironmentInfo {
-  const apiKey = process.env.WORKOS_API_KEY;
-  const clientId = process.env.WORKOS_CLIENT_ID;
-  const redirectUri = process.env.WORKOS_REDIRECT_URI;
-  const cookieDomain = process.env.WORKOS_COOKIE_DOMAIN;
-  const baseUrl = process.env.WORKOS_BASE_URL;
+/**
+ * Load environment variables from project's .env files.
+ * Priority: .env.local > .env (matching Next.js/Vite conventions)
+ */
+function loadProjectEnv(installDir: string): Record<string, string> {
+  const env: Record<string, string> = {};
+
+  // Load in order: .env first, then .env.local (later overrides earlier)
+  const envFiles = ['.env', '.env.local'];
+
+  for (const file of envFiles) {
+    const filePath = join(installDir, file);
+    if (existsSync(filePath)) {
+      try {
+        const content = readFileSync(filePath, 'utf-8');
+        for (const line of content.split('\n')) {
+          const trimmed = line.trim();
+          // Skip comments and empty lines
+          if (!trimmed || trimmed.startsWith('#')) continue;
+
+          const eqIndex = trimmed.indexOf('=');
+          if (eqIndex > 0) {
+            const key = trimmed.slice(0, eqIndex).trim();
+            let value = trimmed.slice(eqIndex + 1).trim();
+            // Remove surrounding quotes if present
+            if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+              value = value.slice(1, -1);
+            }
+            env[key] = value;
+          }
+        }
+      } catch {
+        // Ignore read errors
+      }
+    }
+  }
+
+  return env;
+}
+
+export function checkEnvironment(options?: DoctorOptions): EnvironmentCheckResult {
+  // Load project env files, then fall back to process.env
+  const projectEnv = options?.installDir ? loadProjectEnv(options.installDir) : {};
+
+  const apiKey = projectEnv.WORKOS_API_KEY ?? process.env.WORKOS_API_KEY ?? null;
+  const clientId = projectEnv.WORKOS_CLIENT_ID ?? process.env.WORKOS_CLIENT_ID ?? null;
+  const redirectUri = projectEnv.WORKOS_REDIRECT_URI ?? process.env.WORKOS_REDIRECT_URI ?? null;
+  const cookieDomain = projectEnv.WORKOS_COOKIE_DOMAIN ?? process.env.WORKOS_COOKIE_DOMAIN ?? null;
+  const baseUrl = projectEnv.WORKOS_BASE_URL ?? process.env.WORKOS_BASE_URL ?? null;
 
   return {
-    apiKeyConfigured: !!apiKey,
-    apiKeyType: getApiKeyType(apiKey),
-    clientId: truncateClientId(clientId),
-    redirectUri: redirectUri ?? null,
-    cookieDomain: cookieDomain ?? null,
-    baseUrl: baseUrl ?? 'https://api.workos.com',
+    info: {
+      apiKeyConfigured: !!apiKey,
+      apiKeyType: getApiKeyType(apiKey),
+      clientId: truncateClientId(clientId),
+      redirectUri: redirectUri,
+      cookieDomain: cookieDomain,
+      baseUrl: baseUrl ?? 'https://api.workos.com',
+    },
+    raw: {
+      apiKey,
+      clientId,
+      baseUrl: baseUrl ?? 'https://api.workos.com',
+    },
   };
 }
 

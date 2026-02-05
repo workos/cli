@@ -35,6 +35,28 @@ export const ISSUE_DEFINITIONS = {
     message: 'Cannot reach WorkOS API',
     // remediation generated dynamically based on error
   },
+  REDIRECT_URI_MISMATCH: {
+    severity: 'error' as const,
+    message: 'Redirect URI does not match dashboard configuration',
+    docsUrl: 'https://workos.com/docs/authkit/redirect-uri',
+  },
+  PROD_API_CALL_BLOCKED: {
+    severity: 'warning' as const,
+    message: 'Dashboard settings not fetched (production API key)',
+    remediation: 'Use a staging API key to fetch dashboard settings',
+  },
+  INVALID_API_KEY: {
+    severity: 'error' as const,
+    message: 'API key is invalid or expired',
+    remediation: 'Check your WORKOS_API_KEY in the WorkOS dashboard',
+    docsUrl: 'https://dashboard.workos.com/api-keys',
+  },
+  CLIENT_ID_MISMATCH: {
+    severity: 'error' as const,
+    message: 'Client ID does not match the API key environment',
+    remediation: 'Ensure WORKOS_CLIENT_ID matches the environment for your API key',
+    docsUrl: 'https://dashboard.workos.com/configuration',
+  },
 };
 
 export function detectIssues(report: Omit<DoctorReport, 'issues' | 'summary'>): Issue[] {
@@ -74,6 +96,46 @@ export function detectIssues(report: Omit<DoctorReport, 'issues' | 'summary'>): 
       message: `Cannot reach WorkOS API: ${report.connectivity.error}`,
       remediation: 'Check your network connection and firewall settings',
     });
+  }
+
+  // Redirect URI mismatch
+  if (report.redirectUris && !report.redirectUris.match && report.redirectUris.codeUri) {
+    issues.push({
+      code: 'REDIRECT_URI_MISMATCH',
+      severity: 'error',
+      message: 'Redirect URI mismatch',
+      details: {
+        code: report.redirectUris.codeUri,
+        dashboard: report.redirectUris.dashboardUris,
+      },
+      remediation: `Add "${report.redirectUris.codeUri}" to your WorkOS dashboard redirect URIs`,
+      docsUrl: ISSUE_DEFINITIONS.REDIRECT_URI_MISMATCH.docsUrl,
+    });
+  }
+
+  // Production key warning (no dashboard data)
+  if (report.environment.apiKeyType === 'production' && !report.dashboardSettings) {
+    issues.push({
+      code: 'PROD_API_CALL_BLOCKED',
+      ...ISSUE_DEFINITIONS.PROD_API_CALL_BLOCKED,
+    });
+  }
+
+  // Credential validation issues
+  if (report.credentialValidation) {
+    if (!report.credentialValidation.valid) {
+      issues.push({
+        code: 'INVALID_API_KEY',
+        ...ISSUE_DEFINITIONS.INVALID_API_KEY,
+        details: { error: report.credentialValidation.error },
+      });
+    } else if (!report.credentialValidation.clientIdMatch) {
+      issues.push({
+        code: 'CLIENT_ID_MISMATCH',
+        ...ISSUE_DEFINITIONS.CLIENT_ID_MISMATCH,
+        details: { error: report.credentialValidation.error },
+      });
+    }
   }
 
   return issues;

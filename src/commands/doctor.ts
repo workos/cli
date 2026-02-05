@@ -1,5 +1,5 @@
 import type { ArgumentsCamelCase } from 'yargs';
-import { runDoctor, formatReport } from '../doctor/index.js';
+import { runDoctor, outputReport } from '../doctor/index.js';
 import clack from '../utils/clack.js';
 
 interface DoctorArgs {
@@ -7,6 +7,7 @@ interface DoctorArgs {
   skipApi?: boolean;
   installDir?: string;
   json?: boolean;
+  copy?: boolean;
 }
 
 export async function handleDoctor(argv: ArgumentsCamelCase<DoctorArgs>): Promise<void> {
@@ -14,17 +15,13 @@ export async function handleDoctor(argv: ArgumentsCamelCase<DoctorArgs>): Promis
     installDir: argv.installDir ?? process.cwd(),
     verbose: argv.verbose ?? false,
     skipApi: argv.skipApi ?? false,
+    json: argv.json ?? false,
+    copy: argv.copy ?? false,
   };
 
   try {
     const report = await runDoctor(options);
-
-    // JSON output mode
-    if (argv.json) {
-      console.log(JSON.stringify(report, null, 2));
-    } else {
-      formatReport(report);
-    }
+    await outputReport(report, options);
 
     // Exit with error code if critical issues found
     if (report.summary.errors > 0) {
@@ -32,7 +29,11 @@ export async function handleDoctor(argv: ArgumentsCamelCase<DoctorArgs>): Promis
     }
     process.exit(0);
   } catch (error) {
-    clack.log.error(`Doctor failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    if (!options.json) {
+      clack.log.error(`Doctor failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } else {
+      console.error(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }));
+    }
     process.exit(1);
   }
 }

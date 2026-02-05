@@ -3,7 +3,11 @@ import type { DoctorReport, Issue } from './types.js';
 
 const DOCTOR_VERSION = '1.0.0';
 
-export function formatReport(report: DoctorReport): void {
+export interface FormatOptions {
+  verbose?: boolean;
+}
+
+export function formatReport(report: DoctorReport, options?: FormatOptions): void {
   console.log('');
   console.log(Chalk.cyan(`WorkOS Doctor v${DOCTOR_VERSION}`));
   console.log(Chalk.dim('━'.repeat(70)));
@@ -45,15 +49,62 @@ export function formatReport(report: DoctorReport): void {
     console.log(`   Code:             ${report.environment.redirectUri}`);
   }
 
-  // Connectivity
+  // Connectivity & Credential Validation
   console.log('');
   console.log('Connectivity');
   if (report.connectivity.apiReachable) {
     console.log(`   API:              ${Chalk.green('✓')} Reachable (${report.connectivity.latencyMs}ms)`);
   } else if (report.connectivity.error?.includes('Skipped')) {
-    console.log(`   API:              ${Chalk.dim('Skipped (--no-api)')}`);
+    console.log(`   API:              ${Chalk.dim('Skipped (--skip-api)')}`);
   } else {
     console.log(`   API:              ${Chalk.red('✗')} ${report.connectivity.error}`);
+  }
+
+  // Credential validation
+  if (report.credentialValidation) {
+    if (report.credentialValidation.valid && report.credentialValidation.clientIdMatch) {
+      console.log(`   Credentials:      ${Chalk.green('✓')} Valid and matching`);
+    } else if (!report.credentialValidation.valid) {
+      console.log(`   Credentials:      ${Chalk.red('✗')} ${report.credentialValidation.error ?? 'Invalid'}`);
+    } else if (!report.credentialValidation.clientIdMatch) {
+      console.log(`   Credentials:      ${Chalk.red('✗')} Client ID mismatch`);
+    }
+  }
+
+  // Dashboard Settings (if available)
+  if (report.dashboardSettings) {
+    console.log('');
+    console.log('Dashboard Settings (Staging)');
+    console.log(
+      `   Auth Methods:     ${report.dashboardSettings.authMethods.length > 0 ? report.dashboardSettings.authMethods.join(', ') : 'None configured'}`,
+    );
+    console.log(`   Session Timeout:  ${report.dashboardSettings.sessionTimeout ?? 'Default'}`);
+    console.log(`   MFA:              ${formatMfa(report.dashboardSettings.mfa)}`);
+    console.log(`   Organizations:    ${report.dashboardSettings.organizationCount} configured`);
+  }
+
+  // Redirect URI comparison
+  if (report.redirectUris) {
+    console.log('');
+    console.log('Redirect URIs');
+    console.log(`   Code:             ${report.redirectUris.codeUri ?? Chalk.dim('Not set')}`);
+    if (report.redirectUris.dashboardUris.length > 0) {
+      console.log(`   Dashboard:        ${report.redirectUris.dashboardUris[0]}`);
+      for (const uri of report.redirectUris.dashboardUris.slice(1)) {
+        console.log(`                     ${uri}`);
+      }
+    }
+    const matchStatus = report.redirectUris.match ? Chalk.green('✓ Match found') : Chalk.red('✗ No match');
+    console.log(`   Status:           ${matchStatus}`);
+  }
+
+  // Verbose mode additions
+  if (options?.verbose) {
+    console.log('');
+    console.log(Chalk.dim('Verbose Details'));
+    console.log(`   ${Chalk.dim('Project path:')}  ${report.project.path}`);
+    console.log(`   ${Chalk.dim('Timestamp:')}     ${report.timestamp}`);
+    console.log(`   ${Chalk.dim('Doctor version:')} ${report.version}`);
   }
 
   console.log('');
@@ -112,4 +163,17 @@ function formatIssue(issue: Issue): void {
     console.log(`   ${Chalk.dim('Docs:')} ${issue.docsUrl}`);
   }
   console.log('');
+}
+
+function formatMfa(mfa: string | null): string {
+  switch (mfa) {
+    case 'required':
+      return 'Required';
+    case 'optional':
+      return 'Optional';
+    case 'disabled':
+      return 'Disabled';
+    default:
+      return 'Not configured';
+  }
 }

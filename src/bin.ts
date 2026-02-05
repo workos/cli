@@ -212,6 +212,11 @@ yargs(hideBin(process.argv))
           default: false,
           description: 'Output report as JSON',
         },
+        copy: {
+          type: 'boolean',
+          default: false,
+          description: 'Copy report to clipboard',
+        },
       }),
     async (argv) => {
       const { handleDoctor } = await import('./commands/doctor.js');
