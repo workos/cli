@@ -36,8 +36,8 @@ export const ISSUE_DEFINITIONS = {
     // remediation generated dynamically based on error
   },
   REDIRECT_URI_MISMATCH: {
-    severity: 'error' as const,
-    message: 'Redirect URI does not match dashboard configuration',
+    severity: 'warning' as const,
+    message: 'Redirect URI not found in dashboard configuration',
     docsUrl: 'https://workos.com/docs/authkit/redirect-uri',
   },
   PROD_API_CALL_BLOCKED: {
@@ -98,17 +98,17 @@ export function detectIssues(report: Omit<DoctorReport, 'issues' | 'summary'>): 
     });
   }
 
-  // Redirect URI mismatch
+  // Redirect URI mismatch (warning only - might be intentional or dashboard data incomplete)
   if (report.redirectUris && !report.redirectUris.match && report.redirectUris.codeUri) {
     issues.push({
       code: 'REDIRECT_URI_MISMATCH',
-      severity: 'error',
-      message: 'Redirect URI mismatch',
+      severity: 'warning',
+      message: 'Redirect URI not found in dashboard',
       details: {
         code: report.redirectUris.codeUri,
         dashboard: report.redirectUris.dashboardUris,
       },
-      remediation: `Add "${report.redirectUris.codeUri}" to your WorkOS dashboard redirect URIs`,
+      remediation: `Verify "${report.redirectUris.codeUri}" is in your WorkOS dashboard redirect URIs`,
       docsUrl: ISSUE_DEFINITIONS.REDIRECT_URI_MISMATCH.docsUrl,
     });
   }
