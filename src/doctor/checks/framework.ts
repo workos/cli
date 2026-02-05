@@ -2,21 +2,27 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { getPackageDotJson } from '../../utils/clack-utils.js';
 import { hasPackageInstalled, getPackageVersion } from '../../utils/package-json.js';
+import { detectPort, getCallbackPath } from '../../lib/port-detection.js';
+import { Integration } from '../../lib/constants.js';
 import type { DoctorOptions, FrameworkInfo } from '../types.js';
 
 interface FrameworkConfig {
+  package: string;
   name: string;
+  integration: Integration | null; // Maps to Integration type for callback path/port
   detectVariant: ((options: DoctorOptions) => Promise<string | undefined>) | null;
 }
 
-const FRAMEWORKS: Record<string, FrameworkConfig> = {
-  next: { name: 'Next.js', detectVariant: detectNextVariant },
-  express: { name: 'Express', detectVariant: null },
-  '@remix-run/node': { name: 'Remix', detectVariant: null },
-  '@tanstack/react-router': { name: 'TanStack Router', detectVariant: null },
-  '@tanstack/start': { name: 'TanStack Start', detectVariant: null },
-  'react-router-dom': { name: 'React Router', detectVariant: null },
-};
+// Order matters - more specific frameworks should come first (array guarantees order)
+const FRAMEWORKS: FrameworkConfig[] = [
+  { package: 'next', name: 'Next.js', integration: Integration.nextjs, detectVariant: detectNextVariant },
+  { package: '@tanstack/react-start', name: 'TanStack Start', integration: Integration.tanstackStart, detectVariant: null },
+  { package: '@tanstack/start', name: 'TanStack Start', integration: Integration.tanstackStart, detectVariant: null },
+  { package: '@tanstack/react-router', name: 'TanStack Router', integration: null, detectVariant: null },
+  { package: '@remix-run/node', name: 'Remix', integration: null, detectVariant: null },
+  { package: 'react-router-dom', name: 'React Router', integration: Integration.reactRouter, detectVariant: null },
+  { package: 'express', name: 'Express', integration: null, detectVariant: null },
+];
 
 export async function checkFramework(options: DoctorOptions): Promise<FrameworkInfo> {
   let packageJson;
@@ -26,15 +32,26 @@ export async function checkFramework(options: DoctorOptions): Promise<FrameworkI
     return { name: null, version: null };
   }
 
-  for (const [pkg, config] of Object.entries(FRAMEWORKS)) {
-    if (hasPackageInstalled(pkg, packageJson)) {
-      const version = getPackageVersion(pkg, packageJson) ?? null;
+  for (const config of FRAMEWORKS) {
+    if (hasPackageInstalled(config.package, packageJson)) {
+      const version = getPackageVersion(config.package, packageJson) ?? null;
       const variant = config.detectVariant ? await config.detectVariant(options) : undefined;
+
+      // Get expected callback path and port if we have an integration mapping
+      let expectedCallbackPath: string | undefined;
+      let detectedPort: number | undefined;
+
+      if (config.integration) {
+        expectedCallbackPath = getCallbackPath(config.integration);
+        detectedPort = detectPort(config.integration, options.installDir);
+      }
 
       return {
         name: config.name,
         version,
         variant,
+        expectedCallbackPath,
+        detectedPort,
       };
     }
   }

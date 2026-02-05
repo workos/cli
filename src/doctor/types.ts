@@ -21,6 +21,8 @@ export interface FrameworkInfo {
   name: string | null;
   version: string | null;
   variant?: string; // e.g., 'app-router' | 'pages-router'
+  expectedCallbackPath?: string; // e.g., '/auth/callback' for Next.js
+  detectedPort?: number;
 }
 
 export interface RuntimeInfo {
@@ -69,6 +71,7 @@ export interface RedirectUriComparison {
   codeUri: string | null;
   dashboardUris: string[];
   match: boolean;
+  source?: 'env' | 'inferred'; // Where the codeUri came from
 }
 
 export interface CredentialValidation {

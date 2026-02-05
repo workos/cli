@@ -31,9 +31,17 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
   // Dashboard settings (only for staging, non-blocking)
   const dashboardResult = await checkDashboardSettings(options, environment.apiKeyType, envRaw);
 
+  // Compute expected redirect URI from framework detection if not set in env
+  const redirectUriSource: 'env' | 'inferred' = environment.redirectUri ? 'env' : 'inferred';
+  const expectedRedirectUri =
+    environment.redirectUri ??
+    (framework.expectedCallbackPath && framework.detectedPort
+      ? `http://localhost:${framework.detectedPort}${framework.expectedCallbackPath}`
+      : null);
+
   // Compare redirect URIs if we have dashboard data
   const redirectUris = dashboardResult.settings
-    ? compareRedirectUris(environment.redirectUri, dashboardResult.settings.redirectUris)
+    ? compareRedirectUris(expectedRedirectUri, dashboardResult.settings.redirectUris, redirectUriSource)
     : undefined;
 
   // Build partial report

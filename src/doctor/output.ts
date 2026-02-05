@@ -1,15 +1,13 @@
 import Chalk from 'chalk';
 import type { DoctorReport, Issue } from './types.js';
 
-const DOCTOR_VERSION = '1.0.0';
-
 export interface FormatOptions {
   verbose?: boolean;
 }
 
 export function formatReport(report: DoctorReport, options?: FormatOptions): void {
   console.log('');
-  console.log(Chalk.cyan(`WorkOS Doctor v${DOCTOR_VERSION}`));
+  console.log(Chalk.cyan('WorkOS Doctor'));
   console.log(Chalk.dim('━'.repeat(70)));
 
   // SDK & Project
@@ -91,14 +89,17 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
   if (report.redirectUris) {
     console.log('');
     console.log('Redirect URIs');
-    console.log(`   Code:             ${report.redirectUris.codeUri ?? Chalk.dim('Not set')}`);
+    const sourceLabel = report.redirectUris.source === 'inferred' ? Chalk.dim(' (inferred from framework)') : '';
+    console.log(`   Expected:         ${report.redirectUris.codeUri ?? Chalk.dim('Unknown')}${sourceLabel}`);
     if (report.redirectUris.dashboardUris.length > 0) {
       console.log(`   Dashboard:        ${report.redirectUris.dashboardUris[0]}`);
       for (const uri of report.redirectUris.dashboardUris.slice(1)) {
         console.log(`                     ${uri}`);
       }
+    } else {
+      console.log(`   Dashboard:        ${Chalk.dim('None configured')}`);
     }
-    const matchStatus = report.redirectUris.match ? Chalk.green('✓ Match found') : Chalk.red('✗ No match');
+    const matchStatus = report.redirectUris.match ? Chalk.green('✓ Match found') : Chalk.yellow('? No match');
     console.log(`   Status:           ${matchStatus}`);
   }
 

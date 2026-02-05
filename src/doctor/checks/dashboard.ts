@@ -193,14 +193,18 @@ function normalizeUri(uri: string): string {
   }
 }
 
-export function compareRedirectUris(codeUri: string | null, dashboardUris: string[]): RedirectUriComparison {
+export function compareRedirectUris(
+  codeUri: string | null,
+  dashboardUris: string[],
+  source?: 'env' | 'inferred',
+): RedirectUriComparison {
   if (!codeUri) {
-    return { codeUri, dashboardUris, match: false };
+    return { codeUri, dashboardUris, match: false, source };
   }
 
   const normalizedCode = normalizeUri(codeUri);
   const normalizedDashboard = dashboardUris.map(normalizeUri);
   const match = normalizedDashboard.includes(normalizedCode);
 
-  return { codeUri, dashboardUris, match };
+  return { codeUri, dashboardUris, match, source };
 }
