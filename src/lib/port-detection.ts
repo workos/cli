@@ -13,14 +13,17 @@ const INTEGRATION_TO_SETTINGS_KEY: Record<Integration, string> = {
   'vanilla-js': 'vanillaJs',
 };
 
+const DEFAULT_PORT = 3000;
+const DEFAULT_CALLBACK_PATH = '/auth/callback';
+
 function getDefaultPort(integration: Integration): number {
   const settingsKey = INTEGRATION_TO_SETTINGS_KEY[integration];
-  return settings.frameworks[settingsKey].port;
+  return settings.frameworks[settingsKey]?.port ?? DEFAULT_PORT;
 }
 
 export function getCallbackPath(integration: Integration): string {
   const settingsKey = INTEGRATION_TO_SETTINGS_KEY[integration];
-  return settings.frameworks[settingsKey].callbackPath;
+  return settings.frameworks[settingsKey]?.callbackPath ?? DEFAULT_CALLBACK_PATH;
 }
 
 /**
