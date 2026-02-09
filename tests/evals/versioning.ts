@@ -8,11 +8,23 @@ import { join } from 'node:path';
  * Used to compute git hashes for version tracking.
  */
 const SKILL_FILES: Record<string, string> = {
-  nextjs: 'src/nextjs/nextjs-installer-agent.ts',
-  react: 'src/react/react-installer-agent.ts',
-  'react-router': 'src/react-router/react-router-installer-agent.ts',
-  'tanstack-start': 'src/tanstack-start/tanstack-start-installer-agent.ts',
-  'vanilla-js': 'src/vanilla-js/vanilla-js-installer-agent.ts',
+  // Existing JS SDKs (updated paths from Phase 1 migration)
+  nextjs: 'src/integrations/nextjs/index.ts',
+  react: 'src/integrations/react/index.ts',
+  'react-router': 'src/integrations/react-router/index.ts',
+  'tanstack-start': 'src/integrations/tanstack-start/index.ts',
+  'vanilla-js': 'src/integrations/vanilla-js/index.ts',
+  // New SDKs
+  sveltekit: 'src/integrations/sveltekit/index.ts',
+  node: 'src/integrations/node/index.ts',
+  python: 'src/integrations/python/index.ts',
+  ruby: 'src/integrations/ruby/index.ts',
+  go: 'src/integrations/go/index.ts',
+  php: 'src/integrations/php/index.ts',
+  'php-laravel': 'src/integrations/php-laravel/index.ts',
+  kotlin: 'src/integrations/kotlin/index.ts',
+  dotnet: 'src/integrations/dotnet/index.ts',
+  elixir: 'src/integrations/elixir/index.ts',
 };
 
 export interface VersionMetadata {
