@@ -27,7 +27,7 @@ import { installerMachine } from './installer-core.js';
 import { createEventCapture, compareEventSequences, filterDeterministicEvents } from './installer-core.test-utils.js';
 import type { InstallerOptions } from '../utils/types.js';
 import type { DetectionOutput, GitCheckOutput, AgentOutput, InstallerMachineContext } from './installer-core.types.js';
-import { Integration } from './constants.js';
+
 
 /**
  * Creates mock actor implementations for testing.
@@ -39,7 +39,7 @@ function createMockActors() {
   return {
     checkAuthentication: fromPromise<boolean, { options: InstallerOptions }>(async () => true),
     detectIntegration: fromPromise<DetectionOutput, { options: InstallerOptions }>(async () => ({
-      integration: Integration.nextjs,
+      integration: 'nextjs',
     })),
     checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => ({
       isClean: true,

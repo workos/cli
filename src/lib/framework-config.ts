@@ -1,5 +1,5 @@
-import type { Integration } from './constants.js';
 import type { InstallerOptions } from '../utils/types.js';
+import type { Language } from './language-detection.js';
 
 /**
  * Configuration interface for framework-specific agent integrations.
@@ -21,8 +21,8 @@ export interface FrameworkMetadata {
   /** Display name (e.g., "Next.js", "React") */
   name: string;
 
-  /** Integration type from constants */
-  integration: Integration;
+  /** Integration identifier (e.g., 'nextjs', 'python'). String, not enum — auto-discovered from registry. */
+  integration: string;
 
   /** URL to framework-specific WorkOS AuthKit docs */
   docsUrl: string;
@@ -43,9 +43,23 @@ export interface FrameworkMetadata {
   /**
    * Name of the framework-specific skill for agent integration.
    * Skills are located in .claude/skills/{skillName}/SKILL.md
-   * Will be populated per-framework in Phase 3.
    */
   skillName?: string;
+
+  /** Language ecosystem this integration belongs to */
+  language: Language;
+
+  /** Stability tier: 'stable' for tested integrations, 'experimental' for new ones */
+  stability: 'stable' | 'experimental';
+
+  /** Detection priority — higher numbers are checked first */
+  priority: number;
+
+  /** Default package manager command (e.g., 'pip', 'gem', 'go'). Optional for JS integrations. */
+  packageManager?: string;
+
+  /** Primary manifest file (e.g., 'pyproject.toml', 'Gemfile'). Optional for JS integrations. */
+  manifestFile?: string;
 }
 
 /**

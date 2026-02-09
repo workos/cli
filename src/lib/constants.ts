@@ -1,41 +1,23 @@
 import { getConfig } from './settings.js';
 
-export enum Integration {
-  nextjs = 'nextjs',
-  react = 'react',
-  tanstackStart = 'tanstack-start',
-  reactRouter = 'react-router',
-  vanillaJs = 'vanilla-js',
-}
+/**
+ * Integration identifier type.
+ * No longer an enum — each integration self-registers via the auto-discovery registry.
+ * The string value matches the integration directory name (e.g., 'nextjs', 'react-router').
+ */
+export type Integration = string;
 
-export function getIntegrationDescription(type: string): string {
-  switch (type) {
-    case Integration.nextjs:
-      return 'Next.js';
-    case Integration.react:
-      return 'React (SPA)';
-    case Integration.tanstackStart:
-      return 'TanStack Start';
-    case Integration.reactRouter:
-      return 'React Router';
-    case Integration.vanillaJs:
-      return 'Vanilla JavaScript';
-    default:
-      throw new Error(`Unknown integration ${type}`);
-  }
-}
-
-type IntegrationChoice = {
-  name: string;
-  value: string;
-};
-
-export function getIntegrationChoices(): IntegrationChoice[] {
-  return Object.keys(Integration).map((type: string) => ({
-    name: getIntegrationDescription(type),
-    value: type,
-  }));
-}
+/**
+ * Well-known integration names for backwards compatibility.
+ * New integrations do NOT need to be added here — they're auto-discovered.
+ */
+export const KNOWN_INTEGRATIONS = {
+  nextjs: 'nextjs',
+  react: 'react',
+  tanstackStart: 'tanstack-start',
+  reactRouter: 'react-router',
+  vanillaJs: 'vanilla-js',
+} as const;
 
 export interface Args {
   debug: boolean;
@@ -57,7 +39,7 @@ export const OAUTH_PORT = settings.legacy.oauthPort;
 
 /**
  * Common glob patterns to ignore when searching for files.
- * Used by both Next.js and React Router integrations.
+ * Used by multiple integrations.
  */
 export const IGNORE_PATTERNS: string[] = [
   '**/node_modules/**',

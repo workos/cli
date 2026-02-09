@@ -124,7 +124,6 @@ const installerOptions = {
   },
   integration: {
     describe: 'Integration to set up',
-    choices: ['nextjs', 'react', 'tanstack-start', 'react-router', 'vanilla-js'] as const,
     type: 'string' as const,
   },
   'force-install': {

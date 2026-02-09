@@ -15,7 +15,7 @@ import type {
   AgentOutput,
   BranchCheckOutput,
 } from './installer-core.types.js';
-import { Integration } from './constants.js';
+import type { Integration } from './constants.js';
 import { parseEnvFile } from '../utils/env-parser.js';
 import { enableDebugLogs, initLogFile, logInfo, logError } from '../utils/debug.js';
 
@@ -46,31 +46,18 @@ import {
   generateCommitMessage as generateCommitMessageAi,
   generatePrDescription as generatePrDescriptionAi,
 } from './ai-content.js';
-import { INTEGRATION_CONFIG, INTEGRATION_ORDER } from './config.js';
 import { autoConfigureWorkOSEnvironment } from './workos-management.js';
 import { detectPort, getCallbackPath } from './port-detection.js';
 import { writeEnvLocal } from './env-writer.js';
-import { runNextjsInstallerAgent } from '../nextjs/nextjs-installer-agent.js';
-import { runReactInstallerAgent } from '../react/react-installer-agent.js';
-import { runReactRouterInstallerAgent } from '../react-router/react-router-installer-agent.js';
-import { runTanstackStartInstallerAgent } from '../tanstack-start/tanstack-start-installer-agent.js';
-import { runVanillaJsInstallerAgent } from '../vanilla-js/vanilla-js-installer-agent.js';
+import { getRegistry } from './registry.js';
 
 async function runIntegrationInstallerFn(integration: Integration, options: InstallerOptions): Promise<string> {
-  switch (integration) {
-    case Integration.nextjs:
-      return runNextjsInstallerAgent(options);
-    case Integration.react:
-      return runReactInstallerAgent(options);
-    case Integration.reactRouter:
-      return runReactRouterInstallerAgent(options);
-    case Integration.tanstackStart:
-      return runTanstackStartInstallerAgent(options);
-    case Integration.vanillaJs:
-      return runVanillaJsInstallerAgent(options);
-    default:
-      throw new Error(`Unknown integration: ${integration}`);
+  const registry = await getRegistry();
+  const mod = registry.get(integration);
+  if (!mod) {
+    throw new Error(`Unknown integration: ${integration}`);
   }
+  return mod.run(options);
 }
 
 function readExistingCredentials(installDir: string): { apiKey?: string; clientId?: string } {
@@ -92,17 +79,83 @@ function readExistingCredentials(installDir: string): { apiKey?: string; clientI
 }
 
 async function detectIntegrationFn(options: Pick<InstallerOptions, 'installDir'>): Promise<Integration | undefined> {
-  const integrationConfigs = Object.entries(INTEGRATION_CONFIG).sort(
-    ([a], [b]) => INTEGRATION_ORDER.indexOf(a as Integration) - INTEGRATION_ORDER.indexOf(b as Integration),
-  );
+  const registry = await getRegistry();
+  const configs = registry.detectionOrder();
 
-  for (const [integration, config] of integrationConfigs) {
-    const detected = await config.detect(options);
+  for (const config of configs) {
+    // Use the detect function from INTEGRATION_CONFIG in config.ts for JS integrations,
+    // or fall back to checking if the framework package is installed
+    const detected = await detectSingleIntegration(config.metadata.integration, options);
     if (detected) {
-      return integration as Integration;
+      return config.metadata.integration;
     }
   }
   return undefined;
+}
+
+/**
+ * Detect if a single integration matches the project.
+ * Uses package.json detection for JS integrations, manifest files for others.
+ */
+async function detectSingleIntegration(
+  integration: string,
+  options: Pick<InstallerOptions, 'installDir'>,
+): Promise<boolean> {
+  const { getPackageDotJson } = await import('../utils/clack-utils.js');
+  const { hasPackageInstalled } = await import('../utils/package-json.js');
+  const { existsSync } = await import('node:fs');
+  const { join } = await import('node:path');
+
+  const registry = await getRegistry();
+  const mod = registry.get(integration);
+  if (!mod) return false;
+
+  const config = mod.config;
+
+  // For JS integrations, check package.json
+  if (config.metadata.language === 'javascript') {
+    const packageJson = await getPackageDotJson(options);
+
+    switch (integration) {
+      case 'nextjs':
+        return hasPackageInstalled('next', packageJson);
+      case 'tanstack-start':
+        return hasPackageInstalled('@tanstack/react-start', packageJson);
+      case 'react-router':
+        return hasPackageInstalled('react-router', packageJson);
+      case 'react': {
+        const hasReact = hasPackageInstalled('react', packageJson);
+        const hasNext = hasPackageInstalled('next', packageJson);
+        const hasReactRouter = hasPackageInstalled('react-router', packageJson);
+        const hasTanstack = hasPackageInstalled('@tanstack/react-start', packageJson);
+        const hasSvelteKit = hasPackageInstalled('@sveltejs/kit', packageJson);
+        return hasReact && !hasNext && !hasReactRouter && !hasTanstack && !hasSvelteKit;
+      }
+      case 'sveltekit':
+        return hasPackageInstalled('@sveltejs/kit', packageJson);
+      case 'node': {
+        const hasExpress = hasPackageInstalled('express', packageJson);
+        const hasFrontend =
+          hasPackageInstalled('next', packageJson) ||
+          hasPackageInstalled('@sveltejs/kit', packageJson) ||
+          hasPackageInstalled('react', packageJson) ||
+          hasPackageInstalled('@tanstack/react-start', packageJson);
+        return hasExpress && !hasFrontend;
+      }
+      case 'vanilla-js':
+        return true; // Fallback
+      default:
+        // Unknown JS integration — try package name detection
+        return hasPackageInstalled(config.detection.packageName, packageJson);
+    }
+  }
+
+  // For non-JS integrations, check manifest files
+  if (config.metadata.manifestFile) {
+    return existsSync(join(options.installDir, config.metadata.manifestFile));
+  }
+
+  return false;
 }
 
 export async function runWithCore(options: InstallerOptions): Promise<void> {
@@ -188,7 +241,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         const callbackPath = getCallbackPath(integration);
         const redirectUri = installerOptions.redirectUri || `http://localhost:${port}${callbackPath}`;
 
-        const requiresApiKey = [Integration.nextjs, Integration.tanstackStart, Integration.reactRouter].includes(
+        const requiresApiKey = ['nextjs', 'tanstack-start', 'react-router'].includes(
           integration,
         );
         if (credentials.apiKey && requiresApiKey) {
@@ -199,7 +252,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         }
 
         const redirectUriKey =
-          integration === Integration.nextjs ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
+          integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
 
         writeEnvLocal(installerOptions.installDir, {
           ...(credentials.apiKey ? { WORKOS_API_KEY: credentials.apiKey } : {}),
