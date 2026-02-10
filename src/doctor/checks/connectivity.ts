@@ -1,6 +1,6 @@
 import type { DoctorOptions, ConnectivityInfo } from '../types.js';
 
-export async function checkConnectivity(options: DoctorOptions): Promise<ConnectivityInfo> {
+export async function checkConnectivity(options: DoctorOptions, baseUrl: string): Promise<ConnectivityInfo> {
   if (options.skipApi) {
     return {
       apiReachable: false,
@@ -9,8 +9,6 @@ export async function checkConnectivity(options: DoctorOptions): Promise<Connect
       error: 'Skipped (--skip-api)',
     };
   }
-
-  const baseUrl = process.env.WORKOS_BASE_URL ?? 'https://api.workos.com';
   const startTime = Date.now();
 
   try {

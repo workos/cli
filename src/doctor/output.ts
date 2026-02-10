@@ -134,7 +134,7 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
   }
 
   console.log('');
-  console.log(Chalk.dim('Copy this report: workos doctor --json | pbcopy'));
+  console.log(Chalk.dim('Copy this report: workos doctor --copy'));
   console.log(Chalk.dim('Troubleshooting:  https://workos.com/docs/troubleshooting'));
   console.log('');
 }

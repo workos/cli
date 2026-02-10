@@ -82,6 +82,7 @@ export interface CredentialValidation {
 
 export interface DashboardFetchResult {
   settings: DashboardSettings | null;
+  credentialValidation?: CredentialValidation;
   error?: string;
 }
 

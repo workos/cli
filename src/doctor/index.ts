@@ -3,7 +3,7 @@ import { checkFramework } from './checks/framework.js';
 import { checkRuntime } from './checks/runtime.js';
 import { checkEnvironment } from './checks/environment.js';
 import { checkConnectivity } from './checks/connectivity.js';
-import { checkDashboardSettings, compareRedirectUris, validateCredentials } from './checks/dashboard.js';
+import { checkDashboardSettings, compareRedirectUris } from './checks/dashboard.js';
 import { detectIssues } from './issues.js';
 import { formatReport } from './output.js';
 import { formatReportAsJson } from './json-output.js';
@@ -14,21 +14,19 @@ import type { DoctorOptions, DoctorReport } from './types.js';
 const DOCTOR_VERSION = '1.0.0';
 
 export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
-  // Run all checks concurrently where possible
+  // Environment check first - loads project's .env/.env.local files
+  // Must run before connectivity so the resolved base URL is available
+  const { info: environment, raw: envRaw } = checkEnvironment(options);
+
+  // Run remaining checks concurrently
   const [sdk, framework, runtime, connectivity] = await Promise.all([
     checkSdk(options),
     checkFramework(options),
     checkRuntime(options),
-    checkConnectivity(options),
+    checkConnectivity(options, environment.baseUrl ?? 'https://api.workos.com'),
   ]);
 
-  // Environment check - loads project's .env/.env.local files
-  const { info: environment, raw: envRaw } = checkEnvironment(options);
-
-  // Validate credentials against API (staging only)
-  const credentialValidation = await validateCredentials(environment.apiKeyType, envRaw, options.skipApi);
-
-  // Dashboard settings (only for staging, non-blocking)
+  // Dashboard settings + credential validation (single pass, staging only)
   const dashboardResult = await checkDashboardSettings(options, environment.apiKeyType, envRaw);
 
   // Compute expected redirect URI from framework detection if not set in env
@@ -57,7 +55,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     framework,
     environment,
     connectivity,
-    credentialValidation: credentialValidation ?? undefined,
+    credentialValidation: dashboardResult.credentialValidation,
     dashboardSettings: dashboardResult.settings ?? undefined,
     dashboardError: dashboardResult.settings ? undefined : dashboardResult.error,
     redirectUris,

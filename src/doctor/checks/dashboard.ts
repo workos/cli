@@ -1,12 +1,6 @@
-import type { DashboardSettings, DashboardFetchResult, DoctorOptions, RedirectUriComparison, EnvironmentRaw } from '../types.js';
+import type { CredentialValidation, DashboardSettings, DashboardFetchResult, DoctorOptions, RedirectUriComparison, EnvironmentRaw } from '../types.js';
 
 const WORKOS_API_URL = 'https://api.workos.com';
-
-export interface CredentialValidation {
-  valid: boolean;
-  clientIdMatch: boolean;
-  error?: string;
-}
 
 export async function checkDashboardSettings(
   options: DoctorOptions,
@@ -28,90 +22,59 @@ export async function checkDashboardSettings(
   }
 
   try {
-    const settings = await fetchDashboardSettings(apiKey, raw.baseUrl);
-    return { settings };
+    return await fetchDashboardSettings(apiKey, raw.baseUrl);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return { settings: null, error: message };
   }
 }
 
-/**
- * Validate credentials against WorkOS API.
- * Checks if API key is valid by making a simple API call.
- */
-export async function validateCredentials(
-  apiKeyType: 'staging' | 'production' | null,
-  raw: EnvironmentRaw,
-  skipApi?: boolean,
-): Promise<CredentialValidation | null> {
-  // Skip for production keys or if API calls disabled
-  if (apiKeyType === 'production' || skipApi || !raw.apiKey) {
-    return null;
-  }
-
-  const baseUrl = raw.baseUrl ?? WORKOS_API_URL;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-  try {
-    // Use /organizations endpoint to validate API key (lightweight call)
-    const response = await fetch(`${baseUrl}/organizations?limit=1`, {
-      headers: { Authorization: `Bearer ${raw.apiKey}` },
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        return { valid: false, clientIdMatch: true, error: 'Invalid API key' };
-      }
-      if (response.status === 403) {
-        return { valid: false, clientIdMatch: true, error: 'API key lacks permissions' };
-      }
-      return { valid: false, clientIdMatch: true, error: `API error: ${response.status}` };
-    }
-
-    // API key is valid - we can't easily verify client ID match without a dedicated endpoint
-    // but at least we know the key works
-    return {
-      valid: true,
-      clientIdMatch: true, // Assume match since we can't verify
-    };
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
-      return { valid: false, clientIdMatch: true, error: 'Validation timeout' };
-    }
-    return null; // Network error, skip validation
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-async function fetchDashboardSettings(apiKey: string, baseUrlOverride: string | null): Promise<DashboardSettings> {
+async function fetchDashboardSettings(apiKey: string, baseUrlOverride: string | null): Promise<DashboardFetchResult> {
   const baseUrl = baseUrlOverride ?? WORKOS_API_URL;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
 
   try {
-    // Note: WorkOS API doesn't expose a public endpoint to list redirect URIs
-    // The management API only supports creating them (POST), not listing (GET)
-    // We skip redirect URI fetching - the installer creates them but can't verify them
     const redirectUris: string[] = [];
 
-    // Validate API key by making a lightweight call
-    const orgsCheckResponse = await fetch(`${baseUrl}/organizations?limit=1`, {
+    // Single /organizations?limit=1 call — validates credentials AND gets org count
+    const orgsResponse = await fetch(`${baseUrl}/organizations?limit=1`, {
       headers: { Authorization: `Bearer ${apiKey}` },
       signal: controller.signal,
     });
 
-    // Check for auth errors
-    if (orgsCheckResponse.status === 401) {
-      throw new Error('Invalid API key (401)');
+    if (orgsResponse.status === 401) {
+      return {
+        settings: null,
+        credentialValidation: { valid: false, clientIdMatch: true, error: 'Invalid API key' },
+        error: 'Invalid API key (401)',
+      };
     }
-    if (orgsCheckResponse.status === 403) {
-      throw new Error('API key lacks permissions (403)');
+    if (orgsResponse.status === 403) {
+      return {
+        settings: null,
+        credentialValidation: { valid: false, clientIdMatch: true, error: 'API key lacks permissions' },
+        error: 'API key lacks permissions (403)',
+      };
     }
+    if (!orgsResponse.ok) {
+      return {
+        settings: null,
+        credentialValidation: { valid: false, clientIdMatch: true, error: `API error: ${orgsResponse.status}` },
+        error: `API error: ${orgsResponse.status}`,
+      };
+    }
+
+    // Credentials valid — extract org count from the same response
+    const credentialValidation: CredentialValidation = { valid: true, clientIdMatch: true };
+
+    let organizationCount = 0;
+    const orgsData = (await orgsResponse.json()) as {
+      list_metadata?: { total_count?: number };
+      data?: unknown[];
+    };
+    organizationCount = orgsData.list_metadata?.total_count ?? orgsData.data?.length ?? 0;
 
     // Fetch environment settings
     const envResponse = await fetch(`${baseUrl}/environments/current`, {
@@ -134,27 +97,9 @@ async function fetchDashboardSettings(apiKey: string, baseUrlOverride: string | 
       mfa = envData.mfa_policy ?? null;
     }
 
-    // Fetch organization count
-    const orgsResponse = await fetch(`${baseUrl}/organizations?limit=1`, {
-      headers: { Authorization: `Bearer ${apiKey}` },
-      signal: controller.signal,
-    });
-
-    let organizationCount = 0;
-    if (orgsResponse.ok) {
-      const orgsData = (await orgsResponse.json()) as {
-        list_metadata?: { total_count?: number };
-        data?: unknown[];
-      };
-      organizationCount = orgsData.list_metadata?.total_count ?? orgsData.data?.length ?? 0;
-    }
-
     return {
-      redirectUris,
-      authMethods,
-      sessionTimeout,
-      mfa,
-      organizationCount,
+      settings: { redirectUris, authMethods, sessionTimeout, mfa, organizationCount },
+      credentialValidation,
     };
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
