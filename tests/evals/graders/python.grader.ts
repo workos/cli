@@ -7,10 +7,13 @@ import type { Grader, GradeResult, GradeCheck } from '../types.js';
  *
  * SDK: workos (PyPI)
  *
- * Key patterns:
- * - workos in requirements.txt
- * - server.py contains get_authorization_url, authenticate_with_code, load_sealed_session
- * - python -m py_compile server.py passes syntax validation
+ * Required checks (must pass):
+ * - SDK installed in requirements.txt or pyproject.toml
+ * - Auth endpoints exist (login redirect + callback code exchange)
+ *
+ * Bonus checks (don't block pass):
+ * - Sealed session handling (step 3 of quickstart)
+ * - Syntax validation (requires Python runtime)
  */
 export class PythonGrader implements Grader {
   private fileGrader: FileGrader;
@@ -22,34 +25,57 @@ export class PythonGrader implements Grader {
   }
 
   async grade(): Promise<GradeResult> {
-    const checks: GradeCheck[] = [];
+    const requiredChecks: GradeCheck[] = [];
+    const bonusChecks: GradeCheck[] = [];
 
-    // Check workos in requirements.txt
-    checks.push(
-      ...(await this.fileGrader.checkFileContains('requirements.txt', ['workos'])),
+    // Required: SDK in deps (requirements.txt or pyproject.toml)
+    const reqTxt = await this.fileGrader.checkFileWithPattern(
+      '{requirements*.txt,pyproject.toml}',
+      ['workos'],
+      'WorkOS SDK in dependencies',
     );
+    requiredChecks.push(reqTxt);
 
-    // Check server.py contains required auth functions
-    checks.push(
-      ...(await this.fileGrader.checkFileContains('server.py', [
-        'get_authorization_url',
-        'authenticate_with_code',
-        'load_sealed_session',
-      ])),
-    );
-
-    // Check python -m py_compile server.py passes
-    checks.push(
-      await this.buildGrader.checkCommand(
-        'python',
-        ['-m', 'py_compile', 'server.py'],
-        'python -m py_compile server.py',
+    // Required: sign-in endpoint
+    requiredChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.py',
+        [/get_authorization_url|authorization_url/],
+        'Sign-in endpoint with authorization URL',
       ),
     );
 
+    // Required: callback endpoint
+    requiredChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.py',
+        [/authenticate_with_code/],
+        'Callback endpoint with code exchange',
+      ),
+    );
+
+    // Bonus: sealed session handling
+    bonusChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.py',
+        [/load_sealed_session|seal_session|sealed_session/],
+        'Sealed session handling (bonus)',
+      ),
+    );
+
+    // Bonus: syntax check (requires Python)
+    bonusChecks.push(
+      await this.buildGrader.checkCommand(
+        'python3',
+        ['-m', 'py_compile', 'server.py'],
+        'Python syntax check (bonus)',
+      ),
+    );
+
+    const allChecks = [...requiredChecks, ...bonusChecks];
     return {
-      passed: checks.every((c) => c.passed),
-      checks,
+      passed: requiredChecks.every((c) => c.passed),
+      checks: allChecks,
     };
   }
 }

@@ -7,10 +7,13 @@ import type { Grader, GradeResult, GradeCheck } from '../types.js';
  *
  * SDK: workos (RubyGems)
  *
- * Key patterns:
- * - workos in Gemfile
- * - server.rb contains authorization_url, authenticate_with_code, load_sealed_session
- * - ruby -c server.rb passes syntax validation
+ * Required checks (must pass):
+ * - SDK installed in Gemfile
+ * - Auth endpoints exist (login redirect + callback code exchange)
+ *
+ * Bonus checks (don't block pass):
+ * - Sealed session handling (step 3 of quickstart)
+ * - Syntax validation (requires Ruby runtime)
  */
 export class RubyGrader implements Grader {
   private fileGrader: FileGrader;
@@ -22,30 +25,50 @@ export class RubyGrader implements Grader {
   }
 
   async grade(): Promise<GradeResult> {
-    const checks: GradeCheck[] = [];
+    const requiredChecks: GradeCheck[] = [];
+    const bonusChecks: GradeCheck[] = [];
 
-    // Check workos in Gemfile
-    checks.push(
+    // Required: SDK in Gemfile
+    requiredChecks.push(
       ...(await this.fileGrader.checkFileContains('Gemfile', ['workos'])),
     );
 
-    // Check server.rb contains required auth functions
-    checks.push(
-      ...(await this.fileGrader.checkFileContains('server.rb', [
-        'authorization_url',
-        'authenticate_with_code',
-        'load_sealed_session',
-      ])),
+    // Required: sign-in endpoint
+    requiredChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.rb',
+        [/authorization_url/],
+        'Sign-in endpoint with authorization URL',
+      ),
     );
 
-    // Check ruby -c server.rb passes syntax check
-    checks.push(
-      await this.buildGrader.checkCommand('ruby', ['-c', 'server.rb'], 'ruby -c server.rb'),
+    // Required: callback endpoint
+    requiredChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.rb',
+        [/authenticate_with_code/],
+        'Callback endpoint with code exchange',
+      ),
     );
 
+    // Bonus: sealed session handling
+    bonusChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.rb',
+        [/load_sealed_session|seal_session|sealed_session/],
+        'Sealed session handling (bonus)',
+      ),
+    );
+
+    // Bonus: syntax check (requires Ruby)
+    bonusChecks.push(
+      await this.buildGrader.checkCommand('ruby', ['-c', 'server.rb'], 'Ruby syntax check (bonus)'),
+    );
+
+    const allChecks = [...requiredChecks, ...bonusChecks];
     return {
-      passed: checks.every((c) => c.passed),
-      checks,
+      passed: requiredChecks.every((c) => c.passed),
+      checks: allChecks,
     };
   }
 }

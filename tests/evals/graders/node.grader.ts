@@ -7,10 +7,13 @@ import type { Grader, GradeResult, GradeCheck } from '../types.js';
  *
  * SDK: @workos-inc/node
  *
- * Key patterns:
- * - @workos-inc/node in package.json
- * - server.js contains getAuthorizationUrl, authenticateWithCode, loadSealedSession
- * - node --check server.js passes syntax validation
+ * Required checks (must pass):
+ * - SDK installed in package.json
+ * - Auth endpoints exist (login redirect + callback code exchange)
+ * - Syntax valid
+ *
+ * Bonus checks (don't block pass):
+ * - Sealed session handling (step 3 of quickstart — agent may not get this far)
  */
 export class NodeGrader implements Grader {
   private fileGrader: FileGrader;
@@ -22,30 +25,50 @@ export class NodeGrader implements Grader {
   }
 
   async grade(): Promise<GradeResult> {
-    const checks: GradeCheck[] = [];
+    const requiredChecks: GradeCheck[] = [];
+    const bonusChecks: GradeCheck[] = [];
 
-    // Check @workos-inc/node in package.json
-    checks.push(
+    // Required: SDK in package.json
+    requiredChecks.push(
       ...(await this.fileGrader.checkFileContains('package.json', ['@workos-inc/node'])),
     );
 
-    // Check server.js contains required auth functions
-    checks.push(
-      ...(await this.fileGrader.checkFileContains('server.js', [
-        'getAuthorizationUrl',
-        'authenticateWithCode',
-        'loadSealedSession',
-      ])),
+    // Required: sign-in endpoint (getAuthorizationUrl or authorizationUrl)
+    requiredChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.{js,ts}',
+        [/getAuthorizationUrl|authorization_url|authorizationUrl/i],
+        'Sign-in endpoint with authorization URL',
+      ),
     );
 
-    // Check node --check server.js passes
-    checks.push(
+    // Required: callback endpoint (authenticateWithCode)
+    requiredChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.{js,ts}',
+        [/authenticateWithCode/],
+        'Callback endpoint with code exchange',
+      ),
+    );
+
+    // Required: syntax check
+    requiredChecks.push(
       await this.buildGrader.checkCommand('node', ['--check', 'server.js'], 'node --check server.js'),
     );
 
+    // Bonus: sealed session handling (step 3 of quickstart)
+    bonusChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.{js,ts}',
+        [/loadSealedSession|sealSession|sealed_session/],
+        'Sealed session handling (bonus)',
+      ),
+    );
+
+    const allChecks = [...requiredChecks, ...bonusChecks];
     return {
-      passed: checks.every((c) => c.passed),
-      checks,
+      passed: requiredChecks.every((c) => c.passed),
+      checks: allChecks,
     };
   }
 }

@@ -7,10 +7,13 @@ import type { Grader, GradeResult, GradeCheck } from '../types.js';
  *
  * SDK: workos (Composer, Laravel integration)
  *
- * Key patterns:
- * - workos in composer.json
- * - Auth controller exists
+ * Required checks (must pass):
+ * - SDK in composer.json
+ * - Auth controller or route with workos integration
  * - Routes contain auth paths
+ *
+ * The agent may put auth code in controllers, routes/web.php directly,
+ * or a service provider — check broadly.
  */
 export class PhpLaravelGrader implements Grader {
   private fileGrader: FileGrader;
@@ -29,12 +32,13 @@ export class PhpLaravelGrader implements Grader {
       ...(await this.fileGrader.checkFileContains('composer.json', ['workos'])),
     );
 
-    // Check auth controller exists
+    // Check auth integration exists somewhere in PHP files
+    // Agent may put it in controllers, routes, or a service provider
     checks.push(
       await this.fileGrader.checkFileWithPattern(
-        'app/Http/Controllers/**/*.php',
-        ['workos'],
-        'Auth controller exists with WorkOS integration',
+        '**/*.php',
+        [/workos/i],
+        'WorkOS integration in PHP files',
       ),
     );
 

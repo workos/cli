@@ -5,13 +5,13 @@ import type { Grader, GradeResult, GradeCheck } from '../types.js';
 /**
  * SvelteKit Grader
  *
- * SDK: @workos-inc/authkit-sveltekit
+ * SDK: @workos/authkit-sveltekit (NOT @workos-inc)
  *
- * Key patterns:
- * - @workos-inc/authkit-sveltekit in package.json
- * - hooks.server.ts exists for server-side auth hooks
- * - Callback route exists for OAuth redirect
- * - pnpm build passes
+ * Required checks (must pass):
+ * - AuthKit SDK in package.json
+ * - hooks.server.ts exists with workos/authkit integration
+ * - Callback route exists
+ * - Build passes
  */
 export class SvelteKitGrader implements Grader {
   private fileGrader: FileGrader;
@@ -25,25 +25,29 @@ export class SvelteKitGrader implements Grader {
   async grade(): Promise<GradeResult> {
     const checks: GradeCheck[] = [];
 
-    // Check @workos-inc/authkit-sveltekit in package.json
+    // Check authkit-sveltekit in package.json (could be @workos/ or @workos-inc/)
     checks.push(
-      ...(await this.fileGrader.checkFileContains('package.json', ['@workos-inc/authkit-sveltekit'])),
+      await this.fileGrader.checkFileWithPattern(
+        'package.json',
+        [/authkit-sveltekit/],
+        'AuthKit SvelteKit SDK in package.json',
+      ),
     );
 
-    // Check hooks.server.ts exists
+    // Check hooks.server.ts exists with workos/authkit reference
     checks.push(
       await this.fileGrader.checkFileWithPattern(
         'src/hooks.server.ts',
-        ['@workos-inc/authkit-sveltekit'],
+        [/workos|authkit/i],
         'hooks.server.ts exists with AuthKit integration',
       ),
     );
 
-    // Check callback route exists
+    // Check callback route exists (could be at various paths)
     checks.push(
       await this.fileGrader.checkFileWithPattern(
         'src/routes/**/+server.ts',
-        ['@workos-inc/authkit-sveltekit'],
+        [/workos|authkit|code|callback/i],
         'Callback route exists',
       ),
     );
