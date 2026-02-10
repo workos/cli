@@ -50,6 +50,7 @@ else                                     → pip install
 ### Environment Variables
 
 Check `.env` for:
+
 - `WORKOS_API_KEY` - starts with `sk_`
 - `WORKOS_CLIENT_ID` - starts with `client_`
 
@@ -142,13 +143,17 @@ print('Credentials OK')
 ## Error Recovery
 
 ### "ModuleNotFoundError: No module named 'workos'"
+
 Re-run the install command for the detected package manager.
 
 ### Django: "CSRF verification failed"
+
 Auth callback receives GET requests from WorkOS. Ensure callback view uses GET, not POST. Or add `@csrf_exempt`.
 
 ### Flask: Session not persisting
+
 Ensure `app.secret_key` is set (required for Flask sessions).
 
 ### Virtual environment not active
+
 Check for `.venv/`, `venv/`, or poetry-managed environments. Activate before running install.

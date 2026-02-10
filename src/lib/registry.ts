@@ -50,18 +50,14 @@ export async function buildRegistry(): Promise<IntegrationRegistry> {
   const integrationsDir = join(__dirname, '..', 'integrations');
 
   if (!existsSync(integrationsDir)) {
-    throw new Error(
-      `No integrations directory found at ${integrationsDir}. Is the build corrupt?`,
-    );
+    throw new Error(`No integrations directory found at ${integrationsDir}. Is the build corrupt?`);
   }
 
   const entries = readdirSync(integrationsDir, { withFileTypes: true });
   const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
 
   if (dirs.length === 0) {
-    throw new Error(
-      'No integrations found. Is the build corrupt?',
-    );
+    throw new Error('No integrations found. Is the build corrupt?');
   }
 
   for (const dir of dirs) {
@@ -87,9 +83,7 @@ export async function buildRegistry(): Promise<IntegrationRegistry> {
       const name = mod.config.metadata.integration;
 
       if (modules.has(name)) {
-        throw new Error(
-          `Duplicate integration name: '${name}' (found in both existing and '${dir}/')`,
-        );
+        throw new Error(`Duplicate integration name: '${name}' (found in both existing and '${dir}/')`);
       }
 
       modules.set(name, mod);

@@ -160,9 +160,7 @@ export const config: FrameworkConfig = {
 /**
  * Build the agent prompt for Python/Django integration.
  */
-function buildPythonPrompt(
-  frameworkContext: Record<string, any>,
-): string {
+function buildPythonPrompt(frameworkContext: Record<string, any>): string {
   const contextLines = ['- Framework: Python (Django)'];
   if (frameworkContext.packageManager) contextLines.push(`- Package manager: ${frameworkContext.packageManager}`);
   if (frameworkContext.installCommand) contextLines.push(`- Install command: ${frameworkContext.installCommand}`);
@@ -216,9 +214,7 @@ export async function run(options: InstallerOptions): Promise<string> {
   const clientId = options.clientId || '';
 
   // Gather Python-specific context
-  const frameworkContext = config.metadata.gatherContext
-    ? await config.metadata.gatherContext(options)
-    : {};
+  const frameworkContext = config.metadata.gatherContext ? await config.metadata.gatherContext(options) : {};
 
   analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
     action: 'started agent integration',

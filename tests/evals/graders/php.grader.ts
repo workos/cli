@@ -24,9 +24,7 @@ export class PhpGrader implements Grader {
     const checks: GradeCheck[] = [];
 
     // Check workos in composer.json
-    checks.push(
-      ...(await this.fileGrader.checkFileContains('composer.json', ['workos'])),
-    );
+    checks.push(...(await this.fileGrader.checkFileContains('composer.json', ['workos'])));
 
     // Check auth endpoint files exist
     checks.push(

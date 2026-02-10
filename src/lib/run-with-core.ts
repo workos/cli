@@ -241,9 +241,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         const callbackPath = getCallbackPath(integration);
         const redirectUri = installerOptions.redirectUri || `http://localhost:${port}${callbackPath}`;
 
-        const requiresApiKey = ['nextjs', 'tanstack-start', 'react-router'].includes(
-          integration,
-        );
+        const requiresApiKey = ['nextjs', 'tanstack-start', 'react-router'].includes(integration);
         if (credentials.apiKey && requiresApiKey) {
           await autoConfigureWorkOSEnvironment(credentials.apiKey, integration, port, {
             homepageUrl: installerOptions.homepageUrl,
@@ -251,8 +249,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
           });
         }
 
-        const redirectUriKey =
-          integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
+        const redirectUriKey = integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
 
         writeEnvLocal(installerOptions.installDir, {
           ...(credentials.apiKey ? { WORKOS_API_KEY: credentials.apiKey } : {}),

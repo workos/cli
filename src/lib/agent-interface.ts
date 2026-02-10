@@ -89,21 +89,43 @@ type AgentRunConfig = {
  */
 const PACKAGE_MANAGERS = [
   // JavaScript
-  'npm', 'pnpm', 'yarn', 'bun', 'npx', 'pnpx', 'bunx',
+  'npm',
+  'pnpm',
+  'yarn',
+  'bun',
+  'npx',
+  'pnpx',
+  'bunx',
   // Python
-  'pip', 'pip3', 'poetry', 'uv', 'pipx', 'python', 'python3',
+  'pip',
+  'pip3',
+  'poetry',
+  'uv',
+  'pipx',
+  'python',
+  'python3',
   // Ruby
-  'gem', 'bundle', 'bundler', 'ruby',
+  'gem',
+  'bundle',
+  'bundler',
+  'ruby',
   // PHP
-  'composer', 'php',
+  'composer',
+  'php',
   // Go
   'go',
   // .NET
-  'dotnet', 'nuget',
+  'dotnet',
+  'nuget',
   // Elixir
-  'mix', 'hex', 'elixir',
+  'mix',
+  'hex',
+  'elixir',
   // Kotlin/Java
-  'gradle', 'gradlew', './gradlew', 'mvn',
+  'gradle',
+  'gradlew',
+  './gradlew',
+  'mvn',
 ];
 
 /**

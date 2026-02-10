@@ -27,6 +27,7 @@ This detection determines WHERE to register WorkOS services and middleware.
 ### Environment Variables
 
 Check `appsettings.Development.json` for:
+
 - `WORKOS_API_KEY` — starts with `sk_`
 - `WORKOS_CLIENT_ID` — starts with `client_`
 
@@ -72,17 +73,20 @@ Create auth endpoints following the WorkOS AuthKit pattern. Use minimal API `app
 ### Required Endpoints
 
 **GET /auth/login** — Redirect to WorkOS AuthKit:
+
 - Use the WorkOS SDK to generate an authorization URL
 - Include `clientId`, `redirectUri`, and `provider: "authkit"` parameters
 - Redirect the user to the authorization URL
 
 **GET /auth/callback** — Handle OAuth callback:
+
 - Extract `code` from query parameters
 - Exchange authorization code for user profile using the WorkOS SDK
 - Store user info in session or cookie
 - Redirect to home page
 
 **GET /auth/logout** — Clear session:
+
 - Clear the authentication session/cookie
 - Redirect to home page
 
@@ -132,6 +136,7 @@ dotnet build
 ```
 
 **If build fails:** Read the error output carefully. Common issues:
+
 - Missing `using` statements for WorkOS namespaces
 - Incorrect DI registration order
 - Missing session/cookie middleware registration
@@ -139,16 +144,20 @@ dotnet build
 ## Error Recovery
 
 ### "dotnet: command not found"
+
 - .NET SDK is not installed. Inform the user to install from https://dotnet.microsoft.com/download
 
 ### NuGet restore failures
+
 - Check internet connectivity
 - Try `dotnet restore` explicitly before `dotnet build`
 
 ### "No project file found"
+
 - Ensure you're in the correct directory with a `*.csproj` file
 
 ### Build errors after integration
+
 - Check that all `using` statements are correct
 - Verify DI registration order (services before middleware)
 - Ensure `app.UseSession()` is called before mapping auth endpoints

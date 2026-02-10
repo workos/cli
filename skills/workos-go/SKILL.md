@@ -55,11 +55,13 @@ go get github.com/workos/workos-go/v4
 ### 4a: Create Auth Handler File
 
 Create an auth handler file. Respect existing project structure:
+
 - If `internal/` directory exists, create `internal/auth/handlers.go`
 - If `handlers/` directory exists, create `handlers/auth.go`
 - Otherwise, create `auth/handlers.go`
 
 The file must:
+
 - Declare a package matching the directory name
 - Import `github.com/workos/workos-go/v4` packages as needed
 - Read env vars with `os.Getenv("WORKOS_API_KEY")`, `os.Getenv("WORKOS_CLIENT_ID")`, `os.Getenv("WORKOS_REDIRECT_URI")`
@@ -69,16 +71,19 @@ The file must:
 Implement these three handlers following the redirect-based auth flow from the README:
 
 **Login handler** (`/auth/login`):
+
 - Get the authorization URL from WorkOS
 - Redirect the user to the AuthKit sign-in page
 
 **Callback handler** (`/auth/callback`):
+
 - Extract the `code` query parameter from the redirect
 - Exchange the authorization code for a user profile using the WorkOS SDK
 - Store user info in session (or return as JSON for API-first apps)
 - Redirect to homepage or return user data
 
 **Logout handler** (`/auth/logout`):
+
 - Clear session data
 - Redirect to homepage
 
@@ -155,6 +160,7 @@ go vet ./...
 ```
 
 If build fails:
+
 - Check import paths match the SDK version in `go.mod`
 - Ensure all new files have correct package declarations
 - Run `go mod tidy` to resolve dependency issues

@@ -29,9 +29,7 @@ export class NodeGrader implements Grader {
     const bonusChecks: GradeCheck[] = [];
 
     // Required: SDK in package.json
-    requiredChecks.push(
-      ...(await this.fileGrader.checkFileContains('package.json', ['@workos-inc/node'])),
-    );
+    requiredChecks.push(...(await this.fileGrader.checkFileContains('package.json', ['@workos-inc/node'])));
 
     // Required: sign-in endpoint (getAuthorizationUrl or authorizationUrl)
     requiredChecks.push(

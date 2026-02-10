@@ -25,19 +25,13 @@ export class GoGrader implements Grader {
     const checks: GradeCheck[] = [];
 
     // Check workos in go.mod
-    checks.push(
-      ...(await this.fileGrader.checkFileContains('go.mod', ['workos'])),
-    );
+    checks.push(...(await this.fileGrader.checkFileContains('go.mod', ['workos'])));
 
     // Check go build ./... passes
-    checks.push(
-      await this.buildGrader.checkCommand('go', ['build', './...'], 'go build ./...'),
-    );
+    checks.push(await this.buildGrader.checkCommand('go', ['build', './...'], 'go build ./...'));
 
     // Check go vet ./... passes
-    checks.push(
-      await this.buildGrader.checkCommand('go', ['vet', './...'], 'go vet ./...'),
-    );
+    checks.push(await this.buildGrader.checkCommand('go', ['vet', './...'], 'go vet ./...'));
 
     return {
       passed: checks.every((c) => c.passed),

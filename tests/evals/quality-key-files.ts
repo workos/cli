@@ -77,19 +77,8 @@ export const QUALITY_KEY_FILES: Record<string, string[]> = {
   ruby: ['server.rb', 'app.rb', 'index.html'],
   go: ['main.go', 'handlers/**/*.go', 'auth/**/*.go'],
   php: ['public/index.php', 'login.php', 'callback.php'],
-  'php-laravel': [
-    'app/Http/Controllers/*Auth*.php',
-    'routes/web.php',
-    'config/workos.php',
-  ],
-  kotlin: [
-    'src/main/kotlin/**/*Controller*.kt',
-    'src/main/resources/application.properties',
-  ],
+  'php-laravel': ['app/Http/Controllers/*Auth*.php', 'routes/web.php', 'config/workos.php'],
+  kotlin: ['src/main/kotlin/**/*Controller*.kt', 'src/main/resources/application.properties'],
   dotnet: ['Program.cs', '*.csproj'],
-  elixir: [
-    'lib/*_web/controllers/*auth*.ex',
-    'lib/*_web/router.ex',
-    'config/runtime.exs',
-  ],
+  elixir: ['lib/*_web/controllers/*auth*.ex', 'lib/*_web/router.ex', 'config/runtime.exs'],
 };

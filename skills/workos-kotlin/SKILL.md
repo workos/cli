@@ -122,6 +122,7 @@ Run the build to verify everything compiles:
 ```
 
 **If build fails:**
+
 - Check dependency resolution: `./gradlew dependencies | grep workos`
 - Check for missing imports in the auth controller
 - Verify application.properties syntax

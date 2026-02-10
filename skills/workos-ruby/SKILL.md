@@ -55,6 +55,7 @@ bundle add dotenv
 ### If Rails
 
 1. **Create initializer** — `config/initializers/workos.rb`:
+
    ```ruby
    WorkOS.configure do |config|
      config.api_key = ENV.fetch("WORKOS_API_KEY")
@@ -68,6 +69,7 @@ bundle add dotenv
    - `logout` action: clear session, redirect
 
 3. **Add routes** to `config/routes.rb`:
+
    ```ruby
    get "/auth/login", to: "auth#login"
    get "/auth/callback", to: "auth#callback"
@@ -75,6 +77,7 @@ bundle add dotenv
    ```
 
 4. **Add current_user helper** to `ApplicationController` (optional):
+
    ```ruby
    helper_method :current_user
    def current_user
@@ -89,6 +92,7 @@ bundle add dotenv
 Follow the quickstart pattern exactly:
 
 1. **Configure WorkOS** in `server.rb`:
+
    ```ruby
    require "dotenv/load"
    require "workos"
@@ -125,6 +129,7 @@ WORKOS_CLIENT_ID=client_...
 ## Step 6: Verification
 
 ### Rails
+
 ```bash
 bundle show workos
 bundle exec rails routes | grep auth
@@ -132,6 +137,7 @@ grep WORKOS .env
 ```
 
 ### Sinatra
+
 ```bash
 bundle show workos
 ruby -c server.rb
@@ -141,13 +147,17 @@ grep WORKOS .env
 ## Error Recovery
 
 ### "uninitialized constant WorkOS"
+
 Gem not loaded. Verify `bundle show workos` succeeds. For Rails, ensure initializer exists. For Sinatra, ensure `require "workos"` is at top of server file.
 
 ### "NoMethodError" on WorkOS methods
+
 SDK API may differ from this skill. Re-read the README (Step 1) and use exact method names.
 
 ### Routes not working (Rails)
+
 Run `bundle exec rails routes | grep auth`. Verify routes are inside `Rails.application.routes.draw` block.
 
 ### Session not persisting (Sinatra)
+
 Enable sessions: `enable :sessions` in server.rb, or use `rack-session` gem.

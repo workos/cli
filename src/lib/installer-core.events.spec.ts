@@ -28,7 +28,6 @@ import { createEventCapture, compareEventSequences, filterDeterministicEvents } 
 import type { InstallerOptions } from '../utils/types.js';
 import type { DetectionOutput, GitCheckOutput, AgentOutput, InstallerMachineContext } from './installer-core.types.js';
 
-
 /**
  * Creates mock actor implementations for testing.
  * All return successful results to ensure deterministic flow.

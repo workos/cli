@@ -26,11 +26,7 @@ export class DotnetGrader implements Grader {
 
     // Check WorkOS in *.csproj
     checks.push(
-      await this.fileGrader.checkFileWithPattern(
-        '**/*.csproj',
-        ['WorkOS'],
-        'WorkOS package reference in .csproj',
-      ),
+      await this.fileGrader.checkFileWithPattern('**/*.csproj', ['WorkOS'], 'WorkOS package reference in .csproj'),
     );
 
     // Check Program.cs contains auth routes
@@ -43,9 +39,7 @@ export class DotnetGrader implements Grader {
     );
 
     // Check dotnet build passes
-    checks.push(
-      await this.buildGrader.checkCommand('dotnet', ['build'], 'dotnet build'),
-    );
+    checks.push(await this.buildGrader.checkCommand('dotnet', ['build'], 'dotnet build'));
 
     return {
       passed: checks.every((c) => c.passed),

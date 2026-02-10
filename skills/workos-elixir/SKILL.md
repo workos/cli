@@ -25,6 +25,7 @@ The README is the source of truth for SDK API usage. If this skill conflicts wit
 ### Determine App Name
 
 The app name from `mix.exs` determines all file paths. For example, if `app: :my_app`:
+
 - Web module: `lib/my_app_web/`
 - Router: `lib/my_app_web/router.ex`
 - Controllers: `lib/my_app_web/controllers/`
@@ -32,6 +33,7 @@ The app name from `mix.exs` determines all file paths. For example, if `app: :my
 ### Environment Variables
 
 Check `.env.local` for:
+
 - `WORKOS_API_KEY` - starts with `sk_`
 - `WORKOS_CLIENT_ID` - starts with `client_`
 
@@ -142,6 +144,7 @@ mix compile
 ```
 
 **If compilation fails:**
+
 1. Read the error message carefully
 2. Check that the WorkOS SDK module names match what's in the README
 3. Verify the app name is consistent across all files
@@ -150,17 +153,21 @@ mix compile
 ## Error Recovery
 
 ### "could not compile dependency :workos"
+
 - Check Elixir version compatibility (1.15+ recommended)
 - Try `mix deps.clean workos && mix deps.get`
 
 ### "module WorkOS.UserManagement is not available"
+
 - The SDK API may use different module paths — re-read the README
 - Check if the SDK uses `WorkOS.SSO` or another module instead
 
 ### "undefined function" in controller
+
 - Verify `use {AppName}Web, :controller` is correct
 - Check that the SDK functions match the README exactly
 
 ### Route conflicts
+
 - Check existing routes in router.ex for `/auth` prefix conflicts
 - Adjust the scope path if needed (e.g., `/workos-auth`)

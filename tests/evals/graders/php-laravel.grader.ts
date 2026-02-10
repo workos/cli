@@ -28,19 +28,11 @@ export class PhpLaravelGrader implements Grader {
     const checks: GradeCheck[] = [];
 
     // Check workos in composer.json
-    checks.push(
-      ...(await this.fileGrader.checkFileContains('composer.json', ['workos'])),
-    );
+    checks.push(...(await this.fileGrader.checkFileContains('composer.json', ['workos'])));
 
     // Check auth integration exists somewhere in PHP files
     // Agent may put it in controllers, routes, or a service provider
-    checks.push(
-      await this.fileGrader.checkFileWithPattern(
-        '**/*.php',
-        [/workos/i],
-        'WorkOS integration in PHP files',
-      ),
-    );
+    checks.push(await this.fileGrader.checkFileWithPattern('**/*.php', [/workos/i], 'WorkOS integration in PHP files'));
 
     // Check routes contain auth paths
     checks.push(

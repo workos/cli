@@ -29,9 +29,7 @@ export class RubyGrader implements Grader {
     const bonusChecks: GradeCheck[] = [];
 
     // Required: SDK in Gemfile
-    requiredChecks.push(
-      ...(await this.fileGrader.checkFileContains('Gemfile', ['workos'])),
-    );
+    requiredChecks.push(...(await this.fileGrader.checkFileContains('Gemfile', ['workos'])));
 
     // Required: sign-in endpoint
     requiredChecks.push(
@@ -61,9 +59,7 @@ export class RubyGrader implements Grader {
     );
 
     // Bonus: syntax check (requires Ruby)
-    bonusChecks.push(
-      await this.buildGrader.checkCommand('ruby', ['-c', 'server.rb'], 'Ruby syntax check (bonus)'),
-    );
+    bonusChecks.push(await this.buildGrader.checkCommand('ruby', ['-c', 'server.rb'], 'Ruby syntax check (bonus)'));
 
     const allChecks = [...requiredChecks, ...bonusChecks];
     return {

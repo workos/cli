@@ -65,11 +65,7 @@ export class PythonGrader implements Grader {
 
     // Bonus: syntax check (requires Python)
     bonusChecks.push(
-      await this.buildGrader.checkCommand(
-        'python3',
-        ['-m', 'py_compile', 'server.py'],
-        'Python syntax check (bonus)',
-      ),
+      await this.buildGrader.checkCommand('python3', ['-m', 'py_compile', 'server.py'], 'Python syntax check (bonus)'),
     );
 
     const allChecks = [...requiredChecks, ...bonusChecks];

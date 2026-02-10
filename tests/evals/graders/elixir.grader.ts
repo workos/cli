@@ -25,9 +25,7 @@ export class ElixirGrader implements Grader {
     const checks: GradeCheck[] = [];
 
     // Check workos in mix.exs
-    checks.push(
-      ...(await this.fileGrader.checkFileContains('mix.exs', ['workos'])),
-    );
+    checks.push(...(await this.fileGrader.checkFileContains('mix.exs', ['workos'])));
 
     // Check auth controller exists
     checks.push(
@@ -39,9 +37,7 @@ export class ElixirGrader implements Grader {
     );
 
     // Check mix compile passes
-    checks.push(
-      await this.buildGrader.checkCommand('mix', ['compile'], 'mix compile'),
-    );
+    checks.push(await this.buildGrader.checkCommand('mix', ['compile'], 'mix compile'));
 
     return {
       passed: checks.every((c) => c.passed),

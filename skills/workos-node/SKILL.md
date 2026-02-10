@@ -54,6 +54,7 @@ For TypeScript, also install types: `pnpm add -D @types/cookie-parser`
 Adapt to detected module system (ESM vs CJS):
 
 **ESM/TypeScript:**
+
 ```typescript
 import { WorkOS } from '@workos-inc/node';
 const workos = new WorkOS(process.env.WORKOS_API_KEY, {
@@ -62,6 +63,7 @@ const workos = new WorkOS(process.env.WORKOS_API_KEY, {
 ```
 
 **CJS:**
+
 ```javascript
 const { WorkOS } = require('@workos-inc/node');
 const workos = new WorkOS(process.env.WORKOS_API_KEY, {
@@ -82,6 +84,7 @@ Follow the quickstart pattern:
 5. **Session-aware home route** — read session, display user info
 
 **Session handling options (pick one):**
+
 - **Sealed sessions** (recommended, from quickstart): use `sealSession: true` in authenticateWithCode, store sealed cookie, use `loadSealedSession` for verification
 - **express-session**: install `express-session`, configure middleware before routes, store user in `req.session`
 
@@ -128,6 +131,7 @@ Ensure `.env` is in `.gitignore`.
 **JavaScript:** `node --check <entry-file>`
 
 ### Checklist
+
 - [ ] SDK installed (`@workos-inc/node` in package.json)
 - [ ] WorkOS client initialized
 - [ ] Login route redirects to AuthKit
@@ -139,17 +143,22 @@ Ensure `.env` is in `.gitignore`.
 ## Error Recovery
 
 ### Module not found: @workos-inc/node
+
 Re-run install for detected package manager.
 
 ### Session not persisting
+
 If using express-session: ensure middleware registered BEFORE routes.
 If using sealed sessions: ensure cookie is being set with correct options (httpOnly, secure in prod, sameSite: 'lax').
 
 ### Callback returns 404
+
 Route path must match WORKOS_REDIRECT_URI exactly.
 
 ### ESM/CJS mismatch
+
 Check `"type"` field in package.json — `"module"` = ESM (import/export), absent = CJS (require).
 
 ### TypeScript errors
+
 Install missing types: `@types/express`, `@types/cookie-parser`, `@types/express-session`.

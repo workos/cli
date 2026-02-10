@@ -24,14 +24,10 @@ export class KotlinGrader implements Grader {
     const checks: GradeCheck[] = [];
 
     // Check workos in build.gradle.kts
-    checks.push(
-      ...(await this.fileGrader.checkFileContains('build.gradle.kts', ['workos'])),
-    );
+    checks.push(...(await this.fileGrader.checkFileContains('build.gradle.kts', ['workos'])));
 
     // Check ./gradlew build passes (180s timeout for JVM cold start)
-    checks.push(
-      await this.buildGrader.checkCommand('./gradlew', ['build'], './gradlew build', 180000),
-    );
+    checks.push(await this.buildGrader.checkCommand('./gradlew', ['build'], './gradlew build', 180000));
 
     return {
       passed: checks.every((c) => c.passed),
