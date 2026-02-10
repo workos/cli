@@ -1,9 +1,9 @@
 ---
 name: workos-python
-description: Integrate WorkOS AuthKit with Python/Django. Server-side authentication with Django views and URL routing.
+description: Integrate WorkOS AuthKit with Python applications. Adapts to Django, Flask, FastAPI, or vanilla Python. Server-side authentication with redirect-based OAuth flow.
 ---
 
-# WorkOS AuthKit for Python (Django)
+# WorkOS AuthKit for Python
 
 ## Step 1: Fetch SDK Documentation (BLOCKING)
 
@@ -11,25 +11,31 @@ description: Integrate WorkOS AuthKit with Python/Django. Server-side authentica
 
 WebFetch: `https://raw.githubusercontent.com/workos/workos-python/main/README.md`
 
+Also fetch the AuthKit quickstart for reference:
+WebFetch: `https://workos.com/docs/authkit/vanilla/python`
+
 The README is the source of truth for SDK API usage. If this skill conflicts with README, follow README.
 
-## Step 2: Pre-Flight Validation
+## Step 2: Detect Framework
 
-### Project Structure
+Examine the project to determine which Python web framework is in use:
 
-- Confirm `manage.py` exists (Django project root)
-- Identify the Django settings module: look for `settings.py` or a `settings/` directory with `base.py`
-- Identify the root `urls.py` (project-level URL configuration)
-- If settings are split (`settings/base.py`, `settings/dev.py`, etc.), modify `base.py`
+```
+manage.py exists?                        → Django
+  settings.py has django imports?        → Confirmed Django
 
-### Environment Variables
+Gemfile/requirements has 'fastapi'?      → FastAPI
+  main.py has FastAPI() instance?        → Confirmed FastAPI
 
-Check `.env` for:
+requirements has 'flask'?               → Flask
+  server.py/app.py has Flask() instance? → Confirmed Flask
 
-- `WORKOS_API_KEY` - starts with `sk_`
-- `WORKOS_CLIENT_ID` - starts with `client_`
+None of the above?                       → Vanilla Python (use Flask quickstart pattern)
+```
 
-Python/Django does NOT use `WORKOS_COOKIE_PASSWORD` or `WORKOS_REDIRECT_URI` as env vars. The redirect URI is passed directly in code.
+**Adapt all subsequent steps to the detected framework.** Do not force one framework onto another.
+
+## Step 3: Pre-Flight Validation
 
 ### Package Manager Detection
 
@@ -41,7 +47,13 @@ requirements.txt exists?                 → pip install (+ append to requiremen
 else                                     → pip install
 ```
 
-## Step 3: Install SDK
+### Environment Variables
+
+Check `.env` for:
+- `WORKOS_API_KEY` - starts with `sk_`
+- `WORKOS_CLIENT_ID` - starts with `client_`
+
+## Step 4: Install SDK
 
 Install using the detected package manager:
 
@@ -52,169 +64,91 @@ uv add workos python-dotenv
 # poetry
 poetry add workos python-dotenv
 
-# pipenv
-pipenv install workos python-dotenv
-
 # pip
 pip install workos python-dotenv
 ```
 
-If using `requirements.txt`, also append `workos` and `python-dotenv` to it (if not already listed).
+If using `requirements.txt`, also append `workos` and `python-dotenv` to it.
 
-**Verify installation:**
+**Verify:** `python -c "import workos; print('OK')"`
+
+## Step 5: Integrate Authentication
+
+### If Django
+
+1. **Configure settings.py** — add `import os` + `from dotenv import load_dotenv` + `load_dotenv()` at top. Add `WORKOS_API_KEY` and `WORKOS_CLIENT_ID` from `os.environ.get()`.
+2. **Create auth views** — create `auth_views.py` (or add to existing views):
+   - `login_view`: call SDK's `get_authorization_url()` with `provider='authkit'`, redirect
+   - `callback_view`: call `authenticate_with_code()` with the code param, store user in `request.session`
+   - `logout_view`: flush session, redirect
+3. **Add URL patterns** — add `auth/login/`, `auth/callback/`, `auth/logout/` to `urls.py`
+4. **Update templates** — add login/logout links using `{% url %}` tags
+
+### If Flask
+
+Follow the quickstart pattern exactly:
+
+1. **Initialize WorkOS client** in `server.py` / `app.py`:
+   ```python
+   from workos import WorkOSClient
+   workos = WorkOSClient(api_key=os.getenv("WORKOS_API_KEY"), client_id=os.getenv("WORKOS_CLIENT_ID"))
+   ```
+2. **Create `/login` route** — call `workos.user_management.get_authorization_url(provider="authkit", redirect_uri="...")`, redirect
+3. **Create `/callback` route** — call `workos.user_management.authenticate_with_code(code=code)`, set session cookie
+4. **Create `/logout` route** — clear session, redirect
+5. **Update home route** — show user info if session exists
+
+### If FastAPI
+
+1. **Initialize WorkOS client** in main app file
+2. **Create `/login` endpoint** — generate auth URL, return `RedirectResponse`
+3. **Create `/callback` endpoint** — exchange code, store in session/cookie
+4. **Create `/logout` endpoint** — clear session
+5. Use `Depends()` for auth middleware on protected routes
+
+### If Vanilla Python (no framework detected)
+
+Install Flask and follow the Flask pattern above. This matches the official quickstart.
+
+## Step 6: Environment Setup
+
+Create/update `.env` with WorkOS credentials. Do NOT overwrite existing values.
+
+```
+WORKOS_API_KEY=sk_...
+WORKOS_CLIENT_ID=client_...
+```
+
+## Step 7: Verification Checklist
 
 ```bash
-python -c "import workos; print('workos OK')"
-python -c "import dotenv; print('dotenv OK')"
-```
-
-## Step 4: Configure Django Settings
-
-Edit the project's `settings.py` (or `settings/base.py` if split):
-
-1. Add imports at the top of the file (after existing imports):
-
-```python
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-```
-
-2. Add WorkOS configuration (at the bottom of settings, before any local settings import):
-
-```python
-# WorkOS AuthKit Configuration
-WORKOS_API_KEY = os.environ.get('WORKOS_API_KEY', '')
-WORKOS_CLIENT_ID = os.environ.get('WORKOS_CLIENT_ID', '')
-```
-
-3. Ensure session support is configured:
-   - `'django.contrib.sessions'` must be in `INSTALLED_APPS`
-   - `'django.contrib.sessions.middleware.SessionMiddleware'` must be in `MIDDLEWARE`
-   - These are included by default in Django projects — verify they haven't been removed
-
-**Do NOT remove or reorder existing settings.** Only add new entries.
-
-## Step 5: Create Auth Views
-
-Create an auth views file. Prefer adding to an existing app's `views.py`, or create a new `auth_views.py` in the main project directory.
-
-Follow the exact patterns from the WorkOS Python SDK README for:
-
-### Login View
-- Import and initialize the WorkOS client
-- Call the SDK's method to generate an authorization URL
-- Pass `redirect_uri` pointing to your callback view (e.g., `http://localhost:8000/auth/callback`)
-- Pass `client_id` from settings
-- Redirect the user to the returned authorization URL
-
-### Callback View
-- Receive the `code` query parameter from the request
-- Use the SDK to exchange the code for a user profile
-- Store the user information in `request.session`
-- Redirect to the home page
-
-### Logout View
-- Clear the Django session with `request.session.flush()`
-- Redirect to the home page
-
-**CRITICAL:** Use the SDK methods from the README. Do NOT manually construct OAuth URLs.
-
-## Step 6: Configure URL Routing
-
-Add URL patterns to the project's `urls.py`:
-
-```python
-from django.urls import path
-from . import auth_views  # adjust import path as needed
-
-urlpatterns = [
-    # ... existing patterns ...
-    path('auth/login/', auth_views.login_view, name='workos_login'),
-    path('auth/callback/', auth_views.callback_view, name='workos_callback'),
-    path('auth/logout/', auth_views.logout_view, name='workos_logout'),
-]
-```
-
-Adjust the import path based on where you placed the auth views in Step 5.
-
-## Step 7: UI Integration
-
-Update the home page template (or create `templates/home.html`) to show authentication state:
-
-```html
-{% if request.session.user %}
-  <p>Welcome, {{ request.session.user.email }}!</p>
-  <a href="{% url 'workos_logout' %}">Log out</a>
-{% else %}
-  <a href="{% url 'workos_login' %}">Log in</a>
-{% endif %}
-```
-
-If no home view exists, create a simple one that renders this template.
-
-Ensure `TEMPLATES` in settings has `APP_DIRS: True` or the template directory is configured.
-
-## Step 8: Verification Checklist (ALL MUST PASS)
-
-Run these commands to confirm integration. **Do not mark complete until all pass:**
-
-```bash
-# 1. WorkOS SDK is importable
+# 1. SDK importable
 python -c "import workos; print('OK')"
 
-# 2. python-dotenv is importable
-python -c "import dotenv; print('OK')"
-
-# 3. .env has credentials
+# 2. Credentials configured
 python -c "
 from dotenv import load_dotenv; import os; load_dotenv()
-assert os.environ.get('WORKOS_API_KEY','').startswith('sk_'), 'WORKOS_API_KEY missing or invalid'
-assert os.environ.get('WORKOS_CLIENT_ID','').startswith('client_'), 'WORKOS_CLIENT_ID missing or invalid'
+assert os.environ.get('WORKOS_API_KEY','').startswith('sk_'), 'Missing WORKOS_API_KEY'
+assert os.environ.get('WORKOS_CLIENT_ID','').startswith('client_'), 'Missing WORKOS_CLIENT_ID'
 print('Credentials OK')
 "
 
-# 4. Django check passes
-python manage.py check
+# 3. Framework-specific check
+# Django: python manage.py check
+# Flask: python -m py_compile server.py
+# FastAPI: python -m py_compile main.py
 ```
 
 ## Error Recovery
 
 ### "ModuleNotFoundError: No module named 'workos'"
+Re-run the install command for the detected package manager.
 
-- Verify the install command completed successfully
-- If using a virtual environment, ensure it's activated
-- Re-run the install command
+### Django: "CSRF verification failed"
+Auth callback receives GET requests from WorkOS. Ensure callback view uses GET, not POST. Or add `@csrf_exempt`.
 
-### "ModuleNotFoundError: No module named 'dotenv'"
+### Flask: Session not persisting
+Ensure `app.secret_key` is set (required for Flask sessions).
 
-- Install: use detected package manager to install `python-dotenv`
-- Import as `from dotenv import load_dotenv` (NOT `import dotenv`)
-
-### Django check fails
-
-- Run `python manage.py check` to see specific errors
-- Common: missing migrations (`python manage.py migrate`), invalid URL patterns, missing template directories
-
-### Callback returns error
-
-- Verify redirect URI in code matches `http://localhost:8000/auth/callback/`
-- Verify `WORKOS_CLIENT_ID` and `WORKOS_API_KEY` are set in `.env`
-- Check the authorization code is being exchanged correctly per SDK README
-
-### Session not persisting
-
-- Ensure `django.contrib.sessions` is in `INSTALLED_APPS`
-- Ensure `SessionMiddleware` is in `MIDDLEWARE`
-- Run `python manage.py migrate` if sessions table is missing
-
-### "CSRF verification failed"
-
-- Auth views that receive external redirects (callback) should be decorated with `@csrf_exempt`
-- Or use `GET` method for callback (WorkOS redirects via GET)
-
-### Virtual environment issues
-
-- Check for `.venv/`, `venv/`, or poetry/pipenv managed environments
-- If no venv detected, install globally but warn the user
+### Virtual environment not active
+Check for `.venv/`, `venv/`, or poetry-managed environments. Activate before running install.
