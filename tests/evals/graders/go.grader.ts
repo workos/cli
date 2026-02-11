@@ -36,11 +36,7 @@ export class GoGrader implements Grader {
 
     // Bonus: existing app routes preserved (proves agent read existing code)
     bonusChecks.push(
-      await this.fileGrader.checkFileWithPattern(
-        '**/*.go',
-        [/api\/health/],
-        'Existing app routes preserved',
-      ),
+      await this.fileGrader.checkFileWithPattern('**/*.go', [/api\/health/], 'Existing app routes preserved'),
     );
 
     const allChecks = [...requiredChecks, ...bonusChecks];

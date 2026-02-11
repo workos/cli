@@ -1,4 +1,11 @@
-import type { CredentialValidation, DashboardSettings, DashboardFetchResult, DoctorOptions, RedirectUriComparison, EnvironmentRaw } from '../types.js';
+import type {
+  CredentialValidation,
+  DashboardSettings,
+  DashboardFetchResult,
+  DoctorOptions,
+  RedirectUriComparison,
+  EnvironmentRaw,
+} from '../types.js';
 
 const WORKOS_API_URL = 'https://api.workos.com';
 

@@ -56,11 +56,7 @@ export class PythonGrader implements Grader {
 
     // Bonus: existing app routes preserved (proves agent read existing code)
     bonusChecks.push(
-      await this.fileGrader.checkFileWithPattern(
-        '**/*.py',
-        [/api\/health/],
-        'Existing app routes preserved',
-      ),
+      await this.fileGrader.checkFileWithPattern('**/*.py', [/api\/health/], 'Existing app routes preserved'),
     );
 
     // Bonus: sealed session handling

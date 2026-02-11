@@ -32,7 +32,9 @@ export class PhpLaravelGrader implements Grader {
     requiredChecks.push(...(await this.fileGrader.checkFileContains('composer.json', ['workos'])));
 
     // Required: auth integration exists somewhere in PHP files
-    requiredChecks.push(await this.fileGrader.checkFileWithPattern('**/*.php', [/workos/i], 'WorkOS integration in PHP files'));
+    requiredChecks.push(
+      await this.fileGrader.checkFileWithPattern('**/*.php', [/workos/i], 'WorkOS integration in PHP files'),
+    );
 
     // Required: routes contain auth paths
     requiredChecks.push(

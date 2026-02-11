@@ -56,11 +56,7 @@ export class NodeGrader implements Grader {
 
     // Bonus: existing app routes preserved (proves agent read existing code)
     bonusChecks.push(
-      await this.fileGrader.checkFileWithPattern(
-        '**/*.{js,ts}',
-        [/api\/health/],
-        'Existing app routes preserved',
-      ),
+      await this.fileGrader.checkFileWithPattern('**/*.{js,ts}', [/api\/health/], 'Existing app routes preserved'),
     );
 
     // Bonus: sealed session handling (step 3 of quickstart)
