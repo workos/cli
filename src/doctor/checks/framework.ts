@@ -23,10 +23,20 @@ const FRAMEWORKS: FrameworkConfig[] = [
     integration: KNOWN_INTEGRATIONS.tanstackStart,
     detectVariant: null,
   },
-  { package: '@tanstack/start', name: 'TanStack Start', integration: KNOWN_INTEGRATIONS.tanstackStart, detectVariant: null },
+  {
+    package: '@tanstack/start',
+    name: 'TanStack Start',
+    integration: KNOWN_INTEGRATIONS.tanstackStart,
+    detectVariant: null,
+  },
   { package: '@tanstack/react-router', name: 'TanStack Router', integration: null, detectVariant: null },
   { package: '@remix-run/node', name: 'Remix', integration: null, detectVariant: null },
-  { package: 'react-router-dom', name: 'React Router', integration: KNOWN_INTEGRATIONS.reactRouter, detectVariant: null },
+  {
+    package: 'react-router-dom',
+    name: 'React Router',
+    integration: KNOWN_INTEGRATIONS.reactRouter,
+    detectVariant: null,
+  },
   { package: 'express', name: 'Express', integration: null, detectVariant: null },
 ];
 
