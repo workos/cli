@@ -16,7 +16,7 @@ app.use(
     baseURL: process.env.AUTH0_BASE_URL || 'http://localhost:3000',
     clientID: process.env.AUTH0_CLIENT_ID,
     issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}`,
-  })
+  }),
 );
 
 app.get('/', (req, res) => {

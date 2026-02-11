@@ -188,6 +188,42 @@ yargs(hideBin(process.argv))
     }),
   )
   .command(
+    'doctor',
+    'Diagnose WorkOS integration issues',
+    (yargs) =>
+      yargs.options({
+        verbose: {
+          type: 'boolean',
+          default: false,
+          description: 'Include additional diagnostic information',
+        },
+        'skip-api': {
+          type: 'boolean',
+          default: false,
+          description: 'Skip API calls (offline mode)',
+        },
+        'install-dir': {
+          type: 'string',
+          default: process.cwd(),
+          description: 'Project directory to analyze',
+        },
+        json: {
+          type: 'boolean',
+          default: false,
+          description: 'Output report as JSON',
+        },
+        copy: {
+          type: 'boolean',
+          default: false,
+          description: 'Copy report to clipboard',
+        },
+      }),
+    async (argv) => {
+      const { handleDoctor } = await import('./commands/doctor.js');
+      await handleDoctor(argv);
+    },
+  )
+  .command(
     'install',
     'Install WorkOS AuthKit into your project',
     (yargs) => yargs.options(installerOptions),
