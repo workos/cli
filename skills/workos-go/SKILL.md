@@ -72,14 +72,16 @@ Implement these three handlers following the redirect-based auth flow from the R
 
 **Login handler** (`/auth/login`):
 
-- Get the authorization URL from WorkOS
-- Redirect the user to the AuthKit sign-in page
+- Get the authorization URL from WorkOS using `usermanagement.GetAuthorizationURL()`
+- Set `Provider` to the string `"authkit"` (it's a plain string, not a constant)
+- Include `ClientID` and `RedirectURI` from env vars
+- Redirect the user to the returned URL
 
 **Callback handler** (`/auth/callback`):
 
 - Extract the `code` query parameter from the redirect
-- Exchange the authorization code for a user profile using the WorkOS SDK
-- Store user info in session (or return as JSON for API-first apps)
+- Call `usermanagement.AuthenticateWithCode()` with the code and `ClientID`
+- Store user info in session/cookie (or return as JSON for API-first apps)
 - Redirect to homepage or return user data
 
 **Logout handler** (`/auth/logout`):

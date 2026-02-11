@@ -43,12 +43,14 @@ Add the WorkOS Kotlin SDK dependency to `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("com.workos:workos-kotlin:{version}")
+    implementation("com.workos:workos-kotlin:4.18.1")
     // ... existing dependencies
 }
 ```
 
-Check the README for the latest version number.
+Check the README for the latest version number — use the version from the README if it differs from above.
+
+**JVM target**: Ensure `jvmTarget` in `build.gradle.kts` matches the JDK on the system. Check with `java -version`. Common values: `"17"`, `"21"`. If `kotlin { jvmToolchain(...) }` is set, ensure it matches too.
 
 **Verify:** Run `./gradlew dependencies` or `gradle dependencies` to confirm the dependency resolves.
 
@@ -88,12 +90,13 @@ Adapt based on the SDK README — the exact client initialization may vary.
 Create a Spring `@RestController` with these endpoints:
 
 1. **GET /auth/login** — Redirect user to WorkOS AuthKit hosted login
-   - Use `workos.sso.getAuthorizationUrl()` or equivalent from README
-   - Include `clientId`, `redirectUri`, and `provider: "authkit"` parameters
+   - Use `workos.userManagement.getAuthorizationUrl()` — this returns a URL string
+   - Parameters: `clientId`, `redirectUri`, `provider = "authkit"`
+   - The method uses a builder pattern: `.provider("authkit").redirectUri(uri).build()`
 
 2. **GET /auth/callback** — Exchange authorization code for user profile
    - Extract `code` query parameter
-   - Call `workos.sso.getProfileAndToken(code)` or equivalent
+   - Call `workos.userManagement.authenticateWithCode()` with the code and clientId
    - Store user session (use Spring's `HttpSession`)
    - Redirect to home page
 

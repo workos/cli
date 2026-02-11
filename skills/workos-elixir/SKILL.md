@@ -72,6 +72,27 @@ This ensures credentials are loaded from environment variables at runtime, not c
 
 ## Step 5: Create Auth Controller
 
+### Prerequisite: Verify `{AppName}Web` module exists
+
+The controller uses `use {AppName}Web, :controller`. Confirm `lib/{app}_web.ex` exists and defines the `:controller` macro. If it doesn't exist (minimal Phoenix projects may lack it), create it:
+
+```elixir
+defmodule {AppName}Web do
+  def controller do
+    quote do
+      use Phoenix.Controller, formats: [:html, :json]
+      import Plug.Conn
+    end
+  end
+
+  defmacro __using__(which) when is_atom(which) do
+    apply(__MODULE__, which, [])
+  end
+end
+```
+
+### Create controller
+
 Create `lib/{app}_web/controllers/auth_controller.ex`:
 
 ```elixir
