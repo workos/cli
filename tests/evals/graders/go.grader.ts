@@ -22,20 +22,31 @@ export class GoGrader implements Grader {
   }
 
   async grade(): Promise<GradeResult> {
-    const checks: GradeCheck[] = [];
+    const requiredChecks: GradeCheck[] = [];
+    const bonusChecks: GradeCheck[] = [];
 
-    // Check workos in go.mod
-    checks.push(...(await this.fileGrader.checkFileContains('go.mod', ['workos'])));
+    // Required: workos in go.mod
+    requiredChecks.push(...(await this.fileGrader.checkFileContains('go.mod', ['workos'])));
 
-    // Check go build ./... passes
-    checks.push(await this.buildGrader.checkCommand('go', ['build', './...'], 'go build ./...'));
+    // Required: go build ./... passes
+    requiredChecks.push(await this.buildGrader.checkCommand('go', ['build', './...'], 'go build ./...'));
 
-    // Check go vet ./... passes
-    checks.push(await this.buildGrader.checkCommand('go', ['vet', './...'], 'go vet ./...'));
+    // Required: go vet ./... passes
+    requiredChecks.push(await this.buildGrader.checkCommand('go', ['vet', './...'], 'go vet ./...'));
 
+    // Bonus: existing app routes preserved (proves agent read existing code)
+    bonusChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.go',
+        [/api\/health/],
+        'Existing app routes preserved',
+      ),
+    );
+
+    const allChecks = [...requiredChecks, ...bonusChecks];
     return {
-      passed: checks.every((c) => c.passed),
-      checks,
+      passed: requiredChecks.every((c) => c.passed),
+      checks: allChecks,
     };
   }
 }

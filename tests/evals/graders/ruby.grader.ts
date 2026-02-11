@@ -49,6 +49,15 @@ export class RubyGrader implements Grader {
       ),
     );
 
+    // Bonus: existing app routes preserved (proves agent read existing code)
+    bonusChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.rb',
+        [/api\/health/],
+        'Existing app routes preserved',
+      ),
+    );
+
     // Bonus: sealed session handling
     bonusChecks.push(
       await this.fileGrader.checkFileWithPattern(

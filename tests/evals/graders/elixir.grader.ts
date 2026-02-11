@@ -22,13 +22,14 @@ export class ElixirGrader implements Grader {
   }
 
   async grade(): Promise<GradeResult> {
-    const checks: GradeCheck[] = [];
+    const requiredChecks: GradeCheck[] = [];
+    const bonusChecks: GradeCheck[] = [];
 
-    // Check workos in mix.exs
-    checks.push(...(await this.fileGrader.checkFileContains('mix.exs', ['workos'])));
+    // Required: workos in mix.exs
+    requiredChecks.push(...(await this.fileGrader.checkFileContains('mix.exs', ['workos'])));
 
-    // Check auth controller exists
-    checks.push(
+    // Required: auth controller exists
+    requiredChecks.push(
       await this.fileGrader.checkFileWithPattern(
         'lib/**/*controller*.ex',
         [/auth|authorization|callback/i],
@@ -36,12 +37,22 @@ export class ElixirGrader implements Grader {
       ),
     );
 
-    // Check mix compile passes
-    checks.push(await this.buildGrader.checkCommand('mix', ['compile'], 'mix compile'));
+    // Required: mix compile passes
+    requiredChecks.push(await this.buildGrader.checkCommand('mix', ['compile'], 'mix compile'));
 
+    // Bonus: existing app routes preserved (proves agent read existing code)
+    bonusChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        'lib/**/*.ex',
+        [/api\/health/],
+        'Existing app routes preserved',
+      ),
+    );
+
+    const allChecks = [...requiredChecks, ...bonusChecks];
     return {
-      passed: checks.every((c) => c.passed),
-      checks,
+      passed: requiredChecks.every((c) => c.passed),
+      checks: allChecks,
     };
   }
 }

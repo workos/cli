@@ -1,0 +1,13 @@
+{
+  "name": "example/authkit-php",
+  "require": {
+    "php": ">=8.1",
+    "auth0/auth0-php": "^8.0",
+    "vlucas/phpdotenv": "^5.5"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "src/"
+    }
+  }
+}

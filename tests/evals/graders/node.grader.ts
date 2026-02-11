@@ -54,6 +54,15 @@ export class NodeGrader implements Grader {
       await this.buildGrader.checkCommand('node', ['--check', 'server.js'], 'node --check server.js'),
     );
 
+    // Bonus: existing app routes preserved (proves agent read existing code)
+    bonusChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.{js,ts}',
+        [/api\/health/],
+        'Existing app routes preserved',
+      ),
+    );
+
     // Bonus: sealed session handling (step 3 of quickstart)
     bonusChecks.push(
       await this.fileGrader.checkFileWithPattern(

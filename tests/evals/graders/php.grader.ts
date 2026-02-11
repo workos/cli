@@ -21,13 +21,14 @@ export class PhpGrader implements Grader {
   }
 
   async grade(): Promise<GradeResult> {
-    const checks: GradeCheck[] = [];
+    const requiredChecks: GradeCheck[] = [];
+    const bonusChecks: GradeCheck[] = [];
 
-    // Check workos in composer.json
-    checks.push(...(await this.fileGrader.checkFileContains('composer.json', ['workos'])));
+    // Required: workos in composer.json
+    requiredChecks.push(...(await this.fileGrader.checkFileContains('composer.json', ['workos'])));
 
-    // Check auth endpoint files exist
-    checks.push(
+    // Required: auth endpoint files exist
+    requiredChecks.push(
       await this.fileGrader.checkFileWithPattern(
         '**/*.php',
         ['workos'],
@@ -35,9 +36,19 @@ export class PhpGrader implements Grader {
       ),
     );
 
+    // Bonus: existing app routes preserved (proves agent read existing code)
+    bonusChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.php',
+        [/api\/health/],
+        'Existing app routes preserved',
+      ),
+    );
+
+    const allChecks = [...requiredChecks, ...bonusChecks];
     return {
-      passed: checks.every((c) => c.passed),
-      checks,
+      passed: requiredChecks.every((c) => c.passed),
+      checks: allChecks,
     };
   }
 }

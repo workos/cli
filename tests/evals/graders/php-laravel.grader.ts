@@ -25,17 +25,17 @@ export class PhpLaravelGrader implements Grader {
   }
 
   async grade(): Promise<GradeResult> {
-    const checks: GradeCheck[] = [];
+    const requiredChecks: GradeCheck[] = [];
+    const bonusChecks: GradeCheck[] = [];
 
-    // Check workos in composer.json
-    checks.push(...(await this.fileGrader.checkFileContains('composer.json', ['workos'])));
+    // Required: workos in composer.json
+    requiredChecks.push(...(await this.fileGrader.checkFileContains('composer.json', ['workos'])));
 
-    // Check auth integration exists somewhere in PHP files
-    // Agent may put it in controllers, routes, or a service provider
-    checks.push(await this.fileGrader.checkFileWithPattern('**/*.php', [/workos/i], 'WorkOS integration in PHP files'));
+    // Required: auth integration exists somewhere in PHP files
+    requiredChecks.push(await this.fileGrader.checkFileWithPattern('**/*.php', [/workos/i], 'WorkOS integration in PHP files'));
 
-    // Check routes contain auth paths
-    checks.push(
+    // Required: routes contain auth paths
+    requiredChecks.push(
       await this.fileGrader.checkFileWithPattern(
         'routes/**/*.php',
         [/auth|login|callback/],
@@ -43,9 +43,19 @@ export class PhpLaravelGrader implements Grader {
       ),
     );
 
+    // Bonus: existing app routes preserved (proves agent read existing code)
+    bonusChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '{routes/**/*.php,**/*.php}',
+        [/api\/health/],
+        'Existing app routes preserved',
+      ),
+    );
+
+    const allChecks = [...requiredChecks, ...bonusChecks];
     return {
-      passed: checks.every((c) => c.passed),
-      checks,
+      passed: requiredChecks.every((c) => c.passed),
+      checks: allChecks,
     };
   }
 }

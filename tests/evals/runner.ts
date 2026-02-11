@@ -65,17 +65,29 @@ const SCENARIOS: Scenario[] = [
   { framework: 'vanilla-js', state: 'partial-install', grader: VanillaGrader },
   { framework: 'vanilla-js', state: 'conflicting-auth', grader: VanillaGrader },
 
-  // New SDKs (1 state each — happy path)
+  // SvelteKit (1 state)
   { framework: 'sveltekit', state: 'example', grader: SvelteKitGrader },
+
+  // Backend SDKs (2 states each — happy path + auth0 migration)
   { framework: 'node', state: 'example', grader: NodeGrader },
+  { framework: 'node', state: 'example-auth0', grader: NodeGrader },
   { framework: 'python', state: 'example', grader: PythonGrader },
+  { framework: 'python', state: 'example-auth0', grader: PythonGrader },
   { framework: 'ruby', state: 'example', grader: RubyGrader },
+  { framework: 'ruby', state: 'example-auth0', grader: RubyGrader },
   { framework: 'go', state: 'example', grader: GoGrader },
+  { framework: 'go', state: 'example-auth0', grader: GoGrader },
   { framework: 'php', state: 'example', grader: PhpGrader },
+  { framework: 'php', state: 'example-auth0', grader: PhpGrader },
   { framework: 'php-laravel', state: 'example', grader: PhpLaravelGrader },
+  { framework: 'php-laravel', state: 'example-auth0', grader: PhpLaravelGrader },
   { framework: 'kotlin', state: 'example', grader: KotlinGrader },
-  { framework: 'dotnet', state: 'example', grader: DotnetGrader },
+  { framework: 'kotlin', state: 'example-auth0', grader: KotlinGrader },
   { framework: 'elixir', state: 'example', grader: ElixirGrader },
+  { framework: 'elixir', state: 'example-auth0', grader: ElixirGrader },
+
+  // .NET (broken — no runtime)
+  { framework: 'dotnet', state: 'example', grader: DotnetGrader },
 ];
 
 export interface ExtendedEvalOptions extends EvalOptions {
