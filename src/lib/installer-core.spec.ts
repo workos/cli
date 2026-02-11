@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { createActor, fromPromise } from 'xstate';
 import { installerMachine } from './installer-core.js';
 import { createInstallerEventEmitter } from './events.js';
-import { Integration } from './constants.js';
 import type { InstallerOptions } from '../utils/types.js';
 import type {
   DetectionOutput,
@@ -16,7 +15,7 @@ import type {
 const baseMockActors = {
   checkAuthentication: fromPromise<boolean, { options: InstallerOptions }>(async () => true),
   detectIntegration: fromPromise<DetectionOutput, { options: InstallerOptions }>(async () => ({
-    integration: Integration.nextjs,
+    integration: 'nextjs',
   })),
   checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => ({
     isClean: true,

@@ -20,7 +20,24 @@ export interface CliOptions {
   pruneKeep?: number;
 }
 
-const FRAMEWORKS = ['nextjs', 'react', 'react-router', 'tanstack-start', 'vanilla-js'];
+const FRAMEWORKS = [
+  'nextjs',
+  'react',
+  'react-router',
+  'tanstack-start',
+  'vanilla-js',
+  // New SDKs
+  'sveltekit',
+  'node',
+  'python',
+  'ruby',
+  'go',
+  'php',
+  'php-laravel',
+  'kotlin',
+  'dotnet',
+  'elixir',
+];
 const STATES = [
   'example',
   'example-auth0',

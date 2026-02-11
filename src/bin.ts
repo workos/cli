@@ -9,7 +9,7 @@ if (process.argv.includes('--local') || process.env.INSTALLER_DEV) {
 
 import { satisfies } from 'semver';
 import { red } from './utils/logging.js';
-import { getConfig } from './lib/settings.js';
+import { getConfig, getVersion } from './lib/settings.js';
 
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
@@ -124,7 +124,6 @@ const installerOptions = {
   },
   integration: {
     describe: 'Integration to set up',
-    choices: ['nextjs', 'react', 'tanstack-start', 'react-router', 'vanilla-js'] as const,
     type: 'string' as const,
   },
   'force-install': {
@@ -238,6 +237,6 @@ yargs(hideBin(process.argv))
   .strict()
   .help()
   .alias('help', 'h')
-  .version()
+  .version(getVersion())
   .alias('version', 'v')
   .wrap(process.stdout.isTTY && process.stdout.columns ? process.stdout.columns : 80).argv;

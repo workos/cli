@@ -1,8 +1,10 @@
 import path from 'node:path';
+import { writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Integration } from '../../src/lib/constants.js';
 import { loadCredentials } from './env-loader.js';
 import { writeEnvLocal } from '../../src/lib/env-writer.js';
+import { parseEnvFile } from '../../src/utils/env-parser.js';
 import { getConfig } from '../../src/lib/settings.js';
 import { LatencyTracker } from './latency-tracker.js';
 import type { ToolCall, LatencyMetrics } from './types.js';
@@ -21,13 +23,44 @@ export interface AgentExecutorOptions {
 }
 
 // Skill name mapping for each framework
-const SKILL_NAMES: Record<Integration, string> = {
-  [Integration.nextjs]: 'workos-authkit-nextjs',
-  [Integration.react]: 'workos-authkit-react',
-  [Integration.reactRouter]: 'workos-authkit-react-router',
-  [Integration.tanstackStart]: 'workos-authkit-tanstack-start',
-  [Integration.vanillaJs]: 'workos-authkit-vanilla-js',
+const SKILL_NAMES: Record<string, string> = {
+  nextjs: 'workos-authkit-nextjs',
+  react: 'workos-authkit-react',
+  'react-router': 'workos-authkit-react-router',
+  'tanstack-start': 'workos-authkit-tanstack-start',
+  'vanilla-js': 'workos-authkit-vanilla-js',
+  // New SDKs
+  sveltekit: 'workos-authkit-sveltekit',
+  node: 'workos-node',
+  python: 'workos-python',
+  ruby: 'workos-ruby',
+  go: 'workos-go',
+  php: 'workos-php',
+  'php-laravel': 'workos-php-laravel',
+  kotlin: 'workos-kotlin',
+  dotnet: 'workos-dotnet',
+  elixir: 'workos-elixir',
 };
+
+/** Frameworks that use package.json / .env.local */
+const JS_FRAMEWORKS = ['nextjs', 'react', 'react-router', 'tanstack-start', 'vanilla-js', 'sveltekit', 'node'];
+
+/**
+ * Write a .env file (for non-JS frameworks).
+ * Merges with existing .env if present.
+ */
+function writeEnvFile(workDir: string, envVars: Record<string, string>): void {
+  const envPath = join(workDir, '.env');
+  let existing: Record<string, string> = {};
+  if (existsSync(envPath)) {
+    existing = parseEnvFile(readFileSync(envPath, 'utf-8'));
+  }
+  const merged = { ...existing, ...envVars };
+  const content = Object.entries(merged)
+    .map(([key, value]) => `${key}=${value}`)
+    .join('\n');
+  writeFileSync(envPath, content + '\n');
+}
 
 export class AgentExecutor {
   private options: AgentExecutorOptions;
@@ -57,11 +90,17 @@ export class AgentExecutor {
     // Start latency tracking
     this.latencyTracker.start();
 
-    // Write .env.local with credentials (agent configures redirect URI per framework)
-    writeEnvLocal(this.workDir, {
+    // Write credentials to appropriate env file based on framework
+    const envVars = {
       WORKOS_API_KEY: this.credentials.workosApiKey,
       WORKOS_CLIENT_ID: this.credentials.workosClientId,
-    });
+    };
+
+    if (JS_FRAMEWORKS.includes(this.framework)) {
+      writeEnvLocal(this.workDir, envVars);
+    } else {
+      writeEnvFile(this.workDir, envVars);
+    }
 
     // Build prompt
     const skillName = SKILL_NAMES[integration];
@@ -191,14 +230,8 @@ Begin by invoking the ${skillName} skill.`;
     }
   }
 
-  private getIntegration(): Integration {
-    const map: Record<string, Integration> = {
-      nextjs: Integration.nextjs,
-      react: Integration.react,
-      'react-router': Integration.reactRouter,
-      'tanstack-start': Integration.tanstackStart,
-      'vanilla-js': Integration.vanillaJs,
-    };
-    return map[this.framework];
+  private getIntegration(): string {
+    // Integration is now a string type — framework name IS the integration name
+    return this.framework;
   }
 }

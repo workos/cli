@@ -91,9 +91,9 @@ describe('versioning', () => {
 
       const metadata = await captureVersionMetadata();
 
-      // Should have called git hash-object for each framework
-      expect(execFileNoThrow).toHaveBeenCalledTimes(5);
-      expect(Object.keys(metadata.skillVersions)).toHaveLength(5);
+      // Should have called git hash-object for each framework (15 total: 5 original + 10 new)
+      expect(execFileNoThrow).toHaveBeenCalledTimes(15);
+      expect(Object.keys(metadata.skillVersions)).toHaveLength(15);
     });
 
     it('handles mixed success/failure gracefully', async () => {

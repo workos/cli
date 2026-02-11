@@ -23,13 +23,13 @@ export const QUALITY_RUBRICS = {
   },
   errorHandling: {
     name: 'Error Handling',
-    description: 'Proper error handling and user-friendly error messages',
+    description: 'Appropriate error handling for the integration context',
     scale: {
-      1: 'Missing: no error handling, crashes on edge cases',
-      2: 'Basic: catches some errors but poor messages or recovery',
-      3: 'Acceptable: handles main errors, generic messages',
-      4: 'Good: comprehensive error handling, helpful messages',
-      5: 'Excellent: robust handling with actionable user-friendly messages',
+      1: 'Dangerous: silently swallows errors, loses user data, or crashes without recovery',
+      2: 'Poor: catches errors but ignores them, or shows raw stack traces to users',
+      3: 'Acceptable: delegates to SDK/framework defaults, no custom handling needed for basic integration',
+      4: 'Good: adds targeted error handling where it matters (callback failures, missing params)',
+      5: 'Excellent: comprehensive handling with user-friendly messages and graceful degradation',
     },
   },
   idiomatic: {

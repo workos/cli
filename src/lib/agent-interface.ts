@@ -85,8 +85,48 @@ type AgentRunConfig = {
 
 /**
  * Package managers that can be used to run commands.
+ * Includes JS and non-JS ecosystem package managers for multi-SDK support.
  */
-const PACKAGE_MANAGERS = ['npm', 'pnpm', 'yarn', 'bun', 'npx'];
+const PACKAGE_MANAGERS = [
+  // JavaScript
+  'npm',
+  'pnpm',
+  'yarn',
+  'bun',
+  'npx',
+  'pnpx',
+  'bunx',
+  // Python
+  'pip',
+  'pip3',
+  'poetry',
+  'uv',
+  'pipx',
+  'python',
+  'python3',
+  // Ruby
+  'gem',
+  'bundle',
+  'bundler',
+  'ruby',
+  // PHP
+  'composer',
+  'php',
+  // Go
+  'go',
+  // .NET
+  'dotnet',
+  'nuget',
+  // Elixir
+  'mix',
+  'hex',
+  'elixir',
+  // Kotlin/Java
+  'gradle',
+  'gradlew',
+  './gradlew',
+  'mvn',
+];
 
 /**
  * Safe scripts/commands that can be run with any package manager.
@@ -109,6 +149,31 @@ const SAFE_SCRIPTS = [
   // Linting/formatting script names (actual tools are in LINTING_TOOLS)
   'lint',
   'format',
+  // Common cross-language commands
+  'check',
+  'test',
+  'run',
+  'serve',
+  'dev',
+  'start',
+  'compile',
+  'vet',
+  // Python-specific
+  'manage.py',
+  'pytest',
+  // Ruby-specific
+  'rspec',
+  'rake',
+  'routes',
+  // PHP-specific
+  'artisan',
+  'phpunit',
+  // Elixir-specific
+  'deps.get',
+  'credo',
+  'dialyzer',
+  // .NET-specific
+  'restore',
 ];
 
 /**
