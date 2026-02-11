@@ -3,7 +3,8 @@ import { join } from 'node:path';
 import { getPackageDotJson } from '../../utils/clack-utils.js';
 import { hasPackageInstalled, getPackageVersion } from '../../utils/package-json.js';
 import { detectPort, getCallbackPath } from '../../lib/port-detection.js';
-import { Integration } from '../../lib/constants.js';
+import { KNOWN_INTEGRATIONS } from '../../lib/constants.js';
+import type { Integration } from '../../lib/constants.js';
 import type { DoctorOptions, FrameworkInfo } from '../types.js';
 
 interface FrameworkConfig {
@@ -15,17 +16,17 @@ interface FrameworkConfig {
 
 // Order matters - more specific frameworks should come first (array guarantees order)
 const FRAMEWORKS: FrameworkConfig[] = [
-  { package: 'next', name: 'Next.js', integration: Integration.nextjs, detectVariant: detectNextVariant },
+  { package: 'next', name: 'Next.js', integration: KNOWN_INTEGRATIONS.nextjs, detectVariant: detectNextVariant },
   {
     package: '@tanstack/react-start',
     name: 'TanStack Start',
-    integration: Integration.tanstackStart,
+    integration: KNOWN_INTEGRATIONS.tanstackStart,
     detectVariant: null,
   },
-  { package: '@tanstack/start', name: 'TanStack Start', integration: Integration.tanstackStart, detectVariant: null },
+  { package: '@tanstack/start', name: 'TanStack Start', integration: KNOWN_INTEGRATIONS.tanstackStart, detectVariant: null },
   { package: '@tanstack/react-router', name: 'TanStack Router', integration: null, detectVariant: null },
   { package: '@remix-run/node', name: 'Remix', integration: null, detectVariant: null },
-  { package: 'react-router-dom', name: 'React Router', integration: Integration.reactRouter, detectVariant: null },
+  { package: 'react-router-dom', name: 'React Router', integration: KNOWN_INTEGRATIONS.reactRouter, detectVariant: null },
   { package: 'express', name: 'Express', integration: null, detectVariant: null },
 ];
 
