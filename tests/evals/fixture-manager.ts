@@ -44,7 +44,11 @@ export class FixtureManager {
 
   async cleanup(): Promise<void> {
     if (this.tempDir) {
-      await rm(this.tempDir, { recursive: true, force: true });
+      try {
+        await rm(this.tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 500 });
+      } catch {
+        // Best-effort cleanup — don't let temp dir issues fail scenarios
+      }
       this.tempDir = null;
     }
   }
