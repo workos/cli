@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0](https://github.com/workos/cli/compare/v0.4.5...v0.5.0) (2026-02-11)
+
+
+### Features
+
+* add `workos doctor` command for diagnosing integration issues ([#50](https://github.com/workos/cli/issues/50)) ([8c3e093](https://github.com/workos/cli/commit/8c3e09301d358ab6844fa0a55e06bcaf9276b050))
+* multi-SDK expansion with auto-discovery registry ([#49](https://github.com/workos/cli/issues/49)) ([0316fe8](https://github.com/workos/cli/commit/0316fe87177e12072c3f78dce7d9ac8dfdc20319))
+
 ## [0.4.5](https://github.com/workos/cli/compare/v0.4.4...v0.4.5) (2026-02-04)
 
 
