@@ -18,6 +18,7 @@ export class CLIAdapter implements InstallerAdapter {
   private spinner: ReturnType<typeof clack.spinner> | null = null;
   private isStarted = false;
   private progress = new ProgressTracker();
+  private productName: string;
 
   // Store bound handlers for cleanup
   private handlers = new Map<string, (...args: unknown[]) => void>();
@@ -36,6 +37,7 @@ export class CLIAdapter implements InstallerAdapter {
     this.emitter = config.emitter;
     this.sendEvent = config.sendEvent;
     this.debug = config.debug ?? false;
+    this.productName = config.productName ?? 'AuthKit';
   }
 
   /**
@@ -68,7 +70,7 @@ export class CLIAdapter implements InstallerAdapter {
       console.log(chalk.cyan(art));
       console.log();
     } else {
-      clack.intro('Welcome to the WorkOS AuthKit installer');
+      clack.intro(`Welcome to the WorkOS ${this.productName} installer`);
     }
 
     // Handle Ctrl+C gracefully
@@ -388,16 +390,28 @@ export class CLIAdapter implements InstallerAdapter {
     }
   };
 
-  private handleComplete = ({ success, summary }: InstallerEvents['complete']): void => {
+  private handleComplete = ({ success, summary, product }: InstallerEvents['complete']): void => {
     this.stopAgentUpdates();
     this.stopSpinner(success ? 'Done' : 'Failed');
 
     if (success) {
-      clack.log.success('WorkOS AuthKit installed!');
-      clack.log.message('Next steps:');
-      clack.log.message('  • Start dev server to test authentication');
-      clack.log.message('  • Visit WorkOS Dashboard to manage users');
-      clack.outro(chalk.dim('Docs: https://workos.com/docs/authkit'));
+      if (product === 'widgets') {
+        clack.log.success('WorkOS Widgets installed!');
+        if (summary) {
+          clack.log.message(summary);
+        } else {
+          clack.log.message('Next steps:');
+          clack.log.message('  • Start your dev server to test the user management page');
+          clack.log.message('  • Visit WorkOS Dashboard to manage widgets and settings');
+        }
+        clack.outro(chalk.dim('Docs: https://workos.com/docs/widgets/quick-start'));
+      } else {
+        clack.log.success('WorkOS AuthKit installed!');
+        clack.log.message('Next steps:');
+        clack.log.message('  • Start dev server to test authentication');
+        clack.log.message('  • Visit WorkOS Dashboard to manage users');
+        clack.outro(chalk.dim('Docs: https://workos.com/docs/authkit'));
+      }
     } else {
       clack.log.error('Installation failed');
       if (summary) {

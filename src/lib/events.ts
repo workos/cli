@@ -11,7 +11,7 @@ export interface InstallerEvents {
   'confirm:response': { id: string; confirmed: boolean };
   'credentials:request': { requiresApiKey: boolean };
   'credentials:response': { apiKey: string; clientId: string };
-  complete: { success: boolean; summary?: string };
+  complete: { success: boolean; summary?: string; product?: 'authkit' | 'widgets' };
   error: { message: string; stack?: string };
 
   'state:enter': { state: string };

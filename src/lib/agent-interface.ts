@@ -176,6 +176,17 @@ const SAFE_SCRIPTS = [
   'restore',
 ];
 
+function isAllowedShadcnCommand(command: string): boolean {
+  const normalized = command.trim();
+  const allowedPrefixes = [
+    'npx shadcn@latest add',
+    'pnpm dlx shadcn@latest add',
+    'yarn dlx shadcn@latest add',
+    'bunx shadcn@latest add',
+  ];
+  return allowedPrefixes.some((prefix) => normalized.startsWith(prefix));
+}
+
 /**
  * Dangerous shell operators that could allow command injection.
  * Note: We handle `2>&1` and `| tail/head` separately as safe patterns.
@@ -239,6 +250,12 @@ export function installerCanUseTool(
       behavior: 'deny',
       message: `Bash command not allowed. Shell operators like ; \` $ ( ) are not permitted.`,
     };
+  }
+
+  if (isAllowedShadcnCommand(command)) {
+    logInfo(`Allowing shadcn CLI command: ${command}`);
+    debug(`Allowing shadcn CLI command: ${command}`);
+    return { behavior: 'allow', updatedInput: input };
   }
 
   // Normalize: remove safe stderr redirection (2>&1, 2>&2, etc.)

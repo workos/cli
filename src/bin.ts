@@ -139,6 +139,44 @@ const installerOptions = {
   },
 };
 
+const widgetsInstallerOptions = {
+  direct: installerOptions.direct,
+  debug: installerOptions.debug,
+  local: installerOptions.local,
+  ci: installerOptions.ci,
+  'skip-auth': installerOptions['skip-auth'],
+  'api-key': installerOptions['api-key'],
+  'client-id': installerOptions['client-id'],
+  inspect: installerOptions.inspect,
+  'no-validate': installerOptions['no-validate'],
+  'install-dir': installerOptions['install-dir'],
+  dashboard: installerOptions.dashboard,
+  widget: {
+    describe: 'Widget to install (default: user-management)',
+    default: 'user-management',
+    type: 'string' as const,
+  },
+  'widgets-entry': {
+    describe: 'Create component, page, or both (default: both)',
+    choices: ['page', 'component', 'both'] as const,
+    default: 'both',
+    type: 'string' as const,
+  },
+  'widgets-framework': {
+    describe: 'Framework to use',
+    choices: ['nextjs', 'react-router', 'tanstack-start', 'tanstack-router', 'vite'] as const,
+    type: 'string' as const,
+  },
+  'widgets-path': {
+    describe: 'Path for the widget component file',
+    type: 'string' as const,
+  },
+  'widgets-page-path': {
+    describe: 'Path for the widget page/route file',
+    type: 'string' as const,
+  },
+};
+
 // Check for updates (blocks up to 500ms)
 await checkForUpdates();
 
@@ -230,6 +268,15 @@ yargs(hideBin(process.argv))
     withAuth(async (argv) => {
       const { handleInstall } = await import('./commands/install.js');
       await handleInstall(argv);
+    }),
+  )
+  .command(
+    'install widgets',
+    'Install WorkOS Widgets into your project',
+    (yargs) => yargs.options(widgetsInstallerOptions),
+    withAuth(async (argv) => {
+      const { handleInstallWidgets } = await import('./commands/install-widgets.js');
+      await handleInstallWidgets(argv);
     }),
   )
   .command(

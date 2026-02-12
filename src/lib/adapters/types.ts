@@ -15,6 +15,9 @@ export interface AdapterConfig {
 
   /** Enable verbose debug output (stack traces, etc.) */
   debug?: boolean;
+
+  /** Optional product name override for messaging */
+  productName?: string;
 }
 
 /**
