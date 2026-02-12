@@ -7,6 +7,7 @@ import type { WidgetsInstallerOptions } from '../widgets/run-widgets.js';
 
 interface InstallWidgetsArgs {
   debug?: boolean;
+  insecureStorage?: boolean;
   local?: boolean;
   ci?: boolean;
   skipAuth?: boolean;

@@ -142,6 +142,7 @@ const installerOptions = {
 const widgetsInstallerOptions = {
   direct: installerOptions.direct,
   debug: installerOptions.debug,
+  ...insecureStorageOption,
   local: installerOptions.local,
   ci: installerOptions.ci,
   'skip-auth': installerOptions['skip-auth'],
