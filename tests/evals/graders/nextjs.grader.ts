@@ -53,7 +53,8 @@ export class NextjsGrader implements Grader {
       checks.push({
         name: 'No middleware/proxy conflict',
         passed: false,
-        message: 'Both middleware.ts and proxy.ts exist — Next.js 16 throws an error when both are present. Delete middleware.ts and use only proxy.ts.',
+        message:
+          'Both middleware.ts and proxy.ts exist — Next.js 16 throws an error when both are present. Delete middleware.ts and use only proxy.ts.',
       });
     }
 

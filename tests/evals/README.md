@@ -30,13 +30,13 @@ Use `--no-fail` to run without exit code validation.
 
 **Scenarios: 24 total (5 frameworks × 4-5 states)**
 
-| State                    | Description                     |
-| ------------------------ | ------------------------------- |
-| `example`                | Clean project, no existing auth |
-| `example-auth0`          | Project with Auth0 to migrate   |
-| `partial-install`        | Half-completed AuthKit attempt  |
-| `typescript-strict`      | Strict TypeScript configuration |
-| `conflicting-middleware` | Existing middleware to merge    |
+| State                    | Description                                                        |
+| ------------------------ | ------------------------------------------------------------------ |
+| `example`                | Clean project, no existing auth                                    |
+| `example-auth0`          | Project with Auth0 to migrate                                      |
+| `partial-install`        | Half-completed AuthKit attempt                                     |
+| `typescript-strict`      | Strict TypeScript configuration                                    |
+| `conflicting-middleware` | Existing middleware to merge                                       |
 | `existing-middleware`    | Next.js 16+ with existing middleware.ts (must not create proxy.ts) |
 
 | Framework        | Skill                         | Key Checks                                     |

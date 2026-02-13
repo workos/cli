@@ -600,8 +600,10 @@ async function validateNextjsMiddlewarePlacement(projectDir: string, issues: Val
   const expectedDir = appInSrc ? 'src/' : '';
 
   const correctPaths = [
-    `${expectedDir}middleware.ts`, `${expectedDir}middleware.js`,
-    `${expectedDir}proxy.ts`, `${expectedDir}proxy.js`,
+    `${expectedDir}middleware.ts`,
+    `${expectedDir}middleware.js`,
+    `${expectedDir}proxy.ts`,
+    `${expectedDir}proxy.js`,
   ];
 
   const hasCorrectPlacement = correctPaths.some((p) => existsSync(join(projectDir, p)));
@@ -611,8 +613,14 @@ async function validateNextjsMiddlewarePlacement(projectDir: string, issues: Val
 
   // Check for middleware/proxy at the wrong level
   const allPossible = [
-    'middleware.ts', 'middleware.js', 'src/middleware.ts', 'src/middleware.js',
-    'proxy.ts', 'proxy.js', 'src/proxy.ts', 'src/proxy.js',
+    'middleware.ts',
+    'middleware.js',
+    'src/middleware.ts',
+    'src/middleware.js',
+    'proxy.ts',
+    'proxy.js',
+    'src/proxy.ts',
+    'src/proxy.js',
   ];
   const wrongLevel = allPossible.find((p) => existsSync(join(projectDir, p)) && !correctPaths.includes(p));
 

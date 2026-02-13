@@ -47,6 +47,7 @@ ls src/app/ 2>/dev/null && echo "APP_DIR=src" || (ls app/ 2>/dev/null && echo "A
 ```
 
 Set `APP_DIR` for all subsequent steps. All middleware/proxy files MUST be created in `APP_DIR`:
+
 - If `APP_DIR=src` → create files in `src/` (e.g., `src/proxy.ts`)
 - If `APP_DIR=root` → create files at project root (e.g., `proxy.ts`)
 
