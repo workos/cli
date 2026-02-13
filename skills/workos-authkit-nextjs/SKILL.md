@@ -35,21 +35,39 @@ Detect package manager, install SDK package from README.
 
 **Verify:** SDK package exists in node_modules before continuing.
 
-## Step 4: Version Detection (Decision Tree)
+## Step 4: Locate the app/ directory (BLOCKING)
+
+**STOP. Do this before creating any files.**
+
+Determine where the `app/` directory lives:
+
+```bash
+# Check for src/app/ first, then root app/
+ls src/app/ 2>/dev/null && echo "APP_DIR=src" || (ls app/ 2>/dev/null && echo "APP_DIR=root")
+```
+
+Set `APP_DIR` for all subsequent steps. All middleware/proxy files MUST be created in `APP_DIR`:
+
+- If `APP_DIR=src` → create files in `src/` (e.g., `src/proxy.ts`)
+- If `APP_DIR=root` → create files at project root (e.g., `proxy.ts`)
+
+Next.js only discovers middleware/proxy files in the parent directory of `app/`. A file at the wrong level is **silently ignored** — no error, just doesn't run.
+
+## Step 5: Version Detection (Decision Tree)
 
 Read Next.js version from `package.json`:
 
 ```
 Next.js version?
   |
-  +-- 16+ --> Create proxy.ts at project root
+  +-- 16+ --> Create {APP_DIR}/proxy.ts
   |
-  +-- 15   --> Create middleware.ts (cookies() is async - handlers must await)
+  +-- 15   --> Create {APP_DIR}/middleware.ts (cookies() is async)
   |
-  +-- 13-14 --> Create middleware.ts (cookies() is sync)
+  +-- 13-14 --> Create {APP_DIR}/middleware.ts (cookies() is sync)
 ```
 
-**Critical:** File MUST be at project root (or `src/` if using src directory). Never in `app/`.
+**Next.js 16+ proxy.ts:** `proxy.ts` is the preferred convention. `middleware.ts` still works but shows a deprecation warning. Next.js 16 throws **error E900** if both files exist at the same level.
 
 **Next.js 15+ async note:** All route handlers and middleware accessing cookies must be async and properly await cookie operations. This is a breaking change from Next.js 14.
 
@@ -95,14 +113,14 @@ export default async function middleware(request: NextRequest) {
 
 **Critical:** Always return via `handleAuthkitHeaders()` to ensure `withAuth()` works in pages.
 
-## Step 5: Create Callback Route
+## Step 6: Create Callback Route
 
 Parse `NEXT_PUBLIC_WORKOS_REDIRECT_URI` to determine route path:
 
 ```
-URI path          --> Route location
-/auth/callback    --> app/auth/callback/route.ts
-/callback         --> app/callback/route.ts
+URI path          --> Route location (use APP_DIR from Step 4)
+/auth/callback    --> {APP_DIR}/app/auth/callback/route.ts
+/callback         --> {APP_DIR}/app/callback/route.ts
 ```
 
 Use `handleAuth()` from SDK. Do not write custom OAuth logic.
@@ -118,7 +136,7 @@ export const GET = handleAuth();
 
 Check README for exact usage. If build fails with "cookies outside request scope", the handler is likely missing async/await.
 
-## Step 6: Provider Setup (REQUIRED)
+## Step 7: Provider Setup (REQUIRED)
 
 **CRITICAL:** You MUST wrap the app in `AuthKitProvider` in `app/layout.tsx`.
 
@@ -147,7 +165,7 @@ Check README for exact import path - it may be a subpath export like `@workos-in
 
 **Do NOT skip this step** even if using server-side auth patterns elsewhere.
 
-## Step 7: UI Integration
+## Step 8: UI Integration
 
 Add auth UI to `app/page.tsx` using SDK functions. See README for `getUser`, `getSignInUrl`, `signOut` usage.
 
@@ -190,6 +208,18 @@ This error causes OAuth codes to expire ("invalid_grant"), so fix the handler fi
 
 - Check: File at project root or `src/`, not inside `app/`
 - Check: Filename matches Next.js version (proxy.ts for 16+, middleware.ts for 13-15)
+
+### "Both middleware file and proxy file are detected" (Next.js 16+)
+
+- Next.js 16 throws error E900 if both `middleware.ts` and `proxy.ts` exist
+- Delete `middleware.ts` and use only `proxy.ts`
+- If `middleware.ts` has custom logic, migrate it into `proxy.ts`
+
+### "withAuth route not covered by middleware" but middleware/proxy file exists
+
+- **Most common cause:** File is at the wrong level. Next.js only discovers middleware/proxy files in the parent directory of `app/`. For `src/app/` projects, the file must be in `src/`, not at the project root.
+- Check: Is `app/` at `src/app/`? Then middleware/proxy must be at `src/middleware.ts` or `src/proxy.ts`
+- Check: Matcher config must include the route path being accessed
 
 ### "Cannot use getUser in client component"
 
