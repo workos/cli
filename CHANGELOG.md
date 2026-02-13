@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2](https://github.com/workos/cli/compare/v0.5.1...v0.5.2) (2026-02-13)
+
+
+### Bug Fixes
+
+* use npm publish for OIDC trusted publishing support ([40fbbf9](https://github.com/workos/cli/commit/40fbbf995d75a3a34e39dcee714153dd2b84511e))
+
 ## [0.5.1](https://github.com/workos/cli/compare/v0.5.0...v0.5.1) (2026-02-13)
 
 
