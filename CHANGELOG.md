@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1](https://github.com/workos/cli/compare/v0.5.0...v0.5.1) (2026-02-13)
+
+
+### Bug Fixes
+
+* prefer existing middleware.ts over proxy.ts for Next.js 16+ ([#52](https://github.com/workos/cli/issues/52)) ([83f3ef0](https://github.com/workos/cli/commit/83f3ef0b2c060647475bd073dc1ed99ec14e48e8))
+* remove duplicate release trigger causing publish race condition ([b0935d8](https://github.com/workos/cli/commit/b0935d87460628028b71c29584e7b023db894da8))
+
 ## [0.5.0](https://github.com/workos/cli/compare/v0.4.5...v0.5.0) (2026-02-11)
 
 
