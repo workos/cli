@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3](https://github.com/workos/cli/compare/v0.5.2...v0.5.3) (2026-02-13)
+
+
+### Bug Fixes
+
+* remove registry-url from setup-node to unblock OIDC auth ([75a94bb](https://github.com/workos/cli/commit/75a94bb575c338fa4714f81103cff775e615cd05))
+* trigger release.yml directly via release event for OIDC match ([b7e737d](https://github.com/workos/cli/commit/b7e737d9fb4df9924951203bc2c6939e673a6ddb))
+
 ## [0.5.2](https://github.com/workos/cli/compare/v0.5.1...v0.5.2) (2026-02-13)
 
 
