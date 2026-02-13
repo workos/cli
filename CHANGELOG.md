@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.4](https://github.com/workos/cli/compare/v0.5.3...v0.5.4) (2026-02-13)
+
+
+### Bug Fixes
+
+* restore workflow_call and remove registry-url for OIDC ([1025e57](https://github.com/workos/cli/commit/1025e57bdd4f647d3a7fb054eae11b3fc18016db))
+
 ## [0.5.3](https://github.com/workos/cli/compare/v0.5.2...v0.5.3) (2026-02-13)
 
 
