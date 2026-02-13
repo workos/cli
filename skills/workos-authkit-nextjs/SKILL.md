@@ -40,19 +40,21 @@ Detect package manager, install SDK package from README.
 Read Next.js version from `package.json`:
 
 ```
+1. Locate the app/ directory (could be at root or src/app/)
+2. Place the middleware/proxy file at the SAME level as app/
+
 Next.js version?
   |
-  +-- 16+ --> If middleware.ts already exists, use middleware.ts
-  |           Otherwise, create proxy.ts at project root
+  +-- 16+ --> Create proxy.ts alongside app/
   |
-  +-- 15   --> Create middleware.ts (cookies() is async - handlers must await)
+  +-- 15   --> Create middleware.ts alongside app/ (cookies() is async)
   |
-  +-- 13-14 --> Create middleware.ts (cookies() is sync)
+  +-- 13-14 --> Create middleware.ts alongside app/ (cookies() is sync)
 ```
 
-**Critical:** File MUST be at project root (or `src/` if using src directory). Never in `app/`.
+**Critical — file placement:** The file MUST be placed at the same level as the `app/` directory. If `app/` is at `src/app/`, place the file in `src/` (e.g., `src/proxy.ts`). If `app/` is at the project root, place the file at the root. Next.js only watches for middleware/proxy files in the parent directory of `app/` — a file at the wrong level will be silently ignored.
 
-**Next.js 16+ middleware precedence:** If both `middleware.ts` and `proxy.ts` exist, Next.js uses `middleware.ts` and ignores `proxy.ts`. Always check for an existing `middleware.ts` first and use it if present.
+**Next.js 16+ proxy.ts:** `proxy.ts` is the preferred convention. `middleware.ts` still works but shows a deprecation warning. Next.js 16 throws **error E900** if both files exist at the same level.
 
 **Next.js 15+ async note:** All route handlers and middleware accessing cookies must be async and properly await cookie operations. This is a breaking change from Next.js 14.
 
@@ -192,11 +194,19 @@ This error causes OAuth codes to expire ("invalid_grant"), so fix the handler fi
 ### "middleware.ts not found"
 
 - Check: File at project root or `src/`, not inside `app/`
-- Check: Filename matches Next.js version (proxy.ts for 16+ when no existing middleware.ts, middleware.ts for 13-15)
+- Check: Filename matches Next.js version (proxy.ts for 16+, middleware.ts for 13-15)
 
-### "withAuth route not covered by middleware" with proxy.ts present
+### "Both middleware file and proxy file are detected" (Next.js 16+)
 
-- Check: If both `middleware.ts` and `proxy.ts` exist, Next.js uses `middleware.ts` and ignores `proxy.ts`. Move AuthKit config into `middleware.ts` and delete `proxy.ts`.
+- Next.js 16 throws error E900 if both `middleware.ts` and `proxy.ts` exist
+- Delete `middleware.ts` and use only `proxy.ts`
+- If `middleware.ts` has custom logic, migrate it into `proxy.ts`
+
+### "withAuth route not covered by middleware" but middleware/proxy file exists
+
+- **Most common cause:** File is at the wrong level. Next.js only discovers middleware/proxy files in the parent directory of `app/`. For `src/app/` projects, the file must be in `src/`, not at the project root.
+- Check: Is `app/` at `src/app/`? Then middleware/proxy must be at `src/middleware.ts` or `src/proxy.ts`
+- Check: Matcher config must include the route path being accessed
 
 ### "Cannot use getUser in client component"
 

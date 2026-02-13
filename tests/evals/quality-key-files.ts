@@ -6,8 +6,9 @@
  */
 export const QUALITY_KEY_FILES: Record<string, string[]> = {
   nextjs: [
-    // Middleware - auth protection layer
+    // Middleware - auth protection layer (proxy.ts for Next.js 16+ without existing middleware)
     'middleware.ts',
+    'proxy.ts',
     // Callback route - OAuth handling
     'app/**/callback/**/route.ts',
     'app/auth/callback/route.ts',

@@ -22,32 +22,39 @@ export class NextjsGrader implements Grader {
     );
     checks.push(callbackCheck);
 
-    // Check middleware or proxy exists (Next.js 16+ may use proxy.ts if no middleware.ts existed)
-    const middlewareExists = await this.fileGrader.checkFileExists('middleware.ts');
-    const proxyExists = await this.fileGrader.checkFileExists('proxy.ts');
-    const middlewareFile = middlewareExists.passed ? 'middleware.ts' : 'proxy.ts';
+    // Check middleware or proxy exists at root or src/ (Next.js 16+ should use proxy.ts, 13-15 use middleware.ts)
+    const middlewareRoot = await this.fileGrader.checkFileExists('middleware.ts');
+    const middlewareSrc = await this.fileGrader.checkFileExists('src/middleware.ts');
+    const proxyRoot = await this.fileGrader.checkFileExists('proxy.ts');
+    const proxySrc = await this.fileGrader.checkFileExists('src/proxy.ts');
+
+    const middlewareExists = middlewareRoot.passed || middlewareSrc.passed;
+    const proxyExists = proxyRoot.passed || proxySrc.passed;
+
+    // Determine which file to check for authkit content
+    let middlewareFile: string;
+    if (proxyRoot.passed) middlewareFile = 'proxy.ts';
+    else if (proxySrc.passed) middlewareFile = 'src/proxy.ts';
+    else if (middlewareSrc.passed) middlewareFile = 'src/middleware.ts';
+    else middlewareFile = 'middleware.ts';
 
     checks.push({
       name: 'AuthKit middleware/proxy file exists',
-      passed: middlewareExists.passed || proxyExists.passed,
-      message: middlewareExists.passed
-        ? 'middleware.ts exists'
-        : proxyExists.passed
-          ? 'proxy.ts exists'
+      passed: middlewareExists || proxyExists,
+      message: middlewareExists
+        ? `middleware.ts exists${middlewareSrc.passed ? ' (src/)' : ''}`
+        : proxyExists
+          ? `proxy.ts exists${proxySrc.passed ? ' (src/)' : ''}`
           : 'Neither middleware.ts nor proxy.ts found',
     });
 
-    // If both exist, warn — middleware.ts takes precedence and proxy.ts is ignored
-    if (middlewareExists.passed && proxyExists.passed) {
-      const proxyHasAuthkit = await this.fileGrader.checkFileContains('proxy.ts', ['@workos-inc/authkit-nextjs']);
-      const middlewareHasAuthkit = await this.fileGrader.checkFileContains('middleware.ts', ['@workos-inc/authkit-nextjs']);
-      if (proxyHasAuthkit.some((c) => c.passed) && !middlewareHasAuthkit.some((c) => c.passed)) {
-        checks.push({
-          name: 'AuthKit middleware conflict',
-          passed: false,
-          message: 'AuthKit is in proxy.ts but middleware.ts also exists — Next.js ignores proxy.ts when middleware.ts is present',
-        });
-      }
+    // Next.js 16 throws error E900 if both middleware.ts and proxy.ts exist
+    if (middlewareExists && proxyExists) {
+      checks.push({
+        name: 'No middleware/proxy conflict',
+        passed: false,
+        message: 'Both middleware.ts and proxy.ts exist — Next.js 16 throws an error when both are present. Delete middleware.ts and use only proxy.ts.',
+      });
     }
 
     // Check middleware/proxy imports authkit SDK

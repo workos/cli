@@ -13,7 +13,7 @@
       "mustContain": ["handleAuth", "@workos-inc/authkit-nextjs"]
     },
     {
-      "path": "{middleware,proxy}.{ts,js}",
+      "path": "{,src/}{middleware,proxy}.{ts,js}",
       "mustContainAny": ["authkitMiddleware", "authkit"]
     },
     {

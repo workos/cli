@@ -31,12 +31,13 @@ interface Scenario {
 }
 
 const SCENARIOS: Scenario[] = [
-  // Next.js (5 states)
+  // Next.js (6 states)
   { framework: 'nextjs', state: 'example', grader: NextjsGrader },
   { framework: 'nextjs', state: 'example-auth0', grader: NextjsGrader },
   { framework: 'nextjs', state: 'partial-install', grader: NextjsGrader },
   { framework: 'nextjs', state: 'typescript-strict', grader: NextjsGrader },
   { framework: 'nextjs', state: 'conflicting-middleware', grader: NextjsGrader },
+  { framework: 'nextjs', state: 'existing-middleware', grader: NextjsGrader },
 
   // React SPA (5 states)
   { framework: 'react', state: 'example', grader: ReactGrader },

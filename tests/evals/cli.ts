@@ -44,6 +44,7 @@ const STATES = [
   'partial-install',
   'typescript-strict',
   'conflicting-middleware',
+  'existing-middleware',
   'conflicting-auth',
 ];
 

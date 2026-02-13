@@ -37,6 +37,7 @@ Use `--no-fail` to run without exit code validation.
 | `partial-install`        | Half-completed AuthKit attempt  |
 | `typescript-strict`      | Strict TypeScript configuration |
 | `conflicting-middleware` | Existing middleware to merge    |
+| `existing-middleware`    | Next.js 16+ with existing middleware.ts (must not create proxy.ts) |
 
 | Framework        | Skill                         | Key Checks                                     |
 | ---------------- | ----------------------------- | ---------------------------------------------- |
