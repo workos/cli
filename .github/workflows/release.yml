@@ -35,4 +35,4 @@ jobs:
         run: |
           unset NODE_AUTH_TOKEN
           NPM_TAG="latest"
-          pnpm publish --tag "$NPM_TAG" --access public --no-git-checks --provenance
+          npm publish --tag "$NPM_TAG" --access public --provenance
