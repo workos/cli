@@ -22,16 +22,41 @@ export class NextjsGrader implements Grader {
     );
     checks.push(callbackCheck);
 
-    // Check middleware exists
-    checks.push(await this.fileGrader.checkFileExists('middleware.ts'));
+    // Check middleware or proxy exists (Next.js 16+ may use proxy.ts if no middleware.ts existed)
+    const middlewareExists = await this.fileGrader.checkFileExists('middleware.ts');
+    const proxyExists = await this.fileGrader.checkFileExists('proxy.ts');
+    const middlewareFile = middlewareExists.passed ? 'middleware.ts' : 'proxy.ts';
 
-    // Check middleware imports authkit SDK
-    const sdkImportChecks = await this.fileGrader.checkFileContains('middleware.ts', ['@workos-inc/authkit-nextjs']);
+    checks.push({
+      name: 'AuthKit middleware/proxy file exists',
+      passed: middlewareExists.passed || proxyExists.passed,
+      message: middlewareExists.passed
+        ? 'middleware.ts exists'
+        : proxyExists.passed
+          ? 'proxy.ts exists'
+          : 'Neither middleware.ts nor proxy.ts found',
+    });
+
+    // If both exist, warn — middleware.ts takes precedence and proxy.ts is ignored
+    if (middlewareExists.passed && proxyExists.passed) {
+      const proxyHasAuthkit = await this.fileGrader.checkFileContains('proxy.ts', ['@workos-inc/authkit-nextjs']);
+      const middlewareHasAuthkit = await this.fileGrader.checkFileContains('middleware.ts', ['@workos-inc/authkit-nextjs']);
+      if (proxyHasAuthkit.some((c) => c.passed) && !middlewareHasAuthkit.some((c) => c.passed)) {
+        checks.push({
+          name: 'AuthKit middleware conflict',
+          passed: false,
+          message: 'AuthKit is in proxy.ts but middleware.ts also exists — Next.js ignores proxy.ts when middleware.ts is present',
+        });
+      }
+    }
+
+    // Check middleware/proxy imports authkit SDK
+    const sdkImportChecks = await this.fileGrader.checkFileContains(middlewareFile, ['@workos-inc/authkit-nextjs']);
     checks.push(...sdkImportChecks);
 
     // Check for authkit integration: authkitMiddleware OR (authkit + handleAuthkitHeaders)
-    const middlewareChecks = await this.fileGrader.checkFileContains('middleware.ts', ['authkitMiddleware']);
-    const composableChecks = await this.fileGrader.checkFileContains('middleware.ts', [
+    const middlewareChecks = await this.fileGrader.checkFileContains(middlewareFile, ['authkitMiddleware']);
+    const composableChecks = await this.fileGrader.checkFileContains(middlewareFile, [
       'authkit(',
       'handleAuthkitHeaders',
     ]);

@@ -42,7 +42,8 @@ Read Next.js version from `package.json`:
 ```
 Next.js version?
   |
-  +-- 16+ --> Create proxy.ts at project root
+  +-- 16+ --> If middleware.ts already exists, use middleware.ts
+  |           Otherwise, create proxy.ts at project root
   |
   +-- 15   --> Create middleware.ts (cookies() is async - handlers must await)
   |
@@ -50,6 +51,8 @@ Next.js version?
 ```
 
 **Critical:** File MUST be at project root (or `src/` if using src directory). Never in `app/`.
+
+**Next.js 16+ middleware precedence:** If both `middleware.ts` and `proxy.ts` exist, Next.js uses `middleware.ts` and ignores `proxy.ts`. Always check for an existing `middleware.ts` first and use it if present.
 
 **Next.js 15+ async note:** All route handlers and middleware accessing cookies must be async and properly await cookie operations. This is a breaking change from Next.js 14.
 
@@ -189,7 +192,11 @@ This error causes OAuth codes to expire ("invalid_grant"), so fix the handler fi
 ### "middleware.ts not found"
 
 - Check: File at project root or `src/`, not inside `app/`
-- Check: Filename matches Next.js version (proxy.ts for 16+, middleware.ts for 13-15)
+- Check: Filename matches Next.js version (proxy.ts for 16+ when no existing middleware.ts, middleware.ts for 13-15)
+
+### "withAuth route not covered by middleware" with proxy.ts present
+
+- Check: If both `middleware.ts` and `proxy.ts` exist, Next.js uses `middleware.ts` and ignores `proxy.ts`. Move AuthKit config into `middleware.ts` and delete `proxy.ts`.
 
 ### "Cannot use getUser in client component"
 
