@@ -83,9 +83,9 @@ export class NextjsGrader implements Grader {
     };
     checks.push(authkitCheck);
 
-    // Check AuthKitProvider in layout or extracted providers file
+    // Check AuthKitProvider in layout or extracted providers file (app/ may be in src/)
     const authKitProviderCheck = await this.fileGrader.checkFileWithPattern(
-      'app/**/*.tsx',
+      '{app,src/app}/**/*.tsx',
       ['AuthKitProvider'],
       'AuthKitProvider in app',
     );
