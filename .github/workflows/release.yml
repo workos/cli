@@ -3,8 +3,6 @@ name: Release
 on:
   workflow_dispatch:
   workflow_call:
-  release:
-    types: [published]
 
 jobs:
   publish:
@@ -36,5 +34,5 @@ jobs:
       - name: Publish
         run: |
           unset NODE_AUTH_TOKEN
-          NPM_TAG="${{ github.event.release.prerelease && 'next' || 'latest' }}"
+          NPM_TAG="latest"
           pnpm publish --tag "$NPM_TAG" --access public --no-git-checks --provenance
