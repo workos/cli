@@ -35,24 +35,36 @@ Detect package manager, install SDK package from README.
 
 **Verify:** SDK package exists in node_modules before continuing.
 
-## Step 4: Version Detection (Decision Tree)
+## Step 4: Locate the app/ directory (BLOCKING)
+
+**STOP. Do this before creating any files.**
+
+Determine where the `app/` directory lives:
+
+```bash
+# Check for src/app/ first, then root app/
+ls src/app/ 2>/dev/null && echo "APP_DIR=src" || (ls app/ 2>/dev/null && echo "APP_DIR=root")
+```
+
+Set `APP_DIR` for all subsequent steps. All middleware/proxy files MUST be created in `APP_DIR`:
+- If `APP_DIR=src` → create files in `src/` (e.g., `src/proxy.ts`)
+- If `APP_DIR=root` → create files at project root (e.g., `proxy.ts`)
+
+Next.js only discovers middleware/proxy files in the parent directory of `app/`. A file at the wrong level is **silently ignored** — no error, just doesn't run.
+
+## Step 5: Version Detection (Decision Tree)
 
 Read Next.js version from `package.json`:
 
 ```
-1. Locate the app/ directory (could be at root or src/app/)
-2. Place the middleware/proxy file at the SAME level as app/
-
 Next.js version?
   |
-  +-- 16+ --> Create proxy.ts alongside app/
+  +-- 16+ --> Create {APP_DIR}/proxy.ts
   |
-  +-- 15   --> Create middleware.ts alongside app/ (cookies() is async)
+  +-- 15   --> Create {APP_DIR}/middleware.ts (cookies() is async)
   |
-  +-- 13-14 --> Create middleware.ts alongside app/ (cookies() is sync)
+  +-- 13-14 --> Create {APP_DIR}/middleware.ts (cookies() is sync)
 ```
-
-**Critical — file placement:** The file MUST be placed at the same level as the `app/` directory. If `app/` is at `src/app/`, place the file in `src/` (e.g., `src/proxy.ts`). If `app/` is at the project root, place the file at the root. Next.js only watches for middleware/proxy files in the parent directory of `app/` — a file at the wrong level will be silently ignored.
 
 **Next.js 16+ proxy.ts:** `proxy.ts` is the preferred convention. `middleware.ts` still works but shows a deprecation warning. Next.js 16 throws **error E900** if both files exist at the same level.
 
@@ -100,14 +112,14 @@ export default async function middleware(request: NextRequest) {
 
 **Critical:** Always return via `handleAuthkitHeaders()` to ensure `withAuth()` works in pages.
 
-## Step 5: Create Callback Route
+## Step 6: Create Callback Route
 
 Parse `NEXT_PUBLIC_WORKOS_REDIRECT_URI` to determine route path:
 
 ```
-URI path          --> Route location
-/auth/callback    --> app/auth/callback/route.ts
-/callback         --> app/callback/route.ts
+URI path          --> Route location (use APP_DIR from Step 4)
+/auth/callback    --> {APP_DIR}/app/auth/callback/route.ts
+/callback         --> {APP_DIR}/app/callback/route.ts
 ```
 
 Use `handleAuth()` from SDK. Do not write custom OAuth logic.
@@ -123,7 +135,7 @@ export const GET = handleAuth();
 
 Check README for exact usage. If build fails with "cookies outside request scope", the handler is likely missing async/await.
 
-## Step 6: Provider Setup (REQUIRED)
+## Step 7: Provider Setup (REQUIRED)
 
 **CRITICAL:** You MUST wrap the app in `AuthKitProvider` in `app/layout.tsx`.
 
@@ -152,7 +164,7 @@ Check README for exact import path - it may be a subpath export like `@workos-in
 
 **Do NOT skip this step** even if using server-side auth patterns elsewhere.
 
-## Step 7: UI Integration
+## Step 8: UI Integration
 
 Add auth UI to `app/page.tsx` using SDK functions. See README for `getUser`, `getSignInUrl`, `signOut` usage.
 
