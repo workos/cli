@@ -15,7 +15,7 @@ function makeResult(passed: boolean, attempts: number = 1, correctionAttempts: n
 describe('success-criteria', () => {
   describe('DEFAULT_CRITERIA', () => {
     it('has expected default thresholds', () => {
-      expect(DEFAULT_CRITERIA.firstAttemptPassRate).toBe(0.3);
+      expect(DEFAULT_CRITERIA.firstAttemptPassRate).toBe(0.2);
       expect(DEFAULT_CRITERIA.withCorrectionPassRate).toBe(0.9);
       expect(DEFAULT_CRITERIA.withRetryPassRate).toBe(0.95);
     });
@@ -44,14 +44,12 @@ describe('success-criteria', () => {
     });
 
     it('returns passed=false when first-attempt rate below threshold', () => {
-      // 10 results, only 2 passed on first attempt (20% < 30% threshold)
+      // 10 results, only 1 passed on first attempt (10% < 20% threshold)
       const results: EvalResult[] = [
-        ...Array(2)
+        makeResult(true, 1, 0),
+        ...Array(8)
           .fill(null)
-          .map(() => makeResult(true, 1)),
-        ...Array(7)
-          .fill(null)
-          .map(() => makeResult(true, 2)),
+          .map(() => makeResult(true, 1, 1)),
         makeResult(true, 2),
       ];
 
