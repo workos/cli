@@ -634,7 +634,11 @@ export async function runAgent(
         resolveCurrentTurn();
       }
       // Let callers observe messages (e.g., for latency tracking in evals)
-      try { onMessage?.(message); } catch { /* observer errors are non-critical */ }
+      try {
+        onMessage?.(message);
+      } catch {
+        /* observer errors are non-critical */
+      }
     }
 
     const durationMs = Date.now() - startTime;

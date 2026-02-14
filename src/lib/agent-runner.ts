@@ -120,11 +120,12 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
   };
 
   // Build retry config
-  const retryConfig: RetryConfig | undefined =
-    options.noValidate ? undefined : {
-      maxRetries: options.maxRetries ?? 2,
-      validateAndFormat,
-    };
+  const retryConfig: RetryConfig | undefined = options.noValidate
+    ? undefined
+    : {
+        maxRetries: options.maxRetries ?? 2,
+        validateAndFormat,
+      };
 
   // Run agent with retry support — agent gets correction prompts on validation failure
   const agentResult = await runAgent(

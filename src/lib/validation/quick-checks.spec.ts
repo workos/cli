@@ -52,9 +52,7 @@ describe('runQuickChecks', () => {
   });
 
   it('returns passed=true when both typecheck and build succeed', async () => {
-    mockSpawn
-      .mockImplementationOnce(() => createMockProcess(0))
-      .mockImplementationOnce(() => createMockProcess(0));
+    mockSpawn.mockImplementationOnce(() => createMockProcess(0)).mockImplementationOnce(() => createMockProcess(0));
 
     const result = await runQuickChecks(testDir);
 
@@ -80,9 +78,7 @@ describe('runQuickChecks', () => {
   });
 
   it('runs build after typecheck passes', async () => {
-    mockSpawn
-      .mockImplementationOnce(() => createMockProcess(0))
-      .mockImplementationOnce(() => createMockProcess(0));
+    mockSpawn.mockImplementationOnce(() => createMockProcess(0)).mockImplementationOnce(() => createMockProcess(0));
 
     const result = await runQuickChecks(testDir);
 
@@ -103,7 +99,8 @@ describe('runQuickChecks', () => {
   });
 
   it('generates agentRetryPrompt when typecheck fails', async () => {
-    const tsError = "src/middleware.ts(42,5): error TS2345: Argument of type 'string | undefined' is not assignable to type 'string'.";
+    const tsError =
+      "src/middleware.ts(42,5): error TS2345: Argument of type 'string | undefined' is not assignable to type 'string'.";
     mockSpawn.mockImplementationOnce(() => createMockProcess(1, '', tsError));
 
     const result = await runQuickChecks(testDir);
@@ -114,9 +111,7 @@ describe('runQuickChecks', () => {
   });
 
   it('tracks total duration', async () => {
-    mockSpawn
-      .mockImplementationOnce(() => createMockProcess(0))
-      .mockImplementationOnce(() => createMockProcess(0));
+    mockSpawn.mockImplementationOnce(() => createMockProcess(0)).mockImplementationOnce(() => createMockProcess(0));
 
     const result = await runQuickChecks(testDir);
 
@@ -141,10 +136,7 @@ describe('runQuickChecks', () => {
 
   it('skips build when no build system detected (e.g., Python project)', async () => {
     // Rewrite testDir without a build script or any build system markers
-    writeFileSync(
-      join(testDir, 'package.json'),
-      JSON.stringify({ scripts: { typecheck: 'tsc --noEmit' } }),
-    );
+    writeFileSync(join(testDir, 'package.json'), JSON.stringify({ scripts: { typecheck: 'tsc --noEmit' } }));
 
     mockSpawn.mockImplementationOnce(() => createMockProcess(0)); // typecheck pass only
 
@@ -216,8 +208,7 @@ describe('runTypecheckValidation', () => {
   });
 
   it('handles pretty-printed tsc errors (colon-separated format)', async () => {
-    const tsError =
-      "src/app.tsx:10:3 - error TS2322: Type 'number' is not assignable to type 'string'.";
+    const tsError = "src/app.tsx:10:3 - error TS2322: Type 'number' is not assignable to type 'string'.";
     mockSpawn.mockImplementationOnce(() => createMockProcess(1, tsError, ''));
 
     const result = await runTypecheckValidation(testDir);
@@ -227,9 +218,7 @@ describe('runTypecheckValidation', () => {
   });
 
   it('provides fallback message when errors cannot be parsed', async () => {
-    mockSpawn.mockImplementationOnce(() =>
-      createMockProcess(1, '', 'Some unknown error format that we cannot parse'),
-    );
+    mockSpawn.mockImplementationOnce(() => createMockProcess(1, '', 'Some unknown error format that we cannot parse'));
 
     const result = await runTypecheckValidation(testDir);
 
@@ -243,35 +232,21 @@ describe('runTypecheckValidation', () => {
 
     await runTypecheckValidation(testDir);
 
-    expect(mockSpawn).toHaveBeenCalledWith(
-      'pnpm',
-      ['typecheck'],
-      expect.objectContaining({ cwd: testDir }),
-    );
+    expect(mockSpawn).toHaveBeenCalledWith('pnpm', ['typecheck'], expect.objectContaining({ cwd: testDir }));
   });
 
   it('falls back to npx tsc --noEmit when no typecheck script but tsconfig exists', async () => {
-    writeFileSync(
-      join(testDir, 'package.json'),
-      JSON.stringify({ scripts: { build: 'next build' } }),
-    );
+    writeFileSync(join(testDir, 'package.json'), JSON.stringify({ scripts: { build: 'next build' } }));
     writeFileSync(join(testDir, 'tsconfig.json'), '{}');
     mockSpawn.mockImplementationOnce(() => createMockProcess(0));
 
     await runTypecheckValidation(testDir);
 
-    expect(mockSpawn).toHaveBeenCalledWith(
-      'npx',
-      ['tsc', '--noEmit'],
-      expect.objectContaining({ cwd: testDir }),
-    );
+    expect(mockSpawn).toHaveBeenCalledWith('npx', ['tsc', '--noEmit'], expect.objectContaining({ cwd: testDir }));
   });
 
   it('skips typecheck when no tsconfig.json and no typecheck script', async () => {
-    writeFileSync(
-      join(testDir, 'package.json'),
-      JSON.stringify({ scripts: { build: 'go build' } }),
-    );
+    writeFileSync(join(testDir, 'package.json'), JSON.stringify({ scripts: { build: 'go build' } }));
     // No tsconfig.json — not a TypeScript project
 
     const result = await runTypecheckValidation(testDir);
@@ -282,19 +257,12 @@ describe('runTypecheckValidation', () => {
   });
 
   it('detects type-check script (hyphenated variant)', async () => {
-    writeFileSync(
-      join(testDir, 'package.json'),
-      JSON.stringify({ scripts: { 'type-check': 'tsc --noEmit' } }),
-    );
+    writeFileSync(join(testDir, 'package.json'), JSON.stringify({ scripts: { 'type-check': 'tsc --noEmit' } }));
     mockSpawn.mockImplementationOnce(() => createMockProcess(0));
 
     await runTypecheckValidation(testDir);
 
-    expect(mockSpawn).toHaveBeenCalledWith(
-      'pnpm',
-      ['type-check'],
-      expect.objectContaining({ cwd: testDir }),
-    );
+    expect(mockSpawn).toHaveBeenCalledWith('pnpm', ['type-check'], expect.objectContaining({ cwd: testDir }));
   });
 
   it('tracks duration', async () => {

@@ -70,7 +70,11 @@ export function validateResults(results: EvalResult[], criteria: SuccessCriteria
   return {
     passed: failures.length === 0,
     criteria,
-    actual: { firstAttemptPassRate: firstAttemptRate, withCorrectionPassRate: withCorrectionRate, withRetryPassRate: withRetryRate },
+    actual: {
+      firstAttemptPassRate: firstAttemptRate,
+      withCorrectionPassRate: withCorrectionRate,
+      withRetryPassRate: withRetryRate,
+    },
     failures,
   };
 }

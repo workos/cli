@@ -13,7 +13,11 @@ const { mockRunAgent, mockConfig, mockCredentials } = vi.hoisted(() => ({
     proxy: { refreshThresholdMs: 300000 },
     nodeVersion: '20',
     logging: { debugMode: false },
-    documentation: { workosDocsUrl: 'https://workos.com/docs', dashboardUrl: 'https://dashboard.workos.com', issuesUrl: 'https://github.com' },
+    documentation: {
+      workosDocsUrl: 'https://workos.com/docs',
+      dashboardUrl: 'https://dashboard.workos.com',
+      issuesUrl: 'https://github.com',
+    },
     frameworks: {},
     legacy: { oauthPort: 3000 },
     branding: { showAsciiArt: false, asciiArt: '', compactAsciiArt: '', useCompact: false },

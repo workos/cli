@@ -19,10 +19,7 @@ export async function runQuickChecks(
   const results: QuickCheckResult[] = [];
 
   // Step 1: Typecheck
-  const typecheckResult = await runTypecheckValidation(
-    projectDir,
-    options?.timeoutMs ?? DEFAULT_TYPECHECK_TIMEOUT_MS,
-  );
+  const typecheckResult = await runTypecheckValidation(projectDir, options?.timeoutMs ?? DEFAULT_TYPECHECK_TIMEOUT_MS);
   results.push(typecheckResult);
 
   // Step 2: Build — only if typecheck passed and build not skipped
@@ -129,12 +126,7 @@ async function runBuildQuickCheck(projectDir: string, timeoutMs: number): Promis
     };
   }
 
-  const { exitCode, stdout, stderr } = await spawnCommand(
-    buildCmd.command,
-    buildCmd.args,
-    projectDir,
-    timeoutMs,
-  );
+  const { exitCode, stdout, stderr } = await spawnCommand(buildCmd.command, buildCmd.args, projectDir, timeoutMs);
 
   if (exitCode === 0) {
     return {
@@ -148,19 +140,22 @@ async function runBuildQuickCheck(projectDir: string, timeoutMs: number): Promis
 
   const output = stdout + stderr;
   const errors = parseBuildErrors(output);
-  const issues: ValidationIssue[] = errors.length > 0
-    ? errors.map((e) => ({
-        type: 'file' as const,
-        severity: 'error' as const,
-        message: `Build error: ${e}`,
-        hint: 'Fix the error and run build again',
-      }))
-    : [{
-        type: 'file' as const,
-        severity: 'error' as const,
-        message: 'Build failed',
-        hint: `Run \`${buildCmd.command} ${buildCmd.args.join(' ')}\` to see full output`,
-      }];
+  const issues: ValidationIssue[] =
+    errors.length > 0
+      ? errors.map((e) => ({
+          type: 'file' as const,
+          severity: 'error' as const,
+          message: `Build error: ${e}`,
+          hint: 'Fix the error and run build again',
+        }))
+      : [
+          {
+            type: 'file' as const,
+            severity: 'error' as const,
+            message: 'Build failed',
+            hint: `Run \`${buildCmd.command} ${buildCmd.args.join(' ')}\` to see full output`,
+          },
+        ];
 
   return {
     passed: false,

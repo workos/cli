@@ -30,12 +30,12 @@ export async function validateInstallation(
   }
 
   // Run validations
-  issues.push(...await validatePackages(rules, projectDir));
-  issues.push(...await validateEnvVars(rules, projectDir));
-  issues.push(...await validateFiles(rules, projectDir));
+  issues.push(...(await validatePackages(rules, projectDir)));
+  issues.push(...(await validateEnvVars(rules, projectDir)));
+  issues.push(...(await validateFiles(rules, projectDir)));
 
   // Run framework-specific cross-validations
-  issues.push(...await validateFrameworkSpecific(framework, projectDir));
+  issues.push(...(await validateFrameworkSpecific(framework, projectDir)));
 
   // Run build validation if enabled
   if (options.runBuild !== false) {
@@ -220,10 +220,7 @@ export async function validateFiles(rules: ValidationRules, projectDir: string):
 /**
  * Framework-specific cross-validations that require reading multiple sources.
  */
-export async function validateFrameworkSpecific(
-  framework: string,
-  projectDir: string,
-): Promise<ValidationIssue[]> {
+export async function validateFrameworkSpecific(framework: string, projectDir: string): Promise<ValidationIssue[]> {
   const issues: ValidationIssue[] = [];
 
   // Universal cross-validations

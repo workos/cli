@@ -10,7 +10,11 @@ const { mockQuery, mockConfig } = vi.hoisted(() => ({
     proxy: { refreshThresholdMs: 300000 },
     nodeVersion: '20',
     logging: { debugMode: false },
-    documentation: { workosDocsUrl: 'https://workos.com/docs', dashboardUrl: 'https://dashboard.workos.com', issuesUrl: 'https://github.com' },
+    documentation: {
+      workosDocsUrl: 'https://workos.com/docs',
+      dashboardUrl: 'https://dashboard.workos.com',
+      issuesUrl: 'https://github.com',
+    },
     frameworks: {},
     legacy: { oauthPort: 3000 },
     branding: { showAsciiArt: false, asciiArt: '', compactAsciiArt: '', useCompact: false },
@@ -149,37 +153,23 @@ describe('runAgent retry loop', () => {
   });
 
   it('returns retryCount=0 when no retryConfig provided', async () => {
-    mockQuery.mockImplementation(
-      createMockSDKResponse([{ text: 'Done!' }]),
-    );
+    mockQuery.mockImplementation(createMockSDKResponse([{ text: 'Done!' }]));
 
-    const result = await runAgent(
-      makeAgentConfig(),
-      'Test prompt',
-      makeOptions(),
-      undefined,
-      emitter,
-    );
+    const result = await runAgent(makeAgentConfig(), 'Test prompt', makeOptions(), undefined, emitter);
 
     expect(result.error).toBeUndefined();
     expect(result.retryCount).toBe(0);
   });
 
   it('returns retryCount=0 when validation passes first try', async () => {
-    mockQuery.mockImplementation(
-      createMockSDKResponse([{ text: 'Done!' }]),
-    );
+    mockQuery.mockImplementation(createMockSDKResponse([{ text: 'Done!' }]));
 
     const validateAndFormat = vi.fn().mockResolvedValue(null); // passes
 
-    const result = await runAgent(
-      makeAgentConfig(),
-      'Test prompt',
-      makeOptions(),
-      undefined,
-      emitter,
-      { maxRetries: 2, validateAndFormat },
-    );
+    const result = await runAgent(makeAgentConfig(), 'Test prompt', makeOptions(), undefined, emitter, {
+      maxRetries: 2,
+      validateAndFormat,
+    });
 
     expect(result.error).toBeUndefined();
     expect(result.retryCount).toBe(0);
@@ -199,25 +189,17 @@ describe('runAgent retry loop', () => {
 
   it('retries once when validation fails then passes', async () => {
     // Two turns: initial + one retry
-    mockQuery.mockImplementation(
-      createMockSDKResponse([
-        { text: 'Initial attempt' },
-        { text: 'Fixed it!' },
-      ]),
-    );
+    mockQuery.mockImplementation(createMockSDKResponse([{ text: 'Initial attempt' }, { text: 'Fixed it!' }]));
 
-    const validateAndFormat = vi.fn()
+    const validateAndFormat = vi
+      .fn()
       .mockResolvedValueOnce('Type error in src/foo.ts') // fail first
       .mockResolvedValueOnce(null); // pass second
 
-    const result = await runAgent(
-      makeAgentConfig(),
-      'Test prompt',
-      makeOptions(),
-      undefined,
-      emitter,
-      { maxRetries: 2, validateAndFormat },
-    );
+    const result = await runAgent(makeAgentConfig(), 'Test prompt', makeOptions(), undefined, emitter, {
+      maxRetries: 2,
+      validateAndFormat,
+    });
 
     expect(result.error).toBeUndefined();
     expect(result.retryCount).toBe(1);
@@ -232,23 +214,15 @@ describe('runAgent retry loop', () => {
   it('caps at maxRetries when validation always fails', async () => {
     // Three turns: initial + 2 retries
     mockQuery.mockImplementation(
-      createMockSDKResponse([
-        { text: 'Attempt 1' },
-        { text: 'Attempt 2' },
-        { text: 'Attempt 3' },
-      ]),
+      createMockSDKResponse([{ text: 'Attempt 1' }, { text: 'Attempt 2' }, { text: 'Attempt 3' }]),
     );
 
     const validateAndFormat = vi.fn().mockResolvedValue('Still broken');
 
-    const result = await runAgent(
-      makeAgentConfig(),
-      'Test prompt',
-      makeOptions(),
-      undefined,
-      emitter,
-      { maxRetries: 2, validateAndFormat },
-    );
+    const result = await runAgent(makeAgentConfig(), 'Test prompt', makeOptions(), undefined, emitter, {
+      maxRetries: 2,
+      validateAndFormat,
+    });
 
     expect(result.error).toBeUndefined();
     expect(result.retryCount).toBe(2);
@@ -261,20 +235,14 @@ describe('runAgent retry loop', () => {
   });
 
   it('preserves existing behavior with maxRetries=0', async () => {
-    mockQuery.mockImplementation(
-      createMockSDKResponse([{ text: 'Done!' }]),
-    );
+    mockQuery.mockImplementation(createMockSDKResponse([{ text: 'Done!' }]));
 
     const validateAndFormat = vi.fn().mockResolvedValue('Error');
 
-    const result = await runAgent(
-      makeAgentConfig(),
-      'Test prompt',
-      makeOptions(),
-      undefined,
-      emitter,
-      { maxRetries: 0, validateAndFormat },
-    );
+    const result = await runAgent(makeAgentConfig(), 'Test prompt', makeOptions(), undefined, emitter, {
+      maxRetries: 0,
+      validateAndFormat,
+    });
 
     expect(result.error).toBeUndefined();
     expect(result.retryCount).toBe(0);
@@ -283,20 +251,14 @@ describe('runAgent retry loop', () => {
   });
 
   it('treats validateAndFormat errors as passed', async () => {
-    mockQuery.mockImplementation(
-      createMockSDKResponse([{ text: 'Done!' }]),
-    );
+    mockQuery.mockImplementation(createMockSDKResponse([{ text: 'Done!' }]));
 
     const validateAndFormat = vi.fn().mockRejectedValue(new Error('Validation crashed'));
 
-    const result = await runAgent(
-      makeAgentConfig(),
-      'Test prompt',
-      makeOptions(),
-      undefined,
-      emitter,
-      { maxRetries: 2, validateAndFormat },
-    );
+    const result = await runAgent(makeAgentConfig(), 'Test prompt', makeOptions(), undefined, emitter, {
+      maxRetries: 2,
+      validateAndFormat,
+    });
 
     expect(result.error).toBeUndefined();
     expect(result.retryCount).toBe(0);
