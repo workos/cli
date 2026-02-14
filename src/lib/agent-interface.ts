@@ -625,7 +625,11 @@ export async function runAgent(
       if (message.type === 'result') {
         resolveCurrentTurn();
       }
-      try { onMessage?.(message); } catch { /* non-critical */ }
+      try {
+        onMessage?.(message);
+      } catch {
+        /* non-critical */
+      }
     }
 
     const durationMs = Date.now() - startTime;
