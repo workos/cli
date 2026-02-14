@@ -87,8 +87,8 @@ const SCENARIOS: Scenario[] = [
   { framework: 'elixir', state: 'example', grader: ElixirGrader },
   { framework: 'elixir', state: 'example-auth0', grader: ElixirGrader },
 
-  // .NET (broken — no runtime)
-  { framework: 'dotnet', state: 'example', grader: DotnetGrader },
+  // .NET (disabled — SDK is broken and no runtime available on most machines)
+  // { framework: 'dotnet', state: 'example', grader: DotnetGrader },
 ];
 
 export interface ExtendedEvalOptions extends EvalOptions {
