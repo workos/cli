@@ -18,6 +18,7 @@ interface ParallelRunnerOptions {
   keep?: boolean;
   keepOnFail?: boolean;
   concurrency?: number; // Override auto-detection
+  noCorrection?: boolean;
 }
 
 export class ParallelRunner {
@@ -125,7 +126,9 @@ export class ParallelRunner {
           verbose: this.options.verbose,
           scenarioName,
         });
-        const agentResult = await executor.run();
+        const agentResult = await executor.run(
+          this.options.noCorrection ? { enabled: false, maxRetries: 0 } : undefined,
+        );
         lastToolCalls = agentResult.toolCalls;
 
         const grader = new scenario.grader(workDir);
@@ -143,6 +146,8 @@ export class ParallelRunner {
           attempts: attempt,
           latencyMetrics: agentResult.latencyMetrics,
           keyFiles,
+          correctionAttempts: agentResult.correctionAttempts,
+          selfCorrected: agentResult.selfCorrected,
         };
 
         if (gradeResult.passed) {

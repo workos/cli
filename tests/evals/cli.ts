@@ -12,6 +12,7 @@ export interface CliOptions {
   sequential: boolean;
   noDashboard: boolean;
   noFail: boolean;
+  noCorrection: boolean;
   quality: boolean;
   command?: 'run' | 'history' | 'compare' | 'diff' | 'prune' | 'logs' | 'show';
   compareIds?: [string, string];
@@ -61,6 +62,7 @@ export function parseArgs(args: string[]): CliOptions {
     sequential: false,
     noDashboard: false,
     noFail: false,
+    noCorrection: false,
     quality: false,
   };
 
@@ -144,6 +146,8 @@ export function parseArgs(args: string[]): CliOptions {
       options.noDashboard = true;
     } else if (arg === '--no-fail') {
       options.noFail = true;
+    } else if (arg === '--no-correction') {
+      options.noCorrection = true;
     } else if (arg === '--quality' || arg === '-q') {
       options.quality = true;
     }
@@ -192,6 +196,8 @@ Options:
   --no-dashboard      Disable live dashboard, use sequential logging
 
   --no-fail           Exit 0 even if success criteria thresholds not met
+
+  --no-correction     Disable within-session agent self-correction retries
 
   --quality, -q       Enable LLM-based quality grading (adds cost/time)
 

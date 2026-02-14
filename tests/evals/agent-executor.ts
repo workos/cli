@@ -7,6 +7,7 @@ import { writeEnvLocal } from '../../src/lib/env-writer.js';
 import { parseEnvFile } from '../../src/utils/env-parser.js';
 import { getConfig } from '../../src/lib/settings.js';
 import { LatencyTracker } from './latency-tracker.js';
+import { runQuickChecks } from '../../src/lib/validation/quick-checks.js';
 import type { ToolCall, LatencyMetrics } from './types.js';
 
 export interface AgentResult {
@@ -15,6 +16,17 @@ export interface AgentResult {
   toolCalls: ToolCall[];
   error?: string;
   latencyMetrics?: LatencyMetrics;
+  /** Number of within-session correction attempts */
+  correctionAttempts: number;
+  /** Whether the agent self-corrected after an initial failure */
+  selfCorrected: boolean;
+}
+
+export interface AgentRetryConfig {
+  /** Enable within-session correction. Default: true */
+  enabled: boolean;
+  /** Max correction attempts. Default: 2 */
+  maxRetries: number;
 }
 
 export interface AgentExecutorOptions {
@@ -77,7 +89,8 @@ export class AgentExecutor {
     this.latencyTracker = new LatencyTracker();
   }
 
-  async run(): Promise<AgentResult> {
+  async run(retryConfig?: AgentRetryConfig): Promise<AgentResult> {
+    const config = retryConfig ?? { enabled: true, maxRetries: 2 };
     const integration = this.getIntegration();
     const toolCalls: ToolCall[] = [];
     const collectedOutput: string[] = [];
@@ -106,6 +119,22 @@ export class AgentExecutor {
     const skillName = SKILL_NAMES[integration];
     const prompt = this.buildPrompt(skillName);
 
+    // Retry loop coordination
+    let correctionAttempts = 0;
+    const maxRetries = config.enabled ? config.maxRetries : 0;
+    const workDir = this.workDir;
+
+    // Turn completion signals
+    let resolveCurrentTurn!: () => void;
+    let currentTurnDone!: Promise<void>;
+
+    function resetTurnSignal() {
+      currentTurnDone = new Promise<void>((resolve) => {
+        resolveCurrentTurn = resolve;
+      });
+    }
+    resetTurnSignal();
+
     // Initialize and run agent
     try {
       const { query } = await import('@anthropic-ai/claude-agent-sdk');
@@ -126,8 +155,51 @@ export class AgentExecutor {
       const __dirname = path.dirname(__filename);
       const pluginPath = path.join(__dirname, '../..');
 
+      // Retry-aware prompt stream (same pattern as production agent-interface.ts)
+      const createPromptStream = async function* () {
+        yield {
+          type: 'user',
+          session_id: '',
+          message: { role: 'user', content: prompt },
+          parent_tool_use_id: null,
+        };
+
+        if (maxRetries > 0) {
+          while (correctionAttempts < maxRetries) {
+            await currentTurnDone;
+
+            let validationPrompt: string | null;
+            try {
+              const quickResult = await runQuickChecks(workDir);
+              validationPrompt = quickResult.passed ? null : quickResult.agentRetryPrompt;
+            } catch {
+              validationPrompt = null; // treat validation errors as passed
+            }
+
+            if (validationPrompt === null) break;
+
+            correctionAttempts++;
+            if (label && process.env.EVAL_VERBOSE) {
+              console.log(`${label} Correction attempt ${correctionAttempts}/${maxRetries}`);
+            }
+
+            resetTurnSignal();
+
+            yield {
+              type: 'user',
+              session_id: '',
+              message: { role: 'user', content: validationPrompt },
+              parent_tool_use_id: null,
+            };
+          }
+        }
+
+        // Keep generator alive until final result
+        await currentTurnDone;
+      };
+
       const response = query({
-        prompt: prompt,
+        prompt: createPromptStream(),
         options: {
           model: getConfig().model,
           cwd: this.workDir,
@@ -145,9 +217,12 @@ export class AgentExecutor {
         },
       });
 
-      // Process message stream
+      // Process message stream — signal turn completion on result
       for await (const message of response) {
         this.handleMessage(message, toolCalls, collectedOutput, label);
+        if (message.type === 'result') {
+          resolveCurrentTurn();
+        }
       }
 
       const latencyMetrics = this.latencyTracker.finish();
@@ -156,6 +231,8 @@ export class AgentExecutor {
         output: collectedOutput.join('\n'),
         toolCalls,
         latencyMetrics,
+        correctionAttempts,
+        selfCorrected: correctionAttempts > 0,
       };
     } catch (error) {
       const latencyMetrics = this.latencyTracker.finish();
@@ -165,6 +242,8 @@ export class AgentExecutor {
         toolCalls,
         latencyMetrics,
         error: error instanceof Error ? error.message : String(error),
+        correctionAttempts,
+        selfCorrected: false,
       };
     }
   }

@@ -60,6 +60,7 @@ async function main() {
           noDashboard: options.noDashboard,
           debug: options.debug,
           noFail: options.noFail,
+          noCorrection: options.noCorrection,
           quality: options.quality,
         });
 

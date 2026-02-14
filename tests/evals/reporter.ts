@@ -59,7 +59,8 @@ export function printMatrix(results: EvalResult[]): void {
   const passed = results.filter((r) => r.passed).length;
   const total = results.length;
   const rate = ((passed / total) * 100).toFixed(1);
-  console.log(`\nResults: ${passed}/${total} passed (${rate}%)`);
+  const selfCorrected = results.filter((r) => r.selfCorrected).length;
+  console.log(`\nResults: ${passed}/${total} passed (${rate}%)${selfCorrected > 0 ? `, ${selfCorrected} self-corrected` : ''}`);
 
   if (passed < total) {
     console.log('\nFailed scenarios:');
