@@ -15,7 +15,7 @@ function makeResult(passed: boolean, attempts: number = 1, correctionAttempts: n
 describe('success-criteria', () => {
   describe('DEFAULT_CRITERIA', () => {
     it('has expected default thresholds', () => {
-      expect(DEFAULT_CRITERIA.firstAttemptPassRate).toBe(0.5);
+      expect(DEFAULT_CRITERIA.firstAttemptPassRate).toBe(0.8);
       expect(DEFAULT_CRITERIA.withCorrectionPassRate).toBe(0.9);
       expect(DEFAULT_CRITERIA.withRetryPassRate).toBe(0.95);
     });
@@ -23,14 +23,12 @@ describe('success-criteria', () => {
 
   describe('validateResults', () => {
     it('returns passed=true when all criteria met', () => {
-      // 10 results: 6 clean (60% > 50%), 3 corrected (9/10 = 90% correction), 1 retried (100% retry)
+      // 10 results: 8 clean (80%), 1 corrected (9/10 = 90% correction), 1 retried (100% retry)
       const results: EvalResult[] = [
-        ...Array(6)
+        ...Array(8)
           .fill(null)
           .map(() => makeResult(true, 1, 0)),
-        ...Array(3)
-          .fill(null)
-          .map(() => makeResult(true, 1, 1)),
+        makeResult(true, 1, 1),
         makeResult(true, 2),
       ];
 
@@ -38,18 +36,18 @@ describe('success-criteria', () => {
 
       expect(validation.passed).toBe(true);
       expect(validation.failures).toHaveLength(0);
-      expect(validation.actual.firstAttemptPassRate).toBe(0.6);
+      expect(validation.actual.firstAttemptPassRate).toBe(0.8);
       expect(validation.actual.withCorrectionPassRate).toBe(0.9);
       expect(validation.actual.withRetryPassRate).toBe(1);
     });
 
     it('returns passed=false when first-attempt rate below threshold', () => {
-      // 10 results: 4 clean (40% < 50%), 5 corrected (90% correction), 1 retried
+      // 10 results: 7 clean (70% < 80%), 2 corrected (90% correction), 1 retried
       const results: EvalResult[] = [
-        ...Array(4)
+        ...Array(7)
           .fill(null)
           .map(() => makeResult(true, 1, 0)),
-        ...Array(5)
+        ...Array(2)
           .fill(null)
           .map(() => makeResult(true, 1, 1)),
         makeResult(true, 2),
@@ -62,14 +60,12 @@ describe('success-criteria', () => {
     });
 
     it('returns passed=false when with-retry rate below threshold', () => {
-      // 10 results: 6 clean (60%), 3 corrected (90% correction), 1 failed → 90% retry < 95%
+      // 10 results: 8 clean (80%), 1 corrected (90% correction), 1 failed → 90% retry < 95%
       const results: EvalResult[] = [
-        ...Array(6)
+        ...Array(8)
           .fill(null)
           .map(() => makeResult(true, 1, 0)),
-        ...Array(3)
-          .fill(null)
-          .map(() => makeResult(true, 1, 1)),
+        makeResult(true, 1, 1),
         makeResult(false, 3),
       ];
 
@@ -133,15 +129,15 @@ describe('success-criteria', () => {
 
     it('passes when exactly at threshold', () => {
       // 20 results:
-      //  10 clean first-attempt (attempt=1, corrections=0) → 50% first-attempt
-      //   8 self-corrected (attempt=1, corrections=1)       → 18/20 = 90% with-correction
+      //  16 clean first-attempt (attempt=1, corrections=0) → 80% first-attempt
+      //   2 self-corrected (attempt=1, corrections=1)       → 18/20 = 90% with-correction
       //   1 passed on scenario retry (attempt=2)             → 19/20 = 95% with-retry
       //   1 failed (attempt=3)
       const results: EvalResult[] = [
-        ...Array(10)
+        ...Array(16)
           .fill(null)
           .map(() => makeResult(true, 1, 0)),
-        ...Array(8)
+        ...Array(2)
           .fill(null)
           .map(() => makeResult(true, 1, 1)),
         makeResult(true, 2),

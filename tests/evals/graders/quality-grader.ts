@@ -88,8 +88,9 @@ Then, output your final scores as JSON.
       const thinkingMatch = text.match(/<thinking>([\s\S]*?)<\/thinking>/);
       const reasoning = thinkingMatch?.[1]?.trim() || 'No reasoning provided';
 
-      // Extract JSON scores (after thinking block)
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      // Extract JSON scores — look after </thinking> tag to avoid matching braces in reasoning
+      const afterThinking = thinkingMatch ? text.slice(text.indexOf('</thinking>') + '</thinking>'.length) : text;
+      const jsonMatch = afterThinking.match(/\{[^{}]*\}/);
       if (!jsonMatch) return null;
 
       const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
