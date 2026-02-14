@@ -47,5 +47,22 @@ export interface ValidationRules {
   variants?: Record<string, VariantRules>;
 }
 
+export interface QuickCheckResult {
+  passed: boolean;
+  phase: 'typecheck' | 'build';
+  issues: ValidationIssue[];
+  /** Formatted for agent consumption — actionable, not just error messages */
+  agentPrompt: string | null;
+  durationMs: number;
+}
+
+export interface QuickChecksOutput {
+  passed: boolean;
+  results: QuickCheckResult[];
+  /** Combined agent-ready prompt summarizing all failures */
+  agentRetryPrompt: string | null;
+  totalDurationMs: number;
+}
+
 // Re-export BuildResult from build-validator
 export type { BuildResult } from './build-validator.js';

@@ -30,12 +30,12 @@ export async function validateInstallation(
   }
 
   // Run validations
-  await validatePackages(rules, projectDir, issues);
-  await validateEnvVars(rules, projectDir, issues);
-  await validateFiles(rules, projectDir, issues);
+  issues.push(...(await validatePackages(rules, projectDir)));
+  issues.push(...(await validateEnvVars(rules, projectDir)));
+  issues.push(...(await validateFiles(rules, projectDir)));
 
   // Run framework-specific cross-validations
-  await validateFrameworkSpecific(framework, projectDir, issues);
+  issues.push(...(await validateFrameworkSpecific(framework, projectDir)));
 
   // Run build validation if enabled
   if (options.runBuild !== false) {
@@ -74,16 +74,17 @@ async function loadRules(framework: string, variant?: string): Promise<Validatio
   }
 }
 
-async function validatePackages(rules: ValidationRules, projectDir: string, issues: ValidationIssue[]): Promise<void> {
+export async function validatePackages(rules: ValidationRules, projectDir: string): Promise<ValidationIssue[]> {
+  const issues: ValidationIssue[] = [];
   const pkgPath = join(projectDir, 'package.json');
-  if (!existsSync(pkgPath)) return;
+  if (!existsSync(pkgPath)) return issues;
 
   let pkg: Record<string, unknown>;
   try {
     pkg = JSON.parse(await readFile(pkgPath, 'utf-8'));
   } catch {
     // Malformed package.json - skip package validation
-    return;
+    return issues;
   }
 
   const deps = (pkg.dependencies || {}) as Record<string, string>;
@@ -103,9 +104,12 @@ async function validatePackages(rules: ValidationRules, projectDir: string, issu
       });
     }
   }
+
+  return issues;
 }
 
-async function validateEnvVars(rules: ValidationRules, projectDir: string, issues: ValidationIssue[]): Promise<void> {
+export async function validateEnvVars(rules: ValidationRules, projectDir: string): Promise<ValidationIssue[]> {
+  const issues: ValidationIssue[] = [];
   const envPath = join(projectDir, '.env.local');
   let envContent = '';
 
@@ -120,7 +124,7 @@ async function validateEnvVars(rules: ValidationRules, projectDir: string, issue
         hint: 'Create .env.local with required environment variables',
       });
     }
-    return;
+    return issues;
   }
 
   for (const rule of rules.envVars) {
@@ -144,9 +148,13 @@ async function validateEnvVars(rules: ValidationRules, projectDir: string, issue
       });
     }
   }
+
+  return issues;
 }
 
-async function validateFiles(rules: ValidationRules, projectDir: string, issues: ValidationIssue[]): Promise<void> {
+export async function validateFiles(rules: ValidationRules, projectDir: string): Promise<ValidationIssue[]> {
+  const issues: ValidationIssue[] = [];
+
   for (const rule of rules.files) {
     let matches: string[];
     try {
@@ -205,16 +213,16 @@ async function validateFiles(rules: ValidationRules, projectDir: string, issues:
       }
     }
   }
+
+  return issues;
 }
 
 /**
  * Framework-specific cross-validations that require reading multiple sources.
  */
-async function validateFrameworkSpecific(
-  framework: string,
-  projectDir: string,
-  issues: ValidationIssue[],
-): Promise<void> {
+export async function validateFrameworkSpecific(framework: string, projectDir: string): Promise<ValidationIssue[]> {
+  const issues: ValidationIssue[] = [];
+
   // Universal cross-validations
   await validateCredentialFormats(projectDir, issues);
   await validateDuplicateEnvVars(projectDir, issues);
@@ -238,6 +246,8 @@ async function validateFrameworkSpecific(
       await validateCookiePasswordLength(projectDir, issues, 'WORKOS_COOKIE_PASSWORD');
       break;
   }
+
+  return issues;
 }
 
 /**

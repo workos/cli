@@ -72,10 +72,18 @@ export type AgentConfig = {
   workOSApiHost: string;
 };
 
+export interface RetryConfig {
+  /** Max correction attempts after initial run. Default: 2 */
+  maxRetries: number;
+  /** Run between agent turns. Return null if passed, or error prompt if failed. */
+  validateAndFormat: (workingDirectory: string) => Promise<string | null>;
+}
+
 /**
- * Internal configuration object returned by initializeAgent
+ * Configuration object for running the agent.
+ * Built by initializeAgent (production) or constructed directly (evals).
  */
-type AgentRunConfig = {
+export type AgentRunConfig = {
   workingDirectory: string;
   mcpServers: McpServersConfig;
   model: string;
@@ -489,7 +497,9 @@ export async function runAgent(
     errorMessage?: string;
   },
   emitter?: InstallerEventEmitter,
-): Promise<{ error?: AgentErrorType; errorMessage?: string }> {
+  retryConfig?: RetryConfig,
+  onMessage?: (message: SDKMessage) => void,
+): Promise<{ error?: AgentErrorType; errorMessage?: string; retryCount?: number }> {
   const {
     spinnerMessage = 'Setting up WorkOS AuthKit...',
     successMessage = 'WorkOS AuthKit integration complete',
@@ -509,15 +519,20 @@ export async function runAgent(
   const collectedText: string[] = [];
 
   try {
-    // Workaround for SDK bug: stdin closes before canUseTool responses can be sent.
-    // The fix is to use an async generator for the prompt that stays open until
-    // the result is received, keeping the stdin stream alive for permission responses.
-    // See: https://github.com/anthropics/claude-code/issues/4775
-    // See: https://github.com/anthropics/claude-agent-sdk-typescript/issues/41
-    let signalDone: () => void;
-    const resultReceived = new Promise<void>((resolve) => {
-      signalDone = resolve;
-    });
+    let retryCount = 0;
+    const maxRetries = retryConfig?.maxRetries ?? 0;
+
+    // Turn completion signals — resolveCurrentTurn is called when a 'result'
+    // message arrives; the prompt generator awaits currentTurnDone between turns.
+    let resolveCurrentTurn!: () => void;
+    let currentTurnDone!: Promise<void>;
+
+    function resetTurnSignal() {
+      currentTurnDone = new Promise<void>((resolve) => {
+        resolveCurrentTurn = resolve;
+      });
+    }
+    resetTurnSignal();
 
     const createPromptStream = async function* () {
       yield {
@@ -526,7 +541,44 @@ export async function runAgent(
         message: { role: 'user', content: prompt },
         parent_tool_use_id: null,
       };
-      await resultReceived;
+
+      if (retryConfig && maxRetries > 0) {
+        while (retryCount < maxRetries) {
+          await currentTurnDone;
+
+          emitter?.emit('validation:retry:start', { attempt: retryCount + 1 });
+
+          let validationPrompt: string | null;
+          try {
+            validationPrompt = await retryConfig.validateAndFormat(agentConfig.workingDirectory);
+          } catch (err) {
+            // Don't block on validation bugs — treat as passed
+            logError('validateAndFormat threw:', err);
+            validationPrompt = null;
+          }
+
+          emitter?.emit('validation:retry:complete', {
+            attempt: retryCount + 1,
+            passed: validationPrompt === null,
+          });
+
+          if (validationPrompt === null) break;
+
+          retryCount++;
+          emitter?.emit('agent:retry', { attempt: retryCount, maxRetries });
+
+          resetTurnSignal();
+
+          yield {
+            type: 'user',
+            session_id: '',
+            message: { role: 'user', content: validationPrompt },
+            parent_tool_use_id: null,
+          };
+        }
+      }
+
+      await currentTurnDone;
     };
 
     // Load plugin with bundled skills
@@ -570,9 +622,13 @@ export async function runAgent(
       if (messageError) {
         sdkError = messageError;
       }
-      // Signal completion when result received
       if (message.type === 'result') {
-        signalDone!();
+        resolveCurrentTurn();
+      }
+      try {
+        onMessage?.(message);
+      } catch {
+        /* non-critical */
       }
     }
 
@@ -597,15 +653,18 @@ export async function runAgent(
       return { error: AgentErrorType.RESOURCE_MISSING, errorMessage: 'Could not access setup resource' };
     }
 
-    logInfo(`Agent run completed in ${Math.round(durationMs / 1000)}s`);
+    logInfo(`Agent run completed in ${Math.round(durationMs / 1000)}s (${retryCount} retries)`);
     analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
       action: 'agent integration completed',
       duration_ms: durationMs,
       duration_seconds: Math.round(durationMs / 1000),
+      retry_count: retryCount,
+      max_retries: maxRetries,
+      passed_after_retry: retryCount > 0,
     });
 
     // Don't emit agent:success here - let the state machine handle lifecycle events
-    return {};
+    return { retryCount };
   } catch (error) {
     // Don't emit events here - just log and re-throw for state machine to handle
     logError('Agent run failed:', error);
