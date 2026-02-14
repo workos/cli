@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0](https://github.com/workos/cli/compare/v0.5.4...v0.6.0) (2026-02-14)
+
+
+### Features
+
+* agent self-correction via validation feedback loop ([#57](https://github.com/workos/cli/issues/57)) ([920fc87](https://github.com/workos/cli/commit/920fc87874511550d193fc3a903c845baaf1ad0d))
+
 ## [0.5.4](https://github.com/workos/cli/compare/v0.5.3...v0.5.4) (2026-02-13)
 
 
