@@ -109,8 +109,6 @@ export async function runTypecheckValidation(
 
 /**
  * Run build as a quick check using auto-detected build command.
- * Supports JS (package.json), Go (go.mod), Elixir (mix.exs), .NET (*.csproj), Kotlin/Java (build.gradle).
- * Returns passed when no build system detected — quick-checks are an optimization, not a requirement.
  */
 async function runBuildQuickCheck(projectDir: string, timeoutMs: number): Promise<QuickCheckResult> {
   const startTime = Date.now();
@@ -173,7 +171,6 @@ interface TypecheckCommand {
 
 /**
  * Detect the appropriate typecheck command for the project.
- * Checks for tsc in node_modules, then framework-specific alternatives.
  */
 async function detectTypecheckCommand(projectDir: string): Promise<TypecheckCommand | null> {
   const pm = detectPackageManager(projectDir);
@@ -234,7 +231,6 @@ function parseTypecheckErrors(output: string): string[] {
 
 /**
  * Format typecheck errors into an agent-ready prompt.
- * Turns "TS2345: Argument of type..." into actionable instructions.
  */
 function formatTypecheckErrors(errors: string[], rawOutput: string): string {
   if (errors.length === 0) {
@@ -267,7 +263,6 @@ function formatBuildErrors(issues: ValidationIssue[]): string {
 
 /**
  * Format quick check failures into an agent-ready prompt.
- * Combines typecheck and build errors into a single actionable prompt.
  */
 function formatForAgent(results: QuickCheckResult[]): string {
   const failedResults = results.filter((r) => !r.passed);

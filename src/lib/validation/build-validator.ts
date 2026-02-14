@@ -125,41 +125,34 @@ export interface BuildCommand {
  * Returns null if no build system detected — caller should skip build validation.
  */
 export async function detectBuildCommand(projectDir: string): Promise<BuildCommand | null> {
-  // 1. package.json with build script (JS/TS frameworks)
   const pm = detectPackageManager(projectDir);
   if (await hasBuildScriptInPackageJson(projectDir)) {
     const args = pm === 'npm' ? ['run', 'build'] : ['build'];
     return { command: pm, args };
   }
 
-  // 2. Go (go.mod → go build ./...)
   if (existsSync(join(projectDir, 'go.mod'))) {
     return { command: 'go', args: ['build', './...'] };
   }
 
-  // 3. Elixir (mix.exs → mix compile)
   if (existsSync(join(projectDir, 'mix.exs'))) {
     return { command: 'mix', args: ['compile'] };
   }
 
-  // 4. .NET (*.csproj → dotnet build)
   try {
     const files = readdirSync(projectDir);
     if (files.some((f) => f.endsWith('.csproj'))) {
       return { command: 'dotnet', args: ['build'] };
     }
   } catch {
-    // Can't read directory — skip
+    // Can't read directory
   }
 
-  // 5. Kotlin/Java (build.gradle.kts or build.gradle → gradlew/gradle build)
   if (existsSync(join(projectDir, 'build.gradle.kts')) || existsSync(join(projectDir, 'build.gradle'))) {
     const gradlew = existsSync(join(projectDir, 'gradlew')) ? './gradlew' : 'gradle';
     return { command: gradlew, args: ['build'] };
   }
 
-  // Interpreted languages (Python, Ruby, PHP) have no universal build command.
-  // Return null — quick-checks will skip the build step silently.
   return null;
 }
 

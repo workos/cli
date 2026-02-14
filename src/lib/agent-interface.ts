@@ -536,7 +536,6 @@ export async function runAgent(
     resetTurnSignal();
 
     const createPromptStream = async function* () {
-      // Initial prompt
       yield {
         type: 'user',
         session_id: '',
@@ -544,13 +543,10 @@ export async function runAgent(
         parent_tool_use_id: null,
       };
 
-      // Retry loop — yield follow-up correction prompts on validation failure
       if (retryConfig && maxRetries > 0) {
         while (retryCount < maxRetries) {
-          // Wait for agent to finish current turn
           await currentTurnDone;
 
-          // Run validation between turns
           emitter?.emit('validation:retry:start', { attempt: retryCount + 1 });
 
           let validationPrompt: string | null;
@@ -567,14 +563,13 @@ export async function runAgent(
             passed: validationPrompt === null,
           });
 
-          if (validationPrompt === null) break; // Validation passed
+          if (validationPrompt === null) break;
 
           retryCount++;
           emitter?.emit('agent:retry', { attempt: retryCount, maxRetries });
 
           resetTurnSignal();
 
-          // Feed errors back to agent in same conversation
           yield {
             type: 'user',
             session_id: '',
@@ -584,7 +579,6 @@ export async function runAgent(
         }
       }
 
-      // Keep generator alive until the final result is received
       await currentTurnDone;
     };
 
@@ -629,16 +623,10 @@ export async function runAgent(
       if (messageError) {
         sdkError = messageError;
       }
-      // Signal turn completion when result received — this resumes the generator
       if (message.type === 'result') {
         resolveCurrentTurn();
       }
-      // Let callers observe messages (e.g., for latency tracking in evals)
-      try {
-        onMessage?.(message);
-      } catch {
-        /* observer errors are non-critical */
-      }
+      try { onMessage?.(message); } catch { /* non-critical */ }
     }
 
     const durationMs = Date.now() - startTime;

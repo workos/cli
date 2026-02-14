@@ -57,13 +57,6 @@ export interface InstallerEvents {
   'validation:retry:start': { attempt: number };
   'validation:retry:complete': { attempt: number; passed: boolean };
 
-  'validation:quick:start': Record<string, never>;
-  'validation:quick:complete': {
-    passed: boolean;
-    results: import('./validation/types.js').QuickCheckResult[];
-    durationMs: number;
-  };
-
   'validation:start': { framework: string };
   'validation:issues': { issues: import('./validation/types.js').ValidationIssue[] };
   'validation:complete': { passed: boolean; issueCount: number; durationMs: number };
