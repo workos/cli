@@ -9,7 +9,7 @@ import {
 } from '../utils/clack-utils.js';
 import { analytics } from '../utils/analytics.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from './constants.js';
-import { initializeAgent, runAgent } from './agent-interface.js';
+import { initializeAgent, runAgent, type RetryConfig } from './agent-interface.js';
 import { uploadEnvironmentVariablesStep } from '../steps/index.js';
 import { autoConfigureWorkOSEnvironment } from './workos-management.js';
 import { detectPort, getCallbackPath } from './port-detection.js';
@@ -113,7 +113,20 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
     options,
   );
 
-  // Run agent - errors will throw naturally with skill-based approach
+  // Build validation callback for retry loop — uses quick checks from Phase 1
+  const validateAndFormat = async (workingDirectory: string): Promise<string | null> => {
+    const quickResult = await runQuickChecks(workingDirectory);
+    return quickResult.passed ? null : quickResult.agentRetryPrompt;
+  };
+
+  // Build retry config
+  const retryConfig: RetryConfig | undefined =
+    options.noValidate ? undefined : {
+      maxRetries: options.maxRetries ?? 2,
+      validateAndFormat,
+    };
+
+  // Run agent with retry support — agent gets correction prompts on validation failure
   const agentResult = await runAgent(
     agent,
     integrationPrompt,
@@ -124,6 +137,7 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
       errorMessage: 'Integration failed',
     },
     options.emitter,
+    retryConfig,
   );
 
   // If agent returned an error, throw so state machine can handle it
@@ -133,20 +147,19 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
     throw new Error(`Agent SDK error: ${message}`);
   }
 
-  // Run post-installation validation
-  if (!options.noValidate) {
-    // Quick checks: fast typecheck + build before full validation
-    options.emitter?.emit('validation:quick:start', {});
-
-    const quickCheckResult = await runQuickChecks(options.installDir);
-
-    options.emitter?.emit('validation:quick:complete', {
-      passed: quickCheckResult.passed,
-      results: quickCheckResult.results,
-      durationMs: quickCheckResult.totalDurationMs,
+  // Track retry metrics
+  if (agentResult.retryCount !== undefined && agentResult.retryCount > 0) {
+    analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
+      action: 'agent retry summary',
+      retry_count: agentResult.retryCount,
+      max_retries: options.maxRetries ?? 2,
+      passed_after_retry: true,
     });
+  }
 
-    // Full validation — skip build since quick checks already ran it
+  // Run full validation after agent (with retries) completes
+  // Quick checks already ran inside the retry loop — skip build
+  if (!options.noValidate) {
     options.emitter?.emit('validation:start', { framework: config.metadata.integration });
 
     const validationResult = await validateInstallation(config.metadata.integration, options.installDir, {

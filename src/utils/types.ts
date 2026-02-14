@@ -91,6 +91,13 @@ export type InstallerOptions = {
    * Requires ANTHROPIC_API_KEY environment variable.
    */
   direct?: boolean;
+
+  /**
+   * Max correction attempts after initial agent run.
+   * The agent gets this many chances to fix validation failures (typecheck/build).
+   * Default: 2. Set to 0 to disable retries entirely.
+   */
+  maxRetries?: number;
 };
 
 export interface Feature {
