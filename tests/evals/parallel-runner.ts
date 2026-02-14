@@ -186,11 +186,7 @@ export class ParallelRunner {
 
     if (lastResult && !lastResult.passed) {
       console.log(`✗ ${scenarioName} FAILED`);
-      if (!this.options.verbose) {
-        this.printFailureDetails(lastResult, false);
-      } else {
-        this.printFailureDetails(lastResult, true);
-      }
+      this.printFailureDetails(lastResult, !!this.options.verbose);
       evalEvents.emitScenarioFail({
         scenario: scenarioName,
         framework: scenario.framework,

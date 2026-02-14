@@ -7,7 +7,7 @@ export {
   type ValidateOptions,
 } from './validator.js';
 export { runBuildValidation, type BuildResult } from './build-validator.js';
-export { runQuickChecks, runTypecheckValidation } from './quick-checks.js';
+export { runQuickChecks, runTypecheckValidation, quickCheckValidateAndFormat } from './quick-checks.js';
 export type {
   ValidationResult,
   ValidationRules,

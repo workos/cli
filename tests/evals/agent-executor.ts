@@ -5,7 +5,7 @@ import { writeEnvLocal } from '../../src/lib/env-writer.js';
 import { parseEnvFile } from '../../src/utils/env-parser.js';
 import { getConfig } from '../../src/lib/settings.js';
 import { LatencyTracker } from './latency-tracker.js';
-import { runQuickChecks } from '../../src/lib/validation/quick-checks.js';
+import { quickCheckValidateAndFormat } from '../../src/lib/validation/quick-checks.js';
 import { runAgent, type AgentRunConfig, type RetryConfig } from '../../src/lib/agent-interface.js';
 import type { InstallerOptions } from '../../src/utils/types.js';
 import type { ToolCall, LatencyMetrics } from './types.js';
@@ -91,19 +91,16 @@ export class AgentExecutor {
 
   async run(retryConfig?: AgentRetryConfig): Promise<AgentResult> {
     const config = retryConfig ?? { enabled: true, maxRetries: 2 };
-    const integration = this.getIntegration();
     const toolCalls: ToolCall[] = [];
     const collectedOutput: string[] = [];
 
     const label = this.options.scenarioName ? `[${this.options.scenarioName}]` : '';
     if (this.options.verbose) {
-      console.log(`${label} Initializing agent for ${integration}...`);
+      console.log(`${label} Initializing agent for ${this.framework}...`);
     }
 
-    // Start latency tracking
     this.latencyTracker.start();
 
-    // Write credentials to appropriate env file based on framework
     const envVars = {
       WORKOS_API_KEY: this.credentials.workosApiKey,
       WORKOS_CLIENT_ID: this.credentials.workosClientId,
@@ -115,21 +112,18 @@ export class AgentExecutor {
       writeEnvFile(this.workDir, envVars);
     }
 
-    // Build prompt
-    const skillName = SKILL_NAMES[integration];
+    const skillName = SKILL_NAMES[this.framework];
     const prompt = this.buildPrompt(skillName);
 
-    // Build SDK environment for direct mode
     const sdkEnv: Record<string, string | undefined> = {
       ...process.env,
       ANTHROPIC_API_KEY: this.credentials.anthropicApiKey,
+      ANTHROPIC_BASE_URL: undefined,
+      ANTHROPIC_AUTH_TOKEN: undefined,
       CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 'true',
     };
-    delete sdkEnv.ANTHROPIC_BASE_URL;
-    delete sdkEnv.ANTHROPIC_AUTH_TOKEN;
 
-    // Construct AgentRunConfig directly (bypasses initializeAgent/gateway auth)
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: this.workDir,
       mcpServers: {
@@ -143,7 +137,6 @@ export class AgentExecutor {
       sdkEnv,
     };
 
-    // Thin InstallerOptions — only what runAgent needs
     const installerOptions: InstallerOptions = {
       debug: this.options.verbose ?? false,
       forceInstall: false,
@@ -153,15 +146,8 @@ export class AgentExecutor {
       skipAuth: true,
     };
 
-    // Build production RetryConfig with validateAndFormat callback
     const prodRetryConfig: RetryConfig | undefined = config.enabled
-      ? {
-          maxRetries: config.maxRetries,
-          validateAndFormat: async (workingDirectory: string): Promise<string | null> => {
-            const quickResult = await runQuickChecks(workingDirectory);
-            return quickResult.passed ? null : quickResult.agentRetryPrompt;
-          },
-        }
+      ? { maxRetries: config.maxRetries, validateAndFormat: quickCheckValidateAndFormat }
       : undefined;
 
     try {
@@ -178,34 +164,19 @@ export class AgentExecutor {
 
       const latencyMetrics = this.latencyTracker.finish();
       const correctionAttempts = result.retryCount ?? 0;
+      const base = { output: collectedOutput.join('\n'), toolCalls, latencyMetrics, correctionAttempts };
 
       if (result.error) {
-        return {
-          success: false,
-          output: collectedOutput.join('\n'),
-          toolCalls,
-          latencyMetrics,
-          error: result.errorMessage ?? String(result.error),
-          correctionAttempts,
-          selfCorrected: false,
-        };
+        return { ...base, success: false, error: result.errorMessage ?? String(result.error), selfCorrected: false };
       }
 
-      return {
-        success: true,
-        output: collectedOutput.join('\n'),
-        toolCalls,
-        latencyMetrics,
-        correctionAttempts,
-        selfCorrected: correctionAttempts > 0,
-      };
+      return { ...base, success: true, selfCorrected: correctionAttempts > 0 };
     } catch (error) {
-      const latencyMetrics = this.latencyTracker.finish();
       return {
         success: false,
         output: collectedOutput.join('\n'),
         toolCalls,
-        latencyMetrics,
+        latencyMetrics: this.latencyTracker.finish(),
         error: error instanceof Error ? error.message : String(error),
         correctionAttempts: 0,
         selfCorrected: false,
@@ -273,7 +244,4 @@ Begin by invoking the ${skillName} skill.`;
     }
   }
 
-  private getIntegration(): string {
-    return this.framework;
-  }
 }

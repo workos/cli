@@ -519,12 +519,11 @@ export async function runAgent(
   const collectedText: string[] = [];
 
   try {
-    // Retry loop coordination
     let retryCount = 0;
     const maxRetries = retryConfig?.maxRetries ?? 0;
 
-    // Turn completion signals — the response loop resolves currentTurnDone
-    // when a 'result' message arrives. The generator awaits it between turns.
+    // Turn completion signals — resolveCurrentTurn is called when a 'result'
+    // message arrives; the prompt generator awaits currentTurnDone between turns.
     let resolveCurrentTurn!: () => void;
     let currentTurnDone!: Promise<void>;
 

@@ -52,7 +52,7 @@ vi.mock('../../../src/lib/settings.js', () => ({
 }));
 
 vi.mock('../../../src/lib/validation/quick-checks.js', () => ({
-  runQuickChecks: vi.fn(),
+  quickCheckValidateAndFormat: vi.fn(),
 }));
 
 // Mock debug/analytics that agent-interface transitively imports

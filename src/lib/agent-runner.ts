@@ -1,5 +1,5 @@
 import { SPINNER_MESSAGE, type FrameworkConfig } from './framework-config.js';
-import { validateInstallation, runQuickChecks } from './validation/index.js';
+import { validateInstallation, quickCheckValidateAndFormat } from './validation/index.js';
 import type { InstallerOptions } from '../utils/types.js';
 import {
   ensurePackageIsInstalled,
@@ -113,18 +113,11 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
     options,
   );
 
-  // Build validation callback for retry loop — uses quick checks from Phase 1
-  const validateAndFormat = async (workingDirectory: string): Promise<string | null> => {
-    const quickResult = await runQuickChecks(workingDirectory);
-    return quickResult.passed ? null : quickResult.agentRetryPrompt;
-  };
-
-  // Build retry config
   const retryConfig: RetryConfig | undefined = options.noValidate
     ? undefined
     : {
         maxRetries: options.maxRetries ?? 2,
-        validateAndFormat,
+        validateAndFormat: quickCheckValidateAndFormat,
       };
 
   // Run agent with retry support — agent gets correction prompts on validation failure
@@ -190,12 +183,6 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
     });
   }
 
-  // Skip MCP server setup for now (WorkOS doesn't need it initially)
-  // await addMCPServerToClientsStep({ ... });
-
-  // Build outro message
-  const continueUrl = undefined; // No signup flow for WorkOS wizard
-
   const changes = [
     ...config.ui.getOutroChanges(frameworkContext),
     Object.keys(envVars).length > 0 ? `Added environment variables to .env file` : '',
@@ -209,8 +196,7 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
       : '',
   ].filter(Boolean);
 
-  // Build detailed summary to return to caller (state machine)
-  const summary = buildCompletionSummary(config, changes, nextSteps, continueUrl);
+  const summary = buildCompletionSummary(config, changes, nextSteps);
 
   await analytics.shutdown('success');
 
@@ -277,41 +263,24 @@ Report your progress using [STATUS] prefixes.
 Begin by invoking the ${skillName} skill.`;
 }
 
-/**
- * Build a completion summary for the event payload.
- * This is a plain-text summary without styling (adapters handle presentation).
- */
-function buildCompletionSummary(
-  config: FrameworkConfig,
-  changes: string[],
-  nextSteps: string[],
-  continueUrl: string | undefined,
-): string {
-  const lines: string[] = [];
-
-  lines.push('Successfully installed WorkOS AuthKit!');
-  lines.push('');
+function buildCompletionSummary(config: FrameworkConfig, changes: string[], nextSteps: string[]): string {
+  const lines: string[] = ['Successfully installed WorkOS AuthKit!', ''];
 
   if (changes.length > 0) {
     lines.push('What the agent did:');
-    changes.forEach((change) => lines.push(`• ${change}`));
+    for (const change of changes) lines.push(`• ${change}`);
     lines.push('');
   }
 
   if (nextSteps.length > 0) {
     lines.push('Next steps:');
-    nextSteps.forEach((step) => lines.push(`• ${step}`));
+    for (const step of nextSteps) lines.push(`• ${step}`);
     lines.push('');
   }
 
-  lines.push(`Learn more: ${config.metadata.docsUrl}`);
-
-  if (continueUrl) {
-    lines.push(`Continue onboarding: ${continueUrl}`);
-  }
-
-  lines.push('');
   lines.push(
+    `Learn more: ${config.metadata.docsUrl}`,
+    '',
     'Note: This installer uses an LLM agent to analyze and modify your project. Please review the changes made.',
   );
 
