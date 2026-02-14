@@ -80,9 +80,10 @@ export interface RetryConfig {
 }
 
 /**
- * Internal configuration object returned by initializeAgent
+ * Configuration object for running the agent.
+ * Built by initializeAgent (production) or constructed directly (evals).
  */
-type AgentRunConfig = {
+export type AgentRunConfig = {
   workingDirectory: string;
   mcpServers: McpServersConfig;
   model: string;
@@ -497,6 +498,7 @@ export async function runAgent(
   },
   emitter?: InstallerEventEmitter,
   retryConfig?: RetryConfig,
+  onMessage?: (message: SDKMessage) => void,
 ): Promise<{ error?: AgentErrorType; errorMessage?: string; retryCount?: number }> {
   const {
     spinnerMessage = 'Setting up WorkOS AuthKit...',
@@ -631,6 +633,8 @@ export async function runAgent(
       if (message.type === 'result') {
         resolveCurrentTurn();
       }
+      // Let callers observe messages (e.g., for latency tracking in evals)
+      try { onMessage?.(message); } catch { /* observer errors are non-critical */ }
     }
 
     const durationMs = Date.now() - startTime;

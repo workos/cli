@@ -1,13 +1,13 @@
-import path from 'node:path';
 import { writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { loadCredentials } from './env-loader.js';
 import { writeEnvLocal } from '../../src/lib/env-writer.js';
 import { parseEnvFile } from '../../src/utils/env-parser.js';
 import { getConfig } from '../../src/lib/settings.js';
 import { LatencyTracker } from './latency-tracker.js';
 import { runQuickChecks } from '../../src/lib/validation/quick-checks.js';
+import { runAgent, type AgentRunConfig, type RetryConfig } from '../../src/lib/agent-interface.js';
+import type { InstallerOptions } from '../../src/utils/types.js';
 import type { ToolCall, LatencyMetrics } from './types.js';
 
 export interface AgentResult {
@@ -119,113 +119,78 @@ export class AgentExecutor {
     const skillName = SKILL_NAMES[integration];
     const prompt = this.buildPrompt(skillName);
 
-    // Retry loop coordination
-    let correctionAttempts = 0;
-    const maxRetries = config.enabled ? config.maxRetries : 0;
-    const workDir = this.workDir;
+    // Build SDK environment for direct mode
+    const sdkEnv: Record<string, string | undefined> = {
+      ...process.env,
+      ANTHROPIC_API_KEY: this.credentials.anthropicApiKey,
+      CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 'true',
+    };
+    delete sdkEnv.ANTHROPIC_BASE_URL;
+    delete sdkEnv.ANTHROPIC_AUTH_TOKEN;
 
-    // Turn completion signals
-    let resolveCurrentTurn!: () => void;
-    let currentTurnDone!: Promise<void>;
-
-    function resetTurnSignal() {
-      currentTurnDone = new Promise<void>((resolve) => {
-        resolveCurrentTurn = resolve;
-      });
-    }
-    resetTurnSignal();
-
-    // Initialize and run agent
-    try {
-      const { query } = await import('@anthropic-ai/claude-agent-sdk');
-
-      // Build SDK environment for direct mode
-      const sdkEnv: Record<string, string | undefined> = {
-        ...process.env,
-        ANTHROPIC_API_KEY: this.credentials.anthropicApiKey,
-        CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
-        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 'true',
-      };
-      // Remove gateway config to use direct API
-      delete sdkEnv.ANTHROPIC_BASE_URL;
-      delete sdkEnv.ANTHROPIC_AUTH_TOKEN;
-
-      // Get plugin path for skills
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = path.dirname(__filename);
-      const pluginPath = path.join(__dirname, '../..');
-
-      // Retry-aware prompt stream (same pattern as production agent-interface.ts)
-      const createPromptStream = async function* () {
-        yield {
-          type: 'user',
-          session_id: '',
-          message: { role: 'user', content: prompt },
-          parent_tool_use_id: null,
-        };
-
-        if (maxRetries > 0) {
-          while (correctionAttempts < maxRetries) {
-            await currentTurnDone;
-
-            let validationPrompt: string | null;
-            try {
-              const quickResult = await runQuickChecks(workDir);
-              validationPrompt = quickResult.passed ? null : quickResult.agentRetryPrompt;
-            } catch {
-              validationPrompt = null; // treat validation errors as passed
-            }
-
-            if (validationPrompt === null) break;
-
-            correctionAttempts++;
-            if (label && process.env.EVAL_VERBOSE) {
-              console.log(`${label} Correction attempt ${correctionAttempts}/${maxRetries}`);
-            }
-
-            resetTurnSignal();
-
-            yield {
-              type: 'user',
-              session_id: '',
-              message: { role: 'user', content: validationPrompt },
-              parent_tool_use_id: null,
-            };
-          }
-        }
-
-        // Keep generator alive until final result
-        await currentTurnDone;
-      };
-
-      const response = query({
-        prompt: createPromptStream(),
-        options: {
-          model: getConfig().model,
-          cwd: this.workDir,
-          permissionMode: 'acceptEdits',
-          mcpServers: {
-            workos: {
-              command: 'npx',
-              args: ['-y', '@workos/mcp-docs-server'],
-            },
-          },
-          env: sdkEnv,
-          tools: { type: 'preset', preset: 'claude_code' },
-          allowedTools: ['Skill', 'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch'],
-          plugins: [{ type: 'local', path: pluginPath }],
+    // Construct AgentRunConfig directly (bypasses initializeAgent/gateway auth)
+    const agentRunConfig: AgentRunConfig = {
+      workingDirectory: this.workDir,
+      mcpServers: {
+        workos: {
+          command: 'npx',
+          args: ['-y', '@workos/mcp-docs-server'],
         },
-      });
+      },
+      model: getConfig().model,
+      allowedTools: ['Skill', 'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch'],
+      sdkEnv,
+    };
 
-      // Process message stream — signal turn completion on result
-      for await (const message of response) {
-        this.handleMessage(message, toolCalls, collectedOutput, label);
-        if (message.type === 'result') {
-          resolveCurrentTurn();
+    // Thin InstallerOptions — only what runAgent needs
+    const installerOptions: InstallerOptions = {
+      debug: this.options.verbose ?? false,
+      forceInstall: false,
+      installDir: this.workDir,
+      local: false,
+      ci: true,
+      skipAuth: true,
+    };
+
+    // Build production RetryConfig with validateAndFormat callback
+    const prodRetryConfig: RetryConfig | undefined = config.enabled
+      ? {
+          maxRetries: config.maxRetries,
+          validateAndFormat: async (workingDirectory: string): Promise<string | null> => {
+            const quickResult = await runQuickChecks(workingDirectory);
+            return quickResult.passed ? null : quickResult.agentRetryPrompt;
+          },
         }
-      }
+      : undefined;
+
+    try {
+      // Delegate to production runAgent — same retry loop, same generator coordination
+      const result = await runAgent(
+        agentRunConfig,
+        prompt,
+        installerOptions,
+        undefined, // no spinner config
+        undefined, // no emitter
+        prodRetryConfig,
+        (message) => this.trackMessage(message, toolCalls, collectedOutput, label),
+      );
 
       const latencyMetrics = this.latencyTracker.finish();
+      const correctionAttempts = result.retryCount ?? 0;
+
+      if (result.error) {
+        return {
+          success: false,
+          output: collectedOutput.join('\n'),
+          toolCalls,
+          latencyMetrics,
+          error: result.errorMessage ?? String(result.error),
+          correctionAttempts,
+          selfCorrected: false,
+        };
+      }
+
       return {
         success: true,
         output: collectedOutput.join('\n'),
@@ -242,7 +207,7 @@ export class AgentExecutor {
         toolCalls,
         latencyMetrics,
         error: error instanceof Error ? error.message : String(error),
-        correctionAttempts,
+        correctionAttempts: 0,
         selfCorrected: false,
       };
     }
@@ -266,15 +231,17 @@ Use the \`${skillName}\` skill to integrate WorkOS AuthKit into this application
 Begin by invoking the ${skillName} skill.`;
   }
 
-  private handleMessage(message: any, toolCalls: ToolCall[], collectedOutput: string[], label: string): void {
+  /**
+   * Observe SDK messages for latency tracking and output collection.
+   * This is called via the onMessage hook — production handleSDKMessage runs first.
+   */
+  private trackMessage(message: any, toolCalls: ToolCall[], collectedOutput: string[], label: string): void {
     if (message.type === 'assistant') {
-      // End any in-progress tool call when we get a new assistant message
       this.latencyTracker.endToolCall();
 
       const content = message.message?.content;
       if (Array.isArray(content)) {
         for (const block of content) {
-          // Capture text output and track TTFT
           if (block.type === 'text' && typeof block.text === 'string') {
             this.latencyTracker.recordFirstContent();
             collectedOutput.push(block.text);
@@ -282,14 +249,12 @@ Begin by invoking the ${skillName} skill.`;
               console.log(`${label} Agent: ${block.text.slice(0, 100)}...`);
             }
           }
-          // Capture tool calls and start timing
           if (block.type === 'tool_use') {
             this.latencyTracker.startToolCall(block.name);
-            const call: ToolCall = {
+            toolCalls.push({
               tool: block.name,
               input: block.input as Record<string, unknown>,
-            };
-            toolCalls.push(call);
+            });
             if (this.options.verbose) {
               console.log(`${label} Tool: ${block.name}`);
             }
@@ -299,7 +264,6 @@ Begin by invoking the ${skillName} skill.`;
     }
 
     if (message.type === 'result') {
-      // Capture token usage from result
       if (message.usage) {
         this.latencyTracker.recordTokens(message.usage.input_tokens ?? 0, message.usage.output_tokens ?? 0);
       }
@@ -310,7 +274,6 @@ Begin by invoking the ${skillName} skill.`;
   }
 
   private getIntegration(): string {
-    // Integration is now a string type — framework name IS the integration name
     return this.framework;
   }
 }
