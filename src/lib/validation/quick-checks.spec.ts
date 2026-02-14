@@ -230,11 +230,12 @@ describe('runTypecheckValidation', () => {
     );
   });
 
-  it('falls back to npx tsc --noEmit when no typecheck script', async () => {
+  it('falls back to npx tsc --noEmit when no typecheck script but tsconfig exists', async () => {
     writeFileSync(
       join(testDir, 'package.json'),
       JSON.stringify({ scripts: { build: 'next build' } }),
     );
+    writeFileSync(join(testDir, 'tsconfig.json'), '{}');
     mockSpawn.mockImplementationOnce(() => createMockProcess(0));
 
     await runTypecheckValidation(testDir);
@@ -244,6 +245,20 @@ describe('runTypecheckValidation', () => {
       ['tsc', '--noEmit'],
       expect.objectContaining({ cwd: testDir }),
     );
+  });
+
+  it('skips typecheck when no tsconfig.json and no typecheck script', async () => {
+    writeFileSync(
+      join(testDir, 'package.json'),
+      JSON.stringify({ scripts: { build: 'go build' } }),
+    );
+    // No tsconfig.json — not a TypeScript project
+
+    const result = await runTypecheckValidation(testDir);
+
+    expect(result.passed).toBe(true);
+    expect(result.issues).toHaveLength(0);
+    expect(mockSpawn).not.toHaveBeenCalled();
   });
 
   it('detects type-check script (hyphenated variant)', async () => {

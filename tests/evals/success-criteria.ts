@@ -17,7 +17,7 @@ export interface SuccessCriteria {
 
 /** Default thresholds for CI enforcement */
 export const DEFAULT_CRITERIA: SuccessCriteria = {
-  firstAttemptPassRate: 0.2,
+  firstAttemptPassRate: 0.5,
   withCorrectionPassRate: 0.9,
   withRetryPassRate: 0.95,
 };

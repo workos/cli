@@ -155,8 +155,14 @@ async function detectTypecheckCommand(projectDir: string): Promise<TypecheckComm
     // No package.json or malformed — continue detection
   }
 
-  // Fallback: use npx tsc --noEmit
-  return { command: 'npx', args: ['tsc', '--noEmit'] };
+  // Only fall back to tsc if the project actually uses TypeScript
+  try {
+    await readFile(join(projectDir, 'tsconfig.json'), 'utf-8');
+    return { command: 'npx', args: ['tsc', '--noEmit'] };
+  } catch {
+    // No tsconfig.json — not a TypeScript project, skip typecheck
+    return null;
+  }
 }
 
 /**
