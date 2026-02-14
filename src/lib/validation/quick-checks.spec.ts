@@ -138,6 +138,26 @@ describe('runQuickChecks', () => {
     expect(result.results[1].phase).toBe('build');
     expect(result.agentRetryPrompt).toContain('build failed');
   });
+
+  it('skips build when no build system detected (e.g., Python project)', async () => {
+    // Rewrite testDir without a build script or any build system markers
+    writeFileSync(
+      join(testDir, 'package.json'),
+      JSON.stringify({ scripts: { typecheck: 'tsc --noEmit' } }),
+    );
+
+    mockSpawn.mockImplementationOnce(() => createMockProcess(0)); // typecheck pass only
+
+    const result = await runQuickChecks(testDir);
+
+    expect(result.passed).toBe(true);
+    expect(result.results).toHaveLength(2);
+    expect(result.results[0].phase).toBe('typecheck');
+    expect(result.results[1].phase).toBe('build');
+    expect(result.results[1].passed).toBe(true); // passed through silently
+    // Only one spawn call (typecheck) — no spawn for build
+    expect(mockSpawn).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('runTypecheckValidation', () => {

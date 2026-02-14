@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import type { QuickCheckResult, QuickChecksOutput, ValidationIssue } from './types.js';
-import { detectPackageManager, parseBuildErrors, runBuildValidation } from './build-validator.js';
+import { detectBuildCommand, detectPackageManager, parseBuildErrors } from './build-validator.js';
 
 const DEFAULT_TYPECHECK_TIMEOUT_MS = 30_000;
 const DEFAULT_BUILD_TIMEOUT_MS = 60_000;
@@ -111,17 +111,63 @@ export async function runTypecheckValidation(
 }
 
 /**
- * Run build as a quick check, wrapping the existing runBuildValidation.
+ * Run build as a quick check using auto-detected build command.
+ * Supports JS (package.json), Go (go.mod), Elixir (mix.exs), .NET (*.csproj), Kotlin/Java (build.gradle).
+ * Returns passed when no build system detected — quick-checks are an optimization, not a requirement.
  */
 async function runBuildQuickCheck(projectDir: string, timeoutMs: number): Promise<QuickCheckResult> {
-  const buildResult = await runBuildValidation(projectDir, timeoutMs);
+  const startTime = Date.now();
+  const buildCmd = await detectBuildCommand(projectDir);
+
+  if (!buildCmd) {
+    return {
+      passed: true,
+      phase: 'build',
+      issues: [],
+      agentPrompt: null,
+      durationMs: Date.now() - startTime,
+    };
+  }
+
+  const { exitCode, stdout, stderr } = await spawnCommand(
+    buildCmd.command,
+    buildCmd.args,
+    projectDir,
+    timeoutMs,
+  );
+
+  if (exitCode === 0) {
+    return {
+      passed: true,
+      phase: 'build',
+      issues: [],
+      agentPrompt: null,
+      durationMs: Date.now() - startTime,
+    };
+  }
+
+  const output = stdout + stderr;
+  const errors = parseBuildErrors(output);
+  const issues: ValidationIssue[] = errors.length > 0
+    ? errors.map((e) => ({
+        type: 'file' as const,
+        severity: 'error' as const,
+        message: `Build error: ${e}`,
+        hint: 'Fix the error and run build again',
+      }))
+    : [{
+        type: 'file' as const,
+        severity: 'error' as const,
+        message: 'Build failed',
+        hint: `Run \`${buildCmd.command} ${buildCmd.args.join(' ')}\` to see full output`,
+      }];
 
   return {
-    passed: buildResult.success,
+    passed: false,
     phase: 'build',
-    issues: buildResult.issues,
-    agentPrompt: buildResult.success ? null : formatBuildErrors(buildResult.issues),
-    durationMs: buildResult.durationMs,
+    issues,
+    agentPrompt: formatBuildErrors(issues),
+    durationMs: Date.now() - startTime,
   };
 }
 
