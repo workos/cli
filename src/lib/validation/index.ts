@@ -1,5 +1,13 @@
-export { validateInstallation, type ValidateOptions } from './validator.js';
+export {
+  validateInstallation,
+  validatePackages,
+  validateEnvVars,
+  validateFiles,
+  validateFrameworkSpecific,
+  type ValidateOptions,
+} from './validator.js';
 export { runBuildValidation, type BuildResult } from './build-validator.js';
+export { runQuickChecks, runTypecheckValidation } from './quick-checks.js';
 export type {
   ValidationResult,
   ValidationRules,
@@ -10,4 +18,6 @@ export type {
   EnvVarRule,
   FileRule,
   VariantRules,
+  QuickCheckResult,
+  QuickChecksOutput,
 } from './types.js';

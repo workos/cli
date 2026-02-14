@@ -99,13 +99,13 @@ export async function runBuildValidation(projectDir: string, timeoutMs: number =
   });
 }
 
-function detectPackageManager(projectDir: string): 'pnpm' | 'yarn' | 'npm' {
+export function detectPackageManager(projectDir: string): 'pnpm' | 'yarn' | 'npm' {
   if (existsSync(join(projectDir, 'pnpm-lock.yaml'))) return 'pnpm';
   if (existsSync(join(projectDir, 'yarn.lock'))) return 'yarn';
   return 'npm';
 }
 
-async function hasBuildScriptInPackageJson(projectDir: string): Promise<boolean> {
+export async function hasBuildScriptInPackageJson(projectDir: string): Promise<boolean> {
   try {
     const content = await readFile(join(projectDir, 'package.json'), 'utf-8');
     const pkg = JSON.parse(content) as { scripts?: { build?: string } };
@@ -115,7 +115,7 @@ async function hasBuildScriptInPackageJson(projectDir: string): Promise<boolean>
   }
 }
 
-function parseBuildErrors(output: string): string[] {
+export function parseBuildErrors(output: string): string[] {
   const errors: string[] = [];
 
   // TypeScript errors: "file.ts(line,col): error TS..."

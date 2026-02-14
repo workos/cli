@@ -1,5 +1,5 @@
 import { SPINNER_MESSAGE, type FrameworkConfig } from './framework-config.js';
-import { validateInstallation } from './validation/index.js';
+import { validateInstallation, runQuickChecks } from './validation/index.js';
 import type { InstallerOptions } from '../utils/types.js';
 import {
   ensurePackageIsInstalled,
@@ -135,10 +135,22 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
 
   // Run post-installation validation
   if (!options.noValidate) {
+    // Quick checks: fast typecheck + build before full validation
+    options.emitter?.emit('validation:quick:start', {});
+
+    const quickCheckResult = await runQuickChecks(options.installDir);
+
+    options.emitter?.emit('validation:quick:complete', {
+      passed: quickCheckResult.passed,
+      results: quickCheckResult.results,
+      durationMs: quickCheckResult.totalDurationMs,
+    });
+
+    // Full validation — skip build since quick checks already ran it
     options.emitter?.emit('validation:start', { framework: config.metadata.integration });
 
     const validationResult = await validateInstallation(config.metadata.integration, options.installDir, {
-      runBuild: true,
+      runBuild: false,
     });
 
     if (validationResult.issues.length > 0) {

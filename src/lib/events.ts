@@ -53,6 +53,13 @@ export interface InstallerEvents {
   'agent:success': { summary?: string };
   'agent:failure': { message: string; stack?: string };
 
+  'validation:quick:start': Record<string, never>;
+  'validation:quick:complete': {
+    passed: boolean;
+    results: import('./validation/types.js').QuickCheckResult[];
+    durationMs: number;
+  };
+
   'validation:start': { framework: string };
   'validation:issues': { issues: import('./validation/types.js').ValidationIssue[] };
   'validation:complete': { passed: boolean; issueCount: number; durationMs: number };
