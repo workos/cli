@@ -85,7 +85,13 @@ export async function runUserList(options: UserListOptions, apiKey: string, base
 
     console.log(
       formatTable(
-        [{ header: 'ID' }, { header: 'Email' }, { header: 'First Name' }, { header: 'Last Name' }, { header: 'Verified' }],
+        [
+          { header: 'ID' },
+          { header: 'Email' },
+          { header: 'First Name' },
+          { header: 'Last Name' },
+          { header: 'Verified' },
+        ],
         rows,
       ),
     );

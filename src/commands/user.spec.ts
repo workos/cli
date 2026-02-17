@@ -49,7 +49,9 @@ describe('user commands', () => {
   describe('runUserList', () => {
     it('lists users in table format', async () => {
       mockRequest.mockResolvedValue({
-        data: [{ id: 'user_123', email: 'test@example.com', first_name: 'Test', last_name: 'User', email_verified: true }],
+        data: [
+          { id: 'user_123', email: 'test@example.com', first_name: 'Test', last_name: 'User', email_verified: true },
+        ],
         list_metadata: { before: null, after: null },
       });
       await runUserList({}, 'sk_test');
@@ -98,9 +100,7 @@ describe('user commands', () => {
     it('sends only provided fields', async () => {
       mockRequest.mockResolvedValue({ id: 'user_123' });
       await runUserUpdate('user_123', 'sk_test', { emailVerified: true });
-      expect(mockRequest).toHaveBeenCalledWith(
-        expect.objectContaining({ body: { email_verified: true } }),
-      );
+      expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({ body: { email_verified: true } }));
     });
   });
 

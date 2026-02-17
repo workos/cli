@@ -413,15 +413,13 @@ yargs(hideBin(process.argv))
         'update <userId>',
         'Update a user',
         (yargs) =>
-          yargs
-            .positional('userId', { type: 'string', demandOption: true, describe: 'User ID' })
-            .options({
-              'first-name': { type: 'string', describe: 'First name' },
-              'last-name': { type: 'string', describe: 'Last name' },
-              'email-verified': { type: 'boolean', describe: 'Email verification status' },
-              password: { type: 'string', describe: 'New password' },
-              'external-id': { type: 'string', describe: 'External ID' },
-            }),
+          yargs.positional('userId', { type: 'string', demandOption: true, describe: 'User ID' }).options({
+            'first-name': { type: 'string', describe: 'First name' },
+            'last-name': { type: 'string', describe: 'Last name' },
+            'email-verified': { type: 'boolean', describe: 'Email verification status' },
+            password: { type: 'string', describe: 'New password' },
+            'external-id': { type: 'string', describe: 'External ID' },
+          }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
