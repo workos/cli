@@ -279,6 +279,96 @@ yargs(hideBin(process.argv))
       .demandCommand(1, 'Please specify an env subcommand')
       .strict(),
   )
+  .command('organization', 'Manage organizations', (yargs) =>
+    yargs
+      .options({
+        ...insecureStorageOption,
+        'api-key': { type: 'string' as const, describe: 'WorkOS API key (overrides environment config)' },
+      })
+      .command(
+        'create <name> [domains..]',
+        'Create a new organization',
+        (yargs) =>
+          yargs
+            .positional('name', { type: 'string', demandOption: true, describe: 'Organization name' })
+            .positional('domains', { type: 'string', array: true, describe: 'Domains as domain:state' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runOrgCreate } = await import('./commands/organization.js');
+          const apiKey = resolveApiKey({ apiKey: argv.apiKey });
+          await runOrgCreate(argv.name, (argv.domains as string[]) || [], apiKey, resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'update <orgId> <name> [domain] [state]',
+        'Update an organization',
+        (yargs) =>
+          yargs
+            .positional('orgId', { type: 'string', demandOption: true, describe: 'Organization ID' })
+            .positional('name', { type: 'string', demandOption: true, describe: 'Organization name' })
+            .positional('domain', { type: 'string', describe: 'Domain' })
+            .positional('state', { type: 'string', describe: 'Domain state (verified or pending)' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runOrgUpdate } = await import('./commands/organization.js');
+          const apiKey = resolveApiKey({ apiKey: argv.apiKey });
+          await runOrgUpdate(argv.orgId, argv.name, argv.domain, argv.state, apiKey, resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'get <orgId>',
+        'Get an organization by ID',
+        (yargs) =>
+          yargs.positional('orgId', { type: 'string', demandOption: true, describe: 'Organization ID' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runOrgGet } = await import('./commands/organization.js');
+          const apiKey = resolveApiKey({ apiKey: argv.apiKey });
+          await runOrgGet(argv.orgId, apiKey, resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'list',
+        'List organizations',
+        (yargs) =>
+          yargs.options({
+            domain: { type: 'string', describe: 'Filter by domain' },
+            limit: { type: 'number', describe: 'Limit number of results' },
+            before: { type: 'string', describe: 'Cursor for results before a specific item' },
+            after: { type: 'string', describe: 'Cursor for results after a specific item' },
+            order: { type: 'string', describe: 'Order of results (asc or desc)' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runOrgList } = await import('./commands/organization.js');
+          const apiKey = resolveApiKey({ apiKey: argv.apiKey });
+          await runOrgList(
+            { domain: argv.domain, limit: argv.limit, before: argv.before, after: argv.after, order: argv.order },
+            apiKey,
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'delete <orgId>',
+        'Delete an organization',
+        (yargs) =>
+          yargs.positional('orgId', { type: 'string', demandOption: true, describe: 'Organization ID' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runOrgDelete } = await import('./commands/organization.js');
+          const apiKey = resolveApiKey({ apiKey: argv.apiKey });
+          await runOrgDelete(argv.orgId, apiKey, resolveApiBaseUrl());
+        },
+      )
+      .demandCommand(1, 'Please specify an organization subcommand')
+      .strict(),
+  )
   .command(
     'install',
     'Install WorkOS AuthKit into your project',
