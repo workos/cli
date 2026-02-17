@@ -362,6 +362,98 @@ yargs(hideBin(process.argv))
       .demandCommand(1, 'Please specify an organization subcommand')
       .strict(),
   )
+  .command('user', 'Manage users', (yargs) =>
+    yargs
+      .options({
+        ...insecureStorageOption,
+        'api-key': { type: 'string' as const, describe: 'WorkOS API key (overrides environment config)' },
+      })
+      .command(
+        'get <userId>',
+        'Get a user by ID',
+        (yargs) => yargs.positional('userId', { type: 'string', demandOption: true, describe: 'User ID' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runUserGet } = await import('./commands/user.js');
+          await runUserGet(argv.userId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'list',
+        'List users',
+        (yargs) =>
+          yargs.options({
+            email: { type: 'string', describe: 'Filter by email' },
+            organization: { type: 'string', describe: 'Filter by organization ID' },
+            limit: { type: 'number', describe: 'Limit number of results' },
+            before: { type: 'string', describe: 'Cursor for results before a specific item' },
+            after: { type: 'string', describe: 'Cursor for results after a specific item' },
+            order: { type: 'string', describe: 'Order of results (asc or desc)' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runUserList } = await import('./commands/user.js');
+          await runUserList(
+            {
+              email: argv.email,
+              organization: argv.organization,
+              limit: argv.limit,
+              before: argv.before,
+              after: argv.after,
+              order: argv.order,
+            },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'update <userId>',
+        'Update a user',
+        (yargs) =>
+          yargs
+            .positional('userId', { type: 'string', demandOption: true, describe: 'User ID' })
+            .options({
+              'first-name': { type: 'string', describe: 'First name' },
+              'last-name': { type: 'string', describe: 'Last name' },
+              'email-verified': { type: 'boolean', describe: 'Email verification status' },
+              password: { type: 'string', describe: 'New password' },
+              'external-id': { type: 'string', describe: 'External ID' },
+            }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runUserUpdate } = await import('./commands/user.js');
+          await runUserUpdate(
+            argv.userId,
+            resolveApiKey({ apiKey: argv.apiKey }),
+            {
+              firstName: argv.firstName,
+              lastName: argv.lastName,
+              emailVerified: argv.emailVerified,
+              password: argv.password,
+              externalId: argv.externalId,
+            },
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'delete <userId>',
+        'Delete a user',
+        (yargs) => yargs.positional('userId', { type: 'string', demandOption: true, describe: 'User ID' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runUserDelete } = await import('./commands/user.js');
+          await runUserDelete(argv.userId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .demandCommand(1, 'Please specify a user subcommand')
+      .strict(),
+  )
   .command(
     'install',
     'Install WorkOS AuthKit into your project',
