@@ -31,11 +31,13 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
 import { isNonInteractiveEnvironment } from './utils/environment.js';
 import clack from './utils/clack.js';
 
-/** Apply insecure storage flag if set */
+/** Apply insecure storage flag if set (for both credential-store and config-store) */
 async function applyInsecureStorage(insecureStorage?: boolean): Promise<void> {
   if (insecureStorage) {
     const { setInsecureStorage } = await import('./lib/credentials.js');
+    const { setInsecureConfigStorage } = await import('./lib/config-store.js');
     setInsecureStorage(true);
+    setInsecureConfigStorage(true);
   }
 }
 
@@ -222,6 +224,60 @@ yargs(hideBin(process.argv))
       const { handleDoctor } = await import('./commands/doctor.js');
       await handleDoctor(argv);
     },
+  )
+  .command('env', 'Manage environment configurations', (yargs) =>
+    yargs
+      .options(insecureStorageOption)
+      .command(
+        'add [name] [apiKey]',
+        'Add an environment configuration',
+        (yargs) =>
+          yargs
+            .positional('name', { type: 'string', describe: 'Environment name' })
+            .positional('apiKey', { type: 'string', describe: 'WorkOS API key' })
+            .option('endpoint', { type: 'string', describe: 'Custom API endpoint' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { runEnvAdd } = await import('./commands/env.js');
+          await runEnvAdd({
+            name: argv.name,
+            apiKey: argv.apiKey,
+            endpoint: argv.endpoint,
+          });
+        },
+      )
+      .command(
+        'remove <name>',
+        'Remove an environment configuration',
+        (yargs) => yargs.positional('name', { type: 'string', demandOption: true, describe: 'Environment name' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { runEnvRemove } = await import('./commands/env.js');
+          await runEnvRemove(argv.name);
+        },
+      )
+      .command(
+        'switch [name]',
+        'Switch active environment',
+        (yargs) => yargs.positional('name', { type: 'string', describe: 'Environment name' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { runEnvSwitch } = await import('./commands/env.js');
+          await runEnvSwitch(argv.name);
+        },
+      )
+      .command(
+        'list',
+        'List configured environments',
+        {},
+        async (argv) => {
+          await applyInsecureStorage((argv as any).insecureStorage);
+          const { runEnvList } = await import('./commands/env.js');
+          await runEnvList();
+        },
+      )
+      .demandCommand(1, 'Please specify an env subcommand')
+      .strict(),
   )
   .command(
     'install',
