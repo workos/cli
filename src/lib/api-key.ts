@@ -24,9 +24,7 @@ export function resolveApiKey(options?: ApiKeyOptions): string {
   const activeEnv = getActiveEnvironment();
   if (activeEnv?.apiKey) return activeEnv.apiKey;
 
-  throw new Error(
-    'No API key configured. Run `workos env add` to configure an environment, or set WORKOS_API_KEY.',
-  );
+  throw new Error('No API key configured. Run `workos env add` to configure an environment, or set WORKOS_API_KEY.');
 }
 
 export function resolveApiBaseUrl(): string {

@@ -120,9 +120,9 @@ describe('workos-api', () => {
 
     it('throws WorkOSApiError on 401', async () => {
       mockFetch.mockResolvedValue(mockResponse(401, { message: 'Unauthorized' }, false));
-      await expect(
-        workosRequest({ method: 'GET', path: '/organizations', apiKey: 'bad_key' }),
-      ).rejects.toThrow(WorkOSApiError);
+      await expect(workosRequest({ method: 'GET', path: '/organizations', apiKey: 'bad_key' })).rejects.toThrow(
+        WorkOSApiError,
+      );
       try {
         await workosRequest({ method: 'GET', path: '/organizations', apiKey: 'bad_key' });
       } catch (e) {
@@ -132,14 +132,18 @@ describe('workos-api', () => {
 
     it('throws WorkOSApiError on 404', async () => {
       mockFetch.mockResolvedValue(mockResponse(404, { message: 'Not Found' }, false));
-      await expect(
-        workosRequest({ method: 'GET', path: '/organizations/missing', apiKey: 'sk_test' }),
-      ).rejects.toThrow(WorkOSApiError);
+      await expect(workosRequest({ method: 'GET', path: '/organizations/missing', apiKey: 'sk_test' })).rejects.toThrow(
+        WorkOSApiError,
+      );
     });
 
     it('throws WorkOSApiError with validation errors on 422', async () => {
       mockFetch.mockResolvedValue(
-        mockResponse(422, { message: 'Validation failed', code: 'validation_error', errors: [{ message: 'Name required' }] }, false),
+        mockResponse(
+          422,
+          { message: 'Validation failed', code: 'validation_error', errors: [{ message: 'Name required' }] },
+          false,
+        ),
       );
       try {
         await workosRequest({ method: 'POST', path: '/organizations', apiKey: 'sk_test', body: {} });
@@ -153,9 +157,9 @@ describe('workos-api', () => {
 
     it('throws on network error', async () => {
       mockFetch.mockRejectedValue(new TypeError('fetch failed'));
-      await expect(
-        workosRequest({ method: 'GET', path: '/organizations', apiKey: 'sk_test' }),
-      ).rejects.toThrow('Failed to connect to WorkOS API');
+      await expect(workosRequest({ method: 'GET', path: '/organizations', apiKey: 'sk_test' })).rejects.toThrow(
+        'Failed to connect to WorkOS API',
+      );
     });
   });
 });

@@ -31,7 +31,7 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
 import { isNonInteractiveEnvironment } from './utils/environment.js';
 import clack from './utils/clack.js';
 
-/** Apply insecure storage flag if set (for both credential-store and config-store) */
+/** Apply insecure storage flag if set */
 async function applyInsecureStorage(insecureStorage?: boolean): Promise<void> {
   if (insecureStorage) {
     const { setInsecureStorage } = await import('./lib/credentials.js');
@@ -266,16 +266,11 @@ yargs(hideBin(process.argv))
           await runEnvSwitch(argv.name);
         },
       )
-      .command(
-        'list',
-        'List configured environments',
-        {},
-        async (argv) => {
-          await applyInsecureStorage((argv as any).insecureStorage);
-          const { runEnvList } = await import('./commands/env.js');
-          await runEnvList();
-        },
-      )
+      .command('list', 'List configured environments', {}, async (argv) => {
+        await applyInsecureStorage((argv as any).insecureStorage);
+        const { runEnvList } = await import('./commands/env.js');
+        await runEnvList();
+      })
       .demandCommand(1, 'Please specify an env subcommand')
       .strict(),
   )
@@ -314,14 +309,13 @@ yargs(hideBin(process.argv))
           const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runOrgUpdate } = await import('./commands/organization.js');
           const apiKey = resolveApiKey({ apiKey: argv.apiKey });
-          await runOrgUpdate(argv.orgId, argv.name, argv.domain, argv.state, apiKey, resolveApiBaseUrl());
+          await runOrgUpdate(argv.orgId, argv.name, apiKey, argv.domain, argv.state, resolveApiBaseUrl());
         },
       )
       .command(
         'get <orgId>',
         'Get an organization by ID',
-        (yargs) =>
-          yargs.positional('orgId', { type: 'string', demandOption: true, describe: 'Organization ID' }),
+        (yargs) => yargs.positional('orgId', { type: 'string', demandOption: true, describe: 'Organization ID' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
@@ -356,8 +350,7 @@ yargs(hideBin(process.argv))
       .command(
         'delete <orgId>',
         'Delete an organization',
-        (yargs) =>
-          yargs.positional('orgId', { type: 'string', demandOption: true, describe: 'Organization ID' }),
+        (yargs) => yargs.positional('orgId', { type: 'string', demandOption: true, describe: 'Organization ID' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');

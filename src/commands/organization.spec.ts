@@ -19,9 +19,8 @@ vi.mock('../lib/workos-api.js', () => ({
 const { workosRequest } = await import('../lib/workos-api.js');
 const mockRequest = vi.mocked(workosRequest);
 
-const { runOrgCreate, runOrgUpdate, runOrgGet, runOrgList, runOrgDelete, parseDomainArgs } = await import(
-  './organization.js'
-);
+const { runOrgCreate, runOrgUpdate, runOrgGet, runOrgList, runOrgDelete, parseDomainArgs } =
+  await import('./organization.js');
 
 describe('organization commands', () => {
   let consoleOutput: string[];
@@ -94,7 +93,7 @@ describe('organization commands', () => {
   describe('runOrgUpdate', () => {
     it('updates org name', async () => {
       mockRequest.mockResolvedValue({ id: 'org_123', name: 'Updated' });
-      await runOrgUpdate('org_123', 'Updated', undefined, undefined, 'sk_test');
+      await runOrgUpdate('org_123', 'Updated', 'sk_test');
       expect(mockRequest).toHaveBeenCalledWith(
         expect.objectContaining({
           method: 'PUT',
@@ -106,7 +105,7 @@ describe('organization commands', () => {
 
     it('updates org with domain data', async () => {
       mockRequest.mockResolvedValue({ id: 'org_123', name: 'Updated' });
-      await runOrgUpdate('org_123', 'Updated', 'foo.com', 'pending', 'sk_test');
+      await runOrgUpdate('org_123', 'Updated', 'sk_test', 'foo.com', 'pending');
       expect(mockRequest).toHaveBeenCalledWith(
         expect.objectContaining({
           body: {
@@ -143,9 +142,7 @@ describe('organization commands', () => {
         list_metadata: { before: null, after: null },
       });
       await runOrgList({}, 'sk_test');
-      expect(mockRequest).toHaveBeenCalledWith(
-        expect.objectContaining({ method: 'GET', path: '/organizations' }),
-      );
+      expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({ method: 'GET', path: '/organizations' }));
       // Should contain table data
       expect(consoleOutput.some((l) => l.includes('FooCorp'))).toBe(true);
     });

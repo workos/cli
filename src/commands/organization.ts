@@ -79,9 +79,9 @@ export async function runOrgCreate(
 export async function runOrgUpdate(
   orgId: string,
   name: string,
+  apiKey: string,
   domain?: string,
   state?: string,
-  apiKey?: string,
   baseUrl?: string,
 ): Promise<void> {
   const body: Record<string, unknown> = { name };
@@ -93,7 +93,7 @@ export async function runOrgUpdate(
     const org = await workosRequest<Organization>({
       method: 'PUT',
       path: `/organizations/${orgId}`,
-      apiKey: apiKey!,
+      apiKey,
       baseUrl,
       body,
     });

@@ -1,8 +1,6 @@
 /**
  * Generic WorkOS API client.
- *
  * Thin fetch wrapper with auth, error parsing, and query param support.
- * Reusable for any WorkOS resource endpoint.
  */
 
 const DEFAULT_BASE_URL = 'https://api.workos.com';

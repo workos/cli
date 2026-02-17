@@ -16,11 +16,7 @@ function getOrCreateConfig(): CliConfig {
   return getConfig() ?? { environments: {} };
 }
 
-export async function runEnvAdd(options: {
-  name?: string;
-  apiKey?: string;
-  endpoint?: string;
-}): Promise<void> {
+export async function runEnvAdd(options: { name?: string; apiKey?: string; endpoint?: string }): Promise<void> {
   let { name, apiKey, endpoint } = options;
 
   if (name && apiKey) {
@@ -58,7 +54,6 @@ export async function runEnvAdd(options: {
     if (clack.isCancel(apiKeyResult)) process.exit(0);
     apiKey = apiKeyResult;
 
-    // Store the type from interactive selection
     const config = getOrCreateConfig();
     const isFirst = Object.keys(config.environments).length === 0;
 
@@ -185,10 +180,8 @@ export async function runEnvList(): Promise<void> {
 
   const entries = Object.entries(config.environments);
 
-  // Header
   const nameW = Math.max(6, ...entries.map(([k]) => k.length)) + 2;
   const typeW = 12;
-  const endpointW = 30;
 
   const header = [
     chalk.yellow('  '),
@@ -212,5 +205,3 @@ export async function runEnvList(): Promise<void> {
     console.log([marker, name, type.padEnd(typeW), endpoint].join('  '));
   }
 }
-
-export { setInsecureConfigStorage };
