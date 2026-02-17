@@ -35,7 +35,9 @@ import clack from './utils/clack.js';
 async function applyInsecureStorage(insecureStorage?: boolean): Promise<void> {
   if (insecureStorage) {
     const { setInsecureStorage } = await import('./lib/credentials.js');
+    const { setInsecureConfigStorage } = await import('./lib/config-store.js');
     setInsecureStorage(true);
+    setInsecureConfigStorage(true);
   }
 }
 
@@ -222,6 +224,235 @@ yargs(hideBin(process.argv))
       const { handleDoctor } = await import('./commands/doctor.js');
       await handleDoctor(argv);
     },
+  )
+  .command('env', 'Manage environment configurations', (yargs) =>
+    yargs
+      .options(insecureStorageOption)
+      .command(
+        'add [name] [apiKey]',
+        'Add an environment configuration',
+        (yargs) =>
+          yargs
+            .positional('name', { type: 'string', describe: 'Environment name' })
+            .positional('apiKey', { type: 'string', describe: 'WorkOS API key' })
+            .option('client-id', { type: 'string', describe: 'WorkOS client ID' })
+            .option('endpoint', { type: 'string', describe: 'Custom API endpoint' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { runEnvAdd } = await import('./commands/env.js');
+          await runEnvAdd({
+            name: argv.name,
+            apiKey: argv.apiKey,
+            clientId: argv.clientId,
+            endpoint: argv.endpoint,
+          });
+        },
+      )
+      .command(
+        'remove <name>',
+        'Remove an environment configuration',
+        (yargs) => yargs.positional('name', { type: 'string', demandOption: true, describe: 'Environment name' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { runEnvRemove } = await import('./commands/env.js');
+          await runEnvRemove(argv.name);
+        },
+      )
+      .command(
+        'switch [name]',
+        'Switch active environment',
+        (yargs) => yargs.positional('name', { type: 'string', describe: 'Environment name' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { runEnvSwitch } = await import('./commands/env.js');
+          await runEnvSwitch(argv.name);
+        },
+      )
+      .command('list', 'List configured environments', {}, async (argv) => {
+        await applyInsecureStorage((argv as any).insecureStorage);
+        const { runEnvList } = await import('./commands/env.js');
+        await runEnvList();
+      })
+      .demandCommand(1, 'Please specify an env subcommand')
+      .strict(),
+  )
+  .command('organization', 'Manage organizations', (yargs) =>
+    yargs
+      .options({
+        ...insecureStorageOption,
+        'api-key': { type: 'string' as const, describe: 'WorkOS API key (overrides environment config)' },
+      })
+      .command(
+        'create <name> [domains..]',
+        'Create a new organization',
+        (yargs) =>
+          yargs
+            .positional('name', { type: 'string', demandOption: true, describe: 'Organization name' })
+            .positional('domains', { type: 'string', array: true, describe: 'Domains as domain:state' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runOrgCreate } = await import('./commands/organization.js');
+          const apiKey = resolveApiKey({ apiKey: argv.apiKey });
+          await runOrgCreate(argv.name, (argv.domains as string[]) || [], apiKey, resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'update <orgId> <name> [domain] [state]',
+        'Update an organization',
+        (yargs) =>
+          yargs
+            .positional('orgId', { type: 'string', demandOption: true, describe: 'Organization ID' })
+            .positional('name', { type: 'string', demandOption: true, describe: 'Organization name' })
+            .positional('domain', { type: 'string', describe: 'Domain' })
+            .positional('state', { type: 'string', describe: 'Domain state (verified or pending)' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runOrgUpdate } = await import('./commands/organization.js');
+          const apiKey = resolveApiKey({ apiKey: argv.apiKey });
+          await runOrgUpdate(argv.orgId, argv.name, apiKey, argv.domain, argv.state, resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'get <orgId>',
+        'Get an organization by ID',
+        (yargs) => yargs.positional('orgId', { type: 'string', demandOption: true, describe: 'Organization ID' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runOrgGet } = await import('./commands/organization.js');
+          const apiKey = resolveApiKey({ apiKey: argv.apiKey });
+          await runOrgGet(argv.orgId, apiKey, resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'list',
+        'List organizations',
+        (yargs) =>
+          yargs.options({
+            domain: { type: 'string', describe: 'Filter by domain' },
+            limit: { type: 'number', describe: 'Limit number of results' },
+            before: { type: 'string', describe: 'Cursor for results before a specific item' },
+            after: { type: 'string', describe: 'Cursor for results after a specific item' },
+            order: { type: 'string', describe: 'Order of results (asc or desc)' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runOrgList } = await import('./commands/organization.js');
+          const apiKey = resolveApiKey({ apiKey: argv.apiKey });
+          await runOrgList(
+            { domain: argv.domain, limit: argv.limit, before: argv.before, after: argv.after, order: argv.order },
+            apiKey,
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'delete <orgId>',
+        'Delete an organization',
+        (yargs) => yargs.positional('orgId', { type: 'string', demandOption: true, describe: 'Organization ID' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runOrgDelete } = await import('./commands/organization.js');
+          const apiKey = resolveApiKey({ apiKey: argv.apiKey });
+          await runOrgDelete(argv.orgId, apiKey, resolveApiBaseUrl());
+        },
+      )
+      .demandCommand(1, 'Please specify an organization subcommand')
+      .strict(),
+  )
+  .command('user', 'Manage users', (yargs) =>
+    yargs
+      .options({
+        ...insecureStorageOption,
+        'api-key': { type: 'string' as const, describe: 'WorkOS API key (overrides environment config)' },
+      })
+      .command(
+        'get <userId>',
+        'Get a user by ID',
+        (yargs) => yargs.positional('userId', { type: 'string', demandOption: true, describe: 'User ID' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runUserGet } = await import('./commands/user.js');
+          await runUserGet(argv.userId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'list',
+        'List users',
+        (yargs) =>
+          yargs.options({
+            email: { type: 'string', describe: 'Filter by email' },
+            organization: { type: 'string', describe: 'Filter by organization ID' },
+            limit: { type: 'number', describe: 'Limit number of results' },
+            before: { type: 'string', describe: 'Cursor for results before a specific item' },
+            after: { type: 'string', describe: 'Cursor for results after a specific item' },
+            order: { type: 'string', describe: 'Order of results (asc or desc)' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runUserList } = await import('./commands/user.js');
+          await runUserList(
+            {
+              email: argv.email,
+              organization: argv.organization,
+              limit: argv.limit,
+              before: argv.before,
+              after: argv.after,
+              order: argv.order,
+            },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'update <userId>',
+        'Update a user',
+        (yargs) =>
+          yargs.positional('userId', { type: 'string', demandOption: true, describe: 'User ID' }).options({
+            'first-name': { type: 'string', describe: 'First name' },
+            'last-name': { type: 'string', describe: 'Last name' },
+            'email-verified': { type: 'boolean', describe: 'Email verification status' },
+            password: { type: 'string', describe: 'New password' },
+            'external-id': { type: 'string', describe: 'External ID' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runUserUpdate } = await import('./commands/user.js');
+          await runUserUpdate(
+            argv.userId,
+            resolveApiKey({ apiKey: argv.apiKey }),
+            {
+              firstName: argv.firstName,
+              lastName: argv.lastName,
+              emailVerified: argv.emailVerified,
+              password: argv.password,
+              externalId: argv.externalId,
+            },
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'delete <userId>',
+        'Delete a user',
+        (yargs) => yargs.positional('userId', { type: 'string', demandOption: true, describe: 'User ID' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runUserDelete } = await import('./commands/user.js');
+          await runUserDelete(argv.userId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .demandCommand(1, 'Please specify a user subcommand')
+      .strict(),
   )
   .command(
     'install',

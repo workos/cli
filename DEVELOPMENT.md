@@ -3,39 +3,43 @@
 ## Project Structure
 
 ```
-installer/
-├── src/
-│   ├── bin.ts                # CLI entry point
-│   ├── cli.config.ts         # App configuration (model, URLs)
-│   ├── run.ts                # Entry point
-│   ├── lib/
-│   │   ├── agent-runner.ts       # Core agent execution
-│   │   ├── agent-interface.ts    # SDK interface
-│   │   ├── installer-core.ts     # Headless installer core
-│   │   ├── config.ts             # Framework detection config
-│   │   ├── framework-config.ts   # Framework definitions
-│   │   ├── constants.ts          # Integration types
-│   │   ├── events.ts             # InstallerEventEmitter
-│   │   ├── credential-proxy.ts   # Token refresh proxy for long sessions
-│   │   ├── ensure-auth.ts        # Startup auth guard
-│   │   ├── background-refresh.ts # Background token refresh
-│   │   └── adapters/             # CLI and dashboard adapters
-│   ├── commands/                 # Subcommands (install-skill, login, logout)
-│   ├── steps/                    # Installer step implementations
-│   ├── dashboard/                # Ink/React TUI components
-│   ├── nextjs/                   # Next.js installer agent
-│   ├── react/                    # React SPA installer agent
-│   ├── react-router/             # React Router installer agent
-│   ├── tanstack-start/           # TanStack Start installer agent
-│   ├── vanilla-js/               # Vanilla JS installer agent
-│   └── utils/
-│       ├── clack-utils.ts        # CLI prompts
-│       ├── debug.ts              # Logging with redaction
-│       ├── redact.ts             # Credential redaction
-│       ├── package-manager.ts    # Package manager detection
-│       └── ...                   # Additional utilities
-├── tsconfig.json             # TypeScript config
-└── package.json              # Dependencies and scripts
+src/
+├── bin.ts                    # CLI entry point (yargs command routing)
+├── cli.config.ts             # App configuration (model, URLs)
+├── run.ts                    # Installer orchestration entry point
+├── lib/
+│   ├── agent-runner.ts       # Core agent execution
+│   ├── agent-interface.ts    # Claude Agent SDK interface
+│   ├── installer-core.ts     # Headless installer core (XState)
+│   ├── config.ts             # Framework detection config
+│   ├── constants.ts          # Integration types, shared constants
+│   ├── credential-store.ts   # OAuth credential storage (keyring + file fallback)
+│   ├── config-store.ts       # Environment config storage (keyring + file fallback)
+│   ├── api-key.ts            # API key resolution (env var → flag → config)
+│   ├── workos-api.ts         # Generic WorkOS REST API client
+│   ├── credential-proxy.ts   # Token refresh proxy for long sessions
+│   ├── ensure-auth.ts        # Startup auth guard
+│   └── adapters/             # CLI and dashboard adapters
+├── commands/
+│   ├── env.ts                # workos env (add/remove/switch/list)
+│   ├── organization.ts       # workos organization (create/update/get/list/delete)
+│   ├── user.ts               # workos user (get/list/update/delete)
+│   ├── install.ts            # workos install
+│   ├── install-skill.ts      # workos install-skill
+│   ├── login.ts              # workos login
+│   └── logout.ts             # workos logout
+├── dashboard/                # Ink/React TUI components
+├── nextjs/                   # Next.js installer agent
+├── react/                    # React SPA installer agent
+├── react-router/             # React Router installer agent
+├── tanstack-start/           # TanStack Start installer agent
+├── vanilla-js/               # Vanilla JS installer agent
+└── utils/
+    ├── table.ts              # Terminal table formatter
+    ├── clack-utils.ts        # CLI prompts
+    ├── debug.ts              # Logging with redaction
+    ├── redact.ts             # Credential redaction
+    └── ...                   # Additional utilities
 ```
 
 ## Setup
@@ -54,9 +58,14 @@ pnpm build
 # Build, link globally, and watch for changes
 pnpm dev
 
-# Test locally in another project
+# Test installer in another project
 cd /path/to/test/nextjs-app
 workos dashboard
+
+# Test management commands
+workos env add sandbox sk_test_xxx
+workos organization list
+workos user list
 ```
 
 ## Commands
