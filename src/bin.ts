@@ -235,6 +235,7 @@ yargs(hideBin(process.argv))
           yargs
             .positional('name', { type: 'string', describe: 'Environment name' })
             .positional('apiKey', { type: 'string', describe: 'WorkOS API key' })
+            .option('client-id', { type: 'string', describe: 'WorkOS client ID' })
             .option('endpoint', { type: 'string', describe: 'Custom API endpoint' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -242,6 +243,7 @@ yargs(hideBin(process.argv))
           await runEnvAdd({
             name: argv.name,
             apiKey: argv.apiKey,
+            clientId: argv.clientId,
             endpoint: argv.endpoint,
           });
         },

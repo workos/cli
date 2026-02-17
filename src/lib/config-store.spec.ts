@@ -157,6 +157,28 @@ describe('config-store', () => {
       expect(env?.apiKey).toBe('sk_test_abc123');
     });
 
+    it('returns clientId when present', () => {
+      saveConfig({
+        activeEnvironment: 'staging',
+        environments: {
+          staging: {
+            name: 'staging',
+            type: 'sandbox',
+            apiKey: 'sk_test_abc',
+            clientId: 'client_01ABC',
+          },
+        },
+      });
+      const env = getActiveEnvironment();
+      expect(env?.clientId).toBe('client_01ABC');
+    });
+
+    it('returns undefined clientId when not present', () => {
+      saveConfig(sampleConfig);
+      const env = getActiveEnvironment();
+      expect(env?.clientId).toBeUndefined();
+    });
+
     it('returns correct environment when multiple exist', () => {
       const multiConfig: CliConfig = {
         activeEnvironment: 'sandbox',

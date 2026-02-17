@@ -16,8 +16,14 @@ function getOrCreateConfig(): CliConfig {
   return getConfig() ?? { environments: {} };
 }
 
-export async function runEnvAdd(options: { name?: string; apiKey?: string; endpoint?: string }): Promise<void> {
+export async function runEnvAdd(options: {
+  name?: string;
+  apiKey?: string;
+  clientId?: string;
+  endpoint?: string;
+}): Promise<void> {
   let { name, apiKey, endpoint } = options;
+  const { clientId } = options;
 
   if (name && apiKey) {
     // Non-interactive mode
@@ -61,6 +67,7 @@ export async function runEnvAdd(options: { name?: string; apiKey?: string; endpo
       name,
       type: typeResult as 'production' | 'sandbox',
       apiKey,
+      ...(clientId && { clientId }),
       ...(endpoint && { endpoint }),
     };
 
@@ -88,6 +95,7 @@ export async function runEnvAdd(options: { name?: string; apiKey?: string; endpo
     name: name!,
     type,
     apiKey,
+    ...(clientId && { clientId }),
     ...(endpoint && { endpoint }),
   };
 

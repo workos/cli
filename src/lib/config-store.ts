@@ -19,6 +19,7 @@ export interface EnvironmentConfig {
   name: string;
   type: 'production' | 'sandbox';
   apiKey: string;
+  clientId?: string;
   endpoint?: string;
 }
 
