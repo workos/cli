@@ -1,0 +1,1722 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="revision" content="46" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Larvling Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@600;700&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --bg: #1a1610;
+        --surface: #2a2318;
+        --border: #3d3428;
+        --text: #f5f0e6;
+        --muted: #a09282;
+        --accent: #f5a623;
+        --accent2: #f0c850;
+        --user: #2e2215;
+        --agent: #241f15;
+        --sidebar-w: 260px;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border) transparent;
+      }
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 3px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--muted);
+      }
+      html,
+      body {
+        height: 100%;
+        overflow: hidden;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* Top bar */
+      .topbar {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.35rem 1rem;
+        border-bottom: 2px solid var(--accent);
+        background: linear-gradient(180deg, #2a2318 0%, var(--bg) 100%);
+        flex-shrink: 0;
+      }
+      .logo {
+        width: 80px;
+        height: 80px;
+        border-radius: 6px;
+      }
+      .topbar-link {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .topbar-tagline {
+        display: flex;
+        flex-direction: column;
+        font-family: 'Quicksand', sans-serif;
+        font-size: 0.8rem;
+        color: var(--accent);
+        font-weight: 700;
+        line-height: 1.3;
+        letter-spacing: 0.02em;
+      }
+      .info-wrap {
+        position: relative;
+        display: inline-flex;
+      }
+      .info-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 0.85rem;
+        padding: 0.3rem 0.4rem;
+        line-height: 1;
+      }
+      .info-tooltip {
+        display: none;
+        position: absolute;
+        top: calc(100% + 0.4rem);
+        right: 0;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.8rem 1rem;
+        z-index: 100;
+        min-width: 320px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+      }
+      .info-wrap:hover .info-tooltip {
+        display: block;
+      }
+      .info-tooltip h4 {
+        font-family: 'Quicksand', sans-serif;
+        font-size: 0.75rem;
+        color: var(--accent);
+        margin-bottom: 0.5rem;
+        letter-spacing: 0.03em;
+      }
+      .info-tooltip ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+      .info-tooltip li {
+        font-size: 0.72rem;
+        color: var(--muted);
+        margin-bottom: 0.35rem;
+        padding-left: 1rem;
+        position: relative;
+        line-height: 1.4;
+      }
+      .info-tooltip li:last-child {
+        margin-bottom: 0;
+      }
+      .info-tooltip li::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0.4em;
+        width: 4px;
+        height: 4px;
+        background: var(--accent);
+        border-radius: 50%;
+      }
+      .info-tooltip li strong {
+        color: var(--accent2);
+      }
+      .topbar .meta {
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+      .topbar-right {
+        margin-left: auto;
+      }
+      .topbar-right input {
+        width: 220px;
+        padding: 0.35rem 0.75rem;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        color: var(--text);
+        font-size: 0.8rem;
+        outline: none;
+      }
+      .topbar-right input:focus {
+        border-color: var(--accent);
+      }
+      .topbar-right input::placeholder {
+        color: var(--muted);
+      }
+
+      /* Layout */
+      .layout {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+      }
+
+      /* Sidebar */
+      .sidebar {
+        width: var(--sidebar-w);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+      }
+      .sidebar-controls {
+        padding: 0.5rem 0.6rem;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        gap: 0.35rem;
+        flex-shrink: 0;
+      }
+      .sidebar-controls select {
+        flex: 1;
+        padding: 0.25rem 0.3rem;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--text);
+        font-size: 0.7rem;
+        outline: none;
+        cursor: pointer;
+        appearance: none;
+        -webkit-appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%239a9090'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.4rem center;
+        padding-right: 1.2rem;
+      }
+      .sidebar-controls select:focus {
+        border-color: var(--accent);
+      }
+      .sidebar-controls select option {
+        background: var(--surface);
+        color: var(--text);
+      }
+      .sidebar-list {
+        overflow-y: auto;
+        flex: 1;
+      }
+      .sidebar-item {
+        padding: 0.65rem 1rem;
+        border-bottom: 1px solid var(--border);
+        cursor: pointer;
+      }
+      .sidebar-item:hover {
+        background: var(--surface);
+      }
+      .sidebar-item.active {
+        background: var(--surface);
+        border-left: 3px solid var(--accent);
+      }
+      .si-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .si-date {
+        font-weight: 600;
+        font-size: 0.85rem;
+      }
+      .si-time {
+        color: var(--muted);
+        font-size: 0.75rem;
+        margin-left: 0.4rem;
+      }
+      .si-summary {
+        color: var(--muted);
+        font-size: 0.8rem;
+        margin-top: 0.2rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .si-meta {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 0.2rem;
+        font-size: 0.7rem;
+        color: var(--muted);
+      }
+      /* Overflow menu */
+      .si-menu-wrap {
+        position: relative;
+        margin-left: auto;
+      }
+      .si-menu-btn {
+        cursor: pointer;
+        font-size: 1rem;
+        color: var(--muted);
+        opacity: 0.5;
+        transition: opacity 0.15s;
+        padding: 0 0.2rem;
+        user-select: none;
+      }
+      .si-menu-btn:hover {
+        opacity: 1;
+      }
+      .si-menu {
+        display: none;
+        position: absolute;
+        right: 0;
+        top: 100%;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        min-width: 180px;
+        z-index: 50;
+        padding: 0.25rem 0;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+      }
+      .si-menu.open {
+        display: block;
+      }
+      .menu-item {
+        padding: 0.4rem 0.75rem;
+        font-size: 0.8rem;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .menu-item:hover {
+        background: var(--border);
+      }
+      /* Detail panel */
+      .main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .detail-panel {
+        flex: 1;
+        display: none;
+        flex-direction: column;
+        min-height: 0;
+      }
+      .detail-panel.active {
+        display: flex;
+      }
+      .detail-header {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.65rem 1.25rem;
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+      }
+      .detail-date {
+        font-weight: 600;
+        font-size: 0.95rem;
+      }
+      .detail-sid {
+        color: var(--muted);
+        font-size: 0.75rem;
+        font-family: monospace;
+        margin-left: auto;
+      }
+      .chip {
+        background: rgba(245, 166, 35, 0.1);
+        border: 1px solid rgba(245, 166, 35, 0.2);
+        border-radius: 12px;
+        padding: 0.1rem 0.5rem;
+        font-size: 0.7rem;
+        color: var(--accent2);
+      }
+
+      .no-session {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      /* Messages */
+      .messages {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        overflow-y: auto;
+        padding: 1rem 1.25rem;
+      }
+      .msg {
+        padding: 0.5rem 0.75rem;
+        border-radius: 8px;
+        max-width: 95%;
+        flex-shrink: 0;
+        transition: opacity 0.15s;
+      }
+      .msg.search-dim {
+        display: none;
+      }
+      .msg.search-hit {
+        border-left: 2px solid var(--accent);
+      }
+      .msg.search-hit mark {
+        background: rgba(245, 166, 35, 0.3);
+        color: inherit;
+        border-radius: 2px;
+        padding: 0 1px;
+      }
+      .msg-user {
+        background: var(--user);
+        align-self: flex-end;
+      }
+      .msg-agent {
+        background: var(--agent);
+        align-self: flex-start;
+      }
+      .msg-system {
+        color: var(--muted);
+        font-size: 0.8rem;
+        align-self: center;
+        font-style: italic;
+        padding: 0.25rem 0;
+      }
+      .msg-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.25rem;
+        gap: 0.75rem;
+      }
+      .msg-role {
+        font-weight: 600;
+        font-size: 0.8rem;
+      }
+      .msg-user .msg-role {
+        color: var(--accent);
+      }
+      .msg-user .msg-header {
+        flex-direction: row-reverse;
+      }
+      .msg-agent .msg-role {
+        color: var(--accent2);
+      }
+      .msg-time {
+        color: var(--muted);
+        font-size: 0.7rem;
+      }
+      .msg-body {
+        font-size: 0.85rem;
+        line-height: 1.5;
+        word-break: break-word;
+        max-height: 200px;
+        overflow: hidden;
+        position: relative;
+        cursor: pointer;
+      }
+      .msg-body.expanded {
+        max-height: none;
+      }
+      .msg-body.truncated::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 3rem;
+        pointer-events: none;
+      }
+      .msg-agent .msg-body.truncated::after {
+        background: linear-gradient(transparent 0%, var(--agent) 80%);
+      }
+      .msg-user .msg-body.truncated::after {
+        background: linear-gradient(transparent 0%, var(--user) 80%);
+      }
+      .msg-body.expanded::after {
+        display: none;
+      }
+      .msg-expand {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        padding: 0.3rem 0;
+        margin-top: 0.2rem;
+        font-size: 0.7rem;
+        color: var(--accent);
+        cursor: pointer;
+        opacity: 0.8;
+        transition: opacity 0.15s;
+        user-select: none;
+      }
+      .msg-expand:hover {
+        opacity: 1;
+      }
+      .msg-expand .expand-icon {
+        transition: transform 0.2s;
+      }
+      .msg-expand.collapsed .expand-icon {
+        transform: rotate(0deg);
+      }
+      .msg-expand.expanded .expand-icon {
+        transform: rotate(180deg);
+      }
+      .msg-body p {
+        margin: 0 0 0.4rem 0;
+      }
+      .msg-body p:last-child {
+        margin-bottom: 0;
+      }
+      .msg-body code {
+        font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+        font-size: 0.8rem;
+        background: rgba(0, 0, 0, 0.3);
+        padding: 0.1rem 0.3rem;
+        border-radius: 3px;
+      }
+      .msg-body pre {
+        background: rgba(0, 0, 0, 0.35);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 0.6rem 0.8rem;
+        overflow-x: auto;
+        margin: 0.4rem 0;
+      }
+      .msg-body pre code {
+        background: none;
+        padding: 0;
+        font-size: 0.78rem;
+      }
+      .msg-body h1,
+      .msg-body h2,
+      .msg-body h3,
+      .msg-body h4 {
+        margin: 0.5rem 0 0.3rem;
+        font-size: 0.9rem;
+        color: var(--accent2);
+      }
+      .msg-body h1 {
+        font-size: 1rem;
+      }
+      .msg-body ul,
+      .msg-body ol {
+        margin: 0.3rem 0;
+        padding-left: 1.4rem;
+      }
+      .msg-body li {
+        margin: 0.15rem 0;
+      }
+      .msg-body blockquote {
+        border-left: 3px solid var(--border);
+        padding-left: 0.6rem;
+        margin: 0.3rem 0;
+        color: var(--muted);
+      }
+      .msg-body a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .msg-body a:hover {
+        text-decoration: underline;
+      }
+      .msg-body hr {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 0.5rem 0;
+      }
+      .msg-body table {
+        border-collapse: collapse;
+        margin: 0.4rem 0;
+        font-size: 0.8rem;
+      }
+      .msg-body th,
+      .msg-body td {
+        border: 1px solid var(--border);
+        padding: 0.25rem 0.5rem;
+      }
+      .msg-body th {
+        background: var(--surface);
+      }
+      .msg-tools {
+        display: flex;
+        gap: 0.35rem;
+        margin-top: 0.4rem;
+        flex-wrap: wrap;
+      }
+      .tool-badge {
+        font-size: 0.7rem;
+        padding: 0.1rem 0.4rem;
+        background: rgba(245, 166, 35, 0.08);
+        border: 1px solid rgba(245, 166, 35, 0.25);
+        border-radius: 4px;
+        color: var(--accent2);
+        font-family: monospace;
+      }
+
+      /* Stats bar */
+      .stats-bar {
+        display: none;
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface);
+        flex-shrink: 0;
+      }
+      .stats-bar.open {
+        display: block;
+      }
+      .stats-cards {
+        display: flex;
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
+      }
+      .stat-card {
+        flex: 1;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.6rem 0.8rem;
+        text-align: center;
+      }
+      .stat-value {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: var(--accent);
+      }
+      .stat-label {
+        font-size: 0.7rem;
+        color: var(--muted);
+        margin-top: 0.15rem;
+      }
+      .stats-charts {
+        display: flex;
+        gap: 1rem;
+      }
+      .stats-chart {
+        flex: 1;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0.6rem 0.8rem;
+      }
+      .chart-title {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--muted);
+        margin-bottom: 0.5rem;
+      }
+      .tool-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.3rem;
+      }
+      .tool-name {
+        font-size: 0.7rem;
+        color: var(--text);
+        min-width: 80px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-family: monospace;
+      }
+      .tool-bar-track {
+        flex: 1;
+        height: 6px;
+        background: var(--border);
+        border-radius: 3px;
+        overflow: hidden;
+      }
+      .tool-bar-fill {
+        height: 100%;
+        background: var(--accent);
+        border-radius: 3px;
+      }
+      .tool-count {
+        font-size: 0.7rem;
+        color: var(--muted);
+        min-width: 30px;
+        text-align: right;
+      }
+      .day-chart {
+        display: flex;
+        align-items: flex-end;
+        gap: 2px;
+        height: 60px;
+      }
+      .day-col {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        height: 100%;
+        justify-content: flex-end;
+      }
+      .day-bar {
+        width: 100%;
+        background: var(--accent);
+        border-radius: 2px 2px 0 0;
+        min-height: 2px;
+      }
+      .day-label {
+        font-size: 0.55rem;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+      .stats-toggle {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        color: var(--muted);
+        font-size: 0.8rem;
+        padding: 0.3rem 0.6rem;
+        cursor: pointer;
+        margin-right: 0.5rem;
+      }
+      .stats-toggle:hover,
+      .stats-toggle.active {
+        color: var(--accent);
+        border-color: var(--accent);
+      }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  </head>
+  <body data-revision="46">
+    <div class="topbar">
+      <a href="https://github.com/athrael-soju/Larvling" target="_blank" class="topbar-link">
+        <img
+          src="https://raw.githubusercontent.com/athrael-soju/Larvling/main/larvling.png"
+          alt="Larvling"
+          class="logo"
+        />
+        <div class="topbar-tagline">
+          <span>Your</span><span>friendly</span><span>memory</span><span>companion</span>
+        </div>
+      </a>
+      <div class="topbar-right">
+        <div class="info-wrap">
+          <button class="info-btn" title="About Larvling">&#x2753;</button>
+          <div class="info-tooltip">
+            <h4>The 6 Principles of Larvling</h4>
+            <ul>
+              <li><strong>Tiny</strong> - under 50 KB of logic, under 100 KB total</li>
+              <li><strong>Zero dependencies</strong> - just Python 3.8+ and the standard library</li>
+              <li><strong>Portable</strong> - macOS, Linux, Windows</li>
+              <li><strong>Private</strong> - all data stays local in a single SQLite file</li>
+              <li><strong>Instant</strong> - no setup, no config, no onboarding</li>
+              <li><strong>Lightweight</strong> - SQLite WAL mode, near-zero overhead</li>
+            </ul>
+          </div>
+        </div>
+        <button id="stats-toggle" class="stats-toggle" title="Toggle stats">Stats</button>
+        <input type="text" id="search" placeholder="Search..." />
+      </div>
+    </div>
+
+    <div class="stats-bar" id="stats-bar">
+      <div class="stats-cards">
+        <div class="stat-card">
+          <div class="stat-value">1</div>
+          <div class="stat-label">Sessions</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">46</div>
+          <div class="stat-label">Messages</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">0m</div>
+          <div class="stat-label">Avg Duration</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value">0%</div>
+          <div class="stat-label">Summarized</div>
+        </div>
+      </div>
+      <div class="stats-charts">
+        <div class="stats-chart">
+          <div class="chart-title">Top Tools</div>
+          <div class="tool-row">
+            <span class="tool-name">Bash</span>
+            <div class="tool-bar-track"><div class="tool-bar-fill" style="width: 100%"></div></div>
+            <span class="tool-count">69</span>
+          </div>
+          <div class="tool-row">
+            <span class="tool-name">Read</span>
+            <div class="tool-bar-track"><div class="tool-bar-fill" style="width: 58%"></div></div>
+            <span class="tool-count">40</span>
+          </div>
+          <div class="tool-row">
+            <span class="tool-name">TaskUpdate</span>
+            <div class="tool-bar-track"><div class="tool-bar-fill" style="width: 46%"></div></div>
+            <span class="tool-count">32</span>
+          </div>
+          <div class="tool-row">
+            <span class="tool-name">Edit</span>
+            <div class="tool-bar-track"><div class="tool-bar-fill" style="width: 29%"></div></div>
+            <span class="tool-count">20</span>
+          </div>
+          <div class="tool-row">
+            <span class="tool-name">Write</span>
+            <div class="tool-bar-track"><div class="tool-bar-fill" style="width: 23%"></div></div>
+            <span class="tool-count">16</span>
+          </div>
+        </div>
+        <div class="stats-chart">
+          <div class="chart-title">Activity (14 days)</div>
+          <div class="day-chart">
+            <div class="day-col">
+              <div class="day-bar" style="height: 2%" title="2026-02-04: 0"></div>
+              <span class="day-label">04</span>
+            </div>
+            <div class="day-col">
+              <div class="day-bar" style="height: 2%" title="2026-02-05: 0"></div>
+              <span class="day-label">05</span>
+            </div>
+            <div class="day-col">
+              <div class="day-bar" style="height: 2%" title="2026-02-06: 0"></div>
+              <span class="day-label">06</span>
+            </div>
+            <div class="day-col">
+              <div class="day-bar" style="height: 2%" title="2026-02-07: 0"></div>
+              <span class="day-label">07</span>
+            </div>
+            <div class="day-col">
+              <div class="day-bar" style="height: 2%" title="2026-02-08: 0"></div>
+              <span class="day-label">08</span>
+            </div>
+            <div class="day-col">
+              <div class="day-bar" style="height: 2%" title="2026-02-09: 0"></div>
+              <span class="day-label">09</span>
+            </div>
+            <div class="day-col">
+              <div class="day-bar" style="height: 2%" title="2026-02-10: 0"></div>
+              <span class="day-label">10</span>
+            </div>
+            <div class="day-col">
+              <div class="day-bar" style="height: 2%" title="2026-02-11: 0"></div>
+              <span class="day-label">11</span>
+            </div>
+            <div class="day-col">
+              <div class="day-bar" style="height: 2%" title="2026-02-12: 0"></div>
+              <span class="day-label">12</span>
+            </div>
+            <div class="day-col">
+              <div class="day-bar" style="height: 2%" title="2026-02-13: 0"></div>
+              <span class="day-label">13</span>
+            </div>
+            <div class="day-col">
+              <div class="day-bar" style="height: 2%" title="2026-02-14: 0"></div>
+              <span class="day-label">14</span>
+            </div>
+            <div class="day-col">
+              <div class="day-bar" style="height: 2%" title="2026-02-15: 0"></div>
+              <span class="day-label">15</span>
+            </div>
+            <div class="day-col">
+              <div class="day-bar" style="height: 2%" title="2026-02-16: 0"></div>
+              <span class="day-label">16</span>
+            </div>
+            <div class="day-col">
+              <div class="day-bar" style="height: 100%" title="2026-02-17: 46"></div>
+              <span class="day-label">17</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="layout">
+      <div class="sidebar" id="sidebar">
+        <div class="sidebar-controls">
+          <select id="sort-select">
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="most-msgs">Most msgs</option>
+            <option value="longest">Longest</option>
+          </select>
+          <select id="filter-select">
+            <option value="all">All</option>
+            <option value="today">Today</option>
+            <option value="week">This week</option>
+          </select>
+        </div>
+        <div class="sidebar-list" id="sidebar-list">
+          <div
+            class="sidebar-item active"
+            data-sid="0ba0c676-0651-414b-a3a7-24a545528a73"
+            data-started="2026-02-17 17:27:53"
+            data-ended="2026-02-17 22:33:05"
+            data-msgs="46"
+            data-duration="0"
+          >
+            <div class="si-top">
+              <span class="si-date">2026-02-17</span>
+              <span class="si-time">17:27</span>
+              <span class="si-menu-wrap">
+                <span class="si-menu-btn" title="Actions">&#x22EF;</span>
+                <div class="si-menu">
+                  <div class="menu-item si-export-dl">&#x1F4BE; Export session</div>
+                </div>
+              </span>
+            </div>
+            <div class="si-summary">46 messages</div>
+            <div class="si-meta">
+              <span>46 msgs</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="main" id="main">
+        <div class="no-session" id="no-session">Select a session</div>
+        <div class="detail-panel" data-sid="0ba0c676-0651-414b-a3a7-24a545528a73">
+          <div class="detail-header">
+            <span class="detail-date">2026-02-17</span>
+
+            <span class="detail-sid">0ba0c676</span>
+          </div>
+          <div class="messages">
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">22:33</span></div>
+              <div class="msg-body">
+                Now updating the PR description. Pushed and PR updated with the full command listing:
+                https://github.com/workos/cli/pull/59
+              </div>
+              <div class="msg-tools"><span class="tool-badge">Bash x3</span></div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">22:32</span></div>
+              <div class="msg-body">commit this</div>
+            </div>
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">22:26</span></div>
+              <div class="msg-body">
+                Now register in `bin.ts`. Typecheck clean, 413 tests all green. Let me build and smoke test. Done. New
+                `workos user` commands: get, list, update, delete — all working. Same patterns as organization commands,
+                reusing the existing API client and table formatter. ### Test commands ```bash workos user list workos
+                user list --email someone@example.com workos user list --organization org_XXXXXXX --limit 5 workos user
+                get user_XXXXXXX workos user update user_XXXXXXX --first-name John --last-name Doe workos user update
+                user_XXXXXXX --email-verified workos user delete user_XXXXXXX ```
+              </div>
+              <div class="msg-tools">
+                <span class="tool-badge">Write x2</span> <span class="tool-badge">Read x1</span>
+                <span class="tool-badge">Edit x1</span> <span class="tool-badge">Bash x3</span>
+              </div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">22:22</span></div>
+              <div class="msg-body">on the old CLI, how difficult would it be to port over PR 24 to this CLI?</div>
+            </div>
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">21:55</span></div>
+              <div class="msg-body">
+                Required `apiKey` follows optional `domain?` and `state?`. I&#x27;ll reorder so required params come
+                first. Now update the caller in `bin.ts` and the test to match the new arg order. Clean. Let me amend
+                and push. Fixed and pushed. The issue was my de-slop change made `apiKey` required but left it after
+                optional params — reordered so required params come first.
+              </div>
+              <div class="msg-tools">
+                <span class="tool-badge">Read x1</span> <span class="tool-badge">Edit x4</span>
+                <span class="tool-badge">Grep x1</span> <span class="tool-badge">Bash x2</span>
+              </div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">21:54</span></div>
+              <div class="msg-body">
+                 p typecheck   nicknisi/old-cli &gt; workos@0.6.0 typecheck /Users/nicknisi/Developer/cli/old-cli
+                &gt; tsc --noEmit src/commands/organization.ts:84:3 - error TS1016: A required parameter cannot follow
+                an optional parameter. 84 apiKey: string, ~~~~~~ Found 1 error in src/commands/organization.ts:84
+              </div>
+            </div>
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">21:52</span></div>
+              <div class="msg-body">Pushed. The PR at https://github.com/workos/cli/pull/59 is updated.</div>
+              <div class="msg-tools"><span class="tool-badge">Bash x1</span></div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">21:52</span></div>
+              <div class="msg-body">push and update the PR</div>
+            </div>
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">21:52</span></div>
+              <div class="msg-body">Done — amended into `6bc1fa7`.</div>
+              <div class="msg-tools"><span class="tool-badge">Bash x1</span></div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">21:51</span></div>
+              <div class="msg-body">amend the last commit with these changes</div>
+            </div>
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">21:51</span></div>
+              <div class="msg-body">
+                Removed unnecessary section comments in `table.ts`, an unused variable and unused re-export in `env.ts`,
+                a non-null assertion (`apiKey!`) in `organization.ts` by making the param required, and trimmed verbose
+                doc comment decorations from `workos-api.ts` and `bin.ts`.
+              </div>
+              <div class="msg-tools">
+                <span class="tool-badge">Bash x2</span> <span class="tool-badge">Read x6</span>
+                <span class="tool-badge">Edit x8</span>
+              </div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">21:49</span></div>
+              <div class="msg-body">/essentials:de-slopify</div>
+            </div>
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">21:47</span></div>
+              <div class="msg-body">
+                Here&#x27;s the complete list of Go CLI commands and what we did/didn&#x27;t bring over: | Command |
+                Status | Notes | |---------|--------|-------| | `workos init` | **Skipped** | Replaced by `workos env
+                add` (agreed during ideation) | | `workos env add` | **Ported** | | | `workos env remove` | **Ported** |
+                | | `workos env switch` | **Ported** | | | `workos organization create` | **Ported** | | | `workos
+                organization update` | **Ported** | | | `workos organization get` | **Ported** | | | `workos
+                organization list` | **Ported** | | | `workos organization delete` | **Ported** | | | `workos fga
+                resourcetype list/apply` | **Skipped** | Excluded by design | | `workos fga warrant create/delete` |
+                **Skipped** | Excluded by design | | `workos fga resource create/list/update/delete` | **Skipped** |
+                Excluded by design | | `workos fga check` | **Skipped** | Excluded by design | | `workos fga query` |
+                **Skipped** | Excluded by design | | `workos fga schema get/convert/validate/apply` | **Skipped** |
+                Excluded by design | | `workos fga test` | **Skipped** | Excluded by design | **Everything non-FGA was
+                ported.** The only non-FGA command skipped is `init`, which is functionally replaced by `env add` (it
+                did the same thing — create an environment with an API key).
+              </div>
+              <div class="msg-tools">
+                <span class="tool-badge">Read x2</span> <span class="tool-badge">Glob x1</span>
+                <span class="tool-badge">Bash x1</span>
+              </div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">21:47</span></div>
+              <div class="msg-body">
+                Review the old CLI again and list all of the commands that we did not bring over
+              </div>
+            </div>
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">21:40</span></div>
+              <div class="msg-body">PR created: https://github.com/workos/cli/pull/59</div>
+              <div class="msg-tools"><span class="tool-badge">Bash x1</span></div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">21:40</span></div>
+              <div class="msg-body">no test plan</div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">21:39</span></div>
+              <div class="msg-body">/essentials:pr use the contract to fill in a thorough description</div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">21:38</span></div>
+              <div class="msg-body">amend the last commit with these fixes</div>
+            </div>
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">21:38</span></div>
+              <div class="msg-body">
+                No — yargs propagates `--version` from the root command automatically. The subcommands inherit it.
+                It&#x27;s only defined once at the bottom of `bin.ts` (`.version(getVersion())`).
+              </div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">21:38</span></div>
+              <div class="msg-body">Do each of these subcommands need a `--version`?</div>
+            </div>
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">21:36</span></div>
+              <div class="msg-body">
+                Now cursors only show when there are actually more pages. Also updated the test that checks for cursor
+                output. Good — the &quot;shows pagination cursors&quot; test uses both `before` and `after` as non-null,
+                so it will still pass with the new logic. All pass. Rebuild so the linked CLI picks it up: Done —
+                cursors will only show when there are more pages. Now about that delete error — the API returns `204`
+                with text &quot;Accepted&quot; instead of empty body. Let me fix the response handling. The issue is
+                that the WorkOS delete endpoint likely returns `202 Accepted` (not `204`), and the body is just the text
+                &quot;Accepted&quot; which isn&#x27;t valid JSON. Now update the test for 204 to match the new parsing,
+                and add a 202 test. I need to update `mockResponse` to return `text()` as well, since we now call
+                `response.text()` instead of `response.json()`. Now update the 204 test and add a 202 test. 405 tests,
+                all green. Let me rebuild. Fixed. The WorkOS delete endpoint returns `202 Accepted` with a text body,
+                not `204` with empty body. The API client now handles both `202` and `204` as no-content responses, and
+                gracefully handles non-JSON response bodies. Try `workos organization delete` again.
+              </div>
+              <div class="msg-tools">
+                <span class="tool-badge">Read x5</span> <span class="tool-badge">Edit x4</span>
+                <span class="tool-badge">Bash x4</span>
+              </div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">21:30</span></div>
+              <div class="msg-body">yeah hide them unless there&#x27;s more pages</div>
+            </div>
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">21:30</span></div>
+              <div class="msg-body">
+                That&#x27;s the cursor-based pagination metadata from the WorkOS API. `Before` and `After` are cursor
+                values you&#x27;d pass to `--before` or `--after` flags to page through results. But showing them
+                unconditionally (especially `After: -` when there are no more results) is noisy. The Go CLI did this
+                too, but it&#x27;s not great UX. Want me to hide the cursors unless there are actually more pages to
+                fetch?
+              </div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">21:30</span></div>
+              <div class="msg-body">
+                 workos organization list --limit 1  nicknisi/old-cli ID Name Domains
+                ─────────────────────────────────────────────────── org_01KG2MV36J3KQMZQ1EZ75QERQK Nisi Corp nisi.org
+                Before: org_01KG2MV36J3KQMZQ1EZ75QERQK After: - What is this Before: After: - stuff?
+              </div>
+            </div>
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">21:28</span></div>
+              <div class="msg-body">
+                Here&#x27;s the full checklist: ### Environment Commands ```bash # Add environments (interactive) workos
+                env add # Add environments (non-interactive) workos env add production sk_live_YOUR_KEY workos env add
+                sandbox sk_test_YOUR_KEY workos env add local sk_test_YOUR_KEY --endpoint http://localhost:8001 # List
+                (verify active indicator, types, endpoints) workos env list # Switch active environment workos env
+                switch sandbox workos env list # verify ▸ moved # Remove workos env remove local workos env list #
+                verify it&#x27;s gone ``` ### Organization Commands ```bash # List orgs workos organization list workos
+                organization list --limit 5 workos organization list --order desc workos organization list --domain
+                yourdomain.com # Get single org workos organization get org_XXXXXXX # Create org (name only) workos
+                organization create &quot;Test Org&quot; # Create org with domain workos organization create &quot;Test
+                Org 2&quot; testdomain.com:pending # Update org workos organization update org_XXXXXXX &quot;Renamed
+                Org&quot; workos organization update org_XXXXXXX &quot;Renamed Org&quot; newdomain.com verified # Delete
+                org workos organization delete org_XXXXXXX ``` ### API Key Override ```bash # --api-key flag (bypasses
+                env config) workos organization list --api-key sk_test_YOUR_KEY # Env var (for CI/headless)
+                WORKOS_API_KEY=sk_test_YOUR_KEY workos organization list # Error case: no key configured workos env
+                remove production # remove all envs first workos organization list # should show &quot;No API key
+                configured&quot; error ``` ### Edge Cases ```bash # Invalid env name workos env add &quot;INVALID
+                NAME&quot; sk_test_abc # Remove non-existent env workos env remove doesnotexist # Switch to non-existent
+                env workos env switch doesnotexist # Org command with bad API key workos organization list --api-key
+                sk_invalid_key # Help text workos env --help workos organization --help workos organization create
+                --help ```
+              </div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">21:28</span></div>
+              <div class="msg-body">
+                ok I tried a few commands and they seem to work. List all new commands I should try and verify as part
+                of this work
+              </div>
+            </div>
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">19:20</span></div>
+              <div class="msg-body">
+                Yes, exactly. `pnpm dev` runs `pnpm link --global` as part of its script, so whichever worktree you run
+                `pnpm dev` in will become the globally linked `workos` binary.
+              </div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">19:20</span></div>
+              <div class="msg-body">
+                I mean if I run `pnpm dev` in that worktree, it should then wrok for that version of the CLI?
+              </div>
+            </div>
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">19:19</span></div>
+              <div class="msg-body">
+                No — `pnpm link --global` is a one-shot operation. It points the global `workos` binary at whichever
+                directory you last ran it from. It doesn&#x27;t auto-follow your working directory. So if you switch to
+                `cli/main` and want to test that version, you&#x27;d need to run `pnpm link --global` there again. And
+                vice versa when coming back here. `pnpm dev` handles this (it runs `pnpm build &amp;&amp; pnpm link
+                --global &amp;&amp; pnpm build:watch`), so just running `pnpm dev` in whichever worktree you&#x27;re
+                actively developing in should be sufficient.
+              </div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">19:19</span></div>
+              <div class="msg-body">so it should properly link to whatever worktree I&#x27;m working in, yeah?</div>
+            </div>
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">19:19</span></div>
+              <div class="msg-body">
+                Let me check what&#x27;s happening. The globally linked `workos` is still pointing to the published
+                0.6.0 (without our changes). The `pnpm link --global` likely linked to a different version. Let me fix
+                it. There it is — the global `workos` shim points to `/Users/nicknisi/Developer/cli/main/dist/bin.js`,
+                not this `old-cli` directory. You need to re-link from this project. It&#x27;s working now. The shim was
+                pointing to `cli/main/` — `pnpm link --global` from this directory overwrote it. **Note**: When you
+                switch back to working on the `main` directory, you&#x27;ll need to re-link from there. Only one global
+                link can exist at a time for the same package name.
+              </div>
+              <div class="msg-tools"><span class="tool-badge">Bash x9</span></div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">18:39</span></div>
+              <div class="msg-body">
+                `pnpm dev` doesn&#x27;t seem to be working. When I run `workos env list` it has no idea what that is so
+                that must mean it&#x27;s not using the linked copy, right?
+              </div>
+            </div>
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">18:35</span></div>
+              <div class="msg-body">
+                Committed as `3a015ab`. ## How to test **1. Build and link the CLI:** ```bash pnpm dev # or: pnpm build
+                &amp;&amp; npm link ``` **2. Set up an environment with your API key:** ```bash # Interactive (prompts
+                for name, type, key): workos env add # Or non-interactive: workos env add production sk_live_YOUR_KEY
+                workos env add sandbox sk_test_YOUR_KEY ``` **3. Test environment commands:** ```bash workos env list #
+                see configured environments workos env switch sandbox # switch active env workos env list # verify
+                active indicator moved ``` **4. Test organization commands (requires a valid API key):** ```bash workos
+                organization list workos organization list --limit 5 --order desc workos organization create &quot;Test
+                Org&quot; testdomain.com:pending workos organization get org_XXXXXXX workos organization update
+                org_XXXXXXX &quot;Updated Name&quot; workos organization delete org_XXXXXXX ``` **5. Test API key
+                override (skip env config):** ```bash workos organization list --api-key sk_test_YOUR_KEY ``` **6. Test
+                env var override (for CI):** ```bash WORKOS_API_KEY=sk_test_YOUR_KEY workos organization list ```
+              </div>
+              <div class="msg-tools"><span class="tool-badge">Bash x2</span></div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">18:35</span></div>
+              <div class="msg-body">commit this. then tell me how to test this</div>
+            </div>
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">18:00</span></div>
+              <div class="msg-body">
+                Good. Let me clean up Phase 1 tasks and explore the referenced patterns before creating Phase 2 tasks.
+                Let me quickly re-read the pattern files referenced in the spec — `workos-management.ts` and the current
+                `bin.ts`. Now let me create tasks and start implementing. The table formatter is trivial so I&#x27;ll
+                fold it into the org commands task. Starting with the WorkOS API client — tests first, then
+                implementation. All 12 workos-api tests pass. 389 total green. Table formatter — simple utility, no
+                separate test needed (tested via org commands). Now the organization commands — the main component.
+                Tests first, then implementation. All 15 org tests pass. 404 total green. Now register the organization
+                commands in `bin.ts`. Final validation — typecheck, tests, build, and smoke test. All validations pass:
+                - **Typecheck**: clean - **Tests**: 30 files, 404 tests, all green - **Build**: successful - **Smoke
+                test**: `workos organization --help` shows all 5 subcommands ## Phase 2 Implementation Complete ###
+                Implemented - **WorkOS API Client** (`src/lib/workos-api.ts`) — Generic fetch wrapper with auth, error
+                parsing, query params - **Table Formatter** (`src/utils/table.ts`) — Chalk-colored table output for list
+                commands - **Organization Commands** (`src/commands/organization.ts`) — create, update, get, list,
+                delete matching Go CLI - **bin.ts Registration** — `workos organization` command group with all
+                subcommands + `--api-key` flag ### Files Changed | File | Status | |------|--------| |
+                `src/lib/workos-api.ts` | New | | `src/lib/workos-api.spec.ts` | New (12 tests) | | `src/utils/table.ts`
+                | New | | `src/commands/organization.ts` | New | | `src/commands/organization.spec.ts` | New (15 tests)
+                | | `src/bin.ts` | Modified (organization command group) | ### Validation Results - Type check: PASS -
+                Tests: PASS (404/404) - Build: PASS - Smoke test: PASS Ready to commit when you&#x27;re satisfied.
+              </div>
+              <div class="msg-tools">
+                <span class="tool-badge">Read x3</span> <span class="tool-badge">TaskUpdate x18</span>
+                <span class="tool-badge">TaskCreate x5</span> <span class="tool-badge">Write x5</span>
+                <span class="tool-badge">Bash x6</span> <span class="tool-badge">Edit x1</span>
+              </div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">17:57</span></div>
+              <div class="msg-body">/execute-spec docs/ideation/cli-management-commands/spec-phase-2.md</div>
+            </div>
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">17:57</span></div>
+              <div class="msg-body">
+                Committed as `4dd0175`. The `docs/` and `.claude/` directories were intentionally left unstaged per
+                project conventions (CLAUDE.md says never commit `docs/`).
+              </div>
+              <div class="msg-tools"><span class="tool-badge">Bash x4</span></div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">17:56</span></div>
+              <div class="msg-body">commit this</div>
+            </div>
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">17:55</span></div>
+              <div class="msg-body">
+                Let me load the spec and explore the codebase patterns before creating tasks. Now let me explore
+                patterns for tests and the clack prompt utilities. Good. I have a solid understanding of all the
+                patterns. Let me create the implementation tasks and start building. `★ Insight
+                ─────────────────────────────────────` The credential-store uses a module-level `forceInsecureStorage`
+                boolean set by `setInsecureStorage()`. The config-store needs the same mechanism. Rather than sharing
+                the flag across modules (tight coupling), each store will have its own — the CLI entry point (`bin.ts`)
+                will call both when `--insecure-storage` is passed. `─────────────────────────────────────────────────`
+                Let me start with the test file, then the implementation. Now the implementation. The `@napi-rs/keyring`
+                package isn&#x27;t installed. Let me check. All 16 config-store tests pass, plus all existing tests
+                still green (352 total). Now the API key resolution module. Test first, then implementation. All 10
+                api-key tests pass. 362 total, all green. Now the environment commands. This is the meatiest component —
+                interactive prompts, validation, table output. Let me check how clack prompts work for the patterns I
+                need. Now the test file. For env commands, I&#x27;ll test the non-interactive logic (the parts that
+                don&#x27;t need clack prompts). All 15 env command tests pass. 377 total, all green. Now register the
+                env commands in `bin.ts`. `★ Insight ─────────────────────────────────────` The `applyInsecureStorage`
+                function currently only sets the credential-store flag. Since env commands use the config-store
+                (separate keyring entry), we need to also set the config-store&#x27;s insecure storage flag. Best place:
+                extend `applyInsecureStorage` to call both. `─────────────────────────────────────────────────` Now add
+                the `env` command group. I&#x27;ll add it after the `doctor` command. Now let me build and smoke test.
+                Everything working. Let me clean up the test data and verify all tests still pass. Final validation —
+                typecheck, tests, and build all at once. All passing: - **Typecheck**: clean - **Tests**: 28 files, 377
+                tests, all green - **Build**: successful (verified earlier) - **Smoke test**: env add/list/switch/remove
+                all working ## Phase 1 Implementation Complete ### Implemented - **Config Store**
+                (`src/lib/config-store.ts`) — Keyring-backed storage with file fallback, same pattern as
+                credential-store - **API Key Resolution** (`src/lib/api-key.ts`) — Priority chain: env var → flag →
+                active environment → error - **Environment Commands** (`src/commands/env.ts`) — add, remove, switch,
+                list with interactive clack prompts - **bin.ts Registration** — `workos env` command group with all
+                subcommands ### Files Changed | File | Status | |------|--------| | `src/lib/config-store.ts` | New | |
+                `src/lib/config-store.spec.ts` | New (16 tests) | | `src/lib/api-key.ts` | New | |
+                `src/lib/api-key.spec.ts` | New (10 tests) | | `src/commands/env.ts` | New | |
+                `src/commands/env.spec.ts` | New (15 tests) | | `src/bin.ts` | Modified (env command group + insecure
+                storage for config-store) | ### Validation Results - Type check: PASS - Tests: PASS (377/377) - Build:
+                PASS - Smoke test: PASS (`workos env add/list/switch/remove`) ### Notable Decisions - **Auto-active on
+                first add**: The first environment added becomes the active one automatically (better UX than Go CLI) -
+                **Type auto-detection**: Non-interactive `env add` infers sandbox vs production from `sk_test_` prefix -
+                **Active env transfer on remove**: Removing the active env auto-switches to the next available one ###
+                Next Steps - Review changes: `git diff` - Commit when satisfied - For Phase 2 (organization commands):
+                `/execute-spec docs/ideation/cli-management-commands/spec-phase-2.md`
+              </div>
+              <div class="msg-tools">
+                <span class="tool-badge">Read x6</span> <span class="tool-badge">Glob x1</span>
+                <span class="tool-badge">TaskCreate x5</span> <span class="tool-badge">TaskUpdate x14</span>
+                <span class="tool-badge">Write x6</span> <span class="tool-badge">Bash x21</span>
+                <span class="tool-badge">Grep x1</span> <span class="tool-badge">Edit x2</span>
+              </div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">17:49</span></div>
+              <div class="msg-body">/execute-spec docs/ideation/cli-management-commands/spec-phase-1.md</div>
+            </div>
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">17:49</span></div>
+              <div class="msg-body">
+                Good question. Right now the spec has the API key coming from manual entry via `workos env add`. The
+                interim flow would be: 1. User goes to WorkOS dashboard, copies their API key manually 2. User runs
+                `workos env add production sk_xxx` (or interactive prompt) 3. Key gets stored in keyring 4. Management
+                commands resolve it from the active environment **Future flow** (when programmatic key access exists):
+                1. User runs `workos login` (Connect OAuth — already exists) 2. CLI automatically provisions/fetches API
+                key using the OAuth token 3. Key gets stored in the same config store transparently 4. Management
+                commands work without manual key entry The config store and `resolveApiKey()` don&#x27;t change — only
+                the *source* of the key changes (manual → automatic). The swap point would be in `env add` or a new
+                command that bridges login → key provisioning. Good. The specs already capture this correctly — `env
+                add` for manual key entry now, swappable to automatic provisioning later without changing the downstream
+                resolution chain. Specs approved. Here&#x27;s the execution handoff: --- Ideation complete. Artifacts
+                written to `./docs/ideation/cli-management-commands/`. ## To start implementation Phase 1 must complete
+                before Phase 2 (org commands need API key resolution from environments). ```bash claude /execute-spec
+                docs/ideation/cli-management-commands/spec-phase-1.md ``` After Phase 1 is done and committed: ```bash
+                claude /execute-spec docs/ideation/cli-management-commands/spec-phase-2.md ``` Each `/execute-spec`
+                session creates its own implementation tasks. Fresh sessions keep context focused on the spec at hand.
+              </div>
+              <div class="msg-tools"><span class="tool-badge">AskUserQuestion x2</span></div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">17:48</span></div>
+              <div class="msg-body">How is the API key going to be handled in the interim?</div>
+            </div>
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">17:48</span></div>
+              <div class="msg-body">
+                Good, up to date with main including keyring support. Now the remaining question: It doesn&#x27;t have
+                to be separate. Two approaches: 1. **Same entry** — Extend the existing `Credentials` blob to include
+                environments. Simpler, one keyring read. But credentials get updated frequently (token refresh) while
+                env config is static — mixing them means rewriting the whole blob on every token refresh. 2. **Second
+                entry** — Same service (`workos-cli`), different account (`config`). Cleanly separates volatile auth
+                tokens from stable env config. Trivial to add using the existing `credential-store.ts` pattern.
+                Confidence is now at **95/100**. Ready to generate the contract. Let me read the templates. Contract
+                approved. Now let me determine the workflow and phasing. Now let me read the spec template and plan the
+                phases. Let me explore key patterns in the current codebase to write accurate specs. Now let me check
+                the Go CLI&#x27;s org commands for exact structure and the WorkOS Node SDK. Good. I have everything I
+                need. Let me now generate the implementation specs. This is a 2-phase project: - **Phase 1**: Config
+                Store + Environment Management (foundation) - **Phase 2**: Organization Management (depends on Phase 1)
+                Now let me present the specs for review. What would you like to clarify about the specs?
+              </div>
+              <div class="msg-tools">
+                <span class="tool-badge">Bash x4</span> <span class="tool-badge">AskUserQuestion x5</span>
+                <span class="tool-badge">Read x15</span> <span class="tool-badge">Write x3</span>
+                <span class="tool-badge">Grep x2</span>
+              </div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">17:40</span></div>
+              <div class="msg-body">I updated the branch. Now it&#x27;s up-to-date with main</div>
+            </div>
+            <div class="msg msg-agent">
+              <div class="msg-header"><span class="msg-role">Agent</span><span class="msg-time">17:40</span></div>
+              <div class="msg-body">
+                I&#x27;ll start by exploring both codebases to understand what we&#x27;re working with. Let me kick off
+                parallel exploration of the old Go CLI and the current project. Good, I now have a thorough
+                understanding of both codebases. Let me analyze what&#x27;s in scope. ## Intake Summary **Old Go CLI
+                (non-FGA features):** - `workos init` — setup with API keys + environment config - `workos env
+                add/remove/switch` — multi-environment management (`~/.workos.json`) - `workos organization
+                create/update/get/list/delete` — full CRUD with pagination, domain management **Current TS CLI already
+                has:** - `workos login/logout` — Connect OAuth device auth (`~/.workos/credentials.json`) - `workos
+                install` / `workos dashboard` — AI-powered AuthKit installer - `workos install-skill` — skill
+                distribution **Key tension:** The Go CLI uses direct API keys stored in `~/.workos.json`, while the TS
+                CLI uses Connect OAuth tokens in `~/.workos/credentials.json`. These are fundamentally different auth
+                models. --- Now let me score confidence before generating artifacts. ### Confidence Score: 68/100 |
+                Dimension | Score | Gap | |-----------|-------|-----| | Problem Clarity | 15/20 | Why port these? Is it
+                feature parity or evolution? | | Goal Definition | 14/20 | Exact command structure unclear | | Success
+                Criteria | 12/20 | What defines &quot;done&quot;? | | Scope Boundaries | 14/20 | Init vs login overlap,
+                env mgmt vs existing auth | | Consistency | 13/20 | Two auth models need reconciliation | Below 70 —
+                need to ask several questions. Got it. For the &quot;Extra scope&quot; question — the Go CLI only has
+                orgs and envs beyond FGA. But I&#x27;m wondering if you&#x27;d want to add commands that the Go CLI
+                *didn&#x27;t* have but would be useful. Let me follow up on a couple things. That&#x27;s a critical
+                constraint. So the OAuth token from Connect may not have the right scopes/permissions for management
+                APIs like organizations. These APIs expect an API key (`sk_...`). Good, that clarifies a lot. Let me ask
+                a couple more targeted questions to get to 95%. Let me check how the current credential storage works to
+                understand the keychain vs JSON fallback. Quick clarification — the current credential storage is **just
+                a JSON file** at `~/.workos/credentials.json` (mode 0o600). No system keychain involved. The
+                `Credentials` interface currently holds: ```typescript interface Credentials { accessToken: string;
+                expiresAt: number; userId: string; email?: string; staging?: StagingCache; refreshToken?: string; } ```
+                Let me check — you might be right that there&#x27;s keyring usage I missed. No `@napi-rs/keyring` or any
+                keyring library in the codebase. The credentials are stored as plain JSON at
+                `~/.workos/credentials.json` with `0o600` file permissions. Perhaps that&#x27;s something you planned
+                but hasn&#x27;t been implemented yet? Ah, you mean the current mainline CLI (possibly on `main` branch
+                or a separate repo) already uses `@napi-rs/keyring`? This `old-cli` branch doesn&#x27;t have it. Let me
+                check main. Found it — `main` branch has `@napi-rs/keyring` v1.2.0. Let me see how it&#x27;s used there.
+                Got it — on `main`, credentials use `@napi-rs/keyring` (service: `workos-cli`, account: `credentials`)
+                with JSON file fallback. This branch (`nicknisi/old-cli`) is behind main and doesn&#x27;t have it yet.
+                What would you like to clarify?
+              </div>
+              <div class="msg-tools">
+                <span class="tool-badge">Task x2</span> <span class="tool-badge">AskUserQuestion x7</span>
+                <span class="tool-badge">Read x1</span> <span class="tool-badge">Grep x2</span>
+                <span class="tool-badge">Bash x5</span>
+              </div>
+            </div>
+            <div class="msg msg-user">
+              <div class="msg-header"><span class="msg-role">You</span><span class="msg-time">17:27</span></div>
+              <div class="msg-body">
+                /ideation ../../workos-cli is our old CLI, written in Go. I want to bring the functionality that it does
+                over to this project. Not the FGA part but probably the rest of it.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      var list = document.getElementById('sidebar-list');
+
+      marked.setOptions({ breaks: true, gfm: true });
+      function formatSize(len) {
+        if (len >= 1000) return (len / 1000).toFixed(1).replace(/\.0$/, '') + 'k chars';
+        return len + ' chars';
+      }
+      document.querySelectorAll('.msg-body').forEach(function (body) {
+        var raw = body.textContent;
+        body.dataset.raw = raw;
+        body.innerHTML = marked.parse(raw);
+      });
+
+      function checkTruncation(container) {
+        (container || document).querySelectorAll('.msg-body').forEach(function (body) {
+          if (body.parentNode.querySelector('.msg-expand')) return;
+          if (body.scrollHeight > body.clientHeight) {
+            body.classList.add('truncated');
+            var size = (body.dataset.raw || '').length;
+            var hint = document.createElement('div');
+            hint.className = 'msg-expand collapsed';
+            hint.innerHTML = '<span class="expand-icon">&#x25BC;</span> Show more (' + formatSize(size) + ')';
+            hint.dataset.size = size;
+            body.parentNode.appendChild(hint);
+          }
+        });
+      }
+
+      function selectSession(sid) {
+        document.querySelectorAll('.sidebar-item').forEach(function (el) {
+          el.classList.toggle('active', el.dataset.sid === sid);
+        });
+        document.querySelectorAll('.detail-panel').forEach(function (el) {
+          el.classList.toggle('active', el.dataset.sid === sid);
+        });
+        var ns = document.getElementById('no-session');
+        if (ns) ns.style.display = sid ? 'none' : '';
+        var active = document.querySelector('.detail-panel.active');
+        if (active) checkTruncation(active);
+      }
+
+      function applySort(value) {
+        var items = Array.from(list.querySelectorAll('.sidebar-item'));
+        items.sort(function (a, b) {
+          switch (value) {
+            case 'oldest':
+              return (a.dataset.ended || a.dataset.started).localeCompare(b.dataset.ended || b.dataset.started);
+            case 'most-msgs':
+              return (parseInt(b.dataset.msgs) || 0) - (parseInt(a.dataset.msgs) || 0);
+            case 'longest':
+              return (parseFloat(b.dataset.duration) || 0) - (parseFloat(a.dataset.duration) || 0);
+            default:
+              return (b.dataset.ended || b.dataset.started).localeCompare(a.dataset.ended || a.dataset.started);
+          }
+        });
+        items.forEach(function (el) {
+          list.appendChild(el);
+        });
+      }
+
+      function applyFilter(value) {
+        var now = new Date();
+        var todayStr = now.toISOString().slice(0, 10);
+        var weekAgo = new Date(now - 7 * 86400000).toISOString().slice(0, 10);
+
+        document.querySelectorAll('.sidebar-item').forEach(function (el) {
+          var show = true;
+          var started = el.dataset.started || '';
+          var dateStr = started.split(' ')[0] || '';
+          switch (value) {
+            case 'today':
+              show = dateStr === todayStr;
+              break;
+            case 'week':
+              show = dateStr >= weekAgo;
+              break;
+          }
+          el.style.display = show ? '' : 'none';
+        });
+      }
+
+      function highlightMessages(q) {
+        document.querySelectorAll('.msg').forEach(function (msg) {
+          msg.classList.remove('search-hit', 'search-dim');
+          var body = msg.querySelector('.msg-body');
+          if (body && body.dataset.raw) {
+            body.innerHTML = marked.parse(body.dataset.raw);
+          }
+        });
+        if (!q) return;
+        var escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        var re = new RegExp('(' + escaped + ')', 'gi');
+        document.querySelectorAll('.detail-panel').forEach(function (panel) {
+          panel.querySelectorAll('.msg').forEach(function (msg) {
+            var body = msg.querySelector('.msg-body');
+            if (!body) return;
+            if (body.textContent.toLowerCase().indexOf(q) !== -1) {
+              msg.classList.add('search-hit');
+              var walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+              var nodes = [];
+              while (walker.nextNode()) nodes.push(walker.currentNode);
+              nodes.forEach(function (node) {
+                if (re.test(node.nodeValue)) {
+                  re.lastIndex = 0;
+                  var span = document.createElement('span');
+                  span.innerHTML = node.nodeValue.replace(re, '<mark>$1</mark>');
+                  node.parentNode.replaceChild(span, node);
+                }
+              });
+            } else {
+              msg.classList.add('search-dim');
+            }
+          });
+        });
+      }
+
+      function applyAll() {
+        applySort(document.getElementById('sort-select').value);
+        applyFilter(document.getElementById('filter-select').value);
+        var q = document.getElementById('search').value.toLowerCase();
+        if (q) {
+          document.querySelectorAll('.sidebar-item').forEach(function (el) {
+            if (el.style.display === 'none') return;
+            var sid = el.dataset.sid;
+            var panel = document.querySelector('.detail-panel[data-sid="' + sid + '"]');
+            var match =
+              el.textContent.toLowerCase().indexOf(q) !== -1 ||
+              (panel && panel.textContent.toLowerCase().indexOf(q) !== -1);
+            if (!match) el.style.display = 'none';
+          });
+        }
+        highlightMessages(q);
+      }
+
+      function saveState(key, val) {
+        localStorage.setItem('larvling-' + key, val);
+      }
+
+      document.getElementById('sort-select').addEventListener('change', function () {
+        saveState('sort', this.value);
+        applyAll();
+      });
+      document.getElementById('filter-select').addEventListener('change', function () {
+        saveState('filter', this.value);
+        applyAll();
+      });
+      document.getElementById('search').addEventListener('input', function () {
+        saveState('search', this.value);
+        applyAll();
+      });
+
+      function downloadFile(filename, content) {
+        var blob = new Blob([content], { type: 'text/markdown' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+
+      function exportSession(sid) {
+        var panel = document.querySelector('.detail-panel[data-sid="' + sid + '"]');
+        if (!panel) return;
+        var lines = ['# Session ' + sid.slice(0, 8), ''];
+        var header = panel.querySelector('.detail-header');
+        if (header) {
+          var date = header.querySelector('.detail-date');
+          if (date) lines.push('**Date:** ' + date.textContent);
+          var chips = header.querySelectorAll('.chip');
+          chips.forEach(function (c) {
+            lines.push('**' + c.textContent.trim() + '**');
+          });
+          lines.push('');
+        }
+        lines.push('---', '');
+        panel.querySelectorAll('.msg').forEach(function (msg) {
+          var role = msg.querySelector('.msg-role');
+          var time = msg.querySelector('.msg-time');
+          var body = msg.querySelector('.msg-body');
+          if (!role || !body) return;
+          lines.push('### ' + role.textContent + '  `' + (time ? time.textContent : '') + '`');
+          var tools = msg.querySelector('.msg-tools');
+          if (tools) lines.push('*Tools: ' + tools.textContent.trim() + '*');
+          lines.push('');
+          lines.push(body.dataset.raw || body.textContent);
+          lines.push('');
+        });
+        return lines.join('\n');
+      }
+
+      function closeMenus() {
+        document.querySelectorAll('.si-menu.open').forEach(function (m) {
+          m.classList.remove('open');
+        });
+      }
+      document.addEventListener('click', function (e) {
+        if (!e.target.closest('.si-menu-wrap')) closeMenus();
+      });
+
+      list.addEventListener('click', function (e) {
+        var menuBtn = e.target.closest('.si-menu-btn');
+        if (menuBtn) {
+          e.stopPropagation();
+          var menu = menuBtn.parentElement.querySelector('.si-menu');
+          var wasOpen = menu.classList.contains('open');
+          closeMenus();
+          if (!wasOpen) menu.classList.add('open');
+          return;
+        }
+        var menuItem = e.target.closest('.menu-item');
+        if (menuItem) {
+          e.stopPropagation();
+          closeMenus();
+          var sid = menuItem.closest('.sidebar-item').dataset.sid;
+          if (menuItem.classList.contains('si-summary-dl')) {
+            var text = '# Session Summary\n\n**Session:** ' + sid.slice(0, 8) + '\n\n' + menuItem.dataset.summary;
+            downloadFile('summary-' + sid.slice(0, 8) + '.md', text);
+          } else if (menuItem.classList.contains('si-export-dl')) {
+            var md = exportSession(sid);
+            if (md) downloadFile('export-' + sid.slice(0, 8) + '.md', md);
+          }
+          return;
+        }
+        var item = e.target.closest('.sidebar-item');
+        if (item) {
+          selectSession(item.dataset.sid);
+          saveState('active', item.dataset.sid);
+        }
+      });
+
+      document.addEventListener('click', function (e) {
+        var hint = e.target.closest('.msg-expand');
+        var body = e.target.closest('.msg-body');
+        var target = hint || body;
+        if (!target) return;
+        var msg = target.closest('.msg');
+        if (!msg) return;
+        var msgBody = msg.querySelector('.msg-body');
+        var msgHint = msg.querySelector('.msg-expand');
+        if (!msgBody) return;
+        var isExpanded = msgBody.classList.contains('expanded');
+        if (isExpanded) {
+          msgBody.classList.remove('expanded');
+          msgBody.classList.add('truncated');
+          if (msgHint) {
+            msgHint.classList.remove('expanded');
+            msgHint.classList.add('collapsed');
+            msgHint.innerHTML =
+              '<span class="expand-icon">&#x25BC;</span> Show more (' +
+              formatSize(parseInt(msgHint.dataset.size)) +
+              ')';
+          }
+        } else if (msgBody.classList.contains('truncated') || msgHint) {
+          msgBody.classList.add('expanded');
+          msgBody.classList.remove('truncated');
+          if (msgHint) {
+            msgHint.classList.remove('collapsed');
+            msgHint.classList.add('expanded');
+            msgHint.innerHTML = '<span class="expand-icon">&#x25BC;</span> Show less';
+          }
+        }
+      });
+
+      (function () {
+        var sort = localStorage.getItem('larvling-sort');
+        var filter = localStorage.getItem('larvling-filter');
+        var search = localStorage.getItem('larvling-search');
+        var sid = localStorage.getItem('larvling-active');
+
+        if (sort) document.getElementById('sort-select').value = sort;
+        if (filter) document.getElementById('filter-select').value = filter;
+        if (search) document.getElementById('search').value = search;
+
+        applyAll();
+
+        if (sid && document.querySelector('.sidebar-item[data-sid="' + sid + '"]')) {
+          selectSession(sid);
+        } else {
+          var first = list.querySelector('.sidebar-item:not([style*="display: none"])');
+          if (first) selectSession(first.dataset.sid);
+        }
+
+        var savedScroll = localStorage.getItem('larvling-scroll');
+        if (savedScroll) {
+          setTimeout(function () {
+            var msgs = document.querySelector('.detail-panel.active .messages');
+            if (msgs) msgs.scrollTop = parseInt(savedScroll);
+          }, 50);
+        }
+      })();
+
+      setInterval(function () {
+        var msgs = document.querySelector('.detail-panel.active .messages');
+        if (msgs) saveState('scroll', msgs.scrollTop);
+      }, 1000);
+
+      (function () {
+        var toggle = document.getElementById('stats-toggle');
+        var bar = document.getElementById('stats-bar');
+        if (toggle && bar) {
+          if (localStorage.getItem('larvling-stats') === 'open') {
+            bar.classList.add('open');
+            toggle.classList.add('active');
+          }
+          toggle.addEventListener('click', function () {
+            var isOpen = bar.classList.toggle('open');
+            toggle.classList.toggle('active', isOpen);
+            localStorage.setItem('larvling-stats', isOpen ? 'open' : 'closed');
+          });
+        }
+      })();
+
+      (function () {
+        var currentRev = document.body.dataset.revision;
+        setInterval(function () {
+          var xhr = new XMLHttpRequest();
+          xhr.open('GET', location.href, true);
+          xhr.onload = function () {
+            if (xhr.status === 200 || xhr.status === 0) {
+              var match = xhr.responseText.match(/data-revision="(\d+)"/);
+              if (match && match[1] !== currentRev) {
+                location.reload();
+              }
+            }
+          };
+          xhr.send();
+        }, 3000);
+      })();
+    </script>
+  </body>
+</html>

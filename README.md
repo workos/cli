@@ -1,6 +1,6 @@
 # workos
 
-AI-powered CLI that automatically integrates WorkOS AuthKit into web applications.
+WorkOS CLI for installing AuthKit integrations and managing WorkOS resources.
 
 ## Installation
 
@@ -45,29 +45,65 @@ Get your credentials from [dashboard.workos.com](https://dashboard.workos.com):
 ## CLI Options
 
 ```bash
-workos [options] [command]
+workos [command]
 
 Commands:
-  dashboard              Run with visual TUI dashboard (experimental)
+  install                Install WorkOS AuthKit into your project
+  dashboard              Run installer with visual TUI dashboard (experimental)
   login                  Authenticate with WorkOS via Connect OAuth device flow
   logout                 Remove stored credentials
-  install-skill          Install AuthKit skills to coding agents (Claude Code, Codex, etc.)
-    --list, -l           List available skills without installing
-    --skill, -s          Install specific skill(s)
-    --agent, -a          Target agent(s): claude-code, codex, cursor, goose
+  env                    Manage environment configurations
+  organization           Manage organizations
+  user                   Manage users
+  doctor                 Diagnose WorkOS integration issues
+  install-skill          Install AuthKit skills to coding agents
+```
 
-Options:
+### Environment Management
+
+```bash
+workos env add [name] [apiKey]   # Add environment (interactive if no args)
+workos env remove <name>         # Remove an environment
+workos env switch [name]         # Switch active environment
+workos env list                  # List environments with active indicator
+```
+
+API keys are stored in the system keychain via `@napi-rs/keyring`, with a JSON file fallback at `~/.workos/config.json`.
+
+### Organization Management
+
+```bash
+workos organization create <name> [domain:state ...]
+workos organization update <orgId> <name> [domain] [state]
+workos organization get <orgId>
+workos organization list [--domain] [--limit] [--before] [--after] [--order]
+workos organization delete <orgId>
+```
+
+### User Management
+
+```bash
+workos user get <userId>
+workos user list [--email] [--organization] [--limit] [--before] [--after] [--order]
+workos user update <userId> [--first-name] [--last-name] [--email-verified] [--password] [--external-id]
+workos user delete <userId>
+```
+
+Management commands resolve API keys via: `WORKOS_API_KEY` env var → `--api-key` flag → active environment's stored key.
+
+### Installer Options
+
+```bash
+workos install [options]
+
   --direct, -D            Use your own Anthropic API key (bypass llm-gateway)
   --integration <name>    Framework: nextjs, react, react-router, tanstack-start, vanilla-js
-  --redirect-uri <uri>    Custom redirect URI (defaults to framework convention)
-  --homepage-url <url>    Custom homepage URL (defaults to http://localhost:{port})
+  --redirect-uri <uri>    Custom redirect URI
+  --homepage-url <url>    Custom homepage URL
   --install-dir <path>    Installation directory
-  --no-validate           Skip post-installation validation (includes build check)
+  --no-validate           Skip post-installation validation
   --force-install         Force install packages even if peer dependency checks fail
   --debug                 Enable verbose logging
-
-Environment Variables:
-  WORKOS_TELEMETRY=false  Disable telemetry collection
 ```
 
 ## Examples
@@ -95,7 +131,7 @@ workos login
 workos logout
 ```
 
-Credentials are stored in `~/.workos/credentials.json`. Access tokens are not persisted long-term for security - users re-authenticate when tokens expire.
+OAuth credentials are stored in the system keychain (with `~/.workos/credentials.json` fallback). Access tokens are not persisted long-term for security - users re-authenticate when tokens expire.
 
 ## How It Works
 
