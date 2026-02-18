@@ -1,20 +1,29 @@
-import { hasCredentials, getCredentials, isTokenExpired } from '../../lib/credentials.js';
-import { ensureValidToken } from '../../lib/token-refresh.js';
-import { startCredentialProxy, type CredentialProxyHandle } from '../../lib/credential-proxy.js';
-import { getAuthkitDomain, getCliAuthClientId } from '../../lib/settings.js';
-import { getLlmGatewayUrlFromHost } from '../../utils/urls.js';
+import Anthropic from '@anthropic-ai/sdk';
+import { getLlmGatewayUrl, getAuthkitDomain, getCliAuthClientId, getConfig } from '../../lib/settings.js';
+import { getCredentials, isTokenExpired, updateTokens } from '../../lib/credentials.js';
+import { refreshAccessToken } from '../../lib/token-refresh-client.js';
 import { buildDoctorPrompt, type AnalysisContext } from '../agent-prompt.js';
 import type { AiAnalysis, AiFinding } from '../types.js';
 
-const DOCTOR_MODEL = 'claude-sonnet-4-5-20250514';
-const TIMEOUT_MS = 60_000;
+const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+function startSpinner(message: string): { stop: () => void } {
+  let i = 0;
+  const interval = setInterval(() => {
+    process.stderr.write(`\r  ${SPINNER_FRAMES[i++ % SPINNER_FRAMES.length]} ${message}`);
+  }, 80);
+  return {
+    stop: () => {
+      clearInterval(interval);
+      process.stderr.write(`\r${' '.repeat(message.length + 6)}\r`);
+    },
+  };
+}
 
 /**
- * Parse AI agent response to extract structured JSON findings.
- * Handles both clean JSON and JSON embedded in markdown code blocks.
+ * Parse AI response to extract structured JSON findings.
  */
 export function parseAiResponse(text: string): { findings: AiFinding[]; summary: string } {
-  // Try to extract JSON from markdown code block first
   const codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
   const jsonStr = codeBlockMatch ? codeBlockMatch[1] : text;
 
@@ -34,7 +43,6 @@ export function parseAiResponse(text: string): { findings: AiFinding[]; summary:
       : [];
     return { findings, summary: String(parsed.summary ?? '') };
   } catch {
-    // Fallback: try to find any JSON object in the text
     const jsonMatch = text.match(/\{[\s\S]*"findings"[\s\S]*\}/);
     if (jsonMatch) {
       try {
@@ -44,13 +52,54 @@ export function parseAiResponse(text: string): { findings: AiFinding[]; summary:
           summary: String(parsed.summary ?? ''),
         };
       } catch {
-        // give up on JSON parsing
+        // give up
       }
     }
-
-    // Final fallback: return the raw text as summary with no findings
     return { findings: [], summary: text.slice(0, 500) };
   }
+}
+
+/**
+ * Make a single API call directly to the LLM gateway.
+ * No credential proxy — doctor is a quick one-shot call, not a long session.
+ * Uses the access token directly as an auth header.
+ */
+async function callModel(prompt: string, model: string): Promise<string> {
+  let creds = getCredentials();
+  if (!creds) throw new Error('Not authenticated');
+
+  // One-shot refresh if expired
+  if (isTokenExpired(creds) && creds.refreshToken) {
+    const result = await refreshAccessToken(getAuthkitDomain(), getCliAuthClientId());
+    if (result.success && result.accessToken && result.expiresAt) {
+      updateTokens(result.accessToken, result.expiresAt, result.refreshToken);
+      creds = getCredentials()!;
+    } else {
+      throw new Error('Session expired — run `workos login` to re-authenticate');
+    }
+  } else if (isTokenExpired(creds)) {
+    throw new Error('Session expired — run `workos login` to re-authenticate');
+  }
+
+  const client = new Anthropic({
+    baseURL: getLlmGatewayUrl(),
+    apiKey: 'gateway',
+    defaultHeaders: { Authorization: `Bearer ${creds.accessToken}` },
+  });
+
+  return callApi(client, prompt, model);
+}
+
+async function callApi(client: Anthropic, prompt: string, model: string): Promise<string> {
+  const response = await client.messages.create({
+    model,
+    max_tokens: 2048,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  const text = response.content[0];
+  if (text.type === 'text') return text.text;
+  throw new Error('Unexpected response format');
 }
 
 export async function checkAiAnalysis(
@@ -58,10 +107,12 @@ export async function checkAiAnalysis(
   context: AnalysisContext,
   options: { skipAi?: boolean },
 ): Promise<AiAnalysis> {
+  const model = getConfig().doctorModel;
+
   const skippedResult = (reason: string): AiAnalysis => ({
     findings: [],
     summary: '',
-    model: DOCTOR_MODEL,
+    model,
     durationMs: 0,
     skipped: true,
     skipReason: reason,
@@ -71,132 +122,25 @@ export async function checkAiAnalysis(
     return skippedResult('Skipped (--skip-ai flag)');
   }
 
-  // Check auth
-  if (!hasCredentials()) {
+  const creds = getCredentials();
+  if (!creds) {
     return skippedResult('Not authenticated — run `workos login` for AI-powered analysis');
   }
 
-  const creds = getCredentials();
-  if (!creds) {
-    return skippedResult('No credentials found');
-  }
-
-  // Refresh token if needed
-  if (isTokenExpired(creds)) {
-    try {
-      const result = await ensureValidToken();
-      if (!result.success) {
-        return skippedResult('Authentication expired — run `workos login` to re-authenticate');
-      }
-    } catch {
-      return skippedResult('Authentication expired — run `workos login` to re-authenticate');
-    }
-  }
-
   const startTime = Date.now();
-  let proxy: CredentialProxyHandle | null = null;
+  const spinner = startSpinner('Analyzing project with AI...');
 
   try {
-    // Start credential proxy
-    const gatewayUrl = getLlmGatewayUrlFromHost();
-    const authkitDomain = getAuthkitDomain();
-    const clientId = getCliAuthClientId();
-
-    proxy = await startCredentialProxy({
-      upstreamUrl: gatewayUrl,
-      refresh: { authkitDomain, clientId },
-    });
-
-    // Build prompt
     const prompt = buildDoctorPrompt(context);
-
-    // Dynamically import the SDK
-    const { query } = await import('@anthropic-ai/claude-agent-sdk');
-
-    // Run the agent with timeout
-    const timeoutId = setTimeout(() => {
-      response.close();
-    }, TIMEOUT_MS);
-
-    const collectedText: string[] = [];
-
-    const response = query({
-      prompt,
-      options: {
-        model: DOCTOR_MODEL,
-        cwd: installDir,
-        permissionMode: 'default',
-        allowedTools: ['Read', 'Glob', 'Grep'],
-        canUseTool: (toolName: string, input: unknown) => {
-          if (['Read', 'Glob', 'Grep'].includes(toolName)) {
-            return Promise.resolve({
-              behavior: 'allow' as const,
-              updatedInput: input as Record<string, unknown>,
-            });
-          }
-          return Promise.resolve({
-            behavior: 'deny' as const,
-            message: `Tool ${toolName} not allowed in doctor analysis mode`,
-          });
-        },
-        env: {
-          ANTHROPIC_BASE_URL: proxy.url,
-          CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
-          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 'true',
-        },
-      },
-    });
-
-    try {
-      for await (const message of response) {
-        if (message.type === 'assistant') {
-          const content = message.message?.content;
-          if (Array.isArray(content)) {
-            for (const block of content) {
-              if (block.type === 'text' && typeof block.text === 'string') {
-                collectedText.push(block.text);
-              }
-            }
-          }
-        }
-        if (message.type === 'result' && message.subtype === 'success') {
-          if (typeof message.result === 'string') {
-            collectedText.push(message.result);
-          }
-        }
-      }
-    } finally {
-      clearTimeout(timeoutId);
-    }
-
+    const responseText = await callModel(prompt, model);
     const durationMs = Date.now() - startTime;
-    const outputText = collectedText.join('\n');
-    const { findings, summary } = parseAiResponse(outputText);
-
-    return {
-      findings,
-      summary,
-      model: DOCTOR_MODEL,
-      durationMs,
-    };
+    const { findings, summary } = parseAiResponse(responseText);
+    return { findings, summary, model, durationMs };
   } catch (error) {
     const durationMs = Date.now() - startTime;
-    const message = error instanceof Error ? error.message : 'Unknown error';
-
-    if (message.includes('abort') || message.includes('AbortError')) {
-      return {
-        ...skippedResult(`Analysis timed out after ${Math.round(TIMEOUT_MS / 1000)}s`),
-        durationMs,
-      };
-    }
-
-    return {
-      ...skippedResult(`Analysis failed: ${message}`),
-      durationMs,
-    };
+    const errMsg = error instanceof Error ? error.message : 'Unknown error';
+    return { ...skippedResult(`Analysis failed: ${errMsg}`), durationMs };
   } finally {
-    if (proxy) {
-      await proxy.stop().catch(() => {});
-    }
+    spinner.stop();
   }
 }
