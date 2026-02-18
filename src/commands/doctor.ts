@@ -5,6 +5,7 @@ import clack from '../utils/clack.js';
 interface DoctorArgs {
   verbose?: boolean;
   skipApi?: boolean;
+  skipAi?: boolean;
   installDir?: string;
   json?: boolean;
   copy?: boolean;
@@ -15,6 +16,7 @@ export async function handleDoctor(argv: ArgumentsCamelCase<DoctorArgs>): Promis
     installDir: argv.installDir ?? process.cwd(),
     verbose: argv.verbose ?? false,
     skipApi: argv.skipApi ?? false,
+    skipAi: argv.skipAi ?? false,
     json: argv.json ?? false,
     copy: argv.copy ?? false,
   };

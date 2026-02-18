@@ -113,6 +113,45 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
     }
   }
 
+  // AI Analysis
+  if (report.aiAnalysis) {
+    console.log('');
+    if (report.aiAnalysis.skipped) {
+      console.log('AI Analysis');
+      console.log(`   ${Chalk.dim(report.aiAnalysis.skipReason ?? 'Skipped')}`);
+    } else {
+      const duration = (report.aiAnalysis.durationMs / 1000).toFixed(1);
+      console.log(`AI Analysis ${Chalk.dim(`(${duration}s)`)}`);
+      if (report.aiAnalysis.summary) {
+        console.log(`   ${report.aiAnalysis.summary}`);
+      }
+      console.log('');
+      for (const finding of report.aiAnalysis.findings) {
+        const icon =
+          finding.severity === 'error'
+            ? Chalk.red('✗')
+            : finding.severity === 'warning'
+              ? Chalk.yellow('!')
+              : Chalk.dim('ℹ');
+        const color =
+          finding.severity === 'error'
+            ? Chalk.red
+            : finding.severity === 'warning'
+              ? Chalk.yellow
+              : Chalk.dim;
+        console.log(`   ${icon} ${color(finding.title)}`);
+        console.log(`     ${finding.detail}`);
+        if (finding.remediation) {
+          console.log(`     ${Chalk.dim('→')} ${finding.remediation}`);
+        }
+        if (finding.filePath) {
+          console.log(`     ${Chalk.dim('File:')} ${finding.filePath}`);
+        }
+        console.log('');
+      }
+    }
+  }
+
   // Verbose mode additions
   if (options?.verbose) {
     console.log('');

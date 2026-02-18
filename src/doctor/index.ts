@@ -6,6 +6,7 @@ import { checkEnvironment } from './checks/environment.js';
 import { checkConnectivity } from './checks/connectivity.js';
 import { checkDashboardSettings, compareRedirectUris } from './checks/dashboard.js';
 import { checkAuthPatterns } from './checks/auth-patterns.js';
+import { checkAiAnalysis } from './checks/ai-analysis.js';
 import { detectIssues } from './issues.js';
 import { formatReport } from './output.js';
 import { formatReportAsJson } from './json-output.js';
@@ -29,10 +30,19 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     checkLanguage(options.installDir),
   ]);
 
-  // Dashboard settings + auth patterns (run in parallel, both need sdk/framework results)
-  const [dashboardResult, authPatterns] = await Promise.all([
+  // Dashboard settings + auth patterns + AI analysis (parallel, all need sdk/framework results)
+  // AI analysis also receives early issues as context to avoid duplication
+  const earlyIssues = detectIssues({
+    version: DOCTOR_VERSION,
+    timestamp: '',
+    project: { path: options.installDir, packageManager: runtime.packageManager },
+    sdk, language, runtime, framework, environment, connectivity,
+  });
+
+  const [dashboardResult, authPatterns, aiAnalysis] = await Promise.all([
     checkDashboardSettings(options, environment.apiKeyType, envRaw),
     sdk.isAuthKit ? checkAuthPatterns(options, framework, environment, sdk) : Promise.resolve(undefined),
+    checkAiAnalysis(options.installDir, { language, framework, sdk, environment, existingIssues: earlyIssues }, { skipAi: options.skipAi }),
   ]);
 
   // Compute expected redirect URI from framework detection if not set in env
@@ -67,6 +77,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     dashboardError: dashboardResult.settings ? undefined : dashboardResult.error,
     redirectUris,
     authPatterns,
+    aiAnalysis: aiAnalysis.skipped ? aiAnalysis : aiAnalysis,
   };
 
   // Detect issues based on collected data

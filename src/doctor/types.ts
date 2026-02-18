@@ -126,6 +126,7 @@ export interface DoctorReport {
   redirectUris?: RedirectUriComparison;
   credentialValidation?: CredentialValidation;
   authPatterns?: AuthPatternInfo;
+  aiAnalysis?: AiAnalysis;
   issues: Issue[];
   summary: {
     errors: number;
@@ -134,10 +135,28 @@ export interface DoctorReport {
   };
 }
 
+export interface AiFinding {
+  severity: 'error' | 'warning' | 'info';
+  title: string;
+  detail: string;
+  remediation: string;
+  filePath?: string;
+}
+
+export interface AiAnalysis {
+  findings: AiFinding[];
+  summary: string;
+  model: string;
+  durationMs: number;
+  skipped?: boolean;
+  skipReason?: string;
+}
+
 export interface DoctorOptions {
   installDir: string;
   verbose?: boolean;
   skipApi?: boolean;
+  skipAi?: boolean;
   json?: boolean;
   copy?: boolean;
 }
