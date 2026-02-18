@@ -8,56 +8,56 @@ const unicode = isUnicodeSupported();
 // prettier-ignore
 const UNICODE_LOCKS: Record<LockExpression, string[]> = {
   success: [
-    ' ╭─╮ ',
-    ' │ │ ',
-    '╔╧═╧╗',
-    '║◠ ◠║',
-    '║ ▽ ║',
-    '╚═══╝',
+    '  ╭───╮  ',
+    '  │   │  ',
+    '╔═╧═══╧═╗',
+    '║  ◠ ◠  ║',
+    '║   ▽   ║',
+    '╚═══════╝',
   ],
   warning: [
-    ' ╭─╮ ',
-    ' │ │ ',
-    '╔╧═╧╗',
-    '║• •║',
-    '║ ─ ║',
-    '╚═══╝',
+    '  ╭───╮  ',
+    '  │   │  ',
+    '╔═╧═══╧═╗',
+    '║  • •  ║',
+    '║   ─   ║',
+    '╚═══════╝',
   ],
   error: [
-    ' ╭─╮ ',
-    ' │ │ ',
-    '╔╧══╗',
-    '║× ×║',
-    '║ △ ║',
-    '╚═══╝',
+    '  ╭───╮  ',
+    '  │   │  ',
+    '╔═╧═════╗',
+    '║  × ×  ║',
+    '║   △   ║',
+    '╚═══════╝',
   ],
 };
 
 // prettier-ignore
 const ASCII_LOCKS: Record<LockExpression, string[]> = {
   success: [
-    ' .-. ',
-    ' | | ',
-    '+---+',
-    '|^ ^|',
-    '| v |',
-    '+---+',
+    '  .---.  ',
+    '  |   |  ',
+    '+-------+',
+    '|  ^ ^  |',
+    '|   v   |',
+    '+-------+',
   ],
   warning: [
-    ' .-. ',
-    ' | | ',
-    '+---+',
-    '|. .|',
-    '| - |',
-    '+---+',
+    '  .---.  ',
+    '  |   |  ',
+    '+-------+',
+    '|  . .  |',
+    '|   -   |',
+    '+-------+',
   ],
   error: [
-    ' .-. ',
-    ' |   ',
-    '+---+',
-    '|x x|',
-    '| ^ |',
-    '+---+',
+    '  .---.  ',
+    '  |      ',
+    '+-------+',
+    '|  x x  |',
+    '|   ^   |',
+    '+-------+',
   ],
 };
 
@@ -68,7 +68,7 @@ const COLORS: Record<LockExpression, (text: string) => string> = {
 };
 
 /** Width of each lock art line (all lines are the same width). */
-export const LOCK_WIDTH = 5;
+export const LOCK_WIDTH = 9;
 
 /**
  * Returns the WorkOS lock character as an array of lines.
