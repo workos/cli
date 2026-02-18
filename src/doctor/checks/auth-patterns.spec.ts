@@ -38,7 +38,14 @@ function makeEnv(overrides: Partial<EnvironmentInfo> = {}): EnvironmentInfo {
 }
 
 function makeSdk(overrides: Partial<SdkInfo> = {}): SdkInfo {
-  return { name: '@workos-inc/authkit-nextjs', version: '1.0.0', latest: '1.0.0', outdated: false, isAuthKit: true, ...overrides };
+  return {
+    name: '@workos-inc/authkit-nextjs',
+    version: '1.0.0',
+    latest: '1.0.0',
+    outdated: false,
+    isAuthKit: true,
+    ...overrides,
+  };
 }
 
 // --- Tests ---
@@ -243,7 +250,11 @@ describe('checkAuthPatterns', () => {
 
   describe('MISSING_AUTHKIT_PROVIDER', () => {
     it('warning when layout.tsx lacks AuthKitProvider (Next.js)', async () => {
-      writeFixtureFile(testDir, 'app/layout.tsx', 'export default function Layout({ children }) { return <html>{children}</html> }');
+      writeFixtureFile(
+        testDir,
+        'app/layout.tsx',
+        'export default function Layout({ children }) { return <html>{children}</html> }',
+      );
       const result = await checkAuthPatterns(
         makeOptions(testDir),
         makeFramework({ name: 'Next.js', variant: 'app-router' }),
@@ -278,7 +289,11 @@ describe('checkAuthPatterns', () => {
     });
 
     it('no finding when callback route exists (Next.js)', async () => {
-      writeFixtureFile(testDir, 'app/auth/callback/route.ts', 'export { handleAuth as GET } from "@workos-inc/authkit-nextjs"');
+      writeFixtureFile(
+        testDir,
+        'app/auth/callback/route.ts',
+        'export { handleAuth as GET } from "@workos-inc/authkit-nextjs"',
+      );
       const result = await checkAuthPatterns(
         makeOptions(testDir),
         makeFramework({ name: 'Next.js', variant: 'app-router', expectedCallbackPath: '/auth/callback' }),
@@ -290,7 +305,11 @@ describe('checkAuthPatterns', () => {
 
     it('resolves callback path from NEXT_PUBLIC_WORKOS_REDIRECT_URI', async () => {
       writeFixtureFile(testDir, '.env.local', 'NEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback');
-      writeFixtureFile(testDir, 'app/callback/route.ts', 'export { handleAuth as GET } from "@workos-inc/authkit-nextjs"');
+      writeFixtureFile(
+        testDir,
+        'app/callback/route.ts',
+        'export { handleAuth as GET } from "@workos-inc/authkit-nextjs"',
+      );
       const result = await checkAuthPatterns(
         makeOptions(testDir),
         makeFramework({ name: 'Next.js', variant: 'app-router', expectedCallbackPath: '/auth/callback' }),
@@ -334,7 +353,11 @@ describe('checkAuthPatterns', () => {
     });
 
     it('no finding when callback route exists (React Router flat)', async () => {
-      writeFixtureFile(testDir, 'app/routes/auth.callback.tsx', 'export { authLoader as loader } from "@workos-inc/authkit-react-router"');
+      writeFixtureFile(
+        testDir,
+        'app/routes/auth.callback.tsx',
+        'export { authLoader as loader } from "@workos-inc/authkit-react-router"',
+      );
       const result = await checkAuthPatterns(
         makeOptions(testDir),
         makeFramework({ name: 'React Router', version: '7.0.0', expectedCallbackPath: '/auth/callback' }),
@@ -345,7 +368,11 @@ describe('checkAuthPatterns', () => {
     });
 
     it('no finding when callback route exists (TanStack Start flat)', async () => {
-      writeFixtureFile(testDir, 'src/routes/auth.callback.tsx', 'export const Route = createFileRoute("/auth/callback")');
+      writeFixtureFile(
+        testDir,
+        'src/routes/auth.callback.tsx',
+        'export const Route = createFileRoute("/auth/callback")',
+      );
       const result = await checkAuthPatterns(
         makeOptions(testDir),
         makeFramework({ name: 'TanStack Start', version: '1.0.0', expectedCallbackPath: '/auth/callback' }),
@@ -417,10 +444,14 @@ describe('checkAuthPatterns', () => {
 
   describe('WRONG_CALLBACK_LOADER', () => {
     it('warning when callback uses authkitLoader instead of authLoader', async () => {
-      writeFixtureFile(testDir, 'app/routes/auth.callback.tsx', `
+      writeFixtureFile(
+        testDir,
+        'app/routes/auth.callback.tsx',
+        `
         import { authkitLoader } from "@workos-inc/authkit-react-router";
         export const loader = authkitLoader;
-      `);
+      `,
+      );
       const result = await checkAuthPatterns(
         makeOptions(testDir),
         makeFramework({ name: 'React Router', expectedCallbackPath: '/auth/callback' }),
@@ -431,10 +462,14 @@ describe('checkAuthPatterns', () => {
     });
 
     it('no finding when callback uses authLoader', async () => {
-      writeFixtureFile(testDir, 'app/routes/auth.callback.tsx', `
+      writeFixtureFile(
+        testDir,
+        'app/routes/auth.callback.tsx',
+        `
         import { authLoader } from "@workos-inc/authkit-react-router";
         export const loader = authLoader;
-      `);
+      `,
+      );
       const result = await checkAuthPatterns(
         makeOptions(testDir),
         makeFramework({ name: 'React Router', expectedCallbackPath: '/auth/callback' }),
@@ -458,10 +493,14 @@ describe('checkAuthPatterns', () => {
     });
 
     it('no finding when root route uses authkitLoader', async () => {
-      writeFixtureFile(testDir, 'app/root.tsx', `
+      writeFixtureFile(
+        testDir,
+        'app/root.tsx',
+        `
         import { authkitLoader } from "@workos-inc/authkit-react-router";
         export const loader = authkitLoader;
-      `);
+      `,
+      );
       const result = await checkAuthPatterns(
         makeOptions(testDir),
         makeFramework({ name: 'React Router', expectedCallbackPath: '/auth/callback' }),
@@ -485,10 +524,14 @@ describe('checkAuthPatterns', () => {
     });
 
     it('no finding when start.ts references authkitMiddleware', async () => {
-      writeFixtureFile(testDir, 'src/start.ts', `
+      writeFixtureFile(
+        testDir,
+        'src/start.ts',
+        `
         import { authkitMiddleware } from "@workos-inc/authkit-tanstack-start";
         export default defineStart({ middleware: [authkitMiddleware()] });
-      `);
+      `,
+      );
       const result = await checkAuthPatterns(
         makeOptions(testDir),
         makeFramework({ name: 'TanStack Start', expectedCallbackPath: '/auth/callback' }),
@@ -598,7 +641,11 @@ describe('checkAuthPatterns', () => {
     it('returns no findings for a correctly configured Next.js project', async () => {
       writeFixtureFile(testDir, 'middleware.ts', 'export { authkitMiddleware } from "@workos-inc/authkit-nextjs"');
       writeFixtureFile(testDir, 'app/layout.tsx', '<AuthKitProvider>{children}</AuthKitProvider>');
-      writeFixtureFile(testDir, 'app/auth/callback/route.ts', 'export { handleAuth as GET } from "@workos-inc/authkit-nextjs"');
+      writeFixtureFile(
+        testDir,
+        'app/auth/callback/route.ts',
+        'export { handleAuth as GET } from "@workos-inc/authkit-nextjs"',
+      );
       writeFixtureFile(testDir, '.env.local', 'WORKOS_API_KEY=sk_test_abc\nWORKOS_CLIENT_ID=client_test');
 
       const result = await checkAuthPatterns(

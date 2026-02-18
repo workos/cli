@@ -93,7 +93,9 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
     if (report.authPatterns.findings.length === 0) {
       console.log(`   ${Chalk.green('✓')} ${report.authPatterns.checksRun} checks passed`);
     } else {
-      console.log(`   ${report.authPatterns.checksRun} checked, ${Chalk.yellow(`${report.authPatterns.findings.length} finding(s)`)}`);
+      console.log(
+        `   ${report.authPatterns.checksRun} checked, ${Chalk.yellow(`${report.authPatterns.findings.length} finding(s)`)}`,
+      );
       for (const finding of report.authPatterns.findings) {
         const icon = finding.severity === 'error' ? Chalk.red('✗') : Chalk.yellow('!');
         console.log(`   ${icon} ${finding.message}`);

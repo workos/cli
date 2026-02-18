@@ -1,7 +1,14 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { parse as parseDotenv } from 'dotenv';
-import type { AuthPatternFinding, AuthPatternInfo, FrameworkInfo, EnvironmentInfo, SdkInfo, DoctorOptions } from '../types.js';
+import type {
+  AuthPatternFinding,
+  AuthPatternInfo,
+  FrameworkInfo,
+  EnvironmentInfo,
+  SdkInfo,
+  DoctorOptions,
+} from '../types.js';
 
 // --- Helpers ---
 
@@ -116,7 +123,8 @@ function checkSignoutGetHandler(ctx: CheckContext): AuthPatternFinding[] {
         severity: 'error',
         message: 'Signout/logout route uses GET handler — vulnerable to CSRF and prefetch-triggered logouts',
         filePath: relative(ctx.installDir, route),
-        remediation: 'Convert to a POST server action. GET routes with side effects are vulnerable to CSRF and will be triggered by Next.js link prefetching.',
+        remediation:
+          'Convert to a POST server action. GET routes with side effects are vulnerable to CSRF and will be triggered by Next.js link prefetching.',
         docsUrl: 'https://workos.com/docs/authkit/sign-out',
       });
     }
@@ -139,9 +147,11 @@ function checkSignoutLinkPrefetch(ctx: CheckContext): AuthPatternFinding[] {
       findings.push({
         code: 'SIGNOUT_LINK_PREFETCH',
         severity: 'warning',
-        message: 'Link component points to signout/logout — Next.js will prefetch this in production, potentially triggering logouts',
+        message:
+          'Link component points to signout/logout — Next.js will prefetch this in production, potentially triggering logouts',
         filePath: relative(ctx.installDir, file),
-        remediation: 'Use a <form> with a server action or <button> with onClick handler instead of <Link> for signout.',
+        remediation:
+          'Use a <form> with a server action or <button> with onClick handler instead of <Link> for signout.',
       });
     }
   }
@@ -152,42 +162,49 @@ function checkMissingMiddleware(ctx: CheckContext): AuthPatternFinding[] {
   if (ctx.framework.name !== 'Next.js') return [];
 
   const middlewarePaths = [
-    'middleware.ts', 'middleware.js',
-    'proxy.ts', 'proxy.js',
-    'src/middleware.ts', 'src/middleware.js',
-    'src/proxy.ts', 'src/proxy.js',
+    'middleware.ts',
+    'middleware.js',
+    'proxy.ts',
+    'proxy.js',
+    'src/middleware.ts',
+    'src/middleware.js',
+    'src/proxy.ts',
+    'src/proxy.js',
   ].map((p) => join(ctx.installDir, p));
 
   if (findFile(middlewarePaths)) return [];
 
-  return [{
-    code: 'MISSING_MIDDLEWARE',
-    severity: 'error',
-    message: 'No middleware.ts or proxy.ts found — AuthKit session handling requires middleware',
-    remediation: 'Create middleware.ts at the project root with authkitMiddleware() from @workos-inc/authkit-nextjs.',
-    docsUrl: 'https://workos.com/docs/authkit/nextjs/middleware',
-  }];
+  return [
+    {
+      code: 'MISSING_MIDDLEWARE',
+      severity: 'error',
+      message: 'No middleware.ts or proxy.ts found — AuthKit session handling requires middleware',
+      remediation: 'Create middleware.ts at the project root with authkitMiddleware() from @workos-inc/authkit-nextjs.',
+      docsUrl: 'https://workos.com/docs/authkit/nextjs/middleware',
+    },
+  ];
 }
 
 function checkMiddlewareWrongLocation(ctx: CheckContext): AuthPatternFinding[] {
   if (ctx.framework.name !== 'Next.js') return [];
 
-  const wrongPaths = [
-    'app/middleware.ts', 'app/middleware.js',
-    'src/app/middleware.ts', 'src/app/middleware.js',
-  ].map((p) => join(ctx.installDir, p));
+  const wrongPaths = ['app/middleware.ts', 'app/middleware.js', 'src/app/middleware.ts', 'src/app/middleware.js'].map(
+    (p) => join(ctx.installDir, p),
+  );
 
   const found = findFile(wrongPaths);
   if (!found) return [];
 
-  return [{
-    code: 'MIDDLEWARE_WRONG_LOCATION',
-    severity: 'warning',
-    message: 'middleware.ts found inside app/ directory — must be at project root or src/',
-    filePath: relative(ctx.installDir, found),
-    remediation: 'Move middleware.ts to the project root (or src/ if using src/ directory).',
-    docsUrl: 'https://workos.com/docs/authkit/nextjs/middleware',
-  }];
+  return [
+    {
+      code: 'MIDDLEWARE_WRONG_LOCATION',
+      severity: 'warning',
+      message: 'middleware.ts found inside app/ directory — must be at project root or src/',
+      filePath: relative(ctx.installDir, found),
+      remediation: 'Move middleware.ts to the project root (or src/ if using src/ directory).',
+      docsUrl: 'https://workos.com/docs/authkit/nextjs/middleware',
+    },
+  ];
 }
 
 function checkMissingAuthKitProvider(ctx: CheckContext): AuthPatternFinding[] {
@@ -216,23 +233,24 @@ function checkMissingAuthKitProvider(ctx: CheckContext): AuthPatternFinding[] {
 
   if (fileContains(layoutFile, /AuthKitProvider/)) return [];
 
-  return [{
-    code: 'MISSING_AUTHKIT_PROVIDER',
-    severity: 'warning',
-    message: 'AuthKitProvider not found in root layout — required for AuthKit session management',
-    filePath: relative(ctx.installDir, layoutFile),
-    remediation: 'Wrap your app with <AuthKitProvider> in the root layout.',
-    docsUrl: 'https://workos.com/docs/authkit/nextjs/setup',
-  }];
+  return [
+    {
+      code: 'MISSING_AUTHKIT_PROVIDER',
+      severity: 'warning',
+      message: 'AuthKitProvider not found in root layout — required for AuthKit session management',
+      filePath: relative(ctx.installDir, layoutFile),
+      remediation: 'Wrap your app with <AuthKitProvider> in the root layout.',
+      docsUrl: 'https://workos.com/docs/authkit/nextjs/setup',
+    },
+  ];
 }
 
 /** Extract callback path from redirect URI env vars or framework default */
 function resolveCallbackPath(ctx: CheckContext): string | null {
   // Check env vars for actual redirect URI (including NEXT_PUBLIC_ variant)
   const projectEnv = loadProjectEnvRaw(ctx.installDir);
-  const redirectUri = projectEnv.WORKOS_REDIRECT_URI
-    ?? projectEnv.NEXT_PUBLIC_WORKOS_REDIRECT_URI
-    ?? ctx.environment.redirectUri;
+  const redirectUri =
+    projectEnv.WORKOS_REDIRECT_URI ?? projectEnv.NEXT_PUBLIC_WORKOS_REDIRECT_URI ?? ctx.environment.redirectUri;
 
   if (redirectUri) {
     try {
@@ -283,13 +301,15 @@ function checkCallbackRouteMissing(ctx: CheckContext): AuthPatternFinding[] {
   if (possiblePaths.length === 0) return [];
   if (findFile(possiblePaths)) return [];
 
-  return [{
-    code: 'CALLBACK_ROUTE_MISSING',
-    severity: 'error',
-    message: `No callback route found at expected path ${callbackPath}`,
-    remediation: `Create the callback route handler at the path matching your WORKOS_REDIRECT_URI.`,
-    docsUrl: 'https://workos.com/docs/authkit/redirect-uri',
-  }];
+  return [
+    {
+      code: 'CALLBACK_ROUTE_MISSING',
+      severity: 'error',
+      message: `No callback route found at expected path ${callbackPath}`,
+      remediation: `Create the callback route handler at the path matching your WORKOS_REDIRECT_URI.`,
+      docsUrl: 'https://workos.com/docs/authkit/redirect-uri',
+    },
+  ];
 }
 
 const CLIENT_ENV_PREFIXES = ['NEXT_PUBLIC_', 'VITE_', 'REACT_APP_', 'EXPO_PUBLIC_'];
@@ -337,13 +357,16 @@ function checkWrongCallbackLoader(ctx: CheckContext): AuthPatternFinding[] {
 
   // authkitLoader is for regular routes; authLoader is for the callback
   if (fileContains(callbackFile, /authkitLoader/) && !fileContains(callbackFile, /authLoader/)) {
-    return [{
-      code: 'WRONG_CALLBACK_LOADER',
-      severity: 'warning',
-      message: 'Callback route uses authkitLoader instead of authLoader',
-      filePath: relative(ctx.installDir, callbackFile),
-      remediation: 'Use authLoader (not authkitLoader) for the callback route. authkitLoader is for regular routes that need auth context.',
-    }];
+    return [
+      {
+        code: 'WRONG_CALLBACK_LOADER',
+        severity: 'warning',
+        message: 'Callback route uses authkitLoader instead of authLoader',
+        filePath: relative(ctx.installDir, callbackFile),
+        remediation:
+          'Use authLoader (not authkitLoader) for the callback route. authkitLoader is for regular routes that need auth context.',
+      },
+    ];
   }
   return [];
 }
@@ -351,45 +374,47 @@ function checkWrongCallbackLoader(ctx: CheckContext): AuthPatternFinding[] {
 function checkMissingRootAuthLoader(ctx: CheckContext): AuthPatternFinding[] {
   if (ctx.framework.name !== 'React Router') return [];
 
-  const rootPaths = [
-    'app/root.tsx', 'app/root.jsx',
-    'app/routes/_index.tsx', 'app/routes/_index.jsx',
-  ].map((p) => join(ctx.installDir, p));
+  const rootPaths = ['app/root.tsx', 'app/root.jsx', 'app/routes/_index.tsx', 'app/routes/_index.jsx'].map((p) =>
+    join(ctx.installDir, p),
+  );
 
   const rootFile = findFile(rootPaths);
   if (!rootFile) return [];
 
   if (fileContains(rootFile, /authkitLoader/)) return [];
 
-  return [{
-    code: 'MISSING_ROOT_AUTH_LOADER',
-    severity: 'warning',
-    message: 'Root route does not use authkitLoader — child routes will not have auth context',
-    filePath: relative(ctx.installDir, rootFile),
-    remediation: 'Add authkitLoader to your root route so child routes can access auth state.',
-  }];
+  return [
+    {
+      code: 'MISSING_ROOT_AUTH_LOADER',
+      severity: 'warning',
+      message: 'Root route does not use authkitLoader — child routes will not have auth context',
+      filePath: relative(ctx.installDir, rootFile),
+      remediation: 'Add authkitLoader to your root route so child routes can access auth state.',
+    },
+  ];
 }
 
 function checkMissingAuthkitMiddleware(ctx: CheckContext): AuthPatternFinding[] {
   if (ctx.framework.name !== 'TanStack Start') return [];
 
-  const startPaths = [
-    'src/start.ts', 'src/start.tsx',
-    'app/start.ts', 'app/start.tsx',
-  ].map((p) => join(ctx.installDir, p));
+  const startPaths = ['src/start.ts', 'src/start.tsx', 'app/start.ts', 'app/start.tsx'].map((p) =>
+    join(ctx.installDir, p),
+  );
 
   const startFile = findFile(startPaths);
   if (!startFile) return []; // Can't check if start file doesn't exist
 
   if (fileContains(startFile, /authkitMiddleware/)) return [];
 
-  return [{
-    code: 'MISSING_AUTHKIT_MIDDLEWARE',
-    severity: 'warning',
-    message: 'start.ts does not reference authkitMiddleware — AuthKit session handling requires it',
-    filePath: relative(ctx.installDir, startFile),
-    remediation: 'Add authkitMiddleware to your start.ts server middleware configuration.',
-  }];
+  return [
+    {
+      code: 'MISSING_AUTHKIT_MIDDLEWARE',
+      severity: 'warning',
+      message: 'start.ts does not reference authkitMiddleware — AuthKit session handling requires it',
+      filePath: relative(ctx.installDir, startFile),
+      remediation: 'Add authkitMiddleware to your start.ts server middleware configuration.',
+    },
+  ];
 }
 
 function checkCookiePasswordTooShort(ctx: CheckContext): AuthPatternFinding[] {
@@ -401,21 +426,21 @@ function checkCookiePasswordTooShort(ctx: CheckContext): AuthPatternFinding[] {
   // Only warn if password is set but too short; missing password is a separate concern
   if (!password || password.length >= 32) return [];
 
-  return [{
-    code: 'COOKIE_PASSWORD_TOO_SHORT',
-    severity: 'warning',
-    message: `WORKOS_COOKIE_PASSWORD is ${password.length} characters — minimum 32 required for secure encryption`,
-    remediation: 'Set WORKOS_COOKIE_PASSWORD to a random string of at least 32 characters.',
-  }];
+  return [
+    {
+      code: 'COOKIE_PASSWORD_TOO_SHORT',
+      severity: 'warning',
+      message: `WORKOS_COOKIE_PASSWORD is ${password.length} characters — minimum 32 required for secure encryption`,
+      remediation: 'Set WORKOS_COOKIE_PASSWORD to a random string of at least 32 characters.',
+    },
+  ];
 }
 
 // --- Main Entry Point ---
 
 type CheckFn = (ctx: CheckContext) => AuthPatternFinding[];
 
-const CROSS_FRAMEWORK_CHECKS: CheckFn[] = [
-  checkApiKeyLeakedToClient,
-];
+const CROSS_FRAMEWORK_CHECKS: CheckFn[] = [checkApiKeyLeakedToClient];
 
 const NEXTJS_CHECKS: CheckFn[] = [
   checkSignoutGetHandler,
