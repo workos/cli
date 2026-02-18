@@ -148,7 +148,7 @@ This is required for:
 
 ```tsx
 // app/layout.tsx
-import { AuthKitProvider } from '@workos-inc/authkit-nextjs';
+import { AuthKitProvider } from '@workos-inc/authkit-nextjs/components';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -161,13 +161,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 }
 ```
 
-Check README for exact import path - it may be a subpath export like `@workos-inc/authkit-nextjs/components`.
-
 **Do NOT skip this step** even if using server-side auth patterns elsewhere.
 
 ## Step 8: UI Integration
 
-Add auth UI to `app/page.tsx` using SDK functions. See README for `getUser`, `getSignInUrl`, `signOut` usage.
+Add auth UI to `app/page.tsx` using SDK functions. See README for auth helper usage (`withAuth`/`getUser`, `getSignInUrl`, `signOut`).
+
+**Note:** The SDK renamed `getUser` to `withAuth` in newer versions. Use whichever function the installed SDK version exports — do NOT rename existing working imports.
 
 ## Verification Checklist (ALL MUST PASS)
 
@@ -238,7 +238,7 @@ This error causes OAuth codes to expire ("invalid_grant"), so fix the handler fi
 
 ### Build fails after AuthKitProvider
 
-- Check: README for correct import path (may be subpath export)
+- Check: Import path matches what README specifies (root export vs `/components` subpath)
 - Check: No client/server boundary violations
 
 ### NEXT*PUBLIC* prefix issues

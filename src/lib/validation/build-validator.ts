@@ -31,7 +31,6 @@ export async function runBuildValidation(projectDir: string, timeoutMs: number =
     const args = pm === 'npm' ? ['run', 'build'] : ['build'];
     const proc = spawn(pm, args, {
       cwd: projectDir,
-      shell: true,
       timeout: timeoutMs,
     });
 
