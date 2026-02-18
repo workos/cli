@@ -42,7 +42,6 @@ async function fileExists(path: string): Promise<boolean> {
 }
 
 async function findGlobMatch(dir: string, patterns: string[]): Promise<string | undefined> {
-  // Simple glob for *.ext patterns — check common filenames
   const { readdir } = await import('node:fs/promises');
   try {
     const entries = await readdir(dir);
@@ -52,7 +51,7 @@ async function findGlobMatch(dir: string, patterns: string[]): Promise<string | 
       if (match) return match;
     }
   } catch {
-    // directory not readable
+    return undefined;
   }
   return undefined;
 }
@@ -65,7 +64,6 @@ function detectPythonPackageManager(manifestFile: string): string {
 
 export async function checkLanguage(installDir: string): Promise<LanguageInfo> {
   for (const detector of DETECTORS) {
-    // Check manifest files
     for (const manifest of detector.manifestFiles) {
       const path = join(installDir, manifest);
       if (await fileExists(path)) {
@@ -79,7 +77,6 @@ export async function checkLanguage(installDir: string): Promise<LanguageInfo> {
       }
     }
 
-    // Check glob patterns (e.g., *.csproj)
     if (detector.globPatterns) {
       const match = await findGlobMatch(installDir, detector.globPatterns);
       if (match) {

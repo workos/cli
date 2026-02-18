@@ -70,10 +70,6 @@ const COLORS: Record<LockExpression, (text: string) => string> = {
 /** Width of each lock art line (all lines are the same width). */
 export const LOCK_WIDTH = 9;
 
-/**
- * Returns the WorkOS lock character as an array of lines.
- * Each line is the same width for easy side-by-side composition.
- */
 export function getLockArt(expression: LockExpression, color = true): string[] {
   const variants = unicode ? UNICODE_LOCKS : ASCII_LOCKS;
   const lines = variants[expression];

@@ -20,9 +20,6 @@ function startSpinner(message: string): { stop: () => void } {
   };
 }
 
-/**
- * Parse AI response to extract structured JSON findings.
- */
 export function parseAiResponse(text: string): { findings: AiFinding[]; summary: string } {
   const codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
   const jsonStr = codeBlockMatch ? codeBlockMatch[1] : text;
@@ -59,16 +56,10 @@ export function parseAiResponse(text: string): { findings: AiFinding[]; summary:
   }
 }
 
-/**
- * Make a single API call directly to the LLM gateway.
- * No credential proxy — doctor is a quick one-shot call, not a long session.
- * Uses the access token directly as an auth header.
- */
 async function callModel(prompt: string, model: string): Promise<string> {
   let creds = getCredentials();
   if (!creds) throw new Error('Not authenticated');
 
-  // One-shot refresh if expired
   if (isTokenExpired(creds) && creds.refreshToken) {
     const result = await refreshAccessToken(getAuthkitDomain(), getCliAuthClientId());
     if (result.success && result.accessToken && result.expiresAt) {

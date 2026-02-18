@@ -138,47 +138,25 @@ export function hasCredentials(): boolean {
 }
 
 export function getCredentials(): Credentials | null {
-  if (forceInsecureStorage) {
-    logWarn('[credential-store] getCredentials: insecure mode, reading file only');
-    return readFromFile();
-  }
+  if (forceInsecureStorage) return readFromFile();
 
   const keyringCreds = readFromKeyring();
-  if (keyringCreds) {
-    logWarn('[credential-store] getCredentials: found in keyring');
-    return keyringCreds;
-  }
-
-  logWarn('[credential-store] getCredentials: keyring miss, trying file fallback');
-  const filePath = getCredentialsPath();
-  logWarn(`[credential-store] getCredentials: file path = ${filePath}, exists = ${fileExists()}`);
+  if (keyringCreds) return keyringCreds;
 
   const fileCreds = readFromFile();
   if (fileCreds) {
-    logWarn('[credential-store] getCredentials: found in file, returning');
-    writeToKeyring(fileCreds); // best-effort migrate, but keep file
+    writeToKeyring(fileCreds);
     return fileCreds;
   }
 
-  logWarn('[credential-store] getCredentials: no credentials found in keyring or file');
   return null;
 }
 
 export function saveCredentials(creds: Credentials): void {
-  if (forceInsecureStorage) {
-    logWarn('[credential-store] saveCredentials: insecure mode, writing file only');
-    return writeToFile(creds);
-  }
+  if (forceInsecureStorage) return writeToFile(creds);
 
-  // Always write to file as durable fallback — keyring can become unreadable
-  // after binary rebuilds (macOS code signature changes).
-  logWarn(`[credential-store] saveCredentials: writing file to ${getCredentialsPath()}`);
   writeToFile(creds);
-  logWarn(`[credential-store] saveCredentials: file written, exists = ${fileExists()}`);
-
-  const keyringOk = writeToKeyring(creds);
-  logWarn(`[credential-store] saveCredentials: keyring write = ${keyringOk ? 'ok' : 'FAILED'}`);
-  if (!keyringOk) {
+  if (!writeToKeyring(creds)) {
     showFallbackWarning();
   }
 }

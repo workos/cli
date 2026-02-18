@@ -471,13 +471,11 @@ function checkEnvFileNotGitignored(ctx: CheckContext): AuthPatternFinding[] {
 
   const findings: AuthPatternFinding[] = [];
   for (const envFile of envFiles) {
-    // Check if .gitignore exists and contains the env file (or a wildcard like .env*)
     const isIgnored =
       gitignore !== null &&
       gitignore.split('\n').some((line) => {
         const trimmed = line.trim();
         if (trimmed.startsWith('#') || trimmed === '') return false;
-        // Exact match or wildcard patterns
         return trimmed === envFile || trimmed === '.env*' || trimmed === '.env.*' || trimmed === '.env';
       });
 
