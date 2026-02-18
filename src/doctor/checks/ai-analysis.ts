@@ -118,7 +118,7 @@ export async function checkAiAnalysis(context: AnalysisContext, options: { skipA
   const spinner = startSpinner('Analyzing project with AI...');
 
   try {
-    const prompt = buildDoctorPrompt(context);
+    const prompt = await buildDoctorPrompt(context);
     const responseText = await callModel(prompt, model);
     const durationMs = Date.now() - startTime;
     const { findings, summary } = parseAiResponse(responseText);

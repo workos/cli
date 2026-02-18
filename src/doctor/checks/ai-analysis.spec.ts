@@ -98,6 +98,7 @@ Hope this helps.`;
 
   describe('buildDoctorPrompt', () => {
     const baseContext: AnalysisContext = {
+      installDir: '/tmp/test-project',
       language: { name: 'JavaScript/TypeScript', manifestFile: 'package.json' },
       framework: { name: 'Next.js', version: '14.0.0', variant: 'app-router' },
       sdk: {
@@ -119,60 +120,68 @@ Hope this helps.`;
       existingIssues: [],
     };
 
-    it('includes project context in prompt', () => {
-      const prompt = buildDoctorPrompt(baseContext);
+    it('includes project context in prompt', async () => {
+      const prompt = await buildDoctorPrompt(baseContext);
       expect(prompt).toContain('JavaScript/TypeScript');
       expect(prompt).toContain('Next.js');
       expect(prompt).toContain('@workos/authkit-nextjs');
       expect(prompt).toContain('staging');
     });
 
-    it('includes existing issues for deduplication', () => {
+    it('includes existing issues for deduplication', async () => {
       const context: AnalysisContext = {
         ...baseContext,
         existingIssues: [{ code: 'MISSING_API_KEY', severity: 'error', message: 'API key not set' }],
       };
-      const prompt = buildDoctorPrompt(context);
+      const prompt = await buildDoctorPrompt(context);
       expect(prompt).toContain('MISSING_API_KEY');
       expect(prompt).toContain('API key not set');
     });
 
-    it('shows "None detected" when no existing issues', () => {
-      const prompt = buildDoctorPrompt(baseContext);
+    it('shows "None detected" when no existing issues', async () => {
+      const prompt = await buildDoctorPrompt(baseContext);
       expect(prompt).toContain('None detected');
     });
 
-    it('handles null framework', () => {
+    it('handles null framework', async () => {
       const context: AnalysisContext = {
         ...baseContext,
         framework: { name: null, version: null },
       };
-      const prompt = buildDoctorPrompt(context);
+      const prompt = await buildDoctorPrompt(context);
       expect(prompt).not.toContain('Framework:');
     });
 
-    it('handles null SDK', () => {
+    it('handles null SDK', async () => {
       const context: AnalysisContext = {
         ...baseContext,
         sdk: { ...baseContext.sdk, name: null, version: null },
       };
-      const prompt = buildDoctorPrompt(context);
+      const prompt = await buildDoctorPrompt(context);
       expect(prompt).toContain('SDK: Not installed');
     });
 
-    it('includes output format instructions', () => {
-      const prompt = buildDoctorPrompt(baseContext);
+    it('includes output format instructions', async () => {
+      const prompt = await buildDoctorPrompt(baseContext);
       expect(prompt).toContain('"findings"');
       expect(prompt).toContain('"summary"');
       expect(prompt).toContain('JSON');
     });
 
-    it('includes SDK knowledge to prevent false positives', () => {
-      const prompt = buildDoctorPrompt(baseContext);
-      expect(prompt).toContain('SDK Knowledge');
-      expect(prompt).toContain('PKCE');
-      expect(prompt).toContain('@workos-inc/node');
-      expect(prompt).toContain('ANY JavaScript runtime');
+    it('includes SDK documentation section', async () => {
+      const prompt = await buildDoctorPrompt(baseContext);
+      expect(prompt).toContain('SDK Documentation');
+    });
+
+    it('includes project files section', async () => {
+      const prompt = await buildDoctorPrompt(baseContext);
+      expect(prompt).toContain('## Project Files');
+    });
+
+    it('instructs to compare code against documentation', async () => {
+      const prompt = await buildDoctorPrompt(baseContext);
+      expect(prompt).toContain('docSays');
+      expect(prompt).toContain('codeDoes');
     });
   });
 });
