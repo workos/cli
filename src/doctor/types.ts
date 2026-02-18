@@ -86,6 +86,20 @@ export interface DashboardFetchResult {
   error?: string;
 }
 
+export interface AuthPatternFinding {
+  code: string;
+  severity: IssueSeverity;
+  message: string;
+  filePath?: string;
+  remediation?: string;
+  docsUrl?: string;
+}
+
+export interface AuthPatternInfo {
+  checksRun: number;
+  findings: AuthPatternFinding[];
+}
+
 export interface DoctorReport {
   version: string;
   timestamp: string;
@@ -102,6 +116,7 @@ export interface DoctorReport {
   dashboardError?: string;
   redirectUris?: RedirectUriComparison;
   credentialValidation?: CredentialValidation;
+  authPatterns?: AuthPatternInfo;
   issues: Issue[];
   summary: {
     errors: number;

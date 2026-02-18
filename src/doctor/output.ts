@@ -86,6 +86,24 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
     console.log(`   ${report.redirectUris.codeUri}`);
   }
 
+  // Auth Patterns
+  if (report.authPatterns) {
+    console.log('');
+    console.log('Auth Patterns');
+    if (report.authPatterns.findings.length === 0) {
+      console.log(`   ${Chalk.green('✓')} ${report.authPatterns.checksRun} checks passed`);
+    } else {
+      console.log(`   ${report.authPatterns.checksRun} checked, ${Chalk.yellow(`${report.authPatterns.findings.length} finding(s)`)}`);
+      for (const finding of report.authPatterns.findings) {
+        const icon = finding.severity === 'error' ? Chalk.red('✗') : Chalk.yellow('!');
+        console.log(`   ${icon} ${finding.message}`);
+        if (finding.filePath) {
+          console.log(`     ${Chalk.dim('File:')} ${finding.filePath}`);
+        }
+      }
+    }
+  }
+
   // Verbose mode additions
   if (options?.verbose) {
     console.log('');

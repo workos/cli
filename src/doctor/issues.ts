@@ -126,6 +126,19 @@ export function detectIssues(report: Omit<DoctorReport, 'issues' | 'summary'>): 
     }
   }
 
+  // Auth pattern findings — map directly to issues
+  if (report.authPatterns) {
+    for (const finding of report.authPatterns.findings) {
+      issues.push({
+        code: finding.code,
+        severity: finding.severity,
+        message: finding.message,
+        remediation: finding.remediation,
+        docsUrl: finding.docsUrl,
+      });
+    }
+  }
+
   return issues;
 }
 

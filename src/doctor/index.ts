@@ -4,6 +4,7 @@ import { checkRuntime } from './checks/runtime.js';
 import { checkEnvironment } from './checks/environment.js';
 import { checkConnectivity } from './checks/connectivity.js';
 import { checkDashboardSettings, compareRedirectUris } from './checks/dashboard.js';
+import { checkAuthPatterns } from './checks/auth-patterns.js';
 import { detectIssues } from './issues.js';
 import { formatReport } from './output.js';
 import { formatReportAsJson } from './json-output.js';
@@ -26,8 +27,11 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     checkConnectivity(options, environment.baseUrl ?? 'https://api.workos.com'),
   ]);
 
-  // Dashboard settings + credential validation (single pass, staging only)
-  const dashboardResult = await checkDashboardSettings(options, environment.apiKeyType, envRaw);
+  // Dashboard settings + auth patterns (run in parallel, both need sdk/framework results)
+  const [dashboardResult, authPatterns] = await Promise.all([
+    checkDashboardSettings(options, environment.apiKeyType, envRaw),
+    sdk.isAuthKit ? checkAuthPatterns(options, framework, environment, sdk) : Promise.resolve(undefined),
+  ]);
 
   // Compute expected redirect URI from framework detection if not set in env
   const redirectUriSource: 'env' | 'inferred' = environment.redirectUri ? 'env' : 'inferred';
@@ -59,6 +63,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     dashboardSettings: dashboardResult.settings ?? undefined,
     dashboardError: dashboardResult.settings ? undefined : dashboardResult.error,
     redirectUris,
+    authPatterns,
   };
 
   // Detect issues based on collected data
