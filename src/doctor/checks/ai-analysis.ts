@@ -87,10 +87,7 @@ async function callModel(prompt: string, model: string): Promise<string> {
   throw new Error('Unexpected response format');
 }
 
-export async function checkAiAnalysis(
-  context: AnalysisContext,
-  options: { skipAi?: boolean },
-): Promise<AiAnalysis> {
+export async function checkAiAnalysis(context: AnalysisContext, options: { skipAi?: boolean }): Promise<AiAnalysis> {
   const model = getConfig().doctorModel;
 
   const skippedResult = (reason: string): AiAnalysis => ({

@@ -38,7 +38,14 @@ const AUTHKIT_PACKAGES = new Set([
   '@workos-inc/authkit-js',
 ]);
 
-const NO_SDK: SdkInfo = { name: null, version: null, latest: null, outdated: false, isAuthKit: false, language: 'javascript' };
+const NO_SDK: SdkInfo = {
+  name: null,
+  version: null,
+  latest: null,
+  outdated: false,
+  isAuthKit: false,
+  language: 'javascript',
+};
 
 export async function checkSdk(options: DoctorOptions): Promise<SdkInfo> {
   const packageJson = readPackageJson(options.installDir);
