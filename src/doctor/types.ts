@@ -15,6 +15,14 @@ export interface SdkInfo {
   latest: string | null;
   outdated: boolean;
   isAuthKit: boolean;
+  language: string; // 'javascript' | 'python' | 'ruby' | 'go' | 'java' | 'php' | 'dotnet'
+}
+
+export interface LanguageInfo {
+  name: string; // e.g., 'JavaScript/TypeScript', 'Python', 'Ruby', 'Go', etc.
+  manifestFile?: string; // e.g., 'package.json', 'requirements.txt'
+  runtimeVersion?: string; // e.g., 'Python 3.12'
+  packageManager?: string; // e.g., 'pip', 'poetry', 'bundler'
 }
 
 export interface FrameworkInfo {
@@ -108,6 +116,7 @@ export interface DoctorReport {
     packageManager: string | null;
   };
   sdk: SdkInfo;
+  language: LanguageInfo;
   runtime: RuntimeInfo;
   framework: FrameworkInfo;
   environment: EnvironmentInfo;

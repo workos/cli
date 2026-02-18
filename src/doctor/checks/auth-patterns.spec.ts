@@ -44,6 +44,7 @@ function makeSdk(overrides: Partial<SdkInfo> = {}): SdkInfo {
     latest: '1.0.0',
     outdated: false,
     isAuthKit: true,
+    language: 'javascript',
     ...overrides,
   };
 }

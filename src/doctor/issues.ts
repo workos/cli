@@ -1,4 +1,5 @@
 import type { Issue, DoctorReport } from './types.js';
+import { getInstallHint, languageToSdkLanguage } from './checks/language.js';
 
 export const ISSUE_DEFINITIONS = {
   MISSING_API_KEY: {
@@ -64,7 +65,15 @@ export function detectIssues(report: Omit<DoctorReport, 'issues' | 'summary'>): 
 
   // SDK issues
   if (!report.sdk.name) {
-    issues.push({ code: 'NO_SDK_FOUND', ...ISSUE_DEFINITIONS.NO_SDK_FOUND });
+    const lang = languageToSdkLanguage(report.language.name);
+    const hint = getInstallHint(lang);
+    issues.push({
+      code: 'NO_SDK_FOUND',
+      severity: 'error',
+      message: 'No WorkOS SDK found in dependencies',
+      remediation: `Install a WorkOS SDK: ${hint}`,
+      docsUrl: 'https://workos.com/docs',
+    });
   } else if (report.sdk.outdated && report.sdk.version && report.sdk.latest) {
     issues.push({
       code: 'SDK_OUTDATED',

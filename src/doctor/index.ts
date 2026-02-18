@@ -1,6 +1,7 @@
 import { checkSdk } from './checks/sdk.js';
 import { checkFramework } from './checks/framework.js';
 import { checkRuntime } from './checks/runtime.js';
+import { checkLanguage } from './checks/language.js';
 import { checkEnvironment } from './checks/environment.js';
 import { checkConnectivity } from './checks/connectivity.js';
 import { checkDashboardSettings, compareRedirectUris } from './checks/dashboard.js';
@@ -20,11 +21,12 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
   const { info: environment, raw: envRaw } = checkEnvironment(options);
 
   // Run remaining checks concurrently
-  const [sdk, framework, runtime, connectivity] = await Promise.all([
+  const [sdk, framework, runtime, connectivity, language] = await Promise.all([
     checkSdk(options),
     checkFramework(options),
     checkRuntime(options),
     checkConnectivity(options, environment.baseUrl ?? 'https://api.workos.com'),
+    checkLanguage(options.installDir),
   ]);
 
   // Dashboard settings + auth patterns (run in parallel, both need sdk/framework results)
@@ -55,6 +57,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
       packageManager: runtime.packageManager,
     },
     sdk,
+    language,
     runtime,
     framework,
     environment,

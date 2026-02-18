@@ -16,16 +16,21 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
   console.log('');
   console.log('SDK & Project Information');
   if (report.sdk.name) {
-    console.log(`   SDK:              ${report.sdk.name} v${report.sdk.version}`);
+    console.log(`   SDK:              ${report.sdk.name}${report.sdk.version ? ` v${report.sdk.version}` : ''}`);
   } else {
     console.log(`   SDK:              ${Chalk.red('Not found')}`);
+  }
+  if (report.language.name !== 'Unknown') {
+    console.log(`   Language:         ${report.language.name}`);
   }
   console.log(`   Runtime:          Node.js ${report.runtime.nodeVersion}`);
   if (report.framework.name) {
     const variant = report.framework.variant ? ` (${report.framework.variant})` : '';
-    console.log(`   Framework:        ${report.framework.name} ${report.framework.version}${variant}`);
+    console.log(`   Framework:        ${report.framework.name} ${report.framework.version ?? ''}${variant}`);
   }
-  if (report.runtime.packageManager) {
+  if (report.language.packageManager) {
+    console.log(`   Package Manager:  ${report.language.packageManager}`);
+  } else if (report.runtime.packageManager) {
     console.log(`   Package Manager:  ${report.runtime.packageManager} ${report.runtime.packageManagerVersion ?? ''}`);
   }
 
