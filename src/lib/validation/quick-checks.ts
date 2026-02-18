@@ -223,7 +223,6 @@ function spawnCommand(
   return new Promise((resolve) => {
     const proc = spawn(command, args, {
       cwd,
-      shell: true,
       timeout: timeoutMs,
     });
 
