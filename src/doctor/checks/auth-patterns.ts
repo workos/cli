@@ -1,6 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { parse as parseDotenv } from 'dotenv';
 import type {
   AuthPatternFinding,
   AuthPatternInfo,
@@ -69,18 +68,30 @@ function findFilesShallow(dir: string, namePattern: RegExp, maxDepth = 3): strin
   return results;
 }
 
+function parseEnvFile(content: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const entry = trimmed.startsWith('export ') ? trimmed.slice(7) : trimmed;
+    const eqIndex = entry.indexOf('=');
+    if (eqIndex === -1) continue;
+    const key = entry.slice(0, eqIndex).trim();
+    let value = entry.slice(eqIndex + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    result[key] = value;
+  }
+  return result;
+}
+
 /** Load all env vars from .env and .env.local files */
 function loadProjectEnvRaw(installDir: string): Record<string, string> {
   const env: Record<string, string> = {};
   for (const file of ['.env', '.env.local']) {
     const content = readFileSafe(join(installDir, file));
-    if (content) {
-      try {
-        Object.assign(env, parseDotenv(content));
-      } catch {
-        // Ignore parse errors
-      }
-    }
+    if (content) Object.assign(env, parseEnvFile(content));
   }
   return env;
 }

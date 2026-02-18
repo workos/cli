@@ -1,4 +1,4 @@
-import { access, readFile } from 'node:fs/promises';
+import { access, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { LanguageInfo } from '../types.js';
 
@@ -42,7 +42,6 @@ async function fileExists(path: string): Promise<boolean> {
 }
 
 async function findGlobMatch(dir: string, patterns: string[]): Promise<string | undefined> {
-  const { readdir } = await import('node:fs/promises');
   try {
     const entries = await readdir(dir);
     for (const pattern of patterns) {

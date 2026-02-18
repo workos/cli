@@ -60,16 +60,14 @@ async function callModel(prompt: string, model: string): Promise<string> {
   let creds = getCredentials();
   if (!creds) throw new Error('Not authenticated');
 
-  if (isTokenExpired(creds) && creds.refreshToken) {
+  if (isTokenExpired(creds)) {
+    if (!creds.refreshToken) throw new Error('Session expired — run `workos login` to re-authenticate');
     const result = await refreshAccessToken(getAuthkitDomain(), getCliAuthClientId());
-    if (result.success && result.accessToken && result.expiresAt) {
-      updateTokens(result.accessToken, result.expiresAt, result.refreshToken);
-      creds = getCredentials()!;
-    } else {
+    if (!result.success || !result.accessToken || !result.expiresAt) {
       throw new Error('Session expired — run `workos login` to re-authenticate');
     }
-  } else if (isTokenExpired(creds)) {
-    throw new Error('Session expired — run `workos login` to re-authenticate');
+    updateTokens(result.accessToken, result.expiresAt, result.refreshToken);
+    creds = getCredentials()!;
   }
 
   const client = new Anthropic({
@@ -78,10 +76,6 @@ async function callModel(prompt: string, model: string): Promise<string> {
     defaultHeaders: { Authorization: `Bearer ${creds.accessToken}` },
   });
 
-  return callApi(client, prompt, model);
-}
-
-async function callApi(client: Anthropic, prompt: string, model: string): Promise<string> {
   const response = await client.messages.create({
     model,
     max_tokens: 2048,
@@ -94,7 +88,6 @@ async function callApi(client: Anthropic, prompt: string, model: string): Promis
 }
 
 export async function checkAiAnalysis(
-  installDir: string,
   context: AnalysisContext,
   options: { skipAi?: boolean },
 ): Promise<AiAnalysis> {

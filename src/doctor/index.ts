@@ -48,7 +48,6 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     checkDashboardSettings(options, environment.apiKeyType, envRaw),
     checkAuthPatterns(options, framework, environment, sdk),
     checkAiAnalysis(
-      options.installDir,
       { language, framework, sdk, environment, existingIssues: earlyIssues },
       { skipAi: options.skipAi },
     ),
@@ -86,7 +85,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     dashboardError: dashboardResult.settings ? undefined : dashboardResult.error,
     redirectUris,
     authPatterns,
-    aiAnalysis: aiAnalysis.skipped ? aiAnalysis : aiAnalysis,
+    aiAnalysis,
   };
 
   // Detect issues based on collected data

@@ -1,7 +1,6 @@
 import type { InstallerAdapter, AdapterConfig } from './types.js';
 import type { InstallerEventEmitter, InstallerEvents } from '../events.js';
-import chalk from 'chalk';
-import { renderSummaryBox } from '../../utils/summary-box.js';
+import { renderCompletionSummary } from '../../utils/summary-box.js';
 
 /**
  * Dashboard adapter that renders wizard events via Ink/React TUI.
@@ -74,31 +73,9 @@ export class DashboardAdapter implements InstallerAdapter {
     this.cleanup?.();
     this.cleanup = null;
 
-    // Print branded completion summary to terminal after exiting alternate screen
     if (this.completionData) {
       console.log();
-      if (this.completionData.success) {
-        console.log(
-          renderSummaryBox({
-            expression: 'success',
-            title: 'WorkOS AuthKit Installed',
-            items: [
-              { type: 'pending', text: 'Start dev server to test authentication' },
-              { type: 'pending', text: 'Visit WorkOS Dashboard to manage users' },
-            ],
-            footer: 'https://workos.com/docs/authkit',
-          }),
-        );
-      } else {
-        console.log(
-          renderSummaryBox({
-            expression: 'error',
-            title: 'Installation Failed',
-            items: this.completionData.summary ? [{ type: 'error', text: this.completionData.summary }] : [],
-            footer: 'https://github.com/workos/installer/issues',
-          }),
-        );
-      }
+      console.log(renderCompletionSummary(this.completionData.success, this.completionData.summary));
       console.log();
     }
 

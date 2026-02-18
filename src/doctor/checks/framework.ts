@@ -1,19 +1,10 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { hasPackageInstalled, getPackageVersion } from '../../utils/package-json.js';
+import { readPackageJson, hasPackageInstalled, getPackageVersion } from '../../utils/package-json.js';
 import { detectPort, getCallbackPath } from '../../lib/port-detection.js';
 import { KNOWN_INTEGRATIONS } from '../../lib/constants.js';
 import type { Integration } from '../../lib/constants.js';
 import type { DoctorOptions, FrameworkInfo } from '../types.js';
-
-function readPackageJson(installDir: string): Record<string, unknown> | null {
-  try {
-    const content = readFileSync(join(installDir, 'package.json'), 'utf-8');
-    return JSON.parse(content) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
 
 interface FrameworkConfig {
   package: string;

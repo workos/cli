@@ -3,6 +3,27 @@ import { isUnicodeSupported } from './vendor/is-unicorn-supported.js';
 import { type LockExpression, getLockArt, LOCK_WIDTH } from './lock-art.js';
 import { symbols } from './cli-symbols.js';
 
+/** Pre-built completion summaries shared by CLI and Dashboard adapters. */
+export function renderCompletionSummary(success: boolean, summary?: string): string {
+  if (success) {
+    return renderSummaryBox({
+      expression: 'success',
+      title: 'WorkOS AuthKit Installed',
+      items: [
+        { type: 'pending', text: 'Start dev server to test authentication' },
+        { type: 'pending', text: 'Visit WorkOS Dashboard to manage users' },
+      ],
+      footer: 'https://workos.com/docs/authkit',
+    });
+  }
+  return renderSummaryBox({
+    expression: 'error',
+    title: 'Installation Failed',
+    items: summary ? [{ type: 'error', text: summary }] : [],
+    footer: 'https://github.com/workos/installer/issues',
+  });
+}
+
 export interface SummaryBoxItem {
   type: 'done' | 'pending' | 'error';
   text: string;

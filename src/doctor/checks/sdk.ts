@@ -1,7 +1,6 @@
-import { readFile } from 'node:fs/promises';
-import { readFileSync } from 'node:fs';
+import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { hasPackageInstalled, getPackageVersion } from '../../utils/package-json.js';
+import { readPackageJson, hasPackageInstalled, getPackageVersion } from '../../utils/package-json.js';
 import type { DoctorOptions, SdkInfo } from '../types.js';
 
 // AuthKit SDKs - check newer @workos/* scope first, then legacy @workos-inc/*
@@ -39,47 +38,17 @@ const AUTHKIT_PACKAGES = new Set([
   '@workos-inc/authkit-js',
 ]);
 
-function readPackageJson(installDir: string): Record<string, unknown> | null {
-  try {
-    const content = readFileSync(join(installDir, 'package.json'), 'utf-8');
-    return JSON.parse(content) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
+const NO_SDK: SdkInfo = { name: null, version: null, latest: null, outdated: false, isAuthKit: false, language: 'javascript' };
 
 export async function checkSdk(options: DoctorOptions): Promise<SdkInfo> {
   const packageJson = readPackageJson(options.installDir);
   if (!packageJson) {
-    // No package.json — try non-JS language manifests
-    const nonJs = await checkNonJsSdk(options.installDir);
-    if (nonJs) return nonJs;
-    return {
-      name: null,
-      version: null,
-      latest: null,
-      outdated: false,
-      isAuthKit: false,
-      language: 'javascript',
-    };
+    return (await checkNonJsSdk(options.installDir)) ?? NO_SDK;
   }
 
-  // Find installed SDK (order matters—AuthKit before standalone)
   const installedSdk = SDK_PACKAGES.find((pkg) => hasPackageInstalled(pkg, packageJson));
-
   if (!installedSdk) {
-    // No JS SDK — try non-JS language manifests
-    const nonJs = await checkNonJsSdk(options.installDir);
-    if (nonJs) return nonJs;
-
-    return {
-      name: null,
-      version: null,
-      latest: null,
-      outdated: false,
-      isAuthKit: false,
-      language: 'javascript',
-    };
+    return (await checkNonJsSdk(options.installDir)) ?? NO_SDK;
   }
 
   const version = getPackageVersion(installedSdk, packageJson) ?? null;
@@ -198,7 +167,6 @@ async function checkNonJsSdk(installDir: string): Promise<SdkInfo | null> {
 
   // Check .csproj files for .NET (requires directory listing)
   try {
-    const { readdir } = await import('node:fs/promises');
     const entries = await readdir(installDir);
     for (const entry of entries) {
       if (entry.endsWith('.csproj')) {
