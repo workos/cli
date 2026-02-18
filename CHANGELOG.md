@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0](https://github.com/workos/cli/compare/v0.6.0...v0.7.0) (2026-02-18)
+
+
+### Features
+
+* add environment, organization, and user management commands ([#59](https://github.com/workos/cli/issues/59)) ([cc590b0](https://github.com/workos/cli/commit/cc590b019831c9d57b17bb64d6b7f31de71a1510))
+* major workos doctor overhaul — visual refresh, multi-language, AI analysis ([#62](https://github.com/workos/cli/issues/62)) ([014fbbc](https://github.com/workos/cli/commit/014fbbcfe63959df379f59309caf73adae32f585))
+
+
+### Bug Fixes
+
+* improve installer skill and remove shell: true from spawn calls ([#63](https://github.com/workos/cli/issues/63)) ([92ff704](https://github.com/workos/cli/commit/92ff7042409435483e0aab9c861bd99c144d6a04))
+* replace dotenv devDependency with inline env parser in doctor ([#61](https://github.com/workos/cli/issues/61)) ([4c7553f](https://github.com/workos/cli/commit/4c7553fa8a2adff859c3e2bac63e59352a83bc8f))
+
 ## [0.6.0](https://github.com/workos/cli/compare/v0.5.4...v0.6.0) (2026-02-14)
 
 
