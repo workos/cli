@@ -1,12 +1,36 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { parse as parseDotenv } from 'dotenv';
 import type { EnvironmentInfo, EnvironmentCheckResult, DoctorOptions } from '../types.js';
+
+function parseEnvFile(content: string): Record<string, string> {
+  const result: Record<string, string> = {};
+
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    // Strip optional `export ` prefix
+    const entry = trimmed.startsWith('export ') ? trimmed.slice(7) : trimmed;
+    const eqIndex = entry.indexOf('=');
+    if (eqIndex === -1) continue;
+
+    const key = entry.slice(0, eqIndex).trim();
+    let value = entry.slice(eqIndex + 1).trim();
+
+    // Remove surrounding quotes (single or double)
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+
+    result[key] = value;
+  }
+
+  return result;
+}
 
 /**
  * Load environment variables from project's .env files.
  * Priority: .env.local > .env (matching Next.js/Vite conventions)
- * Uses dotenv parser for proper handling of quotes, multiline, exports, etc.
  */
 function loadProjectEnv(installDir: string): Record<string, string> {
   const env: Record<string, string> = {};
@@ -19,8 +43,7 @@ function loadProjectEnv(installDir: string): Record<string, string> {
     if (existsSync(filePath)) {
       try {
         const content = readFileSync(filePath, 'utf-8');
-        const parsed = parseDotenv(content);
-        Object.assign(env, parsed);
+        Object.assign(env, parseEnvFile(content));
       } catch {
         // Ignore read errors
       }
