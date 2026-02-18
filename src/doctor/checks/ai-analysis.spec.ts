@@ -130,9 +130,7 @@ Hope this helps.`;
     it('includes existing issues for deduplication', () => {
       const context: AnalysisContext = {
         ...baseContext,
-        existingIssues: [
-          { code: 'MISSING_API_KEY', severity: 'error', message: 'API key not set' },
-        ],
+        existingIssues: [{ code: 'MISSING_API_KEY', severity: 'error', message: 'API key not set' }],
       };
       const prompt = buildDoctorPrompt(context);
       expect(prompt).toContain('MISSING_API_KEY');
@@ -167,6 +165,14 @@ Hope this helps.`;
       expect(prompt).toContain('"findings"');
       expect(prompt).toContain('"summary"');
       expect(prompt).toContain('JSON');
+    });
+
+    it('includes SDK knowledge to prevent false positives', () => {
+      const prompt = buildDoctorPrompt(baseContext);
+      expect(prompt).toContain('SDK Knowledge');
+      expect(prompt).toContain('PKCE');
+      expect(prompt).toContain('@workos-inc/node');
+      expect(prompt).toContain('ANY JavaScript runtime');
     });
   });
 });

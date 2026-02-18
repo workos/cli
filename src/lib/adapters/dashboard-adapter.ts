@@ -94,9 +94,7 @@ export class DashboardAdapter implements InstallerAdapter {
           renderSummaryBox({
             expression: 'error',
             title: 'Installation Failed',
-            items: this.completionData.summary
-              ? [{ type: 'error', text: this.completionData.summary }]
-              : [],
+            items: this.completionData.summary ? [{ type: 'error', text: this.completionData.summary }] : [],
             footer: 'https://github.com/workos/installer/issues',
           }),
         );

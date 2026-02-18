@@ -40,7 +40,9 @@ export function CompletionView({ success, summary, outputLog }: CompletionViewPr
       <Box marginBottom={1}>
         <Box flexDirection="column" marginRight={2}>
           {lockLines.map((line, i) => (
-            <Text key={i} color={color}>{line}</Text>
+            <Text key={i} color={color}>
+              {line}
+            </Text>
           ))}
         </Box>
         <Box flexDirection="column" justifyContent="center">

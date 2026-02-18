@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { getLlmGatewayUrl, getAuthkitDomain, getCliAuthClientId, getConfig } from '../../lib/settings.js';
-import { getCredentials, isTokenExpired, updateTokens } from '../../lib/credentials.js';
+import { getCredentials, isTokenExpired, updateTokens, diagnoseCredentials } from '../../lib/credentials.js';
 import { refreshAccessToken } from '../../lib/token-refresh-client.js';
 import { buildDoctorPrompt, type AnalysisContext } from '../agent-prompt.js';
 import type { AiAnalysis, AiFinding } from '../types.js';
@@ -124,6 +124,12 @@ export async function checkAiAnalysis(
 
   const creds = getCredentials();
   if (!creds) {
+    const diag = diagnoseCredentials();
+    process.stderr.write('\n  [credential-debug]\n');
+    for (const line of diag) {
+      process.stderr.write(`    ${line}\n`);
+    }
+    process.stderr.write('\n');
     return skippedResult('Not authenticated — run `workos login` for AI-powered analysis');
   }
 

@@ -134,11 +134,7 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
               ? Chalk.yellow('!')
               : Chalk.dim('ℹ');
         const color =
-          finding.severity === 'error'
-            ? Chalk.red
-            : finding.severity === 'warning'
-              ? Chalk.yellow
-              : Chalk.dim;
+          finding.severity === 'error' ? Chalk.red : finding.severity === 'warning' ? Chalk.yellow : Chalk.dim;
         console.log(`   ${icon} ${color(finding.title)}`);
         console.log(`     ${finding.detail}`);
         if (finding.remediation) {

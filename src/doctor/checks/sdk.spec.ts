@@ -33,10 +33,7 @@ describe('checkSdk - non-JS languages', () => {
   });
 
   it('detects workos-python from pyproject.toml', async () => {
-    await writeFile(
-      join(dir, 'pyproject.toml'),
-      '[project]\ndependencies = ["workos>=4.0"]\n',
-    );
+    await writeFile(join(dir, 'pyproject.toml'), '[project]\ndependencies = ["workos>=4.0"]\n');
     const result = await checkSdk({ installDir: dir });
     expect(result.name).toBe('workos-python');
     expect(result.language).toBe('python');
@@ -50,10 +47,7 @@ describe('checkSdk - non-JS languages', () => {
   });
 
   it('detects workos-go from go.mod', async () => {
-    await writeFile(
-      join(dir, 'go.mod'),
-      'module myapp\n\ngo 1.21\n\nrequire github.com/workos/workos-go/v4 v4.1.0\n',
-    );
+    await writeFile(join(dir, 'go.mod'), 'module myapp\n\ngo 1.21\n\nrequire github.com/workos/workos-go/v4 v4.1.0\n');
     const result = await checkSdk({ installDir: dir });
     expect(result.name).toBe('workos-go');
     expect(result.version).toBe('v4.1.0');
@@ -71,20 +65,14 @@ describe('checkSdk - non-JS languages', () => {
   });
 
   it('detects workos-java from build.gradle', async () => {
-    await writeFile(
-      join(dir, 'build.gradle'),
-      "dependencies {\n  implementation 'com.workos:workos-java:1.0.0'\n}\n",
-    );
+    await writeFile(join(dir, 'build.gradle'), "dependencies {\n  implementation 'com.workos:workos-java:1.0.0'\n}\n");
     const result = await checkSdk({ installDir: dir });
     expect(result.name).toBe('workos-java');
     expect(result.language).toBe('java');
   });
 
   it('detects workos-php from composer.json', async () => {
-    await writeFile(
-      join(dir, 'composer.json'),
-      JSON.stringify({ require: { 'workos/workos-php': '^2.0' } }),
-    );
+    await writeFile(join(dir, 'composer.json'), JSON.stringify({ require: { 'workos/workos-php': '^2.0' } }));
     const result = await checkSdk({ installDir: dir });
     expect(result.name).toBe('workos-php');
     expect(result.language).toBe('php');

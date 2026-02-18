@@ -174,7 +174,7 @@ async function checkNonJsSdk(installDir: string): Promise<SdkInfo | null> {
 
     const match = content.match(detector.pattern);
     if (match) {
-      const version = detector.versionGroup ? (match[detector.versionGroup] || null) : null;
+      const version = detector.versionGroup ? match[detector.versionGroup] || null : null;
       return {
         name: detector.nameExtract ?? null,
         version,

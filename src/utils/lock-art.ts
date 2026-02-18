@@ -5,6 +5,7 @@ export type LockExpression = 'success' | 'warning' | 'error';
 
 const unicode = isUnicodeSupported();
 
+// prettier-ignore
 const UNICODE_LOCKS: Record<LockExpression, string[]> = {
   success: [
     ' ╭─╮ ',
@@ -24,14 +25,15 @@ const UNICODE_LOCKS: Record<LockExpression, string[]> = {
   ],
   error: [
     ' ╭─╮ ',
-    ' │   ',
-    '╔╧═╧╗',
+    ' │ │ ',
+    '╔╧══╗',
     '║× ×║',
     '║ △ ║',
     '╚═══╝',
   ],
 };
 
+// prettier-ignore
 const ASCII_LOCKS: Record<LockExpression, string[]> = {
   success: [
     ' .-. ',

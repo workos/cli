@@ -41,10 +41,7 @@ describe('checkFramework - new frameworks', () => {
   });
 
   it('prefers Expo over React Native', async () => {
-    await writeFile(
-      join(dir, 'package.json'),
-      makePackageJson({ expo: '~50.0.0', 'react-native': '0.73.0' }),
-    );
+    await writeFile(join(dir, 'package.json'), makePackageJson({ expo: '~50.0.0', 'react-native': '0.73.0' }));
     const result = await checkFramework({ installDir: dir });
     expect(result.name).toBe('Expo');
   });
@@ -87,10 +84,7 @@ describe('checkFramework - new frameworks', () => {
   });
 
   it('prefers SvelteKit over Svelte', async () => {
-    await writeFile(
-      join(dir, 'package.json'),
-      makePackageJson({ '@sveltejs/kit': '2.0.0', svelte: '4.0.0' }),
-    );
+    await writeFile(join(dir, 'package.json'), makePackageJson({ '@sveltejs/kit': '2.0.0', svelte: '4.0.0' }));
     const result = await checkFramework({ installDir: dir });
     expect(result.name).toBe('SvelteKit');
   });

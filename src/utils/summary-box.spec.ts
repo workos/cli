@@ -10,10 +10,12 @@ function strip(str: string): string {
 describe('summary-box', () => {
   describe('renderSummaryBox', () => {
     it('renders a box with title and no items', () => {
-      const result = strip(renderSummaryBox({
-        expression: 'success',
-        title: 'All Good',
-      }));
+      const result = strip(
+        renderSummaryBox({
+          expression: 'success',
+          title: 'All Good',
+        }),
+      );
       expect(result).toContain('All Good');
       expect(result).toMatch(/[┌+]/);
       expect(result).toMatch(/[└+]/);
@@ -26,11 +28,13 @@ describe('summary-box', () => {
         { type: 'pending', text: 'Set cookie domain' },
         { type: 'error', text: 'Missing API key' },
       ];
-      const result = strip(renderSummaryBox({
-        expression: 'warning',
-        title: 'Issues Found',
-        items,
-      }));
+      const result = strip(
+        renderSummaryBox({
+          expression: 'warning',
+          title: 'Issues Found',
+          items,
+        }),
+      );
       expect(result).toContain('Middleware configured');
       expect(result).toContain('Auth routes created');
       expect(result).toContain('Set cookie domain');
@@ -38,31 +42,37 @@ describe('summary-box', () => {
     });
 
     it('renders footer with divider', () => {
-      const result = strip(renderSummaryBox({
-        expression: 'success',
-        title: 'Done',
-        footer: 'pnpm dev',
-      }));
+      const result = strip(
+        renderSummaryBox({
+          expression: 'success',
+          title: 'Done',
+          footer: 'pnpm dev',
+        }),
+      );
       expect(result).toContain('pnpm dev');
       // Mid-border should be present
       expect(result).toMatch(/[├+]/);
     });
 
     it('omits mid-border when no footer provided', () => {
-      const result = strip(renderSummaryBox({
-        expression: 'success',
-        title: 'Done',
-      }));
+      const result = strip(
+        renderSummaryBox({
+          expression: 'success',
+          title: 'Done',
+        }),
+      );
       const lines = result.split('\n');
       const hasMidBorder = lines.some((l) => /^├/.test(l));
       expect(hasMidBorder).toBe(false);
     });
 
     it('renders lock character in the box', () => {
-      const result = strip(renderSummaryBox({
-        expression: 'success',
-        title: 'Test',
-      }));
+      const result = strip(
+        renderSummaryBox({
+          expression: 'success',
+          title: 'Test',
+        }),
+      );
       // Should contain parts of the lock body
       expect(result).toMatch(/[╔+]/);
       expect(result).toMatch(/[╚+]/);
@@ -70,9 +80,7 @@ describe('summary-box', () => {
 
     it('renders all three expressions without error', () => {
       for (const expression of ['success', 'warning', 'error'] as const) {
-        expect(() =>
-          renderSummaryBox({ expression, title: `Test ${expression}` }),
-        ).not.toThrow();
+        expect(() => renderSummaryBox({ expression, title: `Test ${expression}` })).not.toThrow();
       }
     });
 
@@ -91,25 +99,29 @@ describe('summary-box', () => {
         type: 'done' as const,
         text: `Item ${i + 1}`,
       }));
-      const result = strip(renderSummaryBox({
-        expression: 'success',
-        title: 'Many Items',
-        items,
-      }));
+      const result = strip(
+        renderSummaryBox({
+          expression: 'success',
+          title: 'Many Items',
+          items,
+        }),
+      );
       expect(result).toContain('Item 1');
       expect(result).toContain('Item 10');
     });
 
     it('box lines are consistent width', () => {
-      const result = strip(renderSummaryBox({
-        expression: 'success',
-        title: 'Width Test',
-        items: [
-          { type: 'done', text: 'Short' },
-          { type: 'pending', text: 'A longer item here' },
-        ],
-        footer: 'Some footer text',
-      }));
+      const result = strip(
+        renderSummaryBox({
+          expression: 'success',
+          title: 'Width Test',
+          items: [
+            { type: 'done', text: 'Short' },
+            { type: 'pending', text: 'A longer item here' },
+          ],
+          footer: 'Some footer text',
+        }),
+      );
       const lines = result.split('\n');
       const firstLineWidth = lines[0].length;
       for (const line of lines) {

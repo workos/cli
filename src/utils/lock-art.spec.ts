@@ -32,11 +32,12 @@ describe('lock-art', () => {
       expect(success[1]).toBe(warning[1]);
     });
 
-    it('error has an open shackle (right side disconnected)', () => {
+    it('error has an open shackle (right side not connected to body)', () => {
       const success = getLockArt('success', false);
       const error = getLockArt('error', false);
       expect(error[0]).toBe(success[0]); // top curve same
-      expect(error[1]).not.toBe(success[1]); // right bar removed
+      expect(error[1]).toBe(success[1]); // shackle bars same
+      expect(error[2]).not.toBe(success[2]); // body top differs — no right connector
     });
 
     it('colored and uncolored return same number of lines', () => {

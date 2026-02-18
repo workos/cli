@@ -69,10 +69,7 @@ export async function checkLanguage(installDir: string): Promise<LanguageInfo> {
     for (const manifest of detector.manifestFiles) {
       const path = join(installDir, manifest);
       if (await fileExists(path)) {
-        const pm =
-          detector.language === 'python'
-            ? detectPythonPackageManager(manifest)
-            : detector.packageManager;
+        const pm = detector.language === 'python' ? detectPythonPackageManager(manifest) : detector.packageManager;
 
         return {
           name: detector.name,

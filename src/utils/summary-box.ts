@@ -116,10 +116,7 @@ export function renderSummaryBox(options: SummaryBoxOptions): string {
       rightPart = '';
       rightPartLen = 0;
     }
-    const row =
-      BOX.v +
-      padRight(lockPart + rightPart, lockPartRaw.length + rightPartLen, innerWidth) +
-      BOX.v;
+    const row = BOX.v + padRight(lockPart + rightPart, lockPartRaw.length + rightPartLen, innerWidth) + BOX.v;
     lines.push(row);
   }
 

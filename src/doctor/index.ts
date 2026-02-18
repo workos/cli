@@ -36,13 +36,22 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     version: DOCTOR_VERSION,
     timestamp: '',
     project: { path: options.installDir, packageManager: runtime.packageManager },
-    sdk, language, runtime, framework, environment, connectivity,
+    sdk,
+    language,
+    runtime,
+    framework,
+    environment,
+    connectivity,
   });
 
   const [dashboardResult, authPatterns, aiAnalysis] = await Promise.all([
     checkDashboardSettings(options, environment.apiKeyType, envRaw),
     sdk.isAuthKit ? checkAuthPatterns(options, framework, environment, sdk) : Promise.resolve(undefined),
-    checkAiAnalysis(options.installDir, { language, framework, sdk, environment, existingIssues: earlyIssues }, { skipAi: options.skipAi }),
+    checkAiAnalysis(
+      options.installDir,
+      { language, framework, sdk, environment, existingIssues: earlyIssues },
+      { skipAi: options.skipAi },
+    ),
   ]);
 
   // Compute expected redirect URI from framework detection if not set in env
