@@ -1,6 +1,6 @@
 import type { InstallerAdapter, AdapterConfig } from './types.js';
 import type { InstallerEventEmitter, InstallerEvents } from '../events.js';
-import chalk from 'chalk';
+import { renderCompletionSummary } from '../../utils/summary-box.js';
 
 /**
  * Dashboard adapter that renders wizard events via Ink/React TUI.
@@ -73,21 +73,9 @@ export class DashboardAdapter implements InstallerAdapter {
     this.cleanup?.();
     this.cleanup = null;
 
-    // Print completion summary to terminal after exiting alternate screen
     if (this.completionData) {
-      console.log(); // blank line
-      if (this.completionData.success) {
-        console.log(chalk.green('✓ Installation Complete'));
-        if (this.completionData.summary) {
-          console.log();
-          console.log(this.completionData.summary);
-        }
-      } else {
-        console.log(chalk.red('✗ Installation Failed'));
-        if (this.completionData.summary) {
-          console.log(chalk.dim(this.completionData.summary));
-        }
-      }
+      console.log();
+      console.log(renderCompletionSummary(this.completionData.success, this.completionData.summary));
       console.log();
     }
 

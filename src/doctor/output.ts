@@ -1,5 +1,7 @@
 import Chalk from 'chalk';
 import type { DoctorReport, Issue } from './types.js';
+import { renderSummaryBox, type SummaryBoxItem } from '../utils/summary-box.js';
+import type { LockExpression } from '../utils/lock-art.js';
 
 export interface FormatOptions {
   verbose?: boolean;
@@ -14,16 +16,23 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
   console.log('');
   console.log('SDK & Project Information');
   if (report.sdk.name) {
-    console.log(`   SDK:              ${report.sdk.name} v${report.sdk.version}`);
+    console.log(`   SDK:              ${report.sdk.name}${report.sdk.version ? ` v${report.sdk.version}` : ''}`);
   } else {
     console.log(`   SDK:              ${Chalk.red('Not found')}`);
   }
-  console.log(`   Runtime:          Node.js ${report.runtime.nodeVersion}`);
+  if (report.language.name !== 'Unknown') {
+    console.log(`   Language:         ${report.language.name}`);
+  }
+  if (report.language.name === 'JavaScript/TypeScript' || report.language.name === 'Unknown') {
+    console.log(`   Runtime:          Node.js ${report.runtime.nodeVersion}`);
+  }
   if (report.framework.name) {
     const variant = report.framework.variant ? ` (${report.framework.variant})` : '';
-    console.log(`   Framework:        ${report.framework.name} ${report.framework.version}${variant}`);
+    console.log(`   Framework:        ${report.framework.name} ${report.framework.version ?? ''}${variant}`);
   }
-  if (report.runtime.packageManager) {
+  if (report.language.packageManager) {
+    console.log(`   Package Manager:  ${report.language.packageManager}`);
+  } else if (report.runtime.packageManager) {
     console.log(`   Package Manager:  ${report.runtime.packageManager} ${report.runtime.packageManagerVersion ?? ''}`);
   }
 
@@ -86,6 +95,61 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
     console.log(`   ${report.redirectUris.codeUri}`);
   }
 
+  // Auth Patterns
+  if (report.authPatterns) {
+    console.log('');
+    console.log('Auth Patterns');
+    if (report.authPatterns.findings.length === 0) {
+      console.log(`   ${Chalk.green('✓')} ${report.authPatterns.checksRun} checks passed`);
+    } else {
+      console.log(
+        `   ${report.authPatterns.checksRun} checked, ${Chalk.yellow(`${report.authPatterns.findings.length} finding(s)`)}`,
+      );
+      for (const finding of report.authPatterns.findings) {
+        const icon = finding.severity === 'error' ? Chalk.red('✗') : Chalk.yellow('!');
+        console.log(`   ${icon} ${finding.message}`);
+        if (finding.filePath) {
+          console.log(`     ${Chalk.dim('File:')} ${finding.filePath}`);
+        }
+      }
+    }
+  }
+
+  // AI Analysis
+  if (report.aiAnalysis) {
+    console.log('');
+    if (report.aiAnalysis.skipped) {
+      console.log('AI Analysis');
+      console.log(`   ${Chalk.dim(report.aiAnalysis.skipReason ?? 'Skipped')}`);
+    } else {
+      const duration = (report.aiAnalysis.durationMs / 1000).toFixed(1);
+      console.log(`AI Analysis ${Chalk.dim(`(${duration}s)`)}`);
+      if (report.aiAnalysis.summary) {
+        console.log(`   ${report.aiAnalysis.summary}`);
+      }
+      console.log('');
+      for (const finding of report.aiAnalysis.findings) {
+        const icon =
+          finding.severity === 'error'
+            ? Chalk.red('✗')
+            : finding.severity === 'warning'
+              ? Chalk.yellow('!')
+              : Chalk.dim('ℹ');
+        const color =
+          finding.severity === 'error' ? Chalk.red : finding.severity === 'warning' ? Chalk.yellow : Chalk.dim;
+        console.log(`   ${icon} ${color(finding.title)}`);
+        console.log(`     ${finding.detail}`);
+        if (finding.remediation) {
+          console.log(`     ${Chalk.dim('→')} ${finding.remediation}`);
+        }
+        if (finding.filePath) {
+          console.log(`     ${Chalk.dim('File:')} ${finding.filePath}`);
+        }
+        console.log('');
+      }
+    }
+  }
+
   // Verbose mode additions
   if (options?.verbose) {
     console.log('');
@@ -121,21 +185,34 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
     }
   }
 
-  console.log(Chalk.dim('━'.repeat(70)));
   console.log('');
 
-  // Summary
-  if (report.summary.healthy) {
-    console.log(Chalk.green('Your WorkOS integration looks healthy!'));
-  } else if (report.summary.errors > 0) {
-    console.log(Chalk.red(`${report.summary.errors} issue(s) must be resolved before authentication will work.`));
-  } else {
-    console.log(Chalk.yellow(`${report.summary.warnings} warning(s) to review.`));
-  }
+  // Summary box with lock character
+  const expression: LockExpression = report.summary.healthy
+    ? 'success'
+    : report.summary.errors > 0
+      ? 'error'
+      : 'warning';
 
-  console.log('');
-  console.log(Chalk.dim('Copy this report: workos doctor --copy'));
-  console.log(Chalk.dim('Troubleshooting:  https://workos.com/docs/troubleshooting'));
+  const title = report.summary.healthy
+    ? 'WorkOS Integration Healthy'
+    : report.summary.errors > 0
+      ? `${report.summary.errors} Issue(s) Found`
+      : `${report.summary.warnings} Warning(s) to Review`;
+
+  const items: SummaryBoxItem[] = report.issues.map((issue) => ({
+    type: issue.severity === 'error' ? ('error' as const) : ('pending' as const),
+    text: `${issue.code}: ${issue.message}`,
+  }));
+
+  console.log(
+    renderSummaryBox({
+      expression,
+      title,
+      items,
+      footer: 'workos doctor --copy | https://workos.com/docs',
+    }),
+  );
   console.log('');
 }
 

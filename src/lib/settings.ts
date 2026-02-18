@@ -9,6 +9,7 @@ export function getVersion(): string {
 
 export interface InstallerConfig {
   model: string;
+  doctorModel: string;
   workos: {
     clientId: string;
     authkitDomain: string;

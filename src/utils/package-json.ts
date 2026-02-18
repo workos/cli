@@ -1,3 +1,15 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+export function readPackageJson(installDir: string): PackageDotJson | null {
+  try {
+    const content = readFileSync(join(installDir, 'package.json'), 'utf-8');
+    return JSON.parse(content) as PackageDotJson;
+  } catch {
+    return null;
+  }
+}
+
 export type PackageDotJson = {
   version?: string;
   scripts?: Record<string, string | undefined>;

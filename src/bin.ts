@@ -204,6 +204,11 @@ yargs(hideBin(process.argv))
           default: false,
           description: 'Skip API calls (offline mode)',
         },
+        'skip-ai': {
+          type: 'boolean',
+          default: false,
+          description: 'Skip AI-powered analysis',
+        },
         'install-dir': {
           type: 'string',
           default: process.cwd(),

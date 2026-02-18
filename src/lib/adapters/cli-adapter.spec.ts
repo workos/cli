@@ -222,28 +222,27 @@ describe('CLIAdapter', () => {
       expect(sendEvent).toHaveBeenCalledWith({ type: 'CANCEL' });
     });
 
-    it('shows success outro on complete', async () => {
+    it('shows success summary box on complete', async () => {
       await adapter.start();
-      const clack = await import('../../utils/clack.js');
+      const consoleSpy = vi.spyOn(console, 'log');
 
       emitter.emit('complete', { success: true, summary: 'All done!' });
 
-      // Uses clack.log for output
-      expect(clack.default.log.success).toHaveBeenCalledWith('WorkOS AuthKit installed!');
-      expect(clack.default.log.message).toHaveBeenCalledWith('Next steps:');
-      expect(clack.default.outro).toHaveBeenCalled();
+      const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+      expect(output).toContain('WorkOS AuthKit Installed');
+      consoleSpy.mockRestore();
     });
 
-    it('shows error on failure complete', async () => {
+    it('shows error summary box on failure complete', async () => {
       await adapter.start();
-      const clack = await import('../../utils/clack.js');
+      const consoleSpy = vi.spyOn(console, 'log');
 
       emitter.emit('complete', { success: false, summary: 'Something went wrong' });
 
-      // Uses clack.log for output
-      expect(clack.default.log.error).toHaveBeenCalledWith('Installation failed');
-      expect(clack.default.log.info).toHaveBeenCalledWith('Something went wrong');
-      expect(clack.default.outro).toHaveBeenCalled();
+      const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
+      expect(output).toContain('Installation Failed');
+      expect(output).toContain('Something went wrong');
+      consoleSpy.mockRestore();
     });
   });
 });

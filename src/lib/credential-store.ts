@@ -84,10 +84,14 @@ function readFromKeyring(): Credentials | null {
   try {
     const entry = getKeyringEntry();
     const data = entry.getPassword();
-    if (!data) return null;
+    if (!data) {
+      logWarn('[credential-store] keyring: entry exists but data is null/empty');
+      return null;
+    }
     return JSON.parse(data);
   } catch (error) {
-    logWarn('Failed to read from keyring:', error);
+    const msg = error instanceof Error ? error.message : String(error);
+    logWarn(`[credential-store] keyring read failed: ${msg}`);
     return null;
   }
 }
@@ -98,7 +102,8 @@ function writeToKeyring(creds: Credentials): boolean {
     entry.setPassword(JSON.stringify(creds));
     return true;
   } catch (error) {
-    logWarn('Failed to write to keyring:', error);
+    const msg = error instanceof Error ? error.message : String(error);
+    logWarn(`[credential-store] keyring write failed: ${msg}`);
     return false;
   }
 }
@@ -140,8 +145,7 @@ export function getCredentials(): Credentials | null {
 
   const fileCreds = readFromFile();
   if (fileCreds) {
-    // Migrate file creds to keyring if possible
-    if (writeToKeyring(fileCreds)) deleteFile();
+    writeToKeyring(fileCreds);
     return fileCreds;
   }
 
@@ -151,11 +155,9 @@ export function getCredentials(): Credentials | null {
 export function saveCredentials(creds: Credentials): void {
   if (forceInsecureStorage) return writeToFile(creds);
 
-  if (writeToKeyring(creds)) {
-    deleteFile();
-  } else {
+  writeToFile(creds);
+  if (!writeToKeyring(creds)) {
     showFallbackWarning();
-    writeToFile(creds);
   }
 }
 
@@ -178,6 +180,49 @@ export function updateTokens(accessToken: string, expiresAt: number, refreshToke
   };
 
   saveCredentials(updated);
+}
+
+/**
+ * Diagnostic info about credential storage state — for debugging auth failures.
+ */
+export function diagnoseCredentials(): string[] {
+  const lines: string[] = [];
+  const filePath = getCredentialsPath();
+  const filePresent = fileExists();
+
+  lines.push(`file: ${filePath} (exists=${filePresent})`);
+
+  if (filePresent) {
+    try {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const parsed = JSON.parse(content) as Partial<Credentials>;
+      const expired = parsed.expiresAt ? Date.now() >= parsed.expiresAt : 'unknown';
+      lines.push(
+        `file creds: userId=${parsed.userId ?? 'missing'}, expired=${expired}, hasRefreshToken=${!!parsed.refreshToken}`,
+      );
+    } catch (e) {
+      lines.push(`file creds: parse error — ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  try {
+    const entry = getKeyringEntry();
+    const data = entry.getPassword();
+    if (data) {
+      const parsed = JSON.parse(data) as Partial<Credentials>;
+      const expired = parsed.expiresAt ? Date.now() >= parsed.expiresAt : 'unknown';
+      lines.push(
+        `keyring: found, userId=${parsed.userId ?? 'missing'}, expired=${expired}, hasRefreshToken=${!!parsed.refreshToken}`,
+      );
+    } else {
+      lines.push('keyring: empty (getPassword returned null)');
+    }
+  } catch (e) {
+    lines.push(`keyring: error — ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  lines.push(`insecureStorage=${forceInsecureStorage}`);
+  return lines;
 }
 
 export { getCredentialsPath };

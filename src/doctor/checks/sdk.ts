@@ -1,5 +1,6 @@
-import { getPackageDotJson } from '../../utils/clack-utils.js';
-import { hasPackageInstalled, getPackageVersion } from '../../utils/package-json.js';
+import { readFile, readdir } from 'node:fs/promises';
+import { join } from 'node:path';
+import { readPackageJson, hasPackageInstalled, getPackageVersion } from '../../utils/package-json.js';
 import type { DoctorOptions, SdkInfo } from '../types.js';
 
 // AuthKit SDKs - check newer @workos/* scope first, then legacy @workos-inc/*
@@ -37,31 +38,24 @@ const AUTHKIT_PACKAGES = new Set([
   '@workos-inc/authkit-js',
 ]);
 
+const NO_SDK: SdkInfo = {
+  name: null,
+  version: null,
+  latest: null,
+  outdated: false,
+  isAuthKit: false,
+  language: 'javascript',
+};
+
 export async function checkSdk(options: DoctorOptions): Promise<SdkInfo> {
-  let packageJson;
-  try {
-    packageJson = await getPackageDotJson(options);
-  } catch {
-    return {
-      name: null,
-      version: null,
-      latest: null,
-      outdated: false,
-      isAuthKit: false,
-    };
+  const packageJson = readPackageJson(options.installDir);
+  if (!packageJson) {
+    return (await checkNonJsSdk(options.installDir)) ?? NO_SDK;
   }
 
-  // Find installed SDK (order matters—AuthKit before standalone)
   const installedSdk = SDK_PACKAGES.find((pkg) => hasPackageInstalled(pkg, packageJson));
-
   if (!installedSdk) {
-    return {
-      name: null,
-      version: null,
-      latest: null,
-      outdated: false,
-      isAuthKit: false,
-    };
+    return (await checkNonJsSdk(options.installDir)) ?? NO_SDK;
   }
 
   const version = getPackageVersion(installedSdk, packageJson) ?? null;
@@ -73,6 +67,7 @@ export async function checkSdk(options: DoctorOptions): Promise<SdkInfo> {
     latest,
     outdated: version && latest ? isVersionOutdated(version, latest) : false,
     isAuthKit: AUTHKIT_PACKAGES.has(installedSdk),
+    language: 'javascript',
   };
 }
 
@@ -93,6 +88,114 @@ async function fetchLatestVersion(packageName: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+interface NonJsDetector {
+  language: string;
+  file: string;
+  pattern: RegExp;
+  nameExtract?: string; // Static SDK name when pattern matches
+  versionGroup?: number; // Capture group index for version
+}
+
+const NON_JS_DETECTORS: NonJsDetector[] = [
+  {
+    language: 'python',
+    file: 'requirements.txt',
+    pattern: /^workos(?:-python)?(?:==|>=|~=|!=)?([\d.]*)/m,
+    nameExtract: 'workos-python',
+    versionGroup: 1,
+  },
+  {
+    language: 'python',
+    file: 'pyproject.toml',
+    pattern: /workos(?:-python)?/m,
+    nameExtract: 'workos-python',
+  },
+  {
+    language: 'ruby',
+    file: 'Gemfile',
+    pattern: /gem\s+['"]workos(?:-ruby)?['"]/m,
+    nameExtract: 'workos-ruby',
+  },
+  {
+    language: 'go',
+    file: 'go.mod',
+    pattern: /github\.com\/workos\/workos-go(?:\/v\d+)?\s+(v[\d.]+)/m,
+    nameExtract: 'workos-go',
+    versionGroup: 1,
+  },
+  {
+    language: 'java',
+    file: 'pom.xml',
+    pattern: /<groupId>com\.workos<\/groupId>/m,
+    nameExtract: 'workos-java',
+  },
+  {
+    language: 'java',
+    file: 'build.gradle',
+    pattern: /com\.workos/m,
+    nameExtract: 'workos-java',
+  },
+  {
+    language: 'php',
+    file: 'composer.json',
+    pattern: /"workos\/workos-php"/m,
+    nameExtract: 'workos-php',
+  },
+];
+
+async function readFileSafe(path: string): Promise<string | null> {
+  try {
+    return await readFile(path, 'utf-8');
+  } catch {
+    return null;
+  }
+}
+
+async function checkNonJsSdk(installDir: string): Promise<SdkInfo | null> {
+  for (const detector of NON_JS_DETECTORS) {
+    const content = await readFileSafe(join(installDir, detector.file));
+    if (!content) continue;
+
+    const match = content.match(detector.pattern);
+    if (match) {
+      const version = detector.versionGroup ? match[detector.versionGroup] || null : null;
+      return {
+        name: detector.nameExtract ?? null,
+        version,
+        latest: null, // No registry checks for non-JS in this phase
+        outdated: false,
+        isAuthKit: false,
+        language: detector.language,
+      };
+    }
+  }
+
+  // Check .csproj files for .NET (requires directory listing)
+  try {
+    const entries = await readdir(installDir);
+    for (const entry of entries) {
+      if (entry.endsWith('.csproj')) {
+        const content = await readFileSafe(join(installDir, entry));
+        if (content && /PackageReference.*Include="WorkOS\.net"/i.test(content)) {
+          const versionMatch = content.match(/Include="WorkOS\.net".*?Version="([\d.]+)"/i);
+          return {
+            name: 'WorkOS.net',
+            version: versionMatch?.[1] ?? null,
+            latest: null,
+            outdated: false,
+            isAuthKit: false,
+            language: 'dotnet',
+          };
+        }
+      }
+    }
+  } catch {
+    // directory not readable
+  }
+
+  return null;
 }
 
 function isVersionOutdated(current: string, latest: string): boolean {
