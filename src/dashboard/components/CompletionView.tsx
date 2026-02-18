@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
+import { getLockArt, type LockExpression } from '../../utils/lock-art.js';
 
 interface OutputLine {
   text: string;
@@ -29,20 +30,26 @@ export function CompletionView({ success, summary, outputLog }: CompletionViewPr
 
   const visibleLines = outputLog.slice(scrollOffset, scrollOffset + 20);
 
+  const expression: LockExpression = success ? 'success' : 'error';
+  const lockLines = getLockArt(expression, false);
+  const color = success ? 'green' : 'red';
+
   return (
     <Box flexDirection="column" padding={1} width="100%" height="100%">
-      {/* Header */}
+      {/* Lock + Header */}
       <Box marginBottom={1}>
-        <Text bold color={success ? 'green' : 'red'}>
-          {success ? '✓ Installation Complete' : '✗ Installation Failed'}
-        </Text>
-      </Box>
-
-      {summary && (
-        <Box marginBottom={1}>
-          <Text>{summary}</Text>
+        <Box flexDirection="column" marginRight={2}>
+          {lockLines.map((line, i) => (
+            <Text key={i} color={color}>{line}</Text>
+          ))}
         </Box>
-      )}
+        <Box flexDirection="column" justifyContent="center">
+          <Text bold color={color}>
+            {success ? 'WorkOS AuthKit Installed' : 'Installation Failed'}
+          </Text>
+          {summary && <Text dimColor>{summary}</Text>}
+        </Box>
+      </Box>
 
       {/* Scrollable Log */}
       <Box flexDirection="column" borderStyle="round" borderColor="gray" flexGrow={1} paddingX={1}>

@@ -1,5 +1,7 @@
 import Chalk from 'chalk';
 import type { DoctorReport, Issue } from './types.js';
+import { renderSummaryBox, type SummaryBoxItem } from '../utils/summary-box.js';
+import type { LockExpression } from '../utils/lock-art.js';
 
 export interface FormatOptions {
   verbose?: boolean;
@@ -141,21 +143,34 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
     }
   }
 
-  console.log(Chalk.dim('━'.repeat(70)));
   console.log('');
 
-  // Summary
-  if (report.summary.healthy) {
-    console.log(Chalk.green('Your WorkOS integration looks healthy!'));
-  } else if (report.summary.errors > 0) {
-    console.log(Chalk.red(`${report.summary.errors} issue(s) must be resolved before authentication will work.`));
-  } else {
-    console.log(Chalk.yellow(`${report.summary.warnings} warning(s) to review.`));
-  }
+  // Summary box with lock character
+  const expression: LockExpression = report.summary.healthy
+    ? 'success'
+    : report.summary.errors > 0
+      ? 'error'
+      : 'warning';
 
-  console.log('');
-  console.log(Chalk.dim('Copy this report: workos doctor --copy'));
-  console.log(Chalk.dim('Troubleshooting:  https://workos.com/docs/troubleshooting'));
+  const title = report.summary.healthy
+    ? 'WorkOS Integration Healthy'
+    : report.summary.errors > 0
+      ? `${report.summary.errors} Issue(s) Found`
+      : `${report.summary.warnings} Warning(s) to Review`;
+
+  const items: SummaryBoxItem[] = report.issues.map((issue) => ({
+    type: issue.severity === 'error' ? ('error' as const) : ('pending' as const),
+    text: `${issue.code}: ${issue.message}`,
+  }));
+
+  console.log(
+    renderSummaryBox({
+      expression,
+      title,
+      items,
+      footer: 'workos doctor --copy | https://workos.com/docs',
+    }),
+  );
   console.log('');
 }
 

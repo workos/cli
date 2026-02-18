@@ -4,6 +4,7 @@ import clack from '../../utils/clack.js';
 import chalk from 'chalk';
 import { getConfig } from '../settings.js';
 import { ProgressTracker } from '../progress-tracker.js';
+import { renderSummaryBox } from '../../utils/summary-box.js';
 
 /**
  * CLI adapter that renders wizard events via clack.
@@ -393,17 +394,30 @@ export class CLIAdapter implements InstallerAdapter {
     this.stopSpinner(success ? 'Done' : 'Failed');
 
     if (success) {
-      clack.log.success('WorkOS AuthKit installed!');
-      clack.log.message('Next steps:');
-      clack.log.message('  • Start dev server to test authentication');
-      clack.log.message('  • Visit WorkOS Dashboard to manage users');
-      clack.outro(chalk.dim('Docs: https://workos.com/docs/authkit'));
+      console.log('');
+      console.log(
+        renderSummaryBox({
+          expression: 'success',
+          title: 'WorkOS AuthKit Installed',
+          items: [
+            { type: 'pending', text: 'Start dev server to test authentication' },
+            { type: 'pending', text: 'Visit WorkOS Dashboard to manage users' },
+          ],
+          footer: 'https://workos.com/docs/authkit',
+        }),
+      );
+      console.log('');
     } else {
-      clack.log.error('Installation failed');
-      if (summary) {
-        clack.log.info(summary);
-      }
-      clack.outro(chalk.dim('Report issues: https://github.com/workos/installer/issues'));
+      console.log('');
+      console.log(
+        renderSummaryBox({
+          expression: 'error',
+          title: 'Installation Failed',
+          items: summary ? [{ type: 'error', text: summary }] : [],
+          footer: 'https://github.com/workos/installer/issues',
+        }),
+      );
+      console.log('');
     }
   };
 
