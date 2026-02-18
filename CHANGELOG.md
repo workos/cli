@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1](https://github.com/workos/cli/compare/v0.7.0...v0.7.1) (2026-02-18)
+
+
+### Bug Fixes
+
+* ground AI analysis in SDK documentation ([#64](https://github.com/workos/cli/issues/64)) ([db8d6e3](https://github.com/workos/cli/commit/db8d6e32c56f7467c0a041a4de26d24fea50efd1))
+
 ## [0.7.0](https://github.com/workos/cli/compare/v0.6.0...v0.7.0) (2026-02-18)
 
 
