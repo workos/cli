@@ -47,7 +47,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
   const [dashboardResult, authPatterns, aiAnalysis] = await Promise.all([
     checkDashboardSettings(options, environment.apiKeyType, envRaw),
     checkAuthPatterns(options, framework, environment, sdk),
-    checkAiAnalysis({ language, framework, sdk, environment, existingIssues: earlyIssues }, { skipAi: options.skipAi }),
+    checkAiAnalysis({ installDir: options.installDir, language, framework, sdk, environment, existingIssues: earlyIssues }, { skipAi: options.skipAi }),
   ]);
 
   // Compute expected redirect URI from framework detection if not set in env
