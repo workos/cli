@@ -1,11 +1,19 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { getPackageDotJson } from '../../utils/clack-utils.js';
 import { hasPackageInstalled, getPackageVersion } from '../../utils/package-json.js';
 import { detectPort, getCallbackPath } from '../../lib/port-detection.js';
 import { KNOWN_INTEGRATIONS } from '../../lib/constants.js';
 import type { Integration } from '../../lib/constants.js';
 import type { DoctorOptions, FrameworkInfo } from '../types.js';
+
+function readPackageJson(installDir: string): Record<string, unknown> | null {
+  try {
+    const content = readFileSync(join(installDir, 'package.json'), 'utf-8');
+    return JSON.parse(content) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
 
 interface FrameworkConfig {
   package: string;
@@ -49,12 +57,8 @@ const FRAMEWORKS: FrameworkConfig[] = [
 ];
 
 export async function checkFramework(options: DoctorOptions): Promise<FrameworkInfo> {
-  let packageJson;
-  try {
-    packageJson = await getPackageDotJson(options);
-  } catch {
-    return { name: null, version: null };
-  }
+  const packageJson = readPackageJson(options.installDir);
+  if (!packageJson) return { name: null, version: null };
 
   for (const config of FRAMEWORKS) {
     if (hasPackageInstalled(config.package, packageJson)) {
@@ -91,12 +95,8 @@ async function detectExpoVariant(options: DoctorOptions): Promise<string> {
 }
 
 async function detectNuxtVariant(options: DoctorOptions): Promise<string | undefined> {
-  let packageJson;
-  try {
-    packageJson = await getPackageDotJson(options);
-  } catch {
-    return undefined;
-  }
+  const packageJson = readPackageJson(options.installDir);
+  if (!packageJson) return undefined;
   const version = getPackageVersion('nuxt', packageJson);
   if (!version) return undefined;
   const major = parseInt(version.replace(/^[\^~>=<]+/, '').split('.')[0], 10);

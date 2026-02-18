@@ -591,6 +591,196 @@ describe('checkAuthPatterns', () => {
     });
   });
 
+  describe('API_KEY_IN_SOURCE', () => {
+    it('error when sk_test_ key is hardcoded in source', async () => {
+      writeFixtureFile(testDir, 'src/config.ts', 'const apiKey = "sk_test_abc123def456";');
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: 'Express' }),
+        makeEnv(),
+        makeSdk({ name: '@workos-inc/node', isAuthKit: false }),
+      );
+      const finding = result.findings.find((f) => f.code === 'API_KEY_IN_SOURCE');
+      expect(finding).toBeDefined();
+      expect(finding!.severity).toBe('error');
+      expect(finding!.filePath).toBe('src/config.ts');
+    });
+
+    it('error when sk_live_ key is hardcoded in Python file', async () => {
+      writeFixtureFile(testDir, 'app/settings.py', 'WORKOS_API_KEY = "sk_live_xxxxxxxxxx"');
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: null }),
+        makeEnv(),
+        makeSdk({ name: 'workos-python', isAuthKit: false, language: 'python' }),
+      );
+      expect(result.findings.find((f) => f.code === 'API_KEY_IN_SOURCE')).toBeDefined();
+    });
+
+    it('no finding when key is only in .env file', async () => {
+      writeFixtureFile(testDir, '.env', 'WORKOS_API_KEY=sk_test_abc123def456');
+      writeFixtureFile(testDir, 'src/app.ts', 'const key = process.env.WORKOS_API_KEY;');
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: 'Express' }),
+        makeEnv(),
+        makeSdk({ name: '@workos-inc/node', isAuthKit: false }),
+      );
+      expect(result.findings.find((f) => f.code === 'API_KEY_IN_SOURCE')).toBeUndefined();
+    });
+
+    it('no finding when no source files exist', async () => {
+      writeFixtureFile(testDir, 'README.md', 'sk_test_abc123def456');
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: null }),
+        makeEnv(),
+        makeSdk({ name: null, version: null, latest: null, outdated: false, isAuthKit: false, language: 'javascript' }),
+      );
+      expect(result.findings.find((f) => f.code === 'API_KEY_IN_SOURCE')).toBeUndefined();
+    });
+  });
+
+  describe('ENV_FILE_NOT_GITIGNORED', () => {
+    it('warning when .env exists but no .gitignore', async () => {
+      writeFixtureFile(testDir, '.env', 'WORKOS_API_KEY=sk_test_abc');
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: null }),
+        makeEnv(),
+        makeSdk({ name: 'workos-python', isAuthKit: false, language: 'python' }),
+      );
+      expect(result.findings.find((f) => f.code === 'ENV_FILE_NOT_GITIGNORED')).toBeDefined();
+    });
+
+    it('warning when .env.local exists but not in .gitignore', async () => {
+      writeFixtureFile(testDir, '.env.local', 'WORKOS_API_KEY=sk_test_abc');
+      writeFixtureFile(testDir, '.gitignore', 'node_modules\ndist\n');
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: null }),
+        makeEnv(),
+        makeSdk({ name: '@workos-inc/node', isAuthKit: false }),
+      );
+      expect(result.findings.find((f) => f.code === 'ENV_FILE_NOT_GITIGNORED')).toBeDefined();
+    });
+
+    it('no finding when .env is in .gitignore', async () => {
+      writeFixtureFile(testDir, '.env', 'WORKOS_API_KEY=sk_test_abc');
+      writeFixtureFile(testDir, '.gitignore', 'node_modules\n.env\n');
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: null }),
+        makeEnv(),
+        makeSdk({ name: '@workos-inc/node', isAuthKit: false }),
+      );
+      expect(
+        result.findings.find((f) => f.code === 'ENV_FILE_NOT_GITIGNORED' && f.filePath === '.env'),
+      ).toBeUndefined();
+    });
+
+    it('no finding when .env* wildcard in .gitignore', async () => {
+      writeFixtureFile(testDir, '.env', 'KEY=val');
+      writeFixtureFile(testDir, '.env.local', 'KEY=val');
+      writeFixtureFile(testDir, '.gitignore', '.env*\n');
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: null }),
+        makeEnv(),
+        makeSdk({ name: '@workos-inc/node', isAuthKit: false }),
+      );
+      expect(result.findings.filter((f) => f.code === 'ENV_FILE_NOT_GITIGNORED')).toHaveLength(0);
+    });
+
+    it('no finding when no .env files exist', async () => {
+      writeFixtureFile(testDir, 'src/app.ts', 'console.log("hello")');
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: null }),
+        makeEnv(),
+        makeSdk({ name: '@workos-inc/node', isAuthKit: false }),
+      );
+      expect(result.findings.find((f) => f.code === 'ENV_FILE_NOT_GITIGNORED')).toBeUndefined();
+    });
+  });
+
+  describe('MIXED_ENVIRONMENT', () => {
+    it('warning when staging key with production redirect URI', async () => {
+      writeFixtureFile(
+        testDir,
+        '.env',
+        'WORKOS_API_KEY=sk_test_abc123def456\nWORKOS_REDIRECT_URI=https://myapp.com/callback',
+      );
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: null }),
+        makeEnv(),
+        makeSdk({ name: 'workos-python', isAuthKit: false, language: 'python' }),
+      );
+      const finding = result.findings.find((f) => f.code === 'MIXED_ENVIRONMENT');
+      expect(finding).toBeDefined();
+      expect(finding!.message).toContain('Staging');
+    });
+
+    it('warning when production key with localhost redirect URI', async () => {
+      writeFixtureFile(
+        testDir,
+        '.env',
+        'WORKOS_API_KEY=sk_live_abc123def456\nWORKOS_REDIRECT_URI=http://localhost:3000/callback',
+      );
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: null }),
+        makeEnv(),
+        makeSdk({ name: 'workos-go', isAuthKit: false, language: 'go' }),
+      );
+      const finding = result.findings.find((f) => f.code === 'MIXED_ENVIRONMENT');
+      expect(finding).toBeDefined();
+      expect(finding!.message).toContain('Production');
+    });
+
+    it('no finding when staging key with localhost', async () => {
+      writeFixtureFile(
+        testDir,
+        '.env',
+        'WORKOS_API_KEY=sk_test_abc123def456\nWORKOS_REDIRECT_URI=http://localhost:3000/callback',
+      );
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: null }),
+        makeEnv(),
+        makeSdk({ name: '@workos-inc/node', isAuthKit: false }),
+      );
+      expect(result.findings.find((f) => f.code === 'MIXED_ENVIRONMENT')).toBeUndefined();
+    });
+
+    it('no finding when production key with production URI', async () => {
+      writeFixtureFile(
+        testDir,
+        '.env',
+        'WORKOS_API_KEY=sk_live_abc123def456\nWORKOS_REDIRECT_URI=https://myapp.com/callback',
+      );
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: null }),
+        makeEnv(),
+        makeSdk({ name: '@workos-inc/node', isAuthKit: false }),
+      );
+      expect(result.findings.find((f) => f.code === 'MIXED_ENVIRONMENT')).toBeUndefined();
+    });
+
+    it('no finding when no redirect URI set', async () => {
+      writeFixtureFile(testDir, '.env', 'WORKOS_API_KEY=sk_test_abc123def456');
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: null }),
+        makeEnv(),
+        makeSdk({ name: '@workos-inc/node', isAuthKit: false }),
+      );
+      expect(result.findings.find((f) => f.code === 'MIXED_ENVIRONMENT')).toBeUndefined();
+    });
+  });
+
   describe('checksRun count', () => {
     it('returns correct count for Next.js', async () => {
       writeFixtureFile(testDir, 'middleware.ts', 'export {}');
@@ -601,8 +791,8 @@ describe('checkAuthPatterns', () => {
         makeEnv(),
         makeSdk(),
       );
-      // 1 cross-framework + 6 Next.js = 7
-      expect(result.checksRun).toBe(7);
+      // 4 cross-framework + 6 Next.js = 10
+      expect(result.checksRun).toBe(10);
     });
 
     it('returns correct count for React Router', async () => {
@@ -612,8 +802,8 @@ describe('checkAuthPatterns', () => {
         makeEnv(),
         makeSdk({ name: '@workos-inc/authkit-react-router' }),
       );
-      // 1 cross-framework + 5 React Router = 6
-      expect(result.checksRun).toBe(6);
+      // 4 cross-framework + 5 React Router = 9
+      expect(result.checksRun).toBe(9);
     });
 
     it('returns correct count for TanStack Start', async () => {
@@ -623,8 +813,8 @@ describe('checkAuthPatterns', () => {
         makeEnv(),
         makeSdk({ name: '@workos-inc/authkit-tanstack-start' }),
       );
-      // 1 cross-framework + 3 TanStack = 4
-      expect(result.checksRun).toBe(4);
+      // 4 cross-framework + 3 TanStack = 7
+      expect(result.checksRun).toBe(7);
     });
 
     it('returns only cross-framework for unknown framework', async () => {
@@ -634,7 +824,7 @@ describe('checkAuthPatterns', () => {
         makeEnv(),
         makeSdk({ name: '@workos-inc/node' }),
       );
-      expect(result.checksRun).toBe(1);
+      expect(result.checksRun).toBe(4);
     });
   });
 
@@ -648,6 +838,7 @@ describe('checkAuthPatterns', () => {
         'export { handleAuth as GET } from "@workos-inc/authkit-nextjs"',
       );
       writeFixtureFile(testDir, '.env.local', 'WORKOS_API_KEY=sk_test_abc\nWORKOS_CLIENT_ID=client_test');
+      writeFixtureFile(testDir, '.gitignore', '.env*\nnode_modules\n');
 
       const result = await checkAuthPatterns(
         makeOptions(testDir),

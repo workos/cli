@@ -23,7 +23,9 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
   if (report.language.name !== 'Unknown') {
     console.log(`   Language:         ${report.language.name}`);
   }
-  console.log(`   Runtime:          Node.js ${report.runtime.nodeVersion}`);
+  if (report.language.name === 'JavaScript/TypeScript' || report.language.name === 'Unknown') {
+    console.log(`   Runtime:          Node.js ${report.runtime.nodeVersion}`);
+  }
   if (report.framework.name) {
     const variant = report.framework.variant ? ` (${report.framework.variant})` : '';
     console.log(`   Framework:        ${report.framework.name} ${report.framework.version ?? ''}${variant}`);

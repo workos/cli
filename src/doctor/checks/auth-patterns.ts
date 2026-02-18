@@ -436,11 +436,119 @@ function checkCookiePasswordTooShort(ctx: CheckContext): AuthPatternFinding[] {
   ];
 }
 
+// --- Cross-language checks (run for ALL projects, not just JS/AuthKit) ---
+
+const SOURCE_EXTENSIONS = /\.(ts|tsx|js|jsx|py|rb|go|java|kt|php|cs|swift|dart)$/;
+
+function checkApiKeyInSource(ctx: CheckContext): AuthPatternFinding[] {
+  const API_KEY_PATTERN = /sk_(test|live)_[A-Za-z0-9]{10,}/;
+  const sourceFiles = findFilesShallow(ctx.installDir, SOURCE_EXTENSIONS, 4);
+  const findings: AuthPatternFinding[] = [];
+
+  for (const file of sourceFiles) {
+    const content = readFileSafe(file);
+    if (!content) continue;
+    if (API_KEY_PATTERN.test(content)) {
+      findings.push({
+        code: 'API_KEY_IN_SOURCE',
+        severity: 'error',
+        message: `WorkOS API key hardcoded in source file`,
+        filePath: relative(ctx.installDir, file),
+        remediation:
+          'Move the API key to an environment variable (WORKOS_API_KEY) and load it from .env or your secret manager.',
+      });
+    }
+  }
+  return findings;
+}
+
+function checkEnvFileNotGitignored(ctx: CheckContext): AuthPatternFinding[] {
+  const envFiles = ['.env', '.env.local'].filter((f) => existsSync(join(ctx.installDir, f)));
+  if (envFiles.length === 0) return [];
+
+  const gitignorePath = join(ctx.installDir, '.gitignore');
+  const gitignore = readFileSafe(gitignorePath);
+
+  const findings: AuthPatternFinding[] = [];
+  for (const envFile of envFiles) {
+    // Check if .gitignore exists and contains the env file (or a wildcard like .env*)
+    const isIgnored =
+      gitignore !== null &&
+      gitignore.split('\n').some((line) => {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('#') || trimmed === '') return false;
+        // Exact match or wildcard patterns
+        return trimmed === envFile || trimmed === '.env*' || trimmed === '.env.*' || trimmed === '.env';
+      });
+
+    if (!isIgnored) {
+      findings.push({
+        code: 'ENV_FILE_NOT_GITIGNORED',
+        severity: 'warning',
+        message: `${envFile} is not in .gitignore — secrets may be committed to version control`,
+        filePath: envFile,
+        remediation: `Add ${envFile} to your .gitignore file.`,
+      });
+    }
+  }
+  return findings;
+}
+
+function checkMixedEnvironmentCredentials(ctx: CheckContext): AuthPatternFinding[] {
+  const projectEnv = loadProjectEnvRaw(ctx.installDir);
+  const apiKey = projectEnv.WORKOS_API_KEY;
+  const redirectUri = projectEnv.WORKOS_REDIRECT_URI ?? projectEnv.NEXT_PUBLIC_WORKOS_REDIRECT_URI;
+
+  if (!apiKey || !redirectUri) return [];
+
+  const isTestKey = apiKey.startsWith('sk_test_');
+  const isLiveKey = apiKey.startsWith('sk_live_');
+
+  let isProductionUri = false;
+  try {
+    const url = new URL(redirectUri);
+    isProductionUri = url.hostname !== 'localhost' && !url.hostname.startsWith('127.0.0.');
+  } catch {
+    return [];
+  }
+
+  if (isTestKey && isProductionUri) {
+    return [
+      {
+        code: 'MIXED_ENVIRONMENT',
+        severity: 'warning',
+        message: 'Staging API key (sk_test_) used with a production redirect URI',
+        remediation:
+          'Use sk_live_ API key for production redirect URIs, or change the redirect URI to localhost for staging.',
+      },
+    ];
+  }
+
+  if (isLiveKey && !isProductionUri) {
+    return [
+      {
+        code: 'MIXED_ENVIRONMENT',
+        severity: 'warning',
+        message: 'Production API key (sk_live_) used with a localhost redirect URI',
+        remediation:
+          'Use sk_test_ API key for localhost development, or update the redirect URI to your production domain.',
+      },
+    ];
+  }
+
+  return [];
+}
+
 // --- Main Entry Point ---
 
 type CheckFn = (ctx: CheckContext) => AuthPatternFinding[];
 
-const CROSS_FRAMEWORK_CHECKS: CheckFn[] = [checkApiKeyLeakedToClient];
+const CROSS_FRAMEWORK_CHECKS: CheckFn[] = [
+  checkApiKeyLeakedToClient,
+  checkApiKeyInSource,
+  checkEnvFileNotGitignored,
+  checkMixedEnvironmentCredentials,
+];
 
 const NEXTJS_CHECKS: CheckFn[] = [
   checkSignoutGetHandler,

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { getPackageDotJson } from '../../utils/clack-utils.js';
 import { hasPackageInstalled, getPackageVersion } from '../../utils/package-json.js';
 import type { DoctorOptions, SdkInfo } from '../types.js';
 
@@ -39,11 +39,21 @@ const AUTHKIT_PACKAGES = new Set([
   '@workos-inc/authkit-js',
 ]);
 
-export async function checkSdk(options: DoctorOptions): Promise<SdkInfo> {
-  let packageJson;
+function readPackageJson(installDir: string): Record<string, unknown> | null {
   try {
-    packageJson = await getPackageDotJson(options);
+    const content = readFileSync(join(installDir, 'package.json'), 'utf-8');
+    return JSON.parse(content) as Record<string, unknown>;
   } catch {
+    return null;
+  }
+}
+
+export async function checkSdk(options: DoctorOptions): Promise<SdkInfo> {
+  const packageJson = readPackageJson(options.installDir);
+  if (!packageJson) {
+    // No package.json — try non-JS language manifests
+    const nonJs = await checkNonJsSdk(options.installDir);
+    if (nonJs) return nonJs;
     return {
       name: null,
       version: null,

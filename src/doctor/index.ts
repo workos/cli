@@ -46,7 +46,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
 
   const [dashboardResult, authPatterns, aiAnalysis] = await Promise.all([
     checkDashboardSettings(options, environment.apiKeyType, envRaw),
-    sdk.isAuthKit ? checkAuthPatterns(options, framework, environment, sdk) : Promise.resolve(undefined),
+    checkAuthPatterns(options, framework, environment, sdk),
     checkAiAnalysis(
       options.installDir,
       { language, framework, sdk, environment, existingIssues: earlyIssues },
