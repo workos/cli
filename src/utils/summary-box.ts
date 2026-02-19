@@ -20,7 +20,7 @@ export function renderCompletionSummary(success: boolean, summary?: string): str
     expression: 'error',
     title: 'Installation Failed',
     items: summary ? [{ type: 'error', text: summary }] : [],
-    footer: 'https://github.com/workos/installer/issues',
+    footer: 'https://github.com/workos/cli/issues',
   });
 }
 

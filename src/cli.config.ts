@@ -33,7 +33,7 @@ export const config = {
   documentation: {
     workosDocsUrl: 'https://workos.com/docs/authkit',
     dashboardUrl: 'https://dashboard.workos.com',
-    issuesUrl: 'https://github.com/workos/installer/issues',
+    issuesUrl: 'https://github.com/workos/cli/issues',
   },
 
   frameworks: {
