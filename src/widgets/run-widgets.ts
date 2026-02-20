@@ -41,12 +41,39 @@ const FRAMEWORK_CHOICES: Array<{ label: string; value: WidgetsFramework }> = [
   { label: 'Vite', value: 'vite' },
 ];
 
-function inferComponentPath(installDir: string, usesTypeScript: boolean): string {
+const WIDGET_CONFIG: Record<
+  WidgetsWidget,
+  {
+    label: string;
+    slug: string;
+    componentBaseName: string;
+    routeName: string;
+    scopeHint: string;
+  }
+> = {
+  'user-management': {
+    label: 'User Management',
+    slug: 'user-management',
+    componentBaseName: 'user-management-widget',
+    routeName: 'user-management',
+    scopeHint: 'widgets:users-table:manage',
+  },
+  'admin-portal-sso-connection': {
+    label: 'Admin Portal SSO Connection',
+    slug: 'admin-portal-sso-connection',
+    componentBaseName: 'admin-portal-sso-connection-widget',
+    routeName: 'admin-portal-sso-connection',
+    scopeHint: 'Determine required scopes from @workos-inc/widgets API methods used',
+  },
+};
+
+function inferComponentPath(installDir: string, usesTypeScript: boolean, widget: WidgetsWidget): string {
   const ext = usesTypeScript ? 'tsx' : 'jsx';
+  const componentName = WIDGET_CONFIG[widget].componentBaseName;
   const candidates = [
-    path.join('src', 'components', 'workos', `user-management-widget.${ext}`),
-    path.join('components', 'workos', `user-management-widget.${ext}`),
-    path.join('src', `user-management-widget.${ext}`),
+    path.join('src', 'components', 'workos', `${componentName}.${ext}`),
+    path.join('components', 'workos', `${componentName}.${ext}`),
+    path.join('src', `${componentName}.${ext}`),
   ];
   for (const candidate of candidates) {
     if (existsSync(path.join(installDir, path.dirname(candidate)))) {
@@ -56,20 +83,59 @@ function inferComponentPath(installDir: string, usesTypeScript: boolean): string
   return candidates[0];
 }
 
-function inferPagePath(usesTypeScript: boolean, framework: WidgetsFramework, nextjsRouter?: NextJsRouter): string {
+function inferPagePath(
+  usesTypeScript: boolean,
+  framework: WidgetsFramework,
+  widget: WidgetsWidget,
+  nextjsRouter?: NextJsRouter,
+): string {
   const ext = usesTypeScript ? 'tsx' : 'jsx';
+  const routeName = WIDGET_CONFIG[widget].routeName;
   if (framework === 'nextjs') {
     const router = nextjsRouter ?? NextJsRouter.APP_ROUTER;
     return router === NextJsRouter.APP_ROUTER
-      ? path.join('app', 'widgets', 'user-management', `page.${ext}`)
-      : path.join('pages', 'widgets', `user-management.${ext}`);
+      ? path.join('app', 'widgets', routeName, `page.${ext}`)
+      : path.join('pages', 'widgets', `${routeName}.${ext}`);
   }
 
   if (framework === 'vite') {
-    return path.join('src', 'pages', `UserManagement.${ext}`);
+    return path.join('src', 'pages', `${toPascalCase(routeName)}.${ext}`);
   }
 
-  return path.join('src', 'routes', `user-management.${ext}`);
+  return path.join('src', 'routes', `${routeName}.${ext}`);
+}
+
+function toPascalCase(value: string): string {
+  return value
+    .split('-')
+    .filter(Boolean)
+    .map((part) => `${part[0].toUpperCase()}${part.slice(1)}`)
+    .join('');
+}
+
+async function selectWidget(options: WidgetsInstallerOptions): Promise<WidgetsWidget> {
+  if (options.widget && WIDGET_CONFIG[options.widget]) return options.widget;
+  if (options.widget && !WIDGET_CONFIG[options.widget]) {
+    throw new Error(`Unsupported widget "${options.widget}".`);
+  }
+
+  if (options.ci) {
+    throw new Error('Could not determine widget. Provide --widget in CI mode.');
+  }
+
+  const selection = await clack.select({
+    message: 'Which widget should WorkOS install?',
+    options: Object.entries(WIDGET_CONFIG).map(([value, config]) => ({
+      value,
+      label: config.label,
+    })),
+  });
+
+  if (clack.isCancel(selection)) {
+    throw new Error('Installer cancelled by user');
+  }
+
+  return selection as WidgetsWidget;
 }
 
 function getFrameworkSkill(framework: WidgetsFramework): string {
@@ -97,12 +163,13 @@ function buildWidgetsPrompt(input: {
   nextjsRouter?: NextJsRouter;
 }): string {
   const { framework, entry, widget, componentPath, pagePath, detection, nextjsRouter } = input;
+  const widgetConfig = WIDGET_CONFIG[widget];
   const widgetSkill = `workos-widgets-${widget}`;
   const frameworkSkill = getFrameworkSkill(framework);
   const nextjsLine =
     framework === 'nextjs' && nextjsRouter ? `- Next.js Router: ${getNextJsRouterName(nextjsRouter)}` : '';
 
-  return `You are installing WorkOS Widgets (User Management) into this project.
+  return `You are installing WorkOS Widgets (${widgetConfig.label}) into this project.
 
 ## Project Context
 
@@ -125,7 +192,7 @@ ${nextjsLine}
   - swr: ${WIDGETS_PACKAGE_NAME}/experimental/api/swr
   - react-query: ${WIDGETS_PACKAGE_NAME}/experimental/api/react-query
 - API Host: use WORKOS_WIDGETS_API_URL, then WORKOS_API_HOST, else https://api.workos.com
-- Required scope: widgets:users-table:manage
+- Scope guidance: ${widgetConfig.scopeHint}
 
 Important constraints:
 - Do NOT call fetch directly. Use exported functions from ${WIDGETS_PACKAGE_NAME}/experimental/api/${detection.dataFetching}.
@@ -141,7 +208,7 @@ const token = await workos.widgets.getToken({ userId, organizationId, scopes: ['
 ## Task
 
 Use the \`${frameworkSkill}\` skill to create the page/route and token plumbing.
-Inside that skill, invoke \`${widgetSkill}\` to generate the User Management widget component.
+Inside that skill, invoke \`${widgetSkill}\` to generate the ${widgetConfig.label} widget component.
 Prefer existing UI components. If shadcn is detected and required components are missing, run shadcn CLI to add them.`;
 }
 
@@ -227,18 +294,19 @@ async function selectFramework(
 async function resolveComponentPath(
   installDir: string,
   usesTypeScript: boolean,
+  widget: WidgetsWidget,
   options: WidgetsInstallerOptions,
 ): Promise<string> {
   if (options.widgetsPath) return options.widgetsPath;
 
-  const defaultPath = inferComponentPath(installDir, usesTypeScript);
+  const defaultPath = inferComponentPath(installDir, usesTypeScript, widget);
 
   if (options.ci) {
     return defaultPath;
   }
 
   const response = await clack.text({
-    message: 'Where should the User Management widget component live?',
+    message: 'Where should the widget component live?',
     initialValue: defaultPath,
   });
 
@@ -252,20 +320,21 @@ async function resolveComponentPath(
 async function resolvePagePath(
   usesTypeScript: boolean,
   framework: WidgetsFramework,
+  widget: WidgetsWidget,
   nextjsRouter: NextJsRouter | undefined,
   options: WidgetsInstallerOptions,
 ): Promise<string | undefined> {
   if (options.widgetsEntry === 'component') return undefined;
   if (options.widgetsPagePath) return options.widgetsPagePath;
 
-  const defaultPath = inferPagePath(usesTypeScript, framework, nextjsRouter);
+  const defaultPath = inferPagePath(usesTypeScript, framework, widget, nextjsRouter);
 
   if (options.ci) {
     return defaultPath;
   }
 
   const response = await clack.text({
-    message: 'Where should the User Management page/route live?',
+    message: 'Where should the widget page/route live?',
     initialValue: defaultPath,
   });
 
@@ -310,9 +379,7 @@ export async function runWidgetsInstaller(options: WidgetsInstallerOptions): Pro
       });
     }
 
-    if (options.widget && options.widget !== 'user-management') {
-      throw new Error('Only the user-management widget is supported in this release.');
-    }
+    const selectedWidget: WidgetsWidget = await selectWidget(options);
 
     if (options.widgetsEntry && options.widgetsEntry === 'component') {
       throw new Error('Widgets install requires both a component and a page.');
@@ -359,10 +426,11 @@ export async function runWidgetsInstaller(options: WidgetsInstallerOptions): Pro
     const componentPath = await resolveComponentPath(
       installerOptions.installDir,
       detection.usesTypeScript,
+      selectedWidget,
       installerOptions,
     );
     const entry: WidgetsEntry = 'both';
-    const pagePath = await resolvePagePath(detection.usesTypeScript, framework, nextjsRouter, {
+    const pagePath = await resolvePagePath(detection.usesTypeScript, framework, selectedWidget, nextjsRouter, {
       ...installerOptions,
       widgetsEntry: entry,
     });
@@ -379,7 +447,7 @@ export async function runWidgetsInstaller(options: WidgetsInstallerOptions): Pro
     const prompt = buildWidgetsPrompt({
       framework,
       entry,
-      widget: installerOptions.widget ?? 'user-management',
+      widget: selectedWidget,
       componentPath,
       pagePath,
       detection,
@@ -400,7 +468,7 @@ export async function runWidgetsInstaller(options: WidgetsInstallerOptions): Pro
       prompt,
       installerOptions,
       {
-        spinnerMessage: 'Setting up WorkOS Widgets (User Management)...',
+        spinnerMessage: `Setting up WorkOS Widgets (${WIDGET_CONFIG[selectedWidget].label})...`,
         successMessage: 'WorkOS Widgets setup complete',
         errorMessage: 'Widgets integration failed',
       },
@@ -434,7 +502,7 @@ export async function runWidgetsInstaller(options: WidgetsInstallerOptions): Pro
     emitter.emit('complete', {
       success: true,
       product: 'widgets',
-      summary: `Created User Management widget (${componentPath}) and page (${pagePath ?? 'n/a'}).`,
+      summary: `Created ${WIDGET_CONFIG[selectedWidget].label} widget (${componentPath}) and page (${pagePath ?? 'n/a'}).`,
     });
 
     await analytics.shutdown('success');

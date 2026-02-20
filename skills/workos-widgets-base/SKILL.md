@@ -19,6 +19,8 @@ description: Shared guidance for WorkOS Widgets integrations (framework-agnostic
 - Avoid global CSS. If styles are needed, use CSS Modules or the project's existing styling system.
 - Keep changes minimal and aligned with existing conventions (naming, props, file layout).
 - When handling complex states (loading, error, data), use a reducer per item to keep state updates predictable.
+- Do not duplicate server query state into reducers. For react-query/swr/fetch-hooks, use hook state (`data`, `error`, loading flags, `refetch`) as the single source of truth for server data.
+- Use reducers only for local interaction state that is not owned by the data-fetching library (for example dialog visibility, selected row ids, transient UI modes).
 - Always create both the widget component and an example page/route that renders it.
 - Never call `fetch` directly. Always use API helpers from `@workos-inc/widgets/experimental/api/{fetch|react-query|swr}`.
 - Discover available API methods from the selected import surface and existing imports/usages; do not hardcode endpoints.

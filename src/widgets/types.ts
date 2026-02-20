@@ -26,7 +26,7 @@ export type WidgetsComponentSystem =
 
 export type WidgetsEntry = 'page' | 'component' | 'both';
 
-export type WidgetsWidget = 'user-management';
+export type WidgetsWidget = 'user-management' | 'admin-portal-sso-connection';
 
 export interface WidgetsDetectionResult {
   framework?: WidgetsFramework;

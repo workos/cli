@@ -153,8 +153,8 @@ const widgetsInstallerOptions = {
   'install-dir': installerOptions['install-dir'],
   dashboard: installerOptions.dashboard,
   widget: {
-    describe: 'Widget to install (default: user-management)',
-    default: 'user-management',
+    describe: 'Widget to install',
+    choices: ['user-management', 'admin-portal-sso-connection'] as const,
     type: 'string' as const,
   },
   'widgets-entry': {
