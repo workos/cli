@@ -12,9 +12,11 @@ describe('writeEnvLocal', () => {
   });
 
   afterEach(() => {
-    const envPath = join(testDir, '.env.local');
-    if (existsSync(envPath)) {
-      unlinkSync(envPath);
+    for (const file of ['.env.local', '.gitignore']) {
+      const filePath = join(testDir, file);
+      if (existsSync(filePath)) {
+        unlinkSync(filePath);
+      }
     }
   });
 
@@ -132,5 +134,83 @@ describe('writeEnvLocal', () => {
 
     const content = readFileSync(join(testDir, '.env.local'), 'utf-8');
     expect(content).toContain('WORKOS_API_KEY=sk_test_123');
+  });
+
+  describe('gitignore handling', () => {
+    const envVars = {
+      WORKOS_CLIENT_ID: 'client_123',
+      WORKOS_REDIRECT_URI: 'http://localhost:3000/callback',
+    };
+
+    it('creates .gitignore with .env.local when no .gitignore exists', () => {
+      writeEnvLocal(testDir, envVars);
+
+      const gitignorePath = join(testDir, '.gitignore');
+      expect(existsSync(gitignorePath)).toBe(true);
+      expect(readFileSync(gitignorePath, 'utf-8')).toBe('.env.local\n');
+    });
+
+    it('appends .env.local to existing .gitignore that does not include it', () => {
+      const gitignorePath = join(testDir, '.gitignore');
+      writeFileSync(gitignorePath, 'node_modules\ndist\n');
+
+      writeEnvLocal(testDir, envVars);
+
+      const content = readFileSync(gitignorePath, 'utf-8');
+      expect(content).toContain('node_modules\n');
+      expect(content).toContain('.env.local\n');
+    });
+
+    it('does not duplicate .env.local if already present', () => {
+      const gitignorePath = join(testDir, '.gitignore');
+      writeFileSync(gitignorePath, 'node_modules\n.env.local\n');
+
+      writeEnvLocal(testDir, envVars);
+
+      const content = readFileSync(gitignorePath, 'utf-8');
+      const matches = content.match(/\.env\.local/g);
+      expect(matches).toHaveLength(1);
+    });
+
+    it('does not add .env.local if .env*.local pattern exists', () => {
+      const gitignorePath = join(testDir, '.gitignore');
+      writeFileSync(gitignorePath, 'node_modules\n.env*.local\n');
+
+      writeEnvLocal(testDir, envVars);
+
+      const content = readFileSync(gitignorePath, 'utf-8');
+      expect(content).not.toContain('\n.env.local\n');
+    });
+
+    it('does not add .env.local if .env* pattern exists', () => {
+      const gitignorePath = join(testDir, '.gitignore');
+      writeFileSync(gitignorePath, '.env*\n');
+
+      writeEnvLocal(testDir, envVars);
+
+      const content = readFileSync(gitignorePath, 'utf-8');
+      expect(content).toBe('.env*\n');
+    });
+
+    it('preserves existing .gitignore content when appending', () => {
+      const gitignorePath = join(testDir, '.gitignore');
+      const original = 'node_modules\ndist\n.DS_Store\n';
+      writeFileSync(gitignorePath, original);
+
+      writeEnvLocal(testDir, envVars);
+
+      const content = readFileSync(gitignorePath, 'utf-8');
+      expect(content).toBe(original + '.env.local\n');
+    });
+
+    it('handles .gitignore without trailing newline', () => {
+      const gitignorePath = join(testDir, '.gitignore');
+      writeFileSync(gitignorePath, 'node_modules');
+
+      writeEnvLocal(testDir, envVars);
+
+      const content = readFileSync(gitignorePath, 'utf-8');
+      expect(content).toBe('node_modules\n.env.local\n');
+    });
   });
 });

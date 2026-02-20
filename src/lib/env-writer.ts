@@ -2,6 +2,32 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { parseEnvFile } from '../utils/env-parser.js';
 
+const ENV_LOCAL_COVERING_PATTERNS = ['.env.local', '.env*.local', '.env*'];
+
+/**
+ * Ensure .env.local is in .gitignore.
+ * Creates .gitignore if it doesn't exist.
+ * No-ops if a covering pattern is already present.
+ */
+function ensureGitignore(installDir: string): void {
+  const gitignorePath = join(installDir, '.gitignore');
+
+  if (!existsSync(gitignorePath)) {
+    writeFileSync(gitignorePath, '.env.local\n');
+    return;
+  }
+
+  const content = readFileSync(gitignorePath, 'utf-8');
+  const lines = content.split('\n').map((line) => line.trim());
+
+  if (lines.some((line) => ENV_LOCAL_COVERING_PATTERNS.includes(line))) {
+    return;
+  }
+
+  const separator = content.endsWith('\n') ? '' : '\n';
+  writeFileSync(gitignorePath, `${content}${separator}.env.local\n`);
+}
+
 interface EnvVars {
   WORKOS_API_KEY?: string;
   WORKOS_CLIENT_ID: string;
@@ -50,4 +76,6 @@ export function writeEnvLocal(installDir: string, envVars: Partial<EnvVars>): vo
     .join('\n');
 
   writeFileSync(envPath, content + '\n');
+
+  ensureGitignore(installDir);
 }
