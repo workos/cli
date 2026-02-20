@@ -3,17 +3,12 @@ import { join } from 'node:path';
 import { readPackageJson, hasPackageInstalled, getPackageVersion } from '../../utils/package-json.js';
 import type { DoctorOptions, SdkInfo } from '../types.js';
 
-// AuthKit SDKs - check newer @workos/* scope first, then legacy @workos-inc/*
+// AuthKit SDKs - check @workos/* scope first, then @workos-inc/*
 const SDK_PACKAGES = [
-  // New @workos/* scope
-  '@workos/authkit-nextjs',
+  // @workos/* scope
   '@workos/authkit-tanstack-react-start',
-  '@workos/authkit-react-router',
-  '@workos/authkit-remix',
   '@workos/authkit-sveltekit',
-  '@workos/authkit-react',
-  '@workos/authkit-js',
-  // Legacy @workos-inc/* scope
+  // @workos-inc/* scope
   '@workos-inc/authkit-nextjs',
   '@workos-inc/authkit-remix',
   '@workos-inc/authkit-react-router',
@@ -24,13 +19,8 @@ const SDK_PACKAGES = [
 ] as const;
 
 const AUTHKIT_PACKAGES = new Set([
-  '@workos/authkit-nextjs',
   '@workos/authkit-tanstack-react-start',
-  '@workos/authkit-react-router',
-  '@workos/authkit-remix',
   '@workos/authkit-sveltekit',
-  '@workos/authkit-react',
-  '@workos/authkit-js',
   '@workos-inc/authkit-nextjs',
   '@workos-inc/authkit-remix',
   '@workos-inc/authkit-react-router',

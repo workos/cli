@@ -447,6 +447,31 @@ function checkCookiePasswordTooShort(ctx: CheckContext): AuthPatternFinding[] {
   ];
 }
 
+const REACT_SPA_SDKS = new Set(['@workos-inc/authkit-react']);
+
+function checkMissingApiHostname(ctx: CheckContext): AuthPatternFinding[] {
+  if (!ctx.sdk.name || !REACT_SPA_SDKS.has(ctx.sdk.name)) return [];
+
+  const sourceFiles = findFilesShallow(ctx.installDir, /\.(tsx|jsx|ts|js)$/, 4);
+  const providerFiles = sourceFiles.filter((f) => fileContains(f, /AuthKitProvider/));
+  if (providerFiles.length === 0) return [];
+
+  const hasApiHostname = providerFiles.some((f) => fileContains(f, /apiHostname/));
+  if (hasApiHostname) return [];
+
+  return [
+    {
+      code: 'MISSING_API_HOSTNAME',
+      severity: 'warning',
+      message: 'AuthKitProvider does not specify apiHostname — authorize requests will route through api.workos.com',
+      filePath: relative(ctx.installDir, providerFiles[0]),
+      remediation:
+        'Set the apiHostname prop on AuthKitProvider to your custom Authentication API domain (e.g. auth.example.com) to avoid routing through api.workos.com.',
+      docsUrl: 'https://workos.com/docs/custom-domains',
+    },
+  ];
+}
+
 // --- Cross-language checks (run for ALL projects, not just JS/AuthKit) ---
 
 const SOURCE_EXTENSIONS = /\.(ts|tsx|js|jsx|py|rb|go|java|kt|php|cs|swift|dart)$/;
@@ -557,6 +582,7 @@ const CROSS_FRAMEWORK_CHECKS: CheckFn[] = [
   checkApiKeyInSource,
   checkEnvFileNotGitignored,
   checkMixedEnvironmentCredentials,
+  checkMissingApiHostname,
 ];
 
 const NEXTJS_CHECKS: CheckFn[] = [
