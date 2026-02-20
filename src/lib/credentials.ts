@@ -8,6 +8,7 @@ export {
   updateTokens,
   getCredentialsPath,
   setInsecureStorage,
+  diagnoseCredentials,
 } from './credential-store.js';
 
 import type { Credentials } from './credential-store.js';

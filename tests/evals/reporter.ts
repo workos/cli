@@ -7,6 +7,7 @@ const STATE_LABELS: Record<string, string> = {
   'partial-install': 'Partial',
   'typescript-strict': 'Strict',
   'conflicting-middleware': 'Conflict',
+  'existing-middleware': 'Existing MW',
   'conflicting-auth': 'Conflict',
 };
 
@@ -24,6 +25,7 @@ export function printMatrix(results: EvalResult[]): void {
     'partial-install',
     'typescript-strict',
     'conflicting-middleware',
+    'existing-middleware',
     'conflicting-auth',
   ];
   states.sort((a, b) => stateOrder.indexOf(a) - stateOrder.indexOf(b));
@@ -57,7 +59,10 @@ export function printMatrix(results: EvalResult[]): void {
   const passed = results.filter((r) => r.passed).length;
   const total = results.length;
   const rate = ((passed / total) * 100).toFixed(1);
-  console.log(`\nResults: ${passed}/${total} passed (${rate}%)`);
+  const selfCorrected = results.filter((r) => r.selfCorrected).length;
+  console.log(
+    `\nResults: ${passed}/${total} passed (${rate}%)${selfCorrected > 0 ? `, ${selfCorrected} self-corrected` : ''}`,
+  );
 
   if (passed < total) {
     console.log('\nFailed scenarios:');

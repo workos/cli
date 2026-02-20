@@ -1,12 +1,13 @@
-import path from 'node:path';
 import { writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { loadCredentials } from './env-loader.js';
 import { writeEnvLocal } from '../../src/lib/env-writer.js';
 import { parseEnvFile } from '../../src/utils/env-parser.js';
 import { getConfig } from '../../src/lib/settings.js';
 import { LatencyTracker } from './latency-tracker.js';
+import { quickCheckValidateAndFormat } from '../../src/lib/validation/quick-checks.js';
+import { runAgent, type AgentRunConfig, type RetryConfig } from '../../src/lib/agent-interface.js';
+import type { InstallerOptions } from '../../src/utils/types.js';
 import type { ToolCall, LatencyMetrics } from './types.js';
 
 export interface AgentResult {
@@ -15,6 +16,17 @@ export interface AgentResult {
   toolCalls: ToolCall[];
   error?: string;
   latencyMetrics?: LatencyMetrics;
+  /** Number of within-session correction attempts */
+  correctionAttempts: number;
+  /** Whether the agent self-corrected after an initial failure */
+  selfCorrected: boolean;
+}
+
+export interface AgentRetryConfig {
+  /** Enable within-session correction. Default: true */
+  enabled: boolean;
+  /** Max correction attempts. Default: 2 */
+  maxRetries: number;
 }
 
 export interface AgentExecutorOptions {
@@ -77,20 +89,18 @@ export class AgentExecutor {
     this.latencyTracker = new LatencyTracker();
   }
 
-  async run(): Promise<AgentResult> {
-    const integration = this.getIntegration();
+  async run(retryConfig?: AgentRetryConfig): Promise<AgentResult> {
+    const config = retryConfig ?? { enabled: true, maxRetries: 2 };
     const toolCalls: ToolCall[] = [];
     const collectedOutput: string[] = [];
 
     const label = this.options.scenarioName ? `[${this.options.scenarioName}]` : '';
     if (this.options.verbose) {
-      console.log(`${label} Initializing agent for ${integration}...`);
+      console.log(`${label} Initializing agent for ${this.framework}...`);
     }
 
-    // Start latency tracking
     this.latencyTracker.start();
 
-    // Write credentials to appropriate env file based on framework
     const envVars = {
       WORKOS_API_KEY: this.credentials.workosApiKey,
       WORKOS_CLIENT_ID: this.credentials.workosClientId,
@@ -102,69 +112,74 @@ export class AgentExecutor {
       writeEnvFile(this.workDir, envVars);
     }
 
-    // Build prompt
-    const skillName = SKILL_NAMES[integration];
+    const skillName = SKILL_NAMES[this.framework];
     const prompt = this.buildPrompt(skillName);
 
-    // Initialize and run agent
-    try {
-      const { query } = await import('@anthropic-ai/claude-agent-sdk');
+    const sdkEnv: Record<string, string | undefined> = {
+      ...process.env,
+      ANTHROPIC_API_KEY: this.credentials.anthropicApiKey,
+      ANTHROPIC_BASE_URL: undefined,
+      ANTHROPIC_AUTH_TOKEN: undefined,
+      CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 'true',
+    };
 
-      // Build SDK environment for direct mode
-      const sdkEnv: Record<string, string | undefined> = {
-        ...process.env,
-        ANTHROPIC_API_KEY: this.credentials.anthropicApiKey,
-        CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
-        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 'true',
-      };
-      // Remove gateway config to use direct API
-      delete sdkEnv.ANTHROPIC_BASE_URL;
-      delete sdkEnv.ANTHROPIC_AUTH_TOKEN;
-
-      // Get plugin path for skills
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = path.dirname(__filename);
-      const pluginPath = path.join(__dirname, '../..');
-
-      const response = query({
-        prompt: prompt,
-        options: {
-          model: getConfig().model,
-          cwd: this.workDir,
-          permissionMode: 'acceptEdits',
-          mcpServers: {
-            workos: {
-              command: 'npx',
-              args: ['-y', '@workos/mcp-docs-server'],
-            },
-          },
-          env: sdkEnv,
-          tools: { type: 'preset', preset: 'claude_code' },
-          allowedTools: ['Skill', 'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch'],
-          plugins: [{ type: 'local', path: pluginPath }],
+    const agentRunConfig: AgentRunConfig = {
+      workingDirectory: this.workDir,
+      mcpServers: {
+        workos: {
+          command: 'npx',
+          args: ['-y', '@workos/mcp-docs-server'],
         },
-      });
+      },
+      model: getConfig().model,
+      allowedTools: ['Skill', 'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch'],
+      sdkEnv,
+    };
 
-      // Process message stream
-      for await (const message of response) {
-        this.handleMessage(message, toolCalls, collectedOutput, label);
+    const installerOptions: InstallerOptions = {
+      debug: this.options.verbose ?? false,
+      forceInstall: false,
+      installDir: this.workDir,
+      local: false,
+      ci: true,
+      skipAuth: true,
+    };
+
+    const prodRetryConfig: RetryConfig | undefined = config.enabled
+      ? { maxRetries: config.maxRetries, validateAndFormat: quickCheckValidateAndFormat }
+      : undefined;
+
+    try {
+      // Delegate to production runAgent — same retry loop, same generator coordination
+      const result = await runAgent(
+        agentRunConfig,
+        prompt,
+        installerOptions,
+        undefined, // no spinner config
+        undefined, // no emitter
+        prodRetryConfig,
+        (message) => this.trackMessage(message, toolCalls, collectedOutput, label),
+      );
+
+      const latencyMetrics = this.latencyTracker.finish();
+      const correctionAttempts = result.retryCount ?? 0;
+      const base = { output: collectedOutput.join('\n'), toolCalls, latencyMetrics, correctionAttempts };
+
+      if (result.error) {
+        return { ...base, success: false, error: result.errorMessage ?? String(result.error), selfCorrected: false };
       }
 
-      const latencyMetrics = this.latencyTracker.finish();
-      return {
-        success: true,
-        output: collectedOutput.join('\n'),
-        toolCalls,
-        latencyMetrics,
-      };
+      return { ...base, success: true, selfCorrected: correctionAttempts > 0 };
     } catch (error) {
-      const latencyMetrics = this.latencyTracker.finish();
       return {
         success: false,
         output: collectedOutput.join('\n'),
         toolCalls,
-        latencyMetrics,
+        latencyMetrics: this.latencyTracker.finish(),
         error: error instanceof Error ? error.message : String(error),
+        correctionAttempts: 0,
+        selfCorrected: false,
       };
     }
   }
@@ -187,15 +202,17 @@ Use the \`${skillName}\` skill to integrate WorkOS AuthKit into this application
 Begin by invoking the ${skillName} skill.`;
   }
 
-  private handleMessage(message: any, toolCalls: ToolCall[], collectedOutput: string[], label: string): void {
+  /**
+   * Observe SDK messages for latency tracking and output collection.
+   * This is called via the onMessage hook — production handleSDKMessage runs first.
+   */
+  private trackMessage(message: any, toolCalls: ToolCall[], collectedOutput: string[], label: string): void {
     if (message.type === 'assistant') {
-      // End any in-progress tool call when we get a new assistant message
       this.latencyTracker.endToolCall();
 
       const content = message.message?.content;
       if (Array.isArray(content)) {
         for (const block of content) {
-          // Capture text output and track TTFT
           if (block.type === 'text' && typeof block.text === 'string') {
             this.latencyTracker.recordFirstContent();
             collectedOutput.push(block.text);
@@ -203,14 +220,12 @@ Begin by invoking the ${skillName} skill.`;
               console.log(`${label} Agent: ${block.text.slice(0, 100)}...`);
             }
           }
-          // Capture tool calls and start timing
           if (block.type === 'tool_use') {
             this.latencyTracker.startToolCall(block.name);
-            const call: ToolCall = {
+            toolCalls.push({
               tool: block.name,
               input: block.input as Record<string, unknown>,
-            };
-            toolCalls.push(call);
+            });
             if (this.options.verbose) {
               console.log(`${label} Tool: ${block.name}`);
             }
@@ -220,7 +235,6 @@ Begin by invoking the ${skillName} skill.`;
     }
 
     if (message.type === 'result') {
-      // Capture token usage from result
       if (message.usage) {
         this.latencyTracker.recordTokens(message.usage.input_tokens ?? 0, message.usage.output_tokens ?? 0);
       }
@@ -228,10 +242,5 @@ Begin by invoking the ${skillName} skill.`;
         collectedOutput.push(`Error: ${message.errors.join(', ')}`);
       }
     }
-  }
-
-  private getIntegration(): string {
-    // Integration is now a string type — framework name IS the integration name
-    return this.framework;
   }
 }

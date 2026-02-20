@@ -27,6 +27,10 @@ export interface EvalResult {
   qualityGrade?: QualityGrade;
   /** Key integration files for quality grading (replaces raw diff) */
   keyFiles?: Map<string, string>;
+  /** Within-session correction attempts (0 = passed first try) */
+  correctionAttempts?: number;
+  /** Agent self-corrected after initial failure */
+  selfCorrected?: boolean;
 }
 
 /** Input for quality grading - structured data instead of raw diff */

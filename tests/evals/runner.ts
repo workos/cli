@@ -31,12 +31,13 @@ interface Scenario {
 }
 
 const SCENARIOS: Scenario[] = [
-  // Next.js (5 states)
+  // Next.js (6 states)
   { framework: 'nextjs', state: 'example', grader: NextjsGrader },
   { framework: 'nextjs', state: 'example-auth0', grader: NextjsGrader },
   { framework: 'nextjs', state: 'partial-install', grader: NextjsGrader },
   { framework: 'nextjs', state: 'typescript-strict', grader: NextjsGrader },
   { framework: 'nextjs', state: 'conflicting-middleware', grader: NextjsGrader },
+  { framework: 'nextjs', state: 'existing-middleware', grader: NextjsGrader },
 
   // React SPA (5 states)
   { framework: 'react', state: 'example', grader: ReactGrader },
@@ -86,8 +87,8 @@ const SCENARIOS: Scenario[] = [
   { framework: 'elixir', state: 'example', grader: ElixirGrader },
   { framework: 'elixir', state: 'example-auth0', grader: ElixirGrader },
 
-  // .NET (broken — no runtime)
-  { framework: 'dotnet', state: 'example', grader: DotnetGrader },
+  // .NET (disabled — SDK is broken and no runtime available on most machines)
+  // { framework: 'dotnet', state: 'example', grader: DotnetGrader },
 ];
 
 export interface ExtendedEvalOptions extends EvalOptions {
@@ -97,6 +98,7 @@ export interface ExtendedEvalOptions extends EvalOptions {
   noDashboard?: boolean;
   debug?: boolean;
   noFail?: boolean;
+  noCorrection?: boolean;
   quality?: boolean;
 }
 
@@ -121,6 +123,7 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
     keep: options.keep,
     keepOnFail: options.keepOnFail,
     concurrency: options.sequential ? 1 : undefined,
+    noCorrection: options.noCorrection,
   });
 
   // Initialize log writer
@@ -301,10 +304,13 @@ function printValidationSummary(validation: ValidationResult): void {
     }
   }
   console.log(
-    `\nFirst-attempt: ${(validation.actual.firstAttemptPassRate * 100).toFixed(1)}% (required: ${validation.criteria.firstAttemptPassRate * 100}%)`,
+    `\nFirst-attempt:    ${(validation.actual.firstAttemptPassRate * 100).toFixed(1)}% (required: ${validation.criteria.firstAttemptPassRate * 100}%)`,
   );
   console.log(
-    `With-retry:    ${(validation.actual.withRetryPassRate * 100).toFixed(1)}% (required: ${validation.criteria.withRetryPassRate * 100}%)`,
+    `With-correction:  ${(validation.actual.withCorrectionPassRate * 100).toFixed(1)}%${validation.criteria.withCorrectionPassRate !== undefined ? ` (required: ${validation.criteria.withCorrectionPassRate * 100}%)` : ''}`,
+  );
+  console.log(
+    `With-retry:       ${(validation.actual.withRetryPassRate * 100).toFixed(1)}% (required: ${validation.criteria.withRetryPassRate * 100}%)`,
   );
   console.log('═'.repeat(50));
 }

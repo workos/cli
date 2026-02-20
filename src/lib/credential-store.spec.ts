@@ -124,16 +124,12 @@ describe('credential-store', () => {
       expect(creds?.userId).toBe(validCreds.userId);
     });
 
-    it('deletes file after saving to keyring (migration cleanup)', () => {
-      // First create file storage manually
-      mkdirSync(installerDir, { recursive: true });
-      writeFileSync(credentialsFile, JSON.stringify(validCreds));
-
-      // Now save to keyring (should delete the file)
+    it('keeps file as durable fallback alongside keyring', () => {
       saveCredentials(validCreds);
 
-      expect(existsSync(credentialsFile)).toBe(false);
+      // Both keyring and file should have credentials
       expect(mockKeyring.has('workos-cli:credentials')).toBe(true);
+      expect(existsSync(credentialsFile)).toBe(true);
     });
 
     it('clears from both keyring and file', () => {
@@ -186,17 +182,17 @@ describe('credential-store', () => {
   });
 
   describe('migration (file to keyring)', () => {
-    it('migrates file credentials to keyring on read', () => {
+    it('migrates file credentials to keyring on read but keeps file', () => {
       // Create file credentials directly
       mkdirSync(installerDir, { recursive: true });
       writeFileSync(credentialsFile, JSON.stringify(validCreds));
 
-      // Read should migrate to keyring
+      // Read should migrate to keyring AND keep the file
       const creds = getCredentials();
 
       expect(creds?.accessToken).toBe(validCreds.accessToken);
       expect(mockKeyring.has('workos-cli:credentials')).toBe(true);
-      expect(existsSync(credentialsFile)).toBe(false);
+      expect(existsSync(credentialsFile)).toBe(true);
     });
 
     it('keeps file if keyring unavailable during migration', () => {
@@ -240,17 +236,11 @@ describe('credential-store', () => {
     });
 
     it('hasCredentials only checks file when flag is set', () => {
-      // Save to keyring
+      // Save with default mode (writes to both keyring + file)
       saveCredentials(validCreds);
 
-      // Enable insecure storage
+      // Enable insecure storage — should still find the file
       setInsecureStorage(true);
-
-      // hasCredentials should return false (no file)
-      expect(hasCredentials()).toBe(false);
-
-      // Now save to file
-      saveCredentials(validCreds);
       expect(hasCredentials()).toBe(true);
     });
   });

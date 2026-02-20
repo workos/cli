@@ -30,12 +30,12 @@ export async function validateInstallation(
   }
 
   // Run validations
-  await validatePackages(rules, projectDir, issues);
-  await validateEnvVars(rules, projectDir, issues);
-  await validateFiles(rules, projectDir, issues);
+  issues.push(...(await validatePackages(rules, projectDir)));
+  issues.push(...(await validateEnvVars(rules, projectDir)));
+  issues.push(...(await validateFiles(rules, projectDir)));
 
   // Run framework-specific cross-validations
-  await validateFrameworkSpecific(framework, projectDir, issues);
+  issues.push(...(await validateFrameworkSpecific(framework, projectDir)));
 
   // Run build validation if enabled
   if (options.runBuild !== false) {
@@ -74,16 +74,17 @@ async function loadRules(framework: string, variant?: string): Promise<Validatio
   }
 }
 
-async function validatePackages(rules: ValidationRules, projectDir: string, issues: ValidationIssue[]): Promise<void> {
+export async function validatePackages(rules: ValidationRules, projectDir: string): Promise<ValidationIssue[]> {
+  const issues: ValidationIssue[] = [];
   const pkgPath = join(projectDir, 'package.json');
-  if (!existsSync(pkgPath)) return;
+  if (!existsSync(pkgPath)) return issues;
 
   let pkg: Record<string, unknown>;
   try {
     pkg = JSON.parse(await readFile(pkgPath, 'utf-8'));
   } catch {
     // Malformed package.json - skip package validation
-    return;
+    return issues;
   }
 
   const deps = (pkg.dependencies || {}) as Record<string, string>;
@@ -103,9 +104,12 @@ async function validatePackages(rules: ValidationRules, projectDir: string, issu
       });
     }
   }
+
+  return issues;
 }
 
-async function validateEnvVars(rules: ValidationRules, projectDir: string, issues: ValidationIssue[]): Promise<void> {
+export async function validateEnvVars(rules: ValidationRules, projectDir: string): Promise<ValidationIssue[]> {
+  const issues: ValidationIssue[] = [];
   const envPath = join(projectDir, '.env.local');
   let envContent = '';
 
@@ -120,7 +124,7 @@ async function validateEnvVars(rules: ValidationRules, projectDir: string, issue
         hint: 'Create .env.local with required environment variables',
       });
     }
-    return;
+    return issues;
   }
 
   for (const rule of rules.envVars) {
@@ -144,9 +148,13 @@ async function validateEnvVars(rules: ValidationRules, projectDir: string, issue
       });
     }
   }
+
+  return issues;
 }
 
-async function validateFiles(rules: ValidationRules, projectDir: string, issues: ValidationIssue[]): Promise<void> {
+export async function validateFiles(rules: ValidationRules, projectDir: string): Promise<ValidationIssue[]> {
+  const issues: ValidationIssue[] = [];
+
   for (const rule of rules.files) {
     let matches: string[];
     try {
@@ -205,16 +213,16 @@ async function validateFiles(rules: ValidationRules, projectDir: string, issues:
       }
     }
   }
+
+  return issues;
 }
 
 /**
  * Framework-specific cross-validations that require reading multiple sources.
  */
-async function validateFrameworkSpecific(
-  framework: string,
-  projectDir: string,
-  issues: ValidationIssue[],
-): Promise<void> {
+export async function validateFrameworkSpecific(framework: string, projectDir: string): Promise<ValidationIssue[]> {
+  const issues: ValidationIssue[] = [];
+
   // Universal cross-validations
   await validateCredentialFormats(projectDir, issues);
   await validateDuplicateEnvVars(projectDir, issues);
@@ -238,6 +246,8 @@ async function validateFrameworkSpecific(
       await validateCookiePasswordLength(projectDir, issues, 'WORKOS_COOKIE_PASSWORD');
       break;
   }
+
+  return issues;
 }
 
 /**
@@ -590,30 +600,63 @@ async function validateCredentialFormats(projectDir: string, issues: ValidationI
 }
 
 /**
- * Validates Next.js middleware.ts is at the correct location.
- * Must be at project root or src/ folder, not nested deeper.
+ * Validates Next.js middleware/proxy is at the correct location.
+ * Must be alongside the app/ directory — Next.js only watches for these files
+ * in the parent directory of app/.
  */
 async function validateNextjsMiddlewarePlacement(projectDir: string, issues: ValidationIssue[]): Promise<void> {
-  // Valid locations
-  const validPaths = ['middleware.ts', 'middleware.js', 'src/middleware.ts', 'src/middleware.js'];
+  // Determine where app/ lives to know where middleware/proxy should be
+  const appInSrc = existsSync(join(projectDir, 'src', 'app'));
+  const expectedDir = appInSrc ? 'src/' : '';
 
-  const hasValidMiddleware = validPaths.some((p) => existsSync(join(projectDir, p)));
-  if (hasValidMiddleware) {
-    return; // Correctly placed
+  const correctPaths = [
+    `${expectedDir}middleware.ts`,
+    `${expectedDir}middleware.js`,
+    `${expectedDir}proxy.ts`,
+    `${expectedDir}proxy.js`,
+  ];
+
+  const hasCorrectPlacement = correctPaths.some((p) => existsSync(join(projectDir, p)));
+  if (hasCorrectPlacement) {
+    return;
   }
 
-  // Check for misplaced middleware
-  const misplacedMiddleware = await fg(['**/middleware.{ts,js}'], {
+  // Check for middleware/proxy at the wrong level
+  const allPossible = [
+    'middleware.ts',
+    'middleware.js',
+    'src/middleware.ts',
+    'src/middleware.js',
+    'proxy.ts',
+    'proxy.js',
+    'src/proxy.ts',
+    'src/proxy.js',
+  ];
+  const wrongLevel = allPossible.find((p) => existsSync(join(projectDir, p)) && !correctPaths.includes(p));
+
+  if (wrongLevel) {
+    const correctLevel = appInSrc ? 'src/' : 'project root';
+    issues.push({
+      type: 'file',
+      severity: 'error',
+      message: `${wrongLevel} is at the wrong level — app/ is in ${appInSrc ? 'src/' : 'root'}`,
+      hint: `Move it to ${expectedDir}${wrongLevel.replace(/^src\//, '')} (must be alongside app/ directory). Next.js silently ignores middleware/proxy files at the wrong level.`,
+    });
+    return;
+  }
+
+  // Check for deeply misplaced middleware
+  const misplaced = await fg(['**/{middleware,proxy}.{ts,js}'], {
     cwd: projectDir,
     ignore: ['node_modules/**'],
   });
 
-  if (misplacedMiddleware.length > 0) {
+  if (misplaced.length > 0) {
     issues.push({
       type: 'file',
       severity: 'error',
-      message: `middleware.ts found at wrong location: ${misplacedMiddleware[0]}`,
-      hint: 'Next.js middleware must be at project root (middleware.ts) or src/middleware.ts, not nested in app/ or other folders.',
+      message: `middleware/proxy found at wrong location: ${misplaced[0]}`,
+      hint: `Must be at ${expectedDir}middleware.ts or ${expectedDir}proxy.ts (alongside app/ directory).`,
     });
   }
 }

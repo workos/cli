@@ -5,6 +5,7 @@ export const version = pkg.version;
 
 export const config = {
   model: 'claude-opus-4-5-20251101',
+  doctorModel: 'claude-haiku-4-5-20251001',
 
   // Production defaults - override via env vars for local dev
   workos: {
@@ -32,7 +33,7 @@ export const config = {
   documentation: {
     workosDocsUrl: 'https://workos.com/docs/authkit',
     dashboardUrl: 'https://dashboard.workos.com',
-    issuesUrl: 'https://github.com/workos/installer/issues',
+    issuesUrl: 'https://github.com/workos/cli/issues',
   },
 
   frameworks: {

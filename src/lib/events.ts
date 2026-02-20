@@ -52,6 +52,10 @@ export interface InstallerEvents {
   'agent:progress': { step: string; detail?: string };
   'agent:success': { summary?: string };
   'agent:failure': { message: string; stack?: string };
+  'agent:retry': { attempt: number; maxRetries: number };
+
+  'validation:retry:start': { attempt: number };
+  'validation:retry:complete': { attempt: number; passed: boolean };
 
   'validation:start': { framework: string };
   'validation:issues': { issues: import('./validation/types.js').ValidationIssue[] };

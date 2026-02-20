@@ -1,5 +1,5 @@
 import { SPINNER_MESSAGE, type FrameworkConfig } from './framework-config.js';
-import { validateInstallation } from './validation/index.js';
+import { validateInstallation, quickCheckValidateAndFormat } from './validation/index.js';
 import type { InstallerOptions } from '../utils/types.js';
 import {
   ensurePackageIsInstalled,
@@ -9,7 +9,7 @@ import {
 } from '../utils/clack-utils.js';
 import { analytics } from '../utils/analytics.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from './constants.js';
-import { initializeAgent, runAgent } from './agent-interface.js';
+import { initializeAgent, runAgent, type RetryConfig } from './agent-interface.js';
 import { uploadEnvironmentVariablesStep } from '../steps/index.js';
 import { autoConfigureWorkOSEnvironment } from './workos-management.js';
 import { detectPort, getCallbackPath } from './port-detection.js';
@@ -113,7 +113,14 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
     options,
   );
 
-  // Run agent - errors will throw naturally with skill-based approach
+  const retryConfig: RetryConfig | undefined = options.noValidate
+    ? undefined
+    : {
+        maxRetries: options.maxRetries ?? 2,
+        validateAndFormat: quickCheckValidateAndFormat,
+      };
+
+  // Run agent with retry support — agent gets correction prompts on validation failure
   const agentResult = await runAgent(
     agent,
     integrationPrompt,
@@ -124,6 +131,7 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
       errorMessage: 'Integration failed',
     },
     options.emitter,
+    retryConfig,
   );
 
   // If agent returned an error, throw so state machine can handle it
@@ -133,12 +141,23 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
     throw new Error(`Agent SDK error: ${message}`);
   }
 
-  // Run post-installation validation
+  // Track retry metrics
+  if (agentResult.retryCount !== undefined && agentResult.retryCount > 0) {
+    analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
+      action: 'agent retry summary',
+      retry_count: agentResult.retryCount,
+      max_retries: options.maxRetries ?? 2,
+      passed_after_retry: true,
+    });
+  }
+
+  // Run full validation after agent (with retries) completes
+  // Quick checks already ran inside the retry loop — skip build
   if (!options.noValidate) {
     options.emitter?.emit('validation:start', { framework: config.metadata.integration });
 
     const validationResult = await validateInstallation(config.metadata.integration, options.installDir, {
-      runBuild: true,
+      runBuild: false,
     });
 
     if (validationResult.issues.length > 0) {
@@ -164,12 +183,6 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
     });
   }
 
-  // Skip MCP server setup for now (WorkOS doesn't need it initially)
-  // await addMCPServerToClientsStep({ ... });
-
-  // Build outro message
-  const continueUrl = undefined; // No signup flow for WorkOS wizard
-
   const changes = [
     ...config.ui.getOutroChanges(frameworkContext),
     Object.keys(envVars).length > 0 ? `Added environment variables to .env file` : '',
@@ -183,8 +196,7 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
       : '',
   ].filter(Boolean);
 
-  // Build detailed summary to return to caller (state machine)
-  const summary = buildCompletionSummary(config, changes, nextSteps, continueUrl);
+  const summary = buildCompletionSummary(config, changes, nextSteps);
 
   await analytics.shutdown('success');
 
@@ -251,41 +263,24 @@ Report your progress using [STATUS] prefixes.
 Begin by invoking the ${skillName} skill.`;
 }
 
-/**
- * Build a completion summary for the event payload.
- * This is a plain-text summary without styling (adapters handle presentation).
- */
-function buildCompletionSummary(
-  config: FrameworkConfig,
-  changes: string[],
-  nextSteps: string[],
-  continueUrl: string | undefined,
-): string {
-  const lines: string[] = [];
-
-  lines.push('Successfully installed WorkOS AuthKit!');
-  lines.push('');
+function buildCompletionSummary(config: FrameworkConfig, changes: string[], nextSteps: string[]): string {
+  const lines: string[] = ['Successfully installed WorkOS AuthKit!', ''];
 
   if (changes.length > 0) {
     lines.push('What the agent did:');
-    changes.forEach((change) => lines.push(`• ${change}`));
+    for (const change of changes) lines.push(`• ${change}`);
     lines.push('');
   }
 
   if (nextSteps.length > 0) {
     lines.push('Next steps:');
-    nextSteps.forEach((step) => lines.push(`• ${step}`));
+    for (const step of nextSteps) lines.push(`• ${step}`);
     lines.push('');
   }
 
-  lines.push(`Learn more: ${config.metadata.docsUrl}`);
-
-  if (continueUrl) {
-    lines.push(`Continue onboarding: ${continueUrl}`);
-  }
-
-  lines.push('');
   lines.push(
+    `Learn more: ${config.metadata.docsUrl}`,
+    '',
     'Note: This installer uses an LLM agent to analyze and modify your project. Please review the changes made.',
   );
 

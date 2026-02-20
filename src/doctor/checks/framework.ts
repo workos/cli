@@ -1,7 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { getPackageDotJson } from '../../utils/clack-utils.js';
-import { hasPackageInstalled, getPackageVersion } from '../../utils/package-json.js';
+import { readPackageJson, hasPackageInstalled, getPackageVersion } from '../../utils/package-json.js';
 import { detectPort, getCallbackPath } from '../../lib/port-detection.js';
 import { KNOWN_INTEGRATIONS } from '../../lib/constants.js';
 import type { Integration } from '../../lib/constants.js';
@@ -38,15 +37,19 @@ const FRAMEWORKS: FrameworkConfig[] = [
     detectVariant: null,
   },
   { package: 'express', name: 'Express', integration: null, detectVariant: null },
+  // Additional JS frameworks (after existing entries to avoid breaking current behavior)
+  { package: 'expo', name: 'Expo', integration: null, detectVariant: detectExpoVariant },
+  { package: 'react-native', name: 'React Native', integration: null, detectVariant: null },
+  { package: '@sveltejs/kit', name: 'SvelteKit', integration: null, detectVariant: null },
+  { package: 'nuxt', name: 'Nuxt', integration: null, detectVariant: detectNuxtVariant },
+  { package: 'vue', name: 'Vue.js', integration: null, detectVariant: null },
+  { package: 'astro', name: 'Astro', integration: null, detectVariant: null },
+  { package: 'svelte', name: 'Svelte', integration: null, detectVariant: null },
 ];
 
 export async function checkFramework(options: DoctorOptions): Promise<FrameworkInfo> {
-  let packageJson;
-  try {
-    packageJson = await getPackageDotJson(options);
-  } catch {
-    return { name: null, version: null };
-  }
+  const packageJson = readPackageJson(options.installDir);
+  if (!packageJson) return { name: null, version: null };
 
   for (const config of FRAMEWORKS) {
     if (hasPackageInstalled(config.package, packageJson)) {
@@ -73,6 +76,22 @@ export async function checkFramework(options: DoctorOptions): Promise<FrameworkI
   }
 
   return { name: null, version: null };
+}
+
+async function detectExpoVariant(options: DoctorOptions): Promise<string> {
+  const iosDir = join(options.installDir, 'ios');
+  const androidDir = join(options.installDir, 'android');
+  const hasBare = existsSync(iosDir) || existsSync(androidDir);
+  return hasBare ? 'bare' : 'managed';
+}
+
+async function detectNuxtVariant(options: DoctorOptions): Promise<string | undefined> {
+  const packageJson = readPackageJson(options.installDir);
+  if (!packageJson) return undefined;
+  const version = getPackageVersion('nuxt', packageJson);
+  if (!version) return undefined;
+  const major = parseInt(version.replace(/^[\^~>=<]+/, '').split('.')[0], 10);
+  return isNaN(major) ? undefined : major >= 3 ? 'Nuxt 3' : 'Nuxt 2';
 }
 
 async function detectNextVariant(options: DoctorOptions): Promise<string> {

@@ -1,29 +1,39 @@
-# installer
+# workos CLI
 
-AI-powered CLI installer that automatically installs WorkOS AuthKit into web projects.
+WorkOS CLI for installing AuthKit integrations and managing WorkOS resources (organizations, users, environments).
 
 ## Project Structure
 
 ```
-installer/
-├── src/
-│   ├── bin.ts              # CLI entry point
-│   ├── cli.config.ts       # App configuration (model, URLs, etc.)
-│   ├── run.ts              # Entry point, orchestrates installer flow
-│   ├── lib/
-│   │   ├── agent-interface.ts  # Claude Agent SDK integration
-│   │   ├── agent-runner.ts     # Builds prompts, runs agent
-│   │   ├── config.ts           # Framework detection config
-│   │   ├── constants.ts        # Integration enum, shared constants
-│   │   ├── credential-proxy.ts # Token refresh proxy for long sessions
-│   │   └── ensure-auth.ts      # Startup auth guard with token refresh
-│   ├── dashboard/          # Ink/React TUI components
-│   ├── nextjs/             # Next.js installer agent
-│   ├── react/              # React SPA installer agent
-│   ├── react-router/       # React Router installer agent
-│   ├── tanstack-start/     # TanStack Start installer agent
-│   └── vanilla-js/         # Vanilla JS installer agent
-└── ...
+src/
+├── bin.ts                    # CLI entry point (yargs command routing)
+├── cli.config.ts             # App configuration (model, URLs, etc.)
+├── run.ts                    # Installer orchestration entry point
+├── lib/
+│   ├── agent-interface.ts    # Claude Agent SDK integration
+│   ├── agent-runner.ts       # Builds prompts, runs agent
+│   ├── config.ts             # Framework detection config
+│   ├── constants.ts          # Integration enum, shared constants
+│   ├── credential-store.ts   # OAuth credential storage (keyring + file fallback)
+│   ├── config-store.ts       # Environment config storage (keyring + file fallback)
+│   ├── api-key.ts            # API key resolution (env var → flag → config)
+│   ├── workos-api.ts         # Generic WorkOS REST API client
+│   ├── credential-proxy.ts   # Token refresh proxy for long sessions
+│   └── ensure-auth.ts        # Startup auth guard with token refresh
+├── commands/
+│   ├── env.ts                # workos env (add/remove/switch/list)
+│   ├── organization.ts       # workos organization (create/update/get/list/delete)
+│   ├── user.ts               # workos user (get/list/update/delete)
+│   ├── install.ts            # workos install
+│   └── login.ts / logout.ts  # Auth commands
+├── dashboard/                # Ink/React TUI components
+├── nextjs/                   # Next.js installer agent
+├── react/                    # React SPA installer agent
+├── react-router/             # React Router installer agent
+├── tanstack-start/           # TanStack Start installer agent
+├── vanilla-js/               # Vanilla JS installer agent
+└── utils/
+    └── table.ts              # Terminal table formatter
 ```
 
 ## Key Architecture
@@ -32,6 +42,8 @@ installer/
 - **Event Emitter**: `InstallerEventEmitter` bridges agent execution ↔ TUI for real-time updates
 - **Framework Detection**: Each integration has a `detect()` function in `config.ts`
 - **Permission Hook**: `installerCanUseTool()` in `agent-interface.ts` restricts Bash to safe commands only
+- **Config Store**: `config-store.ts` stores environment configs (API keys, endpoints) in system keyring with file fallback
+- **WorkOS API Client**: `workos-api.ts` is a generic fetch wrapper for any WorkOS REST endpoint
 
 ## CLI Modes
 
@@ -93,11 +105,16 @@ pnpm test         # Run tests
 pnpm typecheck    # Type check
 ```
 
-## Testing the Installer
+## Testing
 
 ```bash
 # Run installer in a test project
 cd /path/to/test-app && workos dashboard
+
+# Test management commands
+workos env add sandbox sk_test_xxx
+workos organization list
+workos user list
 ```
 
 ## Adding a New Framework
@@ -106,3 +123,10 @@ cd /path/to/test-app && workos dashboard
 2. Add to `Integration` enum in `lib/constants.ts`
 3. Add detection logic in `lib/config.ts`
 4. Wire up in `run.ts` switch statement
+
+## Adding a New Resource Command
+
+1. Create `src/commands/{resource}.ts` with command handlers (uses `workos-api.ts`)
+2. Create `src/commands/{resource}.spec.ts` with mocked API tests
+3. Register in `src/bin.ts` as a yargs command group with subcommands
+4. Commands use `resolveApiKey()` from `api-key.ts` for auth

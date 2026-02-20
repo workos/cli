@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import type { ValidationIssue } from './types.js';
@@ -31,7 +31,6 @@ export async function runBuildValidation(projectDir: string, timeoutMs: number =
     const args = pm === 'npm' ? ['run', 'build'] : ['build'];
     const proc = spawn(pm, args, {
       cwd: projectDir,
-      shell: true,
       timeout: timeoutMs,
     });
 
@@ -99,13 +98,13 @@ export async function runBuildValidation(projectDir: string, timeoutMs: number =
   });
 }
 
-function detectPackageManager(projectDir: string): 'pnpm' | 'yarn' | 'npm' {
+export function detectPackageManager(projectDir: string): 'pnpm' | 'yarn' | 'npm' {
   if (existsSync(join(projectDir, 'pnpm-lock.yaml'))) return 'pnpm';
   if (existsSync(join(projectDir, 'yarn.lock'))) return 'yarn';
   return 'npm';
 }
 
-async function hasBuildScriptInPackageJson(projectDir: string): Promise<boolean> {
+export async function hasBuildScriptInPackageJson(projectDir: string): Promise<boolean> {
   try {
     const content = await readFile(join(projectDir, 'package.json'), 'utf-8');
     const pkg = JSON.parse(content) as { scripts?: { build?: string } };
@@ -115,7 +114,48 @@ async function hasBuildScriptInPackageJson(projectDir: string): Promise<boolean>
   }
 }
 
-function parseBuildErrors(output: string): string[] {
+export interface BuildCommand {
+  command: string;
+  args: string[];
+}
+
+/**
+ * Detect the build command for a project by checking ecosystem markers.
+ * Returns null if no build system detected — caller should skip build validation.
+ */
+export async function detectBuildCommand(projectDir: string): Promise<BuildCommand | null> {
+  const pm = detectPackageManager(projectDir);
+  if (await hasBuildScriptInPackageJson(projectDir)) {
+    const args = pm === 'npm' ? ['run', 'build'] : ['build'];
+    return { command: pm, args };
+  }
+
+  if (existsSync(join(projectDir, 'go.mod'))) {
+    return { command: 'go', args: ['build', './...'] };
+  }
+
+  if (existsSync(join(projectDir, 'mix.exs'))) {
+    return { command: 'mix', args: ['compile'] };
+  }
+
+  try {
+    const files = readdirSync(projectDir);
+    if (files.some((f) => f.endsWith('.csproj'))) {
+      return { command: 'dotnet', args: ['build'] };
+    }
+  } catch {
+    // Can't read directory
+  }
+
+  if (existsSync(join(projectDir, 'build.gradle.kts')) || existsSync(join(projectDir, 'build.gradle'))) {
+    const gradlew = existsSync(join(projectDir, 'gradlew')) ? './gradlew' : 'gradle';
+    return { command: gradlew, args: ['build'] };
+  }
+
+  return null;
+}
+
+export function parseBuildErrors(output: string): string[] {
   const errors: string[] = [];
 
   // TypeScript errors: "file.ts(line,col): error TS..."

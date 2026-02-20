@@ -4,6 +4,71 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2](https://github.com/workos/cli/compare/v0.7.1...v0.7.2) (2026-02-19)
+
+
+### Bug Fixes
+
+* Correct issue submission links ([#66](https://github.com/workos/cli/issues/66)) ([8c3e026](https://github.com/workos/cli/commit/8c3e0267afcb78afa15df3ffd2ce1c5b2984a3cd))
+
+## [0.7.1](https://github.com/workos/cli/compare/v0.7.0...v0.7.1) (2026-02-18)
+
+
+### Bug Fixes
+
+* ground AI analysis in SDK documentation ([#64](https://github.com/workos/cli/issues/64)) ([db8d6e3](https://github.com/workos/cli/commit/db8d6e32c56f7467c0a041a4de26d24fea50efd1))
+
+## [0.7.0](https://github.com/workos/cli/compare/v0.6.0...v0.7.0) (2026-02-18)
+
+
+### Features
+
+* add environment, organization, and user management commands ([#59](https://github.com/workos/cli/issues/59)) ([cc590b0](https://github.com/workos/cli/commit/cc590b019831c9d57b17bb64d6b7f31de71a1510))
+* major workos doctor overhaul — visual refresh, multi-language, AI analysis ([#62](https://github.com/workos/cli/issues/62)) ([014fbbc](https://github.com/workos/cli/commit/014fbbcfe63959df379f59309caf73adae32f585))
+
+
+### Bug Fixes
+
+* improve installer skill and remove shell: true from spawn calls ([#63](https://github.com/workos/cli/issues/63)) ([92ff704](https://github.com/workos/cli/commit/92ff7042409435483e0aab9c861bd99c144d6a04))
+* replace dotenv devDependency with inline env parser in doctor ([#61](https://github.com/workos/cli/issues/61)) ([4c7553f](https://github.com/workos/cli/commit/4c7553fa8a2adff859c3e2bac63e59352a83bc8f))
+
+## [0.6.0](https://github.com/workos/cli/compare/v0.5.4...v0.6.0) (2026-02-14)
+
+
+### Features
+
+* agent self-correction via validation feedback loop ([#57](https://github.com/workos/cli/issues/57)) ([920fc87](https://github.com/workos/cli/commit/920fc87874511550d193fc3a903c845baaf1ad0d))
+
+## [0.5.4](https://github.com/workos/cli/compare/v0.5.3...v0.5.4) (2026-02-13)
+
+
+### Bug Fixes
+
+* restore workflow_call and remove registry-url for OIDC ([1025e57](https://github.com/workos/cli/commit/1025e57bdd4f647d3a7fb054eae11b3fc18016db))
+
+## [0.5.3](https://github.com/workos/cli/compare/v0.5.2...v0.5.3) (2026-02-13)
+
+
+### Bug Fixes
+
+* remove registry-url from setup-node to unblock OIDC auth ([75a94bb](https://github.com/workos/cli/commit/75a94bb575c338fa4714f81103cff775e615cd05))
+* trigger release.yml directly via release event for OIDC match ([b7e737d](https://github.com/workos/cli/commit/b7e737d9fb4df9924951203bc2c6939e673a6ddb))
+
+## [0.5.2](https://github.com/workos/cli/compare/v0.5.1...v0.5.2) (2026-02-13)
+
+
+### Bug Fixes
+
+* use npm publish for OIDC trusted publishing support ([40fbbf9](https://github.com/workos/cli/commit/40fbbf995d75a3a34e39dcee714153dd2b84511e))
+
+## [0.5.1](https://github.com/workos/cli/compare/v0.5.0...v0.5.1) (2026-02-13)
+
+
+### Bug Fixes
+
+* prefer existing middleware.ts over proxy.ts for Next.js 16+ ([#52](https://github.com/workos/cli/issues/52)) ([83f3ef0](https://github.com/workos/cli/commit/83f3ef0b2c060647475bd073dc1ed99ec14e48e8))
+* remove duplicate release trigger causing publish race condition ([b0935d8](https://github.com/workos/cli/commit/b0935d87460628028b71c29584e7b023db894da8))
+
 ## [0.5.0](https://github.com/workos/cli/compare/v0.4.5...v0.5.0) (2026-02-11)
 
 

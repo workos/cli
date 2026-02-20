@@ -22,16 +22,49 @@ export class NextjsGrader implements Grader {
     );
     checks.push(callbackCheck);
 
-    // Check middleware exists
-    checks.push(await this.fileGrader.checkFileExists('middleware.ts'));
+    // Check middleware or proxy exists at root or src/ (Next.js 16+ should use proxy.ts, 13-15 use middleware.ts)
+    const middlewareRoot = await this.fileGrader.checkFileExists('middleware.ts');
+    const middlewareSrc = await this.fileGrader.checkFileExists('src/middleware.ts');
+    const proxyRoot = await this.fileGrader.checkFileExists('proxy.ts');
+    const proxySrc = await this.fileGrader.checkFileExists('src/proxy.ts');
 
-    // Check middleware imports authkit SDK
-    const sdkImportChecks = await this.fileGrader.checkFileContains('middleware.ts', ['@workos-inc/authkit-nextjs']);
+    const middlewareExists = middlewareRoot.passed || middlewareSrc.passed;
+    const proxyExists = proxyRoot.passed || proxySrc.passed;
+
+    // Determine which file to check for authkit content
+    let middlewareFile: string;
+    if (proxyRoot.passed) middlewareFile = 'proxy.ts';
+    else if (proxySrc.passed) middlewareFile = 'src/proxy.ts';
+    else if (middlewareSrc.passed) middlewareFile = 'src/middleware.ts';
+    else middlewareFile = 'middleware.ts';
+
+    checks.push({
+      name: 'AuthKit middleware/proxy file exists',
+      passed: middlewareExists || proxyExists,
+      message: middlewareExists
+        ? `middleware.ts exists${middlewareSrc.passed ? ' (src/)' : ''}`
+        : proxyExists
+          ? `proxy.ts exists${proxySrc.passed ? ' (src/)' : ''}`
+          : 'Neither middleware.ts nor proxy.ts found',
+    });
+
+    // Next.js 16 throws error E900 if both middleware.ts and proxy.ts exist
+    if (middlewareExists && proxyExists) {
+      checks.push({
+        name: 'No middleware/proxy conflict',
+        passed: false,
+        message:
+          'Both middleware.ts and proxy.ts exist — Next.js 16 throws an error when both are present. Delete middleware.ts and use only proxy.ts.',
+      });
+    }
+
+    // Check middleware/proxy imports authkit SDK
+    const sdkImportChecks = await this.fileGrader.checkFileContains(middlewareFile, ['@workos-inc/authkit-nextjs']);
     checks.push(...sdkImportChecks);
 
     // Check for authkit integration: authkitMiddleware OR (authkit + handleAuthkitHeaders)
-    const middlewareChecks = await this.fileGrader.checkFileContains('middleware.ts', ['authkitMiddleware']);
-    const composableChecks = await this.fileGrader.checkFileContains('middleware.ts', [
+    const middlewareChecks = await this.fileGrader.checkFileContains(middlewareFile, ['authkitMiddleware']);
+    const composableChecks = await this.fileGrader.checkFileContains(middlewareFile, [
       'authkit(',
       'handleAuthkitHeaders',
     ]);
@@ -50,9 +83,9 @@ export class NextjsGrader implements Grader {
     };
     checks.push(authkitCheck);
 
-    // Check AuthKitProvider in layout or extracted providers file
+    // Check AuthKitProvider in layout or extracted providers file (app/ may be in src/)
     const authKitProviderCheck = await this.fileGrader.checkFileWithPattern(
-      'app/**/*.tsx',
+      '{app,src/app}/**/*.tsx',
       ['AuthKitProvider'],
       'AuthKitProvider in app',
     );

@@ -9,15 +9,15 @@
   ],
   "files": [
     {
-      "path": "app/**/callback/**/route.{ts,tsx,js,jsx}",
+      "path": "{,src/}app/**/callback/**/route.{ts,tsx,js,jsx}",
       "mustContain": ["handleAuth", "@workos-inc/authkit-nextjs"]
     },
     {
-      "path": "{middleware,proxy}.{ts,js}",
+      "path": "{,src/}{middleware,proxy}.{ts,js}",
       "mustContainAny": ["authkitMiddleware", "authkit"]
     },
     {
-      "path": "app/**/layout.{ts,tsx,js,jsx}",
+      "path": "{,src/}app/**/layout.{ts,tsx,js,jsx}",
       "mustContain": ["AuthKitProvider"]
     }
   ]

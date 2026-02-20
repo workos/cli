@@ -1,9 +1,12 @@
 import { checkSdk } from './checks/sdk.js';
 import { checkFramework } from './checks/framework.js';
 import { checkRuntime } from './checks/runtime.js';
+import { checkLanguage } from './checks/language.js';
 import { checkEnvironment } from './checks/environment.js';
 import { checkConnectivity } from './checks/connectivity.js';
 import { checkDashboardSettings, compareRedirectUris } from './checks/dashboard.js';
+import { checkAuthPatterns } from './checks/auth-patterns.js';
+import { checkAiAnalysis } from './checks/ai-analysis.js';
 import { detectIssues } from './issues.js';
 import { formatReport } from './output.js';
 import { formatReportAsJson } from './json-output.js';
@@ -19,15 +22,36 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
   const { info: environment, raw: envRaw } = checkEnvironment(options);
 
   // Run remaining checks concurrently
-  const [sdk, framework, runtime, connectivity] = await Promise.all([
+  const [sdk, framework, runtime, connectivity, language] = await Promise.all([
     checkSdk(options),
     checkFramework(options),
     checkRuntime(options),
     checkConnectivity(options, environment.baseUrl ?? 'https://api.workos.com'),
+    checkLanguage(options.installDir),
   ]);
 
-  // Dashboard settings + credential validation (single pass, staging only)
-  const dashboardResult = await checkDashboardSettings(options, environment.apiKeyType, envRaw);
+  // Dashboard settings + auth patterns + AI analysis (parallel, all need sdk/framework results)
+  // AI analysis also receives early issues as context to avoid duplication
+  const earlyIssues = detectIssues({
+    version: DOCTOR_VERSION,
+    timestamp: '',
+    project: { path: options.installDir, packageManager: runtime.packageManager },
+    sdk,
+    language,
+    runtime,
+    framework,
+    environment,
+    connectivity,
+  });
+
+  const [dashboardResult, authPatterns, aiAnalysis] = await Promise.all([
+    checkDashboardSettings(options, environment.apiKeyType, envRaw),
+    checkAuthPatterns(options, framework, environment, sdk),
+    checkAiAnalysis(
+      { installDir: options.installDir, language, framework, sdk, environment, existingIssues: earlyIssues },
+      { skipAi: options.skipAi },
+    ),
+  ]);
 
   // Compute expected redirect URI from framework detection if not set in env
   const redirectUriSource: 'env' | 'inferred' = environment.redirectUri ? 'env' : 'inferred';
@@ -51,6 +75,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
       packageManager: runtime.packageManager,
     },
     sdk,
+    language,
     runtime,
     framework,
     environment,
@@ -59,6 +84,8 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     dashboardSettings: dashboardResult.settings ?? undefined,
     dashboardError: dashboardResult.settings ? undefined : dashboardResult.error,
     redirectUris,
+    authPatterns,
+    aiAnalysis,
   };
 
   // Detect issues based on collected data

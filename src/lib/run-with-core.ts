@@ -26,6 +26,7 @@ import {
   getStagingCredentials,
   saveStagingCredentials,
 } from './credentials.js';
+import { getConfig, saveConfig, getActiveEnvironment } from './config-store.js';
 import { checkForEnvFiles, discoverCredentials } from './credential-discovery.js';
 import { requestDeviceCode, pollForToken } from './device-auth.js';
 import { fetchStagingCredentials as fetchStagingCredentialsApi } from './staging-api.js';
@@ -347,16 +348,38 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
       }),
 
       fetchStagingCredentials: fromPromise(async () => {
-        // Check cached staging credentials first
+        const activeEnv = getActiveEnvironment();
+        if (activeEnv?.clientId && activeEnv?.apiKey) {
+          return { clientId: activeEnv.clientId, apiKey: activeEnv.apiKey };
+        }
+
         const cached = getStagingCredentials();
         if (cached) return cached;
 
-        // Fetch fresh from API
         const token = getAccessToken();
         if (!token) throw new Error('No access token available');
 
         const staging = await fetchStagingCredentialsApi(token);
         saveStagingCredentials(staging);
+
+        try {
+          const config = getConfig() ?? { environments: {} };
+          if (!config.environments['default']) {
+            config.environments['default'] = {
+              name: 'default',
+              type: staging.apiKey.startsWith('sk_test_') ? 'sandbox' : 'production',
+              apiKey: staging.apiKey,
+              clientId: staging.clientId,
+            };
+            if (!config.activeEnvironment) {
+              config.activeEnvironment = 'default';
+            }
+            saveConfig(config);
+          }
+        } catch {
+          // Don't block install if config-store write fails
+        }
+
         return staging;
       }),
 

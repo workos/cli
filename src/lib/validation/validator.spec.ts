@@ -582,7 +582,7 @@ describe('validateInstallation', () => {
 
       const middlewareIssue = result.issues.find((i) => i.message.includes('wrong location'));
       expect(middlewareIssue).toBeDefined();
-      expect(middlewareIssue?.hint).toContain('project root');
+      expect(middlewareIssue?.hint).toContain('alongside app/ directory');
     });
 
     it('passes when middleware is at project root', async () => {

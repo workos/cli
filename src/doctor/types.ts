@@ -15,6 +15,14 @@ export interface SdkInfo {
   latest: string | null;
   outdated: boolean;
   isAuthKit: boolean;
+  language: string; // 'javascript' | 'python' | 'ruby' | 'go' | 'java' | 'php' | 'dotnet'
+}
+
+export interface LanguageInfo {
+  name: string; // e.g., 'JavaScript/TypeScript', 'Python', 'Ruby', 'Go', etc.
+  manifestFile?: string; // e.g., 'package.json', 'requirements.txt'
+  runtimeVersion?: string; // e.g., 'Python 3.12'
+  packageManager?: string; // e.g., 'pip', 'poetry', 'bundler'
 }
 
 export interface FrameworkInfo {
@@ -86,6 +94,20 @@ export interface DashboardFetchResult {
   error?: string;
 }
 
+export interface AuthPatternFinding {
+  code: string;
+  severity: IssueSeverity;
+  message: string;
+  filePath?: string;
+  remediation?: string;
+  docsUrl?: string;
+}
+
+export interface AuthPatternInfo {
+  checksRun: number;
+  findings: AuthPatternFinding[];
+}
+
 export interface DoctorReport {
   version: string;
   timestamp: string;
@@ -94,6 +116,7 @@ export interface DoctorReport {
     packageManager: string | null;
   };
   sdk: SdkInfo;
+  language: LanguageInfo;
   runtime: RuntimeInfo;
   framework: FrameworkInfo;
   environment: EnvironmentInfo;
@@ -102,6 +125,8 @@ export interface DoctorReport {
   dashboardError?: string;
   redirectUris?: RedirectUriComparison;
   credentialValidation?: CredentialValidation;
+  authPatterns?: AuthPatternInfo;
+  aiAnalysis?: AiAnalysis;
   issues: Issue[];
   summary: {
     errors: number;
@@ -110,10 +135,28 @@ export interface DoctorReport {
   };
 }
 
+export interface AiFinding {
+  severity: 'error' | 'warning' | 'info';
+  title: string;
+  detail: string;
+  remediation: string;
+  filePath?: string;
+}
+
+export interface AiAnalysis {
+  findings: AiFinding[];
+  summary: string;
+  model: string;
+  durationMs: number;
+  skipped?: boolean;
+  skipReason?: string;
+}
+
 export interface DoctorOptions {
   installDir: string;
   verbose?: boolean;
   skipApi?: boolean;
+  skipAi?: boolean;
   json?: boolean;
   copy?: boolean;
 }
