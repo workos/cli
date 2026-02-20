@@ -39,6 +39,10 @@ The widget component must accept:
 
 ## IMPORTANT NOTES
 
+- Progress reporting:
+  - Emit `[STATUS] <short step>` before each major phase.
+  - Optionally emit a short reason only for major non-obvious decisions.
+  - Keep status lines concise and avoid verbose internal reasoning.
 - If no design system exists, fall back to basic JSX + detected styling solution.
 - When using plain fetch, build reusable hooks outside the component (e.g., `useMembers`) so the main component stays clean.
 - Never call `fetch` directly; always use exported API functions from `@workos-inc/widgets/experimental/api/*` (e.g., `members()`, `roles()`).

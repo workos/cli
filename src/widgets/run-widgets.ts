@@ -167,7 +167,7 @@ function getFrameworkSkill(framework: WidgetsFramework): string {
   }
 }
 
-function buildWidgetsPrompt(input: {
+export function buildWidgetsPrompt(input: {
   framework: WidgetsFramework;
   entry: WidgetsEntry;
   widget: WidgetsWidget;
@@ -223,7 +223,16 @@ const token = await workos.widgets.getToken({ userId, organizationId, scopes: ['
 
 Use the \`${frameworkSkill}\` skill to create the page/route and token plumbing.
 Inside that skill, invoke \`${widgetSkill}\` to generate the ${widgetConfig.label} widget component.
-Prefer existing UI components. If shadcn is detected and required components are missing, run shadcn CLI to add them.`;
+Prefer existing UI components. If shadcn is detected and required components are missing, run shadcn CLI to add them.
+
+Report your progress using [STATUS] prefixes.
+Emit concise status lines for key milestones:
+- [STATUS] Scanning project and conventions
+- [STATUS] Detecting framework/data fetching/styling/component system
+- [STATUS] Creating widget component
+- [STATUS] Creating widget page/route
+- [STATUS] Wiring route and token flow
+- [STATUS] Validating generated changes`;
 }
 
 async function hasAuthKitInstalled(installDir: string): Promise<boolean> {

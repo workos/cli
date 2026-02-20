@@ -26,6 +26,9 @@ The widget component must accept:
    - load current user profile (`me`)
    - display profile picture, full name, email
    - display connected OAuth accounts when available
+   - list user sessions
+   - revoke an individual session
+   - revoke all other sessions while keeping the current session
    - provide edit profile action and submit profile updates when supported by the selected API helpers
 4) Include explicit loading and error states.
 5) Keep component names, props, and file organization aligned with project conventions.
@@ -38,6 +41,7 @@ The widget component must accept:
 - Reuse package types for user and oauth profile data. Do not recreate model types locally.
 - Avoid payload assertions/type casts (for example `as { data: ... }`) when reading query/mutation responses; use the typed client response shape directly.
 - After successful profile update, invalidate/refetch the profile query.
+- After successful session revocation actions, invalidate/refetch sessions query data.
 
 ## Behavior Requirements (Strict)
 
@@ -48,6 +52,10 @@ The widget component must accept:
   - disable submit while pending
   - surface mutation failure in UI state
   - keep last known profile data visible if update fails
+- Treat session revoke actions as mutation-driven UI:
+  - disable duplicate revoke actions while pending
+  - surface mutation failures in UI state
+  - keep last known sessions visible if revoke fails
 - Keep query/mutation hook state as source of truth for server data.
 - Do not mirror query loading/error/data into reducer state.
 
@@ -59,9 +67,17 @@ The widget component must accept:
 - Unknown OAuth provider keys in oauth profile map (render safe text fallback; do not crash).
 - Profile update validation or server error.
 - Concurrent submits (disable duplicate submissions).
+- Sessions query error branch with retry/refetch path.
+- No sessions, only current session, and mixed current/other sessions.
+- Individual session revoke error.
+- Revoke-all-other-sessions error.
 
 ## Important Notes
 
+- Progress reporting:
+  - Emit `[STATUS] <short step>` before each major phase.
+  - Optionally emit a short reason only for major non-obvious decisions.
+  - Keep status lines concise and avoid verbose internal reasoning.
 - Use reducers only for local UI interaction state if needed (for example edit dialog open state).
 - Avoid mutating existing user files beyond the required new page/route wiring and imports.
 - Do not use emojis and avoid icons unless the existing design system already uses them for status UI.

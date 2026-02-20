@@ -32,6 +32,7 @@ export class CLIAdapter implements InstallerAdapter {
 
   // Long-running agent update interval
   private agentUpdateInterval: NodeJS.Timeout | null = null;
+  private hasAgentProgress = false;
 
   constructor(config: AdapterConfig) {
     this.emitter = config.emitter;
@@ -347,6 +348,7 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handleAgentStart = (): void => {
+    this.hasAgentProgress = false;
     this.spinner = clack.spinner();
     this.spinner.start('Running AI agent...');
 
@@ -355,11 +357,14 @@ export class CLIAdapter implements InstallerAdapter {
     this.agentUpdateInterval = setInterval(() => {
       dots = (dots + 1) % 4;
       const dotStr = '.'.repeat(dots + 1);
-      this.spinner?.message(`Running AI agent${dotStr}`);
+      if (!this.hasAgentProgress) {
+        this.spinner?.message(`Running AI agent${dotStr}`);
+      }
     }, 2000);
   };
 
   private handleAgentProgress = ({ step, detail }: InstallerEvents['agent:progress']): void => {
+    this.hasAgentProgress = true;
     const message = detail ? `${step}: ${detail}` : step;
     this.spinner?.message(message);
   };

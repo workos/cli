@@ -27,3 +27,10 @@ description: Next.js adapter for WorkOS Widgets. Creates a page/route, fetches t
 ## Access Token Scope
 
 Use the widget-specific scope guidance from the installer prompt and selected API methods.
+
+## Progress Reporting
+
+- Emit `[STATUS] <short step>` before each major phase (detect, create files, wire route, validate).
+- Keep status lines concise and user-facing.
+- Optionally emit a short reason only for major non-obvious decisions.
+- Do not include verbose internal reasoning.

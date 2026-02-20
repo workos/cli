@@ -48,6 +48,11 @@ IMPORTANT: Make sure the `@workos-inc/node` package is installed when using it.
 
 ## IMPORTANT NOTES
 
+- Progress reporting:
+  - Emit `[STATUS] <short step>` before each major phase.
+  - Keep status text concise and user-facing.
+  - Optionally emit a short reason only when a decision is non-obvious.
+  - Do not output verbose internal reasoning.
 - When using text inputs, add a debounce a perform the action when the user stops typing
 - When using select, combobox, dropdown or similar components, perform the actions immediately upon selection
 - Do not use emojis and avoid using icons whenever possible

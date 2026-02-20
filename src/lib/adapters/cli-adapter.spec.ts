@@ -167,6 +167,46 @@ describe('CLIAdapter', () => {
       expect(spinnerMock.message).toHaveBeenCalledWith('Installing: packages');
     });
 
+    it('does not overwrite progress message with fallback spinner updates', async () => {
+      vi.useFakeTimers();
+      await adapter.start();
+      const clack = await import('../../utils/clack.js');
+      const spinnerMock = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        message: vi.fn(),
+      };
+      vi.mocked(clack.default.spinner).mockReturnValue(spinnerMock);
+
+      emitter.emit('agent:start', {});
+      emitter.emit('agent:progress', { step: 'Creating widget component' });
+      vi.advanceTimersByTime(2500);
+
+      const calls = spinnerMock.message.mock.calls.flat();
+      expect(calls).toContain('Creating widget component');
+      expect(calls).not.toContain('Running AI agent..');
+      expect(calls).not.toContain('Running AI agent...');
+      vi.useRealTimers();
+    });
+
+    it('shows fallback spinner updates when no progress is emitted', async () => {
+      vi.useFakeTimers();
+      await adapter.start();
+      const clack = await import('../../utils/clack.js');
+      const spinnerMock = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        message: vi.fn(),
+      };
+      vi.mocked(clack.default.spinner).mockReturnValue(spinnerMock);
+
+      emitter.emit('agent:start', {});
+      vi.advanceTimersByTime(2500);
+
+      expect(spinnerMock.message).toHaveBeenCalledWith('Running AI agent..');
+      vi.useRealTimers();
+    });
+
     it('sends GIT_CONFIRMED on confirm', async () => {
       await adapter.start();
       const clack = await import('../../utils/clack.js');

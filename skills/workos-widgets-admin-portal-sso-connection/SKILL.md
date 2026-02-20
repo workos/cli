@@ -49,6 +49,10 @@ The widget component must accept:
 
 ## Important Notes
 
+- Progress reporting:
+  - Emit `[STATUS] <short step>` before each major phase.
+  - Optionally emit a short reason only for major non-obvious decisions.
+  - Keep status lines concise and avoid verbose internal reasoning.
 - Never call `fetch` directly; always use exported API functions from `@workos-inc/widgets/experimental/api/*`.
 - Avoid payload assertions/type casts for API responses. Rely on typed response shapes from the selected API helpers.
 - Use reducer-based state handling for complex loading/error/data flows.

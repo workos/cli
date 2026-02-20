@@ -63,6 +63,10 @@ The widget component must accept:
 
 ## Important Notes
 
+- Progress reporting:
+  - Emit `[STATUS] <short step>` before each major phase.
+  - Optionally emit a short reason only for major non-obvious decisions.
+  - Keep status lines concise and avoid verbose internal reasoning.
 - Use query/mutation hook state as the source of truth for server data.
 - Do not mirror query loading/error/data into reducer state.
 - If local reducer state is needed, use it only for local interaction state (for example selected row/action).
