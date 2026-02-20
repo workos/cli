@@ -36,6 +36,7 @@ The widget component must accept:
 - Never hardcode API routes.
 - Never call `fetch` directly.
 - Reuse package types for user and oauth profile data. Do not recreate model types locally.
+- Avoid payload assertions/type casts (for example `as { data: ... }`) when reading query/mutation responses; use the typed client response shape directly.
 - After successful profile update, invalidate/refetch the profile query.
 
 ## Behavior Requirements (Strict)

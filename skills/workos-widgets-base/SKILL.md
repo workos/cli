@@ -24,6 +24,7 @@ description: Shared guidance for WorkOS Widgets integrations (framework-agnostic
 - Always create both the widget component and an example page/route that renders it.
 - Never call `fetch` directly. Always use API helpers from `@workos-inc/widgets/experimental/api/{fetch|react-query|swr}`.
 - Discover available API methods from the selected import surface and existing imports/usages; do not hardcode endpoints.
+- Avoid data assertions/type casts for API responses (for example `as SomeType` on response payloads). Rely on types inferred from the selected fetch client helpers and branch safely on typed fields.
 - Do not manually edit existing user code. Only add new files and wire up new routes/pages as needed.
 - If the WorkOS backend SDK is required for token generation, create a `workos-sdk.ts` in the project root or `src/` with:
   - `export const workos = new WorkOS(process.env.WORKOS_API_KEY, { clientId: process.env.WORKOS_CLIENT_ID });`

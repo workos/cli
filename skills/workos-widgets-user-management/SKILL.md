@@ -43,4 +43,5 @@ The widget component must accept:
 - When using plain fetch, build reusable hooks outside the component (e.g., `useMembers`) so the main component stays clean.
 - Never call `fetch` directly; always use exported API functions from `@workos-inc/widgets/experimental/api/*` (e.g., `members()`, `roles()`).
 - Use reducers for list state like members/roles to manage loading/error/data.
+- Avoid payload assertions/type casts for API responses. Rely on typed response shapes from the selected API helpers.
 - Assume `@workos-inc/widgets/experimental/api/*` exposes typed request helpers for the widget endpoints; discover them by reading the selected import surface.

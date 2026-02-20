@@ -50,6 +50,7 @@ The widget component must accept:
 ## Important Notes
 
 - Never call `fetch` directly; always use exported API functions from `@workos-inc/widgets/experimental/api/*`.
+- Avoid payload assertions/type casts for API responses. Rely on typed response shapes from the selected API helpers.
 - Use reducer-based state handling for complex loading/error/data flows.
 - Avoid mutating existing user files beyond the required new page/route wiring and imports.
 - Do not use emojis and avoid icons unless the existing design system already uses them for status UI.

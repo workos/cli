@@ -39,6 +39,7 @@ The widget component must accept:
   - deleting a domain
 - Never hardcode endpoints.
 - Never call `fetch` directly.
+- Avoid payload assertions/type casts for API responses. Rely on typed response shapes from the selected API helpers.
 - Invalidate/refetch the domains query after successful reverify/delete operations.
 
 ## Behavior Requirements (Strict)

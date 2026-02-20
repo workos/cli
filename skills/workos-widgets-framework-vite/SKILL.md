@@ -20,6 +20,7 @@ description: Vite adapter for WorkOS Widgets. Creates a page/component and wires
 3) If no router exists, add a new route component and render it from the main app component.
 4) Prefer AuthKit client access tokens when available; otherwise use server token if app uses backend SDKs.
 5) Call the widget skill specified in the prompt to generate the component and import it into the page.
+6) Do not add payload assertions/type casts for API responses in generated page code; rely on typed helper responses.
 
 ## Access Token Scope
 

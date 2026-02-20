@@ -20,6 +20,7 @@ description: React Router adapter for WorkOS Widgets. Creates a route/page, fetc
 3) If AuthKit client access token is used, fetch token in the component and pass it down.
 4) Add the route to the router configuration if needed.
 5) Call the widget skill specified in the prompt to generate the component and import it into the page.
+6) Do not add payload assertions/type casts for API responses in generated route code; rely on typed helper responses.
 
 ## Access Token Scope
 

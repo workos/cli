@@ -22,6 +22,7 @@ description: Next.js adapter for WorkOS Widgets. Creates a page/route, fetches t
    - If server-side WorkOS SDK is used, call `workos.widgets.getToken` on the server and pass the token to the component.
 3) Wire the page into routing if necessary (App Router: place file; Pages Router: add route file).
 4) Call the widget skill specified in the prompt to generate the component and import it into the page.
+5) Do not add payload assertions/type casts for API responses in generated page/route code; rely on typed helper responses.
 
 ## Access Token Scope
 
