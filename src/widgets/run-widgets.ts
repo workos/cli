@@ -65,6 +65,13 @@ const WIDGET_CONFIG: Record<
     routeName: 'admin-portal-sso-connection',
     scopeHint: 'Determine required scopes from @workos-inc/widgets API methods used',
   },
+  'admin-portal-domain-verification': {
+    label: 'Admin Portal Domain Verification',
+    slug: 'admin-portal-domain-verification',
+    componentBaseName: 'admin-portal-domain-verification-widget',
+    routeName: 'admin-portal-domain-verification',
+    scopeHint: 'Determine required scopes from @workos-inc/widgets API methods used',
+  },
 };
 
 function inferComponentPath(installDir: string, usesTypeScript: boolean, widget: WidgetsWidget): string {

@@ -154,7 +154,7 @@ const widgetsInstallerOptions = {
   dashboard: installerOptions.dashboard,
   widget: {
     describe: 'Widget to install',
-    choices: ['user-management', 'admin-portal-sso-connection'] as const,
+    choices: ['user-management', 'admin-portal-sso-connection', 'admin-portal-domain-verification'] as const,
     type: 'string' as const,
   },
   'widgets-entry': {
