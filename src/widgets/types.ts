@@ -29,7 +29,8 @@ export type WidgetsEntry = 'page' | 'component' | 'both';
 export type WidgetsWidget =
   | 'user-management'
   | 'admin-portal-sso-connection'
-  | 'admin-portal-domain-verification';
+  | 'admin-portal-domain-verification'
+  | 'user-profile';
 
 export interface WidgetsDetectionResult {
   framework?: WidgetsFramework;

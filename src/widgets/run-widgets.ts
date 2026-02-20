@@ -58,19 +58,26 @@ const WIDGET_CONFIG: Record<
     routeName: 'user-management',
     scopeHint: 'widgets:users-table:manage',
   },
+  'user-profile': {
+    label: 'User Profile',
+    slug: 'user-profile',
+    componentBaseName: 'user-profile-widget',
+    routeName: 'user-profile',
+    scopeHint: 'No special permissions are required to use this widget.',
+  },
   'admin-portal-sso-connection': {
     label: 'Admin Portal SSO Connection',
     slug: 'admin-portal-sso-connection',
     componentBaseName: 'admin-portal-sso-connection-widget',
     routeName: 'admin-portal-sso-connection',
-    scopeHint: 'Determine required scopes from @workos-inc/widgets API methods used',
+    scopeHint: 'widgets:sso:manage',
   },
   'admin-portal-domain-verification': {
     label: 'Admin Portal Domain Verification',
     slug: 'admin-portal-domain-verification',
     componentBaseName: 'admin-portal-domain-verification-widget',
     routeName: 'admin-portal-domain-verification',
-    scopeHint: 'Determine required scopes from @workos-inc/widgets API methods used',
+    scopeHint: 'widgets:domain-verification:manage',
   },
 };
 
@@ -246,14 +253,9 @@ function getWidgetsInstallCommand(packageManager: string): string {
   }
 }
 
-async function ensureWidgetsPackage(
-  installDir: string,
-  packageManager: string,
-): Promise<void> {
+async function ensureWidgetsPackage(installDir: string, packageManager: string): Promise<void> {
   const pkg = await getPackageDotJson({ installDir });
-  const currentVersion =
-    pkg.dependencies?.[WIDGETS_PACKAGE_NAME] ??
-    pkg.devDependencies?.[WIDGETS_PACKAGE_NAME];
+  const currentVersion = pkg.dependencies?.[WIDGETS_PACKAGE_NAME] ?? pkg.devDependencies?.[WIDGETS_PACKAGE_NAME];
 
   const coerced = currentVersion ? semver.coerce(currentVersion) : null;
   const hasMinVersion = coerced ? semver.gte(coerced.version, WIDGETS_MIN_VERSION) : false;
