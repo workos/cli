@@ -781,6 +781,63 @@ describe('checkAuthPatterns', () => {
     });
   });
 
+  describe('MISSING_API_HOSTNAME', () => {
+    it('warning when AuthKitProvider lacks apiHostname in React SPA', async () => {
+      writeFixtureFile(
+        testDir,
+        'src/main.tsx',
+        '<AuthKitProvider clientId="client_01ABC">{children}</AuthKitProvider>',
+      );
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: null }),
+        makeEnv(),
+        makeSdk({ name: '@workos-inc/authkit-react' }),
+      );
+      const finding = result.findings.find((f) => f.code === 'MISSING_API_HOSTNAME');
+      expect(finding).toBeDefined();
+      expect(finding!.severity).toBe('warning');
+      expect(finding!.filePath).toBe('src/main.tsx');
+    });
+
+    it('no finding when apiHostname is set', async () => {
+      writeFixtureFile(
+        testDir,
+        'src/main.tsx',
+        '<AuthKitProvider clientId="client_01ABC" apiHostname="auth.example.com">{children}</AuthKitProvider>',
+      );
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: null }),
+        makeEnv(),
+        makeSdk({ name: '@workos-inc/authkit-react' }),
+      );
+      expect(result.findings.find((f) => f.code === 'MISSING_API_HOSTNAME')).toBeUndefined();
+    });
+
+    it('no finding for non-React SPA SDK', async () => {
+      writeFixtureFile(testDir, 'app/layout.tsx', '<AuthKitProvider>{children}</AuthKitProvider>');
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: 'Next.js' }),
+        makeEnv(),
+        makeSdk({ name: '@workos-inc/authkit-nextjs' }),
+      );
+      expect(result.findings.find((f) => f.code === 'MISSING_API_HOSTNAME')).toBeUndefined();
+    });
+
+    it('no finding when no AuthKitProvider in source', async () => {
+      writeFixtureFile(testDir, 'src/main.tsx', 'ReactDOM.render(<App />, document.getElementById("root"))');
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: null }),
+        makeEnv(),
+        makeSdk({ name: '@workos-inc/authkit-react' }),
+      );
+      expect(result.findings.find((f) => f.code === 'MISSING_API_HOSTNAME')).toBeUndefined();
+    });
+  });
+
   describe('checksRun count', () => {
     it('returns correct count for Next.js', async () => {
       writeFixtureFile(testDir, 'middleware.ts', 'export {}');
@@ -791,8 +848,8 @@ describe('checkAuthPatterns', () => {
         makeEnv(),
         makeSdk(),
       );
-      // 4 cross-framework + 6 Next.js = 10
-      expect(result.checksRun).toBe(10);
+      // 5 cross-framework + 6 Next.js = 11
+      expect(result.checksRun).toBe(11);
     });
 
     it('returns correct count for React Router', async () => {
@@ -802,8 +859,8 @@ describe('checkAuthPatterns', () => {
         makeEnv(),
         makeSdk({ name: '@workos-inc/authkit-react-router' }),
       );
-      // 4 cross-framework + 5 React Router = 9
-      expect(result.checksRun).toBe(9);
+      // 5 cross-framework + 5 React Router = 10
+      expect(result.checksRun).toBe(10);
     });
 
     it('returns correct count for TanStack Start', async () => {
@@ -813,8 +870,8 @@ describe('checkAuthPatterns', () => {
         makeEnv(),
         makeSdk({ name: '@workos-inc/authkit-tanstack-start' }),
       );
-      // 4 cross-framework + 3 TanStack = 7
-      expect(result.checksRun).toBe(7);
+      // 5 cross-framework + 3 TanStack = 8
+      expect(result.checksRun).toBe(8);
     });
 
     it('returns only cross-framework for unknown framework', async () => {
@@ -824,7 +881,7 @@ describe('checkAuthPatterns', () => {
         makeEnv(),
         makeSdk({ name: '@workos-inc/node' }),
       );
-      expect(result.checksRun).toBe(4);
+      expect(result.checksRun).toBe(5);
     });
   });
 
