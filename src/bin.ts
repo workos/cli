@@ -272,7 +272,7 @@ yargs(hideBin(process.argv))
     }),
   )
   .command(
-    'install widgets',
+    'widgets',
     'Install WorkOS Widgets into your project',
     (yargs) => yargs.options(widgetsInstallerOptions),
     withAuth(async (argv) => {

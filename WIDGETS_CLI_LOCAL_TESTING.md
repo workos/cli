@@ -1,6 +1,6 @@
 # WorkOS CLI Widgets - Local Testing Guide
 
-This guide is for engineers testing `workos install widgets` locally.
+This guide is for engineers testing `workos widgets` locally.
 
 ## 1) Prerequisites
 
@@ -49,7 +49,7 @@ Use your own Anthropic key and bypass llm-gateway:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
-workos install widgets --direct
+workos widgets --direct
 ```
 
 ## 4) Prepare the test app
@@ -67,7 +67,7 @@ workos install
 From the test app root:
 
 ```bash
-workos install widgets
+workos widgets
 ```
 
 Pick the widget interactively when prompted by the CLI.
@@ -126,7 +126,7 @@ For every widget run:
 Run with debug logs:
 
 ```bash
-workos install widgets --debug
+workos widgets --debug
 ```
 
 Check logs:
