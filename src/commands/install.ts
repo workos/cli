@@ -5,7 +5,7 @@ import clack from '../utils/clack.js';
 import chalk from 'chalk';
 import type { ArgumentsCamelCase } from 'yargs';
 
-interface InstallArgs {
+export interface InstallArgs {
   debug?: boolean;
   local?: boolean;
   ci?: boolean;
@@ -49,16 +49,16 @@ export async function handleInstall(argv: ArgumentsCamelCase<InstallArgs>): Prom
     clack.intro(chalk.inverse('WorkOS AuthKit Installer'));
     clack.log.error(
       'This installer requires an interactive terminal (TTY) to run.\n' +
-        'It appears you are running in a non-interactive environment.\n' +
-        'Please run the installer in an interactive terminal.\n\n' +
-        'For CI/CD environments, use --ci mode:\n' +
-        '  workos install --ci --api-key sk_xxx --client-id client_xxx',
+      'It appears you are running in a non-interactive environment.\n' +
+      'Please run the installer in an interactive terminal.\n\n' +
+      'For CI/CD environments, use --ci mode:\n' +
+      '  workos install --ci --api-key sk_xxx --client-id client_xxx',
     );
     process.exit(1);
   }
 
   try {
-    await runInstaller(options as unknown as InstallerOptions);
+    await runInstaller(options);
     process.exit(0);
   } catch (err) {
     const { getLogFilePath } = await import('../utils/debug.js');

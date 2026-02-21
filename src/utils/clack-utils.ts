@@ -17,6 +17,17 @@ import { analytics } from './analytics.js';
 import clack from './clack.js';
 import { INTEGRATION_CONFIG } from '../lib/config.js';
 
+/**
+ * Redact sensitive info (API keys, client secrets) from a string.
+ */
+export function redactSensitiveInfo(str: string): string {
+  if (!str) return str;
+  // Redact WorkOS API keys (sk_...), client secrets, etc.
+  return str
+    .replace(/sk_[a-zA-Z0-9]+/g, 'sk_***')
+    .replace(/client_[a-zA-Z0-9]+/g, 'client_***');
+}
+
 interface ProjectData {
   projectApiKey: string;
   accessToken: string;
@@ -329,8 +340,8 @@ export async function installPackage({
               fs.writeFileSync(
                 join(process.cwd(), `workos-installation-error-${Date.now()}.log`),
                 JSON.stringify({
-                  stdout,
-                  stderr,
+                  stdout: redactSensitiveInfo(stdout),
+                  stderr: redactSensitiveInfo(stderr),
                 }),
                 { encoding: 'utf8' },
               );
