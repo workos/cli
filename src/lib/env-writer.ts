@@ -75,7 +75,7 @@ export function writeEnvLocal(installDir: string, envVars: Partial<EnvVars>): vo
     .map(([key, value]) => `${key}=${value}`)
     .join('\n');
 
-  writeFileSync(envPath, content + '\n');
-
   ensureGitignore(installDir);
+
+  writeFileSync(envPath, content + '\n');
 }
