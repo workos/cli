@@ -21,9 +21,8 @@ import { INTEGRATION_CONFIG } from '../lib/config.js';
  * Redact sensitive info (API keys, client secrets) from a string.
  */
 export function redactSensitiveInfo(str: string): string {
-  if (!str) return str;
   // Redact WorkOS API keys (sk_...), client secrets, etc.
-  return str.replace(/sk_[a-zA-Z0-9]+/g, 'sk_***').replace(/client_[a-zA-Z0-9]+/g, 'client_***');
+  return str.replace(/sk_[a-zA-Z0-9]+/g, 'sk_***').replace(/client_[a-zA-Z0-9]{20,}/g, 'client_***');
 }
 
 interface ProjectData {

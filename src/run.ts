@@ -8,7 +8,7 @@ import { EventEmitter } from 'events';
 
 EventEmitter.defaultMaxListeners = 50;
 
-type Args = {
+export type InstallerArgs = {
   integration?: Integration;
   debug?: boolean;
   forceInstall?: boolean;
@@ -32,7 +32,7 @@ type Args = {
  * Main entry point for the wizard CLI.
  * Builds options from args and delegates to the core.
  */
-export async function runInstaller(argv: Args): Promise<void> {
+export async function runInstaller(argv: InstallerArgs): Promise<void> {
   const options = buildOptions(argv);
   await runWithCore(options);
 }
@@ -40,7 +40,7 @@ export async function runInstaller(argv: Args): Promise<void> {
 /**
  * Build InstallerOptions from CLI args and environment.
  */
-function buildOptions(argv: Args): InstallerOptions {
+function buildOptions(argv: InstallerArgs): InstallerOptions {
   const envArgs = readEnvironment();
   const merged = { ...argv, ...envArgs };
 

@@ -1,30 +1,14 @@
 import { runInstaller } from '../run.js';
+import type { InstallerArgs } from '../run.js';
 import { isNonInteractiveEnvironment } from '../utils/environment.js';
 import clack from '../utils/clack.js';
 import chalk from 'chalk';
 import type { ArgumentsCamelCase } from 'yargs';
 
-export interface InstallArgs {
-  debug?: boolean;
-  local?: boolean;
-  ci?: boolean;
-  skipAuth?: boolean;
-  apiKey?: string;
-  clientId?: string;
-  inspect?: boolean;
-  homepageUrl?: string;
-  redirectUri?: string;
-  noValidate?: boolean;
-  installDir?: string;
-  integration?: string;
-  forceInstall?: boolean;
-  dashboard?: boolean;
-}
-
 /**
  * Handle install command execution.
  */
-export async function handleInstall(argv: ArgumentsCamelCase<InstallArgs>): Promise<void> {
+export async function handleInstall(argv: ArgumentsCamelCase<InstallerArgs>): Promise<void> {
   const options = { ...argv };
 
   // CI mode validation

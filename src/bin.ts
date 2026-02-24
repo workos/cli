@@ -16,8 +16,6 @@ import { hideBin } from 'yargs/helpers';
 import chalk from 'chalk';
 import { ensureAuthenticated } from './lib/ensure-auth.js';
 import { checkForUpdates } from './lib/version-check.js';
-import type { ArgumentsCamelCase } from 'yargs';
-import type { InstallArgs } from './commands/install.js';
 
 const NODE_VERSION_RANGE = getConfig().nodeVersion;
 
@@ -275,9 +273,8 @@ yargs(hideBin(process.argv))
           await runEnvSwitch(argv.name);
         },
       )
-      .command('list', 'List configured environments', {}, async (argv) => {
-        const typedArgv = argv as { insecureStorage?: boolean };
-        await applyInsecureStorage(typedArgv.insecureStorage);
+      .command('list', 'List configured environments', (yargs) => yargs, async (argv) => {
+        await applyInsecureStorage(argv.insecureStorage);
         const { runEnvList } = await import('./commands/env.js');
         await runEnvList();
       })
@@ -505,7 +502,7 @@ yargs(hideBin(process.argv))
       await ensureAuthenticated();
 
       const { handleInstall } = await import('./commands/install.js');
-      await handleInstall({ dashboard: false } as ArgumentsCamelCase<InstallArgs>);
+      await handleInstall({ ...argv, dashboard: false });
       process.exit(0);
     },
   )
