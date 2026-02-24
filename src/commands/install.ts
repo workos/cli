@@ -1,4 +1,3 @@
-import type { InstallerOptions } from '../utils/types.js';
 import { runInstaller } from '../run.js';
 import { isNonInteractiveEnvironment } from '../utils/environment.js';
 import clack from '../utils/clack.js';
