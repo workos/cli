@@ -273,11 +273,16 @@ yargs(hideBin(process.argv))
           await runEnvSwitch(argv.name);
         },
       )
-      .command('list', 'List configured environments', (yargs) => yargs, async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { runEnvList } = await import('./commands/env.js');
-        await runEnvList();
-      })
+      .command(
+        'list',
+        'List configured environments',
+        (yargs) => yargs,
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { runEnvList } = await import('./commands/env.js');
+          await runEnvList();
+        },
+      )
       .demandCommand(1, 'Please specify an env subcommand')
       .strict(),
   )
