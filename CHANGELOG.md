@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.3](https://github.com/workos/cli/compare/v0.7.2...v0.7.3) (2026-02-24)
+
+
+### Bug Fixes
+
+* **doctor:** warn when AuthKitProvider missing apiHostname prop ([#68](https://github.com/workos/cli/issues/68)) ([3dfb3ca](https://github.com/workos/cli/commit/3dfb3cad73193f36fc4bac244c3f73ca2a49ee65))
+* ensure .env.local is added to .gitignore during install ([#69](https://github.com/workos/cli/issues/69)) ([a21bfdc](https://github.com/workos/cli/commit/a21bfdc32b9eef9e1095c9d1a6c4ac47a7f7f2a5))
+* redact sensitive info in logs and fix strict type violations ([#70](https://github.com/workos/cli/issues/70)) ([707193b](https://github.com/workos/cli/commit/707193bc079e725ebf695f400e749f1c9d5c28cd))
+
 ## [0.7.2](https://github.com/workos/cli/compare/v0.7.1...v0.7.2) (2026-02-19)
 
 
