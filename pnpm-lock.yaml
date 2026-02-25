@@ -93,9 +93,6 @@ importers:
       p-limit:
         specifier: ^7.2.0
         version: 7.2.0
-      prettier:
-        specifier: ^3.8.0
-        version: 3.8.0
       tsx:
         specifier: ^4.20.3
         version: 4.21.0
