@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import type { EnvironmentInfo, EnvironmentCheckResult, DoctorOptions } from '../types.js';
+import type { EnvironmentCheckResult, DoctorOptions } from '../types.js';
 
 function parseEnvFile(content: string): Record<string, string> {
   const result: Record<string, string> = {};

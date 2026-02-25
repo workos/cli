@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import clack from '../utils/clack.js';
-import { getConfig, saveConfig, setInsecureConfigStorage } from '../lib/config-store.js';
-import type { CliConfig, EnvironmentConfig } from '../lib/config-store.js';
+import { getConfig, saveConfig } from '../lib/config-store.js';
+import type { CliConfig } from '../lib/config-store.js';
 
 const ENV_NAME_REGEX = /^[a-z0-9\-_]+$/;
 

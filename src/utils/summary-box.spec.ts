@@ -62,7 +62,7 @@ describe('summary-box', () => {
         }),
       );
       const lines = result.split('\n');
-      const hasMidBorder = lines.some((l) => /^├/.test(l));
+      const hasMidBorder = lines.some((l) => l.startsWith('├'));
       expect(hasMidBorder).toBe(false);
     });
 

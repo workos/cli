@@ -12,7 +12,6 @@ import { GoGrader } from './graders/go.grader.js';
 import { PhpGrader } from './graders/php.grader.js';
 import { PhpLaravelGrader } from './graders/php-laravel.grader.js';
 import { KotlinGrader } from './graders/kotlin.grader.js';
-import { DotnetGrader } from './graders/dotnet.grader.js';
 import { ElixirGrader } from './graders/elixir.grader.js';
 import { saveResults } from './history.js';
 import { ParallelRunner } from './parallel-runner.js';

@@ -49,13 +49,6 @@ let consecutiveFailures = 0;
 const MAX_CONSECUTIVE_FAILURES = 3;
 
 /**
- * Check if token needs refresh (expires within threshold).
- */
-function tokenNeedsRefresh(expiresAt: number, thresholdMs: number): boolean {
-  return Date.now() + thresholdMs >= expiresAt;
-}
-
-/**
  * Perform token refresh, updating credentials file.
  * Returns true if refresh succeeded.
  */

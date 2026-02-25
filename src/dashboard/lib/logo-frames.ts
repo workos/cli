@@ -52,7 +52,7 @@ export function generateSpinFrames(): LogoFrame[] {
     // Project characters
     const projectedLines = LOGO_SMALL.map((line) => {
       const centerX = line.length / 2;
-      const outChars = new Array(line.length).fill(' ');
+      const outChars = Array.from({ length: line.length }, () => ' ');
 
       for (let col = 0; col < line.length; col++) {
         const ch = line[col];

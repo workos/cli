@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { relative } from 'node:path';
 import fg from 'fast-glob';
 import { QUALITY_KEY_FILES } from '../quality-key-files.js';
 

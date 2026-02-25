@@ -1,7 +1,5 @@
 import { execFileNoThrow } from '../../src/utils/exec-file.js';
 import { getConfig, getVersion } from '../../src/lib/settings.js';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 
 /**
  * Mapping of framework names to their primary skill/agent files.

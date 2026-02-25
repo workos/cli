@@ -1,6 +1,5 @@
 import type {
   CredentialValidation,
-  DashboardSettings,
   DashboardFetchResult,
   DoctorOptions,
   RedirectUriComparison,

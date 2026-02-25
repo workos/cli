@@ -8,10 +8,7 @@
  * used INTEGRATION_CONFIG now delegate to the registry.
  */
 
-import { getPackageDotJson } from '../utils/clack-utils.js';
-import { hasPackageInstalled } from '../utils/package-json.js';
 import type { InstallerOptions } from '../utils/types.js';
-import type { Integration } from './constants.js';
 
 /**
  * @deprecated Use registry.detectionOrder() + config.detection.detect() instead.

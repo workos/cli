@@ -1,7 +1,7 @@
 import * as childProcess from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
-import { basename, isAbsolute, join, relative } from 'node:path';
+import { join } from 'node:path';
 
 import chalk from 'chalk';
 import { traceStep } from '../telemetry.js';
@@ -10,7 +10,7 @@ import { parseEnvFile } from './env-parser.js';
 import { type PackageDotJson, hasPackageInstalled } from './package-json.js';
 import { type PackageManager, detectAllPackageManagers, packageManagers, NPM as npm } from './package-manager.js';
 import { fulfillsVersionRange } from './semver.js';
-import type { Feature, InstallerOptions } from './types.js';
+import type { InstallerOptions } from './types.js';
 import { getPackageVersion } from './package-json.js';
 import { ISSUES_URL, type Integration } from '../lib/constants.js';
 import { analytics } from './analytics.js';
@@ -23,14 +23,6 @@ import { INTEGRATION_CONFIG } from '../lib/config.js';
 export function redactSensitiveInfo(str: string): string {
   // Redact WorkOS API keys (sk_...), client secrets, etc.
   return str.replace(/sk_[a-zA-Z0-9]+/g, 'sk_***').replace(/client_[a-zA-Z0-9]{20,}/g, 'client_***');
-}
-
-interface ProjectData {
-  projectApiKey: string;
-  accessToken: string;
-  host: string;
-  distinctId: string;
-  projectId: number;
 }
 
 export interface CliSetupConfig {
@@ -260,7 +252,7 @@ export async function isReact19Installed({ installDir }: Pick<InstallerOptions, 
       acceptableVersions: '>=19.0.0',
       canBeLatest: true,
     });
-  } catch (error) {
+  } catch {
     return false;
   }
 }

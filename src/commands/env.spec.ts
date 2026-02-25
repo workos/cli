@@ -38,12 +38,12 @@ vi.mock('node:os', async (importOriginal) => {
   };
 });
 
-const { getConfig, saveConfig, setInsecureConfigStorage, clearConfig } = await import('../lib/config-store.js');
+const { getConfig, setInsecureConfigStorage, clearConfig } = await import('../lib/config-store.js');
 const { runEnvAdd, runEnvRemove, runEnvSwitch, runEnvList } = await import('./env.js');
 const clack = (await import('../utils/clack.js')).default;
 
 // Spy on process.exit
-const mockExit = vi.spyOn(process, 'exit').mockImplementation((() => {
+vi.spyOn(process, 'exit').mockImplementation((() => {
   throw new Error('process.exit called');
 }) as any);
 

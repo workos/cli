@@ -30,7 +30,7 @@ vi.mock('../utils/debug.js', () => ({
 }));
 
 // Import after mocks are set up
-const { saveCredentials, clearCredentials, setInsecureStorage } = await import('./credentials.js');
+const { saveCredentials, setInsecureStorage } = await import('./credentials.js');
 const { ensureValidToken } = await import('./token-refresh.js');
 
 describe('token-refresh', () => {

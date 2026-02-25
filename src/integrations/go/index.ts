@@ -85,9 +85,7 @@ export const config: FrameworkConfig = {
   },
 
   prompts: {
-    getAdditionalContextLines: (context: any) => [
-      ...(context?.framework ? [`Go web framework: ${context.framework}`] : []),
-    ],
+    getAdditionalContextLines: (context: any) => (context?.framework ? [`Go web framework: ${context.framework}`] : []),
   },
 
   ui: {

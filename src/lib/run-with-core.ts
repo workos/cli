@@ -40,7 +40,6 @@ import {
   isProtectedBranch,
   createBranch as createGitBranch,
   branchExists,
-  hasGhCli,
 } from '../utils/git-utils.js';
 import { detectChanges, stageAndCommit, pushBranch as pushGitBranch, createPullRequest } from './post-install.js';
 import {

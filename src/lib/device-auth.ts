@@ -141,7 +141,7 @@ export async function pollForToken(
           client_id: options.clientId,
         }),
       });
-    } catch (err) {
+    } catch {
       logInfo('[device-auth] Token poll network error, retrying');
       continue;
     }

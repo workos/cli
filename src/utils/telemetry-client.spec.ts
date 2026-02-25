@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import type { TelemetryEvent } from './telemetry-types.js';
 
 // Mock fetch globally
 const mockFetch = vi.fn();

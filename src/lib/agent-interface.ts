@@ -500,11 +500,7 @@ export async function runAgent(
   retryConfig?: RetryConfig,
   onMessage?: (message: SDKMessage) => void,
 ): Promise<{ error?: AgentErrorType; errorMessage?: string; retryCount?: number }> {
-  const {
-    spinnerMessage = 'Setting up WorkOS AuthKit...',
-    successMessage = 'WorkOS AuthKit integration complete',
-    errorMessage = 'Integration failed',
-  } = config ?? {};
+  const { spinnerMessage = 'Setting up WorkOS AuthKit...' } = config ?? {};
 
   const { query } = await getSDKModule();
 

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/typedef */
 import * as fs from 'fs';
 import * as path from 'path';
 import { traceStep } from '../telemetry.js';
@@ -60,7 +59,7 @@ export const YARN_V1: PackageManager = {
   detect: ({ installDir }: Pick<InstallerOptions, 'installDir'>) => {
     try {
       return fs.readFileSync(path.join(installDir, 'yarn.lock'), 'utf-8').slice(0, 500).includes('yarn lockfile v1');
-    } catch (e) {
+    } catch {
       return false;
     }
   },
@@ -92,7 +91,7 @@ export const YARN_V2: PackageManager = {
   detect: ({ installDir }: Pick<InstallerOptions, 'installDir'>) => {
     try {
       return fs.readFileSync(path.join(installDir, 'yarn.lock'), 'utf-8').slice(0, 500).includes('__metadata');
-    } catch (e) {
+    } catch {
       return false;
     }
   },

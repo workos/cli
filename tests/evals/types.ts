@@ -24,7 +24,7 @@ export interface EvalResult {
   error?: string;
   attempts?: number;
   latencyMetrics?: LatencyMetrics;
-  qualityGrade?: QualityGrade;
+  qualityGrade?: QualityGrade | null;
   /** Key integration files for quality grading (replaces raw diff) */
   keyFiles?: Map<string, string>;
   /** Within-session correction attempts (0 = passed first try) */

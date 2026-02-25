@@ -48,7 +48,7 @@ vi.mock('./token-refresh-client.js', () => ({
 }));
 
 // Import after mocks are set up
-const { saveCredentials, clearCredentials, getCredentials, setInsecureStorage } = await import('./credentials.js');
+const { saveCredentials, getCredentials, setInsecureStorage } = await import('./credentials.js');
 const { ensureAuthenticated } = await import('./ensure-auth.js');
 
 describe('ensure-auth', () => {

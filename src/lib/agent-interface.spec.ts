@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { EventEmitter } from 'node:events';
 
 const { mockQuery, mockConfig } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
@@ -68,7 +67,7 @@ vi.mock('../utils/urls.js', () => ({
   getLlmGatewayUrlFromHost: vi.fn(() => 'http://localhost:8000'),
 }));
 
-import { runAgent, type RetryConfig } from './agent-interface.js';
+import { runAgent } from './agent-interface.js';
 import { InstallerEventEmitter } from './events.js';
 import type { InstallerOptions } from '../utils/types.js';
 

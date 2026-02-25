@@ -635,7 +635,6 @@ async function validateNextjsMiddlewarePlacement(projectDir: string, issues: Val
   const wrongLevel = allPossible.find((p) => existsSync(join(projectDir, p)) && !correctPaths.includes(p));
 
   if (wrongLevel) {
-    const correctLevel = appInSrc ? 'src/' : 'project root';
     issues.push({
       type: 'file',
       severity: 'error',

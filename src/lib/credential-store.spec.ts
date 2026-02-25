@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
-import { existsSync, readFileSync, unlinkSync, mkdtempSync, rmdirSync, writeFileSync, mkdirSync } from 'node:fs';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { existsSync, unlinkSync, mkdtempSync, rmdirSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -25,7 +25,7 @@ vi.mock('@napi-rs/keyring', () => ({
     private key: string;
 
     constructor(
-      private service: string,
+      service: string,
       private account: string,
     ) {
       this.key = `${service}:${account}`;

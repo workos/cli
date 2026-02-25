@@ -9,7 +9,6 @@ import {
   getLanguage,
   tokenize,
   type FileDiff,
-  type Token,
   type TokenType,
 } from '../lib/diff-utils.js';
 
