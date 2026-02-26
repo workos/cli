@@ -1,14 +1,19 @@
-import { writeFileSync, existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { loadCredentials } from './env-loader.js';
-import { writeEnvLocal } from '../../src/lib/env-writer.js';
-import { parseEnvFile } from '../../src/utils/env-parser.js';
-import { getConfig } from '../../src/lib/settings.js';
-import { LatencyTracker } from './latency-tracker.js';
-import { quickCheckValidateAndFormat } from '../../src/lib/validation/quick-checks.js';
-import { runAgent, type AgentRunConfig, type RetryConfig } from '../../src/lib/agent-interface.js';
-import type { InstallerOptions } from '../../src/utils/types.js';
-import type { ToolCall, LatencyMetrics } from './types.js';
+import { writeFileSync, existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { loadCredentials } from "./env-loader.js";
+import { writeEnvLocal } from "../../src/lib/env-writer.js";
+import { parseEnvFile } from "../../src/utils/env-parser.js";
+import { getConfig } from "../../src/lib/settings.js";
+import { LatencyTracker } from "./latency-tracker.js";
+import { quickCheckValidateAndFormat } from "../../src/lib/validation/quick-checks.js";
+import {
+  runAgent,
+  type AgentRunConfig,
+  type RetryConfig,
+} from "../../src/lib/agent-interface.js";
+import type { InstallerOptions } from "../../src/utils/types.js";
+import type { ToolCall, LatencyMetrics } from "./types.js";
+import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk";
 
 export interface AgentResult {
   success: boolean;
@@ -36,42 +41,50 @@ export interface AgentExecutorOptions {
 
 // Skill name mapping for each framework
 const SKILL_NAMES: Record<string, string> = {
-  nextjs: 'workos-authkit-nextjs',
-  react: 'workos-authkit-react',
-  'react-router': 'workos-authkit-react-router',
-  'tanstack-start': 'workos-authkit-tanstack-start',
-  'vanilla-js': 'workos-authkit-vanilla-js',
+  nextjs: "workos-authkit-nextjs",
+  react: "workos-authkit-react",
+  "react-router": "workos-authkit-react-router",
+  "tanstack-start": "workos-authkit-tanstack-start",
+  "vanilla-js": "workos-authkit-vanilla-js",
   // New SDKs
-  sveltekit: 'workos-authkit-sveltekit',
-  node: 'workos-node',
-  python: 'workos-python',
-  ruby: 'workos-ruby',
-  go: 'workos-go',
-  php: 'workos-php',
-  'php-laravel': 'workos-php-laravel',
-  kotlin: 'workos-kotlin',
-  dotnet: 'workos-dotnet',
-  elixir: 'workos-elixir',
+  sveltekit: "workos-authkit-sveltekit",
+  node: "workos-node",
+  python: "workos-python",
+  ruby: "workos-ruby",
+  go: "workos-go",
+  php: "workos-php",
+  "php-laravel": "workos-php-laravel",
+  kotlin: "workos-kotlin",
+  dotnet: "workos-dotnet",
+  elixir: "workos-elixir",
 };
 
 /** Frameworks that use package.json / .env.local */
-const JS_FRAMEWORKS = ['nextjs', 'react', 'react-router', 'tanstack-start', 'vanilla-js', 'sveltekit', 'node'];
+const JS_FRAMEWORKS = [
+  "nextjs",
+  "react",
+  "react-router",
+  "tanstack-start",
+  "vanilla-js",
+  "sveltekit",
+  "node",
+];
 
 /**
  * Write a .env file (for non-JS frameworks).
  * Merges with existing .env if present.
  */
 function writeEnvFile(workDir: string, envVars: Record<string, string>): void {
-  const envPath = join(workDir, '.env');
+  const envPath = join(workDir, ".env");
   let existing: Record<string, string> = {};
   if (existsSync(envPath)) {
-    existing = parseEnvFile(readFileSync(envPath, 'utf-8'));
+    existing = parseEnvFile(readFileSync(envPath, "utf-8"));
   }
   const merged = { ...existing, ...envVars };
   const content = Object.entries(merged)
     .map(([key, value]) => `${key}=${value}`)
-    .join('\n');
-  writeFileSync(envPath, content + '\n');
+    .join("\n");
+  writeFileSync(envPath, content + "\n");
 }
 
 export class AgentExecutor {
@@ -94,7 +107,9 @@ export class AgentExecutor {
     const toolCalls: ToolCall[] = [];
     const collectedOutput: string[] = [];
 
-    const label = this.options.scenarioName ? `[${this.options.scenarioName}]` : '';
+    const label = this.options.scenarioName
+      ? `[${this.options.scenarioName}]`
+      : "";
     if (this.options.verbose) {
       console.log(`${label} Initializing agent for ${this.framework}...`);
     }
@@ -120,20 +135,29 @@ export class AgentExecutor {
       ANTHROPIC_API_KEY: this.credentials.anthropicApiKey,
       ANTHROPIC_BASE_URL: undefined,
       ANTHROPIC_AUTH_TOKEN: undefined,
-      CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: 'true',
-      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 'true',
+      CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: "true",
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "true",
     };
 
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: this.workDir,
       mcpServers: {
         workos: {
-          command: 'npx',
-          args: ['-y', '@workos/mcp-docs-server'],
+          command: "npx",
+          args: ["-y", "@workos/mcp-docs-server"],
         },
       },
       model: getConfig().model,
-      allowedTools: ['Skill', 'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch'],
+      allowedTools: [
+        "Skill",
+        "Read",
+        "Write",
+        "Edit",
+        "Bash",
+        "Glob",
+        "Grep",
+        "WebFetch",
+      ],
       sdkEnv,
     };
 
@@ -147,7 +171,10 @@ export class AgentExecutor {
     };
 
     const prodRetryConfig: RetryConfig | undefined = config.enabled
-      ? { maxRetries: config.maxRetries, validateAndFormat: quickCheckValidateAndFormat }
+      ? {
+          maxRetries: config.maxRetries,
+          validateAndFormat: quickCheckValidateAndFormat,
+        }
       : undefined;
 
     try {
@@ -159,22 +186,33 @@ export class AgentExecutor {
         undefined, // no spinner config
         undefined, // no emitter
         prodRetryConfig,
-        (message) => this.trackMessage(message, toolCalls, collectedOutput, label),
+        (message) =>
+          this.trackMessage(message, toolCalls, collectedOutput, label),
       );
 
       const latencyMetrics = this.latencyTracker.finish();
       const correctionAttempts = result.retryCount ?? 0;
-      const base = { output: collectedOutput.join('\n'), toolCalls, latencyMetrics, correctionAttempts };
+      const base = {
+        output: collectedOutput.join("\n"),
+        toolCalls,
+        latencyMetrics,
+        correctionAttempts,
+      };
 
       if (result.error) {
-        return { ...base, success: false, error: result.errorMessage ?? String(result.error), selfCorrected: false };
+        return {
+          ...base,
+          success: false,
+          error: result.errorMessage ?? String(result.error),
+          selfCorrected: false,
+        };
       }
 
       return { ...base, success: true, selfCorrected: correctionAttempts > 0 };
     } catch (error) {
       return {
         success: false,
-        output: collectedOutput.join('\n'),
+        output: collectedOutput.join("\n"),
         toolCalls,
         latencyMetrics: this.latencyTracker.finish(),
         error: error instanceof Error ? error.message : String(error),
@@ -202,25 +240,26 @@ Use the \`${skillName}\` skill to integrate WorkOS AuthKit into this application
 Begin by invoking the ${skillName} skill.`;
   }
 
-  /**
-   * Observe SDK messages for latency tracking and output collection.
-   * This is called via the onMessage hook — production handleSDKMessage runs first.
-   */
-  private trackMessage(message: any, toolCalls: ToolCall[], collectedOutput: string[], label: string): void {
-    if (message.type === 'assistant') {
+  private trackMessage(
+    message: SDKMessage,
+    toolCalls: ToolCall[],
+    collectedOutput: string[],
+    label: string,
+  ): void {
+    if (message.type === "assistant") {
       this.latencyTracker.endToolCall();
 
       const content = message.message?.content;
       if (Array.isArray(content)) {
         for (const block of content) {
-          if (block.type === 'text' && typeof block.text === 'string') {
+          if (block.type === "text" && typeof block.text === "string") {
             this.latencyTracker.recordFirstContent();
             collectedOutput.push(block.text);
             if (this.options.verbose) {
               console.log(`${label} Agent: ${block.text.slice(0, 100)}...`);
             }
           }
-          if (block.type === 'tool_use') {
+          if (block.type === "tool_use") {
             this.latencyTracker.startToolCall(block.name);
             toolCalls.push({
               tool: block.name,
@@ -234,12 +273,15 @@ Begin by invoking the ${skillName} skill.`;
       }
     }
 
-    if (message.type === 'result') {
+    if (message.type === "result") {
       if (message.usage) {
-        this.latencyTracker.recordTokens(message.usage.input_tokens ?? 0, message.usage.output_tokens ?? 0);
+        this.latencyTracker.recordTokens(
+          message.usage.input_tokens ?? 0,
+          message.usage.output_tokens ?? 0,
+        );
       }
-      if (message.subtype !== 'success' && message.errors?.length > 0) {
-        collectedOutput.push(`Error: ${message.errors.join(', ')}`);
+      if (message.subtype !== "success" && message.errors?.length > 0) {
+        collectedOutput.push(`Error: ${message.errors.join(", ")}`);
       }
     }
   }

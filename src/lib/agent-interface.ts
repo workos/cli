@@ -17,6 +17,13 @@ import { ensureValidToken } from './token-refresh.js';
 import type { InstallerEventEmitter } from './events.js';
 import { startCredentialProxy, type CredentialProxyHandle } from './credential-proxy.js';
 import { getAuthkitDomain, getCliAuthClientId } from './settings.js';
+import type {
+  SDKMessage,
+  SDKUserMessage,
+  Options as AgentSDKOptions,
+  PermissionResult,
+  query as queryFn,
+} from '@anthropic-ai/claude-agent-sdk';
 
 // File content cache for computing edit diffs
 const fileContentCache = new Map<string, string>();
@@ -29,18 +36,13 @@ const pendingToolCalls = new Map<string, { toolName: string; startTime: number }
 let activeProxyHandle: CredentialProxyHandle | null = null;
 
 // Dynamic import cache for ESM module
-let _sdkModule: any = null;
-async function getSDKModule(): Promise<any> {
+let _sdkModule: { query: typeof queryFn } | null = null;
+async function getSDKModule(): Promise<{ query: typeof queryFn }> {
   if (!_sdkModule) {
     _sdkModule = await import('@anthropic-ai/claude-agent-sdk');
   }
   return _sdkModule;
 }
-
-// Using `any` because typed imports from ESM modules require import attributes
-// syntax which prettier cannot parse. See PR discussion for details.
-type SDKMessage = any;
-type McpServersConfig = any;
 
 export const AgentSignals = {
   /** Signal emitted when the agent reports progress to the user */
@@ -85,7 +87,7 @@ export interface RetryConfig {
  */
 export type AgentRunConfig = {
   workingDirectory: string;
-  mcpServers: McpServersConfig;
+  mcpServers: AgentSDKOptions['mcpServers'];
   model: string;
   allowedTools: string[];
   sdkEnv: Record<string, string | undefined>;
@@ -223,10 +225,7 @@ function matchesAllowedPrefix(command: string): boolean {
  * - Piping to tail/head for output limiting is allowed
  * - Stderr redirection (2>&1) is allowed
  */
-export function installerCanUseTool(
-  toolName: string,
-  input: Record<string, unknown>,
-): { behavior: 'allow'; updatedInput: Record<string, unknown> } | { behavior: 'deny'; message: string } {
+export function installerCanUseTool(toolName: string, input: Record<string, unknown>): PermissionResult {
   // Allow all non-Bash tools
   if (toolName !== 'Bash') {
     return { behavior: 'allow', updatedInput: input };
@@ -530,11 +529,11 @@ export async function runAgent(
     }
     resetTurnSignal();
 
-    const createPromptStream = async function* () {
+    const createPromptStream = async function* (): AsyncGenerator<SDKUserMessage> {
       yield {
-        type: 'user',
+        type: 'user' as const,
         session_id: '',
-        message: { role: 'user', content: prompt },
+        message: { role: 'user' as const, content: prompt },
         parent_tool_use_id: null,
       };
 
@@ -592,9 +591,9 @@ export async function runAgent(
         permissionMode: 'acceptEdits',
         mcpServers: agentConfig.mcpServers,
         env: agentConfig.sdkEnv,
-        canUseTool: (toolName: string, input: unknown) => {
+        canUseTool: (toolName, input) => {
           logInfo('canUseTool called:', { toolName, input });
-          const result = installerCanUseTool(toolName, input as Record<string, unknown>);
+          const result = installerCanUseTool(toolName, input);
           logInfo('canUseTool result:', result);
           return Promise.resolve(result);
         },
@@ -822,21 +821,6 @@ function handleSDKMessage(
           }
         }
       }
-      break;
-    }
-
-    case 'tool': {
-      // This case may not be used by the current SDK, keeping for compatibility
-      const toolName = message.tool as string;
-      const input = message.input as Record<string, unknown> | undefined;
-
-      if (toolName === 'Read' && message.content) {
-        const filePath = input?.file_path as string;
-        if (filePath && typeof message.content === 'string') {
-          fileContentCache.set(filePath, message.content);
-        }
-      }
-
       break;
     }
 

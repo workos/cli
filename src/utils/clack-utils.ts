@@ -563,7 +563,7 @@ export async function getOrAskForWorkOSCredentials(
     apiKey = (await abortIfCancelled(
       clack.password({
         message: 'Enter your WorkOS API Key',
-        validate: (value: string) => {
+        validate: (value) => {
           if (!value) return 'API Key is required';
           if (!value.startsWith('sk_')) {
             return 'API Key should start with sk_';
@@ -581,7 +581,7 @@ export async function getOrAskForWorkOSCredentials(
       clack.text({
         message: 'Enter your WorkOS Client ID',
         placeholder: 'client_...',
-        validate: (value: string) => {
+        validate: (value) => {
           if (!value) return 'Client ID is required';
           if (!value.startsWith('client_')) {
             return 'Client ID should start with client_';
