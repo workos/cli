@@ -5,8 +5,8 @@ import type { CliConfig } from '../lib/config-store.js';
 
 const ENV_NAME_REGEX = /^[a-z0-9\-_]+$/;
 
-function validateEnvName(name: string): string | undefined {
-  if (!ENV_NAME_REGEX.test(name)) {
+function validateEnvName(name: string | undefined): string | undefined {
+  if (!name || !ENV_NAME_REGEX.test(name)) {
     return 'Name must contain only lowercase letters, numbers, hyphens, and underscores';
   }
   return undefined;
