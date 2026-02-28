@@ -7,6 +7,8 @@ import { refreshAccessToken } from './token-refresh-client.js';
 import { getCliAuthClientId, getAuthkitDomain } from './settings.js';
 import { runLogin } from '../commands/login.js';
 import { logInfo } from '../utils/debug.js';
+import { isNonInteractiveEnvironment } from '../utils/environment.js';
+import { exitWithAuthRequired } from '../utils/exit-codes.js';
 
 export interface EnsureAuthResult {
   /** Whether auth is now valid */
@@ -36,6 +38,9 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
 
   // Case 1: No credentials at all
   if (!hasCredentials()) {
+    if (isNonInteractiveEnvironment()) {
+      exitWithAuthRequired();
+    }
     logInfo('[ensure-auth] No credentials found, triggering login');
     await runLogin();
     result.loginTriggered = true;
@@ -46,6 +51,9 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
   const creds = getCredentials();
   if (!creds) {
     // Credentials file exists but is invalid/empty
+    if (isNonInteractiveEnvironment()) {
+      exitWithAuthRequired();
+    }
     logInfo('[ensure-auth] Invalid credentials file, triggering login');
     await runLogin();
     result.loginTriggered = true;
@@ -78,6 +86,9 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
 
       // Refresh failed - check if it's recoverable
       if (refreshResult.errorType === 'invalid_grant') {
+        if (isNonInteractiveEnvironment()) {
+          exitWithAuthRequired('Session expired. Run `workos login` in an interactive terminal to re-authenticate.');
+        }
         logInfo('[ensure-auth] Refresh token expired, triggering login');
         await runLogin();
         result.loginTriggered = true;
@@ -86,6 +97,11 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
       }
 
       // Network or server error - try login as fallback
+      if (isNonInteractiveEnvironment()) {
+        exitWithAuthRequired(
+          `Authentication refresh failed (${refreshResult.errorType}). Run \`workos login\` in an interactive terminal.`,
+        );
+      }
       logInfo(`[ensure-auth] Refresh failed (${refreshResult.errorType}), triggering login`);
       await runLogin();
       result.loginTriggered = true;
@@ -95,6 +111,9 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
   }
 
   // Case 4: No refresh token available, must login
+  if (isNonInteractiveEnvironment()) {
+    exitWithAuthRequired('Session expired. Run `workos login` in an interactive terminal to re-authenticate.');
+  }
   logInfo('[ensure-auth] No refresh token, triggering login');
   await runLogin();
   result.loginTriggered = true;

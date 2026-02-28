@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import { workosRequest, WorkOSApiError } from '../lib/workos-api.js';
 import type { WorkOSListResponse } from '../lib/workos-api.js';
 import { formatTable } from '../utils/table.js';
+import { exitWithError } from '../utils/output.js';
 
 interface User {
   id: string;
@@ -15,19 +16,23 @@ interface User {
 
 function handleApiError(error: unknown): never {
   if (error instanceof WorkOSApiError) {
-    if (error.statusCode === 401) {
-      console.error(chalk.red('Invalid API key. Check your environment configuration.'));
-    } else if (error.statusCode === 404) {
-      console.error(chalk.red('User not found.'));
-    } else if (error.statusCode === 422 && error.errors?.length) {
-      console.error(chalk.red(error.errors.map((e) => e.message).join(', ')));
-    } else {
-      console.error(chalk.red(error.message));
-    }
-  } else {
-    console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+    exitWithError({
+      code: error.code ?? `http_${error.statusCode}`,
+      message:
+        error.statusCode === 401
+          ? 'Invalid API key. Check your environment configuration.'
+          : error.statusCode === 404
+            ? 'User not found.'
+            : error.statusCode === 422 && error.errors?.length
+              ? error.errors.map((e) => e.message).join(', ')
+              : error.message,
+      details: error.errors,
+    });
   }
-  process.exit(1);
+  exitWithError({
+    code: 'unknown_error',
+    message: error instanceof Error ? error.message : 'Unknown error',
+  });
 }
 
 export async function runUserGet(userId: string, apiKey: string, baseUrl?: string): Promise<void> {

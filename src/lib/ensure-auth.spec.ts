@@ -29,10 +29,36 @@ vi.mock('../utils/debug.js', () => ({
   logWarn: vi.fn(),
 }));
 
-// Mock settings
+// Mock settings (getConfig needed by constants.ts via environment.ts import chain)
 vi.mock('./settings.js', () => ({
   getCliAuthClientId: vi.fn(() => 'test_client_id'),
   getAuthkitDomain: vi.fn(() => 'https://auth.test.com'),
+  getConfig: vi.fn(() => ({
+    nodeVersion: '>=20',
+    logging: { debugMode: false },
+    documentation: { workosDocsUrl: '', dashboardUrl: '', issuesUrl: '' },
+    telemetry: { enabled: false, eventName: '' },
+    legacy: { oauthPort: 0 },
+  })),
+}));
+
+// Mock environment detection
+const mockIsNonInteractive = vi.fn(() => false);
+vi.mock('../utils/environment.js', () => ({
+  isNonInteractiveEnvironment: () => mockIsNonInteractive(),
+}));
+
+// Mock exit codes — must throw to halt execution like the real process.exit()
+class AuthRequiredExit extends Error {
+  constructor() {
+    super('auth_required_exit');
+  }
+}
+const mockExitWithAuthRequired = vi.fn(() => {
+  throw new AuthRequiredExit();
+});
+vi.mock('../utils/exit-codes.js', () => ({
+  exitWithAuthRequired: (...args: unknown[]) => mockExitWithAuthRequired(...args),
 }));
 
 // Mock runLogin
@@ -255,6 +281,57 @@ describe('ensure-auth', () => {
       await ensureAuthenticated();
 
       expect(mockRefreshAccessToken).toHaveBeenCalledWith('https://auth.test.com', 'test_client_id');
+    });
+
+    describe('non-TTY mode', () => {
+      beforeEach(() => {
+        mockIsNonInteractive.mockReturnValue(true);
+      });
+
+      afterEach(() => {
+        mockIsNonInteractive.mockReturnValue(false);
+      });
+
+      it('exits with auth required when no credentials in non-TTY', async () => {
+        // No credentials saved, non-TTY mode
+        await expect(ensureAuthenticated()).rejects.toThrow(AuthRequiredExit);
+
+        expect(mockExitWithAuthRequired).toHaveBeenCalled();
+        expect(mockRunLogin).not.toHaveBeenCalled();
+      });
+
+      it('still refreshes tokens silently in non-TTY', async () => {
+        saveCredentials(expiredAccessCreds);
+
+        mockRefreshAccessToken.mockResolvedValue({
+          success: true,
+          accessToken: 'new_token',
+          expiresAt: Date.now() + 3600000,
+          refreshToken: 'new_refresh',
+        });
+
+        const result = await ensureAuthenticated();
+
+        expect(result.tokenRefreshed).toBe(true);
+        expect(result.authenticated).toBe(true);
+        expect(mockExitWithAuthRequired).not.toHaveBeenCalled();
+        expect(mockRunLogin).not.toHaveBeenCalled();
+      });
+
+      it('exits with auth required when refresh fails in non-TTY', async () => {
+        saveCredentials(expiredAccessCreds);
+
+        mockRefreshAccessToken.mockResolvedValue({
+          success: false,
+          errorType: 'invalid_grant',
+          error: 'Refresh token expired',
+        });
+
+        await expect(ensureAuthenticated()).rejects.toThrow(AuthRequiredExit);
+
+        expect(mockExitWithAuthRequired).toHaveBeenCalled();
+        expect(mockRunLogin).not.toHaveBeenCalled();
+      });
     });
   });
 });

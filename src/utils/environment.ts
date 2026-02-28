@@ -4,6 +4,16 @@ import fg from 'fast-glob';
 import { IS_DEV } from '../lib/constants.js';
 
 export function isNonInteractiveEnvironment(): boolean {
+  // WORKOS_NO_PROMPT forces non-interactive regardless of TTY
+  if (process.env.WORKOS_NO_PROMPT === '1' || process.env.WORKOS_NO_PROMPT === 'true') {
+    return true;
+  }
+
+  // WORKOS_FORCE_TTY forces interactive regardless of TTY
+  if (process.env.WORKOS_FORCE_TTY) {
+    return false;
+  }
+
   if (IS_DEV) {
     return false;
   }

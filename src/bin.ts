@@ -28,7 +28,13 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
 }
 
 import { isNonInteractiveEnvironment } from './utils/environment.js';
+import { resolveOutputMode, setOutputMode } from './utils/output.js';
 import clack from './utils/clack.js';
+
+// Resolve output mode early from raw argv (before yargs parses)
+const rawArgs = hideBin(process.argv);
+const hasJsonFlag = rawArgs.includes('--json');
+setOutputMode(resolveOutputMode(hasJsonFlag));
 
 /** Apply insecure storage flag if set */
 async function applyInsecureStorage(insecureStorage?: boolean): Promise<void> {
@@ -145,6 +151,12 @@ await checkForUpdates();
 
 yargs(hideBin(process.argv))
   .env('WORKOS_INSTALLER')
+  .option('json', {
+    type: 'boolean',
+    default: false,
+    describe: 'Output results as JSON (auto-enabled in non-TTY)',
+    global: true,
+  })
   .command('login', 'Authenticate with WorkOS', insecureStorageOption, async (argv) => {
     await applyInsecureStorage(argv.insecureStorage);
     const { runLogin } = await import('./commands/login.js');
