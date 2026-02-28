@@ -108,8 +108,6 @@ export class HeadlessAdapter implements InstallerAdapter {
     this.isStarted = false;
   }
 
-  // ===== Helpers =====
-
   private subscribe<K extends keyof InstallerEvents>(
     event: K,
     handler: (payload: InstallerEvents[K]) => void | Promise<void>,

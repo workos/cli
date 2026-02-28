@@ -74,7 +74,7 @@ export async function runOrgCreate(
       baseUrl,
       body,
     });
-    outputSuccess('Created organization', org as unknown as Record<string, unknown>);
+    outputSuccess('Created organization', org);
   } catch (error) {
     handleApiError(error);
   }
@@ -101,7 +101,7 @@ export async function runOrgUpdate(
       baseUrl,
       body,
     });
-    outputSuccess('Updated organization', org as unknown as Record<string, unknown>);
+    outputSuccess('Updated organization', org);
   } catch (error) {
     handleApiError(error);
   }

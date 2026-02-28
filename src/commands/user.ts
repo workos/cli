@@ -148,7 +148,7 @@ export async function runUserUpdate(
       baseUrl,
       body,
     });
-    outputSuccess('Updated user', user as unknown as Record<string, unknown>);
+    outputSuccess('Updated user', user);
   } catch (error) {
     handleApiError(error);
   }

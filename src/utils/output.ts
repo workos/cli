@@ -51,7 +51,7 @@ export function outputJson(data: unknown): void {
 }
 
 /** Write a success result — chalk in human mode, JSON in json mode. */
-export function outputSuccess(message: string, data?: Record<string, unknown>): void {
+export function outputSuccess(message: string, data?: object): void {
   if (currentMode === 'json') {
     console.log(JSON.stringify({ status: 'ok', message, ...data }));
   } else {
