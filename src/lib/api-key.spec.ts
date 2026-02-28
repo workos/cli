@@ -90,9 +90,7 @@ describe('api-key', () => {
 
     it('exits with error when no API key available', () => {
       expect(() => resolveApiKey()).toThrow(ExitError);
-      expect(mockExitWithError).toHaveBeenCalledWith(
-        expect.objectContaining({ code: 'no_api_key' }),
-      );
+      expect(mockExitWithError).toHaveBeenCalledWith(expect.objectContaining({ code: 'no_api_key' }));
     });
 
     it('exits with error when config exists but no active environment', () => {
