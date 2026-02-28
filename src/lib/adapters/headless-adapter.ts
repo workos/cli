@@ -198,10 +198,7 @@ export class HeadlessAdapter implements InstallerAdapter {
 
   // ===== Device Auth (should not occur in headless) =====
 
-  private handleDeviceStarted = ({
-    verificationUri,
-    userCode,
-  }: InstallerEvents['device:started']): void => {
+  private handleDeviceStarted = ({ verificationUri, userCode }: InstallerEvents['device:started']): void => {
     writeNDJSON({
       type: 'auth:device_required',
       verificationUri,

@@ -128,9 +128,9 @@ const installerOptions = {
     describe: 'Redirect URI for WorkOS callback (defaults to framework convention)',
     type: 'string' as const,
   },
-  'no-validate': {
-    default: false,
-    describe: 'Skip post-installation validation (includes build check)',
+  validate: {
+    default: true,
+    describe: 'Run post-installation validation (use --no-validate to skip)',
     type: 'boolean' as const,
   },
   'install-dir': {
@@ -152,14 +152,14 @@ const installerOptions = {
     describe: 'Run with visual dashboard mode',
     type: 'boolean' as const,
   },
-  'no-branch': {
-    default: false,
-    describe: 'Skip branch creation (use current branch)',
+  branch: {
+    default: true,
+    describe: 'Create a new branch for changes (use --no-branch to skip)',
     type: 'boolean' as const,
   },
-  'no-commit': {
-    default: false,
-    describe: 'Skip auto-commit after installation',
+  commit: {
+    default: true,
+    describe: 'Auto-commit after installation (use --no-commit to skip)',
     type: 'boolean' as const,
   },
   'create-pr': {
@@ -167,9 +167,9 @@ const installerOptions = {
     describe: 'Auto-create pull request after installation',
     type: 'boolean' as const,
   },
-  'no-git-check': {
-    default: false,
-    describe: 'Skip git dirty working tree check',
+  'git-check': {
+    default: true,
+    describe: 'Check for dirty working tree (use --no-git-check to skip)',
     type: 'boolean' as const,
   },
 };
@@ -332,11 +332,14 @@ yargs(hideBin(process.argv))
       .demandCommand(1, 'Please specify an env subcommand')
       .strict(),
   )
-  .command('organization', 'Manage WorkOS organizations (create, update, get, list, delete)', (yargs) =>
+  .command(['organization', 'org'], 'Manage WorkOS organizations (create, update, get, list, delete)', (yargs) =>
     yargs
       .options({
         ...insecureStorageOption,
-        'api-key': { type: 'string' as const, describe: 'WorkOS API key (overrides environment config). Format: sk_live_* or sk_test_*' },
+        'api-key': {
+          type: 'string' as const,
+          describe: 'WorkOS API key (overrides environment config). Format: sk_live_* or sk_test_*',
+        },
       })
       .command(
         'create <name> [domains..]',
@@ -344,7 +347,11 @@ yargs(hideBin(process.argv))
         (yargs) =>
           yargs
             .positional('name', { type: 'string', demandOption: true, describe: 'Organization name' })
-            .positional('domains', { type: 'string', array: true, describe: 'Domains in format domain:state (state defaults to verified)' }),
+            .positional('domains', {
+              type: 'string',
+              array: true,
+              describe: 'Domains in format domain:state (state defaults to verified)',
+            }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
@@ -424,7 +431,10 @@ yargs(hideBin(process.argv))
     yargs
       .options({
         ...insecureStorageOption,
-        'api-key': { type: 'string' as const, describe: 'WorkOS API key (overrides environment config). Format: sk_live_* or sk_test_*' },
+        'api-key': {
+          type: 'string' as const,
+          describe: 'WorkOS API key (overrides environment config). Format: sk_live_* or sk_test_*',
+        },
       })
       .command(
         'get <userId>',

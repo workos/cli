@@ -137,7 +137,9 @@ describe('user commands', () => {
 
     it('runUserList outputs JSON with data and list_metadata', async () => {
       mockRequest.mockResolvedValue({
-        data: [{ id: 'user_123', email: 'test@example.com', first_name: 'Test', last_name: 'User', email_verified: true }],
+        data: [
+          { id: 'user_123', email: 'test@example.com', first_name: 'Test', last_name: 'User', email_verified: true },
+        ],
         list_metadata: { before: null, after: 'cursor_a' },
       });
       await runUserList({}, 'sk_test');

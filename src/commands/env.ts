@@ -111,7 +111,10 @@ export async function runEnvAdd(options: {
 export async function runEnvRemove(name: string): Promise<void> {
   const config = getConfig();
   if (!config || Object.keys(config.environments).length === 0) {
-    exitWithError({ code: 'no_environments', message: 'No environments configured. Run `workos env add` to get started.' });
+    exitWithError({
+      code: 'no_environments',
+      message: 'No environments configured. Run `workos env add` to get started.',
+    });
   }
 
   if (!config.environments[name]) {
@@ -136,7 +139,10 @@ export async function runEnvRemove(name: string): Promise<void> {
 export async function runEnvSwitch(name?: string): Promise<void> {
   const config = getConfig();
   if (!config || Object.keys(config.environments).length === 0) {
-    exitWithError({ code: 'no_environments', message: 'No environments configured. Run `workos env add` to get started.' });
+    exitWithError({
+      code: 'no_environments',
+      message: 'No environments configured. Run `workos env add` to get started.',
+    });
   }
 
   if (name) {

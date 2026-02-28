@@ -24,10 +24,14 @@ export type InstallerArgs = {
   dashboard?: boolean;
   inspect?: boolean;
   noValidate?: boolean;
+  validate?: boolean;
   noCommit?: boolean;
+  commit?: boolean;
   noBranch?: boolean;
+  branch?: boolean;
   createPr?: boolean;
   noGitCheck?: boolean;
+  gitCheck?: boolean;
   direct?: boolean;
 };
 
@@ -63,11 +67,11 @@ function buildOptions(argv: InstallerArgs): InstallerOptions {
     dashboard: merged.dashboard ?? false,
     integration: merged.integration,
     inspect: merged.inspect ?? false,
-    noValidate: merged.noValidate ?? false,
-    noCommit: merged.noCommit ?? false,
-    noBranch: merged.noBranch ?? false,
+    noValidate: merged.noValidate ?? (merged.validate === false ? true : false),
+    noCommit: merged.noCommit ?? (merged.commit === false ? true : false),
+    noBranch: merged.noBranch ?? (merged.branch === false ? true : false),
     createPr: merged.createPr ?? false,
-    noGitCheck: merged.noGitCheck ?? false,
+    noGitCheck: merged.noGitCheck ?? (merged.gitCheck === false ? true : false),
     direct: merged.direct ?? false,
     emitter: createInstallerEventEmitter(), // Will be replaced in runWithCore
   };

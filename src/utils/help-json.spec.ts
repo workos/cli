@@ -28,7 +28,16 @@ describe('help-json', () => {
       const tree = buildCommandTree();
       const names = (tree as { commands: { name: string }[] }).commands.map((c) => c.name);
       expect(names).toEqual(
-        expect.arrayContaining(['login', 'logout', 'install-skill', 'doctor', 'env', 'organization', 'user', 'install']),
+        expect.arrayContaining([
+          'login',
+          'logout',
+          'install-skill',
+          'doctor',
+          'env',
+          'organization',
+          'user',
+          'install',
+        ]),
       );
     });
 

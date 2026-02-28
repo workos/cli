@@ -8,6 +8,21 @@ vi.mock('../utils/debug.js', () => ({
   logWarn: vi.fn(),
 }));
 
+// Mock exitWithError — must throw to halt execution like process.exit
+class ExitError extends Error {
+  code: string;
+  constructor(error: { code: string; message: string }) {
+    super(error.message);
+    this.code = error.code;
+  }
+}
+const mockExitWithError = vi.fn((error: { code: string; message: string }) => {
+  throw new ExitError(error);
+});
+vi.mock('../utils/output.js', () => ({
+  exitWithError: (...args: unknown[]) => mockExitWithError(...(args as [{ code: string; message: string }])),
+}));
+
 let testDir: string;
 
 // Mock os.homedir for config-store
@@ -73,13 +88,16 @@ describe('api-key', () => {
       expect(resolveApiKey()).toBe('sk_stored');
     });
 
-    it('throws when no API key available', () => {
-      expect(() => resolveApiKey()).toThrow(/No API key/);
+    it('exits with error when no API key available', () => {
+      expect(() => resolveApiKey()).toThrow(ExitError);
+      expect(mockExitWithError).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'no_api_key' }),
+      );
     });
 
-    it('throws when config exists but no active environment', () => {
+    it('exits with error when config exists but no active environment', () => {
       saveConfig({ environments: {} });
-      expect(() => resolveApiKey()).toThrow(/No API key/);
+      expect(() => resolveApiKey()).toThrow(ExitError);
     });
 
     it('ignores empty string env var', () => {
