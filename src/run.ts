@@ -67,11 +67,11 @@ function buildOptions(argv: InstallerArgs): InstallerOptions {
     dashboard: merged.dashboard ?? false,
     integration: merged.integration,
     inspect: merged.inspect ?? false,
-    noValidate: merged.noValidate ?? (merged.validate === false ? true : false),
-    noCommit: merged.noCommit ?? (merged.commit === false ? true : false),
-    noBranch: merged.noBranch ?? (merged.branch === false ? true : false),
+    noValidate: merged.noValidate ?? merged.validate === false,
+    noCommit: merged.noCommit ?? merged.commit === false,
+    noBranch: merged.noBranch ?? merged.branch === false,
     createPr: merged.createPr ?? false,
-    noGitCheck: merged.noGitCheck ?? (merged.gitCheck === false ? true : false),
+    noGitCheck: merged.noGitCheck ?? merged.gitCheck === false,
     direct: merged.direct ?? false,
     emitter: createInstallerEventEmitter(), // Will be replaced in runWithCore
   };

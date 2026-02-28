@@ -1,8 +1,9 @@
 import chalk from 'chalk';
-import { workosRequest, WorkOSApiError } from '../lib/workos-api.js';
+import { workosRequest } from '../lib/workos-api.js';
 import type { WorkOSListResponse } from '../lib/workos-api.js';
 import { formatTable } from '../utils/table.js';
-import { exitWithError, outputSuccess, outputJson, isJsonMode } from '../utils/output.js';
+import { outputSuccess, outputJson, isJsonMode } from '../utils/output.js';
+import { createApiErrorHandler } from '../lib/api-error-handler.js';
 
 interface OrganizationDomain {
   id: string;
@@ -33,26 +34,7 @@ export function parseDomainArgs(args: string[]): DomainData[] {
   });
 }
 
-function handleApiError(error: unknown): never {
-  if (error instanceof WorkOSApiError) {
-    exitWithError({
-      code: error.code ?? `http_${error.statusCode}`,
-      message:
-        error.statusCode === 401
-          ? 'Invalid API key. Check your environment configuration.'
-          : error.statusCode === 404
-            ? 'Organization not found.'
-            : error.statusCode === 422 && error.errors?.length
-              ? error.errors.map((e) => e.message).join(', ')
-              : error.message,
-      details: error.errors,
-    });
-  }
-  exitWithError({
-    code: 'unknown_error',
-    message: error instanceof Error ? error.message : 'Unknown error',
-  });
-}
+const handleApiError = createApiErrorHandler('Organization');
 
 export async function runOrgCreate(
   name: string,

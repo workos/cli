@@ -177,7 +177,7 @@ const installerOptions = {
 // Check for updates (blocks up to 500ms)
 await checkForUpdates();
 
-yargs(hideBin(process.argv))
+yargs(rawArgs)
   .env('WORKOS_INSTALLER')
   .option('json', {
     type: 'boolean',
@@ -545,7 +545,7 @@ yargs(hideBin(process.argv))
     async (argv) => {
       // Non-TTY: show help
       if (isNonInteractiveEnvironment()) {
-        yargs(hideBin(process.argv)).showHelp();
+        yargs(rawArgs).showHelp();
         return;
       }
 

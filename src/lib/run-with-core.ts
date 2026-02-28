@@ -6,7 +6,6 @@ import { installerMachine } from './installer-core.js';
 import { createInstallerEventEmitter } from './events.js';
 import { CLIAdapter } from './adapters/cli-adapter.js';
 import { DashboardAdapter } from './adapters/dashboard-adapter.js';
-import { HeadlessAdapter } from './adapters/headless-adapter.js';
 import type { InstallerAdapter } from './adapters/types.js';
 import type { InstallerOptions } from '../utils/types.js';
 import { isNonInteractiveEnvironment } from '../utils/environment.js';
@@ -197,6 +196,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
 
   let adapter: InstallerAdapter;
   if (isNonInteractiveEnvironment()) {
+    const { HeadlessAdapter } = await import('./adapters/headless-adapter.js');
     adapter = new HeadlessAdapter({
       emitter,
       sendEvent,
