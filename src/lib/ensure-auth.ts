@@ -2,7 +2,7 @@
  * Startup auth guard - ensures valid authentication before command execution.
  */
 
-import { getCredentials, updateTokens, hasCredentials, isTokenExpired } from './credentials.js';
+import { getCredentials, updateTokens, hasCredentials, isTokenExpired, clearCredentials } from './credentials.js';
 import { refreshAccessToken } from './token-refresh-client.js';
 import { getCliAuthClientId, getAuthkitDomain } from './settings.js';
 import { runLogin } from '../commands/login.js';
@@ -50,7 +50,8 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
 
   const creds = getCredentials();
   if (!creds) {
-    // Credentials file exists but is invalid/empty
+    // Credentials file exists but is invalid/empty — clear stale data
+    clearCredentials();
     if (isNonInteractiveEnvironment()) {
       exitWithAuthRequired();
     }
@@ -86,6 +87,7 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
 
       // Refresh failed - check if it's recoverable
       if (refreshResult.errorType === 'invalid_grant') {
+        clearCredentials();
         if (isNonInteractiveEnvironment()) {
           exitWithAuthRequired('Session expired. Run `workos login` in an interactive terminal to re-authenticate.');
         }
@@ -96,7 +98,8 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
         return result;
       }
 
-      // Network or server error - try login as fallback
+      // Network or server error - clear stale creds and try login as fallback
+      clearCredentials();
       if (isNonInteractiveEnvironment()) {
         exitWithAuthRequired(
           `Authentication refresh failed (${refreshResult.errorType}). Run \`workos login\` in an interactive terminal.`,
@@ -110,7 +113,8 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
     }
   }
 
-  // Case 4: No refresh token available, must login
+  // Case 4: No refresh token available — clear stale creds, must login
+  clearCredentials();
   if (isNonInteractiveEnvironment()) {
     exitWithAuthRequired('Session expired. Run `workos login` in an interactive terminal to re-authenticate.');
   }
