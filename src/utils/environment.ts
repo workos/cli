@@ -10,7 +10,7 @@ export function isNonInteractiveEnvironment(): boolean {
   }
 
   // WORKOS_FORCE_TTY forces interactive regardless of TTY
-  if (process.env.WORKOS_FORCE_TTY) {
+  if (process.env.WORKOS_FORCE_TTY === '1' || process.env.WORKOS_FORCE_TTY === 'true') {
     return false;
   }
 

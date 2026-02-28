@@ -24,7 +24,7 @@ let currentMode: OutputMode = 'human';
  */
 export function resolveOutputMode(jsonFlag?: boolean): OutputMode {
   if (jsonFlag) return 'json';
-  if (process.env.WORKOS_FORCE_TTY) return 'human';
+  if (process.env.WORKOS_FORCE_TTY === '1' || process.env.WORKOS_FORCE_TTY === 'true') return 'human';
   if (process.env.WORKOS_NO_PROMPT === '1' || process.env.WORKOS_NO_PROMPT === 'true') return 'json';
   if (!process.stdout.isTTY) return 'json';
   return 'human';

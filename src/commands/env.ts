@@ -190,8 +190,12 @@ export async function runEnvList(): Promise<void> {
 
   if (isJsonMode()) {
     const data = entries.map(([key, env]) => ({
-      ...env,
+      name: key,
+      type: env.type,
       active: key === config.activeEnvironment,
+      endpoint: env.endpoint ?? null,
+      hasApiKey: !!env.apiKey,
+      hasClientId: !!env.clientId,
     }));
     outputJson({ data });
     return;
