@@ -14,7 +14,7 @@ export interface SessionStartEvent extends TelemetryEvent {
   type: 'session.start';
   attributes: {
     'installer.version': string;
-    'installer.mode': 'cli' | 'tui';
+    'installer.mode': 'cli' | 'tui' | 'headless';
     'workos.user_id'?: string;
     'workos.org_id'?: string;
   };

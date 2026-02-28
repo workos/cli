@@ -87,6 +87,21 @@ export type InstallerOptions = {
   noCommit?: boolean;
 
   /**
+   * Skip branch creation (continue on current branch)
+   */
+  noBranch?: boolean;
+
+  /**
+   * Auto-create pull request after installation
+   */
+  createPr?: boolean;
+
+  /**
+   * Skip git dirty working tree check
+   */
+  noGitCheck?: boolean;
+
+  /**
    * Direct mode - bypass llm-gateway and use user's own Anthropic API key.
    * Requires ANTHROPIC_API_KEY environment variable.
    */

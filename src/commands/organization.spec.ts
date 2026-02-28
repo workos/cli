@@ -18,6 +18,7 @@ vi.mock('../lib/workos-api.js', () => ({
 
 const { workosRequest } = await import('../lib/workos-api.js');
 const mockRequest = vi.mocked(workosRequest);
+const { setOutputMode } = await import('../utils/output.js');
 
 const { runOrgCreate, runOrgUpdate, runOrgGet, runOrgList, runOrgDelete, parseDomainArgs } =
   await import('./organization.js');
@@ -181,7 +182,64 @@ describe('organization commands', () => {
       expect(mockRequest).toHaveBeenCalledWith(
         expect.objectContaining({ method: 'DELETE', path: '/organizations/org_123' }),
       );
-      expect(consoleOutput.some((l) => l.includes('Deleted') && l.includes('org_123'))).toBe(true);
+      expect(consoleOutput.some((l) => l.includes('Deleted'))).toBe(true);
+      expect(consoleOutput.some((l) => l.includes('org_123'))).toBe(true);
+    });
+  });
+
+  describe('JSON output mode', () => {
+    beforeEach(() => {
+      setOutputMode('json');
+    });
+
+    afterEach(() => {
+      setOutputMode('human');
+    });
+
+    it('runOrgCreate outputs JSON success', async () => {
+      mockRequest.mockResolvedValue({ id: 'org_123', name: 'Test', domains: [] });
+      await runOrgCreate('Test', [], 'sk_test');
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.status).toBe('ok');
+      expect(output.message).toBe('Created organization');
+      expect(output.id).toBe('org_123');
+    });
+
+    it('runOrgGet outputs raw JSON', async () => {
+      mockRequest.mockResolvedValue({ id: 'org_123', name: 'Test', domains: [] });
+      await runOrgGet('org_123', 'sk_test');
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.id).toBe('org_123');
+      expect(output.name).toBe('Test');
+      expect(output).not.toHaveProperty('status');
+    });
+
+    it('runOrgList outputs JSON with data and list_metadata', async () => {
+      mockRequest.mockResolvedValue({
+        data: [{ id: 'org_123', name: 'FooCorp', domains: [] }],
+        list_metadata: { before: null, after: 'cursor_a' },
+      });
+      await runOrgList({}, 'sk_test');
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.data).toHaveLength(1);
+      expect(output.data[0].id).toBe('org_123');
+      expect(output.list_metadata.after).toBe('cursor_a');
+    });
+
+    it('runOrgList outputs empty data array for no results', async () => {
+      mockRequest.mockResolvedValue({ data: [], list_metadata: { before: null, after: null } });
+      await runOrgList({}, 'sk_test');
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.data).toEqual([]);
+      expect(output.list_metadata).toBeDefined();
+    });
+
+    it('runOrgDelete outputs JSON success', async () => {
+      mockRequest.mockResolvedValue(null);
+      await runOrgDelete('org_123', 'sk_test');
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.status).toBe('ok');
+      expect(output.id).toBe('org_123');
     });
   });
 });

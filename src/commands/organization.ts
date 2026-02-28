@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import { workosRequest, WorkOSApiError } from '../lib/workos-api.js';
 import type { WorkOSListResponse } from '../lib/workos-api.js';
 import { formatTable } from '../utils/table.js';
-import { exitWithError } from '../utils/output.js';
+import { exitWithError, outputSuccess, outputJson, isJsonMode } from '../utils/output.js';
 
 interface OrganizationDomain {
   id: string;
@@ -74,8 +74,7 @@ export async function runOrgCreate(
       baseUrl,
       body,
     });
-    console.log(chalk.green('Created organization'));
-    console.log(JSON.stringify(org, null, 2));
+    outputSuccess('Created organization', org as unknown as Record<string, unknown>);
   } catch (error) {
     handleApiError(error);
   }
@@ -102,8 +101,7 @@ export async function runOrgUpdate(
       baseUrl,
       body,
     });
-    console.log(chalk.green('Updated organization'));
-    console.log(JSON.stringify(org, null, 2));
+    outputSuccess('Updated organization', org as unknown as Record<string, unknown>);
   } catch (error) {
     handleApiError(error);
   }
@@ -117,7 +115,7 @@ export async function runOrgGet(orgId: string, apiKey: string, baseUrl?: string)
       apiKey,
       baseUrl,
     });
-    console.log(JSON.stringify(org, null, 2));
+    outputJson(org);
   } catch (error) {
     handleApiError(error);
   }
@@ -146,6 +144,11 @@ export async function runOrgList(options: OrgListOptions, apiKey: string, baseUr
         order: options.order,
       },
     });
+
+    if (isJsonMode()) {
+      outputJson({ data: result.data, list_metadata: result.list_metadata });
+      return;
+    }
 
     if (result.data.length === 0) {
       console.log('No organizations found.');
@@ -181,7 +184,7 @@ export async function runOrgDelete(orgId: string, apiKey: string, baseUrl?: stri
       apiKey,
       baseUrl,
     });
-    console.log(chalk.green(`Deleted organization ${orgId}`));
+    outputSuccess('Deleted organization', { id: orgId });
   } catch (error) {
     handleApiError(error);
   }

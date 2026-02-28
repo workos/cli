@@ -6,8 +6,10 @@ import { installerMachine } from './installer-core.js';
 import { createInstallerEventEmitter } from './events.js';
 import { CLIAdapter } from './adapters/cli-adapter.js';
 import { DashboardAdapter } from './adapters/dashboard-adapter.js';
+import { HeadlessAdapter } from './adapters/headless-adapter.js';
 import type { InstallerAdapter } from './adapters/types.js';
 import type { InstallerOptions } from '../utils/types.js';
+import { isNonInteractiveEnvironment } from '../utils/environment.js';
 import type {
   InstallerMachineContext,
   DetectionOutput,
@@ -193,9 +195,26 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
     }
   };
 
-  const adapter: InstallerAdapter = options.dashboard
-    ? new DashboardAdapter({ emitter, sendEvent, debug: augmentedOptions.debug })
-    : new CLIAdapter({ emitter, sendEvent, debug: augmentedOptions.debug });
+  let adapter: InstallerAdapter;
+  if (isNonInteractiveEnvironment()) {
+    adapter = new HeadlessAdapter({
+      emitter,
+      sendEvent,
+      debug: augmentedOptions.debug,
+      options: {
+        apiKey: augmentedOptions.apiKey,
+        clientId: augmentedOptions.clientId,
+        noBranch: augmentedOptions.noBranch,
+        noCommit: augmentedOptions.noCommit,
+        createPr: augmentedOptions.createPr,
+        noGitCheck: augmentedOptions.noGitCheck,
+      },
+    });
+  } else if (options.dashboard) {
+    adapter = new DashboardAdapter({ emitter, sendEvent, debug: augmentedOptions.debug });
+  } else {
+    adapter = new CLIAdapter({ emitter, sendEvent, debug: augmentedOptions.debug });
+  }
 
   const machineWithActors = installerMachine.provide({
     actors: {
@@ -467,7 +486,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   await adapter.start();
 
   // Start telemetry session
-  const mode = augmentedOptions.dashboard ? 'tui' : 'cli';
+  const mode = isNonInteractiveEnvironment() ? 'headless' : augmentedOptions.dashboard ? 'tui' : 'cli';
   analytics.sessionStart(mode, getVersion());
 
   let installerStatus: 'success' | 'error' | 'cancelled' = 'success';

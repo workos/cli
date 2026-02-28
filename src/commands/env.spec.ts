@@ -40,6 +40,7 @@ vi.mock('node:os', async (importOriginal) => {
 
 const { getConfig, setInsecureConfigStorage, clearConfig } = await import('../lib/config-store.js');
 const { runEnvAdd, runEnvRemove, runEnvSwitch, runEnvList } = await import('./env.js');
+const { setOutputMode } = await import('../utils/output.js');
 const clack = (await import('../utils/clack.js')).default;
 
 // Spy on process.exit
@@ -158,6 +159,72 @@ describe('env commands', () => {
     it('does not throw when environments exist', async () => {
       await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
       await expect(runEnvList()).resolves.not.toThrow();
+    });
+  });
+
+  describe('JSON output mode', () => {
+    let consoleOutput: string[];
+
+    beforeEach(() => {
+      setOutputMode('json');
+      consoleOutput = [];
+      vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+        consoleOutput.push(args.map(String).join(' '));
+      });
+    });
+
+    afterEach(() => {
+      setOutputMode('human');
+    });
+
+    it('runEnvAdd outputs JSON success', async () => {
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.status).toBe('ok');
+      expect(output.message).toBe('Environment added');
+      expect(output.name).toBe('prod');
+      expect(output.type).toBe('production');
+      expect(output.active).toBe(true);
+    });
+
+    it('runEnvRemove outputs JSON success', async () => {
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      consoleOutput = [];
+      await runEnvRemove('prod');
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.status).toBe('ok');
+      expect(output.message).toBe('Environment removed');
+      expect(output.name).toBe('prod');
+    });
+
+    it('runEnvSwitch outputs JSON success', async () => {
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      await runEnvAdd({ name: 'sandbox', apiKey: 'sk_test_abc' });
+      consoleOutput = [];
+      await runEnvSwitch('sandbox');
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.status).toBe('ok');
+      expect(output.message).toBe('Switched environment');
+      expect(output.name).toBe('sandbox');
+    });
+
+    it('runEnvList outputs JSON with data array', async () => {
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      await runEnvAdd({ name: 'sandbox', apiKey: 'sk_test_abc' });
+      consoleOutput = [];
+      await runEnvList();
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.data).toHaveLength(2);
+      expect(output.data[0].name).toBe('prod');
+      expect(output.data[0].active).toBe(true);
+      expect(output.data[1].name).toBe('sandbox');
+      expect(output.data[1].active).toBe(false);
+    });
+
+    it('runEnvList outputs empty data array when no environments', async () => {
+      await runEnvList();
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.data).toEqual([]);
     });
   });
 });

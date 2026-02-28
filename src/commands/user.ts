@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import { workosRequest, WorkOSApiError } from '../lib/workos-api.js';
 import type { WorkOSListResponse } from '../lib/workos-api.js';
 import { formatTable } from '../utils/table.js';
-import { exitWithError } from '../utils/output.js';
+import { exitWithError, outputSuccess, outputJson, isJsonMode } from '../utils/output.js';
 
 interface User {
   id: string;
@@ -43,7 +43,7 @@ export async function runUserGet(userId: string, apiKey: string, baseUrl?: strin
       apiKey,
       baseUrl,
     });
-    console.log(JSON.stringify(user, null, 2));
+    outputJson(user);
   } catch (error) {
     handleApiError(error);
   }
@@ -74,6 +74,11 @@ export async function runUserList(options: UserListOptions, apiKey: string, base
         order: options.order,
       },
     });
+
+    if (isJsonMode()) {
+      outputJson({ data: result.data, list_metadata: result.list_metadata });
+      return;
+    }
 
     if (result.data.length === 0) {
       console.log('No users found.');
@@ -143,8 +148,7 @@ export async function runUserUpdate(
       baseUrl,
       body,
     });
-    console.log(chalk.green('Updated user'));
-    console.log(JSON.stringify(user, null, 2));
+    outputSuccess('Updated user', user as unknown as Record<string, unknown>);
   } catch (error) {
     handleApiError(error);
   }
@@ -158,7 +162,7 @@ export async function runUserDelete(userId: string, apiKey: string, baseUrl?: st
       apiKey,
       baseUrl,
     });
-    console.log(chalk.green(`Deleted user ${userId}`));
+    outputSuccess('Deleted user', { id: userId });
   } catch (error) {
     handleApiError(error);
   }

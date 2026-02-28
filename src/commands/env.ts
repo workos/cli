@@ -2,6 +2,8 @@ import chalk from 'chalk';
 import clack from '../utils/clack.js';
 import { getConfig, saveConfig } from '../lib/config-store.js';
 import type { CliConfig } from '../lib/config-store.js';
+import { outputSuccess, outputJson, exitWithError, isJsonMode } from '../utils/output.js';
+import { isNonInteractiveEnvironment } from '../utils/environment.js';
 
 const ENV_NAME_REGEX = /^[a-z0-9\-_]+$/;
 
@@ -29,9 +31,10 @@ export async function runEnvAdd(options: {
     // Non-interactive mode
     const nameError = validateEnvName(name);
     if (nameError) {
-      clack.log.error(nameError);
-      process.exit(1);
+      exitWithError({ code: 'invalid_args', message: nameError });
     }
+  } else if (isNonInteractiveEnvironment()) {
+    exitWithError({ code: 'missing_args', message: 'Name and API key required in non-interactive mode' });
   } else {
     // Interactive mode
     const nameResult = await clack.text({
@@ -71,7 +74,6 @@ export async function runEnvAdd(options: {
       ...(endpoint && { endpoint }),
     };
 
-    // Auto-set active environment if it's the first one
     if (isFirst) {
       config.activeEnvironment = name;
     }
@@ -88,7 +90,6 @@ export async function runEnvAdd(options: {
   const config = getOrCreateConfig();
   const isFirst = Object.keys(config.environments).length === 0;
 
-  // Detect type from API key prefix
   const type: 'production' | 'sandbox' = apiKey.startsWith('sk_test_') ? 'sandbox' : 'production';
 
   config.environments[name!] = {
@@ -104,55 +105,47 @@ export async function runEnvAdd(options: {
   }
 
   saveConfig(config);
-  clack.log.success(`Environment ${chalk.bold(name)} added`);
-  if (isFirst) {
-    clack.log.info(`Set as active environment`);
-  }
+  outputSuccess('Environment added', { name: name!, type, active: isFirst });
 }
 
 export async function runEnvRemove(name: string): Promise<void> {
   const config = getConfig();
   if (!config || Object.keys(config.environments).length === 0) {
-    clack.log.error('No environments configured. Run `workos env add` to get started.');
-    process.exit(1);
+    exitWithError({ code: 'no_environments', message: 'No environments configured. Run `workos env add` to get started.' });
   }
 
   if (!config.environments[name]) {
     const available = Object.keys(config.environments).join(', ');
-    clack.log.error(`Environment "${name}" not found. Available: ${available}`);
-    process.exit(1);
+    exitWithError({ code: 'not_found', message: `Environment "${name}" not found. Available: ${available}` });
   }
 
   delete config.environments[name];
 
-  // Clear active environment if it was the removed one
   if (config.activeEnvironment === name) {
     const remaining = Object.keys(config.environments);
     config.activeEnvironment = remaining.length > 0 ? remaining[0] : undefined;
-    if (config.activeEnvironment) {
+    if (config.activeEnvironment && !isJsonMode()) {
       clack.log.info(`Active environment switched to ${chalk.bold(config.activeEnvironment)}`);
     }
   }
 
   saveConfig(config);
-  clack.log.success(`Environment ${chalk.bold(name)} removed`);
+  outputSuccess('Environment removed', { name, newActive: config.activeEnvironment ?? null });
 }
 
 export async function runEnvSwitch(name?: string): Promise<void> {
   const config = getConfig();
   if (!config || Object.keys(config.environments).length === 0) {
-    clack.log.error('No environments configured. Run `workos env add` to get started.');
-    process.exit(1);
+    exitWithError({ code: 'no_environments', message: 'No environments configured. Run `workos env add` to get started.' });
   }
 
   if (name) {
     if (!config.environments[name]) {
       const available = Object.keys(config.environments).join(', ');
-      clack.log.error(`Environment "${name}" not found. Available: ${available}`);
-      process.exit(1);
+      exitWithError({ code: 'not_found', message: `Environment "${name}" not found. Available: ${available}` });
     }
   } else {
-    // Interactive selection
+    // Interactive selection (TTY only — non-TTY guard is in bin.ts)
     const options = Object.entries(config.environments).map(([key, env]) => {
       let label = key;
       if (env.type === 'sandbox') label += ` [Sandbox]`;
@@ -173,21 +166,32 @@ export async function runEnvSwitch(name?: string): Promise<void> {
   saveConfig(config);
 
   const env = config.environments[name];
-  let label = chalk.bold(name);
-  if (env.type === 'sandbox') label += ` [Sandbox]`;
-  if (env.endpoint) label += ` [${env.endpoint}]`;
-  clack.log.success(`Switched to environment ${label}`);
+  outputSuccess('Switched environment', { name, type: env.type });
 }
 
 export async function runEnvList(): Promise<void> {
   const config = getConfig();
   if (!config || Object.keys(config.environments).length === 0) {
-    clack.log.info('No environments configured. Run `workos env add` to get started.');
+    if (isJsonMode()) {
+      outputJson({ data: [] });
+    } else {
+      clack.log.info('No environments configured. Run `workos env add` to get started.');
+    }
     return;
   }
 
   const entries = Object.entries(config.environments);
 
+  if (isJsonMode()) {
+    const data = entries.map(([key, env]) => ({
+      ...env,
+      active: key === config.activeEnvironment,
+    }));
+    outputJson({ data });
+    return;
+  }
+
+  // Human-mode table
   const nameW = Math.max(6, ...entries.map(([k]) => k.length)) + 2;
   const typeW = 12;
 

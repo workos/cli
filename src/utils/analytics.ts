@@ -71,7 +71,7 @@ export class Analytics {
     return undefined;
   }
 
-  sessionStart(mode: 'cli' | 'tui', version: string) {
+  sessionStart(mode: 'cli' | 'tui' | 'headless', version: string) {
     if (!WORKOS_TELEMETRY_ENABLED) return;
 
     const event: SessionStartEvent = {
