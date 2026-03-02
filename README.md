@@ -21,6 +21,7 @@ workos
 - **Smart Detection:** Auto-detects framework, package manager, router type
 - **Live Documentation:** Fetches latest SDK docs from WorkOS and GitHub
 - **Full Integration:** Creates routes, middleware, environment vars, and UI
+- **Agent & CI Ready:** Non-TTY auto-detection, JSON output, structured errors, headless installer with NDJSON streaming
 
 ## What It Creates
 
@@ -53,7 +54,7 @@ Commands:
   login                  Authenticate with WorkOS via Connect OAuth device flow
   logout                 Remove stored credentials
   env                    Manage environment configurations
-  organization           Manage organizations
+  organization (org)     Manage organizations
   user                   Manage users
   doctor                 Diagnose WorkOS integration issues
   install-skill          Install AuthKit skills to coding agents
@@ -98,10 +99,16 @@ workos install [options]
 
   --direct, -D            Use your own Anthropic API key (bypass llm-gateway)
   --integration <name>    Framework: nextjs, react, react-router, tanstack-start, vanilla-js
+  --api-key <key>         WorkOS API key (required in non-interactive mode)
+  --client-id <id>        WorkOS client ID (required in non-interactive mode)
   --redirect-uri <uri>    Custom redirect URI
   --homepage-url <url>    Custom homepage URL
   --install-dir <path>    Installation directory
   --no-validate           Skip post-installation validation
+  --no-branch             Skip branch creation (use current branch)
+  --no-commit             Skip auto-commit after installation
+  --create-pr             Auto-create pull request after installation
+  --no-git-check          Skip git dirty working tree check
   --force-install         Force install packages even if peer dependency checks fail
   --debug                 Enable verbose logging
 ```
@@ -117,6 +124,78 @@ npx workos --integration react-router
 
 # With visual dashboard (experimental)
 npx workos dashboard
+
+# JSON output (explicit)
+workos org list --json --api-key sk_test_xxx
+
+# Pipe-friendly (auto-detects non-TTY)
+workos org list --api-key sk_test_xxx | jq '.data[].name'
+
+# Machine-readable command discovery
+workos --help --json | jq '.commands[].name'
+```
+
+## Scripting & Automation
+
+The CLI auto-detects non-TTY environments (piped output, CI, coding agents) and switches to machine-friendly behavior. No flags required — just pipe it.
+
+### JSON Output
+
+All commands produce structured JSON when piped or with `--json`:
+
+```bash
+workos org list --api-key sk_test_xxx | jq .
+# → { "data": [...], "list_metadata": { "before": null, "after": "..." } }
+
+workos env list --json
+# → { "data": [{ "name": "prod", "type": "production", "active": true, ... }] }
+```
+
+Errors go to stderr as structured JSON:
+
+```bash
+workos org list 2>&1
+# → { "error": { "code": "no_api_key", "message": "No API key configured..." } }
+```
+
+### Headless Installer
+
+In non-TTY, the installer streams progress as NDJSON (one JSON object per line):
+
+```bash
+workos install --api-key sk_test_xxx --client-id client_xxx --no-commit 2>/dev/null
+# → {"type":"detection:complete","integration":"nextjs","timestamp":"..."}
+# → {"type":"agent:start","timestamp":"..."}
+# → {"type":"agent:progress","message":"...","timestamp":"..."}
+# → {"type":"complete","success":true,"timestamp":"..."}
+```
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | General error |
+| 2 | Cancelled |
+| 4 | Authentication required |
+
+### Environment Variables
+
+| Variable | Effect |
+|----------|--------|
+| `WORKOS_API_KEY` | API key for management commands (bypasses stored config) |
+| `WORKOS_NO_PROMPT=1` | Force non-interactive mode + JSON output |
+| `WORKOS_FORCE_TTY=1` | Force interactive mode even when piped |
+| `WORKOS_TELEMETRY=false` | Disable telemetry |
+
+### Command Discovery
+
+Agents can introspect available commands:
+
+```bash
+workos --help --json              # Full command tree
+workos env --help --json          # Subcommand tree
+workos organization --help --json # With positionals and option types
 ```
 
 ## Authentication
