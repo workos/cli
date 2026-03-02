@@ -14,8 +14,17 @@ export interface WebhookEndpoint {
   id: string;
   url: string;
   events: string[];
+  secret?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface AuditLogAction {
+  action: string;
+}
+
+export interface AuditLogRetention {
+  retention_period_in_days: number;
 }
 
 export interface WorkOSCLIClient {
@@ -33,6 +42,11 @@ export interface WorkOSCLIClient {
   };
   homepageUrl: {
     set(url: string): Promise<void>;
+  };
+  auditLogs: {
+    listActions(): Promise<WorkOSListResponse<AuditLogAction>>;
+    getSchema(action: string): Promise<unknown>;
+    getRetention(orgId: string): Promise<AuditLogRetention>;
   };
 }
 
@@ -135,6 +149,33 @@ export function createWorkOSClient(apiKey?: string, baseUrl?: string): WorkOSCLI
           apiKey: key,
           baseUrl: base,
           body: { url },
+        });
+      },
+    },
+
+    auditLogs: {
+      async listActions() {
+        return workosRequest<WorkOSListResponse<AuditLogAction>>({
+          method: 'GET',
+          path: '/audit_logs/actions',
+          apiKey: key,
+          baseUrl: base,
+        });
+      },
+      async getSchema(action: string) {
+        return workosRequest<unknown>({
+          method: 'GET',
+          path: `/audit_logs/actions/${encodeURIComponent(action)}/schemas`,
+          apiKey: key,
+          baseUrl: base,
+        });
+      },
+      async getRetention(orgId: string) {
+        return workosRequest<AuditLogRetention>({
+          method: 'GET',
+          path: `/organizations/${encodeURIComponent(orgId)}/audit_logs_retention`,
+          apiKey: key,
+          baseUrl: base,
         });
       },
     },
