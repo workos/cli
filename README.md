@@ -172,21 +172,21 @@ workos install --api-key sk_test_xxx --client-id client_xxx --no-commit 2>/dev/n
 
 ### Exit Codes
 
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 1 | General error |
-| 2 | Cancelled |
-| 4 | Authentication required |
+| Code | Meaning                 |
+| ---- | ----------------------- |
+| 0    | Success                 |
+| 1    | General error           |
+| 2    | Cancelled               |
+| 4    | Authentication required |
 
 ### Environment Variables
 
-| Variable | Effect |
-|----------|--------|
-| `WORKOS_API_KEY` | API key for management commands (bypasses stored config) |
-| `WORKOS_NO_PROMPT=1` | Force non-interactive mode + JSON output |
-| `WORKOS_FORCE_TTY=1` | Force interactive mode even when piped |
-| `WORKOS_TELEMETRY=false` | Disable telemetry |
+| Variable                 | Effect                                                   |
+| ------------------------ | -------------------------------------------------------- |
+| `WORKOS_API_KEY`         | API key for management commands (bypasses stored config) |
+| `WORKOS_NO_PROMPT=1`     | Force non-interactive mode + JSON output                 |
+| `WORKOS_FORCE_TTY=1`     | Force interactive mode even when piped                   |
+| `WORKOS_TELEMETRY=false` | Disable telemetry                                        |
 
 ### Command Discovery
 
