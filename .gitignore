@@ -33,3 +33,6 @@ dist/
 tests/eval-results/
 .next/
 .react-router/
+
+# Local ideation artifacts
+docs/
