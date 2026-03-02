@@ -1,35 +1,16 @@
 import chalk from 'chalk';
-import { workosRequest } from '../lib/workos-api.js';
-import type { WorkOSListResponse } from '../lib/workos-api.js';
+import type { DomainData } from '@workos-inc/node';
+import { createWorkOSClient } from '../lib/workos-client.js';
 import { formatTable } from '../utils/table.js';
 import { outputSuccess, outputJson, isJsonMode } from '../utils/output.js';
 import { createApiErrorHandler } from '../lib/api-error-handler.js';
-
-interface OrganizationDomain {
-  id: string;
-  domain: string;
-  state: 'verified' | 'pending';
-}
-
-interface Organization {
-  id: string;
-  name: string;
-  domains: OrganizationDomain[];
-  created_at: string;
-  updated_at: string;
-}
-
-interface DomainData {
-  domain: string;
-  state: string;
-}
 
 export function parseDomainArgs(args: string[]): DomainData[] {
   return args.map((arg) => {
     const parts = arg.split(':');
     return {
       domain: parts[0],
-      state: parts[1] || 'verified',
+      state: (parts[1] || 'verified') as DomainData['state'],
     };
   });
 }
@@ -42,19 +23,13 @@ export async function runOrgCreate(
   apiKey: string,
   baseUrl?: string,
 ): Promise<void> {
-  const body: Record<string, unknown> = { name };
+  const client = createWorkOSClient(apiKey, baseUrl);
   const domains = parseDomainArgs(domainArgs);
-  if (domains.length > 0) {
-    body.domain_data = domains;
-  }
 
   try {
-    const org = await workosRequest<Organization>({
-      method: 'POST',
-      path: '/organizations',
-      apiKey,
-      baseUrl,
-      body,
+    const org = await client.sdk.organizations.createOrganization({
+      name,
+      ...(domains.length > 0 && { domainData: domains }),
     });
     outputSuccess('Created organization', org);
   } catch (error) {
@@ -70,18 +45,13 @@ export async function runOrgUpdate(
   state?: string,
   baseUrl?: string,
 ): Promise<void> {
-  const body: Record<string, unknown> = { name };
-  if (domain) {
-    body.domain_data = [{ domain, state: state || 'verified' }];
-  }
+  const client = createWorkOSClient(apiKey, baseUrl);
 
   try {
-    const org = await workosRequest<Organization>({
-      method: 'PUT',
-      path: `/organizations/${orgId}`,
-      apiKey,
-      baseUrl,
-      body,
+    const org = await client.sdk.organizations.updateOrganization({
+      organization: orgId,
+      name,
+      ...(domain && { domainData: [{ domain, state: (state || 'verified') as DomainData['state'] }] }),
     });
     outputSuccess('Updated organization', org);
   } catch (error) {
@@ -90,13 +60,10 @@ export async function runOrgUpdate(
 }
 
 export async function runOrgGet(orgId: string, apiKey: string, baseUrl?: string): Promise<void> {
+  const client = createWorkOSClient(apiKey, baseUrl);
+
   try {
-    const org = await workosRequest<Organization>({
-      method: 'GET',
-      path: `/organizations/${orgId}`,
-      apiKey,
-      baseUrl,
-    });
+    const org = await client.sdk.organizations.getOrganization(orgId);
     outputJson(org);
   } catch (error) {
     handleApiError(error);
@@ -112,23 +79,19 @@ export interface OrgListOptions {
 }
 
 export async function runOrgList(options: OrgListOptions, apiKey: string, baseUrl?: string): Promise<void> {
+  const client = createWorkOSClient(apiKey, baseUrl);
+
   try {
-    const result = await workosRequest<WorkOSListResponse<Organization>>({
-      method: 'GET',
-      path: '/organizations',
-      apiKey,
-      baseUrl,
-      params: {
-        domains: options.domain,
-        limit: options.limit,
-        before: options.before,
-        after: options.after,
-        order: options.order,
-      },
+    const result = await client.sdk.organizations.listOrganizations({
+      ...(options.domain && { domains: [options.domain] }),
+      limit: options.limit,
+      before: options.before,
+      after: options.after,
+      order: options.order as 'asc' | 'desc' | undefined,
     });
 
     if (isJsonMode()) {
-      outputJson({ data: result.data, list_metadata: result.list_metadata });
+      outputJson({ data: result.data, listMetadata: result.listMetadata });
       return;
     }
 
@@ -145,7 +108,7 @@ export async function runOrgList(options: OrgListOptions, apiKey: string, baseUr
 
     console.log(formatTable([{ header: 'ID' }, { header: 'Name' }, { header: 'Domains' }], rows));
 
-    const { before, after } = result.list_metadata;
+    const { before, after } = result.listMetadata;
     if (before && after) {
       console.log(chalk.dim(`Before: ${before}  After: ${after}`));
     } else if (before) {
@@ -159,13 +122,10 @@ export async function runOrgList(options: OrgListOptions, apiKey: string, baseUr
 }
 
 export async function runOrgDelete(orgId: string, apiKey: string, baseUrl?: string): Promise<void> {
+  const client = createWorkOSClient(apiKey, baseUrl);
+
   try {
-    await workosRequest({
-      method: 'DELETE',
-      path: `/organizations/${orgId}`,
-      apiKey,
-      baseUrl,
-    });
+    await client.sdk.organizations.deleteOrganization(orgId);
     outputSuccess('Deleted organization', { id: orgId });
   } catch (error) {
     handleApiError(error);

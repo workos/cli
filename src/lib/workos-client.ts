@@ -1,0 +1,142 @@
+/**
+ * Unified WorkOS client for CLI commands.
+ *
+ * Wraps @workos-inc/node SDK for documented endpoints and extends with
+ * raw-fetch methods for undocumented/write-only endpoints (webhooks, redirect URIs, etc.).
+ * Commands import one client; they don't care whether a method is SDK-backed or raw fetch.
+ */
+
+import { WorkOS } from '@workos-inc/node';
+import { workosRequest, type WorkOSListResponse } from './workos-api.js';
+import { resolveApiKey, resolveApiBaseUrl } from './api-key.js';
+
+export interface WebhookEndpoint {
+  id: string;
+  url: string;
+  events: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkOSCLIClient {
+  sdk: WorkOS;
+  webhooks: {
+    list(): Promise<WorkOSListResponse<WebhookEndpoint>>;
+    create(endpointUrl: string, events: string[]): Promise<WebhookEndpoint>;
+    delete(id: string): Promise<void>;
+  };
+  redirectUris: {
+    add(uri: string): Promise<{ success: boolean; alreadyExists: boolean }>;
+  };
+  corsOrigins: {
+    add(origin: string): Promise<{ success: boolean; alreadyExists: boolean }>;
+  };
+  homepageUrl: {
+    set(url: string): Promise<void>;
+  };
+}
+
+/**
+ * Create a unified WorkOS client.
+ *
+ * @param apiKey  - Explicit API key; falls back to resolveApiKey()
+ * @param baseUrl - Explicit base URL; falls back to resolveApiBaseUrl()
+ */
+export function createWorkOSClient(apiKey?: string, baseUrl?: string): WorkOSCLIClient {
+  const key = apiKey ?? resolveApiKey();
+  const base = baseUrl ?? resolveApiBaseUrl();
+
+  // Parse hostname from base URL for SDK init
+  const hostname = new URL(base).hostname;
+  const sdk = new WorkOS(key, { apiHostname: hostname });
+
+  return {
+    sdk,
+
+    webhooks: {
+      async list() {
+        return workosRequest<WorkOSListResponse<WebhookEndpoint>>({
+          method: 'GET',
+          path: '/webhook_endpoints',
+          apiKey: key,
+          baseUrl: base,
+        });
+      },
+      async create(endpointUrl: string, events: string[]) {
+        return workosRequest<WebhookEndpoint>({
+          method: 'POST',
+          path: '/webhook_endpoints',
+          apiKey: key,
+          baseUrl: base,
+          body: { url: endpointUrl, events },
+        });
+      },
+      async delete(id: string) {
+        await workosRequest<null>({
+          method: 'DELETE',
+          path: `/webhook_endpoints/${id}`,
+          apiKey: key,
+          baseUrl: base,
+        });
+      },
+    },
+
+    redirectUris: {
+      async add(uri: string) {
+        try {
+          await workosRequest({
+            method: 'POST',
+            path: '/user_management/redirect_uris',
+            apiKey: key,
+            baseUrl: base,
+            body: { uri },
+          });
+          return { success: true, alreadyExists: false };
+        } catch (error: unknown) {
+          const { WorkOSApiError } = await import('./workos-api.js');
+          if (error instanceof WorkOSApiError) {
+            if (error.statusCode === 409 || (error.statusCode === 422 && error.message.includes('already exists'))) {
+              return { success: true, alreadyExists: true };
+            }
+          }
+          throw error;
+        }
+      },
+    },
+
+    corsOrigins: {
+      async add(origin: string) {
+        try {
+          await workosRequest({
+            method: 'POST',
+            path: '/user_management/cors_origins',
+            apiKey: key,
+            baseUrl: base,
+            body: { origin },
+          });
+          return { success: true, alreadyExists: false };
+        } catch (error: unknown) {
+          const { WorkOSApiError } = await import('./workos-api.js');
+          if (error instanceof WorkOSApiError) {
+            if (error.statusCode === 409 || (error.statusCode === 422 && error.message.includes('already exists'))) {
+              return { success: true, alreadyExists: true };
+            }
+          }
+          throw error;
+        }
+      },
+    },
+
+    homepageUrl: {
+      async set(url: string) {
+        await workosRequest({
+          method: 'PUT',
+          path: '/user_management/app_homepage_url',
+          apiKey: key,
+          baseUrl: base,
+          body: { url },
+        });
+      },
+    },
+  };
+}

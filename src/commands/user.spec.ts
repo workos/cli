@@ -1,22 +1,19 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-vi.mock('../lib/workos-api.js', () => ({
-  workosRequest: vi.fn(),
-  WorkOSApiError: class WorkOSApiError extends Error {
-    constructor(
-      message: string,
-      public readonly statusCode: number,
-      public readonly code?: string,
-      public readonly errors?: Array<{ message: string }>,
-    ) {
-      super(message);
-      this.name = 'WorkOSApiError';
-    }
+// Mock the unified client
+const mockSdk = {
+  userManagement: {
+    getUser: vi.fn(),
+    listUsers: vi.fn(),
+    updateUser: vi.fn(),
+    deleteUser: vi.fn(),
   },
+};
+
+vi.mock('../lib/workos-client.js', () => ({
+  createWorkOSClient: () => ({ sdk: mockSdk }),
 }));
 
-const { workosRequest } = await import('../lib/workos-api.js');
-const mockRequest = vi.mocked(workosRequest);
 const { setOutputMode } = await import('../utils/output.js');
 
 const { runUserGet, runUserList, runUserUpdate, runUserDelete } = await import('./user.js');
@@ -25,7 +22,7 @@ describe('user commands', () => {
   let consoleOutput: string[];
 
   beforeEach(() => {
-    mockRequest.mockReset();
+    vi.clearAllMocks();
     consoleOutput = [];
     vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
       consoleOutput.push(args.map(String).join(' '));
@@ -38,47 +35,55 @@ describe('user commands', () => {
 
   describe('runUserGet', () => {
     it('fetches and prints user as JSON', async () => {
-      mockRequest.mockResolvedValue({ id: 'user_123', email: 'test@example.com' });
+      mockSdk.userManagement.getUser.mockResolvedValue({ id: 'user_123', email: 'test@example.com' });
       await runUserGet('user_123', 'sk_test');
-      expect(mockRequest).toHaveBeenCalledWith(
-        expect.objectContaining({ method: 'GET', path: '/user_management/users/user_123' }),
-      );
+      expect(mockSdk.userManagement.getUser).toHaveBeenCalledWith('user_123');
       expect(consoleOutput.some((l) => l.includes('user_123'))).toBe(true);
     });
   });
 
   describe('runUserList', () => {
     it('lists users in table format', async () => {
-      mockRequest.mockResolvedValue({
+      mockSdk.userManagement.listUsers.mockResolvedValue({
         data: [
-          { id: 'user_123', email: 'test@example.com', first_name: 'Test', last_name: 'User', email_verified: true },
+          {
+            id: 'user_123',
+            email: 'test@example.com',
+            firstName: 'Test',
+            lastName: 'User',
+            emailVerified: true,
+          },
         ],
-        list_metadata: { before: null, after: null },
+        listMetadata: { before: null, after: null },
       });
       await runUserList({}, 'sk_test');
       expect(consoleOutput.some((l) => l.includes('test@example.com'))).toBe(true);
     });
 
     it('passes filter params', async () => {
-      mockRequest.mockResolvedValue({ data: [], list_metadata: { before: null, after: null } });
+      mockSdk.userManagement.listUsers.mockResolvedValue({
+        data: [],
+        listMetadata: { before: null, after: null },
+      });
       await runUserList({ email: 'test@example.com', organization: 'org_123', limit: 5 }, 'sk_test');
-      expect(mockRequest).toHaveBeenCalledWith(
-        expect.objectContaining({
-          params: expect.objectContaining({ email: 'test@example.com', organization_id: 'org_123', limit: 5 }),
-        }),
+      expect(mockSdk.userManagement.listUsers).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'test@example.com', organizationId: 'org_123', limit: 5 }),
       );
     });
 
     it('handles empty results', async () => {
-      mockRequest.mockResolvedValue({ data: [], list_metadata: { before: null, after: null } });
+      mockSdk.userManagement.listUsers.mockResolvedValue({
+        data: [],
+        listMetadata: { before: null, after: null },
+      });
       await runUserList({}, 'sk_test');
       expect(consoleOutput.some((l) => l.includes('No users found'))).toBe(true);
     });
 
     it('shows pagination cursors when present', async () => {
-      mockRequest.mockResolvedValue({
-        data: [{ id: 'user_1', email: 'a@b.com', first_name: '', last_name: '', email_verified: false }],
-        list_metadata: { before: 'cur_b', after: 'cur_a' },
+      mockSdk.userManagement.listUsers.mockResolvedValue({
+        data: [{ id: 'user_1', email: 'a@b.com', firstName: '', lastName: '', emailVerified: false }],
+        listMetadata: { before: 'cur_b', after: 'cur_a' },
       });
       await runUserList({}, 'sk_test');
       expect(consoleOutput.some((l) => l.includes('cur_b'))).toBe(true);
@@ -87,31 +92,30 @@ describe('user commands', () => {
 
   describe('runUserUpdate', () => {
     it('updates user with provided fields', async () => {
-      mockRequest.mockResolvedValue({ id: 'user_123', email: 'test@example.com' });
+      mockSdk.userManagement.updateUser.mockResolvedValue({ id: 'user_123', email: 'test@example.com' });
       await runUserUpdate('user_123', 'sk_test', { firstName: 'John', lastName: 'Doe' });
-      expect(mockRequest).toHaveBeenCalledWith(
-        expect.objectContaining({
-          method: 'PUT',
-          path: '/user_management/users/user_123',
-          body: { first_name: 'John', last_name: 'Doe' },
-        }),
-      );
+      expect(mockSdk.userManagement.updateUser).toHaveBeenCalledWith({
+        userId: 'user_123',
+        firstName: 'John',
+        lastName: 'Doe',
+      });
     });
 
     it('sends only provided fields', async () => {
-      mockRequest.mockResolvedValue({ id: 'user_123' });
+      mockSdk.userManagement.updateUser.mockResolvedValue({ id: 'user_123' });
       await runUserUpdate('user_123', 'sk_test', { emailVerified: true });
-      expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({ body: { email_verified: true } }));
+      expect(mockSdk.userManagement.updateUser).toHaveBeenCalledWith({
+        userId: 'user_123',
+        emailVerified: true,
+      });
     });
   });
 
   describe('runUserDelete', () => {
     it('deletes user and prints confirmation', async () => {
-      mockRequest.mockResolvedValue(null);
+      mockSdk.userManagement.deleteUser.mockResolvedValue(undefined);
       await runUserDelete('user_123', 'sk_test');
-      expect(mockRequest).toHaveBeenCalledWith(
-        expect.objectContaining({ method: 'DELETE', path: '/user_management/users/user_123' }),
-      );
+      expect(mockSdk.userManagement.deleteUser).toHaveBeenCalledWith('user_123');
       expect(consoleOutput.some((l) => l.includes('Deleted'))).toBe(true);
       expect(consoleOutput.some((l) => l.includes('user_123'))).toBe(true);
     });
@@ -127,7 +131,7 @@ describe('user commands', () => {
     });
 
     it('runUserGet outputs raw JSON', async () => {
-      mockRequest.mockResolvedValue({ id: 'user_123', email: 'test@example.com' });
+      mockSdk.userManagement.getUser.mockResolvedValue({ id: 'user_123', email: 'test@example.com' });
       await runUserGet('user_123', 'sk_test');
       const output = JSON.parse(consoleOutput[0]);
       expect(output.id).toBe('user_123');
@@ -135,30 +139,39 @@ describe('user commands', () => {
       expect(output).not.toHaveProperty('status');
     });
 
-    it('runUserList outputs JSON with data and list_metadata', async () => {
-      mockRequest.mockResolvedValue({
+    it('runUserList outputs JSON with data and listMetadata', async () => {
+      mockSdk.userManagement.listUsers.mockResolvedValue({
         data: [
-          { id: 'user_123', email: 'test@example.com', first_name: 'Test', last_name: 'User', email_verified: true },
+          {
+            id: 'user_123',
+            email: 'test@example.com',
+            firstName: 'Test',
+            lastName: 'User',
+            emailVerified: true,
+          },
         ],
-        list_metadata: { before: null, after: 'cursor_a' },
+        listMetadata: { before: null, after: 'cursor_a' },
       });
       await runUserList({}, 'sk_test');
       const output = JSON.parse(consoleOutput[0]);
       expect(output.data).toHaveLength(1);
       expect(output.data[0].email).toBe('test@example.com');
-      expect(output.list_metadata.after).toBe('cursor_a');
+      expect(output.listMetadata.after).toBe('cursor_a');
     });
 
     it('runUserList outputs empty data array for no results', async () => {
-      mockRequest.mockResolvedValue({ data: [], list_metadata: { before: null, after: null } });
+      mockSdk.userManagement.listUsers.mockResolvedValue({
+        data: [],
+        listMetadata: { before: null, after: null },
+      });
       await runUserList({}, 'sk_test');
       const output = JSON.parse(consoleOutput[0]);
       expect(output.data).toEqual([]);
-      expect(output.list_metadata).toBeDefined();
+      expect(output.listMetadata).toBeDefined();
     });
 
     it('runUserUpdate outputs JSON success', async () => {
-      mockRequest.mockResolvedValue({ id: 'user_123', email: 'test@example.com' });
+      mockSdk.userManagement.updateUser.mockResolvedValue({ id: 'user_123', email: 'test@example.com' });
       await runUserUpdate('user_123', 'sk_test', { firstName: 'John' });
       const output = JSON.parse(consoleOutput[0]);
       expect(output.status).toBe('ok');
@@ -167,7 +180,7 @@ describe('user commands', () => {
     });
 
     it('runUserDelete outputs JSON success', async () => {
-      mockRequest.mockResolvedValue(null);
+      mockSdk.userManagement.deleteUser.mockResolvedValue(undefined);
       await runUserDelete('user_123', 'sk_test');
       const output = JSON.parse(consoleOutput[0]);
       expect(output.status).toBe('ok');

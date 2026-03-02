@@ -1,30 +1,16 @@
 import chalk from 'chalk';
-import { workosRequest } from '../lib/workos-api.js';
-import type { WorkOSListResponse } from '../lib/workos-api.js';
+import { createWorkOSClient } from '../lib/workos-client.js';
 import { formatTable } from '../utils/table.js';
 import { outputSuccess, outputJson, isJsonMode } from '../utils/output.js';
 import { createApiErrorHandler } from '../lib/api-error-handler.js';
 
-interface User {
-  id: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-  email_verified: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
 const handleApiError = createApiErrorHandler('User');
 
 export async function runUserGet(userId: string, apiKey: string, baseUrl?: string): Promise<void> {
+  const client = createWorkOSClient(apiKey, baseUrl);
+
   try {
-    const user = await workosRequest<User>({
-      method: 'GET',
-      path: `/user_management/users/${userId}`,
-      apiKey,
-      baseUrl,
-    });
+    const user = await client.sdk.userManagement.getUser(userId);
     outputJson(user);
   } catch (error) {
     handleApiError(error);
@@ -41,24 +27,20 @@ export interface UserListOptions {
 }
 
 export async function runUserList(options: UserListOptions, apiKey: string, baseUrl?: string): Promise<void> {
+  const client = createWorkOSClient(apiKey, baseUrl);
+
   try {
-    const result = await workosRequest<WorkOSListResponse<User>>({
-      method: 'GET',
-      path: '/user_management/users',
-      apiKey,
-      baseUrl,
-      params: {
-        email: options.email,
-        organization_id: options.organization,
-        limit: options.limit,
-        before: options.before,
-        after: options.after,
-        order: options.order,
-      },
+    const result = await client.sdk.userManagement.listUsers({
+      email: options.email,
+      organizationId: options.organization,
+      limit: options.limit,
+      before: options.before,
+      after: options.after,
+      order: options.order as 'asc' | 'desc' | undefined,
     });
 
     if (isJsonMode()) {
-      outputJson({ data: result.data, list_metadata: result.list_metadata });
+      outputJson({ data: result.data, listMetadata: result.listMetadata });
       return;
     }
 
@@ -70,9 +52,9 @@ export async function runUserList(options: UserListOptions, apiKey: string, base
     const rows = result.data.map((user) => [
       user.id,
       user.email,
-      user.first_name || chalk.dim('-'),
-      user.last_name || chalk.dim('-'),
-      user.email_verified ? 'Yes' : 'No',
+      user.firstName || chalk.dim('-'),
+      user.lastName || chalk.dim('-'),
+      user.emailVerified ? 'Yes' : 'No',
     ]);
 
     console.log(
@@ -88,7 +70,7 @@ export async function runUserList(options: UserListOptions, apiKey: string, base
       ),
     );
 
-    const { before, after } = result.list_metadata;
+    const { before, after } = result.listMetadata;
     if (before && after) {
       console.log(chalk.dim(`Before: ${before}  After: ${after}`));
     } else if (before) {
@@ -115,20 +97,16 @@ export async function runUserUpdate(
   options: UserUpdateOptions,
   baseUrl?: string,
 ): Promise<void> {
-  const body: Record<string, unknown> = {};
-  if (options.firstName !== undefined) body.first_name = options.firstName;
-  if (options.lastName !== undefined) body.last_name = options.lastName;
-  if (options.emailVerified !== undefined) body.email_verified = options.emailVerified;
-  if (options.password !== undefined) body.password = options.password;
-  if (options.externalId !== undefined) body.external_id = options.externalId;
+  const client = createWorkOSClient(apiKey, baseUrl);
 
   try {
-    const user = await workosRequest<User>({
-      method: 'PUT',
-      path: `/user_management/users/${userId}`,
-      apiKey,
-      baseUrl,
-      body,
+    const user = await client.sdk.userManagement.updateUser({
+      userId,
+      ...(options.firstName !== undefined && { firstName: options.firstName }),
+      ...(options.lastName !== undefined && { lastName: options.lastName }),
+      ...(options.emailVerified !== undefined && { emailVerified: options.emailVerified }),
+      ...(options.password !== undefined && { password: options.password }),
+      ...(options.externalId !== undefined && { externalId: options.externalId }),
     });
     outputSuccess('Updated user', user);
   } catch (error) {
@@ -137,13 +115,10 @@ export async function runUserUpdate(
 }
 
 export async function runUserDelete(userId: string, apiKey: string, baseUrl?: string): Promise<void> {
+  const client = createWorkOSClient(apiKey, baseUrl);
+
   try {
-    await workosRequest({
-      method: 'DELETE',
-      path: `/user_management/users/${userId}`,
-      apiKey,
-      baseUrl,
-    });
+    await client.sdk.userManagement.deleteUser(userId);
     outputSuccess('Deleted user', { id: userId });
   } catch (error) {
     handleApiError(error);
