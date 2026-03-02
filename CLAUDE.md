@@ -12,6 +12,7 @@ src/
 ├── lib/
 │   ├── agent-interface.ts    # Claude Agent SDK integration
 │   ├── agent-runner.ts       # Builds prompts, runs agent
+│   ├── api-error-handler.ts  # Shared WorkOS API error handler factory
 │   ├── config.ts             # Framework detection config
 │   ├── constants.ts          # Integration enum, shared constants
 │   ├── credential-store.ts   # OAuth credential storage (keyring + file fallback)
@@ -19,7 +20,11 @@ src/
 │   ├── api-key.ts            # API key resolution (env var → flag → config)
 │   ├── workos-api.ts         # Generic WorkOS REST API client
 │   ├── credential-proxy.ts   # Token refresh proxy for long sessions
-│   └── ensure-auth.ts        # Startup auth guard with token refresh
+│   ├── ensure-auth.ts        # Startup auth guard with token refresh
+│   └── adapters/
+│       ├── cli-adapter.ts    # Interactive terminal adapter (clack prompts)
+│       ├── dashboard-adapter.ts  # Ink/React TUI adapter
+│       └── headless-adapter.ts   # Non-interactive adapter (NDJSON streaming)
 ├── commands/
 │   ├── env.ts                # workos env (add/remove/switch/list)
 │   ├── organization.ts       # workos organization (create/update/get/list/delete)
@@ -33,44 +38,61 @@ src/
 ├── tanstack-start/           # TanStack Start installer agent
 ├── vanilla-js/               # Vanilla JS installer agent
 └── utils/
+    ├── output.ts             # Output mode system (JSON/human, structured errors)
+    ├── exit-codes.ts         # Standardized exit codes (0, 1, 2, 4)
+    ├── ndjson.ts             # NDJSON writer for headless installer streaming
+    ├── help-json.ts          # Machine-readable command tree (--help --json)
+    ├── environment.ts        # TTY/non-interactive detection
     └── table.ts              # Terminal table formatter
 ```
 
 ## Key Architecture
 
 - **Claude Agent SDK**: Uses `@anthropic-ai/claude-agent-sdk` to run Claude as an agent with tool access
-- **Event Emitter**: `InstallerEventEmitter` bridges agent execution ↔ TUI for real-time updates
+- **Event Emitter**: `InstallerEventEmitter` bridges agent execution ↔ adapters for real-time updates
+- **Adapter Pattern**: Three adapters (CLI, Dashboard, Headless) subscribe to the same state machine events. Selected automatically based on TTY detection.
+- **Output Mode**: `OutputMode` (`human`/`json`) resolved once at startup in `bin.ts`. Drives all formatting via `output.ts` helpers.
 - **Framework Detection**: Each integration has a `detect()` function in `config.ts`
 - **Permission Hook**: `installerCanUseTool()` in `agent-interface.ts` restricts Bash to safe commands only
 - **Config Store**: `config-store.ts` stores environment configs (API keys, endpoints) in system keyring with file fallback
 - **WorkOS API Client**: `workos-api.ts` is a generic fetch wrapper for any WorkOS REST endpoint
+- **API Error Handler**: `api-error-handler.ts` provides `createApiErrorHandler(resourceName)` factory for consistent structured errors across commands
 
 ## CLI Modes
 
-The installer supports two invocation modes:
+The installer supports three invocation modes, selected automatically:
 
-### Regular CLI (default)
+### Regular CLI (default, TTY)
 
 ```bash
 workos install
 ```
 
-Streaming text output directly to terminal. Simple, lightweight, good for CI/scripts.
+Interactive clack prompts, colored output, spinners. Default for humans in a terminal.
 
-### TUI Dashboard (subcommand)
+### TUI Dashboard
 
 ```bash
 workos dashboard
 ```
 
-Interactive Ink/React interface with real-time panels for:
+Interactive Ink/React interface with real-time panels. Code in `src/dashboard/`.
 
-- Agent thinking/reasoning
-- File changes being made
-- Tool execution status
-- Progress indicators
+### Headless (non-TTY, auto-detected)
 
-The dashboard code lives in `src/dashboard/` and uses `InstallerEventEmitter` to receive updates from the agent.
+```bash
+echo '' | workos install --api-key sk_test_xxx --client-id client_xxx
+```
+
+Non-interactive adapter with NDJSON streaming to stdout. Auto-selected when no TTY detected or `WORKOS_NO_PROMPT=1`. All decisions auto-resolved with sensible defaults. Flag overrides: `--no-branch`, `--no-commit`, `--create-pr`, `--no-git-check`.
+
+### Non-TTY Behavior
+
+- **Output**: Auto-switches to JSON when piped or `--json` flag. `WORKOS_FORCE_TTY=1` overrides.
+- **Auth**: Exits code 4 instead of opening browser. Requires prior `workos login` or `WORKOS_API_KEY` env var.
+- **Errors**: Structured JSON to stderr: `{ "error": { "code": "...", "message": "..." } }`
+- **Exit codes**: 0=success, 1=error, 2=cancelled, 4=auth required (follows `gh` CLI convention)
+- **Help**: `--help --json` outputs machine-readable command tree
 
 ## Tech Constraints
 
@@ -127,6 +149,9 @@ workos user list
 ## Adding a New Resource Command
 
 1. Create `src/commands/{resource}.ts` with command handlers (uses `workos-api.ts`)
-2. Create `src/commands/{resource}.spec.ts` with mocked API tests
-3. Register in `src/bin.ts` as a yargs command group with subcommands
-4. Commands use `resolveApiKey()` from `api-key.ts` for auth
+2. Use `createApiErrorHandler('{Resource}')` from `lib/api-error-handler.ts` for error handling
+3. Use `outputSuccess()`, `outputJson()`, `isJsonMode()` from `utils/output.ts` for output
+4. Create `src/commands/{resource}.spec.ts` with mocked API tests (include JSON mode tests)
+5. Register in `src/bin.ts` as a yargs command group with subcommands
+6. Update `src/utils/help-json.ts` command registry to include the new command
+7. Commands use `resolveApiKey()` from `api-key.ts` for auth
