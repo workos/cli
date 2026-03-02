@@ -112,8 +112,8 @@ describe('HeadlessAdapter', () => {
     });
   });
 
-  describe('git:dirty auto-resolution', () => {
-    it('auto-confirms and continues', async () => {
+  describe('git:dirty handling', () => {
+    it('fails fast by default on dirty working tree', async () => {
       const adapter = createAdapter();
       await adapter.start();
 
@@ -124,11 +124,26 @@ describe('HeadlessAdapter', () => {
         dirty: true,
         files: ['package.json'],
       });
+      expect(mockWriteNDJSON).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'error', code: 'git_dirty' }),
+      );
+      expect(sendEvent).toHaveBeenCalledWith({ type: 'GIT_CANCELLED' });
+      expect(mockExit).toHaveBeenCalledWith(1);
+      await adapter.stop();
+    });
+
+    it('continues when --no-git-check is set', async () => {
+      const adapter = createAdapter({ noGitCheck: true });
+      await adapter.start();
+
+      emitter.emit('git:dirty', { files: ['package.json'] });
+
       expect(mockWriteNDJSON).toHaveBeenCalledWith({
         type: 'git:decision',
         action: 'continue',
       });
       expect(sendEvent).toHaveBeenCalledWith({ type: 'GIT_CONFIRMED' });
+      expect(mockExit).not.toHaveBeenCalled();
       await adapter.stop();
     });
   });

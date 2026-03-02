@@ -148,8 +148,23 @@ export class HeadlessAdapter implements InstallerAdapter {
 
   private handleGitDirty = ({ files }: InstallerEvents['git:dirty']): void => {
     writeNDJSON({ type: 'git:status', dirty: true, files });
-    writeNDJSON({ type: 'git:decision', action: 'continue' });
-    this.sendEvent({ type: 'GIT_CONFIRMED' });
+
+    if (this.options.noGitCheck) {
+      writeNDJSON({ type: 'git:decision', action: 'continue' });
+      this.sendEvent({ type: 'GIT_CONFIRMED' });
+      return;
+    }
+
+    writeNDJSON({
+      type: 'error',
+      code: 'git_dirty',
+      message:
+        'Git working tree is dirty in non-interactive mode. ' +
+        'Commit or stash your changes, or rerun with --no-git-check to proceed.',
+    });
+    writeNDJSON({ type: 'git:decision', action: 'cancel' });
+    this.sendEvent({ type: 'GIT_CANCELLED' });
+    process.exit(ExitCode.GENERAL_ERROR);
   };
 
   // ===== Credential Handlers (auto-resolve) =====

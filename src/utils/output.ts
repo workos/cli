@@ -53,7 +53,7 @@ export function outputJson(data: unknown): void {
 /** Write a success result — chalk in human mode, JSON in json mode. */
 export function outputSuccess(message: string, data?: object): void {
   if (currentMode === 'json') {
-    console.log(JSON.stringify({ status: 'ok', message, ...data }));
+    console.log(JSON.stringify(data ? { status: 'ok', message, data } : { status: 'ok', message }));
   } else {
     console.log(chalk.green(message));
     if (data) {

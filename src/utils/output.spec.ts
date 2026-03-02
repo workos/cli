@@ -110,7 +110,7 @@ describe('output', () => {
       const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
       outputSuccess('Created', { id: '123' });
       const output = JSON.parse(spy.mock.calls[0][0]);
-      expect(output).toEqual({ status: 'ok', message: 'Created', id: '123' });
+      expect(output).toEqual({ status: 'ok', message: 'Created', data: { id: '123' } });
       spy.mockRestore();
     });
 

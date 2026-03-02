@@ -163,7 +163,7 @@ describe('user commands', () => {
       const output = JSON.parse(consoleOutput[0]);
       expect(output.status).toBe('ok');
       expect(output.message).toBe('Updated user');
-      expect(output.id).toBe('user_123');
+      expect(output.data.id).toBe('user_123');
     });
 
     it('runUserDelete outputs JSON success', async () => {
@@ -171,7 +171,7 @@ describe('user commands', () => {
       await runUserDelete('user_123', 'sk_test');
       const output = JSON.parse(consoleOutput[0]);
       expect(output.status).toBe('ok');
-      expect(output.id).toBe('user_123');
+      expect(output.data.id).toBe('user_123');
     });
   });
 });

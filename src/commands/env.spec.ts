@@ -182,9 +182,9 @@ describe('env commands', () => {
       const output = JSON.parse(consoleOutput[0]);
       expect(output.status).toBe('ok');
       expect(output.message).toBe('Environment added');
-      expect(output.name).toBe('prod');
-      expect(output.type).toBe('production');
-      expect(output.active).toBe(true);
+      expect(output.data.name).toBe('prod');
+      expect(output.data.type).toBe('production');
+      expect(output.data.active).toBe(true);
     });
 
     it('runEnvRemove outputs JSON success', async () => {
@@ -194,7 +194,7 @@ describe('env commands', () => {
       const output = JSON.parse(consoleOutput[0]);
       expect(output.status).toBe('ok');
       expect(output.message).toBe('Environment removed');
-      expect(output.name).toBe('prod');
+      expect(output.data.name).toBe('prod');
     });
 
     it('runEnvSwitch outputs JSON success', async () => {
@@ -205,7 +205,7 @@ describe('env commands', () => {
       const output = JSON.parse(consoleOutput[0]);
       expect(output.status).toBe('ok');
       expect(output.message).toBe('Switched environment');
-      expect(output.name).toBe('sandbox');
+      expect(output.data.name).toBe('sandbox');
     });
 
     it('runEnvList outputs JSON with data array', async () => {

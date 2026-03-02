@@ -2,6 +2,7 @@ import { runInstaller } from '../run.js';
 import type { InstallerArgs } from '../run.js';
 import clack from '../utils/clack.js';
 import chalk from 'chalk';
+import { exitWithError, isJsonMode } from '../utils/output.js';
 import type { ArgumentsCamelCase } from 'yargs';
 
 /**
@@ -13,19 +14,16 @@ export async function handleInstall(argv: ArgumentsCamelCase<InstallerArgs>): Pr
   // CI mode validation
   if (options.ci) {
     if (!options.apiKey) {
-      clack.intro(chalk.inverse('WorkOS AuthKit Installer'));
-      clack.log.error('CI mode requires --api-key (WorkOS API key sk_xxx)');
-      process.exit(1);
+      exitWithError({ code: 'missing_args', message: 'CI mode requires --api-key (WorkOS API key sk_xxx)' });
     }
     if (!options.clientId) {
-      clack.intro(chalk.inverse('WorkOS AuthKit Installer'));
-      clack.log.error('CI mode requires --client-id (WorkOS Client ID client_xxx)');
-      process.exit(1);
+      exitWithError({ code: 'missing_args', message: 'CI mode requires --client-id (WorkOS Client ID client_xxx)' });
     }
     if (!options.installDir) {
-      clack.intro(chalk.inverse('WorkOS AuthKit Installer'));
-      clack.log.error('CI mode requires --install-dir (directory to install WorkOS AuthKit in)');
-      process.exit(1);
+      exitWithError({
+        code: 'missing_args',
+        message: 'CI mode requires --install-dir (directory to install WorkOS AuthKit in)',
+      });
     }
   }
 
@@ -35,6 +33,13 @@ export async function handleInstall(argv: ArgumentsCamelCase<InstallerArgs>): Pr
   } catch (err) {
     const { getLogFilePath } = await import('../utils/debug.js');
     const logPath = getLogFilePath();
+
+    if (isJsonMode()) {
+      exitWithError({
+        code: 'installer_error',
+        message: err instanceof Error ? err.message : 'Unknown error',
+      });
+    }
 
     if (options.debug && err instanceof Error && err.stack) {
       console.error(err.stack);

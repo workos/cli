@@ -39,7 +39,9 @@ setOutputMode(resolveOutputMode(hasJsonFlag));
 // Intercept --help --json before yargs parses (yargs exits on --help)
 if (hasJsonFlag && (rawArgs.includes('--help') || rawArgs.includes('-h'))) {
   const { buildCommandTree } = await import('./utils/help-json.js');
-  const command = rawArgs.find((a) => !a.startsWith('-'));
+  const commandAliases: Record<string, string> = { org: 'organization' };
+  const rawCommand = rawArgs.find((a) => !a.startsWith('-'));
+  const command = rawCommand ? (commandAliases[rawCommand] ?? rawCommand) : undefined;
   outputJson(buildCommandTree(command));
   process.exit(0);
 }

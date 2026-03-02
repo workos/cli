@@ -202,7 +202,7 @@ describe('organization commands', () => {
       const output = JSON.parse(consoleOutput[0]);
       expect(output.status).toBe('ok');
       expect(output.message).toBe('Created organization');
-      expect(output.id).toBe('org_123');
+      expect(output.data.id).toBe('org_123');
     });
 
     it('runOrgGet outputs raw JSON', async () => {
@@ -239,7 +239,7 @@ describe('organization commands', () => {
       await runOrgDelete('org_123', 'sk_test');
       const output = JSON.parse(consoleOutput[0]);
       expect(output.status).toBe('ok');
-      expect(output.id).toBe('org_123');
+      expect(output.data.id).toBe('org_123');
     });
   });
 });
