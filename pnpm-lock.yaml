@@ -53,6 +53,9 @@ importers:
       xstate:
         specifier: ^5.28.0
         version: 5.28.0
+      yaml:
+        specifier: ^2.8.2
+        version: 2.8.2
       yargs:
         specifier: ^18.0.0
         version: 18.0.0
@@ -104,7 +107,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@22.19.7)(@vitest/ui@4.0.18)(msw@2.10.4(@types/node@22.19.7)(typescript@5.9.3))(tsx@4.21.0)(yaml@2.7.1)
+        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@22.19.7)(@vitest/ui@4.0.18)(msw@2.10.4(@types/node@22.19.7)(typescript@5.9.3))(tsx@4.21.0)(yaml@2.8.2)
 
   packages/cli:
     dependencies:
@@ -2620,6 +2623,11 @@ packages:
     engines: {node: '>= 14'}
     hasBin: true
 
+  yaml@2.8.2:
+    resolution: {integrity: sha512-mplynKqc1C2hTVYxd0PU2xQAc22TI1vShAYGksCCfxbn/dFwnHTNi1bvYsBTkhdUNtGIf5xNOg938rrSSYvS9A==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
+
   yargs-parser@21.1.1:
     resolution: {integrity: sha512-tVpsJW7DdjecAiFpbIB1e3qxIQsE6NoPc5/eTdrbbIC4h0LVsWhnoa3g+m2HclBIujHzsxZ4VJVA+GUuc2/LBw==}
     engines: {node: '>=12'}
@@ -3695,7 +3703,7 @@ snapshots:
       obug: 2.1.1
       std-env: 3.10.0
       tinyrainbow: 3.0.3
-      vitest: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@22.19.7)(@vitest/ui@4.0.18)(msw@2.10.4(@types/node@22.19.7)(typescript@5.9.3))(tsx@4.21.0)(yaml@2.7.1)
+      vitest: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@22.19.7)(@vitest/ui@4.0.18)(msw@2.10.4(@types/node@22.19.7)(typescript@5.9.3))(tsx@4.21.0)(yaml@2.8.2)
 
   '@vitest/expect@4.0.17':
     dependencies:
@@ -3733,14 +3741,14 @@ snapshots:
       msw: 2.10.4(@types/node@22.19.7)(typescript@5.9.3)
       vite: 7.3.1(@types/node@22.19.7)(tsx@4.21.0)(yaml@2.7.1)
 
-  '@vitest/mocker@4.0.18(msw@2.10.4(@types/node@22.19.7)(typescript@5.9.3))(vite@7.3.1(@types/node@22.19.7)(tsx@4.21.0)(yaml@2.7.1))':
+  '@vitest/mocker@4.0.18(msw@2.10.4(@types/node@22.19.7)(typescript@5.9.3))(vite@7.3.1(@types/node@22.19.7)(tsx@4.21.0)(yaml@2.8.2))':
     dependencies:
       '@vitest/spy': 4.0.18
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
       msw: 2.10.4(@types/node@22.19.7)(typescript@5.9.3)
-      vite: 7.3.1(@types/node@22.19.7)(tsx@4.21.0)(yaml@2.7.1)
+      vite: 7.3.1(@types/node@22.19.7)(tsx@4.21.0)(yaml@2.8.2)
 
   '@vitest/pretty-format@4.0.17':
     dependencies:
@@ -3796,7 +3804,7 @@ snapshots:
       sirv: 3.0.2
       tinyglobby: 0.2.15
       tinyrainbow: 3.0.3
-      vitest: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@22.19.7)(@vitest/ui@4.0.18)(msw@2.10.4(@types/node@22.19.7)(typescript@5.9.3))(tsx@4.21.0)(yaml@2.7.1)
+      vitest: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@22.19.7)(@vitest/ui@4.0.18)(msw@2.10.4(@types/node@22.19.7)(typescript@5.9.3))(tsx@4.21.0)(yaml@2.8.2)
 
   '@vitest/utils@4.0.17':
     dependencies:
@@ -4762,6 +4770,20 @@ snapshots:
       tsx: 4.21.0
       yaml: 2.7.1
 
+  vite@7.3.1(@types/node@22.19.7)(tsx@4.21.0)(yaml@2.8.2):
+    dependencies:
+      esbuild: 0.27.2
+      fdir: 6.5.0(picomatch@4.0.3)
+      picomatch: 4.0.3
+      postcss: 8.5.6
+      rollup: 4.55.1
+      tinyglobby: 0.2.15
+    optionalDependencies:
+      '@types/node': 22.19.7
+      fsevents: 2.3.3
+      tsx: 4.21.0
+      yaml: 2.8.2
+
   vitest@4.0.17(@opentelemetry/api@1.9.0)(@types/node@22.0.3)(@vitest/ui@4.0.17)(msw@2.10.4(@types/node@22.0.3)(typescript@5.9.3))(tsx@4.21.0)(yaml@2.7.1):
     dependencies:
       '@vitest/expect': 4.0.17
@@ -4840,10 +4862,10 @@ snapshots:
       - tsx
       - yaml
 
-  vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@22.19.7)(@vitest/ui@4.0.18)(msw@2.10.4(@types/node@22.19.7)(typescript@5.9.3))(tsx@4.21.0)(yaml@2.7.1):
+  vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@22.19.7)(@vitest/ui@4.0.18)(msw@2.10.4(@types/node@22.19.7)(typescript@5.9.3))(tsx@4.21.0)(yaml@2.8.2):
     dependencies:
       '@vitest/expect': 4.0.18
-      '@vitest/mocker': 4.0.18(msw@2.10.4(@types/node@22.19.7)(typescript@5.9.3))(vite@7.3.1(@types/node@22.19.7)(tsx@4.21.0)(yaml@2.7.1))
+      '@vitest/mocker': 4.0.18(msw@2.10.4(@types/node@22.19.7)(typescript@5.9.3))(vite@7.3.1(@types/node@22.19.7)(tsx@4.21.0)(yaml@2.8.2))
       '@vitest/pretty-format': 4.0.18
       '@vitest/runner': 4.0.18
       '@vitest/snapshot': 4.0.18
@@ -4860,7 +4882,7 @@ snapshots:
       tinyexec: 1.0.2
       tinyglobby: 0.2.15
       tinyrainbow: 3.0.3
-      vite: 7.3.1(@types/node@22.19.7)(tsx@4.21.0)(yaml@2.7.1)
+      vite: 7.3.1(@types/node@22.19.7)(tsx@4.21.0)(yaml@2.8.2)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
@@ -4929,6 +4951,8 @@ snapshots:
   y18n@5.0.8: {}
 
   yaml@2.7.1: {}
+
+  yaml@2.8.2: {}
 
   yargs-parser@21.1.1: {}
 
