@@ -169,17 +169,11 @@ export async function runSeed(
   } catch (error) {
     // Partial failure — save what was created so --clean can tear down
     saveState(state);
-    if (isJsonMode()) {
-      outputJson({
-        status: 'error',
-        message: error instanceof Error ? error.message : 'Seed failed',
-        partialState: state,
-      });
-    } else {
-      console.error(chalk.red(`\nSeed failed: ${error instanceof Error ? error.message : 'Unknown error'}`));
-      console.log(chalk.dim(`Partial state saved to ${STATE_FILE}. Run \`workos seed --clean\` to tear down.`));
-    }
-    process.exit(1);
+    exitWithError({
+      code: 'seed_failed',
+      message: `Seed failed: ${error instanceof Error ? error.message : 'Unknown error'}. Partial state saved to ${STATE_FILE}. Run \`workos seed --clean\` to tear down.`,
+      details: state,
+    });
   }
 }
 
