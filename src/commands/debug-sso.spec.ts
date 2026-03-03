@@ -103,9 +103,7 @@ describe('debug-sso command', () => {
 
     await runDebugSso('conn_123', 'sk_test');
 
-    expect(mockSdk.events.listEvents).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: 'org_123' }),
-    );
+    expect(mockSdk.events.listEvents).toHaveBeenCalledWith(expect.objectContaining({ organizationId: 'org_123' }));
   });
 
   it('does not filter by org when connection has no organizationId', async () => {

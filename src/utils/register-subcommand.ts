@@ -27,9 +27,7 @@ export function registerSubcommand<T>(
     builder(probe);
     // getOptions() exists at runtime but is not in yargs' public type definitions
     const opts = (probe as unknown as { getOptions(): YargsOptions }).getOptions();
-    const demanded = Object.keys(opts.demandedOptions || {}).filter(
-      (k) => !['help', 'version'].includes(k),
-    );
+    const demanded = Object.keys(opts.demandedOptions || {}).filter((k) => !['help', 'version'].includes(k));
 
     const requiredSuffix = demanded
       .map((k) => {

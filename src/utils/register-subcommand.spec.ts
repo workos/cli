@@ -56,12 +56,7 @@ describe('registerSubcommand', () => {
       async () => {},
     );
 
-    expect(commandSpy).toHaveBeenCalledWith(
-      'list',
-      'List resources',
-      expect.any(Function),
-      expect.any(Function),
-    );
+    expect(commandSpy).toHaveBeenCalledWith('list', 'List resources', expect.any(Function), expect.any(Function));
   });
 
   it('preserves positional args and appends required options', () => {
@@ -121,7 +116,13 @@ describe('registerSubcommand', () => {
 
   it('returns the parent yargs instance', () => {
     const parent = yargs([]);
-    const result = registerSubcommand(parent, 'test', 'Test', (y) => y, async () => {});
+    const result = registerSubcommand(
+      parent,
+      'test',
+      'Test',
+      (y) => y,
+      async () => {},
+    );
     expect(result).toBe(parent);
   });
 
@@ -139,11 +140,6 @@ describe('registerSubcommand', () => {
       async () => {},
     );
 
-    expect(commandSpy).toHaveBeenCalledWith(
-      'broken',
-      'Broken command',
-      expect.any(Function),
-      expect.any(Function),
-    );
+    expect(commandSpy).toHaveBeenCalledWith('broken', 'Broken command', expect.any(Function), expect.any(Function));
   });
 });

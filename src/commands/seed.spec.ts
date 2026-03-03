@@ -95,18 +95,28 @@ describe('seed command', () => {
 
       // Permissions created first
       expect(mockSdk.authorization.createPermission).toHaveBeenCalledTimes(2);
-      expect(mockSdk.authorization.createPermission).toHaveBeenCalledWith(expect.objectContaining({ slug: 'read-users' }));
-      expect(mockSdk.authorization.createPermission).toHaveBeenCalledWith(expect.objectContaining({ slug: 'write-users' }));
+      expect(mockSdk.authorization.createPermission).toHaveBeenCalledWith(
+        expect.objectContaining({ slug: 'read-users' }),
+      );
+      expect(mockSdk.authorization.createPermission).toHaveBeenCalledWith(
+        expect.objectContaining({ slug: 'write-users' }),
+      );
 
       // Then roles
       expect(mockSdk.authorization.createEnvironmentRole).toHaveBeenCalledTimes(2);
 
       // Then permission assignments
-      expect(mockSdk.authorization.setEnvironmentRolePermissions).toHaveBeenCalledWith('admin', { permissions: ['read-users', 'write-users'] });
-      expect(mockSdk.authorization.setEnvironmentRolePermissions).toHaveBeenCalledWith('viewer', { permissions: ['read-users'] });
+      expect(mockSdk.authorization.setEnvironmentRolePermissions).toHaveBeenCalledWith('admin', {
+        permissions: ['read-users', 'write-users'],
+      });
+      expect(mockSdk.authorization.setEnvironmentRolePermissions).toHaveBeenCalledWith('viewer', {
+        permissions: ['read-users'],
+      });
 
       // Then orgs
-      expect(mockSdk.organizations.createOrganization).toHaveBeenCalledWith(expect.objectContaining({ name: 'Test Org' }));
+      expect(mockSdk.organizations.createOrganization).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'Test Org' }),
+      );
 
       // Then config
       expect(mockExtensions.redirectUris.add).toHaveBeenCalledWith('http://localhost:3000/callback');

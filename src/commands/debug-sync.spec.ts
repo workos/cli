@@ -45,17 +45,29 @@ describe('debug-sync command', () => {
     organizationId: null,
   };
 
-  function mockCountsAndEvents(opts?: { users?: number; hasMore?: boolean; groups?: number; events?: Array<{ id: string; event: string; createdAt: string }> }) {
+  function mockCountsAndEvents(opts?: {
+    users?: number;
+    hasMore?: boolean;
+    groups?: number;
+    events?: Array<{ id: string; event: string; createdAt: string }>;
+  }) {
     const users = Array.from({ length: opts?.users ?? 0 }, (_, i) => ({ id: `u${i}` }));
     const groups = Array.from({ length: opts?.groups ?? 0 }, (_, i) => ({ id: `g${i}` }));
-    mockSdk.directorySync.listUsers.mockResolvedValue({ data: users, listMetadata: { after: opts?.hasMore ? 'cursor' : null } });
+    mockSdk.directorySync.listUsers.mockResolvedValue({
+      data: users,
+      listMetadata: { after: opts?.hasMore ? 'cursor' : null },
+    });
     mockSdk.directorySync.listGroups.mockResolvedValue({ data: groups, listMetadata: { after: null } });
     mockSdk.events.listEvents.mockResolvedValue({ data: opts?.events ?? [], listMetadata: {} });
   }
 
   it('displays directory details', async () => {
     mockSdk.directorySync.getDirectory.mockResolvedValue(linkedDirectory);
-    mockCountsAndEvents({ users: 1, groups: 1, events: [{ id: 'evt_1', event: 'dsync.user.created', createdAt: '2024-01-02' }] });
+    mockCountsAndEvents({
+      users: 1,
+      groups: 1,
+      events: [{ id: 'evt_1', event: 'dsync.user.created', createdAt: '2024-01-02' }],
+    });
 
     await runDebugSync('dir_123', 'sk_test');
 
@@ -66,7 +78,11 @@ describe('debug-sync command', () => {
 
   it('shows user and group counts', async () => {
     mockSdk.directorySync.getDirectory.mockResolvedValue(linkedDirectory);
-    mockCountsAndEvents({ users: 1, groups: 1, events: [{ id: 'e', event: 'dsync.user.created', createdAt: '2024-01-01' }] });
+    mockCountsAndEvents({
+      users: 1,
+      groups: 1,
+      events: [{ id: 'e', event: 'dsync.user.created', createdAt: '2024-01-01' }],
+    });
 
     await runDebugSync('dir_123', 'sk_test');
 
@@ -76,7 +92,11 @@ describe('debug-sync command', () => {
 
   it('shows 1+ when pagination indicates more results', async () => {
     mockSdk.directorySync.getDirectory.mockResolvedValue(linkedDirectory);
-    mockCountsAndEvents({ users: 1, hasMore: true, events: [{ id: 'e', event: 'dsync.user.created', createdAt: '2024-01-01' }] });
+    mockCountsAndEvents({
+      users: 1,
+      hasMore: true,
+      events: [{ id: 'e', event: 'dsync.user.created', createdAt: '2024-01-01' }],
+    });
 
     await runDebugSync('dir_123', 'sk_test');
 
@@ -112,10 +132,12 @@ describe('debug-sync command', () => {
 
   it('shows recent sync events', async () => {
     mockSdk.directorySync.getDirectory.mockResolvedValue(linkedDirectory);
-    mockCountsAndEvents({ events: [
-      { id: 'evt_1', event: 'dsync.user.created', createdAt: '2024-01-02' },
-      { id: 'evt_2', event: 'dsync.group.created', createdAt: '2024-01-03' },
-    ] });
+    mockCountsAndEvents({
+      events: [
+        { id: 'evt_1', event: 'dsync.user.created', createdAt: '2024-01-02' },
+        { id: 'evt_2', event: 'dsync.group.created', createdAt: '2024-01-03' },
+      ],
+    });
 
     await runDebugSync('dir_123', 'sk_test');
 
@@ -152,9 +174,7 @@ describe('debug-sync command', () => {
 
     await runDebugSync('dir_123', 'sk_test');
 
-    expect(mockSdk.events.listEvents).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: 'org_123' }),
-    );
+    expect(mockSdk.events.listEvents).toHaveBeenCalledWith(expect.objectContaining({ organizationId: 'org_123' }));
   });
 
   describe('JSON mode', () => {
@@ -163,7 +183,11 @@ describe('debug-sync command', () => {
 
     it('outputs directory details as JSON', async () => {
       mockSdk.directorySync.getDirectory.mockResolvedValue(linkedDirectory);
-      mockCountsAndEvents({ users: 1, groups: 1, events: [{ id: 'e', event: 'dsync.user.created', createdAt: '2024-01-01' }] });
+      mockCountsAndEvents({
+        users: 1,
+        groups: 1,
+        events: [{ id: 'e', event: 'dsync.user.created', createdAt: '2024-01-01' }],
+      });
 
       await runDebugSync('dir_123', 'sk_test');
 
@@ -188,7 +212,11 @@ describe('debug-sync command', () => {
 
     it('reports 1+ user count as string in JSON', async () => {
       mockSdk.directorySync.getDirectory.mockResolvedValue(linkedDirectory);
-      mockCountsAndEvents({ users: 1, hasMore: true, events: [{ id: 'e', event: 'dsync.user.created', createdAt: '2024-01-01' }] });
+      mockCountsAndEvents({
+        users: 1,
+        hasMore: true,
+        events: [{ id: 'e', event: 'dsync.user.created', createdAt: '2024-01-01' }],
+      });
 
       await runDebugSync('dir_123', 'sk_test');
 
