@@ -15,9 +15,7 @@ vi.mock('../lib/workos-client.js', () => ({
 
 const { setOutputMode } = await import('../utils/output.js');
 
-const { runOrgDomainGet, runOrgDomainCreate, runOrgDomainVerify, runOrgDomainDelete } = await import(
-  './org-domain.js'
-);
+const { runOrgDomainGet, runOrgDomainCreate, runOrgDomainVerify, runOrgDomainDelete } = await import('./org-domain.js');
 
 const mockDomain = {
   id: 'org_domain_123',

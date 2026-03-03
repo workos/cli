@@ -46,10 +46,7 @@ export async function runPermissionList(
     ]);
 
     console.log(
-      formatTable(
-        [{ header: 'Slug' }, { header: 'Name' }, { header: 'Description' }, { header: 'Created' }],
-        rows,
-      ),
+      formatTable([{ header: 'Slug' }, { header: 'Name' }, { header: 'Description' }, { header: 'Created' }], rows),
     );
 
     const { before, after } = result.listMetadata;

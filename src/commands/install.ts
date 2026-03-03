@@ -1,7 +1,6 @@
 import { runInstaller } from '../run.js';
 import type { InstallerArgs } from '../run.js';
 import clack from '../utils/clack.js';
-import chalk from 'chalk';
 import { exitWithError, isJsonMode } from '../utils/output.js';
 import type { ArgumentsCamelCase } from 'yargs';
 

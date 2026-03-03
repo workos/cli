@@ -34,11 +34,7 @@ export async function runVaultList(options: VaultListOptions, apiKey: string, ba
       return;
     }
 
-    const rows = result.data.map((obj) => [
-      obj.id,
-      obj.name,
-      obj.updatedAt ? String(obj.updatedAt) : chalk.dim('-'),
-    ]);
+    const rows = result.data.map((obj) => [obj.id, obj.name, obj.updatedAt ? String(obj.updatedAt) : chalk.dim('-')]);
 
     console.log(formatTable([{ header: 'ID' }, { header: 'Name' }, { header: 'Updated At' }], rows));
 

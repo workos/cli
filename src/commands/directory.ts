@@ -16,11 +16,7 @@ export interface DirectoryListOptions {
   order?: string;
 }
 
-export async function runDirectoryList(
-  options: DirectoryListOptions,
-  apiKey: string,
-  baseUrl?: string,
-): Promise<void> {
+export async function runDirectoryList(options: DirectoryListOptions, apiKey: string, baseUrl?: string): Promise<void> {
   const client = createWorkOSClient(apiKey, baseUrl);
 
   try {

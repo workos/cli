@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import { createWorkOSClient } from '../lib/workos-client.js';
-import { outputJson, isJsonMode, exitWithError } from '../utils/output.js';
+import { outputJson, isJsonMode } from '../utils/output.js';
 import { createApiErrorHandler } from '../lib/api-error-handler.js';
 
 const handleApiError = createApiErrorHandler('SetupOrg');
@@ -87,7 +87,8 @@ export async function runSetupOrg(options: SetupOrgOptions, apiKey: string, base
     } else {
       console.log(chalk.bold('\nSetup complete:'));
       console.log(`  Organization: ${org.id}`);
-      if (options.domain) console.log(`  Domain: ${options.domain} (${summary.domainVerified ? 'verified' : 'pending'})`);
+      if (options.domain)
+        console.log(`  Domain: ${options.domain} (${summary.domainVerified ? 'verified' : 'pending'})`);
       if (summary.portalLink) console.log(`  Portal: ${summary.portalLink}`);
     }
   } catch (error) {

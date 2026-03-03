@@ -122,8 +122,9 @@ export async function runSeed(
             await client.sdk.authorization.setEnvironmentRolePermissions(role.slug, {
               permissions: role.permissions,
             });
-            if (!isJsonMode()) console.log(chalk.green(`  Set permissions on ${role.slug}: ${role.permissions.join(', ')}`));
-          } catch (error: unknown) {
+            if (!isJsonMode())
+              console.log(chalk.green(`  Set permissions on ${role.slug}: ${role.permissions.join(', ')}`));
+          } catch {
             if (!isJsonMode()) console.log(chalk.yellow(`  Warning: Failed to set permissions on ${role.slug}`));
           }
         }
@@ -166,10 +167,14 @@ export async function runSeed(
       console.log(chalk.dim(`State saved to ${STATE_FILE}`));
     }
   } catch (error) {
-    // Partial failure — save what was created
+    // Partial failure — save what was created so --clean can tear down
     saveState(state);
     if (isJsonMode()) {
-      outputJson({ status: 'error', message: error instanceof Error ? error.message : 'Seed failed', partialState: state });
+      outputJson({
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Seed failed',
+        partialState: state,
+      });
     } else {
       console.error(chalk.red(`\nSeed failed: ${error instanceof Error ? error.message : 'Unknown error'}`));
       console.log(chalk.dim(`Partial state saved to ${STATE_FILE}. Run \`workos seed --clean\` to tear down.`));
@@ -221,17 +226,16 @@ async function runSeedClean(apiKey: string, baseUrl?: string): Promise<void> {
   outputSuccess('Seed cleanup complete', { stateFile: STATE_FILE });
 }
 
-async function applyConfig(
-  client: WorkOSCLIClient,
-  config: NonNullable<SeedConfig['config']>,
-): Promise<void> {
+async function applyConfig(client: WorkOSCLIClient, config: NonNullable<SeedConfig['config']>): Promise<void> {
   if (config.redirect_uris) {
     for (const uri of config.redirect_uris) {
       const result = await client.redirectUris.add(uri);
       if (!isJsonMode()) {
-        console.log(result.alreadyExists
-          ? chalk.dim(`  Redirect URI exists: ${uri}`)
-          : chalk.green(`  Added redirect URI: ${uri}`));
+        console.log(
+          result.alreadyExists
+            ? chalk.dim(`  Redirect URI exists: ${uri}`)
+            : chalk.green(`  Added redirect URI: ${uri}`),
+        );
       }
     }
   }
@@ -240,9 +244,11 @@ async function applyConfig(
     for (const origin of config.cors_origins) {
       const result = await client.corsOrigins.add(origin);
       if (!isJsonMode()) {
-        console.log(result.alreadyExists
-          ? chalk.dim(`  CORS origin exists: ${origin}`)
-          : chalk.green(`  Added CORS origin: ${origin}`));
+        console.log(
+          result.alreadyExists
+            ? chalk.dim(`  CORS origin exists: ${origin}`)
+            : chalk.green(`  Added CORS origin: ${origin}`),
+        );
       }
     }
   }

@@ -52,13 +52,7 @@ export async function runInvitationList(
 
     console.log(
       formatTable(
-        [
-          { header: 'ID' },
-          { header: 'Email' },
-          { header: 'Org ID' },
-          { header: 'State' },
-          { header: 'Expires At' },
-        ],
+        [{ header: 'ID' }, { header: 'Email' }, { header: 'Org ID' }, { header: 'State' }, { header: 'Expires At' }],
         rows,
       ),
     );

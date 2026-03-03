@@ -32,7 +32,15 @@ const {
 
 const mockDigest = { id: 'obj_123', name: 'my-secret', updatedAt: '2024-01-01T00:00:00Z' };
 const mockObject = { id: 'obj_123', name: 'my-secret', value: 'secret-value', metadata: {} };
-const mockMetadata = { id: 'obj_123', context: {}, environmentId: 'env_1', keyId: 'key_1', updatedAt: '2024-01-01', updatedBy: 'user', versionId: 'v1' };
+const mockMetadata = {
+  id: 'obj_123',
+  context: {},
+  environmentId: 'env_1',
+  keyId: 'key_1',
+  updatedAt: '2024-01-01',
+  updatedBy: 'user',
+  versionId: 'v1',
+};
 
 describe('vault commands', () => {
   let consoleOutput: string[];
@@ -66,9 +74,7 @@ describe('vault commands', () => {
         listMetadata: { before: null, after: null },
       });
       await runVaultList({ limit: 10, order: 'asc' }, 'sk_test');
-      expect(mockSdk.vault.listObjects).toHaveBeenCalledWith(
-        expect.objectContaining({ limit: 10, order: 'asc' }),
-      );
+      expect(mockSdk.vault.listObjects).toHaveBeenCalledWith(expect.objectContaining({ limit: 10, order: 'asc' }));
     });
 
     it('handles empty results', async () => {
@@ -131,7 +137,11 @@ describe('vault commands', () => {
     it('passes versionCheck when provided', async () => {
       mockSdk.vault.updateObject.mockResolvedValue(mockObject);
       await runVaultUpdate({ id: 'obj_123', value: 'new-value', versionCheck: 'v1' }, 'sk_test');
-      expect(mockSdk.vault.updateObject).toHaveBeenCalledWith({ id: 'obj_123', value: 'new-value', versionCheck: 'v1' });
+      expect(mockSdk.vault.updateObject).toHaveBeenCalledWith({
+        id: 'obj_123',
+        value: 'new-value',
+        versionCheck: 'v1',
+      });
     });
   });
 

@@ -1,4 +1,3 @@
-import chalk from 'chalk';
 import { createWorkOSClient } from '../lib/workos-client.js';
 import { formatTable } from '../utils/table.js';
 import { outputSuccess, outputJson, isJsonMode } from '../utils/output.js';
@@ -6,11 +5,7 @@ import { createApiErrorHandler } from '../lib/api-error-handler.js';
 
 const handleApiError = createApiErrorHandler('Role');
 
-export async function runRoleList(
-  orgId: string | undefined,
-  apiKey: string,
-  baseUrl?: string,
-): Promise<void> {
+export async function runRoleList(orgId: string | undefined, apiKey: string, baseUrl?: string): Promise<void> {
   const client = createWorkOSClient(apiKey, baseUrl);
 
   try {
@@ -38,13 +33,7 @@ export async function runRoleList(
 
     console.log(
       formatTable(
-        [
-          { header: 'Slug' },
-          { header: 'Name' },
-          { header: 'Type' },
-          { header: 'Permissions' },
-          { header: 'Created' },
-        ],
+        [{ header: 'Slug' }, { header: 'Name' }, { header: 'Type' }, { header: 'Permissions' }, { header: 'Created' }],
         rows,
       ),
     );
@@ -130,12 +119,7 @@ export async function runRoleUpdate(
   }
 }
 
-export async function runRoleDelete(
-  slug: string,
-  orgId: string,
-  apiKey: string,
-  baseUrl?: string,
-): Promise<void> {
+export async function runRoleDelete(slug: string, orgId: string, apiKey: string, baseUrl?: string): Promise<void> {
   const client = createWorkOSClient(apiKey, baseUrl);
 
   try {

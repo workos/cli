@@ -79,7 +79,9 @@ export async function runDebugSync(directoryId: string, apiKey: string, baseUrl?
     console.log(chalk.bold(`Directory Sync: ${directory.name}`));
     console.log(`  ID: ${directory.id}`);
     console.log(`  Type: ${directory.type}`);
-    console.log(`  State: ${String(directory.state) === 'linked' ? chalk.green('linked') : chalk.yellow(directory.state)}`);
+    console.log(
+      `  State: ${String(directory.state) === 'linked' ? chalk.green('linked') : chalk.yellow(directory.state)}`,
+    );
     console.log(`  Organization: ${directory.organizationId || chalk.dim('none')}`);
     console.log(`  Users: ${userCount === -1 ? '1+' : userCount}`);
     console.log(`  Groups: ${groupCount === -1 ? '1+' : groupCount}`);

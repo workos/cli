@@ -36,12 +36,7 @@ export async function runApiKeyList(options: ApiKeyListOptions, apiKey: string, 
       return;
     }
 
-    const rows = result.data.map((key) => [
-      key.id,
-      key.name,
-      key.obfuscatedValue ?? chalk.dim('-'),
-      key.createdAt,
-    ]);
+    const rows = result.data.map((key) => [key.id, key.name, key.obfuscatedValue ?? chalk.dim('-'), key.createdAt]);
 
     console.log(
       formatTable([{ header: 'ID' }, { header: 'Name' }, { header: 'Obfuscated Value' }, { header: 'Created' }], rows),

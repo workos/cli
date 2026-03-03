@@ -24,7 +24,11 @@ export async function runDebugSso(connectionId: string, apiKey: string, baseUrl?
     let recentEvents: Array<{ id: string; event: string; createdAt: string }> = [];
     try {
       const events = await client.sdk.events.listEvents({
-        events: ['authentication.email_verification_succeeded', 'authentication.magic_auth_succeeded', 'authentication.sso_succeeded'] as EventName[],
+        events: [
+          'authentication.email_verification_succeeded',
+          'authentication.magic_auth_succeeded',
+          'authentication.sso_succeeded',
+        ] as EventName[],
         ...(connection.organizationId && { organizationId: connection.organizationId }),
         limit: 5,
       });

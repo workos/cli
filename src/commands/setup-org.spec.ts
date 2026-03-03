@@ -52,7 +52,10 @@ describe('setup-org command', () => {
     await runSetupOrg({ name: 'Acme', roles: ['admin', 'viewer'] }, 'sk_test');
 
     expect(mockSdk.authorization.createOrganizationRole).toHaveBeenCalledTimes(2);
-    expect(mockSdk.authorization.createOrganizationRole).toHaveBeenCalledWith('org_123', { slug: 'admin', name: 'admin' });
+    expect(mockSdk.authorization.createOrganizationRole).toHaveBeenCalledWith('org_123', {
+      slug: 'admin',
+      name: 'admin',
+    });
   });
 
   it('generates portal link', async () => {

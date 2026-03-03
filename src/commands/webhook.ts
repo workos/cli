@@ -29,12 +29,7 @@ export async function runWebhookList(apiKey: string, baseUrl?: string): Promise<
       return;
     }
 
-    const rows = result.data.map((ep) => [
-      ep.id,
-      ep.url,
-      ep.events.join(', '),
-      ep.created_at,
-    ]);
+    const rows = result.data.map((ep) => [ep.id, ep.url, ep.events.join(', '), ep.created_at]);
 
     console.log(formatTable([{ header: 'ID' }, { header: 'URL' }, { header: 'Events' }, { header: 'Created' }], rows));
 
@@ -51,12 +46,7 @@ export async function runWebhookList(apiKey: string, baseUrl?: string): Promise<
   }
 }
 
-export async function runWebhookCreate(
-  url: string,
-  events: string[],
-  apiKey: string,
-  baseUrl?: string,
-): Promise<void> {
+export async function runWebhookCreate(url: string, events: string[], apiKey: string, baseUrl?: string): Promise<void> {
   const client = createWorkOSClient(apiKey, baseUrl);
 
   try {

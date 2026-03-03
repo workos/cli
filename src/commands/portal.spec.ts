@@ -53,7 +53,12 @@ describe('portal commands', () => {
     it('passes optional returnUrl and successUrl', async () => {
       mockSdk.portal.generateLink.mockResolvedValue({ link: 'https://portal.workos.com/abc' });
       await runPortalGenerateLink(
-        { intent: 'dsync', organization: 'org_123', returnUrl: 'https://app.com/return', successUrl: 'https://app.com/success' },
+        {
+          intent: 'dsync',
+          organization: 'org_123',
+          returnUrl: 'https://app.com/return',
+          successUrl: 'https://app.com/success',
+        },
         'sk_test',
       );
       expect(mockSdk.portal.generateLink).toHaveBeenCalledWith(

@@ -610,7 +610,11 @@ yargs(rawArgs)
         (yargs) =>
           yargs
             .positional('slug', { type: 'string', demandOption: true })
-            .option('permissions', { type: 'string', demandOption: true, describe: 'Comma-separated permission slugs' }),
+            .option('permissions', {
+              type: 'string',
+              demandOption: true,
+              describe: 'Comma-separated permission slugs',
+            }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
@@ -671,318 +675,808 @@ yargs(rawArgs)
   .command('permission', 'Manage WorkOS permissions', (yargs) =>
     yargs
       .options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } })
-      .command('list', 'List permissions', (yargs) => yargs.options({ limit: { type: 'number' }, before: { type: 'string' }, after: { type: 'string' }, order: { type: 'string' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runPermissionList } = await import('./commands/permission.js');
-        await runPermissionList({ limit: argv.limit, before: argv.before, after: argv.after, order: argv.order }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('get <slug>', 'Get a permission', (yargs) => yargs.positional('slug', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runPermissionGet } = await import('./commands/permission.js');
-        await runPermissionGet(argv.slug, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('create', 'Create a permission', (yargs) => yargs.options({ slug: { type: 'string', demandOption: true }, name: { type: 'string', demandOption: true }, description: { type: 'string' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runPermissionCreate } = await import('./commands/permission.js');
-        await runPermissionCreate({ slug: argv.slug, name: argv.name, description: argv.description }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('update <slug>', 'Update a permission', (yargs) => yargs.positional('slug', { type: 'string', demandOption: true }).options({ name: { type: 'string' }, description: { type: 'string' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runPermissionUpdate } = await import('./commands/permission.js');
-        await runPermissionUpdate(argv.slug, { name: argv.name, description: argv.description }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('delete <slug>', 'Delete a permission', (yargs) => yargs.positional('slug', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runPermissionDelete } = await import('./commands/permission.js');
-        await runPermissionDelete(argv.slug, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
+      .command(
+        'list',
+        'List permissions',
+        (yargs) =>
+          yargs.options({
+            limit: { type: 'number' },
+            before: { type: 'string' },
+            after: { type: 'string' },
+            order: { type: 'string' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runPermissionList } = await import('./commands/permission.js');
+          await runPermissionList(
+            { limit: argv.limit, before: argv.before, after: argv.after, order: argv.order },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'get <slug>',
+        'Get a permission',
+        (yargs) => yargs.positional('slug', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runPermissionGet } = await import('./commands/permission.js');
+          await runPermissionGet(argv.slug, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'create',
+        'Create a permission',
+        (yargs) =>
+          yargs.options({
+            slug: { type: 'string', demandOption: true },
+            name: { type: 'string', demandOption: true },
+            description: { type: 'string' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runPermissionCreate } = await import('./commands/permission.js');
+          await runPermissionCreate(
+            { slug: argv.slug, name: argv.name, description: argv.description },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'update <slug>',
+        'Update a permission',
+        (yargs) =>
+          yargs
+            .positional('slug', { type: 'string', demandOption: true })
+            .options({ name: { type: 'string' }, description: { type: 'string' } }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runPermissionUpdate } = await import('./commands/permission.js');
+          await runPermissionUpdate(
+            argv.slug,
+            { name: argv.name, description: argv.description },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'delete <slug>',
+        'Delete a permission',
+        (yargs) => yargs.positional('slug', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runPermissionDelete } = await import('./commands/permission.js');
+          await runPermissionDelete(argv.slug, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
       .demandCommand(1, 'Please specify a permission subcommand')
       .strict(),
   )
   .command('membership', 'Manage organization memberships', (yargs) =>
     yargs
       .options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } })
-      .command('list', 'List memberships', (yargs) => yargs.options({ org: { type: 'string' }, user: { type: 'string' }, limit: { type: 'number' }, before: { type: 'string' }, after: { type: 'string' }, order: { type: 'string' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runMembershipList } = await import('./commands/membership.js');
-        await runMembershipList({ org: argv.org, user: argv.user, limit: argv.limit, before: argv.before, after: argv.after, order: argv.order }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('get <id>', 'Get a membership', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runMembershipGet } = await import('./commands/membership.js');
-        await runMembershipGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('create', 'Create a membership', (yargs) => yargs.options({ org: { type: 'string', demandOption: true }, user: { type: 'string', demandOption: true }, role: { type: 'string' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runMembershipCreate } = await import('./commands/membership.js');
-        await runMembershipCreate({ org: argv.org, user: argv.user, role: argv.role }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('update <id>', 'Update a membership', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }).option('role', { type: 'string' }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runMembershipUpdate } = await import('./commands/membership.js');
-        await runMembershipUpdate(argv.id, argv.role, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('delete <id>', 'Delete a membership', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runMembershipDelete } = await import('./commands/membership.js');
-        await runMembershipDelete(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('deactivate <id>', 'Deactivate a membership', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runMembershipDeactivate } = await import('./commands/membership.js');
-        await runMembershipDeactivate(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('reactivate <id>', 'Reactivate a membership', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runMembershipReactivate } = await import('./commands/membership.js');
-        await runMembershipReactivate(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
+      .command(
+        'list',
+        'List memberships',
+        (yargs) =>
+          yargs.options({
+            org: { type: 'string' },
+            user: { type: 'string' },
+            limit: { type: 'number' },
+            before: { type: 'string' },
+            after: { type: 'string' },
+            order: { type: 'string' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runMembershipList } = await import('./commands/membership.js');
+          await runMembershipList(
+            {
+              org: argv.org,
+              user: argv.user,
+              limit: argv.limit,
+              before: argv.before,
+              after: argv.after,
+              order: argv.order,
+            },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'get <id>',
+        'Get a membership',
+        (yargs) => yargs.positional('id', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runMembershipGet } = await import('./commands/membership.js');
+          await runMembershipGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'create',
+        'Create a membership',
+        (yargs) =>
+          yargs.options({
+            org: { type: 'string', demandOption: true },
+            user: { type: 'string', demandOption: true },
+            role: { type: 'string' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runMembershipCreate } = await import('./commands/membership.js');
+          await runMembershipCreate(
+            { org: argv.org, user: argv.user, role: argv.role },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'update <id>',
+        'Update a membership',
+        (yargs) => yargs.positional('id', { type: 'string', demandOption: true }).option('role', { type: 'string' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runMembershipUpdate } = await import('./commands/membership.js');
+          await runMembershipUpdate(argv.id, argv.role, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'delete <id>',
+        'Delete a membership',
+        (yargs) => yargs.positional('id', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runMembershipDelete } = await import('./commands/membership.js');
+          await runMembershipDelete(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'deactivate <id>',
+        'Deactivate a membership',
+        (yargs) => yargs.positional('id', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runMembershipDeactivate } = await import('./commands/membership.js');
+          await runMembershipDeactivate(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'reactivate <id>',
+        'Reactivate a membership',
+        (yargs) => yargs.positional('id', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runMembershipReactivate } = await import('./commands/membership.js');
+          await runMembershipReactivate(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
       .demandCommand(1, 'Please specify a membership subcommand')
       .strict(),
   )
   .command('invitation', 'Manage user invitations', (yargs) =>
     yargs
       .options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } })
-      .command('list', 'List invitations', (yargs) => yargs.options({ org: { type: 'string' }, email: { type: 'string' }, limit: { type: 'number' }, before: { type: 'string' }, after: { type: 'string' }, order: { type: 'string' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runInvitationList } = await import('./commands/invitation.js');
-        await runInvitationList({ org: argv.org, email: argv.email, limit: argv.limit, before: argv.before, after: argv.after, order: argv.order }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('get <id>', 'Get an invitation', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runInvitationGet } = await import('./commands/invitation.js');
-        await runInvitationGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('send', 'Send an invitation', (yargs) => yargs.options({ email: { type: 'string', demandOption: true }, org: { type: 'string' }, role: { type: 'string' }, 'expires-in-days': { type: 'number' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runInvitationSend } = await import('./commands/invitation.js');
-        await runInvitationSend({ email: argv.email, org: argv.org, role: argv.role, expiresInDays: argv.expiresInDays }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('revoke <id>', 'Revoke an invitation', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runInvitationRevoke } = await import('./commands/invitation.js');
-        await runInvitationRevoke(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('resend <id>', 'Resend an invitation', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runInvitationResend } = await import('./commands/invitation.js');
-        await runInvitationResend(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
+      .command(
+        'list',
+        'List invitations',
+        (yargs) =>
+          yargs.options({
+            org: { type: 'string' },
+            email: { type: 'string' },
+            limit: { type: 'number' },
+            before: { type: 'string' },
+            after: { type: 'string' },
+            order: { type: 'string' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runInvitationList } = await import('./commands/invitation.js');
+          await runInvitationList(
+            {
+              org: argv.org,
+              email: argv.email,
+              limit: argv.limit,
+              before: argv.before,
+              after: argv.after,
+              order: argv.order,
+            },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'get <id>',
+        'Get an invitation',
+        (yargs) => yargs.positional('id', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runInvitationGet } = await import('./commands/invitation.js');
+          await runInvitationGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'send',
+        'Send an invitation',
+        (yargs) =>
+          yargs.options({
+            email: { type: 'string', demandOption: true },
+            org: { type: 'string' },
+            role: { type: 'string' },
+            'expires-in-days': { type: 'number' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runInvitationSend } = await import('./commands/invitation.js');
+          await runInvitationSend(
+            { email: argv.email, org: argv.org, role: argv.role, expiresInDays: argv.expiresInDays },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'revoke <id>',
+        'Revoke an invitation',
+        (yargs) => yargs.positional('id', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runInvitationRevoke } = await import('./commands/invitation.js');
+          await runInvitationRevoke(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'resend <id>',
+        'Resend an invitation',
+        (yargs) => yargs.positional('id', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runInvitationResend } = await import('./commands/invitation.js');
+          await runInvitationResend(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
       .demandCommand(1, 'Please specify an invitation subcommand')
       .strict(),
   )
   .command('session', 'Manage user sessions', (yargs) =>
     yargs
       .options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } })
-      .command('list <userId>', 'List sessions for a user', (yargs) => yargs.positional('userId', { type: 'string', demandOption: true }).options({ limit: { type: 'number' }, before: { type: 'string' }, after: { type: 'string' }, order: { type: 'string' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runSessionList } = await import('./commands/session.js');
-        await runSessionList(argv.userId, { limit: argv.limit, before: argv.before, after: argv.after, order: argv.order }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('revoke <sessionId>', 'Revoke a session', (yargs) => yargs.positional('sessionId', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runSessionRevoke } = await import('./commands/session.js');
-        await runSessionRevoke(argv.sessionId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
+      .command(
+        'list <userId>',
+        'List sessions for a user',
+        (yargs) =>
+          yargs
+            .positional('userId', { type: 'string', demandOption: true })
+            .options({
+              limit: { type: 'number' },
+              before: { type: 'string' },
+              after: { type: 'string' },
+              order: { type: 'string' },
+            }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runSessionList } = await import('./commands/session.js');
+          await runSessionList(
+            argv.userId,
+            { limit: argv.limit, before: argv.before, after: argv.after, order: argv.order },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'revoke <sessionId>',
+        'Revoke a session',
+        (yargs) => yargs.positional('sessionId', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runSessionRevoke } = await import('./commands/session.js');
+          await runSessionRevoke(argv.sessionId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
       .demandCommand(1, 'Please specify a session subcommand')
       .strict(),
   )
   .command('connection', 'Manage SSO connections (read/delete)', (yargs) =>
     yargs
       .options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } })
-      .command('list', 'List connections', (yargs) => yargs.options({ org: { type: 'string', describe: 'Filter by org ID' }, type: { type: 'string', describe: 'Filter by connection type' }, limit: { type: 'number' }, before: { type: 'string' }, after: { type: 'string' }, order: { type: 'string' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runConnectionList } = await import('./commands/connection.js');
-        await runConnectionList({ organizationId: argv.org, connectionType: argv.type, limit: argv.limit, before: argv.before, after: argv.after, order: argv.order }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('get <id>', 'Get a connection', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runConnectionGet } = await import('./commands/connection.js');
-        await runConnectionGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('delete <id>', 'Delete a connection', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }).option('force', { type: 'boolean', default: false }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runConnectionDelete } = await import('./commands/connection.js');
-        await runConnectionDelete(argv.id, { force: argv.force }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
+      .command(
+        'list',
+        'List connections',
+        (yargs) =>
+          yargs.options({
+            org: { type: 'string', describe: 'Filter by org ID' },
+            type: { type: 'string', describe: 'Filter by connection type' },
+            limit: { type: 'number' },
+            before: { type: 'string' },
+            after: { type: 'string' },
+            order: { type: 'string' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runConnectionList } = await import('./commands/connection.js');
+          await runConnectionList(
+            {
+              organizationId: argv.org,
+              connectionType: argv.type,
+              limit: argv.limit,
+              before: argv.before,
+              after: argv.after,
+              order: argv.order,
+            },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'get <id>',
+        'Get a connection',
+        (yargs) => yargs.positional('id', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runConnectionGet } = await import('./commands/connection.js');
+          await runConnectionGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'delete <id>',
+        'Delete a connection',
+        (yargs) =>
+          yargs
+            .positional('id', { type: 'string', demandOption: true })
+            .option('force', { type: 'boolean', default: false }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runConnectionDelete } = await import('./commands/connection.js');
+          await runConnectionDelete(
+            argv.id,
+            { force: argv.force },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
       .demandCommand(1, 'Please specify a connection subcommand')
       .strict(),
   )
   .command('directory', 'Manage directory sync (read/delete, list users/groups)', (yargs) =>
     yargs
       .options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } })
-      .command('list', 'List directories', (yargs) => yargs.options({ org: { type: 'string' }, limit: { type: 'number' }, before: { type: 'string' }, after: { type: 'string' }, order: { type: 'string' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runDirectoryList } = await import('./commands/directory.js');
-        await runDirectoryList({ organizationId: argv.org, limit: argv.limit, before: argv.before, after: argv.after, order: argv.order }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('get <id>', 'Get a directory', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runDirectoryGet } = await import('./commands/directory.js');
-        await runDirectoryGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('delete <id>', 'Delete a directory', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }).option('force', { type: 'boolean', default: false }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runDirectoryDelete } = await import('./commands/directory.js');
-        await runDirectoryDelete(argv.id, { force: argv.force }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('list-users', 'List directory users', (yargs) => yargs.options({ directory: { type: 'string' }, group: { type: 'string' }, limit: { type: 'number' }, before: { type: 'string' }, after: { type: 'string' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runDirectoryListUsers } = await import('./commands/directory.js');
-        await runDirectoryListUsers({ directory: argv.directory, group: argv.group, limit: argv.limit, before: argv.before, after: argv.after }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('list-groups', 'List directory groups', (yargs) => yargs.options({ directory: { type: 'string', demandOption: true }, limit: { type: 'number' }, before: { type: 'string' }, after: { type: 'string' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runDirectoryListGroups } = await import('./commands/directory.js');
-        await runDirectoryListGroups({ directory: argv.directory, limit: argv.limit, before: argv.before, after: argv.after }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
+      .command(
+        'list',
+        'List directories',
+        (yargs) =>
+          yargs.options({
+            org: { type: 'string' },
+            limit: { type: 'number' },
+            before: { type: 'string' },
+            after: { type: 'string' },
+            order: { type: 'string' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runDirectoryList } = await import('./commands/directory.js');
+          await runDirectoryList(
+            { organizationId: argv.org, limit: argv.limit, before: argv.before, after: argv.after, order: argv.order },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'get <id>',
+        'Get a directory',
+        (yargs) => yargs.positional('id', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runDirectoryGet } = await import('./commands/directory.js');
+          await runDirectoryGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'delete <id>',
+        'Delete a directory',
+        (yargs) =>
+          yargs
+            .positional('id', { type: 'string', demandOption: true })
+            .option('force', { type: 'boolean', default: false }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runDirectoryDelete } = await import('./commands/directory.js');
+          await runDirectoryDelete(
+            argv.id,
+            { force: argv.force },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'list-users',
+        'List directory users',
+        (yargs) =>
+          yargs.options({
+            directory: { type: 'string' },
+            group: { type: 'string' },
+            limit: { type: 'number' },
+            before: { type: 'string' },
+            after: { type: 'string' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runDirectoryListUsers } = await import('./commands/directory.js');
+          await runDirectoryListUsers(
+            { directory: argv.directory, group: argv.group, limit: argv.limit, before: argv.before, after: argv.after },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'list-groups',
+        'List directory groups',
+        (yargs) =>
+          yargs.options({
+            directory: { type: 'string', demandOption: true },
+            limit: { type: 'number' },
+            before: { type: 'string' },
+            after: { type: 'string' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runDirectoryListGroups } = await import('./commands/directory.js');
+          await runDirectoryListGroups(
+            { directory: argv.directory, limit: argv.limit, before: argv.before, after: argv.after },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
       .demandCommand(1, 'Please specify a directory subcommand')
       .strict(),
   )
   .command('event', 'Query WorkOS events', (yargs) =>
     yargs
       .options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } })
-      .command('list', 'List events', (yargs) => yargs.options({ events: { type: 'string', demandOption: true, describe: 'Comma-separated event types' }, after: { type: 'string' }, org: { type: 'string' }, 'range-start': { type: 'string' }, 'range-end': { type: 'string' }, limit: { type: 'number' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runEventList } = await import('./commands/event.js');
-        await runEventList({ events: argv.events.split(','), after: argv.after, organizationId: argv.org, rangeStart: argv.rangeStart, rangeEnd: argv.rangeEnd, limit: argv.limit }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
+      .command(
+        'list',
+        'List events',
+        (yargs) =>
+          yargs.options({
+            events: { type: 'string', demandOption: true, describe: 'Comma-separated event types' },
+            after: { type: 'string' },
+            org: { type: 'string' },
+            'range-start': { type: 'string' },
+            'range-end': { type: 'string' },
+            limit: { type: 'number' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runEventList } = await import('./commands/event.js');
+          await runEventList(
+            {
+              events: argv.events.split(','),
+              after: argv.after,
+              organizationId: argv.org,
+              rangeStart: argv.rangeStart,
+              rangeEnd: argv.rangeEnd,
+              limit: argv.limit,
+            },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
       .demandCommand(1, 'Please specify an event subcommand')
       .strict(),
   )
   .command('audit-log', 'Manage audit logs', (yargs) =>
     yargs
       .options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } })
-      .command('create-event <orgId>', 'Create an audit log event', (yargs) => yargs.positional('orgId', { type: 'string', demandOption: true }).options({ action: { type: 'string' }, 'actor-type': { type: 'string' }, 'actor-id': { type: 'string' }, 'actor-name': { type: 'string' }, targets: { type: 'string' }, context: { type: 'string' }, metadata: { type: 'string' }, 'occurred-at': { type: 'string' }, file: { type: 'string' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runAuditLogCreateEvent } = await import('./commands/audit-log.js');
-        await runAuditLogCreateEvent(argv.orgId, { action: argv.action, actorType: argv.actorType, actorId: argv.actorId, actorName: argv.actorName, targets: argv.targets, context: argv.context, metadata: argv.metadata, occurredAt: argv.occurredAt, file: argv.file }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('export', 'Export audit logs', (yargs) => yargs.options({ org: { type: 'string', demandOption: true }, 'range-start': { type: 'string', demandOption: true }, 'range-end': { type: 'string', demandOption: true }, actions: { type: 'string' }, 'actor-names': { type: 'string' }, 'actor-ids': { type: 'string' }, targets: { type: 'string' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runAuditLogExport } = await import('./commands/audit-log.js');
-        await runAuditLogExport({ organizationId: argv.org, rangeStart: argv.rangeStart, rangeEnd: argv.rangeEnd, actions: argv.actions?.split(','), actorNames: argv.actorNames?.split(','), actorIds: argv.actorIds?.split(','), targets: argv.targets?.split(',') }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('list-actions', 'List available audit log actions', (yargs) => yargs, async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runAuditLogListActions } = await import('./commands/audit-log.js');
-        await runAuditLogListActions(resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('get-schema <action>', 'Get schema for an audit log action', (yargs) => yargs.positional('action', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runAuditLogGetSchema } = await import('./commands/audit-log.js');
-        await runAuditLogGetSchema(argv.action, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('create-schema <action>', 'Create an audit log schema', (yargs) => yargs.positional('action', { type: 'string', demandOption: true }).option('file', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runAuditLogCreateSchema } = await import('./commands/audit-log.js');
-        await runAuditLogCreateSchema(argv.action, argv.file, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('get-retention <orgId>', 'Get audit log retention period', (yargs) => yargs.positional('orgId', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runAuditLogGetRetention } = await import('./commands/audit-log.js');
-        await runAuditLogGetRetention(argv.orgId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
+      .command(
+        'create-event <orgId>',
+        'Create an audit log event',
+        (yargs) =>
+          yargs
+            .positional('orgId', { type: 'string', demandOption: true })
+            .options({
+              action: { type: 'string' },
+              'actor-type': { type: 'string' },
+              'actor-id': { type: 'string' },
+              'actor-name': { type: 'string' },
+              targets: { type: 'string' },
+              context: { type: 'string' },
+              metadata: { type: 'string' },
+              'occurred-at': { type: 'string' },
+              file: { type: 'string' },
+            }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runAuditLogCreateEvent } = await import('./commands/audit-log.js');
+          await runAuditLogCreateEvent(
+            argv.orgId,
+            {
+              action: argv.action,
+              actorType: argv.actorType,
+              actorId: argv.actorId,
+              actorName: argv.actorName,
+              targets: argv.targets,
+              context: argv.context,
+              metadata: argv.metadata,
+              occurredAt: argv.occurredAt,
+              file: argv.file,
+            },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'export',
+        'Export audit logs',
+        (yargs) =>
+          yargs.options({
+            org: { type: 'string', demandOption: true },
+            'range-start': { type: 'string', demandOption: true },
+            'range-end': { type: 'string', demandOption: true },
+            actions: { type: 'string' },
+            'actor-names': { type: 'string' },
+            'actor-ids': { type: 'string' },
+            targets: { type: 'string' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runAuditLogExport } = await import('./commands/audit-log.js');
+          await runAuditLogExport(
+            {
+              organizationId: argv.org,
+              rangeStart: argv.rangeStart,
+              rangeEnd: argv.rangeEnd,
+              actions: argv.actions?.split(','),
+              actorNames: argv.actorNames?.split(','),
+              actorIds: argv.actorIds?.split(','),
+              targets: argv.targets?.split(','),
+            },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'list-actions',
+        'List available audit log actions',
+        (yargs) => yargs,
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runAuditLogListActions } = await import('./commands/audit-log.js');
+          await runAuditLogListActions(resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'get-schema <action>',
+        'Get schema for an audit log action',
+        (yargs) => yargs.positional('action', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runAuditLogGetSchema } = await import('./commands/audit-log.js');
+          await runAuditLogGetSchema(argv.action, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'create-schema <action>',
+        'Create an audit log schema',
+        (yargs) =>
+          yargs
+            .positional('action', { type: 'string', demandOption: true })
+            .option('file', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runAuditLogCreateSchema } = await import('./commands/audit-log.js');
+          await runAuditLogCreateSchema(
+            argv.action,
+            argv.file,
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'get-retention <orgId>',
+        'Get audit log retention period',
+        (yargs) => yargs.positional('orgId', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runAuditLogGetRetention } = await import('./commands/audit-log.js');
+          await runAuditLogGetRetention(argv.orgId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
       .demandCommand(1, 'Please specify an audit-log subcommand')
       .strict(),
   )
   .command('feature-flag', 'Manage feature flags', (yargs) =>
     yargs
       .options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } })
-      .command('list', 'List feature flags', (yargs) => yargs.options({ limit: { type: 'number' }, before: { type: 'string' }, after: { type: 'string' }, order: { type: 'string' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runFeatureFlagList } = await import('./commands/feature-flag.js');
-        await runFeatureFlagList({ limit: argv.limit, before: argv.before, after: argv.after, order: argv.order }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('get <slug>', 'Get a feature flag', (yargs) => yargs.positional('slug', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runFeatureFlagGet } = await import('./commands/feature-flag.js');
-        await runFeatureFlagGet(argv.slug, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('enable <slug>', 'Enable a feature flag', (yargs) => yargs.positional('slug', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runFeatureFlagEnable } = await import('./commands/feature-flag.js');
-        await runFeatureFlagEnable(argv.slug, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('disable <slug>', 'Disable a feature flag', (yargs) => yargs.positional('slug', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runFeatureFlagDisable } = await import('./commands/feature-flag.js');
-        await runFeatureFlagDisable(argv.slug, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('add-target <slug> <targetId>', 'Add a target to a feature flag', (yargs) => yargs.positional('slug', { type: 'string', demandOption: true }).positional('targetId', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runFeatureFlagAddTarget } = await import('./commands/feature-flag.js');
-        await runFeatureFlagAddTarget(argv.slug, argv.targetId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('remove-target <slug> <targetId>', 'Remove a target from a feature flag', (yargs) => yargs.positional('slug', { type: 'string', demandOption: true }).positional('targetId', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runFeatureFlagRemoveTarget } = await import('./commands/feature-flag.js');
-        await runFeatureFlagRemoveTarget(argv.slug, argv.targetId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
+      .command(
+        'list',
+        'List feature flags',
+        (yargs) =>
+          yargs.options({
+            limit: { type: 'number' },
+            before: { type: 'string' },
+            after: { type: 'string' },
+            order: { type: 'string' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runFeatureFlagList } = await import('./commands/feature-flag.js');
+          await runFeatureFlagList(
+            { limit: argv.limit, before: argv.before, after: argv.after, order: argv.order },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'get <slug>',
+        'Get a feature flag',
+        (yargs) => yargs.positional('slug', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runFeatureFlagGet } = await import('./commands/feature-flag.js');
+          await runFeatureFlagGet(argv.slug, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'enable <slug>',
+        'Enable a feature flag',
+        (yargs) => yargs.positional('slug', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runFeatureFlagEnable } = await import('./commands/feature-flag.js');
+          await runFeatureFlagEnable(argv.slug, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'disable <slug>',
+        'Disable a feature flag',
+        (yargs) => yargs.positional('slug', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runFeatureFlagDisable } = await import('./commands/feature-flag.js');
+          await runFeatureFlagDisable(argv.slug, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'add-target <slug> <targetId>',
+        'Add a target to a feature flag',
+        (yargs) =>
+          yargs
+            .positional('slug', { type: 'string', demandOption: true })
+            .positional('targetId', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runFeatureFlagAddTarget } = await import('./commands/feature-flag.js');
+          await runFeatureFlagAddTarget(
+            argv.slug,
+            argv.targetId,
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'remove-target <slug> <targetId>',
+        'Remove a target from a feature flag',
+        (yargs) =>
+          yargs
+            .positional('slug', { type: 'string', demandOption: true })
+            .positional('targetId', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runFeatureFlagRemoveTarget } = await import('./commands/feature-flag.js');
+          await runFeatureFlagRemoveTarget(
+            argv.slug,
+            argv.targetId,
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
       .demandCommand(1, 'Please specify a feature-flag subcommand')
       .strict(),
   )
   .command('webhook', 'Manage webhooks', (yargs) =>
     yargs
       .options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } })
-      .command('list', 'List webhooks', (yargs) => yargs, async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runWebhookList } = await import('./commands/webhook.js');
-        await runWebhookList(resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('create', 'Create a webhook', (yargs) => yargs.options({ url: { type: 'string', demandOption: true }, events: { type: 'string', demandOption: true, describe: 'Comma-separated event types' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runWebhookCreate } = await import('./commands/webhook.js');
-        await runWebhookCreate(argv.url, argv.events.split(','), resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('delete <id>', 'Delete a webhook', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runWebhookDelete } = await import('./commands/webhook.js');
-        await runWebhookDelete(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
+      .command(
+        'list',
+        'List webhooks',
+        (yargs) => yargs,
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runWebhookList } = await import('./commands/webhook.js');
+          await runWebhookList(resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'create',
+        'Create a webhook',
+        (yargs) =>
+          yargs.options({
+            url: { type: 'string', demandOption: true },
+            events: { type: 'string', demandOption: true, describe: 'Comma-separated event types' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runWebhookCreate } = await import('./commands/webhook.js');
+          await runWebhookCreate(
+            argv.url,
+            argv.events.split(','),
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'delete <id>',
+        'Delete a webhook',
+        (yargs) => yargs.positional('id', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runWebhookDelete } = await import('./commands/webhook.js');
+          await runWebhookDelete(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
       .demandCommand(1, 'Please specify a webhook subcommand')
       .strict(),
   )
@@ -991,34 +1485,49 @@ yargs(rawArgs)
       .options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } })
       .command('redirect', 'Manage redirect URIs', (yargs) =>
         yargs
-          .command('add <uri>', 'Add a redirect URI', (yargs) => yargs.positional('uri', { type: 'string', demandOption: true }), async (argv) => {
-            await applyInsecureStorage(argv.insecureStorage);
-            const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-            const { runConfigRedirectAdd } = await import('./commands/config.js');
-            await runConfigRedirectAdd(argv.uri, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-          })
+          .command(
+            'add <uri>',
+            'Add a redirect URI',
+            (yargs) => yargs.positional('uri', { type: 'string', demandOption: true }),
+            async (argv) => {
+              await applyInsecureStorage(argv.insecureStorage);
+              const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+              const { runConfigRedirectAdd } = await import('./commands/config.js');
+              await runConfigRedirectAdd(argv.uri, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+            },
+          )
           .demandCommand(1)
           .strict(),
       )
       .command('cors', 'Manage CORS origins', (yargs) =>
         yargs
-          .command('add <origin>', 'Add a CORS origin', (yargs) => yargs.positional('origin', { type: 'string', demandOption: true }), async (argv) => {
-            await applyInsecureStorage(argv.insecureStorage);
-            const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-            const { runConfigCorsAdd } = await import('./commands/config.js');
-            await runConfigCorsAdd(argv.origin, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-          })
+          .command(
+            'add <origin>',
+            'Add a CORS origin',
+            (yargs) => yargs.positional('origin', { type: 'string', demandOption: true }),
+            async (argv) => {
+              await applyInsecureStorage(argv.insecureStorage);
+              const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+              const { runConfigCorsAdd } = await import('./commands/config.js');
+              await runConfigCorsAdd(argv.origin, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+            },
+          )
           .demandCommand(1)
           .strict(),
       )
       .command('homepage-url', 'Manage homepage URL', (yargs) =>
         yargs
-          .command('set <url>', 'Set the homepage URL', (yargs) => yargs.positional('url', { type: 'string', demandOption: true }), async (argv) => {
-            await applyInsecureStorage(argv.insecureStorage);
-            const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-            const { runConfigHomepageUrlSet } = await import('./commands/config.js');
-            await runConfigHomepageUrlSet(argv.url, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-          })
+          .command(
+            'set <url>',
+            'Set the homepage URL',
+            (yargs) => yargs.positional('url', { type: 'string', demandOption: true }),
+            async (argv) => {
+              await applyInsecureStorage(argv.insecureStorage);
+              const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+              const { runConfigHomepageUrlSet } = await import('./commands/config.js');
+              await runConfigHomepageUrlSet(argv.url, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+            },
+          )
           .demandCommand(1)
           .strict(),
       )
@@ -1028,126 +1537,274 @@ yargs(rawArgs)
   .command('portal', 'Manage Admin Portal', (yargs) =>
     yargs
       .options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } })
-      .command('generate-link', 'Generate an Admin Portal link', (yargs) => yargs.options({ intent: { type: 'string', demandOption: true, describe: 'Portal intent (sso, dsync, audit_logs, log_streams)' }, org: { type: 'string', demandOption: true, describe: 'Organization ID' }, 'return-url': { type: 'string' }, 'success-url': { type: 'string' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runPortalGenerateLink } = await import('./commands/portal.js');
-        await runPortalGenerateLink({ intent: argv.intent, organization: argv.org, returnUrl: argv.returnUrl, successUrl: argv.successUrl }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
+      .command(
+        'generate-link',
+        'Generate an Admin Portal link',
+        (yargs) =>
+          yargs.options({
+            intent: {
+              type: 'string',
+              demandOption: true,
+              describe: 'Portal intent (sso, dsync, audit_logs, log_streams)',
+            },
+            org: { type: 'string', demandOption: true, describe: 'Organization ID' },
+            'return-url': { type: 'string' },
+            'success-url': { type: 'string' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runPortalGenerateLink } = await import('./commands/portal.js');
+          await runPortalGenerateLink(
+            { intent: argv.intent, organization: argv.org, returnUrl: argv.returnUrl, successUrl: argv.successUrl },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
       .demandCommand(1, 'Please specify a portal subcommand')
       .strict(),
   )
   .command('vault', 'Manage WorkOS Vault secrets', (yargs) =>
     yargs
       .options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } })
-      .command('list', 'List vault objects', (yargs) => yargs.options({ limit: { type: 'number' }, before: { type: 'string' }, after: { type: 'string' }, order: { type: 'string' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runVaultList } = await import('./commands/vault.js');
-        await runVaultList({ limit: argv.limit, before: argv.before, after: argv.after, order: argv.order }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('get <id>', 'Get a vault object', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runVaultGet } = await import('./commands/vault.js');
-        await runVaultGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('get-by-name <name>', 'Get a vault object by name', (yargs) => yargs.positional('name', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runVaultGetByName } = await import('./commands/vault.js');
-        await runVaultGetByName(argv.name, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('create', 'Create a vault object', (yargs) => yargs.options({ name: { type: 'string', demandOption: true }, value: { type: 'string', demandOption: true }, org: { type: 'string' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runVaultCreate } = await import('./commands/vault.js');
-        await runVaultCreate({ name: argv.name, value: argv.value, org: argv.org }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('update <id>', 'Update a vault object', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }).options({ value: { type: 'string', demandOption: true }, 'version-check': { type: 'string' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runVaultUpdate } = await import('./commands/vault.js');
-        await runVaultUpdate({ id: argv.id, value: argv.value, versionCheck: argv.versionCheck }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('delete <id>', 'Delete a vault object', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runVaultDelete } = await import('./commands/vault.js');
-        await runVaultDelete(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('describe <id>', 'Describe a vault object', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runVaultDescribe } = await import('./commands/vault.js');
-        await runVaultDescribe(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('list-versions <id>', 'List vault object versions', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runVaultListVersions } = await import('./commands/vault.js');
-        await runVaultListVersions(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
+      .command(
+        'list',
+        'List vault objects',
+        (yargs) =>
+          yargs.options({
+            limit: { type: 'number' },
+            before: { type: 'string' },
+            after: { type: 'string' },
+            order: { type: 'string' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runVaultList } = await import('./commands/vault.js');
+          await runVaultList(
+            { limit: argv.limit, before: argv.before, after: argv.after, order: argv.order },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'get <id>',
+        'Get a vault object',
+        (yargs) => yargs.positional('id', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runVaultGet } = await import('./commands/vault.js');
+          await runVaultGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'get-by-name <name>',
+        'Get a vault object by name',
+        (yargs) => yargs.positional('name', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runVaultGetByName } = await import('./commands/vault.js');
+          await runVaultGetByName(argv.name, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'create',
+        'Create a vault object',
+        (yargs) =>
+          yargs.options({
+            name: { type: 'string', demandOption: true },
+            value: { type: 'string', demandOption: true },
+            org: { type: 'string' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runVaultCreate } = await import('./commands/vault.js');
+          await runVaultCreate(
+            { name: argv.name, value: argv.value, org: argv.org },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'update <id>',
+        'Update a vault object',
+        (yargs) =>
+          yargs
+            .positional('id', { type: 'string', demandOption: true })
+            .options({ value: { type: 'string', demandOption: true }, 'version-check': { type: 'string' } }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runVaultUpdate } = await import('./commands/vault.js');
+          await runVaultUpdate(
+            { id: argv.id, value: argv.value, versionCheck: argv.versionCheck },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'delete <id>',
+        'Delete a vault object',
+        (yargs) => yargs.positional('id', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runVaultDelete } = await import('./commands/vault.js');
+          await runVaultDelete(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'describe <id>',
+        'Describe a vault object',
+        (yargs) => yargs.positional('id', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runVaultDescribe } = await import('./commands/vault.js');
+          await runVaultDescribe(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'list-versions <id>',
+        'List vault object versions',
+        (yargs) => yargs.positional('id', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runVaultListVersions } = await import('./commands/vault.js');
+          await runVaultListVersions(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
       .demandCommand(1, 'Please specify a vault subcommand')
       .strict(),
   )
   .command('api-key', 'Manage API keys', (yargs) =>
     yargs
       .options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } })
-      .command('list', 'List API keys', (yargs) => yargs.options({ org: { type: 'string', demandOption: true }, limit: { type: 'number' }, before: { type: 'string' }, after: { type: 'string' }, order: { type: 'string' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runApiKeyList } = await import('./commands/api-key-mgmt.js');
-        await runApiKeyList({ organizationId: argv.org, limit: argv.limit, before: argv.before, after: argv.after, order: argv.order }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('create', 'Create an API key', (yargs) => yargs.options({ org: { type: 'string', demandOption: true }, name: { type: 'string', demandOption: true }, permissions: { type: 'string', describe: 'Comma-separated permissions' } }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runApiKeyCreate } = await import('./commands/api-key-mgmt.js');
-        await runApiKeyCreate({ organizationId: argv.org, name: argv.name, permissions: argv.permissions?.split(',') }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('validate <value>', 'Validate an API key', (yargs) => yargs.positional('value', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runApiKeyValidate } = await import('./commands/api-key-mgmt.js');
-        await runApiKeyValidate(argv.value, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('delete <id>', 'Delete an API key', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runApiKeyDelete } = await import('./commands/api-key-mgmt.js');
-        await runApiKeyDelete(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
+      .command(
+        'list',
+        'List API keys',
+        (yargs) =>
+          yargs.options({
+            org: { type: 'string', demandOption: true },
+            limit: { type: 'number' },
+            before: { type: 'string' },
+            after: { type: 'string' },
+            order: { type: 'string' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runApiKeyList } = await import('./commands/api-key-mgmt.js');
+          await runApiKeyList(
+            { organizationId: argv.org, limit: argv.limit, before: argv.before, after: argv.after, order: argv.order },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'create',
+        'Create an API key',
+        (yargs) =>
+          yargs.options({
+            org: { type: 'string', demandOption: true },
+            name: { type: 'string', demandOption: true },
+            permissions: { type: 'string', describe: 'Comma-separated permissions' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runApiKeyCreate } = await import('./commands/api-key-mgmt.js');
+          await runApiKeyCreate(
+            { organizationId: argv.org, name: argv.name, permissions: argv.permissions?.split(',') },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      )
+      .command(
+        'validate <value>',
+        'Validate an API key',
+        (yargs) => yargs.positional('value', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runApiKeyValidate } = await import('./commands/api-key-mgmt.js');
+          await runApiKeyValidate(argv.value, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'delete <id>',
+        'Delete an API key',
+        (yargs) => yargs.positional('id', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runApiKeyDelete } = await import('./commands/api-key-mgmt.js');
+          await runApiKeyDelete(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
       .demandCommand(1, 'Please specify an api-key subcommand')
       .strict(),
   )
   .command('org-domain', 'Manage organization domains', (yargs) =>
     yargs
       .options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } })
-      .command('get <id>', 'Get a domain', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runOrgDomainGet } = await import('./commands/org-domain.js');
-        await runOrgDomainGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('create <domain>', 'Create a domain', (yargs) => yargs.positional('domain', { type: 'string', demandOption: true }).option('org', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runOrgDomainCreate } = await import('./commands/org-domain.js');
-        await runOrgDomainCreate(argv.domain, argv.org, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('verify <id>', 'Verify a domain', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runOrgDomainVerify } = await import('./commands/org-domain.js');
-        await runOrgDomainVerify(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
-      .command('delete <id>', 'Delete a domain', (yargs) => yargs.positional('id', { type: 'string', demandOption: true }), async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
-        const { runOrgDomainDelete } = await import('./commands/org-domain.js');
-        await runOrgDomainDelete(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-      })
+      .command(
+        'get <id>',
+        'Get a domain',
+        (yargs) => yargs.positional('id', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runOrgDomainGet } = await import('./commands/org-domain.js');
+          await runOrgDomainGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'create <domain>',
+        'Create a domain',
+        (yargs) =>
+          yargs
+            .positional('domain', { type: 'string', demandOption: true })
+            .option('org', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runOrgDomainCreate } = await import('./commands/org-domain.js');
+          await runOrgDomainCreate(argv.domain, argv.org, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'verify <id>',
+        'Verify a domain',
+        (yargs) => yargs.positional('id', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runOrgDomainVerify } = await import('./commands/org-domain.js');
+          await runOrgDomainVerify(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
+      .command(
+        'delete <id>',
+        'Delete a domain',
+        (yargs) => yargs.positional('id', { type: 'string', demandOption: true }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runOrgDomainDelete } = await import('./commands/org-domain.js');
+          await runOrgDomainDelete(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      )
       .demandCommand(1, 'Please specify an org-domain subcommand')
       .strict(),
   )
@@ -1166,21 +1823,23 @@ yargs(rawArgs)
       await applyInsecureStorage(argv.insecureStorage);
       const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
       const { runSeed } = await import('./commands/seed.js');
-      await runSeed({ file: argv.file, clean: argv.clean }, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+      await runSeed(
+        { file: argv.file, clean: argv.clean },
+        resolveApiKey({ apiKey: argv.apiKey }),
+        resolveApiBaseUrl(),
+      );
     },
   )
   .command(
     'setup-org <name>',
     'One-shot organization onboarding (create org, domain, roles, portal link)',
     (yargs) =>
-      yargs
-        .positional('name', { type: 'string', demandOption: true, describe: 'Organization name' })
-        .options({
-          ...insecureStorageOption,
-          'api-key': { type: 'string' as const, describe: 'WorkOS API key' },
-          domain: { type: 'string', describe: 'Domain to add and verify' },
-          roles: { type: 'string', describe: 'Comma-separated role slugs to create' },
-        }),
+      yargs.positional('name', { type: 'string', demandOption: true, describe: 'Organization name' }).options({
+        ...insecureStorageOption,
+        'api-key': { type: 'string' as const, describe: 'WorkOS API key' },
+        domain: { type: 'string', describe: 'Domain to add and verify' },
+        roles: { type: 'string', describe: 'Comma-separated role slugs to create' },
+      }),
     async (argv) => {
       await applyInsecureStorage(argv.insecureStorage);
       const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
@@ -1196,15 +1855,13 @@ yargs(rawArgs)
     'onboard-user <email>',
     'Onboard a user (send invitation, assign role)',
     (yargs) =>
-      yargs
-        .positional('email', { type: 'string', demandOption: true })
-        .options({
-          ...insecureStorageOption,
-          'api-key': { type: 'string' as const, describe: 'WorkOS API key' },
-          org: { type: 'string', demandOption: true, describe: 'Organization ID' },
-          role: { type: 'string', describe: 'Role slug to assign' },
-          wait: { type: 'boolean', default: false, describe: 'Wait for invitation acceptance' },
-        }),
+      yargs.positional('email', { type: 'string', demandOption: true }).options({
+        ...insecureStorageOption,
+        'api-key': { type: 'string' as const, describe: 'WorkOS API key' },
+        org: { type: 'string', demandOption: true, describe: 'Organization ID' },
+        role: { type: 'string', describe: 'Role slug to assign' },
+        wait: { type: 'boolean', default: false, describe: 'Wait for invitation acceptance' },
+      }),
     async (argv) => {
       await applyInsecureStorage(argv.insecureStorage);
       const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');

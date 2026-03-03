@@ -44,9 +44,7 @@ describe('onboard-user command', () => {
 
     await runOnboardUser({ email: 'alice@acme.com', org: 'org_123', role: 'admin' }, 'sk_test');
 
-    expect(mockSdk.userManagement.sendInvitation).toHaveBeenCalledWith(
-      expect.objectContaining({ roleSlug: 'admin' }),
-    );
+    expect(mockSdk.userManagement.sendInvitation).toHaveBeenCalledWith(expect.objectContaining({ roleSlug: 'admin' }));
   });
 
   describe('JSON mode', () => {

@@ -46,7 +46,12 @@ describe('createApiErrorHandler', () => {
 
     it('handles 422 with validation errors', () => {
       const handler = createApiErrorHandler('Organization');
-      handler(new WorkOSApiError('Validation failed', 422, undefined, [{ message: 'Name is required' }, { message: 'Domain invalid' }]));
+      handler(
+        new WorkOSApiError('Validation failed', 422, undefined, [
+          { message: 'Name is required' },
+          { message: 'Domain invalid' },
+        ]),
+      );
       expect(parseError().error.message).toBe('Name is required, Domain invalid');
     });
 
@@ -64,8 +69,17 @@ describe('createApiErrorHandler', () => {
   });
 
   describe('SDK exceptions (@workos-inc/node)', () => {
-    function makeSdkError(status: number, message: string, extras?: { code?: string; requestID?: string; errors?: Array<{ message: string }> }) {
-      const err = new Error(message) as Error & { status: number; requestID: string; code?: string; errors?: Array<{ message: string }> };
+    function makeSdkError(
+      status: number,
+      message: string,
+      extras?: { code?: string; requestID?: string; errors?: Array<{ message: string }> },
+    ) {
+      const err = new Error(message) as Error & {
+        status: number;
+        requestID: string;
+        code?: string;
+        errors?: Array<{ message: string }>;
+      };
       err.status = status;
       err.requestID = extras?.requestID ?? 'req_test';
       if (extras?.code) err.code = extras.code;
