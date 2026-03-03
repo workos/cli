@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import { readFile } from 'node:fs/promises';
+import type { CreateAuditLogEventOptions } from '@workos-inc/node';
 import { createWorkOSClient } from '../lib/workos-client.js';
 import { formatTable } from '../utils/table.js';
 import { outputJson, outputSuccess, isJsonMode } from '../utils/output.js';
@@ -30,7 +31,7 @@ export async function runAuditLogCreateEvent(
   const client = createWorkOSClient(apiKey, baseUrl);
 
   try {
-    let event: Record<string, unknown>;
+    let event: CreateAuditLogEventOptions;
 
     if (flags.file) {
       const raw = await readFile(flags.file, 'utf-8');
@@ -53,9 +54,8 @@ export async function runAuditLogCreateEvent(
       };
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await client.sdk.auditLogs.createEvent(orgId, event as any);
-    outputSuccess('Created audit log event', { organization_id: orgId, action: event.action as string });
+    await client.sdk.auditLogs.createEvent(orgId, event);
+    outputSuccess('Created audit log event', { organization_id: orgId, action: event.action });
   } catch (error) {
     handleApiError(error);
   }

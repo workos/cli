@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import type { ConnectionType } from '@workos-inc/node';
 import { createWorkOSClient } from '../lib/workos-client.js';
 import { formatTable } from '../utils/table.js';
 import { outputSuccess, outputJson, isJsonMode, exitWithError } from '../utils/output.js';
@@ -27,7 +28,7 @@ export async function runConnectionList(
   try {
     const result = await client.sdk.sso.listConnections({
       ...(options.organizationId && { organizationId: options.organizationId }),
-      ...(options.connectionType && { connectionType: options.connectionType as any }),
+      ...(options.connectionType && { connectionType: options.connectionType as ConnectionType }),
       limit: options.limit,
       before: options.before,
       after: options.after,
