@@ -81,6 +81,7 @@ describe('output', () => {
       expect(spy).toHaveBeenCalledWith('[1,2,3]');
       spy.mockRestore();
     });
+
   });
 
   describe('outputError', () => {
