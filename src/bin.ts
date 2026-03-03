@@ -608,13 +608,11 @@ yargs(rawArgs)
         'set-permissions <slug>',
         'Set all permissions on a role (replaces existing)',
         (yargs) =>
-          yargs
-            .positional('slug', { type: 'string', demandOption: true })
-            .option('permissions', {
-              type: 'string',
-              demandOption: true,
-              describe: 'Comma-separated permission slugs',
-            }),
+          yargs.positional('slug', { type: 'string', demandOption: true }).option('permissions', {
+            type: 'string',
+            demandOption: true,
+            describe: 'Comma-separated permission slugs',
+          }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
@@ -968,14 +966,12 @@ yargs(rawArgs)
         'list <userId>',
         'List sessions for a user',
         (yargs) =>
-          yargs
-            .positional('userId', { type: 'string', demandOption: true })
-            .options({
-              limit: { type: 'number' },
-              before: { type: 'string' },
-              after: { type: 'string' },
-              order: { type: 'string' },
-            }),
+          yargs.positional('userId', { type: 'string', demandOption: true }).options({
+            limit: { type: 'number' },
+            before: { type: 'string' },
+            after: { type: 'string' },
+            order: { type: 'string' },
+          }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
@@ -1212,19 +1208,17 @@ yargs(rawArgs)
         'create-event <orgId>',
         'Create an audit log event',
         (yargs) =>
-          yargs
-            .positional('orgId', { type: 'string', demandOption: true })
-            .options({
-              action: { type: 'string' },
-              'actor-type': { type: 'string' },
-              'actor-id': { type: 'string' },
-              'actor-name': { type: 'string' },
-              targets: { type: 'string' },
-              context: { type: 'string' },
-              metadata: { type: 'string' },
-              'occurred-at': { type: 'string' },
-              file: { type: 'string' },
-            }),
+          yargs.positional('orgId', { type: 'string', demandOption: true }).options({
+            action: { type: 'string' },
+            'actor-type': { type: 'string' },
+            'actor-id': { type: 'string' },
+            'actor-name': { type: 'string' },
+            targets: { type: 'string' },
+            context: { type: 'string' },
+            metadata: { type: 'string' },
+            'occurred-at': { type: 'string' },
+            file: { type: 'string' },
+          }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
