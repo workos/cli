@@ -86,7 +86,7 @@ describe('workos-client', () => {
         expect.objectContaining({
           method: 'POST',
           path: '/webhook_endpoints',
-          body: { url: 'https://example.com/hook', events: ['user.created'] },
+          body: { endpoint_url: 'https://example.com/hook', events: ['user.created'] },
         }),
       );
       expect(result).toBe(mockEndpoint);

@@ -82,7 +82,7 @@ export function createWorkOSClient(apiKey?: string, baseUrl?: string): WorkOSCLI
           path: '/webhook_endpoints',
           apiKey: key,
           baseUrl: base,
-          body: { url: endpointUrl, events },
+          body: { endpoint_url: endpointUrl, events },
         });
       },
       async delete(id: string) {
