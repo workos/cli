@@ -18,7 +18,9 @@ export function encodeSession(data: { user: unknown; session: unknown }): string
   return Buffer.from(JSON.stringify(data)).toString('base64url');
 }
 
-export function decodeSession(token: string): { user: { id: string; username: string }; session: { id: string; userId: string; expiresAt: Date } } | null {
+export function decodeSession(
+  token: string,
+): { user: { id: string; username: string }; session: { id: string; userId: string; expiresAt: Date } } | null {
   try {
     return JSON.parse(Buffer.from(token, 'base64url').toString());
   } catch {

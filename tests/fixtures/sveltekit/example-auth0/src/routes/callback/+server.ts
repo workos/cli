@@ -24,12 +24,10 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
   });
 
   const tokens = await tokenRes.json();
-  const payload = JSON.parse(
-    Buffer.from(tokens.id_token.split('.')[1], 'base64').toString(),
+  const payload = JSON.parse(Buffer.from(tokens.id_token.split('.')[1], 'base64').toString());
+  const session = Buffer.from(JSON.stringify({ sub: payload.sub, email: payload.email, name: payload.name })).toString(
+    'base64',
   );
-  const session = Buffer.from(
-    JSON.stringify({ sub: payload.sub, email: payload.email, name: payload.name }),
-  ).toString('base64');
 
   cookies.set('auth0_session', session, { path: '/', httpOnly: true });
   throw redirect(302, '/');

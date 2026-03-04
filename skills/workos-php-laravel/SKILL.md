@@ -58,6 +58,7 @@ routes/auth.php exists?                           → Auth routes file
 ```
 
 If existing auth detected:
+
 - Do NOT remove or disable it
 - Add WorkOS AuthKit alongside the existing system
 - If Laravel session is already configured, reuse it for WorkOS

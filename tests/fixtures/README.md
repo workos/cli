@@ -4,15 +4,15 @@ Each framework directory contains one or more fixture states — minimal project
 
 ## Fixture States
 
-| State | Description | What it contains |
-| --- | --- | --- |
-| `example` | Clean starter app, no auth | Basic app structure with framework boilerplate |
-| `example-auth0` | App with Auth0 configured | Same as example but with Auth0 SDK installed and configured |
-| `partial-install` | Half-completed AuthKit attempt | WorkOS SDK in deps but incomplete integration (client initialized, some routes missing) |
-| `conflicting-auth` | Existing non-WorkOS auth to merge with | App has a working auth system that the skill must detect and work alongside |
-| `typescript-strict` | Strict TypeScript configuration | Same as example but with `strict: true`, `noImplicitAny`, `strictNullChecks` enabled |
-| `conflicting-middleware` | Existing middleware to merge | Framework-specific middleware that AuthKit must compose with (frontend only) |
-| `existing-middleware` | Pre-existing middleware file | Middleware file already exists, skill must merge not overwrite (Next.js only) |
+| State                    | Description                            | What it contains                                                                        |
+| ------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------- |
+| `example`                | Clean starter app, no auth             | Basic app structure with framework boilerplate                                          |
+| `example-auth0`          | App with Auth0 configured              | Same as example but with Auth0 SDK installed and configured                             |
+| `partial-install`        | Half-completed AuthKit attempt         | WorkOS SDK in deps but incomplete integration (client initialized, some routes missing) |
+| `conflicting-auth`       | Existing non-WorkOS auth to merge with | App has a working auth system that the skill must detect and work alongside             |
+| `typescript-strict`      | Strict TypeScript configuration        | Same as example but with `strict: true`, `noImplicitAny`, `strictNullChecks` enabled    |
+| `conflicting-middleware` | Existing middleware to merge           | Framework-specific middleware that AuthKit must compose with (frontend only)            |
+| `existing-middleware`    | Pre-existing middleware file           | Middleware file already exists, skill must merge not overwrite (Next.js only)           |
 
 ## Requirements
 

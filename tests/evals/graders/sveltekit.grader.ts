@@ -81,11 +81,7 @@ export class SvelteKitGrader implements Grader {
 
     // Bonus: WORKOS_COOKIE_PASSWORD in .env
     bonusChecks.push(
-      await this.fileGrader.checkFileWithPattern(
-        '.env*',
-        [/WORKOS_COOKIE_PASSWORD/],
-        'WORKOS_COOKIE_PASSWORD in .env',
-      ),
+      await this.fileGrader.checkFileWithPattern('.env*', [/WORKOS_COOKIE_PASSWORD/], 'WORKOS_COOKIE_PASSWORD in .env'),
     );
 
     const allChecks = [...requiredChecks, ...bonusChecks];

@@ -61,6 +61,7 @@ package.json has 'express-session'?         → Session-based auth may exist
 ```
 
 If existing auth detected:
+
 - Do NOT remove or disable it
 - Add WorkOS AuthKit alongside the existing system
 - If `express-session` is already configured, reuse it for WorkOS session storage (don't create a second session middleware)

@@ -56,11 +56,7 @@ export class RubyGrader implements Grader {
 
     // Bonus: conflicting auth preserved (Warden config still present)
     bonusChecks.push(
-      await this.fileGrader.checkFileWithPattern(
-        '**/*.rb',
-        [/Warden/],
-        'Conflicting auth config preserved',
-      ),
+      await this.fileGrader.checkFileWithPattern('**/*.rb', [/Warden/], 'Conflicting auth config preserved'),
     );
 
     // Bonus: sealed session handling

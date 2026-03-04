@@ -65,6 +65,7 @@ router.ex has '/:provider' wildcard auth routes?   → Ueberauth routes
 ```
 
 If existing auth detected:
+
 - Do NOT remove or disable it
 - Add WorkOS AuthKit alongside the existing system
 - If Ueberauth is configured, be careful of `/:provider` wildcard routes — use a specific scope like `/auth/workos` to avoid conflicts

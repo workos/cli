@@ -51,9 +51,7 @@ export class PhpGrader implements Grader {
     );
 
     // Bonus: syntax check (requires PHP runtime)
-    bonusChecks.push(
-      await this.buildGrader.checkCommand('php', ['-l', 'login.php'], 'PHP syntax check (bonus)'),
-    );
+    bonusChecks.push(await this.buildGrader.checkCommand('php', ['-l', 'login.php'], 'PHP syntax check (bonus)'));
 
     const allChecks = [...requiredChecks, ...bonusChecks];
     return {

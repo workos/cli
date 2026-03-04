@@ -61,6 +61,7 @@ manage.py exists + 'django.contrib.auth'?   → Django built-in auth
 ```
 
 If existing auth detected:
+
 - Do NOT remove or disable it
 - Add WorkOS AuthKit alongside the existing system
 - If `flask-login` is present, use Flask-Login's session infrastructure (`login_user()`) for WorkOS auth too, rather than raw session management

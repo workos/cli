@@ -61,11 +61,7 @@ export class NodeGrader implements Grader {
 
     // Bonus: conflicting auth preserved (Passport.js routes/config still present)
     bonusChecks.push(
-      await this.fileGrader.checkFileWithPattern(
-        '**/*.{js,ts}',
-        [/passport/],
-        'Conflicting auth config preserved',
-      ),
+      await this.fileGrader.checkFileWithPattern('**/*.{js,ts}', [/passport/], 'Conflicting auth config preserved'),
     );
 
     // Bonus: sealed session handling (step 3 of quickstart)

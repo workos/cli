@@ -63,6 +63,7 @@ build.gradle.kts has 'spring-boot-starter-security'?  → Spring Security
 ```
 
 If existing auth detected:
+
 - Do NOT remove or disable it
 - Add WorkOS AuthKit alongside the existing system
 - If Spring Security is configured, ensure WorkOS auth routes are permitted through the security filter chain (add `.requestMatchers("/auth/workos/**").permitAll()`)

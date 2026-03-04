@@ -55,6 +55,7 @@ composer.json has auth libraries?                   → Third-party auth
 ```
 
 If existing auth detected:
+
 - Do NOT remove or disable it
 - Add WorkOS AuthKit alongside the existing system
 - If `session_start()` is already used, reuse the session for WorkOS (don't create a second session mechanism)

@@ -45,10 +45,13 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-app.post('/login', passport.authenticate('local', {
-  successRedirect: '/dashboard',
-  failureRedirect: '/',
-}));
+app.post(
+  '/login',
+  passport.authenticate('local', {
+    successRedirect: '/dashboard',
+    failureRedirect: '/',
+  }),
+);
 
 app.get('/logout', (req, res) => {
   req.logout(() => {

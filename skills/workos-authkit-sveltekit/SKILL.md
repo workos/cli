@@ -63,6 +63,7 @@ src/hooks.server.ts handles cookies?   → Custom session middleware
 ```
 
 If existing auth detected (Lucia is most common in SvelteKit):
+
 - Do NOT remove or disable the existing auth system
 - Use `sequence()` from `@sveltejs/kit/hooks` to compose handles:
 

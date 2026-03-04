@@ -67,6 +67,7 @@ go.mod has 'github.com/coreos/go-oidc'?     → OIDC auth
 ```
 
 If existing auth detected:
+
 - Do NOT remove or disable it
 - Add WorkOS AuthKit alongside the existing system
 - Create separate route paths for WorkOS auth (e.g., `/auth/workos/login` if `/auth/login` is taken)

@@ -58,6 +58,7 @@ config/initializers has devise.rb?          → Devise configured
 ```
 
 If existing auth detected:
+
 - Do NOT remove or disable it
 - Add WorkOS AuthKit alongside the existing system
 - If Devise is present, Devise uses Warden under the hood — integrate WorkOS at the Warden strategy level if possible
