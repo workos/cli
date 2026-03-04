@@ -517,6 +517,23 @@ async function run() {
     const { runAuditLogGetSchema } = await import('../src/commands/audit-log.js');
     await runAuditLogGetSchema('user.signed_in', apiKey!);
   });
+  const schemaFile = `/tmp/smoke-audit-schema-${Date.now()}.json`;
+  const schemaAction = `smoke.test.${Date.now()}`;
+  writeFileSync(
+    schemaFile,
+    JSON.stringify({
+      targets: [{ type: 'user' }],
+      actor: { metadata: {} },
+      metadata: {},
+    }),
+  );
+  await test('audit-log create-schema', async () => {
+    const { runAuditLogCreateSchema } = await import('../src/commands/audit-log.js');
+    await runAuditLogCreateSchema(schemaAction, schemaFile, apiKey!);
+  });
+  try {
+    unlinkSync(schemaFile);
+  } catch {}
 
   // =====================================================================
   // Feature Flag (read + toggle lifecycle)
