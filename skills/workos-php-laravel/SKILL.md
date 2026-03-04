@@ -31,6 +31,40 @@ Check `.env` for:
 
 If `.env` exists but is missing these variables, append them. If `.env` doesn't exist, copy `.env.example` and add them.
 
+## Step 2b: Partial Install Recovery
+
+Before creating new files, check if a previous AuthKit attempt exists:
+
+1. Check if `workos/workos-php-laravel` is already in `composer.json`
+2. Check if `config/workos.php` exists but no auth controller or routes are wired
+3. If partial install detected:
+   - Do NOT reinstall the SDK (it's already there)
+   - Do NOT re-publish config if `config/workos.php` already exists
+   - Read existing files to understand what's done vs missing
+   - Complete the integration by filling gaps (controller, routes, middleware)
+   - Preserve any working code — only fix what's broken
+   - Check for missing auth controller or routes (most common gap)
+
+## Step 2c: Existing Auth System Detection
+
+Check for existing authentication before integrating:
+
+```
+composer.json has 'laravel/breeze'?               → Breeze auth scaffolding
+composer.json has 'laravel/jetstream'?            → Jetstream auth
+composer.json has 'laravel/fortify'?              → Fortify auth backend
+app/Http/Controllers/Auth/ exists?                → Auth controllers present
+routes/auth.php exists?                           → Auth routes file
+```
+
+If existing auth detected:
+- Do NOT remove or disable it
+- Add WorkOS AuthKit alongside the existing system
+- If Laravel session is already configured, reuse it for WorkOS
+- Create separate route paths for WorkOS auth (e.g., `/auth/workos/login` if `/login` is taken)
+- Ensure existing auth routes continue to work unchanged
+- Document in code comments how to migrate fully to WorkOS later
+
 ## Step 3: Install SDK
 
 ```bash

@@ -40,6 +40,40 @@ go.mod contains github.com/gin-gonic/gin?
   +-- No  --> Use stdlib net/http patterns
 ```
 
+## Step 2b: Partial Install Recovery
+
+Before creating new files, check if a previous AuthKit attempt exists:
+
+1. Check if `github.com/workos/workos-go` is already in `go.mod`
+2. Check for incomplete auth code — files that import WorkOS packages but have non-functional handlers (TODO comments, 501 responses, empty handler bodies)
+3. If partial install detected:
+   - Do NOT re-run `go get` (the module is already there)
+   - Read existing auth files to understand what's done vs missing
+   - Complete the integration by filling gaps rather than starting fresh
+   - Preserve any working code — only fix what's broken
+   - If `usermanagement.SetAPIKey()` is already called in `init()`, don't call it again
+   - Always run `go mod tidy` after changes to keep `go.sum` consistent
+
+## Step 2c: Existing Auth System Detection
+
+Check for existing authentication before integrating:
+
+```
+*.go files have 'jwt' or 'JWT'?             → Custom JWT auth
+*.go files have 'oauth2'?                   → OAuth2 middleware
+*.go files have 'authMiddleware'?            → Custom auth middleware
+go.mod has 'golang.org/x/oauth2'?           → OAuth2 package
+go.mod has 'github.com/coreos/go-oidc'?     → OIDC auth
+```
+
+If existing auth detected:
+- Do NOT remove or disable it
+- Add WorkOS AuthKit alongside the existing system
+- Create separate route paths for WorkOS auth (e.g., `/auth/workos/login` if `/auth/login` is taken)
+- Match handler signatures to the detected framework (Gin `*gin.Context` vs stdlib `http.ResponseWriter, *http.Request`)
+- Ensure existing auth middleware continues to work on its routes
+- Document in code comments how to migrate fully to WorkOS later
+
 ## Step 3: Install SDK
 
 Run:

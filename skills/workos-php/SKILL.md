@@ -30,6 +30,38 @@ Check for `.env` file with:
 
 If `.env` doesn't exist, create it with the required variables.
 
+## Step 2b: Partial Install Recovery
+
+Before creating new files, check if a previous AuthKit attempt exists:
+
+1. Check if `workos/workos-php` is already in `composer.json`
+2. Check for incomplete auth files — `login.php` or `callback.php` that import WorkOS but are non-functional (TODO comments, 501 responses, empty handlers)
+3. If partial install detected:
+   - Do NOT reinstall the SDK (it's already there)
+   - Read existing auth files to understand what's done vs missing
+   - Complete the integration by filling gaps rather than starting fresh
+   - Preserve any working code — only fix what's broken
+   - Check for a missing `callback.php` (most common gap)
+
+## Step 2c: Existing Auth System Detection
+
+Check for existing authentication before integrating:
+
+```
+*.php files have 'session_start()' + '$_SESSION'?  → Native PHP session auth
+*.php files have 'password_verify'?                 → Password-based auth
+*.php files have form POST to '/login'?             → Form-based auth
+composer.json has auth libraries?                   → Third-party auth
+```
+
+If existing auth detected:
+- Do NOT remove or disable it
+- Add WorkOS AuthKit alongside the existing system
+- If `session_start()` is already used, reuse the session for WorkOS (don't create a second session mechanism)
+- Create separate file paths for WorkOS auth (e.g., `workos-login.php` if `login.php` is taken)
+- Ensure existing auth routes continue to work unchanged
+- Document in code comments how to migrate fully to WorkOS later
+
 ## Step 3: Install SDK
 
 ```bash

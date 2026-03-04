@@ -37,6 +37,42 @@ Check `.env.local` for:
 - `WORKOS_API_KEY` - starts with `sk_`
 - `WORKOS_CLIENT_ID` - starts with `client_`
 
+## Step 2b: Partial Install Recovery
+
+Before creating new files, check if a previous AuthKit attempt exists:
+
+1. Check if `:workos` is already in `mix.exs` dependencies
+2. Check for incomplete auth code — AuthController exists but has TODO stubs, 501 responses, or missing callback/sign_out functions
+3. If partial install detected:
+   - Do NOT re-add the SDK dependency (it's already there)
+   - Do NOT re-run `mix deps.get` if deps are already fetched
+   - Read existing auth files to understand what's done vs missing
+   - Complete the integration by filling gaps (controller methods, routes)
+   - Preserve any working code — only fix what's broken
+   - Check for missing `/auth/callback` route (most common gap)
+
+## Step 2c: Existing Auth System Detection
+
+Check for existing authentication before integrating:
+
+```
+mix.exs has ':ueberauth'?                          → Ueberauth auth
+mix.exs has ':pow'?                                → Pow auth
+mix.exs has ':guardian'?                           → Guardian JWT auth
+mix.exs has ':phx_gen_auth'?                       → Phoenix generated auth
+config/*.exs has 'Ueberauth' config?               → Ueberauth configured
+router.ex has '/:provider' wildcard auth routes?   → Ueberauth routes
+```
+
+If existing auth detected:
+- Do NOT remove or disable it
+- Add WorkOS AuthKit alongside the existing system
+- If Ueberauth is configured, be careful of `/:provider` wildcard routes — use a specific scope like `/auth/workos` to avoid conflicts
+- Reuse existing session infrastructure if compatible
+- Create separate route paths for WorkOS auth
+- Ensure existing auth routes continue to work unchanged
+- Document in code comments how to migrate fully to WorkOS later
+
 ## Step 3: Install SDK
 
 Add the `workos` package to `mix.exs` dependencies:

@@ -45,6 +45,15 @@ export class ElixirGrader implements Grader {
       await this.fileGrader.checkFileWithPattern('lib/**/*.ex', [/api\/health/], 'Existing app routes preserved'),
     );
 
+    // Bonus: conflicting auth preserved (Ueberauth config still present)
+    bonusChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '{lib/**/*.ex,config/*.exs}',
+        [/ueberauth|Ueberauth/],
+        'Conflicting auth config preserved',
+      ),
+    );
+
     const allChecks = [...requiredChecks, ...bonusChecks];
     return {
       passed: requiredChecks.every((c) => c.passed),

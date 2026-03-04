@@ -35,6 +35,39 @@ None of the above?                       → Vanilla Python (use Flask quickstar
 
 **Adapt all subsequent steps to the detected framework.** Do not force one framework onto another.
 
+## Step 2b: Partial Install Recovery
+
+Before creating new files, check if a previous AuthKit attempt exists:
+
+1. Check if `workos` is already in `requirements.txt` or `pyproject.toml`
+2. Check for incomplete auth files — files that import `workos` but have non-functional routes (TODO comments, commented-out code, empty handlers)
+3. If partial install detected:
+   - Do NOT reinstall the SDK (it's already there)
+   - Read existing auth files to understand what's done vs missing
+   - Complete the integration by filling gaps rather than starting fresh
+   - Preserve any working code — only fix what's broken
+   - Check for a missing `/callback` route (most common gap)
+
+## Step 2c: Existing Auth System Detection
+
+Check for existing authentication before integrating:
+
+```
+requirements.txt has 'flask-login'?         → Flask-Login auth
+requirements.txt has 'authlib'?             → OAuth/OIDC auth (e.g., Auth0)
+requirements.txt has 'django-allauth'?      → Django allauth
+manage.py exists + 'django.contrib.auth'?   → Django built-in auth
+*.py files have 'flask_login'?              → Flask-Login in use
+```
+
+If existing auth detected:
+- Do NOT remove or disable it
+- Add WorkOS AuthKit alongside the existing system
+- If `flask-login` is present, use Flask-Login's session infrastructure (`login_user()`) for WorkOS auth too, rather than raw session management
+- Create separate route paths for WorkOS auth (e.g., `/auth/workos/login` if `/login` is taken)
+- Ensure existing auth routes continue to work unchanged
+- Document in code comments how to migrate fully to WorkOS later
+
 ## Step 3: Pre-Flight Validation
 
 ### Package Manager Detection

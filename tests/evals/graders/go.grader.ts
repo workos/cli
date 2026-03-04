@@ -39,6 +39,15 @@ export class GoGrader implements Grader {
       await this.fileGrader.checkFileWithPattern('**/*.go', [/api\/health/], 'Existing app routes preserved'),
     );
 
+    // Bonus: conflicting auth preserved (JWT middleware still present)
+    bonusChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.go',
+        [/authMiddleware|Authorization/],
+        'Conflicting auth config preserved',
+      ),
+    );
+
     const allChecks = [...requiredChecks, ...bonusChecks];
     return {
       passed: requiredChecks.every((c) => c.passed),

@@ -37,6 +37,39 @@ Check `application.properties` or `application.yml` for:
 - `workos.api-key` or `WORKOS_API_KEY`
 - `workos.client-id` or `WORKOS_CLIENT_ID`
 
+## Step 2b: Partial Install Recovery
+
+Before creating new files, check if a previous AuthKit attempt exists:
+
+1. Check if `workos-kotlin` is already in `build.gradle.kts` dependencies
+2. Check for incomplete auth code — WorkOS imported/instantiated but no controller with login/callback endpoints
+3. If partial install detected:
+   - Do NOT re-add the SDK dependency (it's already there)
+   - Read existing source files to understand what's done vs missing
+   - Complete the integration by filling gaps (controller, config bean, routes)
+   - Preserve any working code — only fix what's broken
+   - Check for a missing `/auth/callback` endpoint (most common gap)
+
+## Step 2c: Existing Auth System Detection
+
+Check for existing authentication before integrating:
+
+```
+build.gradle.kts has 'spring-boot-starter-security'?  → Spring Security
+*.kt files have 'SecurityFilterChain'?                → Security filter config
+*.kt files have 'formLogin'?                          → Form-based auth
+*.kt files have 'oauth2Login'?                        → OAuth2 auth
+*.kt files have 'httpBasic'?                          → Basic auth
+```
+
+If existing auth detected:
+- Do NOT remove or disable it
+- Add WorkOS AuthKit alongside the existing system
+- If Spring Security is configured, ensure WorkOS auth routes are permitted through the security filter chain (add `.requestMatchers("/auth/workos/**").permitAll()`)
+- Create separate route paths for WorkOS auth (e.g., `/auth/workos/login` if `/login` is taken)
+- Ensure existing auth routes continue to work unchanged
+- Document in code comments how to migrate fully to WorkOS later
+
 ## Step 3: Install SDK
 
 Add the WorkOS Kotlin SDK dependency to `build.gradle.kts`:

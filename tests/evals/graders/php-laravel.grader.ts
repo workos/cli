@@ -54,6 +54,15 @@ export class PhpLaravelGrader implements Grader {
       ),
     );
 
+    // Bonus: conflicting auth preserved (Breeze/auth controllers still present)
+    bonusChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.php',
+        [/breeze|LoginController|Auth\\/],
+        'Conflicting auth config preserved',
+      ),
+    );
+
     const allChecks = [...requiredChecks, ...bonusChecks];
     return {
       passed: requiredChecks.every((c) => c.passed),

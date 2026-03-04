@@ -35,6 +35,15 @@ export class KotlinGrader implements Grader {
       await this.fileGrader.checkFileWithPattern('**/*.kt', [/api\/health/], 'Existing app routes preserved'),
     );
 
+    // Bonus: conflicting auth preserved (Spring Security config still present)
+    bonusChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.kt',
+        [/SecurityFilterChain|formLogin/],
+        'Conflicting auth config preserved',
+      ),
+    );
+
     const allChecks = [...requiredChecks, ...bonusChecks];
     return {
       passed: requiredChecks.every((c) => c.passed),

@@ -12,6 +12,11 @@ import type { Grader, GradeResult, GradeCheck } from '../types.js';
  * - hooks.server.ts exists with workos/authkit integration
  * - Callback route exists
  * - Build passes
+ *
+ * Bonus checks (don't block pass):
+ * - Existing hooks preserved (Lucia handle / auth_session / sequence)
+ * - sequence() used for hook composition
+ * - WORKOS_COOKIE_PASSWORD in .env
  */
 export class SvelteKitGrader implements Grader {
   private fileGrader: FileGrader;
@@ -23,10 +28,11 @@ export class SvelteKitGrader implements Grader {
   }
 
   async grade(): Promise<GradeResult> {
-    const checks: GradeCheck[] = [];
+    const requiredChecks: GradeCheck[] = [];
+    const bonusChecks: GradeCheck[] = [];
 
-    // Check authkit-sveltekit in package.json (could be @workos/ or @workos-inc/)
-    checks.push(
+    // Required: authkit-sveltekit in package.json (could be @workos/ or @workos-inc/)
+    requiredChecks.push(
       await this.fileGrader.checkFileWithPattern(
         'package.json',
         [/authkit-sveltekit/],
@@ -34,8 +40,8 @@ export class SvelteKitGrader implements Grader {
       ),
     );
 
-    // Check hooks.server.ts exists with workos/authkit reference
-    checks.push(
+    // Required: hooks.server.ts exists with workos/authkit reference
+    requiredChecks.push(
       await this.fileGrader.checkFileWithPattern(
         'src/hooks.server.ts',
         [/workos|authkit/i],
@@ -43,8 +49,8 @@ export class SvelteKitGrader implements Grader {
       ),
     );
 
-    // Check callback route exists (could be at various paths)
-    checks.push(
+    // Required: callback route exists (could be at various paths)
+    requiredChecks.push(
       await this.fileGrader.checkFileWithPattern(
         'src/routes/**/+server.ts',
         [/workos|authkit|code|callback/i],
@@ -52,12 +58,40 @@ export class SvelteKitGrader implements Grader {
       ),
     );
 
-    // Check build succeeds
-    checks.push(await this.buildGrader.checkBuild());
+    // Required: build passes
+    requiredChecks.push(await this.buildGrader.checkBuild());
 
+    // Bonus: existing hooks preserved (Lucia handle or auth_session cookie reference)
+    bonusChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        'src/hooks.server.ts',
+        [/lucia|auth_session|sequence/i],
+        'Existing hooks preserved',
+      ),
+    );
+
+    // Bonus: sequence() used for hook composition
+    bonusChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        'src/hooks.server.ts',
+        [/sequence/],
+        'Hook composition via sequence()',
+      ),
+    );
+
+    // Bonus: WORKOS_COOKIE_PASSWORD in .env
+    bonusChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '.env*',
+        [/WORKOS_COOKIE_PASSWORD/],
+        'WORKOS_COOKIE_PASSWORD in .env',
+      ),
+    );
+
+    const allChecks = [...requiredChecks, ...bonusChecks];
     return {
-      passed: checks.every((c) => c.passed),
-      checks,
+      passed: requiredChecks.every((c) => c.passed),
+      checks: allChecks,
     };
   }
 }

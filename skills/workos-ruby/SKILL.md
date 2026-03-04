@@ -32,6 +32,40 @@ None of the above?                       → Vanilla Ruby (use Sinatra quickstar
 
 **Adapt all subsequent steps to the detected framework.** Do not force Rails on a Sinatra project or vice versa.
 
+## Step 2b: Partial Install Recovery
+
+Before creating new files, check if a previous AuthKit attempt exists:
+
+1. Check if `workos` is already in `Gemfile`
+2. Check for incomplete auth files — files that `require "workos"` but have non-functional routes (TODO comments, 501 responses, empty handlers)
+3. If partial install detected:
+   - Do NOT reinstall the gem (it's already there)
+   - Read existing auth files to understand what's done vs missing
+   - Complete the integration by filling gaps rather than starting fresh
+   - Preserve any working code — only fix what's broken
+   - Run `bundle install` (not `bundle update`) to avoid unexpected gem upgrades
+
+## Step 2c: Existing Auth System Detection
+
+Check for existing authentication before integrating:
+
+```
+Gemfile has 'devise'?                       → Devise auth (uses Warden)
+Gemfile has 'warden'?                       → Warden auth
+Gemfile has 'omniauth'?                     → OmniAuth (OAuth/OIDC)
+*.rb files have 'Warden'?                   → Warden middleware in use
+config/initializers has devise.rb?          → Devise configured
+```
+
+If existing auth detected:
+- Do NOT remove or disable it
+- Add WorkOS AuthKit alongside the existing system
+- If Devise is present, Devise uses Warden under the hood — integrate WorkOS at the Warden strategy level if possible
+- Create separate route paths for WorkOS auth (e.g., `/auth/workos/login` if `/login` is taken)
+- Ensure Rack middleware ordering is correct (WorkOS session middleware must not conflict)
+- Ensure existing auth routes continue to work unchanged
+- Document in code comments how to migrate fully to WorkOS later
+
 ## Step 3: Install WorkOS Gem
 
 ```bash

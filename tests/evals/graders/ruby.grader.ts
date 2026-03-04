@@ -54,6 +54,15 @@ export class RubyGrader implements Grader {
       await this.fileGrader.checkFileWithPattern('**/*.rb', [/api\/health/], 'Existing app routes preserved'),
     );
 
+    // Bonus: conflicting auth preserved (Warden config still present)
+    bonusChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.rb',
+        [/Warden/],
+        'Conflicting auth config preserved',
+      ),
+    );
+
     // Bonus: sealed session handling
     bonusChecks.push(
       await this.fileGrader.checkFileWithPattern(

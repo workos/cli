@@ -36,6 +36,38 @@ Detect package manager: `pnpm-lock.yaml` → `yarn.lock` → `bun.lockb` → npm
 
 **Adapt all subsequent steps to the detected framework and module system.**
 
+## Step 2b: Partial Install Recovery
+
+Before creating new files, check if a previous AuthKit attempt exists:
+
+1. Check if `@workos-inc/node` is already in `package.json`
+2. Check for incomplete auth files — routes/handlers that import `@workos-inc/node` but are non-functional (TODO comments, 501 responses, empty handlers)
+3. If partial install detected:
+   - Do NOT reinstall the SDK (it's already there)
+   - Read existing auth files to understand what's done vs missing
+   - Complete the integration by filling gaps rather than starting fresh
+   - Preserve any working code — only fix what's broken
+   - Check for a missing `/callback` route (most common gap)
+
+## Step 2c: Existing Auth System Detection
+
+Check for existing authentication before integrating:
+
+```
+package.json has 'passport'?                → Passport.js auth
+package.json has 'express-openid-connect'?  → Auth0 / OIDC
+package.json has 'express-session'?         → Session-based auth may exist
+*.js/*.ts files have 'jsonwebtoken'?        → JWT-based auth
+```
+
+If existing auth detected:
+- Do NOT remove or disable it
+- Add WorkOS AuthKit alongside the existing system
+- If `express-session` is already configured, reuse it for WorkOS session storage (don't create a second session middleware)
+- Create separate route paths for WorkOS auth (e.g., `/auth/workos/login` if `/login` is taken)
+- Ensure existing auth routes continue to work unchanged
+- Document in code comments how to migrate fully to WorkOS later
+
 ## Step 3: Install SDK
 
 ```

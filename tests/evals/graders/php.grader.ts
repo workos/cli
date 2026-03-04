@@ -41,6 +41,20 @@ export class PhpGrader implements Grader {
       await this.fileGrader.checkFileWithPattern('**/*.php', [/api\/health/], 'Existing app routes preserved'),
     );
 
+    // Bonus: conflicting auth preserved (native PHP session auth still present)
+    bonusChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.php',
+        [/session_start|\$_SESSION/],
+        'Conflicting auth config preserved',
+      ),
+    );
+
+    // Bonus: syntax check (requires PHP runtime)
+    bonusChecks.push(
+      await this.buildGrader.checkCommand('php', ['-l', 'login.php'], 'PHP syntax check (bonus)'),
+    );
+
     const allChecks = [...requiredChecks, ...bonusChecks];
     return {
       passed: requiredChecks.every((c) => c.passed),

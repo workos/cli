@@ -65,26 +65,46 @@ const SCENARIOS: Scenario[] = [
   { framework: 'vanilla-js', state: 'partial-install', grader: VanillaGrader },
   { framework: 'vanilla-js', state: 'conflicting-auth', grader: VanillaGrader },
 
-  // SvelteKit (1 state)
+  // SvelteKit (5 states)
   { framework: 'sveltekit', state: 'example', grader: SvelteKitGrader },
+  { framework: 'sveltekit', state: 'example-auth0', grader: SvelteKitGrader },
+  { framework: 'sveltekit', state: 'partial-install', grader: SvelteKitGrader },
+  { framework: 'sveltekit', state: 'conflicting-auth', grader: SvelteKitGrader },
+  { framework: 'sveltekit', state: 'typescript-strict', grader: SvelteKitGrader },
 
-  // Backend SDKs (2 states each — happy path + auth0 migration)
+  // Backend SDKs (4 states each — happy path + auth0 migration + partial install + conflicting auth)
   { framework: 'node', state: 'example', grader: NodeGrader },
   { framework: 'node', state: 'example-auth0', grader: NodeGrader },
+  { framework: 'node', state: 'partial-install', grader: NodeGrader },
+  { framework: 'node', state: 'conflicting-auth', grader: NodeGrader },
   { framework: 'python', state: 'example', grader: PythonGrader },
   { framework: 'python', state: 'example-auth0', grader: PythonGrader },
+  { framework: 'python', state: 'partial-install', grader: PythonGrader },
+  { framework: 'python', state: 'conflicting-auth', grader: PythonGrader },
   { framework: 'ruby', state: 'example', grader: RubyGrader },
   { framework: 'ruby', state: 'example-auth0', grader: RubyGrader },
+  { framework: 'ruby', state: 'partial-install', grader: RubyGrader },
+  { framework: 'ruby', state: 'conflicting-auth', grader: RubyGrader },
   { framework: 'go', state: 'example', grader: GoGrader },
   { framework: 'go', state: 'example-auth0', grader: GoGrader },
+  { framework: 'go', state: 'partial-install', grader: GoGrader },
+  { framework: 'go', state: 'conflicting-auth', grader: GoGrader },
   { framework: 'php', state: 'example', grader: PhpGrader },
   { framework: 'php', state: 'example-auth0', grader: PhpGrader },
+  { framework: 'php', state: 'partial-install', grader: PhpGrader },
+  { framework: 'php', state: 'conflicting-auth', grader: PhpGrader },
   { framework: 'php-laravel', state: 'example', grader: PhpLaravelGrader },
   { framework: 'php-laravel', state: 'example-auth0', grader: PhpLaravelGrader },
+  { framework: 'php-laravel', state: 'partial-install', grader: PhpLaravelGrader },
+  { framework: 'php-laravel', state: 'conflicting-auth', grader: PhpLaravelGrader },
   { framework: 'kotlin', state: 'example', grader: KotlinGrader },
   { framework: 'kotlin', state: 'example-auth0', grader: KotlinGrader },
+  { framework: 'kotlin', state: 'partial-install', grader: KotlinGrader },
+  { framework: 'kotlin', state: 'conflicting-auth', grader: KotlinGrader },
   { framework: 'elixir', state: 'example', grader: ElixirGrader },
   { framework: 'elixir', state: 'example-auth0', grader: ElixirGrader },
+  { framework: 'elixir', state: 'partial-install', grader: ElixirGrader },
+  { framework: 'elixir', state: 'conflicting-auth', grader: ElixirGrader },
 
   // .NET (disabled — SDK is broken and no runtime available on most machines)
   // { framework: 'dotnet', state: 'example', grader: DotnetGrader },

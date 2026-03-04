@@ -1,0 +1,22 @@
+{
+  "name": "sveltekit-existing-auth0-fixture",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@auth0/auth0-spa-js": "^2.1.0",
+    "@sveltejs/kit": "^2.0.0",
+    "svelte": "^5.0.0"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-auto": "^3.0.0",
+    "@sveltejs/vite-plugin-svelte": "^4.0.0",
+    "typescript": "~5.6.2",
+    "vite": "^5.0.0"
+  }
+}

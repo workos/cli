@@ -59,6 +59,15 @@ export class PythonGrader implements Grader {
       await this.fileGrader.checkFileWithPattern('**/*.py', [/api\/health/], 'Existing app routes preserved'),
     );
 
+    // Bonus: conflicting auth preserved (Flask-Login config still present)
+    bonusChecks.push(
+      await this.fileGrader.checkFileWithPattern(
+        '**/*.py',
+        [/login_manager|LoginManager/],
+        'Conflicting auth config preserved',
+      ),
+    );
+
     // Bonus: sealed session handling
     bonusChecks.push(
       await this.fileGrader.checkFileWithPattern(
