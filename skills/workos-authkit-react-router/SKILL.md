@@ -69,15 +69,25 @@ Required in `.env` or `.env.local`:
 - `WORKOS_REDIRECT_URI` - full URL (e.g., `http://localhost:3000/auth/callback`)
 - `WORKOS_COOKIE_PASSWORD` - 32+ chars (server modes only)
 
-## Verification Checklist
+## Verification Checklist (ALL MUST PASS)
 
-After implementation, verify:
+Run these commands to confirm integration. **Do not mark complete until all pass:**
 
-- [ ] SDK installed in node_modules (package name from README)
-- [ ] Callback route path matches `WORKOS_REDIRECT_URI` path segment
-- [ ] Auth loader/provider on root route (not just child routes)
-- [ ] Build succeeds: `npm run build` exits 0
-- [ ] Correct mode pattern applied (loaders vs hooks)
+```bash
+# 1. Check SDK installed
+ls node_modules/@workos-inc/authkit-react-router 2>/dev/null || echo "FAIL: SDK not installed"
+
+# 2. Check callback route exists and matches WORKOS_REDIRECT_URI
+grep -r "authLoader\|handleCallbackRoute" src/ app/ 2>/dev/null
+
+# 3. Check auth loader/provider on root route
+grep -r "authkitLoader\|AuthKitProvider" src/ app/ 2>/dev/null
+
+# 4. Build succeeds
+npm run build
+```
+
+**If check #2 fails:** Callback route path must match WORKOS_REDIRECT_URI exactly. Use authLoader (not authkitLoader) for the callback route.
 
 ## Error Recovery
 

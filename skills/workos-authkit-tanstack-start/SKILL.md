@@ -110,14 +110,7 @@ export const startInstance = createStart(() => ({
 1. **Named export `startInstance`** — the build plugin generates `import type { startInstance }` from this file. A `default` export will cause a build error.
 2. **`createStart` takes a function** returning the options object, not the options directly. `createStart({ ... })` will fail.
 
-### Verification Checklist
-
-- [ ] `authkitMiddleware` imported from `@workos/authkit-tanstack-react-start`
-- [ ] Middleware in `requestMiddleware` array (not `middleware`)
-- [ ] Named export: `export const startInstance = createStart(...)` (not `export default`)
-
-Verify: `grep -r "authkitMiddleware" src/ app/ 2>/dev/null`
-
+**WARNING: Do NOT add middleware to `createRouter()` in `router.tsx` or `app.tsx`. That is TanStack Router (client-side only). Server middleware belongs in `start.ts` using `requestMiddleware`.**
 ## Callback Route (CRITICAL)
 
 Path must match `WORKOS_REDIRECT_URI`. For `/api/auth/callback`:
@@ -244,6 +237,26 @@ Do not skip this step. If the build fails, fix the errors before finishing. Comm
 - Stale route tree → re-run step 1
 - Missing Vite types → re-run step 2
 - Wrong import paths → check package name is `@workos/authkit-tanstack-react-start`
+
+## Verification Checklist (ALL MUST PASS)
+
+Run these commands to confirm integration. **Do not mark complete until all pass:**
+
+```bash
+# 1. Check authkitMiddleware is configured
+grep -r "authkitMiddleware" src/ app/ 2>/dev/null || echo "FAIL: Middleware not configured"
+
+# 2. Check callback route exists
+find src/routes app/routes -name "*callback*" 2>/dev/null
+
+# 3. Check environment variables
+grep -c "WORKOS_" .env 2>/dev/null || echo "FAIL: No env vars found"
+
+# 4. Build succeeds
+pnpm build
+```
+
+**If check #1 fails:** authkitMiddleware must be in src/start.ts (or app/start.ts for legacy) requestMiddleware array. Auth will fail silently without it.
 
 ## Error Recovery
 

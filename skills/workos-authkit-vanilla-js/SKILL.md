@@ -43,16 +43,25 @@ Follow README examples for:
 const authkit = await createClient(clientId);
 ```
 
-## Verification Checklist
+## Verification Checklist (ALL MUST PASS)
 
-- [ ] README fetched and read before writing code
-- [ ] Project type detected (bundled vs CDN)
-- [ ] SDK installed/script added
-- [ ] `createClient()` called with `await`
-- [ ] Client ID provided (env var or hardcoded)
-- [ ] Sign in called from user gesture (click handler)
-- [ ] No console errors on page load
-- [ ] Auth UI updates on sign in/out
+Run these commands to confirm integration. **Do not mark complete until all pass:**
+
+```bash
+# 1. Check SDK is available (bundled or CDN)
+grep -r "createClient\|WorkOS" src/ *.html 2>/dev/null || echo "FAIL: SDK not found"
+
+# 2. Check createClient uses await
+grep -rn "await createClient" src/ *.js *.html 2>/dev/null || echo "FAIL: createClient must be awaited"
+
+# 3. Check sign-in is on user gesture (click handler)
+grep -rn "signIn\|sign_in" src/ *.js *.html 2>/dev/null
+
+# 4. Build succeeds (bundled projects only)
+pnpm build 2>/dev/null || echo "CDN project — verify manually in browser"
+```
+
+**If check #2 fails:** createClient() is async and must be awaited. Using it without await returns a Promise, not a client.
 
 ## Environment Variables
 
