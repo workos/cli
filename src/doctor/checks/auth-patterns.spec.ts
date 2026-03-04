@@ -514,7 +514,7 @@ describe('checkAuthPatterns', () => {
 
   describe('MISSING_AUTHKIT_MIDDLEWARE (TanStack Start)', () => {
     it('warning when start.ts lacks authkitMiddleware', async () => {
-      writeFixtureFile(testDir, 'src/start.ts', 'export default defineStart({})');
+      writeFixtureFile(testDir, 'src/start.ts', 'export default createStart({})');
       const result = await checkAuthPatterns(
         makeOptions(testDir),
         makeFramework({ name: 'TanStack Start', expectedCallbackPath: '/auth/callback' }),
@@ -529,8 +529,9 @@ describe('checkAuthPatterns', () => {
         testDir,
         'src/start.ts',
         `
+        import { createStart } from "@tanstack/react-start";
         import { authkitMiddleware } from "@workos-inc/authkit-tanstack-start";
-        export default defineStart({ middleware: [authkitMiddleware()] });
+        export default createStart({ requestMiddleware: [authkitMiddleware()] });
       `,
       );
       const result = await checkAuthPatterns(

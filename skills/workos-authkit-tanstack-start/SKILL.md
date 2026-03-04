@@ -86,6 +86,8 @@ Default redirect URI: `http://localhost:3000/api/auth/callback`
 
 **authkitMiddleware MUST be configured or auth will fail silently.**
 
+**WARNING: Do NOT add middleware to `createRouter()` in `router.tsx` or `app.tsx`. That is TanStack Router (client-side only). Server middleware belongs in `start.ts` using `requestMiddleware`.**
+
 Create or update `src/start.ts` (or `app/start.ts` for legacy):
 
 ```typescript

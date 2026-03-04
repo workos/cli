@@ -423,7 +423,10 @@ function checkMissingAuthkitMiddleware(ctx: CheckContext): AuthPatternFinding[] 
       severity: 'warning',
       message: 'start.ts does not reference authkitMiddleware — AuthKit session handling requires it',
       filePath: relative(ctx.installDir, startFile),
-      remediation: 'Add authkitMiddleware to your start.ts server middleware configuration.',
+      remediation:
+        'Add authkitMiddleware to requestMiddleware in src/start.ts:\n' +
+        '  import { authkitMiddleware } from "@workos/authkit-tanstack-react-start";\n' +
+        '  export default createStart({ requestMiddleware: [authkitMiddleware()] });',
     },
   ];
 }
