@@ -368,7 +368,7 @@ describe('checkAuthPatterns', () => {
       expect(result.findings.find((f) => f.code === 'CALLBACK_ROUTE_MISSING')).toBeUndefined();
     });
 
-    it('no finding when callback route exists (TanStack Start flat)', async () => {
+    it('no finding when callback route exists (TanStack Start flat in src/)', async () => {
       writeFixtureFile(
         testDir,
         'src/routes/auth.callback.tsx',
@@ -377,6 +377,36 @@ describe('checkAuthPatterns', () => {
       const result = await checkAuthPatterns(
         makeOptions(testDir),
         makeFramework({ name: 'TanStack Start', version: '1.0.0', expectedCallbackPath: '/auth/callback' }),
+        makeEnv(),
+        makeSdk({ name: '@workos-inc/authkit-tanstack-start' }),
+      );
+      expect(result.findings.find((f) => f.code === 'CALLBACK_ROUTE_MISSING')).toBeUndefined();
+    });
+
+    it('no finding when callback route exists (TanStack Start nested in src/)', async () => {
+      writeFixtureFile(
+        testDir,
+        'src/routes/api/auth/callback.tsx',
+        'export const Route = createFileRoute("/api/auth/callback")',
+      );
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: 'TanStack Start', version: '1.0.0', expectedCallbackPath: '/api/auth/callback' }),
+        makeEnv(),
+        makeSdk({ name: '@workos-inc/authkit-tanstack-start' }),
+      );
+      expect(result.findings.find((f) => f.code === 'CALLBACK_ROUTE_MISSING')).toBeUndefined();
+    });
+
+    it('no finding when callback route exists (TanStack Start flat in app/)', async () => {
+      writeFixtureFile(
+        testDir,
+        'app/routes/api.auth.callback.tsx',
+        'export const Route = createFileRoute("/api/auth/callback")',
+      );
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: 'TanStack Start', version: '1.0.0', expectedCallbackPath: '/api/auth/callback' }),
         makeEnv(),
         makeSdk({ name: '@workos-inc/authkit-tanstack-start' }),
       );

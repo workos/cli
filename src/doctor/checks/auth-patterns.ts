@@ -299,13 +299,16 @@ function checkCallbackRouteMissing(ctx: CheckContext): AuthPatternFinding[] {
       possiblePaths.push(join(ctx.installDir, 'app', 'routes', nested + `.${ext}`));
     }
   } else if (ctx.framework.name === 'TanStack Start') {
-    // Modern flat: src/routes/api.auth.callback.tsx  Legacy nested: app/routes/api/auth/callback.tsx
+    // Flat: routes/api.auth.callback.tsx  Nested: routes/api/auth/callback.tsx
+    // Both conventions work in both src/ and app/ directories
     const segments = callbackPath.replace(/^\//, '').split('/');
     const flat = segments.join('.');
     const nested = segments.join('/');
-    for (const ext of ['tsx', 'jsx', 'ts', 'js']) {
-      possiblePaths.push(join(ctx.installDir, 'src', 'routes', `${flat}.${ext}`));
-      possiblePaths.push(join(ctx.installDir, 'app', 'routes', nested + `.${ext}`));
+    for (const prefix of ['src', 'app']) {
+      for (const ext of ['tsx', 'jsx', 'ts', 'js']) {
+        possiblePaths.push(join(ctx.installDir, prefix, 'routes', `${flat}.${ext}`));
+        possiblePaths.push(join(ctx.installDir, prefix, 'routes', nested + `.${ext}`));
+      }
     }
   }
 
