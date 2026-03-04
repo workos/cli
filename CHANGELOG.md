@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0](https://github.com/workos/cli/compare/v0.7.3...v0.8.0) (2026-03-04)
+
+
+### Features
+
+* CLI management commands for all WorkOS resources ([#76](https://github.com/workos/cli/issues/76)) ([7c05f87](https://github.com/workos/cli/commit/7c05f87953084f91bb88a92cdf35092c15de0d60))
+* non-TTY mode for agent-friendly CLI ([#75](https://github.com/workos/cli/issues/75)) ([df09d1e](https://github.com/workos/cli/commit/df09d1ec2151a11d0af289f6dbe1e59f766b0a6e))
+* upgrade @anthropic-ai/claude-agent-sdk from 0.2.19 to 0.2.62 ([44fc4c2](https://github.com/workos/cli/commit/44fc4c2fbcc68c5ef8a6a18f6ce22987e8b54d4a))
+
 ## [0.7.3](https://github.com/workos/cli/compare/v0.7.2...v0.7.3) (2026-02-24)
 
 
