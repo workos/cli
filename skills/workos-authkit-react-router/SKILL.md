@@ -18,7 +18,7 @@ description: Integrate WorkOS AuthKit with React Router applications. Supports v
 
 **STOP - Do not write any code until this completes.**
 
-WebFetch: `https://github.com/workos/authkit-react-router/blob/main/README.md`
+WebFetch: `https://raw.githubusercontent.com/workos/authkit-react-router/main/README.md`
 
 The README is the source of truth. If this skill conflicts with README, **follow the README**.
 

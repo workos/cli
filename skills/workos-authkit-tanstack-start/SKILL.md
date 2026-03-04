@@ -24,7 +24,7 @@ description: Integrate WorkOS AuthKit with TanStack Start applications. Full-sta
 
 **STOP - Do not proceed until complete.**
 
-WebFetch: `https://github.com/workos/authkit-tanstack-start/blob/main/README.md`
+WebFetch: `https://raw.githubusercontent.com/workos/authkit-tanstack-start/main/README.md`
 
 From README, extract:
 

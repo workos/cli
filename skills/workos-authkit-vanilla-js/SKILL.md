@@ -9,7 +9,7 @@ description: Integrate WorkOS AuthKit with vanilla JavaScript applications. No f
 
 ### Step 1: Fetch README (BLOCKING)
 
-WebFetch: `https://github.com/workos/authkit-js/blob/main/README.md`
+WebFetch: `https://raw.githubusercontent.com/workos/authkit-js/main/README.md`
 
 **README is source of truth.** If this skill conflicts, follow README.
 

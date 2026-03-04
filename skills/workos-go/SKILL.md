@@ -9,7 +9,7 @@ description: Integrate WorkOS AuthKit with Go applications. Supports Gin and std
 
 **STOP. Do not proceed until complete.**
 
-WebFetch: `https://github.com/workos/workos-go/blob/main/README.md`
+WebFetch: `https://raw.githubusercontent.com/workos/workos-go/main/README.md`
 
 The README is the source of truth for SDK API usage. If this skill conflicts with README, follow README.
 

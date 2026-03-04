@@ -9,7 +9,7 @@ description: Integrate WorkOS AuthKit with Next.js App Router (13+). Server-side
 
 **STOP. Do not proceed until complete.**
 
-WebFetch: `https://github.com/workos/authkit-nextjs/blob/main/README.md`
+WebFetch: `https://raw.githubusercontent.com/workos/authkit-nextjs/main/README.md`
 
 The README is the source of truth. If this skill conflicts with README, follow README.
 

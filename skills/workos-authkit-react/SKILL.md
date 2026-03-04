@@ -11,7 +11,7 @@ description: Integrate WorkOS AuthKit with React single-page applications. Clien
 START
   │
   ├─► Fetch README (BLOCKING)
-  │   github.com/workos/authkit-react/blob/main/README.md
+  │   raw.githubusercontent.com/workos/authkit-react/main/README.md
   │   README is source of truth. Stop if fetch fails.
   │
   ├─► Detect Build Tool

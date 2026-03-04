@@ -9,7 +9,7 @@ description: Integrate WorkOS AuthKit with generic PHP applications. Uses the wo
 
 **STOP. Do not proceed until complete.**
 
-WebFetch: `https://github.com/workos/workos-php/blob/main/README.md`
+WebFetch: `https://raw.githubusercontent.com/workos/workos-php/main/README.md`
 
 The README is the source of truth. If this skill conflicts with README, follow README.
 
