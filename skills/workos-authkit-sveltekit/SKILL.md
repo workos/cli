@@ -85,10 +85,10 @@ If existing auth detected (Lucia is most common in SvelteKit):
 Detect package manager, install SDK package from README.
 
 ```
-pnpm-lock.yaml? → pnpm add @workos-inc/authkit-sveltekit
-yarn.lock? → yarn add @workos-inc/authkit-sveltekit
-bun.lockb? → bun add @workos-inc/authkit-sveltekit
-else → npm install @workos-inc/authkit-sveltekit
+pnpm-lock.yaml? → pnpm add @workos/authkit-sveltekit
+yarn.lock? → yarn add @workos/authkit-sveltekit
+bun.lockb? → bun add @workos/authkit-sveltekit
+else → npm install @workos/authkit-sveltekit
 ```
 
 **Verify:** SDK package exists in node_modules before continuing.
@@ -105,7 +105,7 @@ If `src/hooks.server.ts` already exists with custom logic, use SvelteKit's `sequ
 
 ```typescript
 import { sequence } from '@sveltejs/kit/hooks';
-import { authkitHandle } from '@workos-inc/authkit-sveltekit'; // Check README for exact export
+import { authkitHandle } from '@workos/authkit-sveltekit'; // Check README for exact export
 
 export const handle = sequence(authkitHandle, yourExistingHandle);
 ```
@@ -174,7 +174,7 @@ pnpm build || npm run build
 
 ## Error Recovery
 
-### "Cannot find module '@workos-inc/authkit-sveltekit'"
+### "Cannot find module '@workos/authkit-sveltekit'"
 
 - Check: SDK installed before writing imports
 - Check: SDK package directory exists in node_modules
