@@ -406,7 +406,7 @@ export class CLIAdapter implements InstallerAdapter {
 
     // Add actionable hints for common errors
     if (message.includes('authentication') || message.includes('auth')) {
-      clack.log.info('Try running: workos logout && workos install');
+      clack.log.info('Try running: workos auth logout && workos install');
     }
     if (message.includes('ENOENT') || message.includes('not found')) {
       clack.log.info('Ensure you are in a project directory');

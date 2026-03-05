@@ -77,7 +77,7 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
       if (refreshResult.errorType === 'invalid_grant') {
         clearCredentials();
         if (isNonInteractiveEnvironment()) {
-          exitWithAuthRequired('Session expired. Run `workos login` in an interactive terminal to re-authenticate.');
+          exitWithAuthRequired('Session expired. Run `workos auth login` in an interactive terminal to re-authenticate.');
         }
         logInfo('[ensure-auth] Refresh token expired, triggering login');
         await runLogin();
@@ -103,7 +103,7 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
   // Case 4: No refresh token available — clear stale creds, must login
   clearCredentials();
   if (isNonInteractiveEnvironment()) {
-    exitWithAuthRequired('Session expired. Run `workos login` in an interactive terminal to re-authenticate.');
+    exitWithAuthRequired('Session expired. Run `workos auth login` in an interactive terminal to re-authenticate.');
   }
   logInfo('[ensure-auth] No refresh token, triggering login');
   await runLogin();

@@ -77,7 +77,7 @@ export async function runLogin(): Promise<void> {
   if (getAccessToken()) {
     const creds = getCredentials();
     clack.log.info(`Already logged in as ${creds?.email ?? 'unknown'}`);
-    clack.log.info('Run `workos logout` to log out');
+    clack.log.info('Run `workos auth logout` to log out');
     return;
   }
 
@@ -91,7 +91,7 @@ export async function runLogin(): Promise<void> {
         updateTokens(result.accessToken, result.expiresAt, result.refreshToken);
         logInfo('[login] Session refreshed via refresh token');
         clack.log.info(`Already logged in as ${existingCreds.email ?? 'unknown'}`);
-        clack.log.info('Run `workos logout` to log out');
+        clack.log.info('Run `workos auth logout` to log out');
         return;
       }
     } catch {

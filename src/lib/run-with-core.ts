@@ -223,7 +223,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         if (!token) {
           // This should rarely happen since bin.ts handles auth first
           // But keep as safety net for programmatic usage
-          throw new Error('Not authenticated. Run `workos login` first.');
+          throw new Error('Not authenticated. Run `workos auth login` first.');
         }
 
         // Set telemetry from existing credentials

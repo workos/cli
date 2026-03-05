@@ -92,7 +92,7 @@ describe('token-refresh', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('Session expired');
-      expect(result.error).toContain('workos login');
+      expect(result.error).toContain('workos auth login');
     });
 
     it('preserves credentials on valid token', async () => {

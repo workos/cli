@@ -251,7 +251,7 @@ async function handleRequest(
     res.end(
       JSON.stringify({
         error: 'credentials_unavailable',
-        message: 'Not authenticated. Run `workos login` first.',
+        message: 'Not authenticated. Run `workos auth login` first.',
       }),
     );
     return;

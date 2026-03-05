@@ -96,13 +96,18 @@ const paginationOpts: OptionSchema[] = [
 
 const commands: CommandSchema[] = [
   {
-    name: 'login',
+    name: 'auth login',
     description: 'Authenticate with WorkOS via browser-based OAuth',
     options: [insecureStorageOpt],
   },
   {
-    name: 'logout',
+    name: 'auth logout',
     description: 'Remove stored WorkOS credentials and tokens',
+    options: [insecureStorageOpt],
+  },
+  {
+    name: 'auth status',
+    description: 'Show current authentication status',
     options: [insecureStorageOpt],
   },
   {
