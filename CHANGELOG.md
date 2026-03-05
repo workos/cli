@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0](https://github.com/workos/cli/compare/v0.8.2...v0.9.0) (2026-03-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* `workos login` and `workos logout` are now `workos auth login` and `workos auth logout`.
+
+### Features
+
+* move login/logout to auth subcommand, add auth status ([#84](https://github.com/workos/cli/issues/84)) ([b86c39b](https://github.com/workos/cli/commit/b86c39bfe6724b9a8e56a710426074127eedd6de))
+
 ## [0.8.2](https://github.com/workos/cli/compare/v0.8.1...v0.8.2) (2026-03-05)
 
 
