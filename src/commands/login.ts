@@ -3,6 +3,7 @@ import clack from '../utils/clack.js';
 import { saveCredentials, getCredentials, getAccessToken, isTokenExpired, updateTokens } from '../lib/credentials.js';
 import { getCliAuthClientId, getAuthkitDomain } from '../lib/settings.js';
 import { refreshAccessToken } from '../lib/token-refresh-client.js';
+import { logInfo } from '../utils/debug.js';
 
 /**
  * Parse JWT payload
@@ -88,8 +89,8 @@ export async function runLogin(): Promise<void> {
       const result = await refreshAccessToken(authkitDomain, clientId);
       if (result.accessToken && result.expiresAt) {
         updateTokens(result.accessToken, result.expiresAt, result.refreshToken);
+        logInfo('[login] Session refreshed via refresh token');
         clack.log.info(`Already logged in as ${existingCreds.email ?? 'unknown'}`);
-        clack.log.info('(Session refreshed)');
         clack.log.info('Run `workos logout` to log out');
         return;
       }
