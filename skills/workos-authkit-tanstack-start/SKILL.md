@@ -111,6 +111,7 @@ export const startInstance = createStart(() => ({
 2. **`createStart` takes a function** returning the options object, not the options directly. `createStart({ ... })` will fail.
 
 **WARNING: Do NOT add middleware to `createRouter()` in `router.tsx` or `app.tsx`. That is TanStack Router (client-side only). Server middleware belongs in `start.ts` using `requestMiddleware`.**
+
 ## Callback Route (CRITICAL)
 
 Path must match `WORKOS_REDIRECT_URI`. For `/api/auth/callback`:
