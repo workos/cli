@@ -33,33 +33,6 @@ const ACCOUNT_NAME = 'credentials';
 let fallbackWarningShown = false;
 let forceInsecureStorage = false;
 let migrationAttempted = false;
-let auditEnabled = true;
-
-function getAuditLogPath(): string {
-  return path.join(os.homedir(), '.workos', 'audit.log');
-}
-
-function audit(action: string, detail?: string): void {
-  if (!auditEnabled || process.env.VITEST) return;
-  try {
-    const dir = path.join(os.homedir(), '.workos');
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-    }
-    const timestamp = new Date().toISOString();
-    const caller = new Error().stack?.split('\n')[2]?.trim() ?? 'unknown';
-    const line = `[${timestamp}] ${action}${detail ? ` — ${detail}` : ''} (${caller})\n`;
-    fs.appendFileSync(getAuditLogPath(), line, { mode: 0o600 });
-  } catch {
-    // Never fail on audit logging
-  }
-}
-
-export function setAuditEnabled(value: boolean): void {
-  auditEnabled = value;
-}
-
-export { getAuditLogPath };
 
 export function setInsecureStorage(value: boolean): void {
   forceInsecureStorage = value;
@@ -181,25 +154,19 @@ export function getCredentials(): Credentials | null {
     return fileCreds;
   }
 
-  audit('GET_CREDENTIALS', 'result=null (no credentials found)');
   return null;
 }
 
 export function saveCredentials(creds: Credentials): void {
-  const backend = forceInsecureStorage ? 'file' : 'keyring';
-  audit('SAVE_CREDENTIALS', `user=${creds.email ?? creds.userId}, expiresAt=${new Date(creds.expiresAt).toISOString()}, hasRefreshToken=${!!creds.refreshToken}, backend=${backend}`);
-
   if (forceInsecureStorage) return writeToFile(creds);
 
   if (!writeToKeyring(creds)) {
-    audit('SAVE_CREDENTIALS', 'keyring write failed, falling back to file');
     showFallbackWarning();
     writeToFile(creds);
   }
 }
 
 export function clearCredentials(): void {
-  audit('CLEAR_CREDENTIALS', 'deleting from keyring and file');
   deleteFromKeyring();
   deleteFile();
   migrationAttempted = false;
@@ -208,11 +175,8 @@ export function clearCredentials(): void {
 export function updateTokens(accessToken: string, expiresAt: number, refreshToken?: string): void {
   const creds = getCredentials();
   if (!creds) {
-    audit('UPDATE_TOKENS', 'failed — no existing credentials');
     throw new Error('No existing credentials to update');
   }
-
-  audit('UPDATE_TOKENS', `user=${creds.email ?? creds.userId}, newExpiresAt=${new Date(expiresAt).toISOString()}, tokenRotated=${!!refreshToken}`);
 
   const updated: Credentials = {
     ...creds,
