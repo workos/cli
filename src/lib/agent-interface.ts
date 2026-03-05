@@ -4,7 +4,7 @@
  */
 
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { getPackageRoot } from '../utils/paths.js';
 import { debug, logInfo, logWarn, logError, initLogFile, getLogFilePath } from '../utils/debug.js';
 import type { InstallerOptions } from '../utils/types.js';
 import { analytics } from '../utils/analytics.js';
@@ -577,10 +577,7 @@ export async function runAgent(
     };
 
     // Load plugin with bundled skills
-    // Path from dist/lib/ back to package root
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    const pluginPath = path.join(__dirname, '../..');
+    const pluginPath = getPackageRoot(import.meta.url);
     logInfo('Loading plugin from:', pluginPath);
 
     const response = query({

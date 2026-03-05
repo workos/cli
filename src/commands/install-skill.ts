@@ -1,9 +1,9 @@
 import { homedir } from 'os';
-import { join, dirname } from 'path';
+import { join } from 'path';
 import { existsSync } from 'fs';
 import { mkdir, copyFile, readdir } from 'fs/promises';
-import { fileURLToPath } from 'url';
 import chalk from 'chalk';
+import { getPackageRoot } from '../utils/paths.js';
 
 export interface AgentConfig {
   name: string;
@@ -48,9 +48,7 @@ export interface InstallSkillOptions {
 }
 
 export function getSkillsDir(): string {
-  const currentFile = fileURLToPath(import.meta.url);
-  // From dist/commands/install-skill.js -> skills/
-  return join(dirname(currentFile), '..', '..', 'skills');
+  return join(getPackageRoot(import.meta.url), 'skills');
 }
 
 export async function discoverSkills(skillsDir: string): Promise<string[]> {
