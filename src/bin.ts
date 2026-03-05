@@ -190,22 +190,40 @@ yargs(rawArgs)
   })
   .command('auth', 'Manage authentication (login, logout, status)', (yargs) => {
     yargs.options(insecureStorageOption);
-    registerSubcommand(yargs, 'login', 'Authenticate with WorkOS via browser-based OAuth', (y) => y, async (argv) => {
-      await applyInsecureStorage(argv.insecureStorage);
-      const { runLogin } = await import('./commands/login.js');
-      await runLogin();
-      process.exit(0);
-    });
-    registerSubcommand(yargs, 'logout', 'Remove stored WorkOS credentials and tokens', (y) => y, async (argv) => {
-      await applyInsecureStorage(argv.insecureStorage);
-      const { runLogout } = await import('./commands/logout.js');
-      await runLogout();
-    });
-    registerSubcommand(yargs, 'status', 'Show current authentication status', (y) => y, async (argv) => {
-      await applyInsecureStorage(argv.insecureStorage);
-      const { runAuthStatus } = await import('./commands/auth-status.js');
-      await runAuthStatus();
-    });
+    registerSubcommand(
+      yargs,
+      'login',
+      'Authenticate with WorkOS via browser-based OAuth',
+      (y) => y,
+      async (argv) => {
+        await applyInsecureStorage(argv.insecureStorage);
+        const { runLogin } = await import('./commands/login.js');
+        await runLogin();
+        process.exit(0);
+      },
+    );
+    registerSubcommand(
+      yargs,
+      'logout',
+      'Remove stored WorkOS credentials and tokens',
+      (y) => y,
+      async (argv) => {
+        await applyInsecureStorage(argv.insecureStorage);
+        const { runLogout } = await import('./commands/logout.js');
+        await runLogout();
+      },
+    );
+    registerSubcommand(
+      yargs,
+      'status',
+      'Show current authentication status',
+      (y) => y,
+      async (argv) => {
+        await applyInsecureStorage(argv.insecureStorage);
+        const { runAuthStatus } = await import('./commands/auth-status.js');
+        await runAuthStatus();
+      },
+    );
     return yargs.demandCommand(1, 'Please specify an auth subcommand').strict();
   })
   .command(

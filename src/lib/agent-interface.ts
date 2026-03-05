@@ -3,7 +3,6 @@
  * Uses Claude Agent SDK directly with WorkOS MCP server
  */
 
-import path from 'path';
 import { getPackageRoot } from '../utils/paths.js';
 import { debug, logInfo, logWarn, logError, initLogFile, getLogFilePath } from '../utils/debug.js';
 import type { InstallerOptions } from '../utils/types.js';
