@@ -87,6 +87,7 @@ Default redirect URI: `http://localhost:3000/api/auth/callback`
 **authkitMiddleware MUST be configured or auth will fail silently.**
 
 **WARNING: Do NOT add middleware to `createRouter()` in `router.tsx` or `app.tsx`. That is TanStack Router (client-side only). Server middleware belongs in `start.ts` using `requestMiddleware`.**
+
 ### If `start.ts` already exists
 
 Read the existing file first. Add `authkitMiddleware` to the existing `requestMiddleware` array (or create the array if missing). Preserve the existing export style. Do not rewrite the file from scratch.
@@ -105,6 +106,7 @@ export const startInstance = createStart(() => ({
 ```
 
 **Two things matter here:**
+
 1. **Named export `startInstance`** — the build plugin generates `import type { startInstance }` from this file. A `default` export will cause a build error.
 2. **`createStart` takes a function** returning the options object, not the options directly. `createStart({ ... })` will fail.
 
@@ -238,6 +240,7 @@ pnpm build
 ```
 
 Do not skip this step. If the build fails, fix the errors before finishing. Common causes:
+
 - Stale route tree → re-run step 1
 - Missing Vite types → re-run step 2
 - Wrong import paths → check package name is `@workos/authkit-tanstack-react-start`
