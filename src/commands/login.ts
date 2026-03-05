@@ -1,4 +1,5 @@
 import open from 'opn';
+import chalk from 'chalk';
 import clack from '../utils/clack.js';
 import { saveCredentials, getCredentials, getAccessToken, isTokenExpired, updateTokens } from '../lib/credentials.js';
 import { getCliAuthClientId, getAuthkitDomain } from '../lib/settings.js';
@@ -76,8 +77,8 @@ export async function runLogin(): Promise<void> {
   // Check if already logged in with valid token
   if (getAccessToken()) {
     const creds = getCredentials();
-    clack.log.info(`Already logged in as ${creds?.email ?? 'unknown'}`);
-    clack.log.info('Run `workos auth logout` to log out');
+    console.log(chalk.green(`Already logged in as ${creds?.email ?? 'unknown'}`));
+    console.log(chalk.dim('Run `workos auth logout` to log out'));
     return;
   }
 
@@ -90,8 +91,8 @@ export async function runLogin(): Promise<void> {
       if (result.accessToken && result.expiresAt) {
         updateTokens(result.accessToken, result.expiresAt, result.refreshToken);
         logInfo('[login] Session refreshed via refresh token');
-        clack.log.info(`Already logged in as ${existingCreds.email ?? 'unknown'}`);
-        clack.log.info('Run `workos auth logout` to log out');
+        console.log(chalk.green(`Already logged in as ${existingCreds.email ?? 'unknown'}`));
+        console.log(chalk.dim('Run `workos auth logout` to log out'));
         return;
       }
     } catch {
