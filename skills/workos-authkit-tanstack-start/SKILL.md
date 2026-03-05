@@ -87,33 +87,32 @@ Default redirect URI: `http://localhost:3000/api/auth/callback`
 **authkitMiddleware MUST be configured or auth will fail silently.**
 
 **WARNING: Do NOT add middleware to `createRouter()` in `router.tsx` or `app.tsx`. That is TanStack Router (client-side only). Server middleware belongs in `start.ts` using `requestMiddleware`.**
+### If `start.ts` already exists
 
-Create or update `src/start.ts` (or `app/start.ts` for legacy):
+Read the existing file first. Add `authkitMiddleware` to the existing `requestMiddleware` array (or create the array if missing). Preserve the existing export style. Do not rewrite the file from scratch.
 
-```typescript
-import { authkitMiddleware } from '@workos/authkit-tanstack-react-start';
+### If `start.ts` does not exist
 
-export default {
-  requestMiddleware: [authkitMiddleware()],
-};
-```
-
-Alternative pattern with createStart:
+Create `src/start.ts` (or `app/start.ts` for legacy) using `createStart`:
 
 ```typescript
 import { createStart } from '@tanstack/react-start';
 import { authkitMiddleware } from '@workos/authkit-tanstack-react-start';
 
-export default createStart({
+export const startInstance = createStart(() => ({
   requestMiddleware: [authkitMiddleware()],
-});
+}));
 ```
+
+**Two things matter here:**
+1. **Named export `startInstance`** — the build plugin generates `import type { startInstance }` from this file. A `default` export will cause a build error.
+2. **`createStart` takes a function** returning the options object, not the options directly. `createStart({ ... })` will fail.
 
 ### Verification Checklist
 
 - [ ] `authkitMiddleware` imported from `@workos/authkit-tanstack-react-start`
-- [ ] Middleware in `requestMiddleware` array
-- [ ] File exports the config (default export or named `startInstance`)
+- [ ] Middleware in `requestMiddleware` array (not `middleware`)
+- [ ] Named export: `export const startInstance = createStart(...)` (not `export default`)
 
 Verify: `grep -r "authkitMiddleware" src/ app/ 2>/dev/null`
 
@@ -209,6 +208,39 @@ function Profile() {
 ```
 
 **Note:** Server-side `getAuth()` is preferred for most use cases.
+
+## Finalize (REQUIRED before declaring success)
+
+After creating/editing all files, run these steps in order. Skipping them is the most common cause of build failures.
+
+### 1. Regenerate the route tree
+
+Adding new route files (callback, signout, etc.) makes the existing `routeTree.gen.ts` stale. The build will fail with type errors about missing routes until it is regenerated.
+
+```bash
+pnpm build 2>/dev/null || npx tsr generate
+```
+
+The build itself triggers route tree regeneration. If it fails for other reasons, use `tsr generate` directly.
+
+### 2. Ensure Vite type declarations exist
+
+TanStack Start projects import CSS with `import styles from './styles.css?url'`. Without Vite's type declarations, TypeScript will error on these imports. Check if `src/vite-env.d.ts` (or `app/vite-env.d.ts`) exists — if not, create it now (before attempting the build):
+
+```typescript
+/// <reference types="vite/client" />
+```
+
+### 3. Verify the build
+
+```bash
+pnpm build
+```
+
+Do not skip this step. If the build fails, fix the errors before finishing. Common causes:
+- Stale route tree → re-run step 1
+- Missing Vite types → re-run step 2
+- Wrong import paths → check package name is `@workos/authkit-tanstack-react-start`
 
 ## Error Recovery
 
