@@ -1,4 +1,4 @@
-import clack from '../utils/clack.js';
+import chalk from 'chalk';
 import { getCredentials, isTokenExpired } from '../lib/credentials.js';
 import { getActiveEnvironment } from '../lib/config-store.js';
 import { isJsonMode, outputJson } from '../utils/output.js';
@@ -22,8 +22,8 @@ export async function runAuthStatus(): Promise<void> {
       outputJson({ authenticated: false });
       return;
     }
-    clack.log.info('Not logged in');
-    clack.log.info('Run `workos auth login` to authenticate');
+    console.log(chalk.yellow('Not logged in'));
+    console.log(chalk.dim('Run `workos auth login` to authenticate'));
     return;
   }
 
@@ -44,17 +44,17 @@ export async function runAuthStatus(): Promise<void> {
     return;
   }
 
-  clack.log.info(`Logged in as ${creds.email ?? creds.userId}`);
+  console.log(chalk.green(`Logged in as ${creds.email ?? creds.userId}`));
 
   if (expired) {
-    clack.log.warn(`Token expired ${formatTimeRemaining(-timeRemaining)} ago`);
+    console.log(chalk.yellow(`Token expired ${formatTimeRemaining(-timeRemaining)} ago`));
   } else {
-    clack.log.info(`Token expires in ${formatTimeRemaining(timeRemaining)}`);
+    console.log(chalk.dim(`Token expires in ${formatTimeRemaining(timeRemaining)}`));
   }
 
-  clack.log.info(`Refresh token: ${creds.refreshToken ? 'present' : 'absent'}`);
+  console.log(chalk.dim(`Refresh token: ${creds.refreshToken ? 'present' : 'absent'}`));
 
   if (activeEnv) {
-    clack.log.info(`Environment: ${activeEnv.name} (${activeEnv.type})`);
+    console.log(chalk.dim(`Environment: ${activeEnv.name} (${activeEnv.type})`));
   }
 }
