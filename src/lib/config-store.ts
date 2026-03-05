@@ -84,7 +84,6 @@ function getKeyringEntry(): Entry {
 }
 
 function readFromKeyring(): CliConfig | null {
-  if (forceInsecureStorage) return null;
   try {
     const entry = getKeyringEntry();
     const data = entry.getPassword();
@@ -97,7 +96,6 @@ function readFromKeyring(): CliConfig | null {
 }
 
 function writeToKeyring(config: CliConfig): boolean {
-  if (forceInsecureStorage) return false;
   try {
     const entry = getKeyringEntry();
     entry.setPassword(JSON.stringify(config));
@@ -109,7 +107,6 @@ function writeToKeyring(config: CliConfig): boolean {
 }
 
 function deleteFromKeyring(): void {
-  if (forceInsecureStorage) return;
   try {
     const entry = getKeyringEntry();
     entry.deletePassword();
