@@ -1,5 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { existsSync, readFileSync, unlinkSync, mkdtempSync, rmdirSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  readFileSync,
+  unlinkSync,
+  mkdtempSync,
+  rmdirSync,
+  statSync,
+  writeFileSync,
+  mkdirSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -12,6 +21,44 @@ vi.mock('../utils/debug.js', () => ({
 let testDir: string;
 let workosDir: string;
 let configFile: string;
+
+// Mock keyring storage
+const mockKeyring = new Map<string, string>();
+let keyringAvailable = true;
+
+vi.mock('@napi-rs/keyring', () => ({
+  Entry: class MockEntry {
+    private key: string;
+
+    constructor(
+      service: string,
+      private account: string,
+    ) {
+      this.key = `${service}:${account}`;
+    }
+
+    getPassword(): string | null {
+      if (!keyringAvailable) {
+        throw new Error('Keyring not available');
+      }
+      return mockKeyring.get(this.key) ?? null;
+    }
+
+    setPassword(password: string): void {
+      if (!keyringAvailable) {
+        throw new Error('Keyring not available');
+      }
+      mockKeyring.set(this.key, password);
+    }
+
+    deletePassword(): void {
+      if (!keyringAvailable && mockKeyring.has(this.key)) {
+        throw new Error('Keyring not available');
+      }
+      mockKeyring.delete(this.key);
+    }
+  },
+}));
 
 // Mock os.homedir BEFORE importing config-store module
 vi.mock('node:os', async (importOriginal) => {
@@ -36,7 +83,11 @@ describe('config-store', () => {
     testDir = mkdtempSync(join(tmpdir(), 'config-store-test-'));
     workosDir = join(testDir, '.workos');
     configFile = join(workosDir, 'config.json');
-    // Force file-based storage for tests
+
+    // Reset state
+    mockKeyring.clear();
+    keyringAvailable = true;
+    // Force file-based storage for most tests
     setInsecureConfigStorage(true);
   });
 
@@ -197,6 +248,99 @@ describe('config-store', () => {
       expect(env?.name).toBe('sandbox');
       expect(env?.apiKey).toBe('sk_test_sandbox');
       expect(env?.endpoint).toBe('http://localhost:8001');
+    });
+  });
+
+  describe('keyring storage (default)', () => {
+    beforeEach(() => {
+      setInsecureConfigStorage(false);
+    });
+
+    it('saves config to keyring', () => {
+      saveConfig(sampleConfig);
+      expect(mockKeyring.has('workos-cli:config')).toBe(true);
+    });
+
+    it('retrieves config from keyring', () => {
+      saveConfig(sampleConfig);
+      const config = getConfig();
+      expect(config?.activeEnvironment).toBe('production');
+      expect(config?.environments.production.apiKey).toBe('sk_test_abc123');
+    });
+
+    it('does not write file when keyring succeeds', () => {
+      saveConfig(sampleConfig);
+      expect(mockKeyring.has('workos-cli:config')).toBe(true);
+      expect(existsSync(configFile)).toBe(false);
+    });
+
+    it('does not delete existing file on keyring success', () => {
+      // Create a pre-existing file (from a prior fallback write)
+      mkdirSync(workosDir, { recursive: true });
+      writeFileSync(configFile, JSON.stringify(sampleConfig));
+
+      saveConfig({ ...sampleConfig, activeEnvironment: 'staging' });
+
+      expect(mockKeyring.has('workos-cli:config')).toBe(true);
+      expect(existsSync(configFile)).toBe(true);
+    });
+
+    it('clears from both keyring and file', () => {
+      saveConfig(sampleConfig);
+      mkdirSync(workosDir, { recursive: true });
+      writeFileSync(configFile, JSON.stringify(sampleConfig));
+
+      clearConfig();
+
+      expect(mockKeyring.has('workos-cli:config')).toBe(false);
+      expect(existsSync(configFile)).toBe(false);
+    });
+  });
+
+  describe('file fallback (keyring unavailable)', () => {
+    beforeEach(() => {
+      setInsecureConfigStorage(false);
+      keyringAvailable = false;
+    });
+
+    it('falls back to file when keyring unavailable', () => {
+      saveConfig(sampleConfig);
+      expect(existsSync(configFile)).toBe(true);
+      expect(mockKeyring.has('workos-cli:config')).toBe(false);
+    });
+
+    it('reads from file when keyring unavailable', () => {
+      saveConfig(sampleConfig);
+      const config = getConfig();
+      expect(config?.activeEnvironment).toBe('production');
+    });
+  });
+
+  describe('migration (file to keyring)', () => {
+    beforeEach(() => {
+      setInsecureConfigStorage(false);
+    });
+
+    it('migrates file config to keyring on read but keeps file', () => {
+      mkdirSync(workosDir, { recursive: true });
+      writeFileSync(configFile, JSON.stringify(sampleConfig));
+
+      const config = getConfig();
+
+      expect(config?.activeEnvironment).toBe('production');
+      expect(mockKeyring.has('workos-cli:config')).toBe(true);
+      expect(existsSync(configFile)).toBe(true);
+    });
+
+    it('keeps file if keyring unavailable during migration', () => {
+      mkdirSync(workosDir, { recursive: true });
+      writeFileSync(configFile, JSON.stringify(sampleConfig));
+
+      keyringAvailable = false;
+      const config = getConfig();
+
+      expect(config?.activeEnvironment).toBe('production');
+      expect(existsSync(configFile)).toBe(true);
     });
   });
 });

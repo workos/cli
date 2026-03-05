@@ -155,9 +155,9 @@ export function getCredentials(): Credentials | null {
 export function saveCredentials(creds: Credentials): void {
   if (forceInsecureStorage) return writeToFile(creds);
 
-  writeToFile(creds);
   if (!writeToKeyring(creds)) {
     showFallbackWarning();
+    writeToFile(creds);
   }
 }
 

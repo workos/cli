@@ -124,10 +124,22 @@ describe('credential-store', () => {
       expect(creds?.userId).toBe(validCreds.userId);
     });
 
-    it('keeps file as durable fallback alongside keyring', () => {
+    it('does not write file when keyring succeeds', () => {
       saveCredentials(validCreds);
 
-      // Both keyring and file should have credentials
+      // Keyring has credentials, file should NOT be written
+      expect(mockKeyring.has('workos-cli:credentials')).toBe(true);
+      expect(existsSync(credentialsFile)).toBe(false);
+    });
+
+    it('does not delete existing file on keyring success', () => {
+      // Create a pre-existing file (from a prior fallback write)
+      mkdirSync(installerDir, { recursive: true });
+      writeFileSync(credentialsFile, JSON.stringify(validCreds));
+
+      // Save with keyring available — file should remain untouched
+      saveCredentials({ ...validCreds, accessToken: 'new_token' });
+
       expect(mockKeyring.has('workos-cli:credentials')).toBe(true);
       expect(existsSync(credentialsFile)).toBe(true);
     });
@@ -236,11 +248,10 @@ describe('credential-store', () => {
     });
 
     it('hasCredentials only checks file when flag is set', () => {
-      // Save with default mode (writes to both keyring + file)
+      // Save with insecure mode (writes to file)
+      setInsecureStorage(true);
       saveCredentials(validCreds);
 
-      // Enable insecure storage — should still find the file
-      setInsecureStorage(true);
       expect(hasCredentials()).toBe(true);
     });
   });

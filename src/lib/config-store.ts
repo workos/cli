@@ -134,8 +134,8 @@ export function getConfig(): CliConfig | null {
 
   const fileConfig = readFromFile();
   if (fileConfig) {
-    // Migrate file config to keyring if possible
-    if (writeToKeyring(fileConfig)) deleteFile();
+    // Migrate file config to keyring if possible (keep file as backup)
+    writeToKeyring(fileConfig);
     return fileConfig;
   }
 
@@ -145,9 +145,7 @@ export function getConfig(): CliConfig | null {
 export function saveConfig(config: CliConfig): void {
   if (forceInsecureStorage) return writeToFile(config);
 
-  if (writeToKeyring(config)) {
-    deleteFile();
-  } else {
+  if (!writeToKeyring(config)) {
     showFallbackWarning();
     writeToFile(config);
   }
