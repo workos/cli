@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1](https://github.com/workos/cli/compare/v0.8.0...v0.8.1) (2026-03-05)
+
+
+### Bug Fixes
+
+* correct skills directory path resolution in getSkillsDir ([#79](https://github.com/workos/cli/issues/79)) ([732bcaa](https://github.com/workos/cli/commit/732bcaa98ffd911c478e067528d6db483a0cfa14))
+
 ## [0.8.0](https://github.com/workos/cli/compare/v0.7.3...v0.8.0) (2026-03-04)
 
 
