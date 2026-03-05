@@ -304,7 +304,7 @@ describe('ensure-auth', () => {
         expect(mockRunLogin).toHaveBeenCalledOnce();
       });
 
-      it('clears credentials when refresh fails with network error', async () => {
+      it('preserves credentials when refresh fails with network error', async () => {
         saveCredentials(expiredAccessCreds);
 
         mockRefreshAccessToken.mockResolvedValue({
@@ -313,13 +313,12 @@ describe('ensure-auth', () => {
           error: 'Network error',
         });
 
-        // Don't save new creds in login — verify old ones were cleared
         mockRunLogin.mockImplementation(() => {});
 
         await ensureAuthenticated();
 
-        // Old stale credentials should be gone
-        expect(hasCredentials()).toBe(false);
+        // Credentials should be preserved — transient errors shouldn't nuke the session
+        expect(hasCredentials()).toBe(true);
       });
 
       it('clears credentials when no refresh token available', async () => {

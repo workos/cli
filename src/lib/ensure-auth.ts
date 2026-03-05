@@ -98,8 +98,7 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
         return result;
       }
 
-      // Network or server error - clear stale creds and try login as fallback
-      clearCredentials();
+      // Network or server error - keep credentials intact for retry
       if (isNonInteractiveEnvironment()) {
         exitWithAuthRequired(
           `Authentication refresh failed (${refreshResult.errorType}). Run \`workos login\` in an interactive terminal.`,
