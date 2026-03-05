@@ -37,7 +37,7 @@ export async function checkForUpdates(): Promise<void> {
     if (lt(currentVersion, latestVersion)) {
       hasWarned = true;
       yellow(`Update available: ${currentVersion} → ${latestVersion}`);
-      dim(`Run: npx workos@latest`);
+      dim(`Run: npx workos@latest\n`);
     }
   } catch {
     // Silently ignore all errors (timeout, network, parse, etc.)

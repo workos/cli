@@ -33,7 +33,7 @@ describe('version-check', () => {
     await checkForUpdates();
 
     expect(yellow).toHaveBeenCalledWith(expect.stringContaining('0.3.0 → 0.4.0'));
-    expect(dim).toHaveBeenCalledWith('Run: npx workos@latest');
+    expect(dim).toHaveBeenCalledWith(expect.stringContaining('Run: npx workos@latest'));
   });
 
   it('no warning when up to date', async () => {
