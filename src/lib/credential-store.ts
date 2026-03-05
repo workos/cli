@@ -40,7 +40,7 @@ function getAuditLogPath(): string {
 }
 
 function audit(action: string, detail?: string): void {
-  if (!auditEnabled || process.env.VITEST) return;
+  if (!auditEnabled || process.env.VITEST || process.env.NODE_ENV === 'test') return;
   try {
     const dir = path.join(os.homedir(), '.workos');
     if (!fs.existsSync(dir)) {
@@ -110,6 +110,7 @@ function getKeyringEntry(): Entry {
 }
 
 function readFromKeyring(): Credentials | null {
+  if (forceInsecureStorage) return null;
   try {
     const entry = getKeyringEntry();
     const data = entry.getPassword();
@@ -126,6 +127,7 @@ function readFromKeyring(): Credentials | null {
 }
 
 function writeToKeyring(creds: Credentials): boolean {
+  if (forceInsecureStorage) return false;
   try {
     const entry = getKeyringEntry();
     entry.setPassword(JSON.stringify(creds));
@@ -138,6 +140,7 @@ function writeToKeyring(creds: Credentials): boolean {
 }
 
 function deleteFromKeyring(): void {
+  if (forceInsecureStorage) return;
   try {
     const entry = getKeyringEntry();
     entry.deletePassword();
