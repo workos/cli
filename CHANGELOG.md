@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2](https://github.com/workos/cli/compare/v0.8.1...v0.8.2) (2026-03-05)
+
+
+### Bug Fixes
+
+* auth credential storage and transient error handling ([#81](https://github.com/workos/cli/issues/81)) ([ac7922d](https://github.com/workos/cli/commit/ac7922da33ac613b9794b9a8b0bd304d9b95c497))
+* improve TanStack Start skill to reduce first-attempt build failures ([#83](https://github.com/workos/cli/issues/83)) ([6b935ce](https://github.com/workos/cli/commit/6b935ce7b880f3f82b17e86a082206464d16154a))
+* TanStack Start friction log fixes for middleware and doctor checks ([#77](https://github.com/workos/cli/issues/77)) ([7b857f9](https://github.com/workos/cli/commit/7b857f9c06a79fdbfb50a4b57eec97860876461b))
+
 ## [0.8.1](https://github.com/workos/cli/compare/v0.8.0...v0.8.1) (2026-03-05)
 
 
