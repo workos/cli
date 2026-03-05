@@ -91,7 +91,7 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
       // Network or server error - keep credentials intact for retry
       if (isNonInteractiveEnvironment()) {
         exitWithAuthRequired(
-          `Authentication refresh failed (${refreshResult.errorType}). Run \`workos login\` in an interactive terminal.`,
+          `Authentication refresh failed (${refreshResult.errorType}). Run \`workos auth login\` in an interactive terminal.`,
         );
       }
       logInfo(`[ensure-auth] Refresh failed (${refreshResult.errorType}), triggering login`);

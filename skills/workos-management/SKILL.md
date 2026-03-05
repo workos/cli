@@ -5,7 +5,7 @@ description: Manage WorkOS resources (orgs, users, roles, SSO, directories, webh
 
 # WorkOS Management Commands
 
-Use these commands to manage WorkOS resources directly from the terminal. The CLI must be authenticated via `workos login` or `WORKOS_API_KEY` env var.
+Use these commands to manage WorkOS resources directly from the terminal. The CLI must be authenticated via `workos auth login` or `WORKOS_API_KEY` env var.
 
 All commands support `--json` for structured output. Use `--json` when you need to parse output (e.g., extract an ID).
 

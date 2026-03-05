@@ -28,7 +28,7 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
 }
 
 import { isNonInteractiveEnvironment } from './utils/environment.js';
-import { resolveOutputMode, setOutputMode, outputJson, exitWithError } from './utils/output.js';
+import { resolveOutputMode, setOutputMode, isJsonMode, outputJson, exitWithError } from './utils/output.js';
 import clack from './utils/clack.js';
 import { registerSubcommand } from './utils/register-subcommand.js';
 
@@ -178,7 +178,7 @@ const installerOptions = {
 };
 
 // Check for updates (blocks up to 500ms, skip in JSON mode to keep stdout clean)
-if (!hasJsonFlag) await checkForUpdates();
+if (!isJsonMode()) await checkForUpdates();
 
 yargs(rawArgs)
   .env('WORKOS_INSTALLER')

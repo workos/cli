@@ -26,8 +26,9 @@ src/
 │   ├── user.ts               # workos user (get/list/update/delete)
 │   ├── install.ts            # workos install
 │   ├── install-skill.ts      # workos install-skill
-│   ├── login.ts              # workos login
-│   └── logout.ts             # workos logout
+│   ├── auth-status.ts        # workos auth status
+│   ├── login.ts              # workos auth login
+│   └── logout.ts             # workos auth logout
 ├── dashboard/                # Ink/React TUI components
 ├── nextjs/                   # Next.js installer agent
 ├── react/                    # React SPA installer agent
