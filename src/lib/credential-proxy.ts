@@ -9,7 +9,7 @@ import { URL } from 'node:url';
 import { logInfo, logError, logWarn } from '../utils/debug.js';
 import { getCredentials, updateTokens, type Credentials } from './credentials.js';
 import { analytics } from '../utils/analytics.js';
-import { refreshAccessToken } from './token-refresh-client.js';
+import { refreshAccessTokenSafe } from './token-refresh-client.js';
 
 export interface RefreshConfig {
   /** AuthKit domain for refresh endpoint */
@@ -68,7 +68,7 @@ async function doRefresh(): Promise<boolean> {
     trigger: 'lazy',
   });
 
-  const result = await refreshAccessToken(authkitDomain, clientId);
+  const result = await refreshAccessTokenSafe(authkitDomain, clientId);
 
   if (result.success && result.accessToken && result.expiresAt) {
     // Update credentials file atomically

@@ -67,10 +67,10 @@ vi.mock('../commands/login.js', () => ({
   runLogin: () => mockRunLogin(),
 }));
 
-// Mock refreshAccessToken
+// Mock refreshAccessTokenSafe
 const mockRefreshAccessToken = vi.fn();
 vi.mock('./token-refresh-client.js', () => ({
-  refreshAccessToken: (...args: unknown[]) => mockRefreshAccessToken(...args),
+  refreshAccessTokenSafe: (...args: unknown[]) => mockRefreshAccessToken(...args),
 }));
 
 // Import after mocks are set up

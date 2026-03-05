@@ -6,7 +6,7 @@
 
 import { logInfo, logError, logWarn } from '../utils/debug.js';
 import { getCredentials, updateTokens } from './credentials.js';
-import { refreshAccessToken, tokenNeedsRefresh } from './token-refresh-client.js';
+import { refreshAccessTokenSafe, tokenNeedsRefresh } from './token-refresh-client.js';
 import { analytics } from '../utils/analytics.js';
 
 export interface BackgroundRefreshOptions {
@@ -75,7 +75,7 @@ export function startBackgroundRefresh(options: BackgroundRefreshOptions): Backg
     });
 
     const startTime = Date.now();
-    const result = await refreshAccessToken(authkitDomain, clientId);
+    const result = await refreshAccessTokenSafe(authkitDomain, clientId);
 
     if (result.success && result.accessToken && result.expiresAt) {
       // Update credentials file atomically
