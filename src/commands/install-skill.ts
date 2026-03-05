@@ -49,8 +49,8 @@ export interface InstallSkillOptions {
 
 export function getSkillsDir(): string {
   const currentFile = fileURLToPath(import.meta.url);
-  // From dist/src/commands/install-skill.js -> skills/
-  return join(dirname(currentFile), '..', '..', '..', 'skills');
+  // From dist/commands/install-skill.js -> skills/
+  return join(dirname(currentFile), '..', '..', 'skills');
 }
 
 export async function discoverSkills(skillsDir: string): Promise<string[]> {
