@@ -470,10 +470,13 @@ The CLI uses WorkOS Connect OAuth device flow for authentication:
 
 ```bash
 # Login (opens browser for authentication)
-workos login
+workos auth login
+
+# Check current auth status
+workos auth status
 
 # Logout (clears stored credentials)
-workos logout
+workos auth logout
 ```
 
 OAuth credentials are stored in the system keychain (with `~/.workos/credentials.json` fallback). Access tokens are not persisted long-term for security - users re-authenticate when tokens expire.
