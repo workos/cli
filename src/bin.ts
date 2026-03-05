@@ -177,8 +177,8 @@ const installerOptions = {
   },
 };
 
-// Check for updates (blocks up to 500ms)
-await checkForUpdates();
+// Check for updates (blocks up to 500ms, skip in JSON mode to keep stdout clean)
+if (!hasJsonFlag) await checkForUpdates();
 
 yargs(rawArgs)
   .env('WORKOS_INSTALLER')
