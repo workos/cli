@@ -3,7 +3,7 @@
  */
 
 import { getCredentials, updateTokens, hasCredentials, isTokenExpired, clearCredentials } from './credentials.js';
-import { refreshAccessTokenSafe } from './token-refresh-client.js';
+import { refreshAccessToken } from './token-refresh-client.js';
 import { getCliAuthClientId, getAuthkitDomain } from './settings.js';
 import { runLogin } from '../commands/login.js';
 import { logInfo } from '../utils/debug.js';
@@ -76,7 +76,7 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
     const authkitDomain = getAuthkitDomain();
 
     if (clientId && authkitDomain) {
-      const refreshResult = await refreshAccessTokenSafe(authkitDomain, clientId);
+      const refreshResult = await refreshAccessToken(authkitDomain, clientId);
 
       if (refreshResult.success && refreshResult.accessToken && refreshResult.expiresAt) {
         updateTokens(refreshResult.accessToken, refreshResult.expiresAt, refreshResult.refreshToken);

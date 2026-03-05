@@ -2,11 +2,8 @@
  * Token refresh client for WorkOS OAuth
  */
 
-import path from 'node:path';
-import os from 'node:os';
 import { logInfo, logError } from '../utils/debug.js';
-import { getCredentials, isTokenExpired } from './credentials.js';
-import { acquireLock } from './file-lock.js';
+import { getCredentials } from './credentials.js';
 
 export interface RefreshResult {
   success: boolean;
@@ -123,42 +120,4 @@ export async function refreshAccessToken(authkitDomain: string, clientId: string
  */
 export function tokenNeedsRefresh(expiresAt: number, thresholdMs: number = 2 * 60 * 1000): boolean {
   return Date.now() + thresholdMs >= expiresAt;
-}
-
-function getRefreshLockPath(): string {
-  return path.join(os.homedir(), '.workos', 'refresh.lock');
-}
-
-/**
- * Refresh access token with cross-process coordination.
- * Acquires file lock before refreshing to prevent races.
- * If another process refreshed while we waited, returns the fresh creds.
- */
-export async function refreshAccessTokenSafe(authkitDomain: string, clientId: string): Promise<RefreshResult> {
-  let lock;
-  try {
-    lock = await acquireLock({ lockPath: getRefreshLockPath() });
-  } catch (err) {
-    // Lock acquisition failed — fall back to unlocked refresh (racy but functional)
-    logError(`[token-refresh] Lock acquisition failed, proceeding without lock: ${(err as Error).message}`);
-    return refreshAccessToken(authkitDomain, clientId);
-  }
-
-  try {
-    // Re-read creds — another process may have refreshed while we waited for the lock
-    const creds = getCredentials();
-    if (creds && !isTokenExpired(creds)) {
-      logInfo('[token-refresh] Credentials already fresh after acquiring lock (another process refreshed)');
-      return {
-        success: true,
-        accessToken: creds.accessToken,
-        expiresAt: creds.expiresAt,
-      };
-    }
-
-    // Still expired — we're the one who refreshes
-    return await refreshAccessToken(authkitDomain, clientId);
-  } finally {
-    lock.release();
-  }
 }
