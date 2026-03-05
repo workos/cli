@@ -33,9 +33,11 @@ const ACCOUNT_NAME = 'config';
 
 let fallbackWarningShown = false;
 let forceInsecureStorage = false;
+let migrationAttempted = false;
 
 export function setInsecureConfigStorage(value: boolean): void {
   forceInsecureStorage = value;
+  migrationAttempted = false;
 }
 
 function getConfigDir(): string {
@@ -134,8 +136,10 @@ export function getConfig(): CliConfig | null {
 
   const fileConfig = readFromFile();
   if (fileConfig) {
-    // Migrate file config to keyring if possible (keep file as backup)
-    writeToKeyring(fileConfig);
+    if (!migrationAttempted) {
+      migrationAttempted = true;
+      writeToKeyring(fileConfig);
+    }
     return fileConfig;
   }
 
@@ -154,6 +158,7 @@ export function saveConfig(config: CliConfig): void {
 export function clearConfig(): void {
   deleteFromKeyring();
   deleteFile();
+  migrationAttempted = false;
 }
 
 export function getActiveEnvironment(): EnvironmentConfig | null {

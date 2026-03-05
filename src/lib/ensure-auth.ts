@@ -2,7 +2,7 @@
  * Startup auth guard - ensures valid authentication before command execution.
  */
 
-import { getCredentials, updateTokens, hasCredentials, isTokenExpired, clearCredentials } from './credentials.js';
+import { getCredentials, updateTokens, isTokenExpired, clearCredentials } from './credentials.js';
 import { refreshAccessToken } from './token-refresh-client.js';
 import { getCliAuthClientId, getAuthkitDomain } from './settings.js';
 import { runLogin } from '../commands/login.js';
@@ -36,29 +36,17 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
     tokenRefreshed: false,
   };
 
-  // Case 1: No credentials at all
-  if (!hasCredentials()) {
-    if (isNonInteractiveEnvironment()) {
-      exitWithAuthRequired();
-    }
-    logInfo('[ensure-auth] No credentials found, triggering login');
-    await runLogin();
-    result.loginTriggered = true;
-    result.authenticated = hasCredentials();
-    return result;
-  }
-
+  // Case 1: No credentials or invalid credentials
   const creds = getCredentials();
   if (!creds) {
-    // Credentials file exists but is invalid/empty — clear stale data
-    clearCredentials();
+    clearCredentials(); // Clean up any corrupt/empty files
     if (isNonInteractiveEnvironment()) {
       exitWithAuthRequired();
     }
-    logInfo('[ensure-auth] Invalid credentials file, triggering login');
+    logInfo('[ensure-auth] No valid credentials found, triggering login');
     await runLogin();
     result.loginTriggered = true;
-    result.authenticated = hasCredentials();
+    result.authenticated = getCredentials() !== null;
     return result;
   }
 
@@ -94,7 +82,7 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
         logInfo('[ensure-auth] Refresh token expired, triggering login');
         await runLogin();
         result.loginTriggered = true;
-        result.authenticated = hasCredentials();
+        result.authenticated = getCredentials() !== null;
         return result;
       }
 
@@ -107,7 +95,7 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
       logInfo(`[ensure-auth] Refresh failed (${refreshResult.errorType}), triggering login`);
       await runLogin();
       result.loginTriggered = true;
-      result.authenticated = hasCredentials();
+      result.authenticated = getCredentials() !== null;
       return result;
     }
   }
@@ -120,6 +108,6 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
   logInfo('[ensure-auth] No refresh token, triggering login');
   await runLogin();
   result.loginTriggered = true;
-  result.authenticated = hasCredentials();
+  result.authenticated = getCredentials() !== null;
   return result;
 }
