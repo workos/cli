@@ -1,5 +1,4 @@
-import { readFileSync } from 'fs';
-import { getReferencePath } from '@workos/skills';
+import { getReference } from '@workos/skills';
 import { SPINNER_MESSAGE, type FrameworkConfig } from './framework-config.js';
 import { validateInstallation, quickCheckValidateAndFormat } from './validation/index.js';
 import type { InstallerOptions } from '../utils/types.js';
@@ -95,7 +94,7 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
   });
 
   // Build integration prompt (credentials are already in .env.local)
-  const integrationPrompt = buildIntegrationPrompt(
+  const integrationPrompt = await buildIntegrationPrompt(
     config,
     {
       frameworkVersion: frameworkVersion || 'latest',
@@ -210,7 +209,7 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
  * Reads reference content from @workos/skills and injects it directly into the prompt.
  * Note: Credentials are pre-written to .env.local, so not included in prompt.
  */
-function buildIntegrationPrompt(
+async function buildIntegrationPrompt(
   config: FrameworkConfig,
   context: {
     frameworkVersion: string;
@@ -231,7 +230,7 @@ function buildIntegrationPrompt(
   }
 
   // Read reference content from @workos/skills package
-  const refContent = readFileSync(getReferencePath(skillName), 'utf-8');
+  const refContent = await getReference(skillName);
 
   // Next.js uses NEXT_PUBLIC_ prefix for redirect URI
   const redirectUriEnvVar =
