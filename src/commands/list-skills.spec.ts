@@ -101,9 +101,7 @@ describe('runListSkills', () => {
     });
     expect(jsonOutput).toBeDefined();
     const parsed = JSON.parse(jsonOutput![0] as string);
-    expect(parsed).toEqual([
-      { agent: 'Test', available: ['skill-a'], installed: ['skill-a'] },
-    ]);
+    expect(parsed).toEqual([{ agent: 'Test', available: ['skill-a'], installed: ['skill-a'] }]);
 
     consoleSpy.mockRestore();
     resetMode();

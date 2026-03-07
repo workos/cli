@@ -78,7 +78,12 @@ export async function runUninstallSkill(options: UninstallSkillOptions): Promise
     });
   }
 
-  logInfo('Uninstalling skills:', targetSkillNames.join(', '), 'for agents:', targetAgents.map((a) => a.displayName).join(', '));
+  logInfo(
+    'Uninstalling skills:',
+    targetSkillNames.join(', '),
+    'for agents:',
+    targetAgents.map((a) => a.displayName).join(', '),
+  );
 
   if (!isJsonMode()) {
     console.log(chalk.bold('\nUninstalling skills...\n'));
