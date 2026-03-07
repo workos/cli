@@ -259,6 +259,38 @@ yargs(rawArgs)
     }),
   )
   .command(
+    'uninstall-skill',
+    'Remove installed WorkOS skills from coding agents',
+    (yargs) => {
+      return yargs
+        .option('list', {
+          alias: 'l',
+          type: 'boolean',
+          description: 'List installed skills without removing',
+        })
+        .option('skill', {
+          alias: 's',
+          type: 'array',
+          string: true,
+          description: 'Remove specific skill(s)',
+        })
+        .option('agent', {
+          alias: 'a',
+          type: 'array',
+          string: true,
+          description: 'Target specific agent(s): claude-code, codex, cursor, goose',
+        });
+    },
+    withAuth(async (argv) => {
+      const { runUninstallSkill } = await import('./commands/uninstall-skill.js');
+      await runUninstallSkill({
+        list: argv.list as boolean | undefined,
+        skill: argv.skill as string[] | undefined,
+        agent: argv.agent as string[] | undefined,
+      });
+    }),
+  )
+  .command(
     'doctor',
     'Diagnose WorkOS AuthKit integration issues in the current project',
     (yargs) =>

@@ -141,6 +141,36 @@ const commands: CommandSchema[] = [
     ],
   },
   {
+    name: 'uninstall-skill',
+    description: 'Remove installed WorkOS skills from coding agents',
+    options: [
+      {
+        name: 'list',
+        type: 'boolean',
+        description: 'List installed skills without removing',
+        required: false,
+        alias: 'l',
+        hidden: false,
+      },
+      {
+        name: 'skill',
+        type: 'array',
+        description: 'Remove specific skill(s) by name',
+        required: false,
+        alias: 's',
+        hidden: false,
+      },
+      {
+        name: 'agent',
+        type: 'array',
+        description: 'Target specific agent(s): claude-code, codex, cursor, goose',
+        required: false,
+        alias: 'a',
+        hidden: false,
+      },
+    ],
+  },
+  {
     name: 'doctor',
     description: 'Diagnose WorkOS AuthKit integration issues in the current project',
     options: [
