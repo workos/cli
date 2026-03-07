@@ -1,8 +1,10 @@
 import { existsSync } from 'fs';
 import { rm } from 'fs/promises';
-import { join } from 'path';
 import { homedir } from 'os';
+import { join } from 'path';
 import chalk from 'chalk';
+import { logError, logInfo, logWarn } from '../utils/debug.js';
+import { exitWithError, isJsonMode, outputJson } from '../utils/output.js';
 import { createAgents, detectAgents, discoverSkills, getSkillsDir, type AgentConfig } from './install-skill.js';
 
 export interface UninstallSkillOptions {
@@ -24,10 +26,9 @@ export async function uninstallSkill(
     await rm(targetDir, { recursive: true, force: true });
     return { success: true };
   } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    };
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    logError(`Failed to remove skill "${skillName}" for ${agent.displayName} at ${targetDir}:`, message);
+    return { success: false, error: message };
   }
 }
 
@@ -35,46 +36,80 @@ export async function runUninstallSkill(options: UninstallSkillOptions): Promise
   const home = homedir();
   const agents = createAgents(home);
   const skillsDir = getSkillsDir();
-  const knownSkills = await discoverSkills(skillsDir);
+
+  let knownSkills: string[];
+  try {
+    knownSkills = await discoverSkills(skillsDir);
+  } catch (error) {
+    logError('Failed to read skills directory:', error);
+    exitWithError({
+      code: 'SKILLS_DIR_READ_FAILED',
+      message: `Could not read skills directory at ${skillsDir}. Your WorkOS CLI installation may be corrupted. Try reinstalling with \`npm install -g @workos-inc/cli\`.`,
+    });
+  }
 
   const targetAgents = detectAgents(agents, options.agent);
 
   if (targetAgents.length === 0) {
-    if (options.agent) {
-      console.error(chalk.red('Specified agents not found.'));
-    } else {
-      console.error(chalk.red('No coding agents detected.'));
-    }
-    console.log('Supported agents:', Object.keys(agents).join(', '));
-    process.exit(1);
+    const message = options.agent ? 'Specified agents not found.' : 'No coding agents detected.';
+    logWarn(message, 'Supported agents:', Object.keys(agents).join(', '));
+    exitWithError({
+      code: 'NO_AGENTS_FOUND',
+      message: `${message} Supported agents: ${Object.keys(agents).join(', ')}`,
+    });
   }
 
   if (options.list) {
-    console.log(chalk.bold('\nInstalled WorkOS Skills:\n'));
+    const listData: Array<{ agent: string; skills: string[] }> = [];
     for (const agent of targetAgents) {
       const installed = findInstalledSkills(knownSkills, agent);
-      console.log(`  ${chalk.bold(agent.displayName)}:`);
-      if (installed.length === 0) {
-        console.log(`    ${chalk.dim('(none)')}`);
-      } else {
-        for (const skill of installed) {
-          console.log(`    ${chalk.cyan(skill)}`);
+      listData.push({ agent: agent.displayName, skills: installed });
+    }
+
+    if (isJsonMode()) {
+      outputJson(listData);
+    } else {
+      console.log(chalk.bold('\nInstalled WorkOS Skills:\n'));
+      for (const entry of listData) {
+        console.log(`  ${chalk.bold(entry.agent)}:`);
+        if (entry.skills.length === 0) {
+          console.log(`    ${chalk.dim('(none)')}`);
+        } else {
+          for (const skill of entry.skills) {
+            console.log(`    ${chalk.cyan(skill)}`);
+          }
         }
       }
+      console.log();
     }
-    console.log();
     return;
   }
 
   const targetSkillNames = options.skill ? knownSkills.filter((s) => options.skill!.includes(s)) : knownSkills;
 
-  if (options.skill && targetSkillNames.length === 0) {
-    console.error(chalk.red('No matching skills found.'));
-    console.log('Known skills:', knownSkills.join(', '));
-    process.exit(1);
+  if (options.skill) {
+    const unrecognized = options.skill.filter((s) => !knownSkills.includes(s));
+    if (unrecognized.length > 0) {
+      logWarn('Unrecognized skill names requested for uninstall:', unrecognized);
+      if (!isJsonMode()) {
+        console.warn(chalk.yellow(`Unknown skills (ignored): ${unrecognized.join(', ')}`));
+      }
+    }
   }
 
-  console.log(chalk.bold('\nUninstalling skills...\n'));
+  if (options.skill && targetSkillNames.length === 0) {
+    logError('No matching skills found. Known skills:', knownSkills.join(', '));
+    exitWithError({
+      code: 'SKILL_NOT_FOUND',
+      message: `No matching skills found. Known skills: ${knownSkills.join(', ')}`,
+    });
+  }
+
+  logInfo('Uninstalling skills:', targetSkillNames.join(', '), 'for agents:', targetAgents.map((a) => a.displayName).join(', '));
+
+  if (!isJsonMode()) {
+    console.log(chalk.bold('\nUninstalling skills...\n'));
+  }
 
   const results: Array<{
     skill: string;
@@ -86,8 +121,8 @@ export async function runUninstallSkill(options: UninstallSkillOptions): Promise
 
   for (const skill of targetSkillNames) {
     for (const agent of targetAgents) {
-      const isInstalled = existsSync(join(agent.globalSkillsDir, skill, 'SKILL.md'));
-      if (!isInstalled) {
+      const installed = findInstalledSkills([skill], agent);
+      if (installed.length === 0) {
         results.push({ skill, agent: agent.displayName, success: true, skipped: true });
         continue;
       }
@@ -105,7 +140,16 @@ export async function runUninstallSkill(options: UninstallSkillOptions): Promise
   const skipped = results.filter((r) => r.skipped);
   const failed = results.filter((r) => !r.success);
 
+  if (isJsonMode()) {
+    outputJson({ removed, skipped, failed });
+    if (failed.length > 0) {
+      process.exit(1);
+    }
+    return;
+  }
+
   if (removed.length > 0) {
+    logInfo(`Removed ${removed.length} skill(s)`);
     console.log(chalk.green(`✓ Removed ${removed.length} skill(s):\n`));
     for (const r of removed) {
       console.log(`  ${chalk.cyan(r.skill)} ← ${chalk.dim(r.agent)}`);
@@ -117,6 +161,7 @@ export async function runUninstallSkill(options: UninstallSkillOptions): Promise
   }
 
   if (failed.length > 0) {
+    logError(`Failed to remove ${failed.length} skill(s)`);
     console.log(chalk.red(`\n✗ Failed to remove ${failed.length}:\n`));
     for (const r of failed) {
       console.log(`  ${r.skill} ← ${r.agent}: ${chalk.dim(r.error)}`);

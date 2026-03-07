@@ -256,7 +256,6 @@ yargs(rawArgs)
         skill: argv.skill as string[] | undefined,
         agent: argv.agent as string[] | undefined,
       });
-      process.exit(0);
     }),
   )
   .command(
@@ -289,7 +288,6 @@ yargs(rawArgs)
         skill: argv.skill as string[] | undefined,
         agent: argv.agent as string[] | undefined,
       });
-      process.exit(0);
     }),
   )
   .command(
