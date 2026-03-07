@@ -47,3 +47,26 @@ pnpm typecheck    # Type check
 1. Create `src/commands/{resource}.ts` + `{resource}.spec.ts` (follow patterns in `organization.ts`)
 2. Register in `src/bin.ts` and update `src/utils/help-json.ts` command registry
 3. Include JSON mode tests in spec file
+
+## Do / Don't
+
+**Do:**
+- Follow the adapter pattern (`CLI`, `Dashboard`, `Headless`) in `src/integrations/` when adding framework installers
+- Use `InstallerEventEmitter` for state machine events -- see existing adapters for examples
+- Add both human and JSON output modes -- check `OutputMode` usage in `src/bin.ts`
+- Follow existing command patterns in `src/commands/organization.ts` when adding resource commands
+- Write `.spec.ts` tests alongside every command file
+
+**Don't:**
+- Use Node-specific sync APIs (crypto, fs sync) unless necessary
+- Use npm or yarn -- pnpm only
+- Skip JSON mode tests in spec files
+- Forget to wire up new frameworks in `src/run.ts` switch statement
+
+## PR Checklist
+
+- [ ] `pnpm build` passes
+- [ ] `pnpm test` passes
+- [ ] `pnpm typecheck` passes
+- [ ] Conventional Commit message format used (`feat:`, `fix:`, `feat!:` for breaking)
+- [ ] New commands include JSON mode support and tests
