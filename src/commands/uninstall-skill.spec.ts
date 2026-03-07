@@ -233,7 +233,7 @@ describe('runUninstallSkill', () => {
       return { runUninstallSkill, resetMode: () => output.setOutputMode('human') };
     }
 
-    it('outputs structured JSON for --list in JSON mode', async () => {
+    it('outputs structured JSON results for uninstall', async () => {
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
       // Set up a known skill
@@ -245,19 +245,20 @@ describe('runUninstallSkill', () => {
       writeFileSync(join(agentSkillsDir, 'test-skill', 'SKILL.md'), '# Test');
 
       const { runUninstallSkill, resetMode } = await importMockedWithJsonMode();
-      await runUninstallSkill({ list: true });
+      await runUninstallSkill({});
 
       const jsonOutput = consoleSpy.mock.calls.find((call) => {
         try {
-          JSON.parse(call[0] as string);
-          return true;
+          const parsed = JSON.parse(call[0] as string);
+          return parsed.removed !== undefined;
         } catch {
           return false;
         }
       });
       expect(jsonOutput).toBeDefined();
       const parsed = JSON.parse(jsonOutput![0] as string);
-      expect(parsed).toEqual([{ agent: 'Test', skills: ['test-skill'] }]);
+      expect(parsed.removed).toHaveLength(1);
+      expect(parsed.removed[0].skill).toBe('test-skill');
 
       consoleSpy.mockRestore();
       resetMode();

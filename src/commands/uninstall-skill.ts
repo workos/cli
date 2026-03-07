@@ -8,7 +8,6 @@ import { exitWithError, isJsonMode, outputJson } from '../utils/output.js';
 import { createAgents, detectAgents, discoverSkills, getSkillsDir, type AgentConfig } from './install-skill.js';
 
 export interface UninstallSkillOptions {
-  list?: boolean;
   skill?: string[];
   agent?: string[];
 }
@@ -57,32 +56,6 @@ export async function runUninstallSkill(options: UninstallSkillOptions): Promise
       code: 'NO_AGENTS_FOUND',
       message: `${message} Supported agents: ${Object.keys(agents).join(', ')}`,
     });
-  }
-
-  if (options.list) {
-    const listData: Array<{ agent: string; skills: string[] }> = [];
-    for (const agent of targetAgents) {
-      const installed = findInstalledSkills(knownSkills, agent);
-      listData.push({ agent: agent.displayName, skills: installed });
-    }
-
-    if (isJsonMode()) {
-      outputJson(listData);
-    } else {
-      console.log(chalk.bold('\nInstalled WorkOS Skills:\n'));
-      for (const entry of listData) {
-        console.log(`  ${chalk.bold(entry.agent)}:`);
-        if (entry.skills.length === 0) {
-          console.log(`    ${chalk.dim('(none)')}`);
-        } else {
-          for (const skill of entry.skills) {
-            console.log(`    ${chalk.cyan(skill)}`);
-          }
-        }
-      }
-      console.log();
-    }
-    return;
   }
 
   const targetSkillNames = options.skill ? knownSkills.filter((s) => options.skill!.includes(s)) : knownSkills;

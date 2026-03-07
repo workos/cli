@@ -32,7 +32,7 @@ describe('help-json', () => {
           'auth login',
           'auth logout',
           'auth status',
-          'install-skill',
+          'skills',
           'doctor',
           'env',
           'organization',

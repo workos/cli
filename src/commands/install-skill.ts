@@ -42,7 +42,6 @@ export function createAgents(home: string): Record<string, AgentConfig> {
 }
 
 export interface InstallSkillOptions {
-  list?: boolean;
   skill?: string[];
   agent?: string[];
 }
@@ -96,15 +95,6 @@ export async function runInstallSkill(options: InstallSkillOptions): Promise<voi
   const agents = createAgents(home);
   const skillsDir = getSkillsDir();
   const skills = await discoverSkills(skillsDir);
-
-  if (options.list) {
-    console.log(chalk.bold('\nAvailable Skills:\n'));
-    for (const skill of skills) {
-      console.log(`  ${chalk.cyan(skill)}`);
-    }
-    console.log();
-    return;
-  }
 
   const targetSkills = options.skill ? skills.filter((s) => options.skill!.includes(s)) : skills;
 

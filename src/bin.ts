@@ -226,70 +226,79 @@ yargs(rawArgs)
     );
     return yargs.demandCommand(1, 'Please specify an auth subcommand').strict();
   })
-  .command(
-    'install-skill',
-    'Install bundled AuthKit skills to coding agents (Claude Code, Codex, Cursor, Goose)',
-    (yargs) => {
-      return yargs
-        .option('list', {
-          alias: 'l',
-          type: 'boolean',
-          description: 'List available skills without installing',
-        })
-        .option('skill', {
-          alias: 's',
-          type: 'array',
-          string: true,
-          description: 'Install specific skill(s)',
-        })
-        .option('agent', {
+  .command('skills', 'Manage WorkOS skills for coding agents (Claude Code, Codex, Cursor, Goose)', (yargs) => {
+    registerSubcommand(
+      yargs,
+      'install',
+      'Install bundled AuthKit skills to coding agents',
+      (y) =>
+        y
+          .option('skill', {
+            alias: 's',
+            type: 'array',
+            string: true,
+            description: 'Install specific skill(s) by name',
+          })
+          .option('agent', {
+            alias: 'a',
+            type: 'array',
+            string: true,
+            description: 'Target specific agent(s): claude-code, codex, cursor, goose',
+          }),
+      async (argv) => {
+        const { runInstallSkill } = await import('./commands/install-skill.js');
+        await runInstallSkill({
+          skill: argv.skill as string[] | undefined,
+          agent: argv.agent as string[] | undefined,
+        });
+      },
+    );
+    registerSubcommand(
+      yargs,
+      'uninstall',
+      'Remove installed WorkOS skills from coding agents',
+      (y) =>
+        y
+          .option('skill', {
+            alias: 's',
+            type: 'array',
+            string: true,
+            description: 'Remove specific skill(s) by name',
+          })
+          .option('agent', {
+            alias: 'a',
+            type: 'array',
+            string: true,
+            description: 'Target specific agent(s): claude-code, codex, cursor, goose',
+          }),
+      async (argv) => {
+        const { runUninstallSkill } = await import('./commands/uninstall-skill.js');
+        await runUninstallSkill({
+          skill: argv.skill as string[] | undefined,
+          agent: argv.agent as string[] | undefined,
+        });
+      },
+    );
+    registerSubcommand(
+      yargs,
+      'list',
+      'List available and installed skills',
+      (y) =>
+        y.option('agent', {
           alias: 'a',
           type: 'array',
           string: true,
           description: 'Target specific agent(s): claude-code, codex, cursor, goose',
+        }),
+      async (argv) => {
+        const { runListSkills } = await import('./commands/list-skills.js');
+        await runListSkills({
+          agent: argv.agent as string[] | undefined,
         });
-    },
-    withAuth(async (argv) => {
-      const { runInstallSkill } = await import('./commands/install-skill.js');
-      await runInstallSkill({
-        list: argv.list as boolean | undefined,
-        skill: argv.skill as string[] | undefined,
-        agent: argv.agent as string[] | undefined,
-      });
-    }),
-  )
-  .command(
-    'uninstall-skill',
-    'Remove installed WorkOS skills from coding agents',
-    (yargs) => {
-      return yargs
-        .option('list', {
-          alias: 'l',
-          type: 'boolean',
-          description: 'List installed skills without removing',
-        })
-        .option('skill', {
-          alias: 's',
-          type: 'array',
-          string: true,
-          description: 'Remove specific skill(s)',
-        })
-        .option('agent', {
-          alias: 'a',
-          type: 'array',
-          string: true,
-          description: 'Target specific agent(s): claude-code, codex, cursor, goose',
-        });
-    },
-    withAuth(async (argv) => {
-      const { runUninstallSkill } = await import('./commands/uninstall-skill.js');
-      await runUninstallSkill({
-        list: argv.list as boolean | undefined,
-        skill: argv.skill as string[] | undefined,
-        agent: argv.agent as string[] | undefined,
-      });
-    }),
-  )
+      },
+    );
+    return yargs.demandCommand(1, 'Please specify a skills subcommand').strict();
+  })
   .command(
     'doctor',
     'Diagnose WorkOS AuthKit integration issues in the current project',
