@@ -1,3 +1,5 @@
+import { readFileSync } from 'fs';
+import { getReferencePath } from '@workos/skills';
 import { SPINNER_MESSAGE, type FrameworkConfig } from './framework-config.js';
 import { validateInstallation, quickCheckValidateAndFormat } from './validation/index.js';
 import type { InstallerOptions } from '../utils/types.js';
@@ -205,7 +207,7 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
 
 /**
  * Build the integration prompt for the agent.
- * Uses skill-based approach where agent invokes framework-specific skill.
+ * Reads reference content from @workos/skills and injects it directly into the prompt.
  * Note: Credentials are pre-written to .env.local, so not included in prompt.
  */
 function buildIntegrationPrompt(
@@ -228,6 +230,9 @@ function buildIntegrationPrompt(
     throw new Error(`Framework ${config.metadata.name} missing skillName in config`);
   }
 
+  // Read reference content from @workos/skills package
+  const refContent = readFileSync(getReferencePath(skillName), 'utf-8');
+
   // Next.js uses NEXT_PUBLIC_ prefix for redirect URI
   const redirectUriEnvVar =
     config.metadata.integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
@@ -247,20 +252,13 @@ The following environment variables have been configured in .env.local:
 - ${redirectUriEnvVar}
 - WORKOS_COOKIE_PASSWORD
 
-## Your Task
+## Integration Instructions
 
-Use the \`${skillName}\` skill to integrate WorkOS AuthKit into this application.
-
-The skill contains step-by-step instructions including:
-1. Fetching the SDK documentation
-2. Installing the SDK
-3. Creating the callback route
-4. Setting up middleware/auth handling
-5. Adding authentication UI to the home page
+${refContent}
 
 Report your progress using [STATUS] prefixes.
 
-Begin by invoking the ${skillName} skill.`;
+Begin integration now.`;
 }
 
 function buildCompletionSummary(config: FrameworkConfig, changes: string[], nextSteps: string[]): string {

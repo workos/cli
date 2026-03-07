@@ -3,7 +3,7 @@ import { join } from 'path';
 import { existsSync } from 'fs';
 import { mkdir, copyFile, readdir } from 'fs/promises';
 import chalk from 'chalk';
-import { getPackageRoot } from '../utils/paths.js';
+import { getSkillsDir as getSkillsPackageDir } from '@workos/skills';
 
 export interface AgentConfig {
   name: string;
@@ -47,7 +47,7 @@ export interface InstallSkillOptions {
 }
 
 export function getSkillsDir(): string {
-  return join(getPackageRoot(import.meta.url), 'skills');
+  return getSkillsPackageDir();
 }
 
 export async function discoverSkills(skillsDir: string): Promise<string[]> {
