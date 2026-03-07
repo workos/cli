@@ -216,7 +216,7 @@ async function buildIntegrationPrompt(
     typescript: boolean;
   },
   frameworkContext: Record<string, any>,
-): string {
+): Promise<string> {
   const additionalLines = config.prompts.getAdditionalContextLines
     ? config.prompts.getAdditionalContextLines(frameworkContext)
     : [];
