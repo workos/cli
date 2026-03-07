@@ -51,6 +51,7 @@ pnpm typecheck    # Type check
 ## Do / Don't
 
 **Do:**
+
 - Follow the adapter pattern (`CLI`, `Dashboard`, `Headless`) in `src/integrations/` when adding framework installers
 - Use `InstallerEventEmitter` for state machine events -- see existing adapters for examples
 - Add both human and JSON output modes -- check `OutputMode` usage in `src/bin.ts`
@@ -58,6 +59,7 @@ pnpm typecheck    # Type check
 - Write `.spec.ts` tests alongside every command file
 
 **Don't:**
+
 - Use Node-specific sync APIs (crypto, fs sync) unless necessary
 - Use npm or yarn -- pnpm only
 - Skip JSON mode tests in spec files
