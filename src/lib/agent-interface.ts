@@ -5,7 +5,6 @@
 
 import { dirname } from 'path';
 import { getSkillsDir as getSkillsPackageDir } from '@workos/skills';
-import { getPackageRoot } from '../utils/paths.js';
 import { debug, logInfo, logWarn, logError, initLogFile, getLogFilePath } from '../utils/debug.js';
 import type { InstallerOptions } from '../utils/types.js';
 import { analytics } from '../utils/analytics.js';
