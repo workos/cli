@@ -7,6 +7,7 @@ import { enableDebugLogs } from '../../utils/debug.js';
 import { analytics } from '../../utils/analytics.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from '../../lib/constants.js';
 import { parseEnvFile } from '../../utils/env-parser.js';
+import { getReference } from '@workos/skills';
 
 /**
  * Detect which Python package manager the project uses.
@@ -160,12 +161,13 @@ export const config: FrameworkConfig = {
 /**
  * Build the agent prompt for Python/Django integration.
  */
-function buildPythonPrompt(frameworkContext: Record<string, any>): string {
+async function buildPythonPrompt(frameworkContext: Record<string, any>): Promise<string> {
   const contextLines = ['- Framework: Python (Django)'];
   if (frameworkContext.packageManager) contextLines.push(`- Package manager: ${frameworkContext.packageManager}`);
   if (frameworkContext.installCommand) contextLines.push(`- Install command: ${frameworkContext.installCommand}`);
 
   const skillName = config.metadata.skillName!;
+  const refContent = await getReference(skillName);
 
   return `You are integrating WorkOS AuthKit into this Python/Django application.
 
@@ -179,21 +181,13 @@ The following environment variables have been configured in .env:
 - WORKOS_API_KEY
 - WORKOS_CLIENT_ID
 
-## Your Task
+## Integration Instructions
 
-Use the \`${skillName}\` skill to integrate WorkOS AuthKit into this application.
-
-The skill contains step-by-step instructions including:
-1. Fetching the SDK documentation
-2. Installing the SDK and python-dotenv
-3. Configuring Django settings
-4. Creating authentication views
-5. Setting up URL routing
-6. Adding authentication UI
+${refContent}
 
 Report your progress using [STATUS] prefixes.
 
-Begin by invoking the ${skillName} skill.`;
+Begin integration now.`;
 }
 
 /**
@@ -234,7 +228,7 @@ export async function run(options: InstallerOptions): Promise<string> {
   });
 
   // Build Python-specific prompt
-  const prompt = buildPythonPrompt(frameworkContext);
+  const prompt = await buildPythonPrompt(frameworkContext);
 
   // Initialize and run agent directly (bypass runAgentInstaller)
   const { initializeAgent, runAgent } = await import('../../lib/agent-interface.js');

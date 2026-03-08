@@ -12,6 +12,7 @@ import { getOrAskForWorkOSCredentials } from '../../utils/clack-utils.js';
 import { autoConfigureWorkOSEnvironment } from '../../lib/workos-management.js';
 import { validateInstallation } from '../../lib/validation/index.js';
 import { parseEnvFile } from '../../utils/env-parser.js';
+import { getReference } from '@workos/skills';
 
 /** Default port for Go HTTP servers */
 const GO_DEFAULT_PORT = 8080;
@@ -164,6 +165,7 @@ export async function run(options: InstallerOptions): Promise<string> {
     additionalLines.length > 0 ? '\n' + additionalLines.map((line) => `- ${line}`).join('\n') : '';
 
   const skillName = config.metadata.skillName!;
+  const refContent = await getReference(skillName);
   const integrationPrompt = `You are integrating WorkOS AuthKit into this ${config.metadata.name} application.
 
 ## Project Context
@@ -178,21 +180,13 @@ The following environment variables have been configured in .env:
 - WORKOS_CLIENT_ID
 - WORKOS_REDIRECT_URI
 
-## Your Task
+## Integration Instructions
 
-Use the \`${skillName}\` skill to integrate WorkOS AuthKit into this application.
-
-The skill contains step-by-step instructions including:
-1. Fetching the SDK documentation
-2. Installing the SDK
-3. Detecting Gin vs stdlib
-4. Creating authentication handlers
-5. Wiring handlers into the router
-6. Verification with go build and go vet
+${refContent}
 
 Report your progress using [STATUS] prefixes.
 
-Begin by invoking the ${skillName} skill.`;
+Begin integration now.`;
 
   // Initialize and run agent
   const agent = await initializeAgent(

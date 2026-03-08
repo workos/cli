@@ -8,6 +8,7 @@ import { INSTALLER_INTERACTION_EVENT_NAME } from '../../lib/constants.js';
 import { getOrAskForWorkOSCredentials } from '../../utils/clack-utils.js';
 import { initializeAgent, runAgent } from '../../lib/agent-interface.js';
 import { writeEnvLocal } from '../../lib/env-writer.js';
+import { getReference } from '@workos/skills';
 
 export const config: FrameworkConfig = {
   metadata: {
@@ -96,7 +97,7 @@ export async function run(options: InstallerOptions): Promise<string> {
   }
 
   // Build Elixir-specific prompt
-  const integrationPrompt = buildElixirPrompt();
+  const integrationPrompt = await buildElixirPrompt();
 
   // Initialize and run agent
   const agent = await initializeAgent(
@@ -148,7 +149,9 @@ export async function run(options: InstallerOptions): Promise<string> {
   return lines.join('\n');
 }
 
-function buildElixirPrompt(): string {
+async function buildElixirPrompt(): Promise<string> {
+  const refContent = await getReference('workos-elixir');
+
   return `You are integrating WorkOS AuthKit into this Elixir/Phoenix application.
 
 ## Project Context
@@ -165,19 +168,11 @@ The following environment variables have been configured in .env.local:
 
 Note: For Elixir/Phoenix, these should be read via System.get_env() in config/runtime.exs rather than from .env.local directly.
 
-## Your Task
+## Integration Instructions
 
-Use the \`workos-elixir\` skill to integrate WorkOS AuthKit into this application.
-
-The skill contains step-by-step instructions including:
-1. Fetching the SDK documentation
-2. Validating the Phoenix project structure
-3. Installing the workos Hex package
-4. Configuring WorkOS in runtime.exs
-5. Creating auth controller and routes
-6. Verification with mix compile
+${refContent}
 
 Report your progress using [STATUS] prefixes.
 
-Begin by invoking the workos-elixir skill.`;
+Begin integration now.`;
 }

@@ -9,6 +9,7 @@ import { INSTALLER_INTERACTION_EVENT_NAME } from '../../lib/constants.js';
 import { initializeAgent, runAgent } from '../../lib/agent-interface.js';
 import { autoConfigureWorkOSEnvironment } from '../../lib/workos-management.js';
 import { validateInstallation } from '../../lib/validation/index.js';
+import { getReference } from '@workos/skills';
 
 export const config: FrameworkConfig = {
   metadata: {
@@ -94,6 +95,7 @@ export async function run(options: InstallerOptions): Promise<string> {
   // Build prompt — credentials are passed via prompt context since .NET doesn't use .env.local
   const skillName = config.metadata.skillName!;
   const redirectUri = options.redirectUri || 'http://localhost:5000/auth/callback';
+  const refContent = await getReference(skillName);
 
   const prompt = `You are integrating WorkOS AuthKit into this ASP.NET Core application.
 
@@ -110,20 +112,13 @@ The following WorkOS credentials should be configured in appsettings.Development
 - WORKOS_CLIENT_ID: ${clientId}
 - WORKOS_REDIRECT_URI: ${redirectUri}
 
-## Your Task
+## Integration Instructions
 
-Use the \`${skillName}\` skill to integrate WorkOS AuthKit into this application.
-
-The skill contains step-by-step instructions including:
-1. Fetching the SDK documentation
-2. Installing the WorkOS.net NuGet package
-3. Configuring DI registration
-4. Creating authentication endpoints
-5. Setting up appsettings configuration
+${refContent}
 
 Report your progress using [STATUS] prefixes.
 
-Begin by invoking the ${skillName} skill.`;
+Begin integration now.`;
 
   const agent = await initializeAgent(
     {
