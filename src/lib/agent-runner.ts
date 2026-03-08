@@ -234,13 +234,12 @@ async function buildIntegrationPrompt(
 
   // Build env var list dynamically based on what was actually configured
   const envVars = [
-    ...(config.environment.requiresApiKey ? ["WORKOS_API_KEY"] : []),
-    "WORKOS_CLIENT_ID",
-    config.metadata.integration === "nextjs" ? "NEXT_PUBLIC_WORKOS_REDIRECT_URI" : "WORKOS_REDIRECT_URI",
-    "WORKOS_COOKIE_PASSWORD",
+    ...(config.environment.requiresApiKey ? ['WORKOS_API_KEY'] : []),
+    'WORKOS_CLIENT_ID',
+    config.metadata.integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI',
+    'WORKOS_COOKIE_PASSWORD',
   ];
-  const envVarList = envVars.map((v) => `- ${v}`).join("\n");
-
+  const envVarList = envVars.map((v) => `- ${v}`).join('\n');
 
   return `You are integrating WorkOS AuthKit into this ${config.metadata.name} application.
 

@@ -78,7 +78,10 @@ export async function run(options: InstallerOptions): Promise<string> {
   });
 
   // Get WorkOS credentials
-  const { apiKey, clientId: _clientId } = await getOrAskForWorkOSCredentials(options, config.environment.requiresApiKey);
+  const { apiKey, clientId: _clientId } = await getOrAskForWorkOSCredentials(
+    options,
+    config.environment.requiresApiKey,
+  );
 
   // Auto-configure WorkOS environment (redirect URI, CORS, homepage) if not already done
   const callerHandledConfig = Boolean(options.apiKey || options.clientId);
