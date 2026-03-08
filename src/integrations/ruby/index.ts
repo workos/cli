@@ -78,7 +78,7 @@ export async function run(options: InstallerOptions): Promise<string> {
   });
 
   // Get WorkOS credentials
-  const { apiKey, clientId } = await getOrAskForWorkOSCredentials(options, config.environment.requiresApiKey);
+  const { apiKey, clientId: _clientId } = await getOrAskForWorkOSCredentials(options, config.environment.requiresApiKey);
 
   // Auto-configure WorkOS environment (redirect URI, CORS, homepage) if not already done
   const callerHandledConfig = Boolean(options.apiKey || options.clientId);
@@ -103,8 +103,8 @@ export async function run(options: InstallerOptions): Promise<string> {
 ## Environment
 
 The following environment variables should be configured in a .env file:
-- WORKOS_API_KEY=${apiKey ? '(provided)' : '(not set)'}
-- WORKOS_CLIENT_ID=${clientId || '(not set)'}
+- WORKOS_API_KEY: (configured)
+- WORKOS_CLIENT_ID: (configured)
 - WORKOS_REDIRECT_URI=${redirectUri}
 
 ## Integration Instructions

@@ -108,8 +108,8 @@ export async function run(options: InstallerOptions): Promise<string> {
 ## Environment
 
 The following WorkOS credentials should be configured in appsettings.Development.json:
-- WORKOS_API_KEY: ${apiKey || '(not provided)'}
-- WORKOS_CLIENT_ID: ${clientId}
+- WORKOS_API_KEY: (configured)
+- WORKOS_CLIENT_ID: (configured)
 - WORKOS_REDIRECT_URI: ${redirectUri}
 
 ## Integration Instructions

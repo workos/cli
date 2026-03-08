@@ -232,9 +232,15 @@ async function buildIntegrationPrompt(
   // Read reference content from @workos/skills package
   const refContent = await getReference(skillName);
 
-  // Next.js uses NEXT_PUBLIC_ prefix for redirect URI
-  const redirectUriEnvVar =
-    config.metadata.integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
+  // Build env var list dynamically based on what was actually configured
+  const envVars = [
+    ...(config.environment.requiresApiKey ? ["WORKOS_API_KEY"] : []),
+    "WORKOS_CLIENT_ID",
+    config.metadata.integration === "nextjs" ? "NEXT_PUBLIC_WORKOS_REDIRECT_URI" : "WORKOS_REDIRECT_URI",
+    "WORKOS_COOKIE_PASSWORD",
+  ];
+  const envVarList = envVars.map((v) => `- ${v}`).join("\n");
+
 
   return `You are integrating WorkOS AuthKit into this ${config.metadata.name} application.
 
@@ -246,10 +252,7 @@ async function buildIntegrationPrompt(
 ## Environment
 
 The following environment variables have been configured in .env.local:
-- WORKOS_API_KEY
-- WORKOS_CLIENT_ID
-- ${redirectUriEnvVar}
-- WORKOS_COOKIE_PASSWORD
+${envVarList}
 
 ## Integration Instructions
 
