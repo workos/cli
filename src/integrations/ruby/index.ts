@@ -105,9 +105,9 @@ export async function run(options: InstallerOptions): Promise<string> {
 
 ## Environment
 
-The following environment variables should be configured in a .env file:
-- WORKOS_API_KEY: (configured)
-- WORKOS_CLIENT_ID: (configured)
+The following environment variables are needed (create a .env file if one does not exist):
+- WORKOS_API_KEY
+- WORKOS_CLIENT_ID
 - WORKOS_REDIRECT_URI=${redirectUri}
 
 ## Integration Instructions

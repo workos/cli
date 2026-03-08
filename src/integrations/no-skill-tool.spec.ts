@@ -25,7 +25,7 @@ describe('no Skill tool references in integrations', () => {
 
     it(`${dir}/index.ts should not tell agent to invoke a skill`, () => {
       expect(content).not.toMatch(/Begin by invoking.*skill/i);
-      expect(content).not.toMatch(/Use the `\$\{.*\}` skill to integrate/);
+      expect(content).not.toMatch(/Use the (?:`|\\`)\$\{.*\}(?:`|\\`) skill to integrate/i);
     });
   }
 });
