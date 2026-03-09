@@ -232,10 +232,7 @@ async function buildIntegrationPrompt(
   // Read reference content from @workos/skills package
   // Load both the base template (task structure, decision trees, error recovery)
   // and the framework-specific reference (step-by-step instructions)
-  const [baseContent, refContent] = await Promise.all([
-    getReference('workos-authkit-base'),
-    getReference(skillName),
-  ]);
+  const [baseContent, refContent] = await Promise.all([getReference('workos-authkit-base'), getReference(skillName)]);
 
   // Build env var list dynamically based on what was actually configured
   const envVars = [
