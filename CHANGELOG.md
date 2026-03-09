@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0](https://github.com/workos/cli/compare/v0.9.0...v0.10.0) (2026-03-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* `workos install-skill` and `workos uninstall-skill` are replaced by `workos skills install`, `workos skills uninstall`, and `workos skills list`.
+
+### Features
+
+* add `workos skills` subcommand group (install, uninstall, list) ([#86](https://github.com/workos/cli/issues/86)) ([c008b72](https://github.com/workos/cli/commit/c008b724b035e57d857f32b998c0e240cffa73da))
+* consume skills from @workos/skills package ([#88](https://github.com/workos/cli/issues/88)) ([2ec4c18](https://github.com/workos/cli/commit/2ec4c18b1eeb3bc44d18868f56bf6e7f4ce0cac2))
+
+
+### Bug Fixes
+
+* only load authkit-base reference for JavaScript integrations ([fc95a09](https://github.com/workos/cli/commit/fc95a09f0522f18bc9251b9f6cef64a6e26ea49b))
+
 ## [0.9.0](https://github.com/workos/cli/compare/v0.8.2...v0.9.0) (2026-03-05)
 
 
