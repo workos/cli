@@ -4,7 +4,10 @@ import clack from '../utils/clack.js';
 import { saveCredentials, getCredentials, getAccessToken, isTokenExpired, updateTokens } from '../lib/credentials.js';
 import { getCliAuthClientId, getAuthkitDomain } from '../lib/settings.js';
 import { refreshAccessToken } from '../lib/token-refresh-client.js';
-import { logInfo } from '../utils/debug.js';
+import { logInfo, logError } from '../utils/debug.js';
+import { fetchStagingCredentials } from '../lib/staging-api.js';
+import { getConfig, saveConfig } from '../lib/config-store.js';
+import type { CliConfig } from '../lib/config-store.js';
 
 /**
  * Parse JWT payload
@@ -64,6 +67,40 @@ interface AuthErrorResponse {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Auto-provision a staging environment after login.
+ *
+ * Fetches staging credentials using the access token, then saves them
+ * as a "staging" environment in the config store. Non-fatal — logs a
+ * hint on failure instead of throwing.
+ */
+export async function provisionStagingEnvironment(accessToken: string): Promise<boolean> {
+  try {
+    const staging = await fetchStagingCredentials(accessToken);
+
+    const config: CliConfig = getConfig() ?? { environments: {} };
+    const isFirst = Object.keys(config.environments).length === 0;
+
+    config.environments['staging'] = {
+      name: 'staging',
+      type: 'sandbox',
+      apiKey: staging.apiKey,
+      clientId: staging.clientId,
+    };
+
+    if (isFirst || !config.activeEnvironment) {
+      config.activeEnvironment = 'staging';
+    }
+
+    saveConfig(config);
+    logInfo('[login] Staging environment auto-provisioned');
+    return true;
+  } catch (error) {
+    logError('[login] Failed to auto-provision staging environment:', error instanceof Error ? error.message : error);
+    return false;
+  }
 }
 
 export async function runLogin(): Promise<void> {
@@ -184,6 +221,14 @@ export async function runLogin(): Promise<void> {
         spinner.stop('Authentication successful!');
         clack.log.success(`Logged in as ${email || userId}`);
         clack.log.info(`Token expires in ${expiresInSec} seconds`);
+
+        // Auto-provision staging environment
+        const provisioned = await provisionStagingEnvironment(result.access_token);
+        if (provisioned) {
+          clack.log.success('Staging environment configured automatically');
+        } else {
+          clack.log.info(chalk.dim('Run `workos env add` to configure an environment manually'));
+        }
         return;
       }
 
