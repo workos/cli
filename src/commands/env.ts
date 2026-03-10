@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import clack from '../utils/clack.js';
-import { getConfig, saveConfig } from '../lib/config-store.js';
+import { getConfig, saveConfig, isUnclaimedEnvironment } from '../lib/config-store.js';
 import type { CliConfig } from '../lib/config-store.js';
 import { outputSuccess, outputJson, exitWithError, isJsonMode } from '../utils/output.js';
 import { isNonInteractiveEnvironment } from '../utils/environment.js';
@@ -202,7 +202,8 @@ export async function runEnvList(): Promise<void> {
   }
 
   // Human-mode table
-  const nameW = Math.max(6, ...entries.map(([k]) => k.length)) + 2;
+  const hasUnclaimed = entries.some(([, env]) => isUnclaimedEnvironment(env));
+  const nameW = Math.max(6, ...entries.map(([k, env]) => k.length + (isUnclaimedEnvironment(env) ? ' (unclaimed)'.length : 0))) + 2;
   const typeW = 12;
 
   const header = [
@@ -220,10 +221,17 @@ export async function runEnvList(): Promise<void> {
   for (const [key, env] of entries) {
     const isActive = key === config.activeEnvironment;
     const marker = isActive ? chalk.green('▸ ') : '  ';
-    const name = isActive ? chalk.green(key.padEnd(nameW)) : key.padEnd(nameW);
-    const type = env.type === 'sandbox' ? 'Sandbox' : 'Production';
+    const unclaimed = isUnclaimedEnvironment(env);
+    const displayName = unclaimed ? `${key} ${chalk.yellow('(unclaimed)')}` : key;
+    const name = isActive ? chalk.green(displayName.padEnd(nameW)) : displayName.padEnd(nameW);
+    const type = unclaimed ? 'Unclaimed' : env.type === 'sandbox' ? 'Sandbox' : 'Production';
     const endpoint = env.endpoint || chalk.dim('default');
 
     console.log([marker, name, type.padEnd(typeW), endpoint].join('  '));
+  }
+
+  if (hasUnclaimed) {
+    console.log('');
+    console.log(chalk.dim('  Run `workos claim` to keep this environment.'));
   }
 }
