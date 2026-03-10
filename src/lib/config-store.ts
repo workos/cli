@@ -17,10 +17,18 @@ import { logWarn } from '../utils/debug.js';
 
 export interface EnvironmentConfig {
   name: string;
-  type: 'production' | 'sandbox';
+  type: 'production' | 'sandbox' | 'unclaimed';
   apiKey: string;
   clientId?: string;
   endpoint?: string;
+  claimToken?: string;
+}
+
+/**
+ * Type guard for unclaimed one-shot environments.
+ */
+export function isUnclaimedEnvironment(env: EnvironmentConfig): boolean {
+  return env.type === 'unclaimed';
 }
 
 export interface CliConfig {
