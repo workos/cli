@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1](https://github.com/workos/cli/compare/v0.10.0...v0.10.1) (2026-03-10)
+
+
+### Bug Fixes
+
+* **auth:** auto-provision staging environment after login ([#89](https://github.com/workos/cli/issues/89)) ([19b34e2](https://github.com/workos/cli/commit/19b34e27d5c516e0439904da9bc8b0a9b33ea892))
+
 ## [0.10.0](https://github.com/workos/cli/compare/v0.9.0...v0.10.0) (2026-03-09)
 
 
