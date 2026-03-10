@@ -57,6 +57,34 @@ async function applyInsecureStorage(insecureStorage?: boolean): Promise<void> {
   }
 }
 
+/**
+ * Resolve credentials for install flow.
+ * Priority: existing creds (env var, --api-key, active env) -> one-shot provisioning -> login fallback.
+ */
+async function resolveInstallCredentials(
+  apiKey?: string,
+  installDir?: string,
+  skipAuth?: boolean,
+): Promise<void> {
+  // Check for existing credentials without triggering process.exit
+  const envApiKey = process.env.WORKOS_API_KEY;
+  if (envApiKey) return;
+  if (apiKey) return;
+
+  const { getActiveEnvironment } = await import('./lib/config-store.js');
+  const activeEnv = getActiveEnvironment();
+  if (activeEnv?.apiKey) return;
+
+  // No existing credentials — try one-shot provisioning
+  const { tryOneShotProvision } = await import('./lib/one-shot-provision.js');
+  const dir = installDir ?? process.cwd();
+  const provisioned = await tryOneShotProvision({ installDir: dir });
+  if (!provisioned) {
+    // One-shot failed — fall back to login
+    if (!skipAuth) await ensureAuthenticated();
+  }
+}
+
 /** Shared insecure-storage option for commands that access credentials */
 const insecureStorageOption = {
   'insecure-storage': {
@@ -2003,22 +2031,40 @@ yargs(rawArgs)
     },
   )
   .command(
+    'claim',
+    'Claim an unclaimed WorkOS environment (link it to your account)',
+    (yargs) =>
+      yargs.options({
+        ...insecureStorageOption,
+        json: { type: 'boolean' as const, default: false, describe: 'Output in JSON format' },
+      }),
+    async (argv) => {
+      await applyInsecureStorage(argv.insecureStorage);
+      const { runClaim } = await import('./commands/claim.js');
+      await runClaim();
+    },
+  )
+  .command(
     'install',
     'Install WorkOS AuthKit into your project (interactive framework detection and setup)',
     (yargs) => yargs.options(installerOptions),
-    withAuth(async (argv) => {
+    async (argv) => {
+      await applyInsecureStorage(argv.insecureStorage);
+      await resolveInstallCredentials(argv.apiKey, argv.installDir, argv.skipAuth);
       const { handleInstall } = await import('./commands/install.js');
       await handleInstall(argv);
-    }),
+    },
   )
   .command(
     'dashboard',
     false, // hidden from help
     (yargs) => yargs.options(installerOptions),
-    withAuth(async (argv) => {
+    async (argv) => {
+      await applyInsecureStorage(argv.insecureStorage);
+      await resolveInstallCredentials(argv.apiKey, argv.installDir, argv.skipAuth);
       const { handleInstall } = await import('./commands/install.js');
       await handleInstall({ ...argv, dashboard: true });
-    }),
+    },
   )
   .command(
     ['$0'],
@@ -2040,9 +2086,8 @@ yargs(rawArgs)
         process.exit(0);
       }
 
-      // Auth check happens HERE, after user confirms
       await applyInsecureStorage(argv.insecureStorage);
-      await ensureAuthenticated();
+      await resolveInstallCredentials(undefined, undefined, false);
 
       const { handleInstall } = await import('./commands/install.js');
       await handleInstall({ ...argv, dashboard: false });

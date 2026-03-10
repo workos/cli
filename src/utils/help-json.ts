@@ -1034,6 +1034,21 @@ const commands: CommandSchema[] = [
       },
     ],
   },
+  {
+    name: 'claim',
+    description: 'Claim an unclaimed WorkOS environment (link it to your account)',
+    options: [
+      insecureStorageOpt,
+      {
+        name: 'json',
+        type: 'boolean',
+        description: 'Output in JSON format',
+        required: false,
+        default: false,
+        hidden: false,
+      },
+    ],
+  },
   // --- Workflow Commands ---
   {
     name: 'seed',

@@ -34,6 +34,7 @@ interface EnvVars {
   WORKOS_REDIRECT_URI?: string;
   NEXT_PUBLIC_WORKOS_REDIRECT_URI?: string;
   WORKOS_COOKIE_PASSWORD?: string;
+  WORKOS_CLAIM_TOKEN?: string;
 }
 
 /**
