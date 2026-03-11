@@ -25,7 +25,7 @@ export interface EnvironmentConfig {
 }
 
 /**
- * Type guard for unclaimed one-shot environments.
+ * Type guard for unclaimed environments.
  */
 export function isUnclaimedEnvironment(env: EnvironmentConfig): boolean {
   return env.type === 'unclaimed';

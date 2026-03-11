@@ -8,7 +8,7 @@
 
 import chalk from 'chalk';
 import { getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
-import { createClaimNonce } from './one-shot-api.js';
+import { createClaimNonce } from './unclaimed-env-api.js';
 import { markEnvironmentClaimed } from '../commands/claim.js';
 import { logInfo } from '../utils/debug.js';
 import { isJsonMode } from '../utils/output.js';
@@ -46,14 +46,15 @@ export async function warnIfUnclaimed(): Promise<void> {
     warningShownThisSession = true;
 
     if (!isJsonMode()) {
-      console.error(
-        chalk.yellow('⚠') +
-          ' ' +
-          chalk.yellow.bold('Unclaimed environment') +
-          chalk.dim(' — Run ') +
-          chalk.yellow('workos claim') +
-          chalk.dim(' to keep your data.'),
-      );
+      const inner = ` ${chalk.yellow('⚠ Unclaimed environment')} — Run ${chalk.cyan('workos claim')} to keep your data. `;
+      // Strip ANSI for border width calculation
+      const plainLen = inner.replace(/\x1b\[[0-9;]*m/g, '').length;
+      const border = '─'.repeat(plainLen);
+      console.error('');
+      console.error(chalk.yellow(`  ┌${border}┐`));
+      console.error(chalk.yellow('  │') + inner + chalk.yellow('│'));
+      console.error(chalk.yellow(`  └${border}┘`));
+      console.error('');
     }
   } catch {
     // Never block command execution

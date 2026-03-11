@@ -1,5 +1,5 @@
 /**
- * `workos claim` — claim an unclaimed one-shot environment.
+ * `workos claim` — claim an unclaimed environment.
  *
  * Reads claim token from active environment, generates a nonce via
  * createClaimNonce(), opens browser to dashboard claim URL, and polls
@@ -9,7 +9,7 @@
 import open from 'opn';
 import clack from '../utils/clack.js';
 import { getConfig, saveConfig, getActiveEnvironment, isUnclaimedEnvironment } from '../lib/config-store.js';
-import { createClaimNonce } from '../lib/one-shot-api.js';
+import { createClaimNonce } from '../lib/unclaimed-env-api.js';
 import { logInfo, logError } from '../utils/debug.js';
 import { isJsonMode, outputJson } from '../utils/output.js';
 

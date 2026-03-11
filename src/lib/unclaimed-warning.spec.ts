@@ -22,9 +22,9 @@ vi.mock('./config-store.js', () => ({
   saveConfig: vi.fn(),
 }));
 
-// Mock one-shot-api
+// Mock unclaimed-env-api
 const mockCreateClaimNonce = vi.fn();
-vi.mock('./one-shot-api.js', () => ({
+vi.mock('./unclaimed-env-api.js', () => ({
   createClaimNonce: (...args: unknown[]) => mockCreateClaimNonce(...args),
 }));
 
@@ -49,7 +49,7 @@ describe('unclaimed-warning', () => {
 
   it('shows warning when active env is unclaimed', async () => {
     mockGetActiveEnvironment.mockReturnValue({
-      name: 'one-shot',
+      name: 'unclaimed',
       type: 'unclaimed',
       apiKey: 'sk_test_xxx',
     });
@@ -83,22 +83,24 @@ describe('unclaimed-warning', () => {
 
   it('shows warning only once per session (dedup)', async () => {
     mockGetActiveEnvironment.mockReturnValue({
-      name: 'one-shot',
+      name: 'unclaimed',
       type: 'unclaimed',
       apiKey: 'sk_test_xxx',
     });
     mockIsUnclaimedEnvironment.mockReturnValue(true);
 
     await warnIfUnclaimed();
+    const callCount = stderrSpy.mock.calls.length;
     await warnIfUnclaimed();
 
-    expect(stderrSpy).toHaveBeenCalledTimes(1);
+    // Second call should not add any more output (dedup)
+    expect(stderrSpy).toHaveBeenCalledTimes(callCount);
   });
 
   it('suppresses warning in JSON mode', async () => {
     jsonMode = true;
     mockGetActiveEnvironment.mockReturnValue({
-      name: 'one-shot',
+      name: 'unclaimed',
       type: 'unclaimed',
       apiKey: 'sk_test_xxx',
     });
@@ -111,7 +113,7 @@ describe('unclaimed-warning', () => {
 
   it('detects claimed status via lazy check and updates config', async () => {
     mockGetActiveEnvironment.mockReturnValue({
-      name: 'one-shot',
+      name: 'unclaimed',
       type: 'unclaimed',
       apiKey: 'sk_test_xxx',
       clientId: 'client_01ABC',
@@ -130,7 +132,7 @@ describe('unclaimed-warning', () => {
 
   it('shows warning when lazy check fails (network error)', async () => {
     mockGetActiveEnvironment.mockReturnValue({
-      name: 'one-shot',
+      name: 'unclaimed',
       type: 'unclaimed',
       apiKey: 'sk_test_xxx',
       clientId: 'client_01ABC',
@@ -146,7 +148,7 @@ describe('unclaimed-warning', () => {
 
   it('only does lazy check once per session', async () => {
     mockGetActiveEnvironment.mockReturnValue({
-      name: 'one-shot',
+      name: 'unclaimed',
       type: 'unclaimed',
       apiKey: 'sk_test_xxx',
       clientId: 'client_01ABC',
@@ -158,23 +160,18 @@ describe('unclaimed-warning', () => {
     await warnIfUnclaimed();
 
     expect(mockCreateClaimNonce).toHaveBeenCalledTimes(1);
-    expect(stderrSpy).toHaveBeenCalledTimes(1);
+    expect(stderrSpy).toHaveBeenCalled();
 
-    // Reset warning shown but NOT claim check
-    stderrSpy.mockClear();
-    // Second call — claim check should NOT fire again
-    resetUnclaimedWarningState();
-    // Re-import resets module-level state via resetUnclaimedWarningState
-    // But we already called it above; the mock should reflect 1 call still
-
-    // Actually, to test "once per session" we should NOT reset:
-    // After the first warnIfUnclaimed, the warning is already shown. On second call,
-    // the dedup flag prevents it. The claim check also won't fire again.
+    const callCount = stderrSpy.mock.calls.length;
+    // Second call — claim check should NOT fire again, warning should not re-show
+    await warnIfUnclaimed();
+    expect(mockCreateClaimNonce).toHaveBeenCalledTimes(1);
+    expect(stderrSpy).toHaveBeenCalledTimes(callCount);
   });
 
   it('skips lazy check when no claimToken', async () => {
     mockGetActiveEnvironment.mockReturnValue({
-      name: 'one-shot',
+      name: 'unclaimed',
       type: 'unclaimed',
       apiKey: 'sk_test_xxx',
       // no claimToken
@@ -184,12 +181,12 @@ describe('unclaimed-warning', () => {
     await warnIfUnclaimed();
 
     expect(mockCreateClaimNonce).not.toHaveBeenCalled();
-    expect(stderrSpy).toHaveBeenCalledTimes(1);
+    expect(stderrSpy).toHaveBeenCalled();
   });
 
   it('skips lazy check when no clientId', async () => {
     mockGetActiveEnvironment.mockReturnValue({
-      name: 'one-shot',
+      name: 'unclaimed',
       type: 'unclaimed',
       apiKey: 'sk_test_xxx',
       claimToken: 'ct_token',
@@ -200,23 +197,25 @@ describe('unclaimed-warning', () => {
     await warnIfUnclaimed();
 
     expect(mockCreateClaimNonce).not.toHaveBeenCalled();
-    expect(stderrSpy).toHaveBeenCalledTimes(1);
+    expect(stderrSpy).toHaveBeenCalled();
   });
 
   it('resetUnclaimedWarningState allows re-testing', async () => {
     mockGetActiveEnvironment.mockReturnValue({
-      name: 'one-shot',
+      name: 'unclaimed',
       type: 'unclaimed',
       apiKey: 'sk_test_xxx',
     });
     mockIsUnclaimedEnvironment.mockReturnValue(true);
 
     await warnIfUnclaimed();
-    expect(stderrSpy).toHaveBeenCalledTimes(1);
+    const firstCallCount = stderrSpy.mock.calls.length;
+    expect(firstCallCount).toBeGreaterThan(0);
 
     resetUnclaimedWarningState();
     await warnIfUnclaimed();
-    expect(stderrSpy).toHaveBeenCalledTimes(2);
+    // Should have doubled the output (warning shown again after reset)
+    expect(stderrSpy.mock.calls.length).toBe(firstCallCount * 2);
   });
 
   it('never throws even if getActiveEnvironment throws', async () => {

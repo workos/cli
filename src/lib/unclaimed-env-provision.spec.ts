@@ -31,17 +31,17 @@ vi.mock('./config-store.js', () => ({
   getActiveEnvironment: (...args: unknown[]) => mockGetActiveEnvironment(...args),
 }));
 
-// Mock one-shot-api
-const mockProvisionOneShotEnvironment = vi.fn();
+// Mock unclaimed-env-api
+const mockProvisionUnclaimedEnvironment = vi.fn();
 const mockGenerateCookiePassword = vi.fn(() => 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4');
-vi.mock('./one-shot-api.js', () => ({
-  provisionOneShotEnvironment: (...args: unknown[]) => mockProvisionOneShotEnvironment(...args),
+vi.mock('./unclaimed-env-api.js', () => ({
+  provisionUnclaimedEnvironment: (...args: unknown[]) => mockProvisionUnclaimedEnvironment(...args),
   generateCookiePassword: () => mockGenerateCookiePassword(),
 }));
 
-const { tryOneShotProvision } = await import('./one-shot-provision.js');
+const { tryProvisionUnclaimedEnv } = await import('./unclaimed-env-provision.js');
 
-describe('one-shot-provision', () => {
+describe('unclaimed-env-provision', () => {
   let testDir: string;
 
   const validProvisionResult = {
@@ -52,7 +52,7 @@ describe('one-shot-provision', () => {
   };
 
   beforeEach(() => {
-    testDir = mkdtempSync(join(tmpdir(), 'one-shot-provision-test-'));
+    testDir = mkdtempSync(join(tmpdir(), 'unclaimed-env-provision-test-'));
     vi.clearAllMocks();
     mockGetConfig.mockReturnValue(null);
   });
@@ -61,31 +61,31 @@ describe('one-shot-provision', () => {
     rmSync(testDir, { recursive: true, force: true });
   });
 
-  describe('tryOneShotProvision', () => {
+  describe('tryProvisionUnclaimedEnv', () => {
     it('returns true on successful provisioning', async () => {
-      mockProvisionOneShotEnvironment.mockResolvedValueOnce(validProvisionResult);
+      mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
 
-      const result = await tryOneShotProvision({ installDir: testDir });
+      const result = await tryProvisionUnclaimedEnv({ installDir: testDir });
 
       expect(result).toBe(true);
     });
 
     it('saves config with type unclaimed and sets as active', async () => {
-      mockProvisionOneShotEnvironment.mockResolvedValueOnce(validProvisionResult);
+      mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
 
-      await tryOneShotProvision({ installDir: testDir });
+      await tryProvisionUnclaimedEnv({ installDir: testDir });
 
       expect(mockSaveConfig).toHaveBeenCalledWith({
         environments: {
-          'one-shot': {
-            name: 'one-shot',
+          unclaimed: {
+            name: 'unclaimed',
             type: 'unclaimed',
             apiKey: 'sk_test_oneshot',
             clientId: 'client_01ABC',
             claimToken: 'ct_token123',
           },
         },
-        activeEnvironment: 'one-shot',
+        activeEnvironment: 'unclaimed',
       });
     });
 
@@ -100,25 +100,25 @@ describe('one-shot-provision', () => {
           },
         },
       });
-      mockProvisionOneShotEnvironment.mockResolvedValueOnce(validProvisionResult);
+      mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
 
-      await tryOneShotProvision({ installDir: testDir });
+      await tryProvisionUnclaimedEnv({ installDir: testDir });
 
       expect(mockSaveConfig).toHaveBeenCalledWith(
         expect.objectContaining({
           environments: expect.objectContaining({
             production: expect.objectContaining({ apiKey: 'sk_live_existing' }),
-            'one-shot': expect.objectContaining({ type: 'unclaimed' }),
+            unclaimed: expect.objectContaining({ type: 'unclaimed' }),
           }),
-          activeEnvironment: 'one-shot',
+          activeEnvironment: 'unclaimed',
         }),
       );
     });
 
     it('writes .env.local with all credentials including cookie password and claim token', async () => {
-      mockProvisionOneShotEnvironment.mockResolvedValueOnce(validProvisionResult);
+      mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
 
-      await tryOneShotProvision({ installDir: testDir });
+      await tryProvisionUnclaimedEnv({ installDir: testDir });
 
       const envPath = join(testDir, '.env.local');
       expect(existsSync(envPath)).toBe(true);
@@ -130,53 +130,53 @@ describe('one-shot-provision', () => {
     });
 
     it('generates cookie password', async () => {
-      mockProvisionOneShotEnvironment.mockResolvedValueOnce(validProvisionResult);
+      mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
 
-      await tryOneShotProvision({ installDir: testDir });
+      await tryProvisionUnclaimedEnv({ installDir: testDir });
 
       expect(mockGenerateCookiePassword).toHaveBeenCalled();
     });
 
     it('shows provisioning message to user', async () => {
-      mockProvisionOneShotEnvironment.mockResolvedValueOnce(validProvisionResult);
+      mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
 
-      await tryOneShotProvision({ installDir: testDir });
+      await tryProvisionUnclaimedEnv({ installDir: testDir });
 
       expect(mockClack.log.info).toHaveBeenCalledWith(expect.stringContaining('workos claim'));
     });
 
     it('returns false on API failure (network error)', async () => {
-      mockProvisionOneShotEnvironment.mockRejectedValueOnce(new Error('Network error: DNS failed'));
+      mockProvisionUnclaimedEnvironment.mockRejectedValueOnce(new Error('Network error: DNS failed'));
 
-      const result = await tryOneShotProvision({ installDir: testDir });
+      const result = await tryProvisionUnclaimedEnv({ installDir: testDir });
 
       expect(result).toBe(false);
       expect(mockSaveConfig).not.toHaveBeenCalled();
     });
 
     it('returns false on API failure (rate limit)', async () => {
-      mockProvisionOneShotEnvironment.mockRejectedValueOnce(
+      mockProvisionUnclaimedEnvironment.mockRejectedValueOnce(
         new Error('Rate limited. Please wait a moment and try again.'),
       );
 
-      const result = await tryOneShotProvision({ installDir: testDir });
+      const result = await tryProvisionUnclaimedEnv({ installDir: testDir });
 
       expect(result).toBe(false);
       expect(mockClack.log.warn).toHaveBeenCalledWith(expect.stringContaining('falling back to login'));
     });
 
     it('returns false on API failure (server error)', async () => {
-      mockProvisionOneShotEnvironment.mockRejectedValueOnce(new Error('Server error: 500'));
+      mockProvisionUnclaimedEnvironment.mockRejectedValueOnce(new Error('Server error: 500'));
 
-      const result = await tryOneShotProvision({ installDir: testDir });
+      const result = await tryProvisionUnclaimedEnv({ installDir: testDir });
 
       expect(result).toBe(false);
     });
 
     it('writes redirect URI to .env.local when provided', async () => {
-      mockProvisionOneShotEnvironment.mockResolvedValueOnce(validProvisionResult);
+      mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
 
-      await tryOneShotProvision({
+      await tryProvisionUnclaimedEnv({
         installDir: testDir,
         redirectUri: 'http://localhost:3000/callback',
         redirectUriKey: 'NEXT_PUBLIC_WORKOS_REDIRECT_URI',
@@ -187,9 +187,9 @@ describe('one-shot-provision', () => {
     });
 
     it('uses WORKOS_REDIRECT_URI key by default when redirect URI provided', async () => {
-      mockProvisionOneShotEnvironment.mockResolvedValueOnce(validProvisionResult);
+      mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
 
-      await tryOneShotProvision({
+      await tryProvisionUnclaimedEnv({
         installDir: testDir,
         redirectUri: 'http://localhost:3000/callback',
       });

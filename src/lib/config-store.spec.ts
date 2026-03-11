@@ -353,7 +353,7 @@ describe('config-store', () => {
 
   describe('unclaimed environment type', () => {
     const unclaimedEnv: EnvironmentConfig = {
-      name: 'one-shot',
+      name: 'unclaimed',
       type: 'unclaimed',
       apiKey: 'sk_test_oneshot',
       clientId: 'client_01ONESHOT',
@@ -361,9 +361,9 @@ describe('config-store', () => {
     };
 
     const unclaimedConfig: CliConfig = {
-      activeEnvironment: 'one-shot',
+      activeEnvironment: 'unclaimed',
       environments: {
-        'one-shot': unclaimedEnv,
+        unclaimed: unclaimedEnv,
       },
     };
 
@@ -371,7 +371,7 @@ describe('config-store', () => {
       saveConfig(unclaimedConfig);
       const config = getConfig();
       expect(config).not.toBeNull();
-      const env = config?.environments['one-shot'];
+      const env = config?.environments['unclaimed'];
       expect(env?.type).toBe('unclaimed');
       expect(env?.claimToken).toBe('ct_claim_token_abc');
       expect(env?.clientId).toBe('client_01ONESHOT');
@@ -383,7 +383,7 @@ describe('config-store', () => {
       saveConfig(unclaimedConfig);
       const config = getConfig();
       expect(config).not.toBeNull();
-      const env = config?.environments['one-shot'];
+      const env = config?.environments['unclaimed'];
       expect(env?.type).toBe('unclaimed');
       expect(env?.claimToken).toBe('ct_claim_token_abc');
     });
@@ -402,8 +402,8 @@ describe('config-store', () => {
         endpoint: 'http://localhost:8001',
       };
       saveConfig({
-        activeEnvironment: 'one-shot',
-        environments: { 'one-shot': envWithEndpoint },
+        activeEnvironment: 'unclaimed',
+        environments: { unclaimed: envWithEndpoint },
       });
       const env = getActiveEnvironment();
       expect(env?.claimToken).toBe('ct_claim_token_abc');

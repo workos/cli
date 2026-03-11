@@ -65,7 +65,7 @@ async function maybeWarnUnclaimed(): Promise<void> {
 
 /**
  * Resolve credentials for install flow.
- * Priority: existing creds (env var, --api-key, active env) -> one-shot provisioning -> login fallback.
+ * Priority: existing creds (env var, --api-key, active env) -> unclaimed env provisioning -> login fallback.
  */
 async function resolveInstallCredentials(apiKey?: string, installDir?: string, skipAuth?: boolean): Promise<void> {
   // Check for existing credentials without triggering process.exit
@@ -77,12 +77,12 @@ async function resolveInstallCredentials(apiKey?: string, installDir?: string, s
   const activeEnv = getActiveEnvironment();
   if (activeEnv?.apiKey) return;
 
-  // No existing credentials — try one-shot provisioning
-  const { tryOneShotProvision } = await import('./lib/one-shot-provision.js');
+  // No existing credentials — try unclaimed env provisioning
+  const { tryProvisionUnclaimedEnv } = await import('./lib/unclaimed-env-provision.js');
   const dir = installDir ?? process.cwd();
-  const provisioned = await tryOneShotProvision({ installDir: dir });
+  const provisioned = await tryProvisionUnclaimedEnv({ installDir: dir });
   if (!provisioned) {
-    // One-shot failed — fall back to login
+    // Unclaimed env provisioning failed — fall back to login
     if (!skipAuth) await ensureAuthenticated();
   }
 }

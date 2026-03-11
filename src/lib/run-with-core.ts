@@ -219,7 +219,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   const machineWithActors = installerMachine.provide({
     actors: {
       checkAuthentication: fromPromise(async () => {
-        // Check for active environment with credentials (covers one-shot environments)
+        // Check for active environment with credentials (covers unclaimed environments)
         const activeEnv = getActiveEnvironment();
         if (activeEnv?.clientId && activeEnv?.apiKey) {
           return true;

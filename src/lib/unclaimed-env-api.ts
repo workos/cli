@@ -1,7 +1,7 @@
 /**
- * One-Shot Environment Provisioning API Client
+ * Unclaimed Environment Provisioning API Client
  *
- * Provisions unauthenticated one-shot environments and generates claim nonces.
+ * Provisions unauthenticated unclaimed environments and generates claim nonces.
  * No authentication required for provisioning — claim tokens are used for
  * subsequent claim operations.
  */
@@ -9,7 +9,7 @@
 import { logInfo, logError } from '../utils/debug.js';
 import { getActiveEnvironment } from './config-store.js';
 
-export interface OneShotProvisionResult {
+export interface UnclaimedEnvProvisionResult {
   clientId: string;
   apiKey: string;
   claimToken: string;
@@ -27,13 +27,13 @@ export interface AlreadyClaimedResult {
 
 export type ClaimNonceResponse = ClaimNonceResult | AlreadyClaimedResult;
 
-export class OneShotApiError extends Error {
+export class UnclaimedEnvApiError extends Error {
   constructor(
     message: string,
     public readonly statusCode?: number,
   ) {
     super(message);
-    this.name = 'OneShotApiError';
+    this.name = 'UnclaimedEnvApiError';
   }
 }
 
@@ -46,17 +46,17 @@ function getBaseUrl(): string {
 }
 
 /**
- * Provision a new one-shot environment. No authentication required.
+ * Provision a new unclaimed environment. No authentication required.
  *
- * @returns OneShotProvisionResult containing clientId, apiKey, claimToken, and authkitDomain
- * @throws OneShotApiError on rate limit, network failure, timeout, or server error
+ * @returns UnclaimedEnvProvisionResult containing clientId, apiKey, claimToken, and authkitDomain
+ * @throws UnclaimedEnvApiError on rate limit, network failure, timeout, or server error
  */
-export async function provisionOneShotEnvironment(): Promise<OneShotProvisionResult> {
+export async function provisionUnclaimedEnvironment(): Promise<UnclaimedEnvProvisionResult> {
   const url = `${getBaseUrl()}/x/one-shot-environments`;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  logInfo('[one-shot-api] Provisioning one-shot environment:', url);
+  logInfo('[unclaimed-env-api] Provisioning unclaimed environment:', url);
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -64,16 +64,16 @@ export async function provisionOneShotEnvironment(): Promise<OneShotProvisionRes
       signal: controller.signal,
     });
 
-    logInfo('[one-shot-api] Response status:', res.status);
+    logInfo('[unclaimed-env-api] Response status:', res.status);
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      logError('[one-shot-api] Error response:', res.status, text);
+      logError('[unclaimed-env-api] Error response:', res.status, text);
 
       if (res.status === 429) {
-        throw new OneShotApiError('Rate limited. Please wait a moment and try again.', 429);
+        throw new UnclaimedEnvApiError('Rate limited. Please wait a moment and try again.', 429);
       }
 
-      throw new OneShotApiError(`Server error: ${res.status}`, res.status);
+      throw new UnclaimedEnvApiError(`Server error: ${res.status}`, res.status);
     }
 
     const data = (await res.json()) as {
@@ -94,20 +94,20 @@ export async function provisionOneShotEnvironment(): Promise<OneShotProvisionRes
     const authkitDomain = data.authkitDomain || data.authkit_domain;
 
     if (!clientId || !apiKey || !claimToken || !authkitDomain) {
-      logError('[one-shot-api] Invalid response: missing required fields');
-      throw new OneShotApiError('Invalid response: missing required fields');
+      logError('[unclaimed-env-api] Invalid response: missing required fields');
+      throw new UnclaimedEnvApiError('Invalid response: missing required fields');
     }
 
-    logInfo('[one-shot-api] One-shot environment provisioned successfully');
+    logInfo('[unclaimed-env-api] Unclaimed environment provisioned successfully');
     return { clientId, apiKey, claimToken, authkitDomain };
   } catch (error) {
-    if (error instanceof OneShotApiError) throw error;
+    if (error instanceof UnclaimedEnvApiError) throw error;
     if (error instanceof Error && error.name === 'AbortError') {
-      logError('[one-shot-api] Request timed out');
-      throw new OneShotApiError('Request timed out.');
+      logError('[unclaimed-env-api] Request timed out');
+      throw new UnclaimedEnvApiError('Request timed out.');
     }
-    logError('[one-shot-api] Network error:', error instanceof Error ? error.message : 'Unknown');
-    throw new OneShotApiError(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    logError('[unclaimed-env-api] Network error:', error instanceof Error ? error.message : 'Unknown');
+    throw new UnclaimedEnvApiError(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
   } finally {
     clearTimeout(timeoutId);
   }
@@ -117,17 +117,17 @@ export async function provisionOneShotEnvironment(): Promise<OneShotProvisionRes
  * Generate a claim nonce from a claim token + client ID.
  * Returns { alreadyClaimed: true } if environment was already claimed.
  *
- * @param clientId - The client ID of the one-shot environment
+ * @param clientId - The client ID of the unclaimed environment
  * @param claimToken - The claim token from provisioning
  * @returns ClaimNonceResponse — either a nonce or already-claimed indicator
- * @throws OneShotApiError on invalid token, not found, or server error
+ * @throws UnclaimedEnvApiError on invalid token, not found, or server error
  */
 export async function createClaimNonce(clientId: string, claimToken: string): Promise<ClaimNonceResponse> {
   const url = `${getBaseUrl()}/x/one-shot-environments/claim-nonces`;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  logInfo('[one-shot-api] Creating claim nonce:', url);
+  logInfo('[unclaimed-env-api] Creating claim nonce:', url);
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -136,22 +136,22 @@ export async function createClaimNonce(clientId: string, claimToken: string): Pr
       signal: controller.signal,
     });
 
-    logInfo('[one-shot-api] Response status:', res.status);
+    logInfo('[unclaimed-env-api] Response status:', res.status);
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      logError('[one-shot-api] Error response:', res.status, text);
+      logError('[unclaimed-env-api] Error response:', res.status, text);
 
       if (res.status === 401) {
-        throw new OneShotApiError('Invalid claim token.', 401);
+        throw new UnclaimedEnvApiError('Invalid claim token.', 401);
       }
       if (res.status === 404) {
-        throw new OneShotApiError('Environment not found.', 404);
+        throw new UnclaimedEnvApiError('Environment not found.', 404);
       }
       if (res.status === 429) {
-        throw new OneShotApiError('Rate limited. Please wait a moment and try again.', 429);
+        throw new UnclaimedEnvApiError('Rate limited. Please wait a moment and try again.', 429);
       }
 
-      throw new OneShotApiError(`Server error: ${res.status}`, res.status);
+      throw new UnclaimedEnvApiError(`Server error: ${res.status}`, res.status);
     }
 
     const data = (await res.json()) as {
@@ -162,25 +162,25 @@ export async function createClaimNonce(clientId: string, claimToken: string): Pr
 
     const alreadyClaimed = data.alreadyClaimed ?? data.already_claimed;
     if (alreadyClaimed) {
-      logInfo('[one-shot-api] Environment already claimed');
+      logInfo('[unclaimed-env-api] Environment already claimed');
       return { alreadyClaimed: true };
     }
 
     if (!data.nonce) {
-      logError('[one-shot-api] Invalid response: missing nonce');
-      throw new OneShotApiError('Invalid response: missing nonce');
+      logError('[unclaimed-env-api] Invalid response: missing nonce');
+      throw new UnclaimedEnvApiError('Invalid response: missing nonce');
     }
 
-    logInfo('[one-shot-api] Claim nonce created successfully');
+    logInfo('[unclaimed-env-api] Claim nonce created successfully');
     return { nonce: data.nonce, alreadyClaimed: false };
   } catch (error) {
-    if (error instanceof OneShotApiError) throw error;
+    if (error instanceof UnclaimedEnvApiError) throw error;
     if (error instanceof Error && error.name === 'AbortError') {
-      logError('[one-shot-api] Request timed out');
-      throw new OneShotApiError('Request timed out.');
+      logError('[unclaimed-env-api] Request timed out');
+      throw new UnclaimedEnvApiError('Request timed out.');
     }
-    logError('[one-shot-api] Network error:', error instanceof Error ? error.message : 'Unknown');
-    throw new OneShotApiError(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    logError('[unclaimed-env-api] Network error:', error instanceof Error ? error.message : 'Unknown');
+    throw new UnclaimedEnvApiError(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
   } finally {
     clearTimeout(timeoutId);
   }
@@ -188,7 +188,7 @@ export async function createClaimNonce(clientId: string, claimToken: string): Pr
 
 /**
  * Generate a random cookie password (32-char hex string).
- * Used as WORKOS_COOKIE_PASSWORD in .env.local for one-shot environments.
+ * Used as WORKOS_COOKIE_PASSWORD in .env.local for unclaimed environments.
  */
 export function generateCookiePassword(): string {
   const bytes = new Uint8Array(16);
