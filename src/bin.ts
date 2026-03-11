@@ -96,20 +96,6 @@ const insecureStorageOption = {
   },
 } as const;
 
-/**
- * Wrap a command handler with authentication check.
- * Ensures valid auth before executing the handler.
- * Respects --skip-auth flag for CI/testing.
- */
-function withAuth<T>(handler: (argv: T) => Promise<void>): (argv: T) => Promise<void> {
-  return async (argv: T) => {
-    const typedArgv = argv as { skipAuth?: boolean; insecureStorage?: boolean };
-    await applyInsecureStorage(typedArgv.insecureStorage);
-    if (!typedArgv.skipAuth) await ensureAuthenticated();
-    await handler(argv);
-  };
-}
-
 const installerOptions = {
   direct: {
     alias: 'D',
