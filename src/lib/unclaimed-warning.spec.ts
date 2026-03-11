@@ -57,9 +57,7 @@ describe('unclaimed-warning', () => {
 
     await warnIfUnclaimed();
 
-    expect(stderrSpy).toHaveBeenCalledWith(
-      'Warning: This environment is unclaimed. Run `workos claim` to keep your data.',
-    );
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Unclaimed environment'));
   });
 
   it('does not show warning when active env is not unclaimed', async () => {
@@ -143,9 +141,7 @@ describe('unclaimed-warning', () => {
 
     await warnIfUnclaimed();
 
-    expect(stderrSpy).toHaveBeenCalledWith(
-      'Warning: This environment is unclaimed. Run `workos claim` to keep your data.',
-    );
+    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Unclaimed environment'));
   });
 
   it('only does lazy check once per session', async () => {

@@ -6,6 +6,7 @@
  * Never throws — all errors are caught to avoid blocking management commands.
  */
 
+import chalk from 'chalk';
 import { getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
 import { createClaimNonce } from './one-shot-api.js';
 import { markEnvironmentClaimed } from '../commands/claim.js';
@@ -45,7 +46,14 @@ export async function warnIfUnclaimed(): Promise<void> {
     warningShownThisSession = true;
 
     if (!isJsonMode()) {
-      console.error('Warning: This environment is unclaimed. Run `workos claim` to keep your data.');
+      console.error(
+        chalk.yellow('⚠') +
+          ' ' +
+          chalk.yellow.bold('Unclaimed environment') +
+          chalk.dim(' — Run ') +
+          chalk.yellow('workos claim') +
+          chalk.dim(' to keep your data.'),
+      );
     }
   } catch {
     // Never block command execution
