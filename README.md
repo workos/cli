@@ -50,6 +50,7 @@ workos [command]
 
 Commands:
   install                Install WorkOS AuthKit into your project
+  claim                  Claim an unclaimed environment (link to your account)
   auth                   Manage authentication (login, logout, status)
   env                    Manage environment configurations
   doctor                 Diagnose WorkOS integration issues
@@ -84,6 +85,24 @@ Workflows:
 ```
 
 All management commands support `--json` for structured output (auto-enabled in non-TTY) and `--api-key` to override the active environment's key.
+
+### Unclaimed Environments
+
+When you run `workos install` without credentials, the CLI automatically provisions a temporary WorkOS environment — no account needed. This lets you try AuthKit immediately.
+
+```bash
+# Install with zero setup — environment provisioned automatically
+workos install
+
+# Check your environment
+workos env list
+# Shows: unclaimed (unclaimed) ← active
+
+# Claim the environment to link it to your WorkOS account
+workos claim
+```
+
+Management commands work on unclaimed environments with a warning reminding you to claim.
 
 ### Workflows
 
