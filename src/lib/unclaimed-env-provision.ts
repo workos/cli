@@ -6,6 +6,7 @@
  * try/catch so install flow can fall back to login.
  */
 
+import chalk from 'chalk';
 import { provisionUnclaimedEnvironment, generateCookiePassword } from './unclaimed-env-api.js';
 import { getConfig, saveConfig } from './config-store.js';
 import type { CliConfig } from './config-store.js';
@@ -65,7 +66,14 @@ export async function tryProvisionUnclaimedEnv(options: UnclaimedEnvProvisionOpt
     writeEnvLocal(options.installDir, envVars);
 
     logInfo('[unclaimed-env-provision] Unclaimed environment provisioned and saved');
-    clack.log.info("Provisioned temporary environment. Run 'workos claim' to keep it.");
+    const inner = ` ✓ ${chalk.green('Environment provisioned')} — Run ${chalk.cyan('workos claim')} to keep it. `;
+    const plainLen = inner.replace(/\x1b\[[0-9;]*m/g, '').length;
+    const border = '─'.repeat(plainLen);
+    console.error('');
+    console.error(chalk.green(`  ┌${border}┐`));
+    console.error(chalk.green('  │') + inner + chalk.green('│'));
+    console.error(chalk.green(`  └${border}┘`));
+    console.error('');
 
     return true;
   } catch (error) {

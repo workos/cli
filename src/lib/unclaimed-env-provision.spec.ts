@@ -139,10 +139,12 @@ describe('unclaimed-env-provision', () => {
 
     it('shows provisioning message to user', async () => {
       mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
+      const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       await tryProvisionUnclaimedEnv({ installDir: testDir });
 
-      expect(mockClack.log.info).toHaveBeenCalledWith(expect.stringContaining('workos claim'));
+      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Environment provisioned'));
+      stderrSpy.mockRestore();
     });
 
     it('returns false on API failure (network error)', async () => {
