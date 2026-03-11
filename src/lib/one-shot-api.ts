@@ -132,7 +132,7 @@ export async function createClaimNonce(clientId: string, claimToken: string): Pr
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientId, claimToken }),
+      body: JSON.stringify({ client_id: clientId, claim_token: claimToken }),
       signal: controller.signal,
     });
 

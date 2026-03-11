@@ -199,7 +199,7 @@ describe('one-shot-api', () => {
         expect.objectContaining({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientId: 'client_01ABC', claimToken: 'ct_token' }),
+          body: JSON.stringify({ client_id: 'client_01ABC', claim_token: 'ct_token' }),
         }),
       );
     });
