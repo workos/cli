@@ -33,10 +33,22 @@ vi.mock('./config-store.js', () => ({
 
 // Mock unclaimed-env-api
 const mockProvisionUnclaimedEnvironment = vi.fn();
-const mockGenerateCookiePassword = vi.fn(() => 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4');
 vi.mock('./unclaimed-env-api.js', () => ({
   provisionUnclaimedEnvironment: (...args: unknown[]) => mockProvisionUnclaimedEnvironment(...args),
-  generateCookiePassword: () => mockGenerateCookiePassword(),
+  UnclaimedEnvApiError: class UnclaimedEnvApiError extends Error {
+    constructor(
+      message: string,
+      public readonly statusCode?: number,
+    ) {
+      super(message);
+      this.name = 'UnclaimedEnvApiError';
+    }
+  },
+}));
+
+// Mock box utility
+vi.mock('../utils/box.js', () => ({
+  renderStderrBox: vi.fn(),
 }));
 
 const { tryProvisionUnclaimedEnv } = await import('./unclaimed-env-provision.js');
@@ -129,22 +141,13 @@ describe('unclaimed-env-provision', () => {
       expect(content).toContain('WORKOS_CLAIM_TOKEN=ct_token123');
     });
 
-    it('generates cookie password', async () => {
-      mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
-
-      await tryProvisionUnclaimedEnv({ installDir: testDir });
-
-      expect(mockGenerateCookiePassword).toHaveBeenCalled();
-    });
-
     it('shows provisioning message to user', async () => {
       mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
-      const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { renderStderrBox } = await import('../utils/box.js');
 
       await tryProvisionUnclaimedEnv({ installDir: testDir });
 
-      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Environment provisioned'));
-      stderrSpy.mockRestore();
+      expect(renderStderrBox).toHaveBeenCalled();
     });
 
     it('returns false on API failure (network error)', async () => {
@@ -157,8 +160,9 @@ describe('unclaimed-env-provision', () => {
     });
 
     it('returns false on API failure (rate limit)', async () => {
+      const { UnclaimedEnvApiError } = await import('./unclaimed-env-api.js');
       mockProvisionUnclaimedEnvironment.mockRejectedValueOnce(
-        new Error('Rate limited. Please wait a moment and try again.'),
+        new UnclaimedEnvApiError('Rate limited. Please wait a moment and try again.', 429),
       );
 
       const result = await tryProvisionUnclaimedEnv({ installDir: testDir });

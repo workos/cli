@@ -8,32 +8,14 @@
 
 import open from 'opn';
 import clack from '../utils/clack.js';
-import { getConfig, saveConfig, getActiveEnvironment, isUnclaimedEnvironment } from '../lib/config-store.js';
+import { getActiveEnvironment, isUnclaimedEnvironment, markEnvironmentClaimed } from '../lib/config-store.js';
 import { createClaimNonce } from '../lib/unclaimed-env-api.js';
 import { logInfo, logError } from '../utils/debug.js';
 import { isJsonMode, outputJson } from '../utils/output.js';
+import { sleep } from '../lib/helper-functions.js';
 
 const POLL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const POLL_INTERVAL_MS = 5_000; // 5 seconds
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * Mark the active unclaimed environment as claimed.
- * Updates type to 'sandbox' and removes the claim token.
- */
-export function markEnvironmentClaimed(): void {
-  const config = getConfig();
-  if (!config?.activeEnvironment) return;
-  const env = config.environments[config.activeEnvironment];
-  if (env) {
-    env.type = 'sandbox';
-    delete env.claimToken;
-    saveConfig(config);
-  }
-}
 
 /**
  * Run the claim flow.

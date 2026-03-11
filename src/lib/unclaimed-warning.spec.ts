@@ -18,33 +18,21 @@ const mockIsUnclaimedEnvironment = vi.fn();
 vi.mock('./config-store.js', () => ({
   getActiveEnvironment: (...args: unknown[]) => mockGetActiveEnvironment(...args),
   isUnclaimedEnvironment: (...args: unknown[]) => mockIsUnclaimedEnvironment(...args),
-  getConfig: vi.fn(),
-  saveConfig: vi.fn(),
 }));
 
-// Mock unclaimed-env-api
-const mockCreateClaimNonce = vi.fn();
-vi.mock('./unclaimed-env-api.js', () => ({
-  createClaimNonce: (...args: unknown[]) => mockCreateClaimNonce(...args),
-}));
-
-// Mock claim command
-const mockMarkEnvironmentClaimed = vi.fn();
-vi.mock('../commands/claim.js', () => ({
-  markEnvironmentClaimed: (...args: unknown[]) => mockMarkEnvironmentClaimed(...args),
+// Mock box utility
+const mockRenderStderrBox = vi.fn();
+vi.mock('../utils/box.js', () => ({
+  renderStderrBox: (...args: unknown[]) => mockRenderStderrBox(...args),
 }));
 
 const { warnIfUnclaimed, resetUnclaimedWarningState } = await import('./unclaimed-warning.js');
-const { logInfo } = await import('../utils/debug.js');
 
 describe('unclaimed-warning', () => {
-  let stderrSpy: ReturnType<typeof vi.spyOn>;
-
   beforeEach(() => {
     vi.clearAllMocks();
     jsonMode = false;
     resetUnclaimedWarningState();
-    stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   it('shows warning when active env is unclaimed', async () => {
@@ -57,7 +45,7 @@ describe('unclaimed-warning', () => {
 
     await warnIfUnclaimed();
 
-    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Unclaimed environment'));
+    expect(mockRenderStderrBox).toHaveBeenCalled();
   });
 
   it('does not show warning when active env is not unclaimed', async () => {
@@ -70,7 +58,7 @@ describe('unclaimed-warning', () => {
 
     await warnIfUnclaimed();
 
-    expect(stderrSpy).not.toHaveBeenCalled();
+    expect(mockRenderStderrBox).not.toHaveBeenCalled();
   });
 
   it('does not show warning when no active env', async () => {
@@ -78,7 +66,7 @@ describe('unclaimed-warning', () => {
 
     await warnIfUnclaimed();
 
-    expect(stderrSpy).not.toHaveBeenCalled();
+    expect(mockRenderStderrBox).not.toHaveBeenCalled();
   });
 
   it('shows warning only once per session (dedup)', async () => {
@@ -90,11 +78,11 @@ describe('unclaimed-warning', () => {
     mockIsUnclaimedEnvironment.mockReturnValue(true);
 
     await warnIfUnclaimed();
-    const callCount = stderrSpy.mock.calls.length;
+    expect(mockRenderStderrBox).toHaveBeenCalledTimes(1);
     await warnIfUnclaimed();
 
     // Second call should not add any more output (dedup)
-    expect(stderrSpy).toHaveBeenCalledTimes(callCount);
+    expect(mockRenderStderrBox).toHaveBeenCalledTimes(1);
   });
 
   it('suppresses warning in JSON mode', async () => {
@@ -108,96 +96,7 @@ describe('unclaimed-warning', () => {
 
     await warnIfUnclaimed();
 
-    expect(stderrSpy).not.toHaveBeenCalled();
-  });
-
-  it('detects claimed status via lazy check and updates config', async () => {
-    mockGetActiveEnvironment.mockReturnValue({
-      name: 'unclaimed',
-      type: 'unclaimed',
-      apiKey: 'sk_test_xxx',
-      clientId: 'client_01ABC',
-      claimToken: 'ct_token',
-    });
-    mockIsUnclaimedEnvironment.mockReturnValue(true);
-    mockCreateClaimNonce.mockResolvedValueOnce({ alreadyClaimed: true });
-
-    await warnIfUnclaimed();
-
-    expect(mockMarkEnvironmentClaimed).toHaveBeenCalled();
-    expect(logInfo).toHaveBeenCalledWith('[unclaimed-warning] Environment was claimed, config updated');
-    // No warning shown when environment is claimed
-    expect(stderrSpy).not.toHaveBeenCalled();
-  });
-
-  it('shows warning when lazy check fails (network error)', async () => {
-    mockGetActiveEnvironment.mockReturnValue({
-      name: 'unclaimed',
-      type: 'unclaimed',
-      apiKey: 'sk_test_xxx',
-      clientId: 'client_01ABC',
-      claimToken: 'ct_token',
-    });
-    mockIsUnclaimedEnvironment.mockReturnValue(true);
-    mockCreateClaimNonce.mockRejectedValueOnce(new Error('Network error'));
-
-    await warnIfUnclaimed();
-
-    expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('Unclaimed environment'));
-  });
-
-  it('only does lazy check once per session', async () => {
-    mockGetActiveEnvironment.mockReturnValue({
-      name: 'unclaimed',
-      type: 'unclaimed',
-      apiKey: 'sk_test_xxx',
-      clientId: 'client_01ABC',
-      claimToken: 'ct_token',
-    });
-    mockIsUnclaimedEnvironment.mockReturnValue(true);
-    mockCreateClaimNonce.mockResolvedValue({ nonce: 'nonce_abc', alreadyClaimed: false });
-
-    await warnIfUnclaimed();
-
-    expect(mockCreateClaimNonce).toHaveBeenCalledTimes(1);
-    expect(stderrSpy).toHaveBeenCalled();
-
-    const callCount = stderrSpy.mock.calls.length;
-    // Second call — claim check should NOT fire again, warning should not re-show
-    await warnIfUnclaimed();
-    expect(mockCreateClaimNonce).toHaveBeenCalledTimes(1);
-    expect(stderrSpy).toHaveBeenCalledTimes(callCount);
-  });
-
-  it('skips lazy check when no claimToken', async () => {
-    mockGetActiveEnvironment.mockReturnValue({
-      name: 'unclaimed',
-      type: 'unclaimed',
-      apiKey: 'sk_test_xxx',
-      // no claimToken
-    });
-    mockIsUnclaimedEnvironment.mockReturnValue(true);
-
-    await warnIfUnclaimed();
-
-    expect(mockCreateClaimNonce).not.toHaveBeenCalled();
-    expect(stderrSpy).toHaveBeenCalled();
-  });
-
-  it('skips lazy check when no clientId', async () => {
-    mockGetActiveEnvironment.mockReturnValue({
-      name: 'unclaimed',
-      type: 'unclaimed',
-      apiKey: 'sk_test_xxx',
-      claimToken: 'ct_token',
-      // no clientId
-    });
-    mockIsUnclaimedEnvironment.mockReturnValue(true);
-
-    await warnIfUnclaimed();
-
-    expect(mockCreateClaimNonce).not.toHaveBeenCalled();
-    expect(stderrSpy).toHaveBeenCalled();
+    expect(mockRenderStderrBox).not.toHaveBeenCalled();
   });
 
   it('resetUnclaimedWarningState allows re-testing', async () => {
@@ -209,13 +108,12 @@ describe('unclaimed-warning', () => {
     mockIsUnclaimedEnvironment.mockReturnValue(true);
 
     await warnIfUnclaimed();
-    const firstCallCount = stderrSpy.mock.calls.length;
-    expect(firstCallCount).toBeGreaterThan(0);
+    expect(mockRenderStderrBox).toHaveBeenCalledTimes(1);
 
     resetUnclaimedWarningState();
     await warnIfUnclaimed();
     // Should have doubled the output (warning shown again after reset)
-    expect(stderrSpy.mock.calls.length).toBe(firstCallCount * 2);
+    expect(mockRenderStderrBox).toHaveBeenCalledTimes(2);
   });
 
   it('never throws even if getActiveEnvironment throws', async () => {

@@ -5,13 +5,13 @@ vi.mock('../utils/debug.js', () => ({
   logError: vi.fn(),
 }));
 
-vi.mock('./config-store.js', () => ({
-  getActiveEnvironment: vi.fn(() => null),
+vi.mock('./api-key.js', () => ({
+  resolveApiBaseUrl: vi.fn(() => 'https://api.workos.com'),
 }));
 
-const { provisionUnclaimedEnvironment, createClaimNonce, generateCookiePassword, UnclaimedEnvApiError } =
+const { provisionUnclaimedEnvironment, createClaimNonce, UnclaimedEnvApiError } =
   await import('./unclaimed-env-api.js');
-const { getActiveEnvironment } = await import('./config-store.js');
+const { resolveApiBaseUrl } = await import('./api-key.js');
 
 describe('unclaimed-env-api', () => {
   const mockFetch = vi.fn();
@@ -20,7 +20,7 @@ describe('unclaimed-env-api', () => {
   beforeEach(() => {
     globalThis.fetch = mockFetch;
     mockFetch.mockReset();
-    vi.mocked(getActiveEnvironment).mockReturnValue(null);
+    vi.mocked(resolveApiBaseUrl).mockReturnValue('https://api.workos.com');
   });
 
   afterEach(() => {
@@ -168,12 +168,7 @@ describe('unclaimed-env-api', () => {
     });
 
     it('uses active environment endpoint when available', async () => {
-      vi.mocked(getActiveEnvironment).mockReturnValue({
-        name: 'local',
-        type: 'sandbox',
-        apiKey: 'sk_test_local',
-        endpoint: 'http://localhost:8001',
-      });
+      vi.mocked(resolveApiBaseUrl).mockReturnValue('http://localhost:8001');
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -291,19 +286,6 @@ describe('unclaimed-env-api', () => {
       });
 
       await expect(createClaimNonce('client_01ABC', 'ct_token')).rejects.toThrow('missing nonce');
-    });
-  });
-
-  describe('generateCookiePassword', () => {
-    it('returns a 32-character hex string', () => {
-      const password = generateCookiePassword();
-      expect(password).toMatch(/^[0-9a-f]{32}$/);
-    });
-
-    it('generates unique values', () => {
-      const a = generateCookiePassword();
-      const b = generateCookiePassword();
-      expect(a).not.toBe(b);
     });
   });
 });

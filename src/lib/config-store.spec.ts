@@ -82,6 +82,7 @@ const {
   setInsecureConfigStorage,
   getConfigPath,
   isUnclaimedEnvironment,
+  markEnvironmentClaimed,
 } = await import('./config-store.js');
 import type { CliConfig, EnvironmentConfig } from './config-store.js';
 
@@ -429,6 +430,46 @@ describe('config-store', () => {
 
     it('returns false for sandbox type', () => {
       expect(isUnclaimedEnvironment({ name: 'test', type: 'sandbox', apiKey: 'sk_test' })).toBe(false);
+    });
+  });
+
+  describe('markEnvironmentClaimed', () => {
+    it('updates environment type to sandbox and removes claimToken', () => {
+      saveConfig({
+        activeEnvironment: 'unclaimed',
+        environments: {
+          unclaimed: {
+            name: 'unclaimed',
+            type: 'unclaimed',
+            apiKey: 'sk_test_xxx',
+            clientId: 'client_01ABC',
+            claimToken: 'ct_token',
+          },
+        },
+      });
+
+      markEnvironmentClaimed();
+
+      const config = getConfig();
+      expect(config?.environments['unclaimed'].type).toBe('sandbox');
+      expect(config?.environments['unclaimed'].claimToken).toBeUndefined();
+    });
+
+    it('does nothing when no config', () => {
+      // No config saved — should not throw
+      expect(() => markEnvironmentClaimed()).not.toThrow();
+    });
+
+    it('does nothing when no active environment', () => {
+      saveConfig({
+        environments: { unclaimed: { name: 'unclaimed', type: 'unclaimed', apiKey: 'sk_test' } },
+      });
+
+      markEnvironmentClaimed();
+
+      const config = getConfig();
+      // Type should remain unchanged since there's no activeEnvironment
+      expect(config?.environments['unclaimed'].type).toBe('unclaimed');
     });
   });
 });

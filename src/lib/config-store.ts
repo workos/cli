@@ -178,3 +178,18 @@ export function getActiveEnvironment(): EnvironmentConfig | null {
 export function getConfigPath(): string {
   return getConfigFilePath();
 }
+
+/**
+ * Mark the active unclaimed environment as claimed.
+ * Updates type to 'sandbox' and removes the claim token.
+ */
+export function markEnvironmentClaimed(): void {
+  const config = getConfig();
+  if (!config?.activeEnvironment) return;
+  const env = config.environments[config.activeEnvironment];
+  if (env) {
+    env.type = 'sandbox';
+    delete env.claimToken;
+    saveConfig(config);
+  }
+}

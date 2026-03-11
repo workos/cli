@@ -35,16 +35,23 @@ vi.mock('../utils/output.js', () => ({
   outputJson: (...args: unknown[]) => mockOutputJson(...args),
 }));
 
+// Mock helper-functions
+vi.mock('../lib/helper-functions.js', () => ({
+  sleep: vi.fn((ms: number) => new Promise((resolve) => setTimeout(resolve, ms))),
+}));
+
 // Mock config-store
 const mockGetConfig = vi.fn();
 const mockSaveConfig = vi.fn();
 const mockGetActiveEnvironment = vi.fn();
 const mockIsUnclaimedEnvironment = vi.fn();
+const mockMarkEnvironmentClaimed = vi.fn();
 vi.mock('../lib/config-store.js', () => ({
   getConfig: (...args: unknown[]) => mockGetConfig(...args),
   saveConfig: (...args: unknown[]) => mockSaveConfig(...args),
   getActiveEnvironment: (...args: unknown[]) => mockGetActiveEnvironment(...args),
   isUnclaimedEnvironment: (...args: unknown[]) => mockIsUnclaimedEnvironment(...args),
+  markEnvironmentClaimed: (...args: unknown[]) => mockMarkEnvironmentClaimed(...args),
 }));
 
 // Mock unclaimed-env-api
@@ -53,7 +60,7 @@ vi.mock('../lib/unclaimed-env-api.js', () => ({
   createClaimNonce: (...args: unknown[]) => mockCreateClaimNonce(...args),
 }));
 
-const { runClaim, markEnvironmentClaimed } = await import('./claim.js');
+const { runClaim } = await import('./claim.js');
 
 describe('claim command', () => {
   beforeEach(() => {
@@ -140,30 +147,10 @@ describe('claim command', () => {
       mockIsUnclaimedEnvironment.mockReturnValue(true);
       mockCreateClaimNonce.mockResolvedValueOnce({ alreadyClaimed: true });
 
-      // Mock getConfig for markEnvironmentClaimed
-      mockGetConfig.mockReturnValue({
-        activeEnvironment: 'unclaimed',
-        environments: {
-          unclaimed: {
-            name: 'unclaimed',
-            type: 'unclaimed',
-            apiKey: 'sk_test_xxx',
-            clientId: 'client_01ABC',
-            claimToken: 'ct_token',
-          },
-        },
-      });
-
       await runClaim();
 
       expect(mockClack.log.success).toHaveBeenCalledWith('Environment already claimed!');
-      expect(mockSaveConfig).toHaveBeenCalledWith(
-        expect.objectContaining({
-          environments: expect.objectContaining({
-            unclaimed: expect.objectContaining({ type: 'sandbox' }),
-          }),
-        }),
-      );
+      expect(mockMarkEnvironmentClaimed).toHaveBeenCalled();
     });
 
     it('generates nonce, opens browser, and polls for claim', async () => {
@@ -185,12 +172,6 @@ describe('claim command', () => {
       // Second call (poll): returns claimed
       mockCreateClaimNonce.mockResolvedValueOnce({ alreadyClaimed: true });
 
-      // Mock getConfig for markEnvironmentClaimed
-      mockGetConfig.mockReturnValue({
-        activeEnvironment: 'unclaimed',
-        environments: { unclaimed: { ...unclaimedEnv } },
-      });
-
       const claimPromise = runClaim();
 
       // Advance past poll interval
@@ -202,7 +183,7 @@ describe('claim command', () => {
       );
       expect(mockSpinner.start).toHaveBeenCalledWith('Waiting for claim...');
       expect(mockSpinner.stop).toHaveBeenCalledWith('Environment claimed!');
-      expect(mockSaveConfig).toHaveBeenCalled();
+      expect(mockMarkEnvironmentClaimed).toHaveBeenCalled();
     });
 
     it('outputs JSON with claim URL in JSON mode', async () => {
@@ -243,18 +224,6 @@ describe('claim command', () => {
       });
       mockIsUnclaimedEnvironment.mockReturnValue(true);
       mockCreateClaimNonce.mockResolvedValueOnce({ alreadyClaimed: true });
-      mockGetConfig.mockReturnValue({
-        activeEnvironment: 'unclaimed',
-        environments: {
-          unclaimed: {
-            name: 'unclaimed',
-            type: 'unclaimed',
-            apiKey: 'sk_test_xxx',
-            clientId: 'client_01ABC',
-            claimToken: 'ct_token',
-          },
-        },
-      });
 
       await runClaim();
 
@@ -313,11 +282,6 @@ describe('claim command', () => {
       // Third poll call: claimed
       mockCreateClaimNonce.mockResolvedValueOnce({ alreadyClaimed: true });
 
-      mockGetConfig.mockReturnValue({
-        activeEnvironment: 'unclaimed',
-        environments: { unclaimed: { ...unclaimedEnv } },
-      });
-
       const claimPromise = runClaim();
 
       // Advance through two poll intervals
@@ -342,56 +306,6 @@ describe('claim command', () => {
 
       expect(mockClack.log.error).toHaveBeenCalledWith(expect.stringContaining('Invalid claim token'));
       expect(mockClack.log.info).toHaveBeenCalledWith(expect.stringContaining('Try again'));
-    });
-  });
-
-  describe('markEnvironmentClaimed', () => {
-    it('updates environment type to sandbox and removes claimToken', () => {
-      mockGetConfig.mockReturnValue({
-        activeEnvironment: 'unclaimed',
-        environments: {
-          unclaimed: {
-            name: 'unclaimed',
-            type: 'unclaimed',
-            apiKey: 'sk_test_xxx',
-            clientId: 'client_01ABC',
-            claimToken: 'ct_token',
-          },
-        },
-      });
-
-      markEnvironmentClaimed();
-
-      expect(mockSaveConfig).toHaveBeenCalledWith(
-        expect.objectContaining({
-          environments: expect.objectContaining({
-            unclaimed: expect.objectContaining({
-              type: 'sandbox',
-            }),
-          }),
-        }),
-      );
-      // Verify claimToken is removed
-      const savedConfig = mockSaveConfig.mock.calls[0][0];
-      expect(savedConfig.environments['unclaimed'].claimToken).toBeUndefined();
-    });
-
-    it('does nothing when no config', () => {
-      mockGetConfig.mockReturnValue(null);
-
-      markEnvironmentClaimed();
-
-      expect(mockSaveConfig).not.toHaveBeenCalled();
-    });
-
-    it('does nothing when no active environment', () => {
-      mockGetConfig.mockReturnValue({
-        environments: { unclaimed: { name: 'unclaimed', type: 'unclaimed', apiKey: 'sk_test' } },
-      });
-
-      markEnvironmentClaimed();
-
-      expect(mockSaveConfig).not.toHaveBeenCalled();
     });
   });
 });

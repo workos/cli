@@ -7,7 +7,7 @@
  */
 
 import { logInfo, logError } from '../utils/debug.js';
-import { getActiveEnvironment } from './config-store.js';
+import { resolveApiBaseUrl } from './api-key.js';
 
 export interface UnclaimedEnvProvisionResult {
   clientId: string;
@@ -37,13 +37,7 @@ export class UnclaimedEnvApiError extends Error {
   }
 }
 
-const DEFAULT_BASE_URL = 'https://api.workos.com';
 const REQUEST_TIMEOUT_MS = 30_000;
-
-function getBaseUrl(): string {
-  const env = getActiveEnvironment();
-  return env?.endpoint ?? DEFAULT_BASE_URL;
-}
 
 /**
  * Provision a new unclaimed environment. No authentication required.
@@ -52,7 +46,7 @@ function getBaseUrl(): string {
  * @throws UnclaimedEnvApiError on rate limit, network failure, timeout, or server error
  */
 export async function provisionUnclaimedEnvironment(): Promise<UnclaimedEnvProvisionResult> {
-  const url = `${getBaseUrl()}/x/one-shot-environments`;
+  const url = `${resolveApiBaseUrl()}/x/one-shot-environments`;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -123,7 +117,7 @@ export async function provisionUnclaimedEnvironment(): Promise<UnclaimedEnvProvi
  * @throws UnclaimedEnvApiError on invalid token, not found, or server error
  */
 export async function createClaimNonce(clientId: string, claimToken: string): Promise<ClaimNonceResponse> {
-  const url = `${getBaseUrl()}/x/one-shot-environments/claim-nonces`;
+  const url = `${resolveApiBaseUrl()}/x/one-shot-environments/claim-nonces`;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -184,16 +178,4 @@ export async function createClaimNonce(clientId: string, claimToken: string): Pr
   } finally {
     clearTimeout(timeoutId);
   }
-}
-
-/**
- * Generate a random cookie password (32-char hex string).
- * Used as WORKOS_COOKIE_PASSWORD in .env.local for unclaimed environments.
- */
-export function generateCookiePassword(): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
 }
