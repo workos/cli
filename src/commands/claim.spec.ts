@@ -73,9 +73,7 @@ describe('claim command', () => {
 
       await runClaim();
 
-      expect(mockClack.log.info).toHaveBeenCalledWith(
-        expect.stringContaining('No unclaimed environment found'),
-      );
+      expect(mockClack.log.info).toHaveBeenCalledWith(expect.stringContaining('No unclaimed environment found'));
     });
 
     it('exits with info when active environment is not unclaimed', async () => {
@@ -88,9 +86,7 @@ describe('claim command', () => {
 
       await runClaim();
 
-      expect(mockClack.log.info).toHaveBeenCalledWith(
-        expect.stringContaining('No unclaimed environment found'),
-      );
+      expect(mockClack.log.info).toHaveBeenCalledWith(expect.stringContaining('No unclaimed environment found'));
     });
 
     it('outputs JSON when no unclaimed environment in JSON mode', async () => {
@@ -100,9 +96,7 @@ describe('claim command', () => {
 
       await runClaim();
 
-      expect(mockOutputJson).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'no_unclaimed_environment' }),
-      );
+      expect(mockOutputJson).toHaveBeenCalledWith(expect.objectContaining({ status: 'no_unclaimed_environment' }));
     });
 
     it('exits with error when missing claim token', async () => {
@@ -117,9 +111,7 @@ describe('claim command', () => {
 
       await runClaim();
 
-      expect(mockClack.log.error).toHaveBeenCalledWith(
-        expect.stringContaining('Missing claim token'),
-      );
+      expect(mockClack.log.error).toHaveBeenCalledWith(expect.stringContaining('Missing claim token'));
     });
 
     it('exits with error when missing clientId', async () => {
@@ -134,9 +126,7 @@ describe('claim command', () => {
 
       await runClaim();
 
-      expect(mockClack.log.error).toHaveBeenCalledWith(
-        expect.stringContaining('Missing claim token or client ID'),
-      );
+      expect(mockClack.log.error).toHaveBeenCalledWith(expect.stringContaining('Missing claim token or client ID'));
     });
 
     it('handles already-claimed environment immediately', async () => {
@@ -268,9 +258,7 @@ describe('claim command', () => {
 
       await runClaim();
 
-      expect(mockOutputJson).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'already_claimed' }),
-      );
+      expect(mockOutputJson).toHaveBeenCalledWith(expect.objectContaining({ status: 'already_claimed' }));
     });
 
     it('times out after 5 minutes of polling', async () => {
@@ -301,9 +289,7 @@ describe('claim command', () => {
       await claimPromise;
 
       expect(mockSpinner.stop).toHaveBeenCalledWith('Claim timed out');
-      expect(mockClack.log.info).toHaveBeenCalledWith(
-        expect.stringContaining('Complete the claim in your browser'),
-      );
+      expect(mockClack.log.info).toHaveBeenCalledWith(expect.stringContaining('Complete the claim in your browser'));
     });
 
     it('continues polling on transient poll errors', async () => {
@@ -354,12 +340,8 @@ describe('claim command', () => {
 
       await runClaim();
 
-      expect(mockClack.log.error).toHaveBeenCalledWith(
-        expect.stringContaining('Invalid claim token'),
-      );
-      expect(mockClack.log.info).toHaveBeenCalledWith(
-        expect.stringContaining('Try again'),
-      );
+      expect(mockClack.log.error).toHaveBeenCalledWith(expect.stringContaining('Invalid claim token'));
+      expect(mockClack.log.info).toHaveBeenCalledWith(expect.stringContaining('Try again'));
     });
   });
 

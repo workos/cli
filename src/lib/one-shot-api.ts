@@ -122,10 +122,7 @@ export async function provisionOneShotEnvironment(): Promise<OneShotProvisionRes
  * @returns ClaimNonceResponse — either a nonce or already-claimed indicator
  * @throws OneShotApiError on invalid token, not found, or server error
  */
-export async function createClaimNonce(
-  clientId: string,
-  claimToken: string,
-): Promise<ClaimNonceResponse> {
+export async function createClaimNonce(clientId: string, claimToken: string): Promise<ClaimNonceResponse> {
   const url = `${getBaseUrl()}/x/one-shot-environments/claim-nonces`;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);

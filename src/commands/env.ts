@@ -203,7 +203,8 @@ export async function runEnvList(): Promise<void> {
 
   // Human-mode table
   const hasUnclaimed = entries.some(([, env]) => isUnclaimedEnvironment(env));
-  const nameW = Math.max(6, ...entries.map(([k, env]) => k.length + (isUnclaimedEnvironment(env) ? ' (unclaimed)'.length : 0))) + 2;
+  const nameW =
+    Math.max(6, ...entries.map(([k, env]) => k.length + (isUnclaimedEnvironment(env) ? ' (unclaimed)'.length : 0))) + 2;
   const typeW = 12;
 
   const header = [

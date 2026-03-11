@@ -45,9 +45,7 @@ export async function warnIfUnclaimed(): Promise<void> {
     warningShownThisSession = true;
 
     if (!isJsonMode()) {
-      console.error(
-        'Warning: This environment is unclaimed. Run `workos claim` to keep your data.',
-      );
+      console.error('Warning: This environment is unclaimed. Run `workos claim` to keep your data.');
     }
   } catch {
     // Never block command execution

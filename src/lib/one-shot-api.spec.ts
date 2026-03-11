@@ -9,9 +9,8 @@ vi.mock('./config-store.js', () => ({
   getActiveEnvironment: vi.fn(() => null),
 }));
 
-const { provisionOneShotEnvironment, createClaimNonce, generateCookiePassword, OneShotApiError } = await import(
-  './one-shot-api.js'
-);
+const { provisionOneShotEnvironment, createClaimNonce, generateCookiePassword, OneShotApiError } =
+  await import('./one-shot-api.js');
 const { getActiveEnvironment } = await import('./config-store.js');
 
 describe('one-shot-api', () => {
@@ -181,10 +180,7 @@ describe('one-shot-api', () => {
 
       await provisionOneShotEnvironment();
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:8001/x/one-shot-environments',
-        expect.anything(),
-      );
+      expect(mockFetch).toHaveBeenCalledWith('http://localhost:8001/x/one-shot-environments', expect.anything());
     });
   });
 

@@ -36,3 +36,6 @@ tests/eval-results/
 
 # Local ideation artifacts
 docs/
+
+# Case harness markers
+.case-*

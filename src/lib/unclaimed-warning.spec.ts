@@ -125,9 +125,7 @@ describe('unclaimed-warning', () => {
     await warnIfUnclaimed();
 
     expect(mockMarkEnvironmentClaimed).toHaveBeenCalled();
-    expect(logInfo).toHaveBeenCalledWith(
-      '[unclaimed-warning] Environment was claimed, config updated',
-    );
+    expect(logInfo).toHaveBeenCalledWith('[unclaimed-warning] Environment was claimed, config updated');
     // No warning shown when environment is claimed
     expect(stderrSpy).not.toHaveBeenCalled();
   });

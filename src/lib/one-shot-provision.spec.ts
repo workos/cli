@@ -142,9 +142,7 @@ describe('one-shot-provision', () => {
 
       await tryOneShotProvision({ installDir: testDir });
 
-      expect(mockClack.log.info).toHaveBeenCalledWith(
-        expect.stringContaining('workos claim'),
-      );
+      expect(mockClack.log.info).toHaveBeenCalledWith(expect.stringContaining('workos claim'));
     });
 
     it('returns false on API failure (network error)', async () => {
@@ -157,14 +155,14 @@ describe('one-shot-provision', () => {
     });
 
     it('returns false on API failure (rate limit)', async () => {
-      mockProvisionOneShotEnvironment.mockRejectedValueOnce(new Error('Rate limited. Please wait a moment and try again.'));
+      mockProvisionOneShotEnvironment.mockRejectedValueOnce(
+        new Error('Rate limited. Please wait a moment and try again.'),
+      );
 
       const result = await tryOneShotProvision({ installDir: testDir });
 
       expect(result).toBe(false);
-      expect(mockClack.log.warn).toHaveBeenCalledWith(
-        expect.stringContaining('falling back to login'),
-      );
+      expect(mockClack.log.warn).toHaveBeenCalledWith(expect.stringContaining('falling back to login'));
     });
 
     it('returns false on API failure (server error)', async () => {

@@ -67,11 +67,7 @@ async function maybeWarnUnclaimed(): Promise<void> {
  * Resolve credentials for install flow.
  * Priority: existing creds (env var, --api-key, active env) -> one-shot provisioning -> login fallback.
  */
-async function resolveInstallCredentials(
-  apiKey?: string,
-  installDir?: string,
-  skipAuth?: boolean,
-): Promise<void> {
+async function resolveInstallCredentials(apiKey?: string, installDir?: string, skipAuth?: boolean): Promise<void> {
   // Check for existing credentials without triggering process.exit
   const envApiKey = process.env.WORKOS_API_KEY;
   if (envApiKey) return;
