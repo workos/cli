@@ -11,14 +11,12 @@ import {
 } from '../lib/credentials.js';
 import {
   getConfig,
-  getActiveEnvironment,
   saveConfig,
   clearConfig,
   getConfigPath,
   setInsecureConfigStorage,
-  type CliConfig,
 } from '../lib/config-store.js';
-import { isJsonMode, outputJson, outputError, exitWithError } from '../utils/output.js';
+import { isJsonMode, outputJson, exitWithError } from '../utils/output.js';
 import { isNonInteractiveEnvironment } from '../utils/environment.js';
 
 function maskSecret(value: string | undefined): string | undefined {
