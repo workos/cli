@@ -302,6 +302,62 @@ export async function runDebugSimulate({
   }
 }
 
+// --- debug env ---
+
+interface EnvVarInfo {
+  name: string;
+  value: string | undefined;
+  effect: string;
+}
+
+const ENV_VAR_CATALOG: { name: string; effect: string }[] = [
+  { name: 'WORKOS_API_KEY', effect: 'Bypasses credential resolution — used directly for API calls' },
+  { name: 'WORKOS_CLIENT_ID', effect: 'Overrides client ID from settings' },
+  { name: 'WORKOS_FORCE_TTY', effect: 'Forces human (non-JSON) output mode, even when piped' },
+  { name: 'WORKOS_NO_PROMPT', effect: 'Forces non-interactive/JSON mode' },
+  { name: 'WORKOS_TELEMETRY', effect: 'Set to "false" to disable telemetry' },
+  { name: 'WORKOS_API_URL', effect: 'Overrides API base URL (default: https://api.workos.com)' },
+  { name: 'WORKOS_DASHBOARD_URL', effect: 'Overrides dashboard URL (default: https://dashboard.workos.com)' },
+  { name: 'WORKOS_AUTHKIT_DOMAIN', effect: 'Overrides AuthKit domain from settings' },
+  { name: 'WORKOS_LLM_GATEWAY_URL', effect: 'Overrides LLM gateway URL from settings' },
+  { name: 'INSTALLER_DEV', effect: 'Enables dev mode — loads .env.local at startup' },
+  { name: 'INSTALLER_DISABLE_PROXY', effect: 'Disables the credential proxy for gateway auth' },
+];
+
+export async function runDebugEnv(): Promise<void> {
+  const vars: EnvVarInfo[] = ENV_VAR_CATALOG.map(({ name, effect }) => ({
+    name,
+    value: process.env[name],
+    effect,
+  }));
+
+  const setVars = vars.filter((v) => v.value !== undefined);
+  const unsetVars = vars.filter((v) => v.value === undefined);
+
+  if (isJsonMode()) {
+    outputJson({
+      variables: Object.fromEntries(vars.map((v) => [v.name, { value: v.value ?? null, effect: v.effect }])),
+      set: setVars.map((v) => v.name),
+      unset: unsetVars.map((v) => v.name),
+    });
+    return;
+  }
+
+  if (setVars.length > 0) {
+    console.log(chalk.bold('Set'));
+    for (const v of setVars) {
+      console.log(`  ${chalk.green(v.name)}=${v.value}`);
+      console.log(`    ${chalk.dim(v.effect)}`);
+    }
+    console.log();
+  }
+
+  console.log(chalk.bold(`Unset${setVars.length > 0 ? '' : ' (none active)'}`));
+  for (const v of unsetVars) {
+    console.log(`  ${chalk.dim(v.name)} — ${chalk.dim(v.effect)}`);
+  }
+}
+
 // --- debug token ---
 
 export async function runDebugToken(): Promise<void> {

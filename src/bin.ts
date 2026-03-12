@@ -2234,6 +2234,16 @@ yargs(rawArgs)
     );
     registerSubcommand(
       yargs,
+      'env',
+      'Show WORKOS_* environment variables and their effects',
+      (y) => y,
+      async () => {
+        const { runDebugEnv } = await import('./commands/debug.js');
+        await runDebugEnv();
+      },
+    );
+    registerSubcommand(
+      yargs,
       'token',
       'Decode and inspect the current access token',
       (y) => y,

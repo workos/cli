@@ -68,7 +68,7 @@ vi.mock('../utils/environment.js', () => ({
   isNonInteractiveEnvironment: () => mockIsNonInteractive(),
 }));
 
-const { runDebugState, runDebugReset, runDebugSimulate, runDebugToken } = await import('./debug.js');
+const { runDebugState, runDebugReset, runDebugSimulate, runDebugToken, runDebugEnv } = await import('./debug.js');
 
 const makeCreds = (overrides = {}) => ({
   accessToken: 'eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1c2VyXzEyMyIsImV4cCI6OTk5OTk5OTk5OX0.sig',
@@ -477,6 +477,56 @@ describe('debug commands', () => {
 
       const output = consoleOutput.join('\n');
       expect(output).toContain('Opaque Token');
+    });
+  });
+
+  describe('debug env', () => {
+    it('shows set env vars with values', async () => {
+      process.env.WORKOS_FORCE_TTY = '1';
+
+      await runDebugEnv();
+
+      const output = consoleOutput.join('\n');
+      expect(output).toContain('WORKOS_FORCE_TTY');
+      expect(output).toContain('1');
+
+      delete process.env.WORKOS_FORCE_TTY;
+    });
+
+    it('shows unset env vars with descriptions', async () => {
+      delete process.env.WORKOS_API_KEY;
+
+      await runDebugEnv();
+
+      const output = consoleOutput.join('\n');
+      expect(output).toContain('WORKOS_API_KEY');
+      expect(output).toContain('Bypasses credential resolution');
+    });
+
+    it('outputs valid JSON in json mode', async () => {
+      jsonMode = true;
+      process.env.WORKOS_NO_PROMPT = '1';
+
+      await runDebugEnv();
+
+      const parsed = JSON.parse(consoleOutput[0]);
+      expect(parsed.variables.WORKOS_NO_PROMPT.value).toBe('1');
+      expect(parsed.set).toContain('WORKOS_NO_PROMPT');
+      expect(parsed.unset).not.toContain('WORKOS_NO_PROMPT');
+
+      delete process.env.WORKOS_NO_PROMPT;
+    });
+
+    it('lists all known env vars', async () => {
+      jsonMode = true;
+
+      await runDebugEnv();
+
+      const parsed = JSON.parse(consoleOutput[0]);
+      expect(Object.keys(parsed.variables)).toContain('WORKOS_API_KEY');
+      expect(Object.keys(parsed.variables)).toContain('WORKOS_FORCE_TTY');
+      expect(Object.keys(parsed.variables)).toContain('WORKOS_TELEMETRY');
+      expect(Object.keys(parsed.variables)).toContain('INSTALLER_DEV');
     });
   });
 });
