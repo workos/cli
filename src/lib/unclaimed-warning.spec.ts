@@ -15,9 +15,27 @@ vi.mock('../utils/output.js', () => ({
 // Mock config-store
 const mockGetActiveEnvironment = vi.fn();
 const mockIsUnclaimedEnvironment = vi.fn();
+const mockMarkEnvironmentClaimed = vi.fn();
 vi.mock('./config-store.js', () => ({
   getActiveEnvironment: (...args: unknown[]) => mockGetActiveEnvironment(...args),
   isUnclaimedEnvironment: (...args: unknown[]) => mockIsUnclaimedEnvironment(...args),
+  markEnvironmentClaimed: (...args: unknown[]) => mockMarkEnvironmentClaimed(...args),
+}));
+
+// Mock unclaimed-env-api
+const mockCreateClaimNonce = vi.fn();
+class MockUnclaimedEnvApiError extends Error {
+  constructor(
+    message: string,
+    public readonly statusCode?: number,
+  ) {
+    super(message);
+    this.name = 'UnclaimedEnvApiError';
+  }
+}
+vi.mock('./unclaimed-env-api.js', () => ({
+  createClaimNonce: (...args: unknown[]) => mockCreateClaimNonce(...args),
+  UnclaimedEnvApiError: MockUnclaimedEnvApiError,
 }));
 
 // Mock box utility
@@ -114,6 +132,39 @@ describe('unclaimed-warning', () => {
     await warnIfUnclaimed();
     // Should have doubled the output (warning shown again after reset)
     expect(mockRenderStderrBox).toHaveBeenCalledTimes(2);
+  });
+
+  it('detects claimed status and updates config', async () => {
+    mockGetActiveEnvironment.mockReturnValue({
+      name: 'unclaimed',
+      type: 'unclaimed',
+      apiKey: 'sk_test_xxx',
+      clientId: 'client_01ABC',
+      claimToken: 'ct_token',
+    });
+    mockIsUnclaimedEnvironment.mockReturnValue(true);
+    mockCreateClaimNonce.mockResolvedValue({ alreadyClaimed: true });
+
+    await warnIfUnclaimed();
+
+    expect(mockMarkEnvironmentClaimed).toHaveBeenCalled();
+    expect(mockRenderStderrBox).not.toHaveBeenCalled();
+  });
+
+  it('shows warning when claim check fails', async () => {
+    mockGetActiveEnvironment.mockReturnValue({
+      name: 'unclaimed',
+      type: 'unclaimed',
+      apiKey: 'sk_test_xxx',
+      clientId: 'client_01ABC',
+      claimToken: 'ct_token',
+    });
+    mockIsUnclaimedEnvironment.mockReturnValue(true);
+    mockCreateClaimNonce.mockRejectedValue(new Error('Network error'));
+
+    await warnIfUnclaimed();
+
+    expect(mockRenderStderrBox).toHaveBeenCalled();
   });
 
   it('never throws even if getActiveEnvironment throws', async () => {

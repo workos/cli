@@ -141,6 +141,10 @@ export async function createClaimNonce(clientId: string, claimToken: string): Pr
       if (res.status === 404) {
         throw new UnclaimedEnvApiError('Environment not found.', 404);
       }
+      if (res.status === 409) {
+        logInfo('[unclaimed-env-api] Environment already claimed (409)');
+        return { alreadyClaimed: true };
+      }
       if (res.status === 429) {
         throw new UnclaimedEnvApiError('Rate limited. Please wait a moment and try again.', 429);
       }

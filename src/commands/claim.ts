@@ -9,7 +9,7 @@
 import open from 'opn';
 import clack from '../utils/clack.js';
 import { getActiveEnvironment, isUnclaimedEnvironment, markEnvironmentClaimed } from '../lib/config-store.js';
-import { createClaimNonce } from '../lib/unclaimed-env-api.js';
+import { createClaimNonce, UnclaimedEnvApiError } from '../lib/unclaimed-env-api.js';
 import { logInfo, logError } from '../utils/debug.js';
 import { isJsonMode, outputJson } from '../utils/output.js';
 import { sleep } from '../lib/helper-functions.js';
@@ -90,6 +90,14 @@ export async function runClaim(): Promise<void> {
           return;
         }
       } catch (pollError) {
+        const statusCode = pollError instanceof UnclaimedEnvApiError ? pollError.statusCode : undefined;
+        if (statusCode === 401) {
+          // Token invalid or expired — stop polling, clean up
+          spinner.stop('Claim token is invalid or expired.');
+          markEnvironmentClaimed(); // removes claim token from config
+          clack.log.warn('Run `workos auth login` to set up your environment.');
+          return;
+        }
         logError('[claim] Poll error:', pollError instanceof Error ? pollError.message : 'Unknown');
         // Continue polling — transient errors shouldn't stop the flow
       }
