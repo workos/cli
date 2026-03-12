@@ -2146,6 +2146,105 @@ yargs(rawArgs)
       await handleInstall(argv);
     },
   )
+  .command('debug', false, (yargs) => {
+    yargs.options(insecureStorageOption);
+    registerSubcommand(
+      yargs,
+      'state',
+      'Dump raw CLI state (credentials, config, storage)',
+      (y) =>
+        y.option('show-secrets', {
+          type: 'boolean',
+          default: false,
+          describe: 'Show unredacted tokens and API keys',
+        }),
+      async (argv) => {
+        await applyInsecureStorage(argv.insecureStorage);
+        const { runDebugState } = await import('./commands/debug.js');
+        await runDebugState({ showSecrets: argv.showSecrets as boolean });
+      },
+    );
+    registerSubcommand(
+      yargs,
+      'reset',
+      'Clear auth state (keyring + files)',
+      (y) =>
+        y
+          .option('force', {
+            type: 'boolean',
+            default: false,
+            describe: 'Skip confirmation prompt',
+          })
+          .option('credentials-only', {
+            type: 'boolean',
+            default: false,
+            describe: 'Only clear credentials',
+          })
+          .option('config-only', {
+            type: 'boolean',
+            default: false,
+            describe: 'Only clear config',
+          }),
+      async (argv) => {
+        await applyInsecureStorage(argv.insecureStorage);
+        const { runDebugReset } = await import('./commands/debug.js');
+        await runDebugReset({
+          force: argv.force as boolean,
+          credentialsOnly: argv.credentialsOnly as boolean,
+          configOnly: argv.configOnly as boolean,
+        });
+      },
+    );
+    registerSubcommand(
+      yargs,
+      'simulate',
+      'Simulate CLI states for testing',
+      (y) =>
+        y
+          .option('expired-token', {
+            type: 'boolean',
+            default: false,
+            describe: 'Set token expiresAt to the past',
+          })
+          .option('no-keyring', {
+            type: 'boolean',
+            default: false,
+            describe: 'Force file-only storage mode',
+          })
+          .option('unclaimed', {
+            type: 'boolean',
+            default: false,
+            describe: 'Write synthetic unclaimed environment',
+          })
+          .option('no-auth', {
+            type: 'boolean',
+            default: false,
+            describe: 'Clear credentials, keep config',
+          }),
+      async (argv) => {
+        await applyInsecureStorage(argv.insecureStorage);
+        const { runDebugSimulate } = await import('./commands/debug.js');
+        await runDebugSimulate({
+          expiredToken: argv.expiredToken as boolean,
+          noKeyring: argv.noKeyring as boolean,
+          unclaimed: argv.unclaimed as boolean,
+          noAuth: argv.noAuth as boolean,
+        });
+      },
+    );
+    registerSubcommand(
+      yargs,
+      'token',
+      'Decode and inspect the current access token',
+      (y) => y,
+      async (argv) => {
+        await applyInsecureStorage(argv.insecureStorage);
+        const { runDebugToken } = await import('./commands/debug.js');
+        await runDebugToken();
+      },
+    );
+    return yargs.demandCommand(1, 'Run "workos debug <command>" for debug tools.').strict();
+  })
   .command(
     'dashboard',
     false, // hidden from help
