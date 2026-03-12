@@ -68,7 +68,7 @@ export async function runClaim(): Promise<void> {
     clack.log.info(`Open this URL to claim your environment:\n\n  ${claimUrl}`);
 
     try {
-      await open(claimUrl);
+      open(claimUrl, { wait: false });
       clack.log.info('Browser opened automatically');
     } catch {
       // User can open manually

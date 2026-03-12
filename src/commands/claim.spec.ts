@@ -190,6 +190,7 @@ describe('claim command', () => {
 
       expect(mockOpen).toHaveBeenCalledWith(
         expect.stringContaining('https://dashboard.workos.com/claim?nonce=nonce_abc123'),
+        { wait: false },
       );
       expect(mockSpinner.start).toHaveBeenCalledWith('Waiting for claim...');
       expect(mockSpinner.stop).toHaveBeenCalledWith('Environment claimed!');
