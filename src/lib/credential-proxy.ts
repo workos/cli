@@ -367,6 +367,114 @@ async function handleRequest(
   req.pipe(proxyReq);
 }
 
+/**
+ * Start a lightweight proxy that injects claim token headers for unclaimed environments.
+ * No refresh logic — claim tokens don't expire during a session.
+ */
+export async function startClaimTokenProxy(options: {
+  upstreamUrl: string;
+  claimToken: string;
+  clientId: string;
+}): Promise<CredentialProxyHandle> {
+  const upstream = new URL(options.upstreamUrl);
+  const useHttps = upstream.protocol === 'https:';
+
+  const server = http.createServer(async (req, res) => {
+    const requestPath = req.url || '/';
+    const basePath = upstream.pathname.replace(/\/$/, '');
+    const fullPath = basePath + requestPath;
+    const upstreamUrl = new URL(fullPath, upstream.origin);
+
+    const headers: http.OutgoingHttpHeaders = {};
+
+    const hopByHop = new Set([
+      'connection',
+      'keep-alive',
+      'proxy-authenticate',
+      'proxy-authorization',
+      'te',
+      'trailer',
+      'transfer-encoding',
+      'upgrade',
+    ]);
+
+    for (const [key, value] of Object.entries(req.headers)) {
+      if (!hopByHop.has(key.toLowerCase()) && value !== undefined) {
+        headers[key] = value;
+      }
+    }
+
+    // Inject claim token headers
+    headers['x-workos-claim-token'] = options.claimToken;
+    headers['x-workos-client-id'] = options.clientId;
+    headers['host'] = upstream.host;
+
+    const searchParams = new URLSearchParams(upstreamUrl.search);
+    searchParams.delete('beta');
+    const queryString = searchParams.toString();
+    const finalPath = upstreamUrl.pathname + (queryString ? `?${queryString}` : '');
+
+    const transport = useHttps ? https : http;
+
+    const proxyReq = transport.request(
+      {
+        hostname: upstream.hostname,
+        port: upstream.port || (useHttps ? 443 : 80),
+        path: finalPath,
+        method: req.method,
+        headers,
+        timeout: 120_000,
+      },
+      (proxyRes) => {
+        const responseHeaders: http.OutgoingHttpHeaders = {};
+        for (const [key, value] of Object.entries(proxyRes.headers)) {
+          if (!hopByHop.has(key.toLowerCase()) && value !== undefined) {
+            responseHeaders[key] = value;
+          }
+        }
+        res.writeHead(proxyRes.statusCode || 500, responseHeaders);
+        proxyRes.pipe(res);
+      },
+    );
+
+    proxyReq.on('error', (err) => {
+      logError('[claim-token-proxy] Upstream error:', err.message);
+      if (!res.headersSent) {
+        res.writeHead(502, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'proxy_error', message: err.message }));
+      }
+    });
+
+    proxyReq.on('timeout', () => {
+      proxyReq.destroy();
+      if (!res.headersSent) {
+        res.writeHead(504, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'upstream_timeout', message: 'Upstream server timed out' }));
+      }
+    });
+
+    req.pipe(proxyReq);
+  });
+
+  const port = await new Promise<number>((resolve, reject) => {
+    server.once('error', (err) => reject(err));
+    server.listen(0, '127.0.0.1', () => {
+      const addr = server.address();
+      if (addr && typeof addr === 'object') resolve(addr.port);
+      else reject(new Error('Failed to get server address'));
+    });
+  });
+
+  const url = `http://127.0.0.1:${port}`;
+  logInfo(`[claim-token-proxy] Started on ${url}, forwarding to ${options.upstreamUrl}`);
+
+  return {
+    port,
+    url,
+    stop: async () => stopServer(server),
+  };
+}
+
 function stopServer(server: http.Server): Promise<void> {
   return new Promise((resolve, reject) => {
     // Set a timeout for graceful shutdown

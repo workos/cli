@@ -15,7 +15,8 @@ import { getConfig } from './settings.js';
 import { getCredentials, hasCredentials } from './credentials.js';
 import { ensureValidToken } from './token-refresh.js';
 import type { InstallerEventEmitter } from './events.js';
-import { startCredentialProxy, type CredentialProxyHandle } from './credential-proxy.js';
+import { startCredentialProxy, startClaimTokenProxy, type CredentialProxyHandle } from './credential-proxy.js';
+import { getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
 import { getAuthkitDomain, getCliAuthClientId } from './settings.js';
 import type {
   SDKMessage,
@@ -358,8 +359,21 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
       // Gateway mode (existing behavior)
       const gatewayUrl = getLlmGatewayUrlFromHost();
 
-      // Check/refresh authentication for production (unless skipping auth)
-      if (!options.skipAuth && !options.local) {
+      // Check for unclaimed environment — use claim token auth
+      const activeEnv = getActiveEnvironment();
+      if (activeEnv && isUnclaimedEnvironment(activeEnv) && activeEnv.claimToken && activeEnv.clientId) {
+        activeProxyHandle = await startClaimTokenProxy({
+          upstreamUrl: gatewayUrl,
+          claimToken: activeEnv.claimToken,
+          clientId: activeEnv.clientId,
+        });
+
+        sdkEnv.ANTHROPIC_BASE_URL = activeProxyHandle.url;
+        delete sdkEnv.ANTHROPIC_AUTH_TOKEN;
+        authMode = `claim-token-proxy:${activeProxyHandle.url}→${gatewayUrl}`;
+        logInfo(`[agent-interface] Using claim token proxy for unclaimed environment`);
+      } else if (!options.skipAuth && !options.local) {
+        // Check/refresh authentication for production (unless skipping auth)
         if (!hasCredentials()) {
           throw new Error('Not authenticated. Run `workos auth login` to authenticate.');
         }
