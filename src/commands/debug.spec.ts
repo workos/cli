@@ -136,7 +136,10 @@ describe('debug commands', () => {
     it('shows present: false when no credentials', async () => {
       mockGetCredentials.mockReturnValue(null);
       mockGetConfig.mockReturnValue(null);
-      mockDiagnoseCredentials.mockReturnValue(['file: /home/user/.workos/credentials.json (exists=false)', 'insecureStorage=false']);
+      mockDiagnoseCredentials.mockReturnValue([
+        'file: /home/user/.workos/credentials.json (exists=false)',
+        'insecureStorage=false',
+      ]);
 
       await runDebugState({ showSecrets: false });
 
@@ -261,9 +264,9 @@ describe('debug commands', () => {
     it('errors in non-interactive mode without --force', async () => {
       mockIsNonInteractive.mockReturnValue(true);
 
-      await expect(
-        runDebugReset({ force: false, credentialsOnly: false, configOnly: false }),
-      ).rejects.toThrow('Use --force to reset in non-interactive mode');
+      await expect(runDebugReset({ force: false, credentialsOnly: false, configOnly: false })).rejects.toThrow(
+        'Use --force to reset in non-interactive mode',
+      );
     });
 
     it('outputs JSON on reset', async () => {
@@ -290,9 +293,7 @@ describe('debug commands', () => {
         noAuth: false,
       });
 
-      expect(mockSaveCredentials).toHaveBeenCalledWith(
-        expect.objectContaining({ expiresAt: expect.any(Number) }),
-      );
+      expect(mockSaveCredentials).toHaveBeenCalledWith(expect.objectContaining({ expiresAt: expect.any(Number) }));
       const saved = mockSaveCredentials.mock.calls[0][0];
       expect(saved.expiresAt).toBeLessThan(Date.now());
     });
@@ -441,9 +442,7 @@ describe('debug commands', () => {
       const payload = Buffer.from(JSON.stringify({ sub: 'user_123', exp: 1000 })).toString('base64url');
       const token = `${header}.${payload}.sig`;
 
-      mockGetCredentials.mockReturnValue(
-        makeCreds({ accessToken: token, expiresAt: Date.now() - 60_000 }),
-      );
+      mockGetCredentials.mockReturnValue(makeCreds({ accessToken: token, expiresAt: Date.now() - 60_000 }));
       mockIsTokenExpired.mockReturnValue(true);
 
       jsonMode = true;
@@ -456,9 +455,7 @@ describe('debug commands', () => {
 
     it('shows human-readable output for JWT', async () => {
       const header = Buffer.from(JSON.stringify({ alg: 'RS256' })).toString('base64url');
-      const payload = Buffer.from(
-        JSON.stringify({ sub: 'user_123', exp: 9999999999 }),
-      ).toString('base64url');
+      const payload = Buffer.from(JSON.stringify({ sub: 'user_123', exp: 9999999999 })).toString('base64url');
       const token = `${header}.${payload}.sig`;
 
       mockGetCredentials.mockReturnValue(makeCreds({ accessToken: token }));

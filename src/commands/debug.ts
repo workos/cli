@@ -78,7 +78,9 @@ export async function runDebugState({ showSecrets }: { showSecrets: boolean }): 
       accessToken: maybeRedact(creds.accessToken),
       refreshToken: creds.refreshToken ? 'present' : 'absent',
       expiresAt: creds.expiresAt,
-      expiresIn: expired ? `expired ${formatTimeRemaining(-timeRemaining)} ago` : `in ${formatTimeRemaining(timeRemaining)}`,
+      expiresIn: expired
+        ? `expired ${formatTimeRemaining(-timeRemaining)} ago`
+        : `in ${formatTimeRemaining(timeRemaining)}`,
       isExpired: expired,
     });
     if (creds.staging) {
@@ -229,8 +231,7 @@ export async function runDebugSimulate({
   if (!expiredToken && !noKeyring && !unclaimed && !noAuth) {
     exitWithError({
       code: 'no_simulation_flags',
-      message:
-        'Specify at least one simulation flag: --expired-token, --no-keyring, --unclaimed, --no-auth',
+      message: 'Specify at least one simulation flag: --expired-token, --no-keyring, --unclaimed, --no-auth',
     });
   }
 
