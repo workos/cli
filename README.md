@@ -502,7 +502,7 @@ OAuth credentials are stored in the system keychain (with `~/.workos/credentials
 ## How It Works
 
 1. **Detects** your framework and project structure
-2. **Prompts** for WorkOS credentials (API key masked)
+2. **Resolves credentials** — uses existing config, or auto-provisions an unclaimed environment if none found
 3. **Auto-configures** WorkOS dashboard (redirect URI, CORS, homepage URL)
 4. **Fetches** latest SDK documentation from workos.com
 5. **Uses AI** (Claude) to generate integration code
