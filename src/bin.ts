@@ -225,6 +225,14 @@ yargs(rawArgs)
     describe: 'Output results as JSON (auto-enabled in non-TTY)',
     global: true,
   })
+  .middleware(async (argv) => {
+    // Warn about unclaimed environments before management commands.
+    // Excluded: auth/claim/install handle their own flows; skills/doctor/env/debug don't need it.
+    const command = String(argv._?.[0] ?? '');
+    if (['auth', 'skills', 'doctor', 'env', 'claim', 'install', 'debug'].includes(command)) return;
+    await applyInsecureStorage(argv.insecureStorage as boolean | undefined);
+    await maybeWarnUnclaimed();
+  })
   .command('auth', 'Manage authentication (login, logout, status)', (yargs) => {
     yargs.options(insecureStorageOption);
     registerSubcommand(
@@ -464,7 +472,7 @@ yargs(rawArgs)
           }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runOrgCreate } = await import('./commands/organization.js');
         const apiKey = resolveApiKey({ apiKey: argv.apiKey });
@@ -483,7 +491,7 @@ yargs(rawArgs)
           .positional('state', { type: 'string', describe: 'Domain state (verified or pending)' }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runOrgUpdate } = await import('./commands/organization.js');
         const apiKey = resolveApiKey({ apiKey: argv.apiKey });
@@ -497,7 +505,7 @@ yargs(rawArgs)
       (y) => y.positional('orgId', { type: 'string', demandOption: true, describe: 'Organization ID' }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runOrgGet } = await import('./commands/organization.js');
         const apiKey = resolveApiKey({ apiKey: argv.apiKey });
@@ -518,7 +526,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runOrgList } = await import('./commands/organization.js');
         const apiKey = resolveApiKey({ apiKey: argv.apiKey });
@@ -536,7 +544,7 @@ yargs(rawArgs)
       (y) => y.positional('orgId', { type: 'string', demandOption: true, describe: 'Organization ID' }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runOrgDelete } = await import('./commands/organization.js');
         const apiKey = resolveApiKey({ apiKey: argv.apiKey });
@@ -560,7 +568,7 @@ yargs(rawArgs)
       (y) => y.positional('userId', { type: 'string', demandOption: true, describe: 'User ID' }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runUserGet } = await import('./commands/user.js');
         await runUserGet(argv.userId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -581,7 +589,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runUserList } = await import('./commands/user.js');
         await runUserList(
@@ -612,7 +620,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runUserUpdate } = await import('./commands/user.js');
         await runUserUpdate(
@@ -636,7 +644,7 @@ yargs(rawArgs)
       (y) => y.positional('userId', { type: 'string', demandOption: true, describe: 'User ID' }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runUserDelete } = await import('./commands/user.js');
         await runUserDelete(argv.userId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -658,7 +666,7 @@ yargs(rawArgs)
       (y) => y,
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runRoleList } = await import('./commands/role.js');
         await runRoleList(argv.org, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -671,7 +679,7 @@ yargs(rawArgs)
       (y) => y.positional('slug', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runRoleGet } = await import('./commands/role.js');
         await runRoleGet(argv.slug, argv.org, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -689,7 +697,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runRoleCreate } = await import('./commands/role.js');
         await runRoleCreate(
@@ -710,7 +718,7 @@ yargs(rawArgs)
           .options({ name: { type: 'string' }, description: { type: 'string' } }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runRoleUpdate } = await import('./commands/role.js');
         await runRoleUpdate(
@@ -729,7 +737,7 @@ yargs(rawArgs)
       (y) => y.positional('slug', { type: 'string', demandOption: true }).demandOption('org'),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runRoleDelete } = await import('./commands/role.js');
         await runRoleDelete(argv.slug, argv.org!, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -747,7 +755,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runRoleSetPermissions } = await import('./commands/role.js');
         await runRoleSetPermissions(
@@ -769,7 +777,7 @@ yargs(rawArgs)
           .positional('permissionSlug', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runRoleAddPermission } = await import('./commands/role.js');
         await runRoleAddPermission(
@@ -792,7 +800,7 @@ yargs(rawArgs)
           .demandOption('org'),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runRoleRemovePermission } = await import('./commands/role.js');
         await runRoleRemovePermission(
@@ -821,7 +829,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runPermissionList } = await import('./commands/permission.js');
         await runPermissionList(
@@ -838,7 +846,7 @@ yargs(rawArgs)
       (y) => y.positional('slug', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runPermissionGet } = await import('./commands/permission.js');
         await runPermissionGet(argv.slug, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -856,7 +864,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runPermissionCreate } = await import('./commands/permission.js');
         await runPermissionCreate(
@@ -876,7 +884,7 @@ yargs(rawArgs)
           .options({ name: { type: 'string' }, description: { type: 'string' } }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runPermissionUpdate } = await import('./commands/permission.js');
         await runPermissionUpdate(
@@ -894,7 +902,7 @@ yargs(rawArgs)
       (y) => y.positional('slug', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runPermissionDelete } = await import('./commands/permission.js');
         await runPermissionDelete(argv.slug, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -919,7 +927,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runMembershipList } = await import('./commands/membership.js');
         await runMembershipList(
@@ -943,7 +951,7 @@ yargs(rawArgs)
       (y) => y.positional('id', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runMembershipGet } = await import('./commands/membership.js');
         await runMembershipGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -961,7 +969,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runMembershipCreate } = await import('./commands/membership.js');
         await runMembershipCreate(
@@ -978,7 +986,7 @@ yargs(rawArgs)
       (y) => y.positional('id', { type: 'string', demandOption: true }).option('role', { type: 'string' }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runMembershipUpdate } = await import('./commands/membership.js');
         await runMembershipUpdate(argv.id, argv.role, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -991,7 +999,7 @@ yargs(rawArgs)
       (y) => y.positional('id', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runMembershipDelete } = await import('./commands/membership.js');
         await runMembershipDelete(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1004,7 +1012,7 @@ yargs(rawArgs)
       (y) => y.positional('id', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runMembershipDeactivate } = await import('./commands/membership.js');
         await runMembershipDeactivate(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1017,7 +1025,7 @@ yargs(rawArgs)
       (y) => y.positional('id', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runMembershipReactivate } = await import('./commands/membership.js');
         await runMembershipReactivate(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1042,7 +1050,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runInvitationList } = await import('./commands/invitation.js');
         await runInvitationList(
@@ -1066,7 +1074,7 @@ yargs(rawArgs)
       (y) => y.positional('id', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runInvitationGet } = await import('./commands/invitation.js');
         await runInvitationGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1085,7 +1093,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runInvitationSend } = await import('./commands/invitation.js');
         await runInvitationSend(
@@ -1102,7 +1110,7 @@ yargs(rawArgs)
       (y) => y.positional('id', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runInvitationRevoke } = await import('./commands/invitation.js');
         await runInvitationRevoke(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1115,7 +1123,7 @@ yargs(rawArgs)
       (y) => y.positional('id', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runInvitationResend } = await import('./commands/invitation.js');
         await runInvitationResend(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1138,7 +1146,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runSessionList } = await import('./commands/session.js');
         await runSessionList(
@@ -1156,7 +1164,7 @@ yargs(rawArgs)
       (y) => y.positional('sessionId', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runSessionRevoke } = await import('./commands/session.js');
         await runSessionRevoke(argv.sessionId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1181,7 +1189,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runConnectionList } = await import('./commands/connection.js');
         await runConnectionList(
@@ -1205,7 +1213,7 @@ yargs(rawArgs)
       (y) => y.positional('id', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runConnectionGet } = await import('./commands/connection.js');
         await runConnectionGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1219,7 +1227,7 @@ yargs(rawArgs)
         y.positional('id', { type: 'string', demandOption: true }).option('force', { type: 'boolean', default: false }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runConnectionDelete } = await import('./commands/connection.js');
         await runConnectionDelete(
@@ -1248,7 +1256,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runDirectoryList } = await import('./commands/directory.js');
         await runDirectoryList(
@@ -1265,7 +1273,7 @@ yargs(rawArgs)
       (y) => y.positional('id', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runDirectoryGet } = await import('./commands/directory.js');
         await runDirectoryGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1279,7 +1287,7 @@ yargs(rawArgs)
         y.positional('id', { type: 'string', demandOption: true }).option('force', { type: 'boolean', default: false }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runDirectoryDelete } = await import('./commands/directory.js');
         await runDirectoryDelete(
@@ -1304,7 +1312,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runDirectoryListUsers } = await import('./commands/directory.js');
         await runDirectoryListUsers(
@@ -1327,7 +1335,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runDirectoryListGroups } = await import('./commands/directory.js');
         await runDirectoryListGroups(
@@ -1356,7 +1364,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runEventList } = await import('./commands/event.js');
         await runEventList(
@@ -1395,7 +1403,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runAuditLogCreateEvent } = await import('./commands/audit-log.js');
         await runAuditLogCreateEvent(
@@ -1432,7 +1440,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runAuditLogExport } = await import('./commands/audit-log.js');
         await runAuditLogExport(
@@ -1457,7 +1465,7 @@ yargs(rawArgs)
       (y) => y,
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runAuditLogListActions } = await import('./commands/audit-log.js');
         await runAuditLogListActions(resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1470,7 +1478,7 @@ yargs(rawArgs)
       (y) => y.positional('action', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runAuditLogGetSchema } = await import('./commands/audit-log.js');
         await runAuditLogGetSchema(argv.action, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1486,7 +1494,7 @@ yargs(rawArgs)
           .option('file', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runAuditLogCreateSchema } = await import('./commands/audit-log.js');
         await runAuditLogCreateSchema(
@@ -1504,7 +1512,7 @@ yargs(rawArgs)
       (y) => y.positional('orgId', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runAuditLogGetRetention } = await import('./commands/audit-log.js');
         await runAuditLogGetRetention(argv.orgId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1527,7 +1535,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runFeatureFlagList } = await import('./commands/feature-flag.js');
         await runFeatureFlagList(
@@ -1544,7 +1552,7 @@ yargs(rawArgs)
       (y) => y.positional('slug', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runFeatureFlagGet } = await import('./commands/feature-flag.js');
         await runFeatureFlagGet(argv.slug, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1557,7 +1565,7 @@ yargs(rawArgs)
       (y) => y.positional('slug', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runFeatureFlagEnable } = await import('./commands/feature-flag.js');
         await runFeatureFlagEnable(argv.slug, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1570,7 +1578,7 @@ yargs(rawArgs)
       (y) => y.positional('slug', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runFeatureFlagDisable } = await import('./commands/feature-flag.js');
         await runFeatureFlagDisable(argv.slug, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1586,7 +1594,7 @@ yargs(rawArgs)
           .positional('targetId', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runFeatureFlagAddTarget } = await import('./commands/feature-flag.js');
         await runFeatureFlagAddTarget(
@@ -1607,7 +1615,7 @@ yargs(rawArgs)
           .positional('targetId', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runFeatureFlagRemoveTarget } = await import('./commands/feature-flag.js');
         await runFeatureFlagRemoveTarget(
@@ -1629,7 +1637,7 @@ yargs(rawArgs)
       (y) => y,
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runWebhookList } = await import('./commands/webhook.js');
         await runWebhookList(resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1646,7 +1654,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runWebhookCreate } = await import('./commands/webhook.js');
         await runWebhookCreate(
@@ -1664,7 +1672,7 @@ yargs(rawArgs)
       (y) => y.positional('id', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runWebhookDelete } = await import('./commands/webhook.js');
         await runWebhookDelete(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1682,7 +1690,7 @@ yargs(rawArgs)
         (y) => y.positional('uri', { type: 'string', demandOption: true }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-          await maybeWarnUnclaimed();
+
           const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runConfigRedirectAdd } = await import('./commands/config.js');
           await runConfigRedirectAdd(argv.uri, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1698,7 +1706,7 @@ yargs(rawArgs)
         (y) => y.positional('origin', { type: 'string', demandOption: true }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-          await maybeWarnUnclaimed();
+
           const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runConfigCorsAdd } = await import('./commands/config.js');
           await runConfigCorsAdd(argv.origin, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1714,7 +1722,7 @@ yargs(rawArgs)
         (y) => y.positional('url', { type: 'string', demandOption: true }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-          await maybeWarnUnclaimed();
+
           const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runConfigHomepageUrlSet } = await import('./commands/config.js');
           await runConfigHomepageUrlSet(argv.url, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1743,7 +1751,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runPortalGenerateLink } = await import('./commands/portal.js');
         await runPortalGenerateLink(
@@ -1770,7 +1778,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runVaultList } = await import('./commands/vault.js');
         await runVaultList(
@@ -1787,7 +1795,7 @@ yargs(rawArgs)
       (y) => y.positional('id', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runVaultGet } = await import('./commands/vault.js');
         await runVaultGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1800,7 +1808,7 @@ yargs(rawArgs)
       (y) => y.positional('name', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runVaultGetByName } = await import('./commands/vault.js');
         await runVaultGetByName(argv.name, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1818,7 +1826,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runVaultCreate } = await import('./commands/vault.js');
         await runVaultCreate(
@@ -1838,7 +1846,7 @@ yargs(rawArgs)
           .options({ value: { type: 'string', demandOption: true }, 'version-check': { type: 'string' } }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runVaultUpdate } = await import('./commands/vault.js');
         await runVaultUpdate(
@@ -1855,7 +1863,7 @@ yargs(rawArgs)
       (y) => y.positional('id', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runVaultDelete } = await import('./commands/vault.js');
         await runVaultDelete(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1868,7 +1876,7 @@ yargs(rawArgs)
       (y) => y.positional('id', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runVaultDescribe } = await import('./commands/vault.js');
         await runVaultDescribe(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1881,7 +1889,7 @@ yargs(rawArgs)
       (y) => y.positional('id', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runVaultListVersions } = await import('./commands/vault.js');
         await runVaultListVersions(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1905,7 +1913,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runApiKeyList } = await import('./commands/api-key-mgmt.js');
         await runApiKeyList(
@@ -1927,7 +1935,7 @@ yargs(rawArgs)
         }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runApiKeyCreate } = await import('./commands/api-key-mgmt.js');
         await runApiKeyCreate(
@@ -1944,7 +1952,7 @@ yargs(rawArgs)
       (y) => y.positional('value', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runApiKeyValidate } = await import('./commands/api-key-mgmt.js');
         await runApiKeyValidate(argv.value, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1957,7 +1965,7 @@ yargs(rawArgs)
       (y) => y.positional('id', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runApiKeyDelete } = await import('./commands/api-key-mgmt.js');
         await runApiKeyDelete(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1974,7 +1982,7 @@ yargs(rawArgs)
       (y) => y.positional('id', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runOrgDomainGet } = await import('./commands/org-domain.js');
         await runOrgDomainGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -1990,7 +1998,7 @@ yargs(rawArgs)
           .option('org', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runOrgDomainCreate } = await import('./commands/org-domain.js');
         await runOrgDomainCreate(argv.domain, argv.org, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -2003,7 +2011,7 @@ yargs(rawArgs)
       (y) => y.positional('id', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runOrgDomainVerify } = await import('./commands/org-domain.js');
         await runOrgDomainVerify(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -2016,7 +2024,7 @@ yargs(rawArgs)
       (y) => y.positional('id', { type: 'string', demandOption: true }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        await maybeWarnUnclaimed();
+
         const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
         const { runOrgDomainDelete } = await import('./commands/org-domain.js');
         await runOrgDomainDelete(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -2099,7 +2107,6 @@ yargs(rawArgs)
       }),
     async (argv) => {
       await applyInsecureStorage(argv.insecureStorage);
-      await maybeWarnUnclaimed();
       const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
       const { runDebugSso } = await import('./commands/debug-sso.js');
       await runDebugSso(argv.connectionId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
@@ -2115,7 +2122,6 @@ yargs(rawArgs)
       }),
     async (argv) => {
       await applyInsecureStorage(argv.insecureStorage);
-      await maybeWarnUnclaimed();
       const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
       const { runDebugSync } = await import('./commands/debug-sync.js');
       await runDebugSync(argv.directoryId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());

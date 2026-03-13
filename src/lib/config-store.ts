@@ -187,7 +187,7 @@ export function markEnvironmentClaimed(): void {
   const config = getConfig();
   if (!config?.activeEnvironment) return;
   const env = config.environments[config.activeEnvironment];
-  if (env) {
+  if (env && env.type === 'unclaimed') {
     env.type = 'sandbox';
     delete env.claimToken;
     saveConfig(config);
