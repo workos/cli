@@ -73,6 +73,7 @@ export async function runClaim(): Promise<void> {
     spinner.start('Waiting for claim...');
 
     const startTime = Date.now();
+    let consecutiveFailures = 0;
 
     while (Date.now() - startTime < POLL_TIMEOUT_MS) {
       await sleep(POLL_INTERVAL_MS);
@@ -84,6 +85,7 @@ export async function runClaim(): Promise<void> {
           clack.log.info('Run `workos auth login` to connect your account.');
           return;
         }
+        consecutiveFailures = 0;
       } catch (pollError) {
         const statusCode = pollError instanceof UnclaimedEnvApiError ? pollError.statusCode : undefined;
         if (statusCode === 401) {
@@ -94,8 +96,11 @@ export async function runClaim(): Promise<void> {
           clack.log.warn('Run `workos auth login` to set up your environment.');
           return;
         }
+        consecutiveFailures++;
         logError('[claim] Poll error:', pollError instanceof Error ? pollError.message : 'Unknown');
-        // Continue polling — transient errors shouldn't stop the flow
+        if (consecutiveFailures >= 3) {
+          spinner.message('Still waiting... (connection issues detected)');
+        }
       }
     }
 

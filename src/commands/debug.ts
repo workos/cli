@@ -94,7 +94,6 @@ export async function runDebugState({ showSecrets }: { showSecrets: boolean }): 
   const configOutput: Record<string, unknown> = { present: !!config };
 
   if (config) {
-    // Config uses same storage pattern — infer from credential diagnostics
     configOutput.activeEnvironment = config.activeEnvironment ?? null;
     configOutput.environments = Object.fromEntries(
       Object.entries(config.environments).map(([key, env]) => [

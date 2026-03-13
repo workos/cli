@@ -58,15 +58,7 @@ vi.mock('../lib/config-store.js', () => ({
 
 // Mock unclaimed-env-api
 const mockCreateClaimNonce = vi.fn();
-class MockUnclaimedEnvApiError extends Error {
-  constructor(
-    message: string,
-    public readonly statusCode?: number,
-  ) {
-    super(message);
-    this.name = 'UnclaimedEnvApiError';
-  }
-}
+import { MockUnclaimedEnvApiError } from '../lib/__test-helpers__/mock-unclaimed-env-api-error.js';
 vi.mock('../lib/unclaimed-env-api.js', () => ({
   createClaimNonce: (...args: unknown[]) => mockCreateClaimNonce(...args),
   UnclaimedEnvApiError: MockUnclaimedEnvApiError,

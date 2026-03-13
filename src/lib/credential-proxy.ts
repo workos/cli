@@ -1,5 +1,5 @@
 /**
- * Lightweight HTTP proxy that injects credentials from file into requests.
+ * Lightweight HTTP proxy that injects credentials into upstream requests.
  * Includes lazy token refresh - refreshes proactively when token is expiring soon.
  */
 
@@ -365,7 +365,7 @@ async function handleRequest(
 
 /**
  * Start a lightweight proxy that injects claim token headers for unclaimed environments.
- * No refresh logic — claim tokens don't expire during a session.
+ * No refresh logic — claim tokens are assumed valid for the duration of an install session.
  */
 export async function startClaimTokenProxy(options: {
   upstreamUrl: string;
