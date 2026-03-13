@@ -160,6 +160,14 @@ export function saveConfig(config: CliConfig): void {
   if (!writeToKeyring(config)) {
     showFallbackWarning();
     writeToFile(config);
+    return;
+  }
+
+  // Verify the keyring write is readable (guards against silent keyring failures
+  // where setPassword succeeds but getPassword returns null in the same process)
+  if (!readFromKeyring()) {
+    logWarn('Keyring write succeeded but read-back failed — falling back to file');
+    writeToFile(config);
   }
 }
 
@@ -180,16 +188,66 @@ export function getConfigPath(): string {
 }
 
 /**
+ * Diagnostic info about config storage state — for debugging config persistence failures.
+ */
+export function diagnoseConfig(): string[] {
+  const lines: string[] = [];
+  const filePath = getConfigFilePath();
+  const filePresent = fileExists();
+
+  lines.push(`file: ${filePath} (exists=${filePresent})`);
+
+  if (filePresent) {
+    try {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const parsed = JSON.parse(content) as Partial<CliConfig>;
+      const envCount = parsed.environments ? Object.keys(parsed.environments).length : 0;
+      lines.push(`file config: active=${parsed.activeEnvironment ?? 'none'}, environments=${envCount}`);
+    } catch (e) {
+      lines.push(`file config: parse error — ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  try {
+    const entry = getKeyringEntry();
+    const data = entry.getPassword();
+    if (data) {
+      const parsed = JSON.parse(data) as Partial<CliConfig>;
+      const envCount = parsed.environments ? Object.keys(parsed.environments).length : 0;
+      lines.push(`keyring: found, active=${parsed.activeEnvironment ?? 'none'}, environments=${envCount}`);
+    } else {
+      lines.push('keyring: empty (getPassword returned null)');
+    }
+  } catch (e) {
+    lines.push(`keyring: error — ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  lines.push(`insecureStorage=${forceInsecureStorage}`);
+  return lines;
+}
+
+/**
  * Mark the active unclaimed environment as claimed.
- * Updates type to 'sandbox' and removes the claim token.
+ * Updates type to 'sandbox', removes the claim token, and renames
+ * the environment key from 'unclaimed' to 'sandbox'.
  */
 export function markEnvironmentClaimed(): void {
   const config = getConfig();
   if (!config?.activeEnvironment) return;
-  const env = config.environments[config.activeEnvironment];
+  const oldKey = config.activeEnvironment;
+  const env = config.environments[oldKey];
   if (env && env.type === 'unclaimed') {
     env.type = 'sandbox';
+    env.name = 'sandbox';
     delete env.claimToken;
+
+    // Rename the key from 'unclaimed' to 'sandbox'
+    if (oldKey !== 'sandbox') {
+      delete config.environments[oldKey];
+      config.environments['sandbox'] = env;
+      config.activeEnvironment = 'sandbox';
+    }
+
     saveConfig(config);
   }
 }

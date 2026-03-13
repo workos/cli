@@ -15,6 +15,7 @@ import {
   clearConfig,
   getConfigPath,
   setInsecureConfigStorage,
+  diagnoseConfig,
 } from '../lib/config-store.js';
 import { isJsonMode, outputJson, exitWithError } from '../utils/output.js';
 import { isNonInteractiveEnvironment } from '../utils/environment.js';
@@ -110,13 +111,17 @@ export async function runDebugState({ showSecrets }: { showSecrets: boolean }): 
     );
   }
 
+  const configDiagnostics = diagnoseConfig();
+  const configSource = determineCredentialSource(configDiagnostics);
+
   const result = {
     credentials: credentialsOutput,
     config: configOutput,
     storage: {
       credentialsPath: getCredentialsPath(),
       configPath: getConfigPath(),
-      diagnostics,
+      credentialDiagnostics: diagnostics,
+      configDiagnostics,
     },
   };
 
@@ -146,6 +151,7 @@ export async function runDebugState({ showSecrets }: { showSecrets: boolean }): 
   console.log();
   console.log(chalk.bold('Config'));
   console.log(`  present: ${config ? chalk.green('true') : chalk.yellow('false')}`);
+  console.log(`  source:  ${configSource}`);
   if (config) {
     console.log(`  active:  ${config.activeEnvironment ?? chalk.dim('none')}`);
     for (const [key, env] of Object.entries(config.environments)) {
@@ -155,10 +161,16 @@ export async function runDebugState({ showSecrets }: { showSecrets: boolean }): 
   }
 
   console.log();
-  console.log(chalk.bold('Storage'));
-  console.log(`  credentials: ${getCredentialsPath()}`);
-  console.log(`  config:      ${getConfigPath()}`);
+  console.log(chalk.bold('Storage — Credentials'));
+  console.log(`  path: ${getCredentialsPath()}`);
   for (const line of diagnostics) {
+    console.log(`  ${chalk.dim(line)}`);
+  }
+
+  console.log();
+  console.log(chalk.bold('Storage — Config'));
+  console.log(`  path: ${getConfigPath()}`);
+  for (const line of configDiagnostics) {
     console.log(`  ${chalk.dim(line)}`);
   }
 }

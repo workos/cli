@@ -434,7 +434,7 @@ describe('config-store', () => {
   });
 
   describe('markEnvironmentClaimed', () => {
-    it('updates environment type to sandbox and removes claimToken', () => {
+    it('renames environment from unclaimed to sandbox', () => {
       saveConfig({
         activeEnvironment: 'unclaimed',
         environments: {
@@ -451,8 +451,12 @@ describe('config-store', () => {
       markEnvironmentClaimed();
 
       const config = getConfig();
-      expect(config?.environments['unclaimed'].type).toBe('sandbox');
-      expect(config?.environments['unclaimed'].claimToken).toBeUndefined();
+      expect(config?.environments['unclaimed']).toBeUndefined();
+      expect(config?.environments['sandbox']).toBeDefined();
+      expect(config?.environments['sandbox'].type).toBe('sandbox');
+      expect(config?.environments['sandbox'].name).toBe('sandbox');
+      expect(config?.environments['sandbox'].claimToken).toBeUndefined();
+      expect(config?.activeEnvironment).toBe('sandbox');
     });
 
     it('does nothing when no config', () => {

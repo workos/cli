@@ -54,6 +54,7 @@ export async function runClaim(): Promise<void> {
         outputJson({ status: 'already_claimed', message: 'Environment already claimed!' });
       } else {
         clack.log.success('Environment already claimed!');
+        clack.log.info('Run `workos auth login` to connect your account.');
       }
       return;
     }
@@ -87,6 +88,7 @@ export async function runClaim(): Promise<void> {
         if (check.alreadyClaimed) {
           spinner.stop('Environment claimed!');
           markEnvironmentClaimed();
+          clack.log.info('Run `workos auth login` to connect your account.');
           return;
         }
       } catch (pollError) {

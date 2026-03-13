@@ -26,6 +26,7 @@ const mockClearConfig = vi.fn();
 const mockGetActiveEnvironment = vi.fn();
 const mockGetConfigPath = vi.fn(() => '/home/user/.workos/config.json');
 const mockSetInsecureConfigStorage = vi.fn();
+const mockDiagnoseConfig = vi.fn();
 
 vi.mock('../lib/config-store.js', () => ({
   getConfig: (...args: unknown[]) => mockGetConfig(...args),
@@ -34,6 +35,7 @@ vi.mock('../lib/config-store.js', () => ({
   getActiveEnvironment: (...args: unknown[]) => mockGetActiveEnvironment(...args),
   getConfigPath: (...args: unknown[]) => mockGetConfigPath(...args),
   setInsecureConfigStorage: (...args: unknown[]) => mockSetInsecureConfigStorage(...args),
+  diagnoseConfig: (...args: unknown[]) => mockDiagnoseConfig(...args),
 }));
 
 // Mock output
@@ -112,6 +114,11 @@ describe('debug commands', () => {
       'keyring: found, userId=user_123, expired=false, hasRefreshToken=true',
       'insecureStorage=false',
     ]);
+    mockDiagnoseConfig.mockReturnValue([
+      'file: /home/user/.workos/config.json (exists=true)',
+      'keyring: found, active=default, environments=1',
+      'insecureStorage=false',
+    ]);
   });
 
   afterEach(() => {
@@ -138,6 +145,11 @@ describe('debug commands', () => {
       mockGetConfig.mockReturnValue(null);
       mockDiagnoseCredentials.mockReturnValue([
         'file: /home/user/.workos/credentials.json (exists=false)',
+        'insecureStorage=false',
+      ]);
+      mockDiagnoseConfig.mockReturnValue([
+        'file: /home/user/.workos/config.json (exists=false)',
+        'keyring: empty (getPassword returned null)',
         'insecureStorage=false',
       ]);
 
@@ -205,6 +217,10 @@ describe('debug commands', () => {
       mockIsTokenExpired.mockReturnValue(false);
       mockDiagnoseCredentials.mockReturnValue([
         'file: /home/user/.workos/credentials.json (exists=true)',
+        'insecureStorage=true',
+      ]);
+      mockDiagnoseConfig.mockReturnValue([
+        'file: /home/user/.workos/config.json (exists=true)',
         'insecureStorage=true',
       ]);
 
