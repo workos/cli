@@ -85,7 +85,7 @@ async function resolveInstallCredentials(apiKey?: string, installDir?: string, s
 
   if (activeEnv?.apiKey) {
     // Has API key — but does it have gateway auth?
-    if (isUnclaimedEnvironment(activeEnv) && activeEnv.claimToken) {
+    if (isUnclaimedEnvironment(activeEnv)) {
       // Unclaimed with claim token — claim token proxy will handle gateway
       return;
     }
@@ -2133,7 +2133,6 @@ yargs(rawArgs)
     (yargs) =>
       yargs.options({
         ...insecureStorageOption,
-        json: { type: 'boolean' as const, default: false, describe: 'Output in JSON format' },
       }),
     async (argv) => {
       await applyInsecureStorage(argv.insecureStorage);

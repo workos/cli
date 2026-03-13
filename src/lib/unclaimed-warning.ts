@@ -10,7 +10,7 @@
 import chalk from 'chalk';
 import { getActiveEnvironment, isUnclaimedEnvironment, markEnvironmentClaimed } from './config-store.js';
 import { createClaimNonce, UnclaimedEnvApiError } from './unclaimed-env-api.js';
-import { logInfo } from '../utils/debug.js';
+import { logError, logInfo } from '../utils/debug.js';
 import { isJsonMode } from '../utils/output.js';
 import { renderStderrBox } from '../utils/box.js';
 
@@ -27,7 +27,8 @@ export async function warnIfUnclaimed(): Promise<void> {
     if (!env || !isUnclaimedEnvironment(env)) return;
 
     // Check once per session if the env was claimed externally
-    if (!claimCheckDoneThisSession && env.claimToken && env.clientId) {
+    // claimToken and clientId guaranteed present by UnclaimedEnvironmentConfig
+    if (!claimCheckDoneThisSession) {
       claimCheckDoneThisSession = true;
       try {
         const result = await createClaimNonce(env.clientId, env.claimToken);
@@ -37,7 +38,8 @@ export async function warnIfUnclaimed(): Promise<void> {
           return;
         }
       } catch (error) {
-        // 401 = token invalid/expired — clean up, stop warning about claiming
+        // 401 means the server invalidated the claim token — the environment
+        // was claimed (e.g. via browser). Safe to promote to sandbox.
         if (error instanceof UnclaimedEnvApiError && error.statusCode === 401) {
           markEnvironmentClaimed();
           logInfo('[unclaimed-warning] Claim token invalid/expired, removed');
@@ -55,8 +57,9 @@ export async function warnIfUnclaimed(): Promise<void> {
       const inner = ` ${chalk.yellow('⚠ Unclaimed environment')} — Run ${chalk.cyan('workos claim')} to keep your data. `;
       renderStderrBox(inner, chalk.yellow);
     }
-  } catch {
-    // Never block command execution
+  } catch (error) {
+    // Never block command execution, but log for diagnostics
+    logError('[unclaimed-warning] Unexpected error:', error instanceof Error ? error.message : String(error));
   }
 }
 

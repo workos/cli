@@ -11,7 +11,7 @@ import clack from '../utils/clack.js';
 import { getActiveEnvironment, isUnclaimedEnvironment, markEnvironmentClaimed } from '../lib/config-store.js';
 import { createClaimNonce, UnclaimedEnvApiError } from '../lib/unclaimed-env-api.js';
 import { logInfo, logError } from '../utils/debug.js';
-import { isJsonMode, outputJson } from '../utils/output.js';
+import { isJsonMode, outputJson, exitWithError } from '../utils/output.js';
 import { sleep } from '../lib/helper-functions.js';
 
 const POLL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
@@ -32,14 +32,7 @@ export async function runClaim(): Promise<void> {
     return;
   }
 
-  if (!activeEnv.claimToken || !activeEnv.clientId) {
-    if (isJsonMode()) {
-      outputJson({ status: 'error', message: 'Missing claim token or client ID.' });
-    } else {
-      clack.log.error('Missing claim token or client ID.');
-    }
-    return;
-  }
+  // claimToken and clientId guaranteed present by UnclaimedEnvironmentConfig
 
   logInfo('[claim] Starting claim flow for environment:', activeEnv.name);
 
@@ -72,7 +65,7 @@ export async function runClaim(): Promise<void> {
       open(claimUrl, { wait: false });
       clack.log.info('Browser opened automatically');
     } catch {
-      // User can open manually
+      clack.log.info('Could not open browser — open the URL above manually.');
     }
 
     // Poll for claim completion
@@ -94,9 +87,10 @@ export async function runClaim(): Promise<void> {
       } catch (pollError) {
         const statusCode = pollError instanceof UnclaimedEnvApiError ? pollError.statusCode : undefined;
         if (statusCode === 401) {
-          // Token invalid or expired — stop polling, clean up
+          // 401 means the server invalidated the claim token — this happens
+          // when the environment is claimed. Safe to promote to sandbox.
           spinner.stop('Claim token is invalid or expired.');
-          markEnvironmentClaimed(); // removes claim token from config
+          markEnvironmentClaimed();
           clack.log.warn('Run `workos auth login` to set up your environment.');
           return;
         }
@@ -110,12 +104,6 @@ export async function runClaim(): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     logError('[claim] Error:', message);
-
-    if (isJsonMode()) {
-      outputJson({ status: 'error', message });
-    } else {
-      clack.log.error(`Claim failed: ${message}`);
-      clack.log.info('Try again or claim via the WorkOS dashboard.');
-    }
+    exitWithError({ code: 'claim_failed', message: `Claim failed: ${message}` });
   }
 }

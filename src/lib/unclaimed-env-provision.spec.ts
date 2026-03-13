@@ -67,6 +67,14 @@ describe('unclaimed-env-provision', () => {
     testDir = mkdtempSync(join(tmpdir(), 'unclaimed-env-provision-test-'));
     vi.clearAllMocks();
     mockGetConfig.mockReturnValue(null);
+    // Read-back after save should return the unclaimed env by default
+    mockGetActiveEnvironment.mockReturnValue({
+      name: 'unclaimed',
+      type: 'unclaimed',
+      apiKey: 'sk_test_oneshot',
+      clientId: 'client_01ABC',
+      claimToken: 'ct_token123',
+    });
   });
 
   afterEach(() => {

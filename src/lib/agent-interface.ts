@@ -361,7 +361,7 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
 
       // Check for unclaimed environment — use claim token auth
       const activeEnv = getActiveEnvironment();
-      if (activeEnv && isUnclaimedEnvironment(activeEnv) && activeEnv.claimToken && activeEnv.clientId) {
+      if (activeEnv && isUnclaimedEnvironment(activeEnv)) {
         activeProxyHandle = await startClaimTokenProxy({
           upstreamUrl: gatewayUrl,
           claimToken: activeEnv.claimToken,

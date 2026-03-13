@@ -15,19 +15,29 @@ import path from 'node:path';
 import os from 'node:os';
 import { logWarn } from '../utils/debug.js';
 
-export interface EnvironmentConfig {
+interface BaseEnvironmentConfig {
   name: string;
-  type: 'production' | 'sandbox' | 'unclaimed';
   apiKey: string;
-  clientId?: string;
   endpoint?: string;
-  claimToken?: string;
 }
 
+export interface ClaimedEnvironmentConfig extends BaseEnvironmentConfig {
+  type: 'production' | 'sandbox';
+  clientId?: string;
+}
+
+export interface UnclaimedEnvironmentConfig extends BaseEnvironmentConfig {
+  type: 'unclaimed';
+  clientId: string;
+  claimToken: string;
+}
+
+export type EnvironmentConfig = ClaimedEnvironmentConfig | UnclaimedEnvironmentConfig;
+
 /**
- * Type guard for unclaimed environments.
+ * Type guard — narrows to UnclaimedEnvironmentConfig with required clientId and claimToken.
  */
-export function isUnclaimedEnvironment(env: EnvironmentConfig): boolean {
+export function isUnclaimedEnvironment(env: EnvironmentConfig): env is UnclaimedEnvironmentConfig {
   return env.type === 'unclaimed';
 }
 
@@ -237,16 +247,17 @@ export function markEnvironmentClaimed(): void {
   const oldKey = config.activeEnvironment;
   const env = config.environments[oldKey];
   if (env && env.type === 'unclaimed') {
-    env.type = 'sandbox';
-    env.name = 'sandbox';
-    delete env.claimToken;
+    const claimed: ClaimedEnvironmentConfig = {
+      name: 'sandbox',
+      type: 'sandbox',
+      apiKey: env.apiKey,
+      clientId: env.clientId,
+      ...(env.endpoint && { endpoint: env.endpoint }),
+    };
 
-    // Rename the key from 'unclaimed' to 'sandbox'
-    if (oldKey !== 'sandbox') {
-      delete config.environments[oldKey];
-      config.environments['sandbox'] = env;
-      config.activeEnvironment = 'sandbox';
-    }
+    delete config.environments[oldKey];
+    config.environments['sandbox'] = claimed;
+    config.activeEnvironment = 'sandbox';
 
     saveConfig(config);
   }

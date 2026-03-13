@@ -30,9 +30,11 @@ vi.mock('../utils/clack.js', () => ({ default: mockClack }));
 // Mock output utilities
 const mockOutputJson = vi.fn();
 let jsonMode = false;
+const mockExitWithError = vi.fn();
 vi.mock('../utils/output.js', () => ({
   isJsonMode: () => jsonMode,
   outputJson: (...args: unknown[]) => mockOutputJson(...args),
+  exitWithError: (...args: unknown[]) => mockExitWithError(...args),
 }));
 
 // Mock helper-functions
@@ -116,35 +118,8 @@ describe('claim command', () => {
       expect(mockOutputJson).toHaveBeenCalledWith(expect.objectContaining({ status: 'no_unclaimed_environment' }));
     });
 
-    it('exits with error when missing claim token', async () => {
-      mockGetActiveEnvironment.mockReturnValue({
-        name: 'unclaimed',
-        type: 'unclaimed',
-        apiKey: 'sk_test_xxx',
-        clientId: 'client_01ABC',
-        // no claimToken
-      });
-      mockIsUnclaimedEnvironment.mockReturnValue(true);
-
-      await runClaim();
-
-      expect(mockClack.log.error).toHaveBeenCalledWith(expect.stringContaining('Missing claim token'));
-    });
-
-    it('exits with error when missing clientId', async () => {
-      mockGetActiveEnvironment.mockReturnValue({
-        name: 'unclaimed',
-        type: 'unclaimed',
-        apiKey: 'sk_test_xxx',
-        claimToken: 'ct_token',
-        // no clientId
-      });
-      mockIsUnclaimedEnvironment.mockReturnValue(true);
-
-      await runClaim();
-
-      expect(mockClack.log.error).toHaveBeenCalledWith(expect.stringContaining('Missing claim token or client ID'));
-    });
+    // Missing claimToken/clientId tests removed — discriminated union makes these states
+    // impossible at the type level (UnclaimedEnvironmentConfig requires both fields).
 
     it('handles already-claimed environment immediately', async () => {
       mockGetActiveEnvironment.mockReturnValue({
@@ -315,8 +290,9 @@ describe('claim command', () => {
 
       await runClaim();
 
-      expect(mockClack.log.error).toHaveBeenCalledWith(expect.stringContaining('Invalid claim token'));
-      expect(mockClack.log.info).toHaveBeenCalledWith(expect.stringContaining('Try again'));
+      expect(mockExitWithError).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'claim_failed', message: expect.stringContaining('Invalid claim token') }),
+      );
     });
   });
 });

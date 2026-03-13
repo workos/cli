@@ -105,7 +105,7 @@ export async function runDebugState({ showSecrets }: { showSecrets: boolean }): 
           apiKey: maybeRedact(env.apiKey),
           clientId: env.clientId ?? null,
           endpoint: env.endpoint ?? null,
-          claimToken: env.claimToken ? maybeRedact(env.claimToken) : null,
+          ...(env.type === 'unclaimed' && { claimToken: maybeRedact(env.claimToken) }),
         },
       ]),
     );
@@ -113,6 +113,7 @@ export async function runDebugState({ showSecrets }: { showSecrets: boolean }): 
 
   const configDiagnostics = diagnoseConfig();
   const configSource = determineCredentialSource(configDiagnostics);
+  configOutput.source = configSource;
 
   const result = {
     credentials: credentialsOutput,
@@ -156,7 +157,7 @@ export async function runDebugState({ showSecrets }: { showSecrets: boolean }): 
     console.log(`  active:  ${config.activeEnvironment ?? chalk.dim('none')}`);
     for (const [key, env] of Object.entries(config.environments)) {
       console.log(`  env[${key}]: type=${env.type} apiKey=${maybeRedact(env.apiKey)}`);
-      if (env.claimToken) console.log(`    claimToken=${maybeRedact(env.claimToken)}`);
+      if (env.type === 'unclaimed') console.log(`    claimToken=${maybeRedact(env.claimToken)}`);
     }
   }
 
