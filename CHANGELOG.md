@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0](https://github.com/workos/cli/compare/v0.10.1...v0.11.0) (2026-03-13)
+
+
+### Features
+
+* add zero-auth install flow with claim command ([#91](https://github.com/workos/cli/issues/91)) ([d1b0039](https://github.com/workos/cli/commit/d1b0039c051cd8fccb2a655aa97ad7017998ff2e))
+
 ## [0.10.1](https://github.com/workos/cli/compare/v0.10.0...v0.10.1) (2026-03-10)
 
 
