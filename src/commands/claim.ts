@@ -104,7 +104,7 @@ export async function runClaim(): Promise<void> {
           spinner.stop('Too many connection failures');
           clack.log.error(
             `Polling failed ${consecutiveFailures} times in a row. Check your network and try again.\n` +
-            `You can also complete the claim at: ${claimUrl}`,
+              `You can also complete the claim at: ${claimUrl}`,
           );
           return;
         }
