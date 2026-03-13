@@ -159,6 +159,23 @@ describe('unclaimed-warning', () => {
     expect(mockRenderStderrBox).toHaveBeenCalled();
   });
 
+  it('promotes to claimed when claim check returns 401', async () => {
+    mockGetActiveEnvironment.mockReturnValue({
+      name: 'unclaimed',
+      type: 'unclaimed',
+      apiKey: 'sk_test_xxx',
+      clientId: 'client_01ABC',
+      claimToken: 'ct_token',
+    });
+    mockIsUnclaimedEnvironment.mockReturnValue(true);
+    mockCreateClaimNonce.mockRejectedValue(new MockUnclaimedEnvApiError('Invalid claim token.', 401));
+
+    await warnIfUnclaimed();
+
+    expect(mockMarkEnvironmentClaimed).toHaveBeenCalled();
+    expect(mockRenderStderrBox).not.toHaveBeenCalled();
+  });
+
   it('never throws even if getActiveEnvironment throws', async () => {
     mockGetActiveEnvironment.mockImplementation(() => {
       throw new Error('Config store failure');

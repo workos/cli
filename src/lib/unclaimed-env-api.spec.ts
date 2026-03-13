@@ -243,6 +243,18 @@ describe('unclaimed-env-api', () => {
       await expect(createClaimNonce('bad_client', 'ct_token')).rejects.toThrow('Environment not found.');
     });
 
+    it('returns alreadyClaimed on 409 Conflict (claimed server-side)', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        text: async () => 'Conflict',
+      });
+
+      const result = await createClaimNonce('client_01ABC', 'ct_token');
+
+      expect(result).toEqual({ alreadyClaimed: true });
+    });
+
     it('throws UnclaimedEnvApiError on 429 rate limit', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,

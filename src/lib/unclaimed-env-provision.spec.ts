@@ -158,6 +158,18 @@ describe('unclaimed-env-provision', () => {
       expect(renderStderrBox).toHaveBeenCalled();
     });
 
+    it('returns false when config read-back fails after save', async () => {
+      mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
+      // Read-back returns null — simulates keyring write that silently fails
+      mockGetActiveEnvironment.mockReturnValue(null);
+
+      const result = await tryProvisionUnclaimedEnv({ installDir: testDir });
+
+      expect(result).toBe(false);
+      expect(mockSaveConfig).toHaveBeenCalled();
+      expect(mockClack.log.warn).toHaveBeenCalledWith(expect.stringContaining('config storage may be unreliable'));
+    });
+
     it('returns false on API failure (network error)', async () => {
       mockProvisionUnclaimedEnvironment.mockRejectedValueOnce(new Error('Network error: DNS failed'));
 

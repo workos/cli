@@ -42,7 +42,7 @@ export interface CredentialProxyHandle {
   stop: () => Promise<void>;
 }
 
-// Hop-by-hop headers that must not be forwarded by proxies (RFC 2616 §13.5.1)
+// Hop-by-hop headers that must not be forwarded by proxies (RFC 7230 §6.1)
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',
   'keep-alive',

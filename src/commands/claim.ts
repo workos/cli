@@ -16,6 +16,7 @@ import { sleep } from '../lib/helper-functions.js';
 
 const POLL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const POLL_INTERVAL_MS = 5_000; // 5 seconds
+const MAX_CONSECUTIVE_FAILURES = 10;
 
 /**
  * Run the claim flow.
@@ -64,7 +65,8 @@ export async function runClaim(): Promise<void> {
     try {
       open(claimUrl, { wait: false });
       clack.log.info('Browser opened automatically');
-    } catch {
+    } catch (openError) {
+      logError('[claim] Failed to open browser:', openError instanceof Error ? openError.message : String(openError));
       clack.log.info('Could not open browser — open the URL above manually.');
     }
 
@@ -98,6 +100,14 @@ export async function runClaim(): Promise<void> {
         }
         consecutiveFailures++;
         logError('[claim] Poll error:', pollError instanceof Error ? pollError.message : 'Unknown');
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          spinner.stop('Too many connection failures');
+          clack.log.error(
+            `Polling failed ${consecutiveFailures} times in a row. Check your network and try again.\n` +
+            `You can also complete the claim at: ${claimUrl}`,
+          );
+          return;
+        }
         if (consecutiveFailures >= 3) {
           spinner.message('Still waiting... (connection issues detected)');
         }

@@ -81,11 +81,11 @@ export async function provisionUnclaimedEnvironment(): Promise<UnclaimedEnvProvi
       authkit_domain?: string;
     };
 
-    // Handle both camelCase and snake_case responses
-    const clientId = data.clientId || data.client_id;
-    const apiKey = data.apiKey || data.api_key;
-    const claimToken = data.claimToken || data.claim_token;
-    const authkitDomain = data.authkitDomain || data.authkit_domain;
+    // Handle both camelCase and snake_case responses (API may respond in either format)
+    const clientId = data.clientId ?? data.client_id;
+    const apiKey = data.apiKey ?? data.api_key;
+    const claimToken = data.claimToken ?? data.claim_token;
+    const authkitDomain = data.authkitDomain ?? data.authkit_domain;
 
     if (!clientId || !apiKey || !claimToken || !authkitDomain) {
       logError('[unclaimed-env-api] Invalid response: missing required fields');

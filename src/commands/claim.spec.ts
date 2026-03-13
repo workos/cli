@@ -14,6 +14,7 @@ vi.mock('opn', () => ({ default: mockOpen }));
 const mockSpinner = {
   start: vi.fn(),
   stop: vi.fn(),
+  message: vi.fn(),
 };
 const mockClack = {
   log: {
@@ -30,7 +31,9 @@ vi.mock('../utils/clack.js', () => ({ default: mockClack }));
 // Mock output utilities
 const mockOutputJson = vi.fn();
 let jsonMode = false;
-const mockExitWithError = vi.fn();
+const mockExitWithError = vi.fn(() => {
+  throw new Error('exitWithError');
+});
 vi.mock('../utils/output.js', () => ({
   isJsonMode: () => jsonMode,
   outputJson: (...args: unknown[]) => mockOutputJson(...args),
@@ -280,11 +283,127 @@ describe('claim command', () => {
       mockIsUnclaimedEnvironment.mockReturnValue(true);
       mockCreateClaimNonce.mockRejectedValueOnce(new Error('Invalid claim token.'));
 
-      await runClaim();
+      await runClaim().catch(() => {}); // exitWithError throws
 
       expect(mockExitWithError).toHaveBeenCalledWith(
         expect.objectContaining({ code: 'claim_failed', message: expect.stringContaining('Invalid claim token') }),
       );
+    });
+
+    it('treats 401 poll error as implicit claim (environment claimed externally)', async () => {
+      const unclaimedEnv = {
+        name: 'unclaimed',
+        type: 'unclaimed',
+        apiKey: 'sk_test_xxx',
+        clientId: 'client_01ABC',
+        claimToken: 'ct_token',
+      };
+      mockGetActiveEnvironment.mockReturnValue(unclaimedEnv);
+      mockIsUnclaimedEnvironment.mockReturnValue(true);
+
+      // First call: returns nonce
+      mockCreateClaimNonce.mockResolvedValueOnce({
+        nonce: 'nonce_abc123',
+        alreadyClaimed: false,
+      });
+      // Poll call: 401 — claim token invalidated (claimed via browser)
+      mockCreateClaimNonce.mockRejectedValueOnce(new MockUnclaimedEnvApiError('Invalid claim token.', 401));
+
+      const claimPromise = runClaim();
+      await vi.advanceTimersByTimeAsync(6_000);
+      await claimPromise;
+
+      expect(mockSpinner.stop).toHaveBeenCalledWith('Claim token is invalid or expired.');
+      expect(mockMarkEnvironmentClaimed).toHaveBeenCalled();
+      expect(mockClack.log.warn).toHaveBeenCalledWith(expect.stringContaining('workos auth login'));
+    });
+
+    it('shows connection issues after 3 consecutive poll failures', async () => {
+      const unclaimedEnv = {
+        name: 'unclaimed',
+        type: 'unclaimed',
+        apiKey: 'sk_test_xxx',
+        clientId: 'client_01ABC',
+        claimToken: 'ct_token',
+      };
+      mockGetActiveEnvironment.mockReturnValue(unclaimedEnv);
+      mockIsUnclaimedEnvironment.mockReturnValue(true);
+
+      // First call: returns nonce
+      mockCreateClaimNonce.mockResolvedValueOnce({
+        nonce: 'nonce_abc123',
+        alreadyClaimed: false,
+      });
+      // 3 consecutive failures, then success
+      mockCreateClaimNonce.mockRejectedValueOnce(new Error('Network error'));
+      mockCreateClaimNonce.mockRejectedValueOnce(new Error('Network error'));
+      mockCreateClaimNonce.mockRejectedValueOnce(new Error('Network error'));
+      mockCreateClaimNonce.mockResolvedValueOnce({ alreadyClaimed: true });
+
+      const claimPromise = runClaim();
+      await vi.advanceTimersByTimeAsync(25_000);
+      await claimPromise;
+
+      expect(mockSpinner.message).toHaveBeenCalledWith('Still waiting... (connection issues detected)');
+      expect(mockSpinner.stop).toHaveBeenCalledWith('Environment claimed!');
+    });
+
+    it('exits early after MAX_CONSECUTIVE_FAILURES poll errors', async () => {
+      const unclaimedEnv = {
+        name: 'unclaimed',
+        type: 'unclaimed',
+        apiKey: 'sk_test_xxx',
+        clientId: 'client_01ABC',
+        claimToken: 'ct_token',
+      };
+      mockGetActiveEnvironment.mockReturnValue(unclaimedEnv);
+      mockIsUnclaimedEnvironment.mockReturnValue(true);
+
+      // First call: returns nonce
+      mockCreateClaimNonce.mockResolvedValueOnce({
+        nonce: 'nonce_abc123',
+        alreadyClaimed: false,
+      });
+      // 10 consecutive failures (MAX_CONSECUTIVE_FAILURES)
+      for (let i = 0; i < 10; i++) {
+        mockCreateClaimNonce.mockRejectedValueOnce(new Error('Server down'));
+      }
+
+      const claimPromise = runClaim();
+      await vi.advanceTimersByTimeAsync(60_000);
+      await claimPromise;
+
+      expect(mockSpinner.stop).toHaveBeenCalledWith('Too many connection failures');
+      expect(mockClack.log.error).toHaveBeenCalledWith(expect.stringContaining('Polling failed 10 times'));
+      expect(mockMarkEnvironmentClaimed).not.toHaveBeenCalled();
+    });
+
+    it('logs error and shows fallback when browser open fails', async () => {
+      const unclaimedEnv = {
+        name: 'unclaimed',
+        type: 'unclaimed',
+        apiKey: 'sk_test_xxx',
+        clientId: 'client_01ABC',
+        claimToken: 'ct_token',
+      };
+      mockGetActiveEnvironment.mockReturnValue(unclaimedEnv);
+      mockIsUnclaimedEnvironment.mockReturnValue(true);
+      mockCreateClaimNonce.mockResolvedValueOnce({
+        nonce: 'nonce_abc123',
+        alreadyClaimed: false,
+      });
+      // Poll returns claimed immediately
+      mockCreateClaimNonce.mockResolvedValueOnce({ alreadyClaimed: true });
+      // Browser open throws synchronously (open() is called without await)
+      mockOpen.mockImplementationOnce(() => {
+        throw new Error('No browser available');
+      });
+
+      const claimPromise = runClaim();
+      await vi.advanceTimersByTimeAsync(6_000);
+      await claimPromise;
+
+      expect(mockClack.log.info).toHaveBeenCalledWith(expect.stringContaining('Could not open browser'));
     });
   });
 });

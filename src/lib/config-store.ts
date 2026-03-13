@@ -247,17 +247,25 @@ export function markEnvironmentClaimed(): void {
   const oldKey = config.activeEnvironment;
   const env = config.environments[oldKey];
   if (env && env.type === 'unclaimed') {
+    // Pick a key that won't overwrite an existing environment
+    let newKey = 'sandbox';
+    if (oldKey !== newKey && config.environments[newKey]) {
+      newKey = oldKey; // keep existing key if 'sandbox' is already taken
+    }
+
     const claimed: ClaimedEnvironmentConfig = {
-      name: 'sandbox',
+      name: newKey,
       type: 'sandbox',
       apiKey: env.apiKey,
       clientId: env.clientId,
       ...(env.endpoint && { endpoint: env.endpoint }),
     };
 
-    delete config.environments[oldKey];
-    config.environments['sandbox'] = claimed;
-    config.activeEnvironment = 'sandbox';
+    if (oldKey !== newKey) {
+      delete config.environments[oldKey];
+    }
+    config.environments[newKey] = claimed;
+    config.activeEnvironment = newKey;
 
     saveConfig(config);
   }

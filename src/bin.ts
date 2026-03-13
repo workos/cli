@@ -184,9 +184,10 @@ yargs(rawArgs)
   })
   .middleware(async (argv) => {
     // Warn about unclaimed environments before management commands.
-    // Excluded: auth/claim/install handle their own flows; skills/doctor/env/debug don't need it.
+    // Excluded: auth/claim/install/dashboard handle their own credential flows;
+    // skills/doctor/env/debug are utility commands where the warning is unnecessary.
     const command = String(argv._?.[0] ?? '');
-    if (['auth', 'skills', 'doctor', 'env', 'claim', 'install', 'debug'].includes(command)) return;
+    if (['auth', 'skills', 'doctor', 'env', 'claim', 'install', 'debug', 'dashboard', ''].includes(command)) return;
     await applyInsecureStorage(argv.insecureStorage as boolean | undefined);
     await maybeWarnUnclaimed();
   })

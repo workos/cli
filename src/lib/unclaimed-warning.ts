@@ -38,14 +38,19 @@ export async function warnIfUnclaimed(): Promise<void> {
           return;
         }
       } catch (error) {
-        // 401 means the server invalidated the claim token — the environment
-        // was claimed (e.g. via browser). Safe to promote to sandbox.
         if (error instanceof UnclaimedEnvApiError && error.statusCode === 401) {
+          // 401 likely means the claim token was invalidated after the environment
+          // was claimed. We assume claimed and promote to sandbox.
           markEnvironmentClaimed();
           logInfo('[unclaimed-warning] Claim token invalid/expired, removed');
           return;
         }
-        // Other errors — still show warning
+        // Log non-401 errors for diagnostics, then fall through to show warning
+        if (error instanceof UnclaimedEnvApiError) {
+          logError('[unclaimed-warning] Claim check failed:', error.statusCode, error.message);
+        } else {
+          logError('[unclaimed-warning] Claim check failed:', error instanceof Error ? error.message : String(error));
+        }
       }
     }
 
