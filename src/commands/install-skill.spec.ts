@@ -3,7 +3,14 @@ import { existsSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
-import { createAgents, discoverSkills, detectAgents, installSkill, autoInstallSkills, type AgentConfig } from './install-skill.js';
+import {
+  createAgents,
+  discoverSkills,
+  detectAgents,
+  installSkill,
+  autoInstallSkills,
+  type AgentConfig,
+} from './install-skill.js';
 
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof import('os')>();
