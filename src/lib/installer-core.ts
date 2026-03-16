@@ -241,6 +241,9 @@ export const installerMachine = setup({
       const message = context.error?.message ?? 'Commit failed';
       context.emitter.emit('postinstall:commit:failed', { error: message });
     },
+    assignPostInstallError: assign({
+      postInstallError: ({ context }) => context.error?.message ?? 'Post-install step failed',
+    }),
     emitPrPrompt: ({ context }) => {
       context.emitter.emit('postinstall:pr:prompt', {});
     },
@@ -282,8 +285,11 @@ export const installerMachine = setup({
       context.emitter.emit('postinstall:manual', { instructions });
     },
     emitComplete: ({ context }) => {
-      const summary = context.agentSummary ?? 'WorkOS AuthKit installed successfully!';
-      context.emitter.emit('complete', { success: true, summary });
+      const hasPostInstallError = !!context.postInstallError;
+      const summary = hasPostInstallError
+        ? `Installation completed but post-install failed: ${context.postInstallError}`
+        : context.agentSummary ?? 'WorkOS AuthKit installed successfully!';
+      context.emitter.emit('complete', { success: !hasPostInstallError, summary });
     },
   },
 
@@ -936,7 +942,7 @@ export const installerMachine = setup({
             },
             onError: {
               target: 'done',
-              actions: ['assignError', 'emitCommitFailed'],
+              actions: ['assignError', 'assignPostInstallError', 'emitCommitFailed'],
             },
           },
         },
@@ -989,7 +995,7 @@ export const installerMachine = setup({
             onDone: { target: 'creatingPr' },
             onError: {
               target: 'showingManualInstructions',
-              actions: ['assignError', 'emitPushFailed'],
+              actions: ['assignError', 'assignPostInstallError', 'emitPushFailed'],
             },
           },
         },
@@ -1010,7 +1016,7 @@ export const installerMachine = setup({
             },
             onError: {
               target: 'done',
-              actions: ['assignError', 'emitPrFailed'],
+              actions: ['assignError', 'assignPostInstallError', 'emitPrFailed'],
             },
           },
         },

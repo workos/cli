@@ -12,4 +12,9 @@ export abstract class EnvironmentProvider {
   abstract detect(): Promise<boolean>;
 
   abstract uploadEnvVars(vars: Record<string, string>): Promise<Record<string, boolean>>;
+
+  /** Check for existing env vars in the provider. Returns var names, or empty on failure. */
+  async checkExistingVars(): Promise<string[]> {
+    return [];
+  }
 }

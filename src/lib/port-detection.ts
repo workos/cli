@@ -46,7 +46,7 @@ function parseViteConfigPort(configPath: string): number | null {
 
 /**
  * Parse port from Next.js package.json scripts.
- * Next.js uses: "dev": "next dev -p 4000" or --port 4000
+ * Checks for: -p 4000, --port 4000, --port=4000, PORT=4000
  */
 function parseNextConfigPort(installDir: string): number | null {
   try {
@@ -60,8 +60,34 @@ function parseNextConfigPort(installDir: string): number | null {
     if (portMatch) {
       return parseInt(portMatch[1] || portMatch[2], 10);
     }
+
+    // Match: PORT=4000 (inline env var in script)
+    const portEnvMatch = devScript.match(/PORT=(\d+)/);
+    if (portEnvMatch) {
+      return parseInt(portEnvMatch[1], 10);
+    }
   } catch {
     // Can't read package.json
+  }
+  return null;
+}
+
+/**
+ * Parse PORT from .env files.
+ * Checks .env.local, .env.development, .env in order.
+ */
+function parseEnvFilePort(installDir: string): number | null {
+  const envFiles = ['.env.local', '.env.development', '.env'];
+  for (const file of envFiles) {
+    try {
+      const content = fs.readFileSync(join(installDir, file), 'utf-8');
+      const match = content.match(/^PORT=(\d+)/m);
+      if (match) {
+        return parseInt(match[1], 10);
+      }
+    } catch {
+      // File doesn't exist
+    }
   }
   return null;
 }
@@ -121,5 +147,6 @@ export function detectPort(integration: Integration, installDir: string): number
     }
   }
 
-  return detectedPort ?? getDefaultPort(integration);
+  // Fallback: check .env files for PORT before using framework default
+  return detectedPort ?? parseEnvFilePort(installDir) ?? getDefaultPort(integration);
 }
