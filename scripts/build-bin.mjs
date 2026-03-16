@@ -6,7 +6,7 @@
  *
  * Pipeline: esbuild (bundle) → SEA blob → inject into node binary
  *
- * Why SEA instead of @yao-pkg/pkg (as the spec originally called for):
+ * Why SEA instead of @yao-pkg/pkg:
  * pkg produced SIGSEGV crashes on commands beyond --version due to V8 bytecode
  * compilation issues with our ~4MB CJS bundle. SEA uses the real Node binary
  * with our code injected, avoiding the bytecode compilation layer entirely.

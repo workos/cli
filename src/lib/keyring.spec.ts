@@ -7,23 +7,12 @@ vi.mock('node:child_process', () => ({
 
 const mockedExecFileSync = vi.mocked(execFileSync);
 
-// We need to re-import Entry for each platform test since
-// the module caches process.platform at import time.
-// Instead, we'll test via the module directly and override
-// the platform dispatch by testing the exported Entry class.
-
 describe('keyring', () => {
   beforeEach(() => {
     vi.resetAllMocks();
   });
 
-  // Since the module reads process.platform at load time,
-  // we test against the current platform's code path.
-  // For cross-platform coverage, we mock execFileSync and verify
-  // the correct commands are called.
-
   describe('macOS backend (darwin)', () => {
-    // Skip if not on macOS — the module's platform constant is baked at import
     const isMac = process.platform === 'darwin';
 
     it.skipIf(!isMac)('getPassword calls security find-generic-password', async () => {
@@ -191,8 +180,6 @@ describe('keyring', () => {
 
   describe('unsupported platform', () => {
     it('throws for unknown platform', async () => {
-      // We can't easily override the module-level constant,
-      // but we can verify the error message format
       if (!['darwin', 'linux', 'win32'].includes(process.platform)) {
         const { Entry } = await import('./keyring.js');
         const entry = new Entry('svc', 'acct');

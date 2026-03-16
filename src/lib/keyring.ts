@@ -76,8 +76,6 @@ function linuxGet(service: string, account: string): string | null {
     const trimmed = result.trimEnd();
     return trimmed.length > 0 ? trimmed : null;
   } catch {
-    // Command not found or lookup failed — return null for "not found",
-    // but rethrow if the tool itself is missing
     return null;
   }
 }
