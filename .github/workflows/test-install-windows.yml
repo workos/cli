@@ -1,0 +1,23 @@
+# This workflow will only trigger once install.ps1 is added to the repository.
+name: Test install.ps1
+
+on:
+  pull_request:
+    paths: [install.ps1]
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Run install script
+        run: ./install.ps1
+        shell: pwsh
+
+      - name: Verify CLI works
+        run: workos --version

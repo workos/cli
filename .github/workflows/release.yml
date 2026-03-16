@@ -2,7 +2,17 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: Release tag (e.g. v1.0.0)
+        type: string
+        required: true
   workflow_call:
+    inputs:
+      tag_name:
+        description: Release tag (e.g. v1.0.0)
+        type: string
+        required: true
 
 jobs:
   publish:
@@ -23,10 +33,141 @@ jobs:
           cache: pnpm
 
       - name: Install
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm build
 
       - name: Publish
         run: npm publish --tag latest --access public --provenance
+
+  # Build standalone binaries on native runners (SEA cannot cross-compile).
+  build-binary:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            arch: darwin-arm64
+            archive: workos-darwin-arm64.tar.gz
+            binary: ./dist/workos
+          - os: macos-13
+            arch: darwin-x64
+            archive: workos-darwin-x64.tar.gz
+            binary: ./dist/workos
+          - os: ubuntu-latest
+            arch: linux-x64
+            archive: workos-linux-x64.tar.gz
+            binary: ./dist/workos
+          - os: ubuntu-24.04-arm
+            arch: linux-arm64
+            archive: workos-linux-arm64.tar.gz
+            binary: ./dist/workos
+          - os: windows-latest
+            arch: windows-x64
+            archive: workos-windows-x64.zip
+            binary: ./dist/workos.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build binary
+        run: node scripts/build-bin.mjs
+
+      - name: Smoke test
+        env:
+          BIN: ${{ matrix.binary }}
+        run: |
+          "$BIN" --version
+          "$BIN" --help
+        shell: bash
+
+      - name: Package archive
+        env:
+          ARCHIVE: ${{ matrix.archive }}
+        run: |
+          cd dist
+          if [[ "$ARCHIVE" == *.zip ]]; then
+            7z a ../"$ARCHIVE" workos.exe
+          else
+            tar czf ../"$ARCHIVE" workos
+          fi
+        shell: bash
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.arch }}
+          path: ${{ matrix.archive }}
+
+  # Upload all binary archives to the GitHub Release created by release-please.
+  release:
+    needs: [build-binary]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Verify all archives exist
+        run: |
+          for f in workos-darwin-arm64.tar.gz workos-darwin-x64.tar.gz \
+                    workos-linux-x64.tar.gz workos-linux-arm64.tar.gz \
+                    workos-windows-x64.zip; do
+            [ -s "$f" ] || { echo "Missing or empty: $f"; exit 1; }
+          done
+
+      - name: Detect pre-release
+        id: meta
+        env:
+          TAG: ${{ inputs.tag_name || github.ref_name }}
+        run: |
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+            echo "make_latest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "make_latest=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag_name || github.ref_name }}
+          prerelease: ${{ steps.meta.outputs.prerelease }}
+          make_latest: ${{ steps.meta.outputs.make_latest }}
+          generate_release_notes: true
+          body: |
+            ## Install
+
+            **macOS / Linux:**
+            ```sh
+            curl -fsSL https://raw.githubusercontent.com/workos/cli/main/install.sh | bash
+            ```
+
+            **Windows (PowerShell):**
+            ```powershell
+            irm https://raw.githubusercontent.com/workos/cli/main/install.ps1 | iex
+            ```
+
+            **npm:**
+            ```sh
+            npm install -g workos
+            ```
+          files: |
+            workos-darwin-arm64.tar.gz
+            workos-darwin-x64.tar.gz
+            workos-linux-x64.tar.gz
+            workos-linux-arm64.tar.gz
+            workos-windows-x64.zip

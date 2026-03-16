@@ -14,7 +14,7 @@
  * Platform notes:
  * - macOS: requires codesign --remove-signature before injection, then codesign --sign - after
  * - Linux: no signing needed
- * - Windows: requires signtool remove + sign (handled in CI)
+ * - Windows: no signing needed; output is workos.exe
  */
 
 import { execFileSync } from 'node:child_process';
@@ -23,7 +23,7 @@ import { platform } from 'node:os';
 
 const run = (cmd, args) => execFileSync(cmd, args, { stdio: 'inherit' });
 
-const OUTPUT = 'dist/workos';
+const OUTPUT = platform() === 'win32' ? 'dist/workos.exe' : 'dist/workos';
 const BLOB = 'dist/sea-prep.blob';
 // Official Node.js SEA fuse string — see https://nodejs.org/api/single-executable-applications.html
 const SENTINEL = 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2';
