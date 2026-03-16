@@ -11,13 +11,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
       - name: Run install script
         run: ./install.ps1
         shell: pwsh
 
       - name: Verify CLI works
-        run: workos --version
+        run: |
+          & "$HOME\.workos\bin\workos.exe" --version
+          & "$HOME\.workos\bin\workos.exe" --help
+        shell: pwsh

@@ -13,12 +13,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
       - name: Run install script
         run: bash install.sh
 
       - name: Verify CLI works
-        run: workos --version
+        run: |
+          ~/.workos/bin/workos --version
+          ~/.workos/bin/workos --help
