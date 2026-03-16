@@ -3,6 +3,7 @@ import type { InstallerArgs } from '../run.js';
 import clack from '../utils/clack.js';
 import { exitWithError, isJsonMode } from '../utils/output.js';
 import type { ArgumentsCamelCase } from 'yargs';
+import { autoInstallSkills } from './install-skill.js';
 
 /**
  * Handle install command execution.
@@ -28,6 +29,7 @@ export async function handleInstall(argv: ArgumentsCamelCase<InstallerArgs>): Pr
 
   try {
     await runInstaller(options);
+    await autoInstallSkills();
     process.exit(0);
   } catch (err) {
     const { getLogFilePath } = await import('../utils/debug.js');

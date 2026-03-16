@@ -1,9 +1,19 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { existsSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
-import { createAgents, discoverSkills, detectAgents, installSkill, type AgentConfig } from './install-skill.js';
+import { createAgents, discoverSkills, detectAgents, installSkill, autoInstallSkills, type AgentConfig } from './install-skill.js';
+
+vi.mock('os', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('os')>();
+  return { ...actual, homedir: vi.fn(actual.homedir) };
+});
+
+vi.mock('@workos/skills', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@workos/skills')>();
+  return { ...actual, getSkillsDir: vi.fn(actual.getSkillsDir) };
+});
 
 describe('install-skill', () => {
   let testDir: string;
@@ -193,6 +203,94 @@ describe('install-skill', () => {
 
       const content = readFileSync(join(homeDir, '.test-agent/skills/test-skill/SKILL.md'), 'utf-8');
       expect(content).toContain('# Updated Skill');
+    });
+  });
+
+  describe('autoInstallSkills', () => {
+    beforeEach(async () => {
+      const { homedir } = await import('os');
+      const { getSkillsDir } = await import('@workos/skills');
+      vi.mocked(homedir).mockReturnValue(homeDir);
+      vi.mocked(getSkillsDir).mockReturnValue(skillsDir);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('installs all skills to all detected agents', async () => {
+      // Set up skills
+      mkdirSync(join(skillsDir, 'skill-a'));
+      writeFileSync(join(skillsDir, 'skill-a', 'SKILL.md'), '# Skill A');
+      mkdirSync(join(skillsDir, 'skill-b'));
+      writeFileSync(join(skillsDir, 'skill-b', 'SKILL.md'), '# Skill B');
+
+      // Set up detected agents
+      mkdirSync(join(homeDir, '.claude'));
+      mkdirSync(join(homeDir, '.codex'));
+
+      await autoInstallSkills();
+
+      expect(existsSync(join(homeDir, '.claude/skills/skill-a/SKILL.md'))).toBe(true);
+      expect(existsSync(join(homeDir, '.claude/skills/skill-b/SKILL.md'))).toBe(true);
+      expect(existsSync(join(homeDir, '.codex/skills/skill-a/SKILL.md'))).toBe(true);
+      expect(existsSync(join(homeDir, '.codex/skills/skill-b/SKILL.md'))).toBe(true);
+    });
+
+    it('no-ops silently when no agents are detected', async () => {
+      mkdirSync(join(skillsDir, 'skill-a'));
+      writeFileSync(join(skillsDir, 'skill-a', 'SKILL.md'), '# Skill A');
+
+      // No agent directories created — none detected
+      await expect(autoInstallSkills()).resolves.toBeUndefined();
+    });
+
+    it('no-ops silently when no skills are discovered', async () => {
+      mkdirSync(join(homeDir, '.claude'));
+
+      // No skills in skillsDir
+      await expect(autoInstallSkills()).resolves.toBeUndefined();
+    });
+
+    it('swallows errors from discoverSkills', async () => {
+      // Point to a nonexistent skills directory
+      const { getSkillsDir } = await import('@workos/skills');
+      vi.mocked(getSkillsDir).mockReturnValue('/nonexistent/path');
+
+      await expect(autoInstallSkills()).resolves.toBeUndefined();
+    });
+
+    it('resolves silently when installSkill returns failure', async () => {
+      // installSkill returns { success: false } on copy errors (doesn't throw).
+      // Verify autoInstallSkills completes without throwing even when installs fail.
+      // Simulate by creating a skill dir with SKILL.md for discovery, then making
+      // the target agent dir read-only so copyFile fails.
+      mkdirSync(join(skillsDir, 'test-skill'));
+      writeFileSync(join(skillsDir, 'test-skill', 'SKILL.md'), '# Test');
+
+      mkdirSync(join(homeDir, '.claude'));
+      // Create a file where the skills directory should be, so mkdir fails
+      mkdirSync(join(homeDir, '.claude/skills'));
+      writeFileSync(join(homeDir, '.claude/skills/test-skill'), 'not a directory');
+
+      await expect(autoInstallSkills()).resolves.toBeUndefined();
+    });
+
+    it('does not produce any console output', async () => {
+      const logSpy = vi.spyOn(console, 'log');
+      const errorSpy = vi.spyOn(console, 'error');
+
+      mkdirSync(join(skillsDir, 'skill-a'));
+      writeFileSync(join(skillsDir, 'skill-a', 'SKILL.md'), '# Skill A');
+      mkdirSync(join(homeDir, '.claude'));
+
+      await autoInstallSkills();
+
+      expect(logSpy).not.toHaveBeenCalled();
+      expect(errorSpy).not.toHaveBeenCalled();
+
+      logSpy.mockRestore();
+      errorSpy.mockRestore();
     });
   });
 });

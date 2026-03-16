@@ -156,3 +156,27 @@ export async function runInstallSkill(options: InstallSkillOptions): Promise<voi
 
   console.log(chalk.green('\nDone!'));
 }
+
+/**
+ * Silently install all bundled skills to all detected coding agents.
+ * Errors are swallowed — this must never disrupt the calling flow.
+ */
+export async function autoInstallSkills(): Promise<void> {
+  try {
+    const home = homedir();
+    const agents = createAgents(home);
+    const skillsDir = getSkillsDir();
+    const skills = await discoverSkills(skillsDir);
+    const targetAgents = detectAgents(agents);
+
+    if (skills.length === 0 || targetAgents.length === 0) return;
+
+    for (const skill of skills) {
+      for (const agent of targetAgents) {
+        await installSkill(skillsDir, skill, agent);
+      }
+    }
+  } catch {
+    // Intentionally swallowed — skill install is best-effort
+  }
+}
