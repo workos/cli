@@ -50,9 +50,8 @@ workos [command]
 
 Commands:
   install                Install WorkOS AuthKit into your project
-  claim                  Claim an unclaimed environment (link to your account)
   auth                   Manage authentication (login, logout, status)
-  env                    Manage environment configurations
+  env                    Manage environment configurations (add, remove, switch, list, claim)
   doctor                 Diagnose WorkOS integration issues
   skills                 Manage WorkOS skills for coding agents (install, uninstall, list)
 
@@ -99,7 +98,7 @@ workos env list
 # Shows: unclaimed (unclaimed) ← active
 
 # Claim the environment to link it to your WorkOS account
-workos claim
+workos env claim
 ```
 
 Management commands work on unclaimed environments with a warning reminding you to claim.

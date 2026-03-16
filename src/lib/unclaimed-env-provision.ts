@@ -64,7 +64,7 @@ export async function tryProvisionUnclaimedEnv(options: UnclaimedEnvProvisionOpt
     config.activeEnvironment = 'unclaimed';
     saveConfig(config);
 
-    // Verify config persisted — critical for `workos claim` in a later process
+    // Verify config persisted — critical for `workos env claim` in a later process
     const readBack = getActiveEnvironment();
     if (!readBack || readBack.type !== 'unclaimed') {
       logError('[unclaimed-env-provision] Config read-back failed after save — claim token may not persist');
@@ -73,7 +73,7 @@ export async function tryProvisionUnclaimedEnv(options: UnclaimedEnvProvisionOpt
     }
 
     logInfo('[unclaimed-env-provision] Unclaimed environment provisioned and saved');
-    const inner = ` ✓ ${chalk.green('Environment provisioned')} — Run ${chalk.cyan('workos claim')} to keep it. `;
+    const inner = ` ✓ ${chalk.green('Environment provisioned')} — Run ${chalk.cyan('workos env claim')} to keep it. `;
     renderStderrBox(inner, chalk.green);
 
     return true;

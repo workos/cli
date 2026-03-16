@@ -233,6 +233,6 @@ export async function runEnvList(): Promise<void> {
 
   if (hasUnclaimed) {
     console.log('');
-    console.log(chalk.dim('  Run `workos claim` to keep this environment.'));
+    console.log(chalk.dim('  Run `workos env claim` to keep this environment.'));
   }
 }

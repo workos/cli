@@ -1,5 +1,5 @@
 /**
- * `workos claim` — claim an unclaimed environment.
+ * `workos env claim` — claim an unclaimed environment.
  *
  * Reads claim token from active environment, generates a nonce via
  * createClaimNonce(), opens browser to dashboard claim URL, and polls

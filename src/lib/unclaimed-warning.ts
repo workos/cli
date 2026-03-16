@@ -59,7 +59,7 @@ export async function warnIfUnclaimed(): Promise<void> {
     warningShownThisSession = true;
 
     if (!isJsonMode()) {
-      const inner = ` ${chalk.yellow('⚠ Unclaimed environment')} — Run ${chalk.cyan('workos claim')} to keep your data. `;
+      const inner = ` ${chalk.yellow('⚠ Unclaimed environment')} — Run ${chalk.cyan('workos env claim')} to keep your data. `;
       renderStderrBox(inner, chalk.yellow);
     }
   } catch (error) {

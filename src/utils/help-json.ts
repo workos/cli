@@ -269,6 +269,20 @@ const commands: CommandSchema[] = [
         name: 'list',
         description: 'List all configured environments and show which is active',
       },
+      {
+        name: 'claim',
+        description: 'Claim an unclaimed WorkOS environment (link it to your account)',
+        options: [
+          {
+            name: 'json',
+            type: 'boolean',
+            description: 'Output in JSON format',
+            required: false,
+            default: false,
+            hidden: false,
+          },
+        ],
+      },
     ],
   },
   {
@@ -1031,21 +1045,6 @@ const commands: CommandSchema[] = [
         name: 'delete',
         description: 'Delete a domain',
         positionals: [{ name: 'id', type: 'string', description: 'Domain ID', required: true }],
-      },
-    ],
-  },
-  {
-    name: 'claim',
-    description: 'Claim an unclaimed WorkOS environment (link it to your account)',
-    options: [
-      insecureStorageOpt,
-      {
-        name: 'json',
-        type: 'boolean',
-        description: 'Output in JSON format',
-        required: false,
-        default: false,
-        hidden: false,
       },
     ],
   },

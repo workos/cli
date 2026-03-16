@@ -406,6 +406,17 @@ yargs(rawArgs)
         await runEnvList();
       },
     );
+    registerSubcommand(
+      yargs,
+      'claim',
+      'Claim an unclaimed environment (link it to your account)',
+      (y) => y,
+      async (argv) => {
+        await applyInsecureStorage(argv.insecureStorage);
+        const { runClaim } = await import('./commands/claim.js');
+        await runClaim();
+      },
+    );
     return yargs.demandCommand(1, 'Please specify an env subcommand').strict();
   })
   .command(['organization', 'org'], 'Manage WorkOS organizations (create, update, get, list, delete)', (yargs) => {
@@ -2085,6 +2096,7 @@ yargs(rawArgs)
       await runDebugSync(argv.directoryId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
     },
   )
+  // Alias — canonical command is `workos env claim`
   .command(
     'claim',
     'Claim an unclaimed WorkOS environment (link it to your account)',
