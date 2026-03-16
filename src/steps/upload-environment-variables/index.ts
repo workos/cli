@@ -1,6 +1,9 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { Integration } from '../../lib/constants.js';
 import { traceStep } from '../../telemetry.js';
 import { analytics } from '../../utils/analytics.js';
+import { parseEnvFile } from '../../utils/env-parser.js';
 import ui from '../../utils/ui.js';
 import { abortIfCanceled } from '../../utils/ui-utils.js';
 import { isPromptAllowed } from '../../utils/interaction-mode.js';
@@ -50,6 +53,13 @@ export const uploadEnvironmentVariablesStep = async (
     return [];
   }
 
+  const existingWorkosVars = (await provider.checkExistingVars()).filter((key) => key.includes('WORKOS'));
+  if (existingWorkosVars.length > 0) {
+    ui.log.warn(
+      `Found existing WorkOS variables in ${provider.name}: ${existingWorkosVars.join(', ')}. Uploading may fail for these keys.`,
+    );
+  }
+
   const upload: boolean = await abortIfCanceled(
     ui.select({
       message: `It looks like you are using ${provider.name}. Would you like to upload the environment variables?`,
@@ -57,7 +67,10 @@ export const uploadEnvironmentVariablesStep = async (
         {
           value: true,
           label: 'Yes',
-          hint: `Upload the environment variables to ${provider.name}`,
+          hint:
+            existingWorkosVars.length > 0
+              ? `Upload to ${provider.name} (some vars already exist)`
+              : `Upload the environment variables to ${provider.name}`,
         },
         {
           value: false,
@@ -80,7 +93,16 @@ export const uploadEnvironmentVariablesStep = async (
   }
 
   const results = await traceStep('uploading environment variables', async () => {
-    return await provider.uploadEnvVars(envVars);
+    // These values are written during setup, not returned by the integration's getEnvVars.
+    const content = await readFile(join(options.installDir, '.env.local'), 'utf8').catch(() => '');
+    const localVars = parseEnvFile(content);
+    const uploadVars = { ...envVars };
+    for (const key of ['WORKOS_COOKIE_PASSWORD', 'NEXT_PUBLIC_WORKOS_REDIRECT_URI', 'WORKOS_REDIRECT_URI']) {
+      if (!uploadVars[key] && localVars[key]) {
+        uploadVars[key] = localVars[key];
+      }
+    }
+    return await provider.uploadEnvVars(uploadVars);
   });
 
   analytics.capture('installer interaction', {
