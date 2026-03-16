@@ -26,7 +26,7 @@ let configFile: string;
 const mockKeyring = new Map<string, string>();
 let keyringAvailable = true;
 
-vi.mock('@napi-rs/keyring', () => ({
+vi.mock('./keyring.js', () => ({
   Entry: class MockEntry {
     private key: string;
 

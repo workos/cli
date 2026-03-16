@@ -19,8 +19,8 @@ const mockKeyring = new Map<string, string>();
 // Track whether keyring is "available" for this test
 let keyringAvailable = true;
 
-// Mock @napi-rs/keyring BEFORE importing credential-store
-vi.mock('@napi-rs/keyring', () => ({
+// Mock keyring module BEFORE importing credential-store
+vi.mock('./keyring.js', () => ({
   Entry: class MockEntry {
     private key: string;
 

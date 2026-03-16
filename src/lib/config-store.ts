@@ -9,7 +9,7 @@
  * 2. Try keyring, fall back to file with warning if unavailable
  */
 
-import { Entry } from '@napi-rs/keyring';
+import { Entry } from './keyring.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';

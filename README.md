@@ -201,7 +201,7 @@ workos env switch [name]         # Switch active environment
 workos env list                  # List environments with active indicator
 ```
 
-API keys are stored in the system keychain via `@napi-rs/keyring`, with a JSON file fallback at `~/.workos/config.json`.
+API keys are stored in the system keychain (`security` on macOS, `secret-tool` on Linux, Credential Manager on Windows), with a JSON file fallback at `~/.workos/config.json`.
 
 ### Resource Management
 
