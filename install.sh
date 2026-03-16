@@ -175,7 +175,7 @@ chmod +x "$exe" || error "Failed to make binary executable"
 # Strip macOS Gatekeeper quarantine flag (set automatically on curl downloads)
 # Without this, macOS will block the binary: "cannot be opened because Apple
 # cannot check it for malicious software"
-if [[ $(uname -s) == "Darwin" ]]; then
+if [[ $target == darwin-* ]]; then
   xattr -d com.apple.quarantine "$exe" 2>/dev/null || true
 fi
 
@@ -232,7 +232,7 @@ case $shell_name in
   bash)
     # macOS bash opens login shells — .bash_profile is loaded, not .bashrc.
     # Linux bash opens non-login interactive shells — .bashrc is preferred.
-    if [[ $(uname -s) == "Darwin" ]]; then
+    if [[ $target == darwin-* ]]; then
       if [[ -f "$HOME/.bash_profile" ]]; then
         config="$HOME/.bash_profile"
       elif [[ -f "$HOME/.bashrc" ]]; then

@@ -12,7 +12,16 @@
 
 import { execFileSync } from 'node:child_process';
 
-const platform = process.platform;
+const currentPlatform = process.platform;
+
+const SILENT_STDIO = { stdio: ['pipe', 'pipe', 'pipe'] as ['pipe', 'pipe', 'pipe'] };
+
+// macOS Keychain returns exit code 44 when an item is not found
+const MACOS_ITEM_NOT_FOUND = 44;
+
+function isKeychainNotFound(error: unknown): boolean {
+  return error instanceof Error && 'status' in error && (error as { status: number }).status === MACOS_ITEM_NOT_FOUND;
+}
 
 // ─── macOS (Keychain via `security` CLI) ──────────────────────────────────────
 
@@ -23,15 +32,10 @@ function macosGet(service: string, account: string): string | null {
       '-s', service,
       '-a', account,
       '-w',
-    ], { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
+    ], { encoding: 'utf-8', ...SILENT_STDIO });
     return result.trimEnd();
   } catch (error: unknown) {
-    // Exit code 44 = item not found — expected, return null
-    if (error instanceof Error && 'status' in error && (error as { status: number }).status === 44) {
-      return null;
-    }
-    // Any other error (keychain locked, command not found) — re-throw
-    // so credential-store falls back to file storage
+    if (isKeychainNotFound(error)) return null;
     throw error;
   }
 }
@@ -44,7 +48,7 @@ function macosSet(service: string, account: string, password: string): void {
     '-s', service,
     '-a', account,
     '-w', password,
-  ], { stdio: ['pipe', 'pipe', 'pipe'] });
+  ], SILENT_STDIO);
 }
 
 function macosDelete(service: string, account: string): void {
@@ -53,12 +57,9 @@ function macosDelete(service: string, account: string): void {
       'delete-generic-password',
       '-s', service,
       '-a', account,
-    ], { stdio: ['pipe', 'pipe', 'pipe'] });
+    ], SILENT_STDIO);
   } catch (error: unknown) {
-    // Exit code 44 = item not found — silently succeed (matches @napi-rs/keyring behavior)
-    if (error instanceof Error && 'status' in error && (error as { status: number }).status === 44) {
-      return;
-    }
+    if (isKeychainNotFound(error)) return;
     throw error;
   }
 }
@@ -71,8 +72,7 @@ function linuxGet(service: string, account: string): string | null {
       'lookup',
       'service', service,
       'account', account,
-    ], { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
-    // secret-tool returns empty string when not found (exit 0) or exits non-zero
+    ], { encoding: 'utf-8', ...SILENT_STDIO });
     const trimmed = result.trimEnd();
     return trimmed.length > 0 ? trimmed : null;
   } catch {
@@ -87,7 +87,7 @@ function linuxSet(service: string, account: string, password: string): void {
     '--label=' + service,
     'service', service,
     'account', account,
-  ], { input: password, stdio: ['pipe', 'pipe', 'pipe'] });
+  ], { input: password, ...SILENT_STDIO });
 }
 
 function linuxDelete(service: string, account: string): void {
@@ -96,7 +96,7 @@ function linuxDelete(service: string, account: string): void {
       'clear',
       'service', service,
       'account', account,
-    ], { stdio: ['pipe', 'pipe', 'pipe'] });
+    ], SILENT_STDIO);
   } catch {
     // Silently succeed if entry doesn't exist
   }
@@ -108,17 +108,22 @@ function windowsTargetName(service: string, account: string): string {
   return `${service}:${account}`;
 }
 
-function windowsGet(service: string, account: string): string | null {
-  const target = windowsTargetName(service, account);
-  // Use .NET CredentialManager API via PowerShell — no external modules needed
-  const script = `
-    $ErrorActionPreference = 'Stop'
-    Add-Type -TypeDefinition @'
+function escapePS(s: string): string {
+  return s.replace(/'/g, "''");
+}
+
+// Shared C# P/Invoke definitions for Windows Credential Manager
+const WIN_CRED_CSHARP = `
     using System;
     using System.Runtime.InteropServices;
-    public class CredManager {
+    using System.Text;
+    public class CredNative {
       [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
       public static extern bool CredRead(string target, int type, int flags, out IntPtr cred);
+      [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+      public static extern bool CredWrite(ref CREDENTIAL cred, int flags);
+      [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+      public static extern bool CredDelete(string target, int type, int flags);
       [DllImport("advapi32.dll")]
       public static extern void CredFree(IntPtr cred);
       [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -136,40 +141,6 @@ function windowsGet(service: string, account: string): string | null {
           return Marshal.PtrToStringUni(cred.CredentialBlob, cred.CredentialBlobSize / 2);
         } finally { CredFree(ptr); }
       }
-    }
-'@
-    $r = [CredManager]::Read('${target.replace(/'/g, "''")}')
-    if ($r -eq $null) { exit 1 }
-    [Console]::Out.Write($r)
-  `;
-  try {
-    const result = execFileSync('powershell', [
-      '-NoProfile', '-NonInteractive', '-Command', script,
-    ], { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
-    return result.length > 0 ? result : null;
-  } catch {
-    return null;
-  }
-}
-
-function windowsSet(service: string, account: string, password: string): void {
-  const target = windowsTargetName(service, account);
-  const script = `
-    $ErrorActionPreference = 'Stop'
-    Add-Type -TypeDefinition @'
-    using System;
-    using System.Runtime.InteropServices;
-    using System.Text;
-    public class CredWriter {
-      [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-      public static extern bool CredWrite(ref CREDENTIAL cred, int flags);
-      [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-      public struct CREDENTIAL {
-        public int Flags; public int Type; public string TargetName;
-        public string Comment; public long LastWritten; public int CredentialBlobSize;
-        public IntPtr CredentialBlob; public int Persist; public int AttributeCount;
-        public IntPtr Attributes; public string TargetAlias; public string UserName;
-      }
       public static void Write(string target, string user, string pass) {
         byte[] bytes = Encoding.Unicode.GetBytes(pass);
         CREDENTIAL cred = new CREDENTIAL();
@@ -181,19 +152,50 @@ function windowsSet(service: string, account: string, password: string): void {
           if (!CredWrite(ref cred, 0)) throw new Exception("CredWrite failed");
         } finally { Marshal.FreeHGlobal(cred.CredentialBlob); }
       }
+      public static void Delete(string target) {
+        CredDelete(target, 1, 0);
+      }
     }
-'@
-    [CredWriter]::Write('${target.replace(/'/g, "''")}', '${account.replace(/'/g, "''")}', $input)
+`;
+
+function runWindowsCredScript(script: string, opts?: { input?: string; encoding?: BufferEncoding }): string {
+  const full = `
+    $ErrorActionPreference = 'Stop'
+    Add-Type -TypeDefinition @'${WIN_CRED_CSHARP}'@
+    ${script}
   `;
-  execFileSync('powershell', [
-    '-NoProfile', '-NonInteractive', '-Command', script,
-  ], { input: password, stdio: ['pipe', 'pipe', 'pipe'] });
+  return execFileSync('powershell', [
+    '-NoProfile', '-NonInteractive', '-Command', full,
+  ], { ...SILENT_STDIO, ...opts }) as unknown as string;
+}
+
+function windowsGet(service: string, account: string): string | null {
+  const target = windowsTargetName(service, account);
+  try {
+    const result = runWindowsCredScript(
+      `$r = [CredNative]::Read('${escapePS(target)}')
+    if ($r -eq $null) { exit 1 }
+    [Console]::Out.Write($r)`,
+      { encoding: 'utf-8' },
+    );
+    return result.length > 0 ? result : null;
+  } catch {
+    return null;
+  }
+}
+
+function windowsSet(service: string, account: string, password: string): void {
+  const target = windowsTargetName(service, account);
+  runWindowsCredScript(
+    `[CredNative]::Write('${escapePS(target)}', '${escapePS(account)}', $input)`,
+    { input: password },
+  );
 }
 
 function windowsDelete(service: string, account: string): void {
   const target = windowsTargetName(service, account);
   try {
-    execFileSync('cmdkey', ['/delete:' + target], { stdio: ['pipe', 'pipe', 'pipe'] });
+    runWindowsCredScript(`[CredNative]::Delete('${escapePS(target)}')`);
   } catch {
     // Silently succeed if entry doesn't exist
   }
@@ -208,7 +210,7 @@ export class Entry {
   ) {}
 
   getPassword(): string | null {
-    switch (platform) {
+    switch (currentPlatform) {
       case 'darwin':
         return macosGet(this.service, this.account);
       case 'linux':
@@ -216,12 +218,12 @@ export class Entry {
       case 'win32':
         return windowsGet(this.service, this.account);
       default:
-        throw new Error(`Unsupported platform for keyring: ${platform}`);
+        throw new Error(`Unsupported platform for keyring: ${currentPlatform}`);
     }
   }
 
   setPassword(password: string): void {
-    switch (platform) {
+    switch (currentPlatform) {
       case 'darwin':
         return macosSet(this.service, this.account, password);
       case 'linux':
@@ -229,12 +231,12 @@ export class Entry {
       case 'win32':
         return windowsSet(this.service, this.account, password);
       default:
-        throw new Error(`Unsupported platform for keyring: ${platform}`);
+        throw new Error(`Unsupported platform for keyring: ${currentPlatform}`);
     }
   }
 
   deletePassword(): void {
-    switch (platform) {
+    switch (currentPlatform) {
       case 'darwin':
         return macosDelete(this.service, this.account);
       case 'linux':
@@ -242,7 +244,7 @@ export class Entry {
       case 'win32':
         return windowsDelete(this.service, this.account);
       default:
-        throw new Error(`Unsupported platform for keyring: ${platform}`);
+        throw new Error(`Unsupported platform for keyring: ${currentPlatform}`);
     }
   }
 }

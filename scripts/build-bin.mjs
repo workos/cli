@@ -23,6 +23,7 @@ import { platform } from 'node:os';
 
 const run = (cmd, args) => execFileSync(cmd, args, { stdio: 'inherit' });
 
+const IS_MAC = platform() === 'darwin';
 const OUTPUT = platform() === 'win32' ? 'dist/workos.exe' : 'dist/workos';
 const BLOB = 'dist/sea-prep.blob';
 // Official Node.js SEA fuse string — see https://nodejs.org/api/single-executable-applications.html
@@ -41,7 +42,7 @@ console.log('→ Copying node binary...');
 cpSync(process.execPath, OUTPUT);
 
 // Step 4: Remove code signature (macOS only)
-if (platform() === 'darwin') {
+if (IS_MAC) {
   console.log('→ Removing macOS code signature...');
   run('codesign', ['--remove-signature', OUTPUT]);
 }
@@ -54,13 +55,13 @@ const postjectArgs = [
   BLOB,
   '--sentinel-fuse', SENTINEL,
 ];
-if (platform() === 'darwin') {
+if (IS_MAC) {
   postjectArgs.push('--macho-segment-name', 'NODE_SEA');
 }
 run('npx', ['postject@1.0.0-alpha.6', ...postjectArgs]);
 
 // Step 6: Re-sign (macOS only)
-if (platform() === 'darwin') {
+if (IS_MAC) {
   console.log('→ Re-signing binary...');
   run('codesign', ['--sign', '-', OUTPUT]);
 }

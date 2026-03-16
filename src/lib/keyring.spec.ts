@@ -163,7 +163,7 @@ describe('keyring', () => {
       );
     });
 
-    it.skipIf(!isWindows)('deletePassword calls cmdkey', async () => {
+    it.skipIf(!isWindows)('deletePassword calls powershell with CredDelete', async () => {
       const { Entry } = await import('./keyring.js');
       mockedExecFileSync.mockReturnValue(Buffer.from(''));
 
@@ -171,8 +171,8 @@ describe('keyring', () => {
       entry.deletePassword();
 
       expect(mockedExecFileSync).toHaveBeenCalledWith(
-        'cmdkey',
-        ['/delete:test-service:test-account'],
+        'powershell',
+        expect.arrayContaining(['-NoProfile', '-NonInteractive', '-Command']),
         expect.any(Object),
       );
     });
