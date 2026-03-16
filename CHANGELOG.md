@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1](https://github.com/workos/cli/compare/v0.11.0...v0.11.1) (2026-03-16)
+
+
+### Bug Fixes
+
+* auto-install skills to coding agents after install ([#94](https://github.com/workos/cli/issues/94)) ([ae5e5cd](https://github.com/workos/cli/commit/ae5e5cd46e96081d3960462292b13cfe0563de26))
+
 ## [0.11.0](https://github.com/workos/cli/compare/v0.10.1...v0.11.0) (2026-03-13)
 
 
