@@ -32,7 +32,7 @@ vi.mock('../lib/workos-client.js', () => ({
 }));
 
 const { setOutputMode } = await import('../utils/output.js');
-const { runSeed } = await import('./seed.js');
+const { runSeed, runSeedInit } = await import('./seed.js');
 
 const mockExistsSync = vi.mocked(existsSync);
 const mockReadFileSync = vi.mocked(readFileSync);
@@ -78,6 +78,55 @@ describe('seed command', () => {
   });
 
   afterEach(() => vi.restoreAllMocks());
+
+  describe('runSeedInit (--init)', () => {
+    it('creates workos-seed.yml with example content', () => {
+      mockExistsSync.mockReturnValue(false);
+
+      runSeedInit();
+
+      expect(mockWriteFileSync).toHaveBeenCalledTimes(1);
+      const [filePath, content] = mockWriteFileSync.mock.calls[0];
+      expect(filePath).toBe('workos-seed.yml');
+      expect(content).toContain('permissions:');
+      expect(content).toContain('roles:');
+      expect(content).toContain('organizations:');
+      expect(content).toContain('config:');
+      expect(content).toContain('redirect_uris:');
+      expect(consoleOutput.some((l) => l.includes('Created'))).toBe(true);
+    });
+
+    it('does not overwrite existing file', () => {
+      mockExistsSync.mockReturnValue(true);
+
+      runSeedInit();
+
+      expect(mockWriteFileSync).not.toHaveBeenCalled();
+      expect(consoleOutput.some((l) => l.includes('already exists'))).toBe(true);
+    });
+
+    it('outputs JSON when in JSON mode', () => {
+      setOutputMode('json');
+      mockExistsSync.mockReturnValue(false);
+
+      runSeedInit();
+
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.status).toBe('ok');
+      expect(output.file).toBe('workos-seed.yml');
+      setOutputMode('human');
+    });
+
+    it('is reachable via runSeed({ init: true })', async () => {
+      mockExistsSync.mockReturnValue(false);
+
+      await runSeed({ init: true }, 'sk_test');
+
+      expect(mockWriteFileSync).toHaveBeenCalledTimes(1);
+      const [filePath] = mockWriteFileSync.mock.calls[0];
+      expect(filePath).toBe('workos-seed.yml');
+    });
+  });
 
   describe('runSeed with --file', () => {
     it('creates resources in dependency order: permissions → roles → orgs → config', async () => {

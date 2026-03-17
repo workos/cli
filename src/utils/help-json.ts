@@ -1064,6 +1064,14 @@ const commands: CommandSchema[] = [
         default: false,
         hidden: false,
       },
+      {
+        name: 'init',
+        type: 'boolean',
+        description: 'Create an example workos-seed.yml file',
+        required: false,
+        default: false,
+        hidden: false,
+      },
     ],
   },
   {

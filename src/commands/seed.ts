@@ -38,11 +38,74 @@ function saveState(state: SeedState): void {
   writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
 }
 
+const DEFAULT_SEED_FILE = 'workos-seed.yml';
+
+const SEED_TEMPLATE = `# WorkOS seed file — provision resources with \`workos seed --file=${DEFAULT_SEED_FILE}\`
+# Resources are created in dependency order: permissions → roles → organizations → config.
+# Existing resources are skipped (idempotent). Run \`workos seed --clean\` to tear down.
+
+permissions:
+  - name: Read Posts
+    slug: posts:read
+  - name: Write Posts
+    slug: posts:write
+    description: Create and edit posts
+
+roles:
+  - name: Admin
+    slug: admin
+    description: Full access
+    permissions:
+      - posts:read
+      - posts:write
+  - name: Viewer
+    slug: viewer
+    permissions:
+      - posts:read
+
+organizations:
+  - name: Acme Corp
+    domains:
+      - acme.com
+
+config:
+  redirect_uris:
+    - http://localhost:3000/auth/callback
+  cors_origins:
+    - http://localhost:3000
+  homepage_url: http://localhost:3000
+`;
+
+export function runSeedInit(): void {
+  if (existsSync(DEFAULT_SEED_FILE)) {
+    if (isJsonMode()) {
+      outputJson({ status: 'exists', message: `${DEFAULT_SEED_FILE} already exists`, file: DEFAULT_SEED_FILE });
+    } else {
+      console.log(chalk.yellow(`${DEFAULT_SEED_FILE} already exists — not overwriting.`));
+    }
+    return;
+  }
+
+  writeFileSync(DEFAULT_SEED_FILE, SEED_TEMPLATE);
+
+  if (isJsonMode()) {
+    outputJson({ status: 'ok', message: `Created ${DEFAULT_SEED_FILE}`, file: DEFAULT_SEED_FILE });
+  } else {
+    console.log(chalk.green(`Created ${DEFAULT_SEED_FILE}`));
+    console.log(chalk.dim('Edit the file, then run: workos seed --file=workos-seed.yml'));
+  }
+}
+
 export async function runSeed(
-  options: { file?: string; clean?: boolean },
+  options: { file?: string; clean?: boolean; init?: boolean },
   apiKey: string,
   baseUrl?: string,
 ): Promise<void> {
+  if (options.init) {
+    runSeedInit();
+    return;
+  }
+
   if (options.clean) {
     await runSeedClean(apiKey, baseUrl);
     return;
@@ -51,7 +114,7 @@ export async function runSeed(
   if (!options.file) {
     return exitWithError({
       code: 'missing_args',
-      message: 'Provide a seed file: workos seed --file=workos-seed.yml',
+      message: 'Provide a seed file: workos seed --file=workos-seed.yml\nRun workos seed --init to create an example seed file.',
     });
   }
 

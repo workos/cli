@@ -2011,13 +2011,14 @@ yargs(rawArgs)
         'api-key': { type: 'string' as const, describe: 'WorkOS API key' },
         file: { type: 'string', describe: 'Path to seed YAML file' },
         clean: { type: 'boolean', default: false, describe: 'Tear down seeded resources' },
+        init: { type: 'boolean', default: false, describe: 'Create an example workos-seed.yml file' },
       }),
     async (argv) => {
       await applyInsecureStorage(argv.insecureStorage);
       const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
       const { runSeed } = await import('./commands/seed.js');
       await runSeed(
-        { file: argv.file, clean: argv.clean },
+        { file: argv.file, clean: argv.clean, init: argv.init },
         resolveApiKey({ apiKey: argv.apiKey }),
         resolveApiBaseUrl(),
       );
