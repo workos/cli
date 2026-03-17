@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.2](https://github.com/workos/cli/compare/v0.11.1...v0.11.2) (2026-03-17)
+
+
+### Bug Fixes
+
+* add `workos seed --init` to scaffold example seed file ([#97](https://github.com/workos/cli/issues/97)) ([a8ea743](https://github.com/workos/cli/commit/a8ea74372d5a627e5b876df2222a57549431fec0))
+
 ## [0.11.1](https://github.com/workos/cli/compare/v0.11.0...v0.11.1) (2026-03-16)
 
 
