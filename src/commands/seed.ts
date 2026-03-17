@@ -114,7 +114,8 @@ export async function runSeed(
   if (!options.file) {
     return exitWithError({
       code: 'missing_args',
-      message: 'Provide a seed file: workos seed --file=workos-seed.yml\nRun workos seed --init to create an example seed file.',
+      message:
+        'Provide a seed file: workos seed --file=workos-seed.yml\nRun workos seed --init to create an example seed file.',
     });
   }
 
