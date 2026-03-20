@@ -58,11 +58,7 @@ describe('uploadEnvironmentVariablesStep', () => {
 
   it('warns about existing WorkOS vars before prompting', async () => {
     mockDetect.mockResolvedValue(true);
-    mockCheckExistingVars.mockResolvedValue([
-      'WORKOS_API_KEY',
-      'WORKOS_CLIENT_ID',
-      'NODE_ENV',
-    ]);
+    mockCheckExistingVars.mockResolvedValue(['WORKOS_API_KEY', 'WORKOS_CLIENT_ID', 'NODE_ENV']);
     mockClack.select.mockResolvedValue(false);
 
     await uploadEnvironmentVariablesStep(
@@ -70,9 +66,7 @@ describe('uploadEnvironmentVariablesStep', () => {
       { integration: 'nextjs', options: { installDir: '/test' } as any },
     );
 
-    expect(mockClack.log.warn).toHaveBeenCalledWith(
-      expect.stringContaining('WORKOS_API_KEY, WORKOS_CLIENT_ID'),
-    );
+    expect(mockClack.log.warn).toHaveBeenCalledWith(expect.stringContaining('WORKOS_API_KEY, WORKOS_CLIENT_ID'));
   });
 
   it('does not warn when no existing WorkOS vars', async () => {

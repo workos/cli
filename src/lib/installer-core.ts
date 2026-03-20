@@ -288,7 +288,7 @@ export const installerMachine = setup({
       const hasPostInstallError = !!context.postInstallError;
       const summary = hasPostInstallError
         ? `Installation completed but post-install failed: ${context.postInstallError}`
-        : context.agentSummary ?? 'WorkOS AuthKit installed successfully!';
+        : (context.agentSummary ?? 'WorkOS AuthKit installed successfully!');
       context.emitter.emit('complete', { success: !hasPostInstallError, summary });
     },
   },

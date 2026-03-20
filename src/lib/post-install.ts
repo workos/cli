@@ -20,9 +20,7 @@ export function stageAndCommit(message: string, cwd: string): void {
     const execError = error as { stderr?: Buffer; stdout?: Buffer; message?: string };
     const stderr = execError.stderr?.toString() ?? '';
     const stdout = execError.stdout?.toString() ?? '';
-    throw new Error(
-      `Git commit failed${stderr ? `:\n${stderr}` : stdout ? `:\n${stdout}` : `: ${execError.message}`}`,
-    );
+    throw new Error(`Git commit failed${stderr ? `:\n${stderr}` : stdout ? `:\n${stdout}` : `: ${execError.message}`}`);
   }
 }
 

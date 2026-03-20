@@ -360,8 +360,7 @@ export class CLIAdapter implements InstallerAdapter {
     // Periodic status updates with elapsed time
     this.agentUpdateInterval = setInterval(() => {
       const elapsed = Math.round((Date.now() - (this.agentStartTime ?? Date.now())) / 1000);
-      const timeStr =
-        elapsed >= 60 ? `${Math.floor(elapsed / 60)}m ${elapsed % 60}s` : `${elapsed}s`;
+      const timeStr = elapsed >= 60 ? `${Math.floor(elapsed / 60)}m ${elapsed % 60}s` : `${elapsed}s`;
       const detail = this.lastFileOperation ?? 'Working';
       this.spinner?.message(`${detail} (${timeStr})`);
     }, 2000);

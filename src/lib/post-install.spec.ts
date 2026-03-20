@@ -30,11 +30,10 @@ describe('post-install', () => {
         cwd: '/test/dir',
         stdio: 'ignore',
       });
-      expect(mockExecFileSync).toHaveBeenCalledWith(
-        'git',
-        ['commit', '-m', 'feat: add WorkOS AuthKit'],
-        { cwd: '/test/dir', stdio: ['ignore', 'pipe', 'pipe'] },
-      );
+      expect(mockExecFileSync).toHaveBeenCalledWith('git', ['commit', '-m', 'feat: add WorkOS AuthKit'], {
+        cwd: '/test/dir',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
     });
 
     it('throws with stderr when commit fails from pre-commit hook', () => {
@@ -83,9 +82,7 @@ describe('post-install', () => {
         throw error;
       });
 
-      expect(() => stageAndCommit('feat: add WorkOS', '/test/dir')).toThrow(
-        /Git commit failed: signal SIGTERM/,
-      );
+      expect(() => stageAndCommit('feat: add WorkOS', '/test/dir')).toThrow(/Git commit failed: signal SIGTERM/);
     });
   });
 

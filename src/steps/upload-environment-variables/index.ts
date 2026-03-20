@@ -53,9 +53,10 @@ export const uploadEnvironmentVariablesStep = async (
         {
           value: true,
           label: 'Yes',
-          hint: existingWorkosVars.length > 0
-            ? `Upload to ${provider.name} (some vars already exist)`
-            : `Upload the environment variables to ${provider.name}`,
+          hint:
+            existingWorkosVars.length > 0
+              ? `Upload to ${provider.name} (some vars already exist)`
+              : `Upload the environment variables to ${provider.name}`,
         },
         {
           value: false,
