@@ -423,6 +423,23 @@ yargs(rawArgs)
         await runClaim();
       },
     );
+    registerSubcommand(
+      yargs,
+      'provision',
+      'Provision a new WorkOS environment',
+      (y) =>
+        y.option('plan', {
+          type: 'string',
+          choices: ['free', 'production'] as const,
+          default: 'free',
+          describe: 'Environment plan (free: staging, production: requires payment)',
+        }),
+      async (argv) => {
+        await applyInsecureStorage(argv.insecureStorage);
+        const { runProvision } = await import('./commands/provision.js');
+        await runProvision(argv.plan as 'free' | 'production');
+      },
+    );
     return yargs.demandCommand(1, 'Please specify an env subcommand').strict();
   })
   .command(['organization', 'org'], 'Manage WorkOS organizations (create, update, get, list, delete)', (yargs) => {
