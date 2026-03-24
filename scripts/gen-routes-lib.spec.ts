@@ -124,9 +124,9 @@ describe('schemaToTsType', () => {
   });
 
   it('converts object with additionalProperties', () => {
-    expect(
-      schemaToTsType({ type: 'object', additionalProperties: { type: 'string' } }, emptySpec),
-    ).toBe('Record<string, string>');
+    expect(schemaToTsType({ type: 'object', additionalProperties: { type: 'string' } }, emptySpec)).toBe(
+      'Record<string, string>',
+    );
   });
 
   it('handles unknown type', () => {
@@ -347,14 +347,18 @@ describe('generateStore', () => {
     expect(output).toContain('export interface WorkOSGeneratedStore {');
     expect(output).toContain('  organizations: Collection<WorkOSOrganization>;');
     expect(output).toContain('export function getWorkOSGeneratedStore(store: Store): WorkOSGeneratedStore {');
-    expect(output).toContain("store.collection<WorkOSOrganization>('workos.organizations', 'org', ['name', 'external_id'])");
+    expect(output).toContain(
+      "store.collection<WorkOSOrganization>('workos.organizations', 'org', ['name', 'external_id'])",
+    );
   });
 });
 
 describe('generateHelpers', () => {
   it('generates format functions', () => {
     const output = generateHelpers([sampleEntity]);
-    expect(output).toContain('export function formatOrganization(organization: WorkOSOrganization): Record<string, unknown> {');
+    expect(output).toContain(
+      'export function formatOrganization(organization: WorkOSOrganization): Record<string, unknown> {',
+    );
     expect(output).toContain("    object: 'organization',");
     expect(output).toContain('    id: organization.id,');
     expect(output).toContain('    name: organization.name,');

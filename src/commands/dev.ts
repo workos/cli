@@ -85,9 +85,7 @@ export async function runDev(argv: DevArgs): Promise<void> {
       },
     });
   } catch {
-    console.error(
-      chalk.red(`Failed to start: ${devCmd.command} ${devCmd.args.join(' ')}`),
-    );
+    console.error(chalk.red(`Failed to start: ${devCmd.command} ${devCmd.args.join(' ')}`));
     console.error(chalk.dim('Try specifying the command explicitly: workos dev -- <your-command>'));
     await emulator.close();
     process.exit(1);

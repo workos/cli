@@ -155,9 +155,7 @@ describe('Pipe connection routes', () => {
   it('returns 400 for access token on disconnected connection', async () => {
     const { app: seededApp, store } = createTestApp();
     seedFromConfig(store, 'http://localhost:0', {
-      pipeConnections: [
-        { user_id: 'user_01ABC', provider: 'github', scopes: ['repo'], status: 'disconnected' },
-      ],
+      pipeConnections: [{ user_id: 'user_01ABC', provider: 'github', scopes: ['repo'], status: 'disconnected' }],
     });
 
     const list = (await (await seededApp.request('/pipes/connections', { headers })).json()) as any;

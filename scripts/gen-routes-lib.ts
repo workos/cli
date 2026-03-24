@@ -304,11 +304,7 @@ function guessIndexFields(fields: ParsedField[]): string[] {
   return indexes;
 }
 
-function extractEntityFromSchema(
-  schemaName: string,
-  schema: SchemaObject,
-  spec: OpenAPISpec,
-): ParsedEntity | null {
+function extractEntityFromSchema(schemaName: string, schema: SchemaObject, spec: OpenAPISpec): ParsedEntity | null {
   const resolved = resolveSchema(schema, spec);
   if (resolved.type !== 'object' || !resolved.properties) return null;
 
@@ -354,13 +350,7 @@ function extractRoutes(spec: OpenAPISpec): Map<string, ParsedOperation[]> {
   const tagOps = new Map<string, ParsedOperation[]>();
 
   for (const [path, item] of Object.entries(spec.paths ?? {})) {
-    const methods: Array<'get' | 'post' | 'put' | 'patch' | 'delete'> = [
-      'get',
-      'post',
-      'put',
-      'patch',
-      'delete',
-    ];
+    const methods: Array<'get' | 'post' | 'put' | 'patch' | 'delete'> = ['get', 'post', 'put', 'patch', 'delete'];
 
     for (const method of methods) {
       const op = item[method];
@@ -507,7 +497,9 @@ export function generateStore(entities: ParsedEntity[]): string {
     const accessor = toCamelCase(pluralize(entity.objectType));
     const namespace = `workos.${pluralize(entity.objectType)}`;
     const indexList = entity.indexFields.map((f) => `'${f}'`).join(', ');
-    lines.push(`    ${accessor}: store.collection<WorkOS${entity.name}>('${namespace}', '${entity.idPrefix}', [${indexList}]),`);
+    lines.push(
+      `    ${accessor}: store.collection<WorkOS${entity.name}>('${namespace}', '${entity.idPrefix}', [${indexList}]),`,
+    );
   }
   lines.push('  };');
   lines.push('}');
