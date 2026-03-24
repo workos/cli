@@ -77,6 +77,10 @@ Resource Management:
   api-key                Manage per-org API keys
   org-domain             Manage organization domains
 
+Local Development:
+  emulate                Start a local WorkOS API emulator
+  dev                    Start emulator + your app in one command
+
 Workflows:
   seed                   Declarative resource provisioning from YAML
   setup-org              One-shot organization onboarding
@@ -191,6 +195,123 @@ Inspects a directory's sync state, user/group counts, recent events, and detects
 ```bash
 workos debug-sync directory_01ABC123
 ```
+
+### Local Development
+
+Test your WorkOS integration locally without hitting the live API. The emulator provides a full in-memory WorkOS API replacement with all major endpoints.
+
+#### `workos dev` — One command to start everything
+
+The fastest way to develop locally. Starts the emulator and your app together, auto-detecting your framework and injecting the right environment variables.
+
+```bash
+# Auto-detects framework (Next.js, Vite, Remix, SvelteKit, etc.) and dev command
+workos dev
+
+# Override the dev command
+workos dev -- npx vite --port 5173
+
+# Custom emulator port and seed data
+workos dev --port 8080 --seed workos-emulate.config.yaml
+```
+
+Your app receives these environment variables automatically:
+- `WORKOS_API_BASE_URL` — points to the local emulator (e.g. `http://localhost:4100`)
+- `WORKOS_API_KEY` — `sk_test_default`
+- `WORKOS_CLIENT_ID` — `client_emulate`
+
+#### `workos emulate` — Standalone emulator
+
+Run the emulator on its own for CI, test suites, or when you want manual control.
+
+```bash
+# Start with defaults (port 4100)
+workos emulate
+
+# CI-friendly: JSON output, custom port
+workos emulate --port 9100 --json
+# → {"url":"http://localhost:9100","port":9100,"apiKey":"sk_test_default","health":"http://localhost:9100/health"}
+
+# Pre-load seed data
+workos emulate --seed workos-emulate.config.yaml
+```
+
+The emulator supports `GET /health` for readiness polling and shuts down cleanly on Ctrl+C.
+
+#### Seed configuration
+
+Create a `workos-emulate.config.yaml` (auto-detected) or pass `--seed <path>`:
+
+```yaml
+users:
+  - email: alice@acme.com
+    first_name: Alice
+    password: test123
+    email_verified: true
+
+organizations:
+  - name: Acme Corp
+    domains:
+      - domain: acme.com
+        state: verified
+    memberships:
+      - user_id: <user_id>
+        role: admin
+
+connections:
+  - name: Acme SSO
+    organization: Acme Corp
+    connection_type: GenericSAML
+    domains: [acme.com]
+```
+
+#### Programmatic API
+
+Use the emulator directly in test suites without the CLI:
+
+```typescript
+import { createEmulator } from 'workos/emulate';
+
+const emulator = await createEmulator({
+  port: 0, // random available port
+  seed: {
+    users: [{ email: 'test@example.com', password: 'secret' }],
+  },
+});
+
+// Use emulator.url as your WORKOS_API_BASE_URL
+const res = await fetch(`${emulator.url}/user_management/users`, {
+  headers: { Authorization: 'Bearer sk_test_default' },
+});
+
+// Reset between tests (clears data, re-applies seed)
+emulator.reset();
+
+// Clean up
+await emulator.close();
+```
+
+#### Emulated endpoints
+
+The emulator covers all major WorkOS APIs:
+
+| Endpoint Group | Routes |
+|---|---|
+| Organizations | CRUD, external_id lookup, domain management |
+| Users | CRUD, email uniqueness, password management |
+| Organization memberships | CRUD, role assignment, deactivate/reactivate |
+| Organization domains | CRUD, verification |
+| SSO connections | CRUD, domain-based lookup |
+| SSO flow | Authorize, token exchange, profile, JWKS |
+| AuthKit | OAuth authorize, authenticate (password, magic auth, email verification, authorization code + PKCE) |
+| Sessions | List, revoke |
+| Email verification | Send code, confirm |
+| Password reset | Create token, confirm |
+| Magic auth | Create code |
+| Auth factors | TOTP enrollment |
+| Pipes | Connection CRUD, mock `getAccessToken()` |
+
+All list endpoints support cursor pagination (`before`, `after`, `limit`, `order`). Error responses match the WorkOS format (`{ message, code, errors }`).
 
 ### Environment Management
 
@@ -469,6 +590,7 @@ workos install --api-key sk_test_xxx --client-id client_xxx --no-commit 2>/dev/n
 | Variable                 | Effect                                                   |
 | ------------------------ | -------------------------------------------------------- |
 | `WORKOS_API_KEY`         | API key for management commands (bypasses stored config) |
+| `WORKOS_API_BASE_URL`    | Override API base URL (set automatically by `workos dev`) |
 | `WORKOS_NO_PROMPT=1`     | Force non-interactive mode + JSON output                 |
 | `WORKOS_FORCE_TTY=1`     | Force interactive mode even when piped                   |
 | `WORKOS_TELEMETRY=false` | Disable telemetry                                        |
