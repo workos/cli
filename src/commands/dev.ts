@@ -46,6 +46,30 @@ function autoDetectSeedFile(): EmulatorSeedConfig | null {
  * so the emulator works with authkit SDKs (which read the decomposed vars)
  * and direct SDK consumers (which may use the base URL).
  */
+/**
+ * Default seed data for `workos dev` so the AuthKit login flow works
+ * out of the box. Provides a test user, an organization with a verified
+ * domain, and a membership linking the two. Skipped when the user
+ * provides `--seed` or a `workos-emulate.config.*` file is auto-detected.
+ */
+export const DEFAULT_DEV_SEED: EmulatorSeedConfig = {
+  users: [
+    {
+      email: 'test@example.com',
+      first_name: 'Test',
+      last_name: 'User',
+      password: 'password',
+      email_verified: true,
+    },
+  ],
+  organizations: [
+    {
+      name: 'Test Organization',
+      domains: [{ domain: 'example.com', state: 'verified' }],
+    },
+  ],
+};
+
 export function buildDevEnv(emulatorUrl: string): Record<string, string> {
   const url = new URL(emulatorUrl);
   return {
@@ -59,12 +83,13 @@ export function buildDevEnv(emulatorUrl: string): Record<string, string> {
 }
 
 export async function runDev(argv: DevArgs): Promise<void> {
-  const seedConfig = argv.seed ? loadSeedFile(argv.seed) : autoDetectSeedFile();
+  const userSeed = argv.seed ? loadSeedFile(argv.seed) : autoDetectSeedFile();
+  const seedConfig = userSeed ?? DEFAULT_DEV_SEED;
 
   // 1. Start emulator
   const emulator = await createEmulator({
     port: argv.port,
-    seed: seedConfig ?? undefined,
+    seed: seedConfig,
   });
 
   // 2. Resolve dev command
@@ -81,6 +106,11 @@ export async function runDev(argv: DevArgs): Promise<void> {
     console.log(chalk.dim(`Detected ${devCmd.framework}`));
   }
   console.log(chalk.dim(`Running: ${devCmd.command} ${devCmd.args.join(' ')}`));
+  if (!userSeed) {
+    console.log();
+    console.log(`  ${chalk.dim('Email:')}    test@example.com`);
+    console.log(`  ${chalk.dim('Password:')} password`);
+  }
   console.log();
 
   // 4. Spawn child process with env vars
