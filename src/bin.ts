@@ -2122,6 +2122,19 @@ yargs(rawArgs)
       await handleInstall(argv);
     },
   )
+  .command(
+    'emulate',
+    'Start a local WorkOS API emulator',
+    (yargs) =>
+      yargs.options({
+        port: { type: 'number', default: 4100, describe: 'Port to listen on' },
+        seed: { type: 'string', describe: 'Path to seed config file (YAML or JSON)' },
+      }),
+    async (argv) => {
+      const { runEmulate } = await import('./commands/emulate.js');
+      await runEmulate({ port: argv.port, seed: argv.seed, json: argv.json as boolean });
+    },
+  )
   .command('debug', false, (yargs) => {
     yargs.options(insecureStorageOption);
     registerSubcommand(

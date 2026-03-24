@@ -34,6 +34,16 @@
   "typescript": {
     "definition": "dist/index.d.ts"
   },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./emulate": {
+      "import": "./dist/emulate/index.js",
+      "types": "./dist/emulate/index.d.ts"
+    }
+  },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "~0.2.62",
     "@anthropic-ai/sdk": "^0.78.0",
@@ -51,6 +61,9 @@
     "semver": "^7.7.4",
     "uuid": "^13.0.0",
     "xstate": "^5.28.0",
+    "hono": "^4",
+    "@hono/node-server": "^1",
+    "jose": "^6",
     "yaml": "^2.8.2",
     "yargs": "^18.0.0",
     "zod": "^4.3.6"

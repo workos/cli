@@ -1048,6 +1048,21 @@ const commands: CommandSchema[] = [
       },
     ],
   },
+  // --- Emulator ---
+  {
+    name: 'emulate',
+    description: 'Start a local WorkOS API emulator',
+    options: [
+      { name: 'port', type: 'number', description: 'Port to listen on', required: false, default: 4100, hidden: false },
+      {
+        name: 'seed',
+        type: 'string',
+        description: 'Path to seed config file (YAML or JSON)',
+        required: false,
+        hidden: false,
+      },
+    ],
+  },
   // --- Workflow Commands ---
   {
     name: 'seed',
