@@ -1063,6 +1063,14 @@ const commands: CommandSchema[] = [
       },
     ],
   },
+  {
+    name: 'dev',
+    description: 'Start emulator + your app in one command',
+    options: [
+      { name: 'port', type: 'number', description: 'Emulator port', required: false, default: 4100, hidden: false },
+      { name: 'seed', type: 'string', description: 'Path to seed config file', required: false, hidden: false },
+    ],
+  },
   // --- Workflow Commands ---
   {
     name: 'seed',
