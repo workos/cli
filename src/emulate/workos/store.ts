@@ -14,6 +14,7 @@ import type {
   WorkOSConnection,
   WorkOSSSOProfile,
   WorkOSSSOAuthorization,
+  WorkOSPipeConnection,
 } from './entities.js';
 
 export interface WorkOSStore {
@@ -31,6 +32,7 @@ export interface WorkOSStore {
   connections: Collection<WorkOSConnection>;
   ssoProfiles: Collection<WorkOSSSOProfile>;
   ssoAuthorizations: Collection<WorkOSSSOAuthorization>;
+  pipeConnections: Collection<WorkOSPipeConnection>;
 }
 
 export function getWorkOSStore(store: Store): WorkOSStore {
@@ -57,5 +59,9 @@ export function getWorkOSStore(store: Store): WorkOSStore {
     connections: store.collection<WorkOSConnection>('workos.connections', 'conn', ['organization_id']),
     ssoProfiles: store.collection<WorkOSSSOProfile>('workos.sso_profiles', 'prof', ['connection_id', 'email']),
     ssoAuthorizations: store.collection<WorkOSSSOAuthorization>('workos.sso_authorizations', 'sso_auth', ['code']),
+    pipeConnections: store.collection<WorkOSPipeConnection>('workos.pipe_connections', 'pipe_conn', [
+      'user_id',
+      'provider',
+    ]),
   };
 }

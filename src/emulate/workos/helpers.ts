@@ -13,6 +13,7 @@ import type {
   WorkOSIdentity,
   WorkOSConnection,
   WorkOSSSOProfile,
+  WorkOSPipeConnection,
 } from './entities.js';
 
 export function formatOrganization(org: WorkOSOrganization, ws: WorkOSStore): Record<string, unknown> {
@@ -209,6 +210,20 @@ export function formatSSOProfile(p: WorkOSSSOProfile): Record<string, unknown> {
     raw_attributes: p.raw_attributes,
     created_at: p.created_at,
     updated_at: p.updated_at,
+  };
+}
+
+export function formatPipeConnection(pc: WorkOSPipeConnection): Record<string, unknown> {
+  return {
+    object: 'pipe_connection',
+    id: pc.id,
+    user_id: pc.user_id,
+    provider: pc.provider,
+    scopes: pc.scopes,
+    status: pc.status,
+    external_account_id: pc.external_account_id,
+    created_at: pc.created_at,
+    updated_at: pc.updated_at,
   };
 }
 

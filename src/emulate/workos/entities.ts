@@ -155,3 +155,15 @@ export interface WorkOSSSOAuthorization extends Entity {
   state: string | null;
   expires_at: string;
 }
+
+export type PipeProvider = 'github' | 'slack' | 'google' | 'salesforce';
+export type PipeConnectionStatus = 'connected' | 'disconnected' | 'requires_reauth';
+
+export interface WorkOSPipeConnection extends Entity {
+  object: 'pipe_connection';
+  user_id: string;
+  provider: PipeProvider;
+  scopes: string[];
+  status: PipeConnectionStatus;
+  external_account_id: string | null;
+}

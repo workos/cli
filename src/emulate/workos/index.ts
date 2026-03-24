@@ -13,8 +13,9 @@ import { sessionRoutes } from './routes/sessions.js';
 import { authRoutes } from './routes/auth.js';
 import { connectionRoutes } from './routes/connections.js';
 import { ssoRoutes } from './routes/sso.js';
+import { pipeRoutes } from './routes/pipes.js';
 import { generateVerificationToken, hashPassword } from './helpers.js';
-import type { WorkOSConnectionType } from './entities.js';
+import type { WorkOSConnectionType, PipeProvider, PipeConnectionStatus } from './entities.js';
 
 export { getWorkOSStore, type WorkOSStore } from './store.js';
 export * from './entities.js';
@@ -56,10 +57,19 @@ export interface WorkOSSeedConnection {
   }>;
 }
 
+export interface WorkOSSeedPipeConnection {
+  user_id: string;
+  provider: PipeProvider;
+  scopes: string[];
+  status?: PipeConnectionStatus;
+  external_account_id?: string;
+}
+
 export interface WorkOSSeedConfig {
   organizations?: WorkOSSeedOrganization[];
   users?: WorkOSSeedUser[];
   connections?: WorkOSSeedConnection[];
+  pipeConnections?: WorkOSSeedPipeConnection[];
 }
 
 function seedDefaults(_store: Store, _baseUrl: string): void {
@@ -165,6 +175,19 @@ export function seedFromConfig(store: Store, _baseUrl: string, config: WorkOSSee
       }
     }
   }
+
+  if (config.pipeConnections) {
+    for (const pc of config.pipeConnections) {
+      ws.pipeConnections.insert({
+        object: 'pipe_connection',
+        user_id: pc.user_id,
+        provider: pc.provider,
+        scopes: pc.scopes,
+        status: pc.status ?? 'connected',
+        external_account_id: pc.external_account_id ?? null,
+      });
+    }
+  }
 }
 
 export const workosPlugin: ServicePlugin = {
@@ -182,6 +205,7 @@ export const workosPlugin: ServicePlugin = {
     authRoutes(ctx);
     connectionRoutes(ctx);
     ssoRoutes(ctx);
+    pipeRoutes(ctx);
   },
   seed(store: Store, baseUrl: string): void {
     seedDefaults(store, baseUrl);

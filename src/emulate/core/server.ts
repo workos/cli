@@ -58,6 +58,7 @@ export function createServer(plugin: ServicePlugin, options: ServerOptions = {})
   app.use('/directory_users/*', authMiddleware(apiKeys));
   app.use('/events', authMiddleware(apiKeys));
   app.use('/events/*', authMiddleware(apiKeys));
+  app.use('/pipes/*', authMiddleware(apiKeys));
 
   // Rate limiting
   const rateLimitCounters = new Map<string, { remaining: number; resetAt: number }>();

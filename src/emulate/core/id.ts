@@ -51,4 +51,5 @@ export const ID_PREFIXES = {
   authentication_challenge: 'auth_challenge',
   api_key: 'api_key',
   profile: 'prof',
+  pipe_connection: 'pipe_conn',
 } as const;
