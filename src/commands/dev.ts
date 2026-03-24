@@ -40,10 +40,19 @@ function autoDetectSeedFile(): EmulatorSeedConfig | null {
 
 /**
  * Build the env vars object to inject into the child process.
+ *
+ * Sets both the base URL style (`WORKOS_API_BASE_URL`) and the decomposed
+ * style (`WORKOS_API_HOSTNAME` + `WORKOS_API_PORT` + `WORKOS_API_HTTPS`)
+ * so the emulator works with authkit SDKs (which read the decomposed vars)
+ * and direct SDK consumers (which may use the base URL).
  */
 export function buildDevEnv(emulatorUrl: string): Record<string, string> {
+  const url = new URL(emulatorUrl);
   return {
     WORKOS_API_BASE_URL: emulatorUrl,
+    WORKOS_API_HOSTNAME: url.hostname,
+    WORKOS_API_PORT: url.port,
+    WORKOS_API_HTTPS: 'false',
     WORKOS_API_KEY: 'sk_test_default',
     WORKOS_CLIENT_ID: 'client_emulated',
   };
