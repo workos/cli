@@ -96,7 +96,8 @@ export function authRoutes(ctx: RouteContext): void {
     return c.json(formatDeviceAuthorization(deviceAuth));
   });
 
-  app.post('/user_management/authenticate', async (c) => {
+  // AuthKit SDK uses /x/authkit/users/authenticate for the same flow
+  const authenticateHandler = async (c: any) => {
     const body = await parseJsonBody(c);
     const grantType = body.grant_type as string | undefined;
     const clientId = body.client_id as string | undefined;
@@ -414,5 +415,8 @@ export function authRoutes(ctx: RouteContext): void {
       sealed_session: sealedSession,
       impersonator: updatedUser.impersonator ?? undefined,
     });
-  });
+  };
+
+  app.post('/user_management/authenticate', authenticateHandler);
+  app.post('/x/authkit/users/authenticate', authenticateHandler);
 }

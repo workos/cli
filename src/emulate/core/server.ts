@@ -48,6 +48,7 @@ export function createServer(plugin: ServicePlugin, options: ServerOptions = {})
     }
     return authMiddleware(apiKeys)(c, next);
   });
+  app.use('/x/authkit/*', authMiddleware(apiKeys));
   app.use('/organizations', authMiddleware(apiKeys));
   app.use('/organizations/*', authMiddleware(apiKeys));
   app.use('/organization_memberships', authMiddleware(apiKeys));
