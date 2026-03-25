@@ -1,6 +1,7 @@
 import { type RouteContext, notFound, validationError, parseJsonBody, WorkOSApiError } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
 import { formatInvitation, generateVerificationToken, expiresIn, parseListParams } from '../helpers.js';
+import type { EventBus } from '../event-bus.js';
 
 export function invitationRoutes(ctx: RouteContext): void {
   const { app, store, baseUrl } = ctx;
@@ -72,6 +73,8 @@ export function invitationRoutes(ctx: RouteContext): void {
     }
 
     ws.invitations.update(inv.id, { state: 'accepted' });
+    const eventBus = store.getData<EventBus>('eventBus');
+    eventBus?.emit({ event: 'invitation.accepted', data: formatInvitation(ws.invitations.get(inv.id)!) });
 
     // Create org membership if invitation has an organization
     if (inv.organization_id) {
@@ -102,6 +105,8 @@ export function invitationRoutes(ctx: RouteContext): void {
     }
 
     ws.invitations.update(inv.id, { state: 'revoked' });
+    const eventBus = store.getData<EventBus>('eventBus');
+    eventBus?.emit({ event: 'invitation.revoked', data: formatInvitation(ws.invitations.get(inv.id)!) });
     const updated = ws.invitations.get(inv.id)!;
     return c.json(formatInvitation(updated));
   });
@@ -118,6 +123,8 @@ export function invitationRoutes(ctx: RouteContext): void {
       state: 'pending',
     });
 
+    const eventBus = store.getData<EventBus>('eventBus');
+    eventBus?.emit({ event: 'invitation.resent', data: formatInvitation(ws.invitations.get(inv.id)!) });
     const updated = ws.invitations.get(inv.id)!;
     return c.json(formatInvitation(updated));
   });

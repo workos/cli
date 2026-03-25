@@ -10,6 +10,7 @@ import {
   assertLocalRedirectUri,
   sealSession,
 } from '../helpers.js';
+import type { EventBus } from '../event-bus.js';
 
 interface PendingAuth {
   user_id: string;
@@ -389,6 +390,16 @@ export function authRoutes(ctx: RouteContext): void {
           sealKey,
         )
       : null;
+
+    // Emit authentication event (hybrid Option B for action-specific events)
+    const eventBus = store.getData<EventBus>('eventBus');
+    if (eventBus) {
+      const authEventType = `authentication.${authMethod.toLowerCase()}_succeeded`;
+      eventBus.emit({
+        event: authEventType,
+        data: { user_id: user.id, email: updatedUser.email, method: authMethod, ip_address: session.ip_address },
+      });
+    }
 
     return c.json({
       user: formatUser(updatedUser),

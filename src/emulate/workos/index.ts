@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import type { ServicePlugin, Store, RouteContext } from '../core/index.js';
 import { generateId } from '../core/index.js';
 import { getWorkOSStore, type WorkOSStore } from './store.js';
@@ -33,7 +34,10 @@ import { directoryRoutes } from './routes/directories.js';
 import { auditLogRoutes } from './routes/audit-logs.js';
 import { featureFlagRoutes } from './routes/feature-flags.js';
 import { dataIntegrationRoutes } from './routes/data-integrations.js';
-import { generateVerificationToken, hashPassword, expiresIn } from './helpers.js';
+import { webhookEndpointRoutes } from './routes/webhook-endpoints.js';
+import { eventRoutes } from './routes/events.js';
+import { EventBus } from './event-bus.js';
+import { generateVerificationToken, hashPassword, expiresIn, formatUser, formatOrganization, formatMembership, formatConnection, formatSession, formatInvitation, formatRole, formatPermission, formatDirectory, formatDirectoryUser, formatDirectoryGroup, formatDomain } from './helpers.js';
 import type { WorkOSConnectionType, PipeProvider, PipeConnectionStatus } from './entities.js';
 
 export { getWorkOSStore, type WorkOSStore } from './store.js';
@@ -109,6 +113,12 @@ export interface WorkOSSeedPermission {
   description?: string;
 }
 
+export interface WorkOSSeedWebhookEndpoint {
+  url: string;
+  events?: string[];
+  enabled?: boolean;
+}
+
 export interface WorkOSSeedConfig {
   organizations?: WorkOSSeedOrganization[];
   users?: WorkOSSeedUser[];
@@ -117,6 +127,7 @@ export interface WorkOSSeedConfig {
   invitations?: WorkOSSeedInvitation[];
   roles?: WorkOSSeedRole[];
   permissions?: WorkOSSeedPermission[];
+  webhookEndpoints?: WorkOSSeedWebhookEndpoint[];
 }
 
 function seedDefaults(_store: Store, _baseUrl: string): void {
@@ -288,6 +299,19 @@ export function seedFromConfig(store: Store, _baseUrl: string, config: WorkOSSee
       });
     }
   }
+
+  if (config.webhookEndpoints) {
+    for (const whConfig of config.webhookEndpoints) {
+      ws.webhookEndpoints.insert({
+        object: 'webhook_endpoint',
+        url: whConfig.url,
+        secret: randomBytes(32).toString('hex'),
+        enabled: whConfig.enabled !== false,
+        events: whConfig.events ?? [],
+        description: null,
+      });
+    }
+  }
 }
 
 export const workosPlugin: ServicePlugin = {
@@ -325,6 +349,75 @@ export const workosPlugin: ServicePlugin = {
     auditLogRoutes(ctx);
     featureFlagRoutes(ctx);
     dataIntegrationRoutes(ctx);
+    webhookEndpointRoutes(ctx);
+    eventRoutes(ctx);
+
+    // Set up event bus with collection hooks (Option A from spec)
+    // Store on ctx.store for route-level access (hybrid Option A+B for action events)
+    const eventBus = new EventBus(ctx.store);
+    ctx.store.setData('eventBus', eventBus);
+    const ws = getWorkOSStore(ctx.store);
+
+    ws.users.setHooks({
+      onInsert: (u) => eventBus.emit({ event: 'user.created', data: formatUser(u) }),
+      onUpdate: (u) => eventBus.emit({ event: 'user.updated', data: formatUser(u) }),
+      onDelete: (u) => eventBus.emit({ event: 'user.deleted', data: formatUser(u) }),
+    });
+    ws.organizations.setHooks({
+      onInsert: (o) => eventBus.emit({ event: 'organization.created', data: formatOrganization(o, ws) }),
+      onUpdate: (o) => eventBus.emit({ event: 'organization.updated', data: formatOrganization(o, ws) }),
+      onDelete: (o) => eventBus.emit({ event: 'organization.deleted', data: formatOrganization(o, ws) }),
+    });
+    ws.organizationDomains.setHooks({
+      onInsert: (d) => eventBus.emit({ event: 'organization_domain.created', data: formatDomain(d) }),
+      onUpdate: (d) => eventBus.emit({
+        event: d.state === 'verified' ? 'organization_domain.verified' : 'organization_domain.updated',
+        data: formatDomain(d),
+      }),
+      onDelete: (d) => eventBus.emit({ event: 'organization_domain.deleted', data: formatDomain(d) }),
+    });
+    ws.organizationMemberships.setHooks({
+      onInsert: (m) => eventBus.emit({ event: 'organization_membership.created', data: formatMembership(m) }),
+      onUpdate: (m) => eventBus.emit({ event: 'organization_membership.updated', data: formatMembership(m) }),
+      onDelete: (m) => eventBus.emit({ event: 'organization_membership.deleted', data: formatMembership(m) }),
+    });
+    ws.connections.setHooks({
+      onInsert: (c) => eventBus.emit({ event: 'connection.created', data: formatConnection(c) }),
+      onUpdate: (c) => eventBus.emit({ event: 'connection.updated', data: formatConnection(c) }),
+      onDelete: (c) => eventBus.emit({ event: 'connection.deleted', data: formatConnection(c) }),
+    });
+    ws.sessions.setHooks({
+      onInsert: (s) => eventBus.emit({ event: 'session.created', data: formatSession(s) }),
+      onDelete: (s) => eventBus.emit({ event: 'session.revoked', data: formatSession(s) }),
+    });
+    ws.invitations.setHooks({
+      onInsert: (i) => eventBus.emit({ event: 'invitation.created', data: formatInvitation(i) }),
+    });
+    ws.roles.setHooks({
+      onInsert: (r) => eventBus.emit({ event: 'role.created', data: formatRole(r) }),
+      onUpdate: (r) => eventBus.emit({ event: 'role.updated', data: formatRole(r) }),
+      onDelete: (r) => eventBus.emit({ event: 'role.deleted', data: formatRole(r) }),
+    });
+    ws.permissions.setHooks({
+      onInsert: (p) => eventBus.emit({ event: 'permission.created', data: formatPermission(p) }),
+      onUpdate: (p) => eventBus.emit({ event: 'permission.updated', data: formatPermission(p) }),
+      onDelete: (p) => eventBus.emit({ event: 'permission.deleted', data: formatPermission(p) }),
+    });
+    ws.directories.setHooks({
+      onInsert: (d) => eventBus.emit({ event: 'directory.created', data: formatDirectory(d) }),
+      onUpdate: (d) => eventBus.emit({ event: 'directory.updated', data: formatDirectory(d) }),
+      onDelete: (d) => eventBus.emit({ event: 'directory.deleted', data: formatDirectory(d) }),
+    });
+    ws.directoryUsers.setHooks({
+      onInsert: (u) => eventBus.emit({ event: 'directory_user.created', data: formatDirectoryUser(u) }),
+      onUpdate: (u) => eventBus.emit({ event: 'directory_user.updated', data: formatDirectoryUser(u) }),
+      onDelete: (u) => eventBus.emit({ event: 'directory_user.deleted', data: formatDirectoryUser(u) }),
+    });
+    ws.directoryGroups.setHooks({
+      onInsert: (g) => eventBus.emit({ event: 'directory_group.created', data: formatDirectoryGroup(g) }),
+      onUpdate: (g) => eventBus.emit({ event: 'directory_group.updated', data: formatDirectoryGroup(g) }),
+      onDelete: (g) => eventBus.emit({ event: 'directory_group.deleted', data: formatDirectoryGroup(g) }),
+    });
   },
   seed(store: Store, baseUrl: string): void {
     seedDefaults(store, baseUrl);

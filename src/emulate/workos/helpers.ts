@@ -37,6 +37,8 @@ import type {
   WorkOSClientSecret,
   WorkOSRadarAttempt,
   WorkOSApiKey,
+  WorkOSEvent,
+  WorkOSWebhookEndpoint,
 } from './entities.js';
 
 export function formatOrganization(org: WorkOSOrganization, ws: WorkOSStore): Record<string, unknown> {
@@ -568,6 +570,34 @@ export function formatApiKeyRecord(k: WorkOSApiKey): Record<string, unknown> {
     name: k.name,
     created_at: k.created_at,
     updated_at: k.updated_at,
+  };
+}
+
+export function formatEvent(e: WorkOSEvent): Record<string, unknown> {
+  return {
+    object: 'event',
+    id: e.id,
+    event: e.event,
+    data: e.data,
+    environment_id: e.environment_id,
+    created_at: e.created_at,
+  };
+}
+
+export function formatWebhookEndpoint(
+  ep: WorkOSWebhookEndpoint,
+  opts?: { includeSecret?: boolean },
+): Record<string, unknown> {
+  return {
+    object: 'webhook_endpoint',
+    id: ep.id,
+    url: ep.url,
+    secret: opts?.includeSecret ? ep.secret : `${ep.secret.slice(0, 8)}****`,
+    enabled: ep.enabled,
+    events: ep.events,
+    description: ep.description,
+    created_at: ep.created_at,
+    updated_at: ep.updated_at,
   };
 }
 

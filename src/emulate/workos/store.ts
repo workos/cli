@@ -41,6 +41,8 @@ import type {
   WorkOSDataIntegrationAuth,
   WorkOSRadarAttempt,
   WorkOSApiKey,
+  WorkOSEvent,
+  WorkOSWebhookEndpoint,
 } from './entities.js';
 
 export interface WorkOSStore {
@@ -85,6 +87,8 @@ export interface WorkOSStore {
   dataIntegrationAuths: Collection<WorkOSDataIntegrationAuth>;
   radarAttempts: Collection<WorkOSRadarAttempt>;
   apiKeyRecords: Collection<WorkOSApiKey>;
+  events: Collection<WorkOSEvent>;
+  webhookEndpoints: Collection<WorkOSWebhookEndpoint>;
 }
 
 export function getWorkOSStore(store: Store): WorkOSStore {
@@ -190,5 +194,7 @@ export function getWorkOSStore(store: Store): WorkOSStore {
     ]),
     radarAttempts: store.collection<WorkOSRadarAttempt>('workos.radar_attempts', 'radar_attempt', ['ip_address']),
     apiKeyRecords: store.collection<WorkOSApiKey>('workos.api_keys', 'api_key', ['key', 'environment']),
+    events: store.collection<WorkOSEvent>('workos.events', 'evt', ['event']),
+    webhookEndpoints: store.collection<WorkOSWebhookEndpoint>('workos.webhook_endpoints', 'we', ['url']),
   };
 }

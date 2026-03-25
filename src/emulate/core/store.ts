@@ -10,9 +10,16 @@ export type InsertInput<T extends Entity> = Omit<T, 'id' | 'created_at' | 'updat
 export type FilterFn<T> = (item: T) => boolean;
 export type SortFn<T> = (a: T, b: T) => number;
 
+export interface CollectionHooks<T extends Entity> {
+  onInsert?: (item: T) => void;
+  onUpdate?: (item: T) => void;
+  onDelete?: (item: T) => void;
+}
+
 export class Collection<T extends Entity> {
   private items = new Map<string, T>();
   private indexes = new Map<string, Map<string, Set<string>>>();
+  private hooks: CollectionHooks<T> = {};
   readonly fieldNames: string[];
 
   constructor(
@@ -59,6 +66,7 @@ export class Collection<T extends Entity> {
     } as unknown as T;
     this.items.set(id, item);
     this.addToIndex(item);
+    this.hooks.onInsert?.(item);
     return item;
   }
 
@@ -93,14 +101,20 @@ export class Collection<T extends Entity> {
     } as T;
     this.items.set(id, updated);
     this.addToIndex(updated);
+    this.hooks.onUpdate?.(updated);
     return updated;
   }
 
   delete(id: string): boolean {
     const existing = this.items.get(id);
     if (!existing) return false;
+    this.hooks.onDelete?.(existing);
     this.removeFromIndex(existing);
     return this.items.delete(id);
+  }
+
+  setHooks(hooks: CollectionHooks<T>): void {
+    this.hooks = hooks;
   }
 
   all(): T[] {

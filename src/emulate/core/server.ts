@@ -78,6 +78,8 @@ export function createServer(plugin: ServicePlugin, options: ServerOptions = {})
   app.use('/api_keys', authMiddleware(apiKeys));
   app.use('/api_keys/*', authMiddleware(apiKeys));
   app.use('/portal/*', authMiddleware(apiKeys));
+  app.use('/webhook_endpoints', authMiddleware(apiKeys));
+  app.use('/webhook_endpoints/*', authMiddleware(apiKeys));
   app.use('/auth/factors', authMiddleware(apiKeys));
   app.use('/auth/factors/*', authMiddleware(apiKeys));
   app.use('/auth/challenges/*', authMiddleware(apiKeys));

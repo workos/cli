@@ -10,6 +10,7 @@ export interface EmulatorSeedConfig {
   invitations?: WorkOSSeedConfig['invitations'];
   roles?: WorkOSSeedConfig['roles'];
   permissions?: WorkOSSeedConfig['permissions'];
+  webhookEndpoints?: WorkOSSeedConfig['webhookEndpoints'];
 }
 
 export interface EmulatorOptions {

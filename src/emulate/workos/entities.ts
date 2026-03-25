@@ -385,3 +385,19 @@ export interface WorkOSApiKey extends Entity {
   key: string;
   environment: string;
 }
+
+export interface WorkOSEvent extends Entity {
+  object: 'event';
+  event: string;
+  data: Record<string, unknown>;
+  environment_id: string | null;
+}
+
+export interface WorkOSWebhookEndpoint extends Entity {
+  object: 'webhook_endpoint';
+  url: string;
+  secret: string;
+  enabled: boolean;
+  events: string[];
+  description: string | null;
+}
