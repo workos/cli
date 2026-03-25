@@ -142,4 +142,44 @@ export function ssoRoutes(ctx: RouteContext): void {
   app.get('/sso/jwks', (c) => {
     return c.json(jwt.getJWKS());
   });
+
+  // SSO Single Logout — generate logout token
+  app.post('/sso/logout/authorize', async (c) => {
+    const body = await parseJsonBody(c);
+    const profileId = body.profile_id as string;
+    if (!profileId) {
+      throw new WorkOSApiError(400, 'profile_id is required', 'invalid_request');
+    }
+
+    const profile = ws.ssoProfiles.get(profileId);
+    if (!profile) {
+      throw new WorkOSApiError(404, 'Profile not found', 'not_found');
+    }
+
+    const logoutToken = generateId('sso_logout');
+    store.setData(`sso_logout:${logoutToken}`, profile.id);
+
+    return c.json({
+      logout_token: logoutToken,
+      logout_url: `${ctx.baseUrl}/sso/logout?logout_token=${logoutToken}`,
+    });
+  });
+
+  // SSO Single Logout — redirect (public, no auth)
+  app.get('/sso/logout', (c) => {
+    const url = new URL(c.req.url);
+    const logoutToken = url.searchParams.get('logout_token');
+
+    if (!logoutToken) {
+      throw new WorkOSApiError(400, 'logout_token is required', 'invalid_request');
+    }
+
+    const profileId = store.getData<string>(`sso_logout:${logoutToken}`);
+    if (!profileId) {
+      throw new WorkOSApiError(400, 'Invalid logout token', 'invalid_logout_token');
+    }
+
+    store.setData(`sso_logout:${logoutToken}`, undefined);
+    return c.json({ success: true });
+  });
 }

@@ -37,7 +37,13 @@ export function createServer(plugin: ServicePlugin, options: ServerOptions = {})
   app.use('/api/*', authMiddleware(apiKeys));
   app.use('/user_management/*', async (c, next) => {
     const path = new URL(c.req.url).pathname;
-    if (path === '/user_management/authorize' || path === '/user_management/authenticate') {
+    // Public endpoints (no auth required)
+    if (
+      path === '/user_management/authorize' ||
+      path === '/user_management/authenticate' ||
+      path === '/user_management/sessions/logout' ||
+      path.startsWith('/user_management/sessions/jwks/')
+    ) {
       return next();
     }
     return authMiddleware(apiKeys)(c, next);
@@ -59,6 +65,22 @@ export function createServer(plugin: ServicePlugin, options: ServerOptions = {})
   app.use('/events', authMiddleware(apiKeys));
   app.use('/events/*', authMiddleware(apiKeys));
   app.use('/pipes/*', authMiddleware(apiKeys));
+  app.use('/audit_logs/*', authMiddleware(apiKeys));
+  app.use('/feature-flags', authMiddleware(apiKeys));
+  app.use('/feature-flags/*', authMiddleware(apiKeys));
+  app.use('/connect/*', authMiddleware(apiKeys));
+  app.use('/data-integrations/*', async (c, next) => {
+    const path = new URL(c.req.url).pathname;
+    if (path.endsWith('/authorize')) return next();
+    return authMiddleware(apiKeys)(c, next);
+  });
+  app.use('/radar/*', authMiddleware(apiKeys));
+  app.use('/api_keys', authMiddleware(apiKeys));
+  app.use('/api_keys/*', authMiddleware(apiKeys));
+  app.use('/portal/*', authMiddleware(apiKeys));
+  app.use('/auth/factors', authMiddleware(apiKeys));
+  app.use('/auth/factors/*', authMiddleware(apiKeys));
+  app.use('/auth/challenges/*', authMiddleware(apiKeys));
 
   // Rate limiting
   const rateLimitCounters = new Map<string, { remaining: number; resetAt: number }>();
@@ -101,6 +123,9 @@ export function createServer(plugin: ServicePlugin, options: ServerOptions = {})
 
     await next();
   });
+
+  // Store API key map for route access
+  store.setData('apiKeyMap', apiKeys);
 
   // Register plugin routes
   plugin.register({ app, store, jwt, baseUrl });

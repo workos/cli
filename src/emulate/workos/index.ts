@@ -14,7 +14,26 @@ import { authRoutes } from './routes/auth.js';
 import { connectionRoutes } from './routes/connections.js';
 import { ssoRoutes } from './routes/sso.js';
 import { pipeRoutes } from './routes/pipes.js';
-import { generateVerificationToken, hashPassword } from './helpers.js';
+import { authChallengeRoutes } from './routes/auth-challenges.js';
+import { invitationRoutes } from './routes/invitations.js';
+import { configRoutes } from './routes/config.js';
+import { userFeatureRoutes } from './routes/user-features.js';
+import { widgetRoutes } from './routes/widgets.js';
+import { authorizationRoleRoutes } from './routes/authorization-roles.js';
+import { authorizationPermissionRoutes } from './routes/authorization-permissions.js';
+import { authorizationOrgRoleRoutes } from './routes/authorization-org-roles.js';
+import { authorizationResourceRoutes } from './routes/authorization-resources.js';
+import { authorizationCheckRoutes } from './routes/authorization-checks.js';
+import { portalRoutes } from './routes/portal.js';
+import { legacyMfaRoutes } from './routes/legacy-mfa.js';
+import { apiKeyRoutes } from './routes/api-keys.js';
+import { radarRoutes } from './routes/radar.js';
+import { connectRoutes } from './routes/connect.js';
+import { directoryRoutes } from './routes/directories.js';
+import { auditLogRoutes } from './routes/audit-logs.js';
+import { featureFlagRoutes } from './routes/feature-flags.js';
+import { dataIntegrationRoutes } from './routes/data-integrations.js';
+import { generateVerificationToken, hashPassword, expiresIn } from './helpers.js';
 import type { WorkOSConnectionType, PipeProvider, PipeConnectionStatus } from './entities.js';
 
 export { getWorkOSStore, type WorkOSStore } from './store.js';
@@ -40,6 +59,7 @@ export interface WorkOSSeedUser {
   email_verified?: boolean;
   external_id?: string;
   metadata?: Record<string, string>;
+  impersonator?: { email: string; reason: string };
 }
 
 export interface WorkOSSeedConnection {
@@ -65,11 +85,38 @@ export interface WorkOSSeedPipeConnection {
   external_account_id?: string;
 }
 
+export interface WorkOSSeedInvitation {
+  email: string;
+  organization_id?: string;
+  inviter_user_id?: string;
+  role_slug?: string;
+}
+
+export interface WorkOSSeedRole {
+  slug: string;
+  name: string;
+  description?: string;
+  type?: 'EnvironmentRole' | 'OrganizationRole';
+  organization_id?: string;
+  is_default_role?: boolean;
+  priority?: number;
+  permissions?: string[];
+}
+
+export interface WorkOSSeedPermission {
+  slug: string;
+  name: string;
+  description?: string;
+}
+
 export interface WorkOSSeedConfig {
   organizations?: WorkOSSeedOrganization[];
   users?: WorkOSSeedUser[];
   connections?: WorkOSSeedConnection[];
   pipeConnections?: WorkOSSeedPipeConnection[];
+  invitations?: WorkOSSeedInvitation[];
+  roles?: WorkOSSeedRole[];
+  permissions?: WorkOSSeedPermission[];
 }
 
 function seedDefaults(_store: Store, _baseUrl: string): void {
@@ -93,6 +140,7 @@ export function seedFromConfig(store: Store, _baseUrl: string, config: WorkOSSee
         metadata: userConfig.metadata ?? {},
         locale: null,
         password_hash: userConfig.password ? hashPassword(userConfig.password) : null,
+        impersonator: userConfig.impersonator ?? null,
       });
     }
   }
@@ -188,6 +236,58 @@ export function seedFromConfig(store: Store, _baseUrl: string, config: WorkOSSee
       });
     }
   }
+
+  if (config.permissions) {
+    for (const permConfig of config.permissions) {
+      ws.permissions.insert({
+        object: 'permission',
+        slug: permConfig.slug,
+        name: permConfig.name,
+        description: permConfig.description ?? null,
+      });
+    }
+  }
+
+  if (config.roles) {
+    for (const roleConfig of config.roles) {
+      const role = ws.roles.insert({
+        object: 'role',
+        slug: roleConfig.slug,
+        name: roleConfig.name,
+        description: roleConfig.description ?? null,
+        type: roleConfig.type ?? 'EnvironmentRole',
+        organization_id: roleConfig.organization_id ?? null,
+        is_default_role: roleConfig.is_default_role ?? false,
+        priority: roleConfig.priority ?? 0,
+      });
+
+      if (roleConfig.permissions) {
+        for (const permSlug of roleConfig.permissions) {
+          const perm = ws.permissions.findOneBy('slug', permSlug);
+          if (perm) {
+            ws.rolePermissions.insert({ role_id: role.id, permission_id: perm.id });
+          }
+        }
+      }
+    }
+  }
+
+  if (config.invitations) {
+    for (const invConfig of config.invitations) {
+      const token = generateVerificationToken();
+      ws.invitations.insert({
+        object: 'invitation',
+        email: invConfig.email,
+        state: 'pending',
+        token,
+        accept_invitation_url: `${_baseUrl}/user_management/invitations/accept?token=${token}`,
+        organization_id: invConfig.organization_id ?? null,
+        inviter_user_id: invConfig.inviter_user_id ?? null,
+        role_slug: invConfig.role_slug ?? null,
+        expires_at: expiresIn(72 * 60),
+      });
+    }
+  }
 }
 
 export const workosPlugin: ServicePlugin = {
@@ -201,11 +301,30 @@ export const workosPlugin: ServicePlugin = {
     passwordResetRoutes(ctx);
     magicAuthRoutes(ctx);
     authFactorRoutes(ctx);
+    authChallengeRoutes(ctx);
     sessionRoutes(ctx);
     authRoutes(ctx);
     connectionRoutes(ctx);
     ssoRoutes(ctx);
     pipeRoutes(ctx);
+    invitationRoutes(ctx);
+    configRoutes(ctx);
+    userFeatureRoutes(ctx);
+    widgetRoutes(ctx);
+    authorizationRoleRoutes(ctx);
+    authorizationPermissionRoutes(ctx);
+    authorizationOrgRoleRoutes(ctx);
+    authorizationResourceRoutes(ctx);
+    authorizationCheckRoutes(ctx);
+    portalRoutes(ctx);
+    legacyMfaRoutes(ctx);
+    apiKeyRoutes(ctx);
+    radarRoutes(ctx);
+    connectRoutes(ctx);
+    directoryRoutes(ctx);
+    auditLogRoutes(ctx);
+    featureFlagRoutes(ctx);
+    dataIntegrationRoutes(ctx);
   },
   seed(store: Store, baseUrl: string): void {
     seedDefaults(store, baseUrl);

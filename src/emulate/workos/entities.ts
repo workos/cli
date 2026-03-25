@@ -40,6 +40,7 @@ export interface WorkOSUser extends Entity {
   metadata: Record<string, string>;
   locale: string | null;
   password_hash: string | null;
+  impersonator: { email: string; reason: string } | null;
 }
 
 export interface WorkOSSession extends Entity {
@@ -156,6 +157,42 @@ export interface WorkOSSSOAuthorization extends Entity {
   expires_at: string;
 }
 
+export interface WorkOSInvitation extends Entity {
+  object: 'invitation';
+  email: string;
+  state: 'pending' | 'accepted' | 'expired' | 'revoked';
+  token: string;
+  accept_invitation_url: string;
+  organization_id: string | null;
+  inviter_user_id: string | null;
+  role_slug: string | null;
+  expires_at: string;
+}
+
+export interface WorkOSRedirectUri extends Entity {
+  object: 'redirect_uri';
+  uri: string;
+}
+
+export interface WorkOSCorsOrigin extends Entity {
+  object: 'cors_origin';
+  origin: string;
+}
+
+export interface WorkOSAuthorizedApplication extends Entity {
+  object: 'authorized_application';
+  user_id: string;
+  name: string;
+  redirect_uri: string;
+}
+
+export interface WorkOSConnectedAccount extends Entity {
+  object: 'connected_account';
+  user_id: string;
+  provider: string;
+  provider_id: string;
+}
+
 export type PipeProvider = 'github' | 'slack' | 'google' | 'salesforce';
 export type PipeConnectionStatus = 'connected' | 'disconnected' | 'requires_reauth';
 
@@ -166,4 +203,185 @@ export interface WorkOSPipeConnection extends Entity {
   scopes: string[];
   status: PipeConnectionStatus;
   external_account_id: string | null;
+}
+
+export interface WorkOSRefreshToken extends Entity {
+  token: string;
+  user_id: string;
+  organization_id: string | null;
+  session_id: string;
+  expires_at: string;
+}
+
+export interface WorkOSAuthenticationChallenge extends Entity {
+  object: 'authentication_challenge';
+  user_id: string;
+  factor_id: string;
+  expires_at: string;
+  code: string | null;
+}
+
+export interface WorkOSDeviceAuthorization extends Entity {
+  device_code: string;
+  user_code: string;
+  user_id: string | null;
+  client_id: string;
+  expires_at: string;
+  interval: number;
+}
+
+export interface WorkOSRole extends Entity {
+  object: 'role';
+  slug: string;
+  name: string;
+  description: string | null;
+  type: 'EnvironmentRole' | 'OrganizationRole';
+  organization_id: string | null;
+  is_default_role: boolean;
+  priority: number;
+}
+
+export interface WorkOSPermission extends Entity {
+  object: 'permission';
+  slug: string;
+  name: string;
+  description: string | null;
+}
+
+export interface WorkOSRolePermission extends Entity {
+  role_id: string;
+  permission_id: string;
+}
+
+export interface WorkOSAuthorizationResource extends Entity {
+  object: 'authorization_resource';
+  resource_type_slug: string;
+  external_id: string;
+  organization_id: string;
+  metadata: Record<string, string>;
+}
+
+export interface WorkOSRoleAssignment extends Entity {
+  object: 'role_assignment';
+  organization_membership_id: string;
+  role_id: string;
+}
+
+// --- Phase 4: CRUD Domains ---
+
+export interface WorkOSDirectory extends Entity {
+  object: 'directory';
+  name: string;
+  organization_id: string | null;
+  domain: string | null;
+  type: string;
+  state: 'linked' | 'unlinked' | 'deleting' | 'invalid_credentials';
+  external_key: string | null;
+}
+
+export interface WorkOSDirectoryUser extends Entity {
+  object: 'directory_user';
+  directory_id: string;
+  organization_id: string | null;
+  idp_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  username: string | null;
+  state: 'active' | 'inactive';
+  role: { slug: string } | null;
+  custom_attributes: Record<string, unknown>;
+  raw_attributes: Record<string, unknown>;
+  groups: Array<{ object: 'directory_group'; id: string; name: string }>;
+}
+
+export interface WorkOSDirectoryGroup extends Entity {
+  object: 'directory_group';
+  directory_id: string;
+  organization_id: string | null;
+  idp_id: string;
+  name: string;
+  raw_attributes: Record<string, unknown>;
+}
+
+export interface WorkOSAuditLogAction extends Entity {
+  object: 'audit_log_action';
+  name: string;
+  description: string | null;
+  condition: string | null;
+}
+
+export interface WorkOSAuditLogEvent extends Entity {
+  object: 'audit_log_event';
+  organization_id: string;
+  action: { name: string; type: string; id: string };
+  actor: Record<string, unknown>;
+  targets: Array<Record<string, unknown>>;
+  metadata: Record<string, unknown> | null;
+  occurred_at: string;
+}
+
+export interface WorkOSAuditLogExport extends Entity {
+  object: 'audit_log_export';
+  organization_id: string;
+  state: 'pending' | 'ready' | 'error';
+  url: string | null;
+  filters: Record<string, unknown>;
+}
+
+export interface WorkOSFeatureFlag extends Entity {
+  object: 'feature_flag';
+  slug: string;
+  name: string;
+  description: string | null;
+  type: 'boolean' | 'string' | 'number';
+  default_value: unknown;
+  enabled: boolean;
+}
+
+export interface WorkOSFlagTarget extends Entity {
+  object: 'flag_target';
+  flag_slug: string;
+  resource_id: string;
+  resource_type: string;
+  value: unknown;
+}
+
+export interface WorkOSConnectApplication extends Entity {
+  object: 'connect_application';
+  name: string;
+  redirect_uris: string[];
+  client_id: string;
+  logo_url: string | null;
+}
+
+export interface WorkOSClientSecret extends Entity {
+  object: 'client_secret';
+  application_id: string;
+  value: string;
+  last_four: string;
+}
+
+export interface WorkOSDataIntegrationAuth extends Entity {
+  slug: string;
+  code: string;
+  redirect_uri: string;
+  state: string | null;
+  expires_at: string;
+}
+
+export interface WorkOSRadarAttempt extends Entity {
+  object: 'radar_attempt';
+  user_id: string | null;
+  ip_address: string;
+  user_agent: string | null;
+  verdict: 'allow' | 'deny' | 'challenge';
+  signals: Array<{ type: string; confidence: number }>;
+}
+
+export interface WorkOSApiKey extends Entity {
+  object: 'api_key';
+  name: string;
+  key: string;
+  environment: string;
 }

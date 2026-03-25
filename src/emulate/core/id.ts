@@ -52,4 +52,13 @@ export const ID_PREFIXES = {
   api_key: 'api_key',
   profile: 'prof',
   pipe_connection: 'pipe_conn',
+  audit_log_action: 'audit_action',
+  audit_log_event: 'audit_event',
+  audit_log_export: 'audit_export',
+  feature_flag: 'ff',
+  flag_target: 'ff_target',
+  connect_application: 'connect_app',
+  client_secret: 'client_secret',
+  data_integration_auth: 'di_auth',
+  radar_attempt: 'radar_attempt',
 } as const;

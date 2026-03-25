@@ -31,6 +31,7 @@ export function userRoutes(ctx: RouteContext): void {
       metadata: (body.metadata as Record<string, string>) ?? {},
       locale: null,
       password_hash: password ? hashPassword(password) : null,
+      impersonator: null,
     });
 
     return c.json(formatUser(user), 201);

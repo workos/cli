@@ -1,7 +1,21 @@
 import { createHash } from 'node:crypto';
 import { type RouteContext, notFound, parseJsonBody, WorkOSApiError, generateId } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
-import { formatUser, verifyPassword, isExpired, expiresIn, assertLocalRedirectUri } from '../helpers.js';
+import {
+  formatUser,
+  formatDeviceAuthorization,
+  verifyPassword,
+  isExpired,
+  expiresIn,
+  assertLocalRedirectUri,
+  sealSession,
+} from '../helpers.js';
+
+interface PendingAuth {
+  user_id: string;
+  organization_id: string | null;
+  auth_method: string;
+}
 
 export function authRoutes(ctx: RouteContext): void {
   const { app, store, jwt } = ctx;
@@ -13,14 +27,26 @@ export function authRoutes(ctx: RouteContext): void {
     const state = url.searchParams.get('state');
     const codeChallenge = url.searchParams.get('code_challenge');
     const codeChallengeMethod = url.searchParams.get('code_challenge_method');
+    const loginHint = url.searchParams.get('login_hint');
 
     if (!redirectUri) {
       throw new WorkOSApiError(400, 'redirect_uri is required', 'invalid_request');
     }
     assertLocalRedirectUri(redirectUri);
 
-    const users = ws.users.all();
-    const user = users[0];
+    let user;
+    if (loginHint) {
+      user = ws.users.findOneBy('email', loginHint);
+      if (!user) {
+        const redirect = new URL(redirectUri);
+        redirect.searchParams.set('error', 'user_not_found');
+        if (state) redirect.searchParams.set('state', state);
+        return c.redirect(redirect.toString());
+      }
+    } else {
+      const users = ws.users.all();
+      user = users[0];
+    }
 
     if (!user) {
       const redirect = new URL(redirectUri);
@@ -45,10 +71,35 @@ export function authRoutes(ctx: RouteContext): void {
     return c.redirect(redirect.toString());
   });
 
+  // Device authorization endpoint
+  app.post('/user_management/authorize/device', async (c) => {
+    const body = await parseJsonBody(c);
+    const clientId = body.client_id as string;
+    if (!clientId) {
+      throw new WorkOSApiError(400, 'client_id is required', 'invalid_request');
+    }
+
+    // Auto-approve with first user for emulator convenience
+    const users = ws.users.all();
+    const user = users[0] ?? null;
+
+    const deviceAuth = ws.deviceAuthorizations.insert({
+      device_code: generateId('dev_code'),
+      user_code: Math.random().toString(36).slice(2, 10).toUpperCase(),
+      user_id: user?.id ?? null,
+      client_id: clientId,
+      expires_at: expiresIn(15),
+      interval: 5,
+    });
+
+    return c.json(formatDeviceAuthorization(deviceAuth));
+  });
+
   app.post('/user_management/authenticate', async (c) => {
     const body = await parseJsonBody(c);
     const grantType = body.grant_type as string | undefined;
     const clientId = body.client_id as string | undefined;
+    const clientSecret = body.client_secret as string | undefined;
 
     if (!grantType) {
       throw new WorkOSApiError(400, 'grant_type is required', 'invalid_request');
@@ -108,7 +159,9 @@ export function authRoutes(ctx: RouteContext): void {
         break;
       }
 
-      case 'urn:workos:oauth:grant-type:magic-auth': {
+      // Accept both old and new grant type names for magic-auth
+      case 'urn:workos:oauth:grant-type:magic-auth':
+      case 'urn:workos:oauth:grant-type:magic-auth:code': {
         const code = body.code as string;
         const email = body.email as string;
         if (!code || !email) {
@@ -129,7 +182,9 @@ export function authRoutes(ctx: RouteContext): void {
         break;
       }
 
-      case 'urn:workos:oauth:grant-type:email-verification': {
+      // Accept both old and new grant type names for email-verification
+      case 'urn:workos:oauth:grant-type:email-verification':
+      case 'urn:workos:oauth:grant-type:email-verification:code': {
         const code = body.code as string;
         const userId = body.user_id as string;
         if (!code || !userId) {
@@ -151,6 +206,123 @@ export function authRoutes(ctx: RouteContext): void {
         break;
       }
 
+      case 'refresh_token': {
+        const token = body.refresh_token as string;
+        if (!token) {
+          throw new WorkOSApiError(400, 'refresh_token is required', 'invalid_request');
+        }
+
+        const refreshToken = ws.refreshTokens.findOneBy('token', token);
+        if (!refreshToken) {
+          throw new WorkOSApiError(400, 'Invalid refresh token', 'invalid_grant');
+        }
+        if (isExpired(refreshToken.expires_at)) {
+          ws.refreshTokens.delete(refreshToken.id);
+          throw new WorkOSApiError(400, 'Refresh token has expired', 'invalid_grant');
+        }
+
+        user = ws.users.get(refreshToken.user_id);
+        organizationId = refreshToken.organization_id;
+
+        // Rotate: delete old, issue new below
+        ws.refreshTokens.delete(refreshToken.id);
+        authMethod = 'OAuth';
+        break;
+      }
+
+      case 'urn:workos:oauth:grant-type:mfa-totp': {
+        const code = body.code as string;
+        const pendingToken = body.pending_authentication_token as string;
+        const challengeId = body.authentication_challenge_id as string;
+
+        if (!code || !pendingToken || !challengeId) {
+          throw new WorkOSApiError(
+            400,
+            'code, pending_authentication_token, and authentication_challenge_id are required',
+            'invalid_request',
+          );
+        }
+
+        const pending = store.getData<PendingAuth>(`pending_auth:${pendingToken}`);
+        if (!pending) {
+          throw new WorkOSApiError(400, 'Invalid pending authentication token', 'invalid_pending_authentication_token');
+        }
+
+        const challenge = ws.authChallenges.get(challengeId);
+        if (!challenge) {
+          throw new WorkOSApiError(400, 'Invalid authentication challenge', 'invalid_request');
+        }
+        if (isExpired(challenge.expires_at)) {
+          ws.authChallenges.delete(challenge.id);
+          throw new WorkOSApiError(400, 'Challenge has expired', 'expired_challenge');
+        }
+
+        // Verify code against the challenge's stored code
+        if (challenge.code && code !== challenge.code) {
+          throw new WorkOSApiError(400, 'Invalid one-time code', 'invalid_one_time_code');
+        }
+
+        ws.authChallenges.delete(challenge.id);
+        store.setData(`pending_auth:${pendingToken}`, undefined);
+
+        user = ws.users.get(pending.user_id);
+        organizationId = pending.organization_id;
+        authMethod = 'MFA';
+        break;
+      }
+
+      case 'urn:workos:oauth:grant-type:organization-selection': {
+        const pendingToken = body.pending_authentication_token as string;
+        const orgId = body.organization_id as string;
+
+        if (!pendingToken || !orgId) {
+          throw new WorkOSApiError(
+            400,
+            'pending_authentication_token and organization_id are required',
+            'invalid_request',
+          );
+        }
+
+        const pending = store.getData<PendingAuth>(`pending_auth:${pendingToken}`);
+        if (!pending) {
+          throw new WorkOSApiError(400, 'Invalid pending authentication token', 'invalid_pending_authentication_token');
+        }
+
+        const org = ws.organizations.get(orgId);
+        if (!org) throw notFound('Organization');
+
+        store.setData(`pending_auth:${pendingToken}`, undefined);
+
+        user = ws.users.get(pending.user_id);
+        organizationId = orgId;
+        authMethod = pending.auth_method;
+        break;
+      }
+
+      case 'urn:ietf:params:oauth:grant-type:device_code': {
+        const deviceCode = body.device_code as string;
+        if (!deviceCode) {
+          throw new WorkOSApiError(400, 'device_code is required', 'invalid_request');
+        }
+
+        const deviceAuth = ws.deviceAuthorizations.findOneBy('device_code', deviceCode);
+        if (!deviceAuth) {
+          throw new WorkOSApiError(400, 'Invalid device code', 'invalid_grant');
+        }
+        if (isExpired(deviceAuth.expires_at)) {
+          ws.deviceAuthorizations.delete(deviceAuth.id);
+          throw new WorkOSApiError(400, 'Device code has expired', 'expired_token');
+        }
+        if (!deviceAuth.user_id) {
+          throw new WorkOSApiError(400, 'Authorization pending', 'authorization_pending');
+        }
+
+        user = ws.users.get(deviceAuth.user_id);
+        ws.deviceAuthorizations.delete(deviceAuth.id);
+        authMethod = 'OAuth';
+        break;
+      }
+
       default:
         throw new WorkOSApiError(400, `Unsupported grant_type: ${grantType}`, 'invalid_request');
     }
@@ -168,22 +340,64 @@ export function authRoutes(ctx: RouteContext): void {
       user_agent: c.req.header('user-agent') ?? null,
     });
 
+    // Resolve role + permissions for org-scoped sessions
+    let roleSlug: string | undefined;
+    let permissionSlugs: string[] | undefined;
+    if (organizationId) {
+      const membership = ws.organizationMemberships
+        .findBy('organization_id', organizationId)
+        .find((m) => m.user_id === user.id);
+      if (membership) {
+        roleSlug = membership.role.slug;
+        const role = ws.roles.findBy('slug', membership.role.slug).find(
+          (r) => r.organization_id === organizationId || r.type === 'EnvironmentRole',
+        );
+        if (role) {
+          const rps = ws.rolePermissions.findBy('role_id', role.id);
+          permissionSlugs = rps
+            .map((rp) => ws.permissions.get(rp.permission_id))
+            .filter(Boolean)
+            .map((p) => p!.slug);
+        }
+      }
+    }
+
     const accessToken = jwt.sign({
       sub: user.id,
       sid: session.id,
       org_id: organizationId ?? undefined,
+      role: roleSlug,
+      permissions: permissionSlugs,
       aud: clientId ?? 'workos-emulate',
     });
 
-    const refreshToken = generateId('ref');
+    // Store a real refresh token
+    const newRefreshToken = ws.refreshTokens.insert({
+      token: generateId('ref'),
+      user_id: user.id,
+      organization_id: organizationId,
+      session_id: session.id,
+      expires_at: expiresIn(30 * 24 * 60), // 30 days
+    });
+
+    // Compute sealed session when client_secret is provided
+    const apiKey = c.req.header('Authorization')?.replace(/^Bearer\s+/i, '').trim();
+    const sealKey = clientSecret ?? apiKey;
+    const sealedSession = sealKey
+      ? sealSession(
+          { access_token: accessToken, refresh_token: newRefreshToken.token, session_id: session.id },
+          sealKey,
+        )
+      : null;
 
     return c.json({
       user: formatUser(updatedUser),
       organization_id: organizationId,
       access_token: accessToken,
-      refresh_token: refreshToken,
+      refresh_token: newRefreshToken.token,
       authentication_method: authMethod,
-      sealed_session: null,
+      sealed_session: sealedSession,
+      impersonator: updatedUser.impersonator ?? undefined,
     });
   });
 }

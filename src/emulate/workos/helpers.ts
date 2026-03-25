@@ -1,4 +1,4 @@
-import { randomBytes, createHash } from 'node:crypto';
+import { randomBytes, createHash, createCipheriv } from 'node:crypto';
 import { WorkOSApiError } from '../core/index.js';
 import type { WorkOSStore } from './store.js';
 import type {
@@ -15,6 +15,28 @@ import type {
   WorkOSConnection,
   WorkOSSSOProfile,
   WorkOSPipeConnection,
+  WorkOSInvitation,
+  WorkOSRedirectUri,
+  WorkOSCorsOrigin,
+  WorkOSAuthorizedApplication,
+  WorkOSConnectedAccount,
+  WorkOSAuthenticationChallenge,
+  WorkOSDeviceAuthorization,
+  WorkOSRole,
+  WorkOSPermission,
+  WorkOSAuthorizationResource,
+  WorkOSRoleAssignment,
+  WorkOSDirectory,
+  WorkOSDirectoryUser,
+  WorkOSDirectoryGroup,
+  WorkOSAuditLogAction,
+  WorkOSAuditLogEvent,
+  WorkOSAuditLogExport,
+  WorkOSFeatureFlag,
+  WorkOSConnectApplication,
+  WorkOSClientSecret,
+  WorkOSRadarAttempt,
+  WorkOSApiKey,
 } from './entities.js';
 
 export function formatOrganization(org: WorkOSOrganization, ws: WorkOSStore): Record<string, unknown> {
@@ -228,6 +250,67 @@ export function formatPipeConnection(pc: WorkOSPipeConnection): Record<string, u
   };
 }
 
+export function formatInvitation(inv: WorkOSInvitation): Record<string, unknown> {
+  return {
+    object: 'invitation',
+    id: inv.id,
+    email: inv.email,
+    state: inv.state,
+    token: inv.token,
+    accept_invitation_url: inv.accept_invitation_url,
+    organization_id: inv.organization_id,
+    inviter_user_id: inv.inviter_user_id,
+    role_slug: inv.role_slug,
+    expires_at: inv.expires_at,
+    created_at: inv.created_at,
+    updated_at: inv.updated_at,
+  };
+}
+
+export function formatRedirectUri(r: WorkOSRedirectUri): Record<string, unknown> {
+  return {
+    object: 'redirect_uri',
+    id: r.id,
+    uri: r.uri,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+  };
+}
+
+export function formatCorsOrigin(o: WorkOSCorsOrigin): Record<string, unknown> {
+  return {
+    object: 'cors_origin',
+    id: o.id,
+    origin: o.origin,
+    created_at: o.created_at,
+    updated_at: o.updated_at,
+  };
+}
+
+export function formatAuthorizedApplication(a: WorkOSAuthorizedApplication): Record<string, unknown> {
+  return {
+    object: 'authorized_application',
+    id: a.id,
+    user_id: a.user_id,
+    name: a.name,
+    redirect_uri: a.redirect_uri,
+    created_at: a.created_at,
+    updated_at: a.updated_at,
+  };
+}
+
+export function formatConnectedAccount(a: WorkOSConnectedAccount): Record<string, unknown> {
+  return {
+    object: 'connected_account',
+    id: a.id,
+    user_id: a.user_id,
+    provider: a.provider,
+    provider_id: a.provider_id,
+    created_at: a.created_at,
+    updated_at: a.updated_at,
+  };
+}
+
 export function parseListParams(url: URL) {
   const limit = Math.max(1, Math.min(parseInt(url.searchParams.get('limit') ?? '10'), 100));
   const order = (url.searchParams.get('order') as 'asc' | 'desc') ?? 'desc';
@@ -257,4 +340,246 @@ export function assertLocalRedirectUri(uri: string): void {
       'invalid_redirect_uri',
     );
   }
+}
+
+export function formatAuthChallenge(c: WorkOSAuthenticationChallenge): Record<string, unknown> {
+  return {
+    object: 'authentication_challenge',
+    id: c.id,
+    user_id: c.user_id,
+    factor_id: c.factor_id,
+    expires_at: c.expires_at,
+    created_at: c.created_at,
+    updated_at: c.updated_at,
+  };
+}
+
+export function formatRole(role: WorkOSRole): Record<string, unknown> {
+  return {
+    object: 'role',
+    id: role.id,
+    slug: role.slug,
+    name: role.name,
+    description: role.description,
+    type: role.type,
+    organization_id: role.organization_id,
+    is_default_role: role.is_default_role,
+    priority: role.priority,
+    created_at: role.created_at,
+    updated_at: role.updated_at,
+  };
+}
+
+export function formatPermission(p: WorkOSPermission): Record<string, unknown> {
+  return {
+    object: 'permission',
+    id: p.id,
+    slug: p.slug,
+    name: p.name,
+    description: p.description,
+    created_at: p.created_at,
+    updated_at: p.updated_at,
+  };
+}
+
+export function formatAuthorizationResource(r: WorkOSAuthorizationResource): Record<string, unknown> {
+  return {
+    object: 'authorization_resource',
+    id: r.id,
+    resource_type_slug: r.resource_type_slug,
+    external_id: r.external_id,
+    organization_id: r.organization_id,
+    metadata: r.metadata,
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+  };
+}
+
+export function formatRoleAssignment(ra: WorkOSRoleAssignment): Record<string, unknown> {
+  return {
+    object: 'role_assignment',
+    id: ra.id,
+    organization_membership_id: ra.organization_membership_id,
+    role_id: ra.role_id,
+    created_at: ra.created_at,
+    updated_at: ra.updated_at,
+  };
+}
+
+export function formatDeviceAuthorization(d: WorkOSDeviceAuthorization): Record<string, unknown> {
+  return {
+    device_code: d.device_code,
+    user_code: d.user_code,
+    verification_uri: 'http://localhost:0/user_management/authorize/device/verify',
+    expires_in: Math.max(0, Math.floor((new Date(d.expires_at).getTime() - Date.now()) / 1000)),
+    interval: d.interval,
+  };
+}
+
+// --- Phase 4: CRUD Domain formatters ---
+
+export function formatDirectory(d: WorkOSDirectory): Record<string, unknown> {
+  return {
+    object: 'directory',
+    id: d.id,
+    name: d.name,
+    organization_id: d.organization_id,
+    domain: d.domain,
+    type: d.type,
+    state: d.state,
+    external_key: d.external_key,
+    created_at: d.created_at,
+    updated_at: d.updated_at,
+  };
+}
+
+export function formatDirectoryUser(u: WorkOSDirectoryUser): Record<string, unknown> {
+  return {
+    object: 'directory_user',
+    id: u.id,
+    directory_id: u.directory_id,
+    organization_id: u.organization_id,
+    idp_id: u.idp_id,
+    first_name: u.first_name,
+    last_name: u.last_name,
+    email: u.email,
+    username: u.username,
+    state: u.state,
+    role: u.role,
+    custom_attributes: u.custom_attributes,
+    raw_attributes: u.raw_attributes,
+    groups: u.groups,
+    created_at: u.created_at,
+    updated_at: u.updated_at,
+  };
+}
+
+export function formatDirectoryGroup(g: WorkOSDirectoryGroup): Record<string, unknown> {
+  return {
+    object: 'directory_group',
+    id: g.id,
+    directory_id: g.directory_id,
+    organization_id: g.organization_id,
+    idp_id: g.idp_id,
+    name: g.name,
+    raw_attributes: g.raw_attributes,
+    created_at: g.created_at,
+    updated_at: g.updated_at,
+  };
+}
+
+export function formatAuditLogAction(a: WorkOSAuditLogAction): Record<string, unknown> {
+  return {
+    object: 'audit_log_action',
+    id: a.id,
+    name: a.name,
+    description: a.description,
+    condition: a.condition,
+    created_at: a.created_at,
+    updated_at: a.updated_at,
+  };
+}
+
+export function formatAuditLogEvent(e: WorkOSAuditLogEvent): Record<string, unknown> {
+  return {
+    object: 'audit_log_event',
+    id: e.id,
+    organization_id: e.organization_id,
+    action: e.action,
+    actor: e.actor,
+    targets: e.targets,
+    metadata: e.metadata,
+    occurred_at: e.occurred_at,
+    created_at: e.created_at,
+    updated_at: e.updated_at,
+  };
+}
+
+export function formatAuditLogExport(ex: WorkOSAuditLogExport): Record<string, unknown> {
+  return {
+    object: 'audit_log_export',
+    id: ex.id,
+    organization_id: ex.organization_id,
+    state: ex.state,
+    url: ex.url,
+    filters: ex.filters,
+    created_at: ex.created_at,
+    updated_at: ex.updated_at,
+  };
+}
+
+export function formatFeatureFlag(f: WorkOSFeatureFlag): Record<string, unknown> {
+  return {
+    object: 'feature_flag',
+    id: f.id,
+    slug: f.slug,
+    name: f.name,
+    description: f.description,
+    type: f.type,
+    default_value: f.default_value,
+    enabled: f.enabled,
+    created_at: f.created_at,
+    updated_at: f.updated_at,
+  };
+}
+
+export function formatConnectApplication(a: WorkOSConnectApplication): Record<string, unknown> {
+  return {
+    object: 'connect_application',
+    id: a.id,
+    name: a.name,
+    redirect_uris: a.redirect_uris,
+    client_id: a.client_id,
+    logo_url: a.logo_url,
+    created_at: a.created_at,
+    updated_at: a.updated_at,
+  };
+}
+
+export function formatClientSecret(s: WorkOSClientSecret): Record<string, unknown> {
+  return {
+    object: 'client_secret',
+    id: s.id,
+    application_id: s.application_id,
+    last_four: s.last_four,
+    created_at: s.created_at,
+    updated_at: s.updated_at,
+  };
+}
+
+export function formatRadarAttempt(a: WorkOSRadarAttempt): Record<string, unknown> {
+  return {
+    object: 'radar_attempt',
+    id: a.id,
+    user_id: a.user_id,
+    ip_address: a.ip_address,
+    user_agent: a.user_agent,
+    verdict: a.verdict,
+    signals: a.signals,
+    created_at: a.created_at,
+    updated_at: a.updated_at,
+  };
+}
+
+export function formatApiKeyRecord(k: WorkOSApiKey): Record<string, unknown> {
+  return {
+    object: 'api_key',
+    id: k.id,
+    name: k.name,
+    created_at: k.created_at,
+    updated_at: k.updated_at,
+  };
+}
+
+export function sealSession(
+  data: { access_token: string; refresh_token: string; session_id: string },
+  apiKey: string,
+): string {
+  const key = createHash('sha256').update(apiKey).digest();
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  const plaintext = JSON.stringify(data);
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([iv, tag, encrypted]).toString('base64');
 }
