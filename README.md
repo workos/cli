@@ -216,6 +216,7 @@ workos dev --port 8080 --seed workos-emulate.config.yaml
 ```
 
 Your app receives these environment variables automatically:
+
 - `WORKOS_API_BASE_URL` — points to the local emulator (e.g. `http://localhost:4100`)
 - `WORKOS_API_KEY` — `sk_test_default`
 - `WORKOS_CLIENT_ID` — `client_emulate`
@@ -295,21 +296,21 @@ await emulator.close();
 
 The emulator covers all major WorkOS APIs:
 
-| Endpoint Group | Routes |
-|---|---|
-| Organizations | CRUD, external_id lookup, domain management |
-| Users | CRUD, email uniqueness, password management |
-| Organization memberships | CRUD, role assignment, deactivate/reactivate |
-| Organization domains | CRUD, verification |
-| SSO connections | CRUD, domain-based lookup |
-| SSO flow | Authorize, token exchange, profile, JWKS |
-| AuthKit | OAuth authorize, authenticate (password, magic auth, email verification, authorization code + PKCE) |
-| Sessions | List, revoke |
-| Email verification | Send code, confirm |
-| Password reset | Create token, confirm |
-| Magic auth | Create code |
-| Auth factors | TOTP enrollment |
-| Pipes | Connection CRUD, mock `getAccessToken()` |
+| Endpoint Group           | Routes                                                                                              |
+| ------------------------ | --------------------------------------------------------------------------------------------------- |
+| Organizations            | CRUD, external_id lookup, domain management                                                         |
+| Users                    | CRUD, email uniqueness, password management                                                         |
+| Organization memberships | CRUD, role assignment, deactivate/reactivate                                                        |
+| Organization domains     | CRUD, verification                                                                                  |
+| SSO connections          | CRUD, domain-based lookup                                                                           |
+| SSO flow                 | Authorize, token exchange, profile, JWKS                                                            |
+| AuthKit                  | OAuth authorize, authenticate (password, magic auth, email verification, authorization code + PKCE) |
+| Sessions                 | List, revoke                                                                                        |
+| Email verification       | Send code, confirm                                                                                  |
+| Password reset           | Create token, confirm                                                                               |
+| Magic auth               | Create code                                                                                         |
+| Auth factors             | TOTP enrollment                                                                                     |
+| Pipes                    | Connection CRUD, mock `getAccessToken()`                                                            |
 
 All list endpoints support cursor pagination (`before`, `after`, `limit`, `order`). Error responses match the WorkOS format (`{ message, code, errors }`).
 
@@ -587,13 +588,13 @@ workos install --api-key sk_test_xxx --client-id client_xxx --no-commit 2>/dev/n
 
 ### Environment Variables
 
-| Variable                 | Effect                                                   |
-| ------------------------ | -------------------------------------------------------- |
-| `WORKOS_API_KEY`         | API key for management commands (bypasses stored config) |
+| Variable                 | Effect                                                    |
+| ------------------------ | --------------------------------------------------------- |
+| `WORKOS_API_KEY`         | API key for management commands (bypasses stored config)  |
 | `WORKOS_API_BASE_URL`    | Override API base URL (set automatically by `workos dev`) |
-| `WORKOS_NO_PROMPT=1`     | Force non-interactive mode + JSON output                 |
-| `WORKOS_FORCE_TTY=1`     | Force interactive mode even when piped                   |
-| `WORKOS_TELEMETRY=false` | Disable telemetry                                        |
+| `WORKOS_NO_PROMPT=1`     | Force non-interactive mode + JSON output                  |
+| `WORKOS_FORCE_TTY=1`     | Force interactive mode even when piped                    |
+| `WORKOS_TELEMETRY=false` | Disable telemetry                                         |
 
 ### Command Discovery
 
