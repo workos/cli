@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createServer, type ApiKeyMap, type Store } from '../../core/index.js';
+import { createServer, type ApiKeyMap } from '../../core/index.js';
 import { workosPlugin } from '../index.js';
-import { getWorkOSStore } from '../store.js';
 
 const apiKeys: ApiKeyMap = { sk_test_org: { environment: 'test' } };
 const headers = { Authorization: 'Bearer sk_test_org', 'Content-Type': 'application/json' };
@@ -12,12 +11,9 @@ function createTestApp() {
 
 describe('Data Integrations routes', () => {
   let app: ReturnType<typeof createTestApp>['app'];
-  let store: Store;
 
   beforeEach(() => {
-    const server = createTestApp();
-    app = server.app;
-    store = server.store;
+    app = createTestApp().app;
   });
 
   const req = (path: string, init?: RequestInit) => app.request(path, { headers, ...init });

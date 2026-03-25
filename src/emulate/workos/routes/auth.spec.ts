@@ -239,7 +239,7 @@ describe('Auth routes', () => {
   // --- Impersonation tests ---
 
   it('includes impersonator in response when configured', async () => {
-    const user = await createUser('target@test.com', {
+    await createUser('target@test.com', {
       impersonator: { email: 'admin@test.com', reason: 'debugging' },
     });
 

@@ -5,7 +5,6 @@ import { getWorkOSStore } from '../store.js';
 import type { Store } from '../../core/index.js';
 
 const apiKeys: ApiKeyMap = { sk_test_session: { environment: 'test' } };
-const headers = { Authorization: 'Bearer sk_test_session', 'Content-Type': 'application/json' };
 
 function createTestApp() {
   return createServer(workosPlugin, { port: 0, baseUrl: 'http://localhost:0', apiKeys });
@@ -21,7 +20,6 @@ describe('Session routes', () => {
     store = server.store;
   });
 
-  const req = (path: string, init?: RequestInit) => app.request(path, { headers, ...init });
   const json = (res: Response) => res.json() as Promise<any>;
 
   it('logout redirects to return_to when provided', async () => {

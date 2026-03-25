@@ -100,8 +100,8 @@ describe('EventBus', () => {
 
     expect(fetchSpy).toHaveBeenCalledOnce();
     const [, init] = fetchSpy.mock.calls[0];
-    receivedBody = init?.body as string;
-    receivedSignature = (init?.headers as Record<string, string>)['WorkOS-Signature'];
+    receivedBody = init!.body as string;
+    receivedSignature = (init!.headers as Record<string, string>)['WorkOS-Signature'];
 
     // Verify signature format
     expect(receivedSignature).toMatch(/^t=\d+,v1=[a-f0-9]{64}$/);
