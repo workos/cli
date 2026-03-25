@@ -223,7 +223,8 @@ export function authRoutes(ctx: RouteContext): void {
         }
 
         user = ws.users.get(refreshToken.user_id);
-        organizationId = refreshToken.organization_id;
+        // Allow body.organization_id to switch org context (switchToOrganization)
+        organizationId = (body.organization_id as string) ?? refreshToken.organization_id;
 
         // Rotate: delete old, issue new below
         ws.refreshTokens.delete(refreshToken.id);
