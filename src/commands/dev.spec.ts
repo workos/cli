@@ -19,6 +19,11 @@ describe('buildDevEnv', () => {
     expect(env.WORKOS_API_KEY).toBe('sk_test_default');
   });
 
+  it('uses custom API key when provided', () => {
+    const env = buildDevEnv('http://localhost:4100', 'sk_test_custom');
+    expect(env.WORKOS_API_KEY).toBe('sk_test_custom');
+  });
+
   it('includes WORKOS_CLIENT_ID', () => {
     const env = buildDevEnv('http://localhost:4100');
     expect(env.WORKOS_CLIENT_ID).toBe('client_emulated');

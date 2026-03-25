@@ -103,4 +103,25 @@ describe('Auth routes', () => {
     expect(body.access_token).toBeDefined();
     expect(body.authentication_method).toBe('OAuth');
   });
+
+  it('authorize rejects non-localhost redirect_uri', async () => {
+    const res = await app.request(
+      '/user_management/authorize?redirect_uri=https://evil.example.com/callback&response_type=code',
+    );
+    expect(res.status).toBe(400);
+    const body = await json(res);
+    expect(body.code).toBe('invalid_redirect_uri');
+  });
+
+  it('authorize allows 127.0.0.1 redirect_uri', async () => {
+    await req('/user_management/users', {
+      method: 'POST',
+      body: JSON.stringify({ email: 'ip@test.com' }),
+    });
+
+    const res = await app.request(
+      '/user_management/authorize?redirect_uri=http://127.0.0.1:5000/callback&response_type=code',
+    );
+    expect(res.status).toBe(302);
+  });
 });

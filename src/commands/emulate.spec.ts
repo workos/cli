@@ -113,4 +113,35 @@ describe('createEmulator', () => {
     });
     expect(res2.status).toBe(200);
   });
+
+  it('exposes the primary API key on the emulator object', async () => {
+    emulator = await createEmulator({ port: 0 });
+    expect(emulator.apiKey).toBe('sk_test_default');
+  });
+
+  it('exposes custom API key when seed.apiKeys is provided', async () => {
+    emulator = await createEmulator({
+      port: 0,
+      seed: { apiKeys: { sk_test_custom: { environment: 'staging' } } },
+    });
+    expect(emulator.apiKey).toBe('sk_test_custom');
+  });
+
+  it('issues JWT tokens with correct issuer when using port 0', async () => {
+    emulator = await createEmulator({
+      port: 0,
+      seed: { users: [{ email: 'jwt@test.com', password: 'pass' }] },
+    });
+
+    const res = await fetch(`${emulator.url}/user_management/authenticate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ grant_type: 'password', email: 'jwt@test.com', password: 'pass' }),
+    });
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as any;
+    const payload = JSON.parse(Buffer.from(body.access_token.split('.')[1], 'base64url').toString('utf-8'));
+    expect(payload.iss).toBe(emulator.url);
+  });
 });

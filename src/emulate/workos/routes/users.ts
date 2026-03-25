@@ -111,6 +111,15 @@ export function userRoutes(ctx: RouteContext): void {
     for (const i of ws.identities.findBy('user_id', user.id)) {
       ws.identities.delete(i.id);
     }
+    for (const pr of ws.passwordResets.findBy('user_id', user.id)) {
+      ws.passwordResets.delete(pr.id);
+    }
+    for (const ev of ws.emailVerifications.findBy('user_id', user.id)) {
+      ws.emailVerifications.delete(ev.id);
+    }
+    for (const ma of ws.magicAuths.findBy('user_id', user.id)) {
+      ws.magicAuths.delete(ma.id);
+    }
 
     ws.users.delete(user.id);
     return c.body(null, 204);

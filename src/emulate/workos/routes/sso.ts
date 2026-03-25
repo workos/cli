@@ -1,6 +1,6 @@
 import { type RouteContext, parseJsonBody, WorkOSApiError, generateId } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
-import { formatSSOProfile, expiresIn, isExpired } from '../helpers.js';
+import { formatSSOProfile, expiresIn, isExpired, assertLocalRedirectUri } from '../helpers.js';
 import type { WorkOSConnection } from '../entities.js';
 
 export function ssoRoutes(ctx: RouteContext): void {
@@ -19,6 +19,7 @@ export function ssoRoutes(ctx: RouteContext): void {
     if (!redirectUri) {
       throw new WorkOSApiError(400, 'Missing required parameter: redirect_uri', 'invalid_request');
     }
+    assertLocalRedirectUri(redirectUri);
 
     let connection: WorkOSConnection | undefined;
 

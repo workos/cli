@@ -54,12 +54,17 @@ export function passwordResetRoutes(ctx: RouteContext): void {
       throw new WorkOSApiError(400, 'Token has expired', 'expired_token');
     }
 
+    const user = ws.users.get(pr.user_id);
+    if (!user) {
+      ws.passwordResets.delete(pr.id);
+      throw notFound('User');
+    }
+
     ws.users.update(pr.user_id, {
       password_hash: hashPassword(newPassword),
     });
     ws.passwordResets.delete(pr.id);
 
-    const user = ws.users.get(pr.user_id)!;
     return c.json({ user: { object: 'user', id: user.id, email: user.email } });
   });
 }

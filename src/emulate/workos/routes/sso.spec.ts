@@ -93,4 +93,15 @@ describe('SSO routes', () => {
     expect(body.keys).toHaveLength(1);
     expect(body.keys[0].alg).toBe('RS256');
   });
+
+  it('sso authorize rejects non-localhost redirect_uri', async () => {
+    const { conn } = await createOrgWithConnection();
+
+    const res = await app.request(
+      `/sso/authorize?connection=${conn.id}&redirect_uri=https://evil.example.com/callback`,
+    );
+    expect(res.status).toBe(400);
+    const body = await json(res);
+    expect(body.code).toBe('invalid_redirect_uri');
+  });
 });

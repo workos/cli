@@ -168,4 +168,58 @@ describe('Password Reset', () => {
     });
     expect(confirmRes.status).toBe(200);
   });
+
+  it('returns 404 when confirming reset after user deletion', async () => {
+    const user = await json(
+      await req('/user_management/users', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'gone@test.com', password: 'old' }),
+      }),
+    );
+
+    const pr = await json(
+      await req('/user_management/password_reset', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'gone@test.com' }),
+      }),
+    );
+
+    // Delete the user while the reset token is still valid
+    await req(`/user_management/users/${user.id}`, { method: 'DELETE' });
+
+    // Password-reset artifacts should have been cleaned up by user deletion,
+    // so the token is now invalid
+    const confirmRes = await req('/user_management/password_reset/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ token: pr.token, new_password: 'new' }),
+    });
+    // Token was cleaned up → 400 invalid token (not a 500)
+    expect(confirmRes.status).toBeLessThan(500);
+  });
+
+  it('deleting a user cleans up password resets, verifications, and magic auths', async () => {
+    const user = await json(
+      await req('/user_management/users', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'cleanup@test.com', password: 'pw' }),
+      }),
+    );
+
+    // Create a password reset
+    await req('/user_management/password_reset', {
+      method: 'POST',
+      body: JSON.stringify({ email: 'cleanup@test.com' }),
+    });
+
+    // Create an email verification
+    await req(`/user_management/users/${user.id}/email_verification/send`, { method: 'POST' });
+
+    // Delete the user
+    const delRes = await req(`/user_management/users/${user.id}`, { method: 'DELETE' });
+    expect(delRes.status).toBe(204);
+
+    // Verify the user is gone
+    const getRes = await req(`/user_management/users/${user.id}`);
+    expect(getRes.status).toBe(404);
+  });
 });

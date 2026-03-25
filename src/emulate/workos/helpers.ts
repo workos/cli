@@ -1,4 +1,5 @@
 import { randomBytes, createHash } from 'node:crypto';
+import { WorkOSApiError } from '../core/index.js';
 import type { WorkOSStore } from './store.js';
 import type {
   WorkOSOrganization,
@@ -233,4 +234,27 @@ export function parseListParams(url: URL) {
   const before = url.searchParams.get('before') ?? undefined;
   const after = url.searchParams.get('after') ?? undefined;
   return { limit, order, before, after };
+}
+
+/** Allowed redirect URI hosts for the emulator's authorize endpoints. */
+const ALLOWED_REDIRECT_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/**
+ * Validate that a redirect_uri points to a localhost origin.
+ * Prevents the emulator from being used as an open redirect.
+ */
+export function assertLocalRedirectUri(uri: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(uri);
+  } catch {
+    throw new WorkOSApiError(400, 'Invalid redirect_uri', 'invalid_redirect_uri');
+  }
+  if (!ALLOWED_REDIRECT_HOSTS.has(parsed.hostname)) {
+    throw new WorkOSApiError(
+      400,
+      `redirect_uri must point to localhost, got ${parsed.hostname}`,
+      'invalid_redirect_uri',
+    );
+  }
 }

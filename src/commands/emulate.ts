@@ -36,12 +36,12 @@ function autoDetectSeedFile(): EmulatorSeedConfig | null {
   return null;
 }
 
-function printBanner(emulator: { url: string; port: number }): void {
+function printBanner(emulator: { url: string; port: number; apiKey: string }): void {
   console.log();
   console.log(chalk.bold('  WorkOS Emulator'));
   console.log();
   console.log(`  ${chalk.dim('URL:')}      ${emulator.url}`);
-  console.log(`  ${chalk.dim('API Key:')}  sk_test_default`);
+  console.log(`  ${chalk.dim('API Key:')}  ${emulator.apiKey}`);
   console.log(`  ${chalk.dim('Health:')}   ${emulator.url}/health`);
   console.log();
   console.log(chalk.dim('  Press Ctrl+C to stop'));
@@ -61,7 +61,7 @@ export async function runEmulate(argv: EmulateArgs): Promise<void> {
       JSON.stringify({
         url: emulator.url,
         port: emulator.port,
-        apiKey: 'sk_test_default',
+        apiKey: emulator.apiKey,
         health: `${emulator.url}/health`,
       }),
     );

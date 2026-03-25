@@ -70,14 +70,14 @@ export const DEFAULT_DEV_SEED: EmulatorSeedConfig = {
   ],
 };
 
-export function buildDevEnv(emulatorUrl: string): Record<string, string> {
+export function buildDevEnv(emulatorUrl: string, apiKey = 'sk_test_default'): Record<string, string> {
   const url = new URL(emulatorUrl);
   return {
     WORKOS_API_BASE_URL: emulatorUrl,
     WORKOS_API_HOSTNAME: url.hostname,
     WORKOS_API_PORT: url.port,
     WORKOS_API_HTTPS: 'false',
-    WORKOS_API_KEY: 'sk_test_default',
+    WORKOS_API_KEY: apiKey,
     WORKOS_CLIENT_ID: 'client_emulated',
   };
 }
@@ -120,7 +120,7 @@ export async function runDev(argv: DevArgs): Promise<void> {
       stdio: 'inherit',
       env: {
         ...process.env,
-        ...buildDevEnv(emulator.url),
+        ...buildDevEnv(emulator.url, emulator.apiKey),
       },
     });
   } catch {

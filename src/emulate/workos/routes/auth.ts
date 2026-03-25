@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { type RouteContext, notFound, parseJsonBody, WorkOSApiError, generateId } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
-import { formatUser, verifyPassword, isExpired, expiresIn } from '../helpers.js';
+import { formatUser, verifyPassword, isExpired, expiresIn, assertLocalRedirectUri } from '../helpers.js';
 
 export function authRoutes(ctx: RouteContext): void {
   const { app, store, jwt } = ctx;
@@ -17,6 +17,7 @@ export function authRoutes(ctx: RouteContext): void {
     if (!redirectUri) {
       throw new WorkOSApiError(400, 'redirect_uri is required', 'invalid_request');
     }
+    assertLocalRedirectUri(redirectUri);
 
     const users = ws.users.all();
     const user = users[0];

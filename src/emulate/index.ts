@@ -17,6 +17,7 @@ export interface EmulatorOptions {
 export interface Emulator {
   url: string;
   port: number;
+  apiKey: string;
   close(): Promise<void>;
   reset(): void;
 }
@@ -29,7 +30,7 @@ export async function createEmulator(options: EmulatorOptions = {}): Promise<Emu
     sk_test_default: { environment: 'test' },
   };
 
-  const { app, store } = createServer(workosPlugin, {
+  const { app, store, jwt } = createServer(workosPlugin, {
     port,
     baseUrl,
     apiKeys,
@@ -53,9 +54,15 @@ export async function createEmulator(options: EmulatorOptions = {}): Promise<Emu
   const actualPort = typeof addr === 'object' && addr ? addr.port : port;
   const url = `http://localhost:${actualPort}`;
 
+  // Update JWT issuer to reflect the actual bound URL (matters when port: 0)
+  jwt.issuer = url;
+
+  const primaryApiKey = Object.keys(apiKeys)[0];
+
   return {
     url,
     port: actualPort,
+    apiKey: primaryApiKey,
     reset() {
       store.reset();
       seedFn();
