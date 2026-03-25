@@ -119,25 +119,22 @@ export function authorizationResourceRoutes(ctx: RouteContext): void {
   });
 
   // Memberships for resource by type + external ID within an org
-  app.get(
-    '/authorization/organizations/:orgId/resources/:type_slug/:external_id/organization_memberships',
-    (c) => {
-      const ws = getWorkOSStore(store);
-      const orgId = c.req.param('orgId');
-      const typeSlug = c.req.param('type_slug');
-      const externalId = c.req.param('external_id');
+  app.get('/authorization/organizations/:orgId/resources/:type_slug/:external_id/organization_memberships', (c) => {
+    const ws = getWorkOSStore(store);
+    const orgId = c.req.param('orgId');
+    const typeSlug = c.req.param('type_slug');
+    const externalId = c.req.param('external_id');
 
-      const resource = ws.authorizationResources
-        .findBy('organization_id', orgId)
-        .find((r) => r.resource_type_slug === typeSlug && r.external_id === externalId);
-      if (!resource) throw notFound('AuthorizationResource');
+    const resource = ws.authorizationResources
+      .findBy('organization_id', orgId)
+      .find((r) => r.resource_type_slug === typeSlug && r.external_id === externalId);
+    if (!resource) throw notFound('AuthorizationResource');
 
-      const memberships = ws.organizationMemberships.findBy('organization_id', resource.organization_id);
-      return c.json({
-        object: 'list',
-        data: memberships.map(formatMembership),
-        list_metadata: { before: null, after: null },
-      });
-    },
-  );
+    const memberships = ws.organizationMemberships.findBy('organization_id', resource.organization_id);
+    return c.json({
+      object: 'list',
+      data: memberships.map(formatMembership),
+      list_metadata: { before: null, after: null },
+    });
+  });
 }

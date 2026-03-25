@@ -40,11 +40,7 @@ describe('EventBus', () => {
 
     const events = ws.events.all();
     expect(events).toHaveLength(3);
-    expect(events.map((e) => e.event)).toEqual([
-      'user.created',
-      'user.updated',
-      'organization.created',
-    ]);
+    expect(events.map((e) => e.event)).toEqual(['user.created', 'user.updated', 'organization.created']);
   });
 
   it('does not deliver to disabled webhook endpoints', () => {
@@ -113,9 +109,7 @@ describe('EventBus', () => {
     // Verify HMAC is correct
     const match = receivedSignature!.match(/^t=(\d+),v1=([a-f0-9]+)$/)!;
     const [, timestamp, hash] = match;
-    const expectedHash = createHmac('sha256', secret)
-      .update(`${timestamp}.${receivedBody}`)
-      .digest('hex');
+    const expectedHash = createHmac('sha256', secret).update(`${timestamp}.${receivedBody}`).digest('hex');
     expect(hash).toBe(expectedHash);
 
     fetchSpy.mockRestore();
@@ -125,9 +119,9 @@ describe('EventBus', () => {
     const ws = getWorkOSStore(store);
 
     // Mock fetch to simulate a slow endpoint
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
-      () => new Promise((resolve) => setTimeout(() => resolve(new Response('ok')), 10000)),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(() => new Promise((resolve) => setTimeout(() => resolve(new Response('ok')), 10000)));
 
     ws.webhookEndpoints.insert({
       object: 'webhook_endpoint',

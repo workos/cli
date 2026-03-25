@@ -17,9 +17,7 @@ describe('signWebhookPayload', () => {
     expect(match).toBeTruthy();
 
     const [, timestamp, hash] = match!;
-    const expected = createHmac('sha256', secret)
-      .update(`${timestamp}.${payload}`)
-      .digest('hex');
+    const expected = createHmac('sha256', secret).update(`${timestamp}.${payload}`).digest('hex');
 
     expect(hash).toBe(expected);
   });

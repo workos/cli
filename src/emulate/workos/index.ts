@@ -37,7 +37,23 @@ import { dataIntegrationRoutes } from './routes/data-integrations.js';
 import { webhookEndpointRoutes } from './routes/webhook-endpoints.js';
 import { eventRoutes } from './routes/events.js';
 import { EventBus } from './event-bus.js';
-import { generateVerificationToken, hashPassword, expiresIn, formatUser, formatOrganization, formatMembership, formatConnection, formatSession, formatInvitation, formatRole, formatPermission, formatDirectory, formatDirectoryUser, formatDirectoryGroup, formatDomain } from './helpers.js';
+import {
+  generateVerificationToken,
+  hashPassword,
+  expiresIn,
+  formatUser,
+  formatOrganization,
+  formatMembership,
+  formatConnection,
+  formatSession,
+  formatInvitation,
+  formatRole,
+  formatPermission,
+  formatDirectory,
+  formatDirectoryUser,
+  formatDirectoryGroup,
+  formatDomain,
+} from './helpers.js';
 import type { WorkOSConnectionType, PipeProvider, PipeConnectionStatus } from './entities.js';
 
 export { getWorkOSStore, type WorkOSStore } from './store.js';
@@ -370,10 +386,11 @@ export const workosPlugin: ServicePlugin = {
     });
     ws.organizationDomains.setHooks({
       onInsert: (d) => eventBus.emit({ event: 'organization_domain.created', data: formatDomain(d) }),
-      onUpdate: (d) => eventBus.emit({
-        event: d.state === 'verified' ? 'organization_domain.verified' : 'organization_domain.updated',
-        data: formatDomain(d),
-      }),
+      onUpdate: (d) =>
+        eventBus.emit({
+          event: d.state === 'verified' ? 'organization_domain.verified' : 'organization_domain.updated',
+          data: formatDomain(d),
+        }),
       onDelete: (d) => eventBus.emit({ event: 'organization_domain.deleted', data: formatDomain(d) }),
     });
     ws.organizationMemberships.setHooks({

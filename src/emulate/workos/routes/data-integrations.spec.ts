@@ -40,9 +40,7 @@ describe('Data Integrations routes', () => {
   });
 
   it('authorize rejects non-localhost redirect_uri', async () => {
-    const res = await app.request(
-      '/data-integrations/salesforce/authorize?redirect_uri=https://evil.com/callback',
-    );
+    const res = await app.request('/data-integrations/salesforce/authorize?redirect_uri=https://evil.com/callback');
     expect(res.status).toBe(400);
   });
 

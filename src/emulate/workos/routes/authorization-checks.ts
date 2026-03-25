@@ -14,9 +14,9 @@ function getPermissionsForMembership(ws: ReturnType<typeof getWorkOSStore>, memb
   const permSlugs = new Set<string>();
 
   // Permissions from the membership's primary role
-  const primaryRole = ws.roles.findBy('slug', membership.role.slug).find(
-    (r) => r.organization_id === membership.organization_id || r.type === 'EnvironmentRole',
-  );
+  const primaryRole = ws.roles
+    .findBy('slug', membership.role.slug)
+    .find((r) => r.organization_id === membership.organization_id || r.type === 'EnvironmentRole');
   if (primaryRole) {
     const rps = ws.rolePermissions.findBy('role_id', primaryRole.id);
     for (const rp of rps) {

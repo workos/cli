@@ -180,10 +180,9 @@ describe('Authorization org role routes', () => {
     expect(body.data.length).toBe(2);
 
     // Remove one permission
-    const delRes = await req(
-      `/authorization/organizations/${org.id}/roles/org-editor/permissions/org-write`,
-      { method: 'DELETE' },
-    );
+    const delRes = await req(`/authorization/organizations/${org.id}/roles/org-editor/permissions/org-write`, {
+      method: 'DELETE',
+    });
     expect(delRes.status).toBe(204);
 
     // Verify removal

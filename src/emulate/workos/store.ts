@@ -132,11 +132,7 @@ export function getWorkOSStore(store: Store): WorkOSStore {
       'device_code',
       'user_code',
     ]),
-    invitations: store.collection<WorkOSInvitation>('workos.invitations', 'inv', [
-      'email',
-      'token',
-      'organization_id',
-    ]),
+    invitations: store.collection<WorkOSInvitation>('workos.invitations', 'inv', ['email', 'token', 'organization_id']),
     redirectUris: store.collection<WorkOSRedirectUri>('workos.redirect_uris', 'redir', ['uri']),
     corsOrigins: store.collection<WorkOSCorsOrigin>('workos.cors_origins', 'cors', ['origin']),
     authorizedApplications: store.collection<WorkOSAuthorizedApplication>(
@@ -180,10 +176,7 @@ export function getWorkOSStore(store: Store): WorkOSStore {
       'organization_id',
     ]),
     featureFlags: store.collection<WorkOSFeatureFlag>('workos.feature_flags', 'ff', ['slug']),
-    flagTargets: store.collection<WorkOSFlagTarget>('workos.flag_targets', 'ff_target', [
-      'flag_slug',
-      'resource_id',
-    ]),
+    flagTargets: store.collection<WorkOSFlagTarget>('workos.flag_targets', 'ff_target', ['flag_slug', 'resource_id']),
     connectApplications: store.collection<WorkOSConnectApplication>('workos.connect_applications', 'connect_app', [
       'client_id',
     ]),

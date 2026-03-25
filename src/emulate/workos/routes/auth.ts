@@ -350,9 +350,9 @@ export function authRoutes(ctx: RouteContext): void {
         .find((m) => m.user_id === user.id);
       if (membership) {
         roleSlug = membership.role.slug;
-        const role = ws.roles.findBy('slug', membership.role.slug).find(
-          (r) => r.organization_id === organizationId || r.type === 'EnvironmentRole',
-        );
+        const role = ws.roles
+          .findBy('slug', membership.role.slug)
+          .find((r) => r.organization_id === organizationId || r.type === 'EnvironmentRole');
         if (role) {
           const rps = ws.rolePermissions.findBy('role_id', role.id);
           permissionSlugs = rps
@@ -382,7 +382,10 @@ export function authRoutes(ctx: RouteContext): void {
     });
 
     // Compute sealed session when client_secret is provided
-    const apiKey = c.req.header('Authorization')?.replace(/^Bearer\s+/i, '').trim();
+    const apiKey = c.req
+      .header('Authorization')
+      ?.replace(/^Bearer\s+/i, '')
+      .trim();
     const sealKey = clientSecret ?? apiKey;
     const sealedSession = sealKey
       ? sealSession(

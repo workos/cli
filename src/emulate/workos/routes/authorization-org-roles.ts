@@ -177,9 +177,7 @@ export function authorizationOrgRoleRoutes(ctx: RouteContext): void {
     const body = await parseJsonBody(c);
     const permissionSlugs = body.permissions as string[];
     if (!Array.isArray(permissionSlugs)) {
-      throw validationError('permissions must be an array of slugs', [
-        { field: 'permissions', code: 'invalid' },
-      ]);
+      throw validationError('permissions must be an array of slugs', [{ field: 'permissions', code: 'invalid' }]);
     }
 
     // Replace all
@@ -216,9 +214,7 @@ export function authorizationOrgRoleRoutes(ctx: RouteContext): void {
     const perm = ws.permissions.findOneBy('slug', permissionSlug);
     if (!perm) throw notFound('Permission');
 
-    const rp = ws.rolePermissions
-      .findBy('role_id', role.id)
-      .find((rp) => rp.permission_id === perm.id);
+    const rp = ws.rolePermissions.findBy('role_id', role.id).find((rp) => rp.permission_id === perm.id);
     if (!rp) throw notFound('RolePermission');
 
     ws.rolePermissions.delete(rp.id);

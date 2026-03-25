@@ -82,9 +82,7 @@ describe('Session routes', () => {
       user_agent: null,
     });
 
-    const res = await app.request(
-      `/user_management/sessions/logout?session_id=${session.id}`,
-    );
+    const res = await app.request(`/user_management/sessions/logout?session_id=${session.id}`);
     expect(res.status).toBe(200);
     const body = await json(res);
     expect(body.success).toBe(true);
@@ -96,9 +94,7 @@ describe('Session routes', () => {
   });
 
   it('logout succeeds even if session does not exist', async () => {
-    const res = await app.request(
-      '/user_management/sessions/logout?session_id=session_nonexistent',
-    );
+    const res = await app.request('/user_management/sessions/logout?session_id=session_nonexistent');
     expect(res.status).toBe(200);
   });
 

@@ -50,9 +50,7 @@ export function featureFlagRoutes(ctx: RouteContext): void {
     const body = await parseJsonBody(c);
 
     // Upsert: find existing target or create
-    const existing = ws.flagTargets
-      .findBy('flag_slug', flag.slug)
-      .find((t) => t.resource_id === resourceId);
+    const existing = ws.flagTargets.findBy('flag_slug', flag.slug).find((t) => t.resource_id === resourceId);
 
     if (existing) {
       const updated = ws.flagTargets.update(existing.id, {
@@ -77,14 +75,17 @@ export function featureFlagRoutes(ctx: RouteContext): void {
       value: body.value,
     });
 
-    return c.json({
-      object: 'flag_target',
-      id: target.id,
-      flag_slug: target.flag_slug,
-      resource_id: target.resource_id,
-      resource_type: target.resource_type,
-      value: target.value,
-    }, 201);
+    return c.json(
+      {
+        object: 'flag_target',
+        id: target.id,
+        flag_slug: target.flag_slug,
+        resource_id: target.resource_id,
+        resource_type: target.resource_type,
+        value: target.value,
+      },
+      201,
+    );
   });
 
   // Remove target
@@ -93,9 +94,7 @@ export function featureFlagRoutes(ctx: RouteContext): void {
     if (!flag) throw notFound('FeatureFlag');
 
     const resourceId = c.req.param('resourceId');
-    const target = ws.flagTargets
-      .findBy('flag_slug', flag.slug)
-      .find((t) => t.resource_id === resourceId);
+    const target = ws.flagTargets.findBy('flag_slug', flag.slug).find((t) => t.resource_id === resourceId);
     if (!target) throw notFound('FlagTarget');
 
     ws.flagTargets.delete(target.id);
@@ -108,14 +107,12 @@ export function featureFlagRoutes(ctx: RouteContext): void {
     const flags = ws.featureFlags.all();
 
     const evaluations = flags.map((flag) => {
-      const target = ws.flagTargets
-        .findBy('flag_slug', flag.slug)
-        .find((t) => t.resource_id === orgId);
+      const target = ws.flagTargets.findBy('flag_slug', flag.slug).find((t) => t.resource_id === orgId);
 
       return {
         slug: flag.slug,
         type: flag.type,
-        value: target ? target.value : (flag.enabled ? flag.default_value : null),
+        value: target ? target.value : flag.enabled ? flag.default_value : null,
         enabled: flag.enabled,
       };
     });
@@ -133,14 +130,12 @@ export function featureFlagRoutes(ctx: RouteContext): void {
     const flags = ws.featureFlags.all();
 
     const evaluations = flags.map((flag) => {
-      const target = ws.flagTargets
-        .findBy('flag_slug', flag.slug)
-        .find((t) => t.resource_id === userId);
+      const target = ws.flagTargets.findBy('flag_slug', flag.slug).find((t) => t.resource_id === userId);
 
       return {
         slug: flag.slug,
         type: flag.type,
-        value: target ? target.value : (flag.enabled ? flag.default_value : null),
+        value: target ? target.value : flag.enabled ? flag.default_value : null,
         enabled: flag.enabled,
       };
     });

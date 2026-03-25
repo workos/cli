@@ -1,7 +1,12 @@
 import { type RouteContext, notFound, parseJsonBody, validationError } from '../../core/index.js';
 import { generateId } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
-import { formatConnectApplication, formatClientSecret, parseListParams, generateVerificationToken } from '../helpers.js';
+import {
+  formatConnectApplication,
+  formatClientSecret,
+  parseListParams,
+  generateVerificationToken,
+} from '../helpers.js';
 
 export function connectRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
@@ -59,10 +64,13 @@ export function connectRoutes(ctx: RouteContext): void {
     });
 
     // Return full value only on creation
-    return c.json({
-      ...formatClientSecret(secret),
-      value: secret.value,
-    }, 201);
+    return c.json(
+      {
+        ...formatClientSecret(secret),
+        value: secret.value,
+      },
+      201,
+    );
   });
 
   // Revoke client secret

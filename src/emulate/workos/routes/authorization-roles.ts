@@ -122,9 +122,7 @@ export function authorizationRoleRoutes(ctx: RouteContext): void {
     const body = await parseJsonBody(c);
     const permissionSlugs = body.permissions as string[];
     if (!Array.isArray(permissionSlugs)) {
-      throw validationError('permissions must be an array of slugs', [
-        { field: 'permissions', code: 'invalid' },
-      ]);
+      throw validationError('permissions must be an array of slugs', [{ field: 'permissions', code: 'invalid' }]);
     }
 
     // Replace all: delete existing, add new

@@ -34,9 +34,7 @@ export function userFeatureRoutes(ctx: RouteContext): void {
     if (!user) throw notFound('User');
 
     const slug = c.req.param('slug');
-    const account = ws.connectedAccounts
-      .findBy('user_id', user.id)
-      .find((a) => a.provider === slug);
+    const account = ws.connectedAccounts.findBy('user_id', user.id).find((a) => a.provider === slug);
 
     if (!account) throw notFound('Connected Account');
     return c.json(formatConnectedAccount(account));
@@ -53,5 +51,4 @@ export function userFeatureRoutes(ctx: RouteContext): void {
       list_metadata: { before: null, after: null },
     });
   });
-
 }

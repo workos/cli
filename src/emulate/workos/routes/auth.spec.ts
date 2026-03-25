@@ -24,7 +24,10 @@ describe('Auth routes', () => {
   const req = (path: string, init?: RequestInit) => app.request(path, { headers, ...init });
   const json = (res: Response) => res.json() as Promise<any>;
 
-  async function createUser(email: string, opts?: { password?: string; impersonator?: { email: string; reason: string } }) {
+  async function createUser(
+    email: string,
+    opts?: { password?: string; impersonator?: { email: string; reason: string } },
+  ) {
     const ws = getWorkOSStore(store);
     return ws.users.insert({
       object: 'user',
@@ -241,9 +244,7 @@ describe('Auth routes', () => {
     });
 
     // Authorize + authenticate to get the response
-    const authRes = await app.request(
-      '/user_management/authorize?redirect_uri=http://localhost:3000/callback',
-    );
+    const authRes = await app.request('/user_management/authorize?redirect_uri=http://localhost:3000/callback');
     const code = new URL(authRes.headers.get('location')!).searchParams.get('code')!;
     const tokenRes = await app.request('/user_management/authenticate', {
       method: 'POST',
@@ -257,9 +258,7 @@ describe('Auth routes', () => {
   it('omits impersonator when not configured', async () => {
     await createUser('normal@test.com');
 
-    const authRes = await app.request(
-      '/user_management/authorize?redirect_uri=http://localhost:3000/callback',
-    );
+    const authRes = await app.request('/user_management/authorize?redirect_uri=http://localhost:3000/callback');
     const code = new URL(authRes.headers.get('location')!).searchParams.get('code')!;
     const tokenRes = await app.request('/user_management/authenticate', {
       method: 'POST',

@@ -10,9 +10,7 @@ export interface EventPayload {
 }
 
 export class EventBus {
-  constructor(
-    private store: Store,
-  ) {}
+  constructor(private store: Store) {}
 
   emit(payload: EventPayload): void {
     const ws = getWorkOSStore(this.store);

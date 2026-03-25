@@ -13,9 +13,7 @@ export function eventRoutes(ctx: RouteContext): void {
 
     const result = ws.events.list({
       ...params,
-      filter: eventTypes.length > 0
-        ? (e) => eventTypes.includes(e.event)
-        : undefined,
+      filter: eventTypes.length > 0 ? (e) => eventTypes.includes(e.event) : undefined,
     });
 
     return c.json({
