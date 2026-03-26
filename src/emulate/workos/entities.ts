@@ -267,8 +267,6 @@ export interface WorkOSRoleAssignment extends Entity {
   role_id: string;
 }
 
-// --- Phase 4: CRUD Domains ---
-
 export interface WorkOSDirectory extends Entity {
   object: 'directory';
   name: string;

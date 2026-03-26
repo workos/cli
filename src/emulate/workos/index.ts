@@ -146,10 +146,6 @@ export interface WorkOSSeedConfig {
   webhookEndpoints?: WorkOSSeedWebhookEndpoint[];
 }
 
-function seedDefaults(_store: Store, _baseUrl: string): void {
-  // No default seed data — users provide their own via config
-}
-
 export function seedFromConfig(store: Store, _baseUrl: string, config: WorkOSSeedConfig): void {
   const ws = getWorkOSStore(store);
 
@@ -436,8 +432,8 @@ export const workosPlugin: ServicePlugin = {
       onDelete: (g) => eventBus.emit({ event: 'directory_group.deleted', data: formatDirectoryGroup(g) }),
     });
   },
-  seed(store: Store, baseUrl: string): void {
-    seedDefaults(store, baseUrl);
+  seed(_store: Store, _baseUrl: string): void {
+    // No default seed data — users provide their own via seedFromConfig
   },
 };
 

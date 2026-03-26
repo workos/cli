@@ -91,8 +91,13 @@ export interface WorkOSStore {
   webhookEndpoints: Collection<WorkOSWebhookEndpoint>;
 }
 
+const CACHE_KEY = '_workos_store';
+
 export function getWorkOSStore(store: Store): WorkOSStore {
-  return {
+  const cached = store.getData<WorkOSStore>(CACHE_KEY);
+  if (cached) return cached;
+
+  const ws: WorkOSStore = {
     organizations: store.collection<WorkOSOrganization>('workos.organizations', 'org', ['name', 'external_id']),
     organizationDomains: store.collection<WorkOSOrganizationDomain>('workos.organization_domains', 'org_domain', [
       'organization_id',
@@ -190,4 +195,7 @@ export function getWorkOSStore(store: Store): WorkOSStore {
     events: store.collection<WorkOSEvent>('workos.events', 'evt', ['event']),
     webhookEndpoints: store.collection<WorkOSWebhookEndpoint>('workos.webhook_endpoints', 'we', ['url']),
   };
+
+  store.setData(CACHE_KEY, ws);
+  return ws;
 }

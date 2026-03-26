@@ -4,9 +4,9 @@ import { formatAuthorizationResource, formatMembership, parseListParams } from '
 
 export function authorizationResourceRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
+  const ws = getWorkOSStore(store);
 
   app.post('/authorization/resources', async (c) => {
-    const ws = getWorkOSStore(store);
     const body = await parseJsonBody(c);
 
     const resourceTypeSlug = body.resource_type_slug as string;
@@ -35,7 +35,6 @@ export function authorizationResourceRoutes(ctx: RouteContext): void {
   });
 
   app.get('/authorization/resources', (c) => {
-    const ws = getWorkOSStore(store);
     const url = new URL(c.req.url);
     const params = parseListParams(url);
     const organizationId = url.searchParams.get('organization_id') ?? undefined;
@@ -58,7 +57,6 @@ export function authorizationResourceRoutes(ctx: RouteContext): void {
   });
 
   app.get('/authorization/resources/:resource_id', (c) => {
-    const ws = getWorkOSStore(store);
     const resourceId = c.req.param('resource_id');
     const resource = ws.authorizationResources.get(resourceId);
     if (!resource) throw notFound('AuthorizationResource');
@@ -66,7 +64,6 @@ export function authorizationResourceRoutes(ctx: RouteContext): void {
   });
 
   app.put('/authorization/resources/:resource_id', async (c) => {
-    const ws = getWorkOSStore(store);
     const resourceId = c.req.param('resource_id');
     const resource = ws.authorizationResources.get(resourceId);
     if (!resource) throw notFound('AuthorizationResource');
@@ -80,7 +77,6 @@ export function authorizationResourceRoutes(ctx: RouteContext): void {
   });
 
   app.delete('/authorization/resources/:resource_id', (c) => {
-    const ws = getWorkOSStore(store);
     const resourceId = c.req.param('resource_id');
     const resource = ws.authorizationResources.get(resourceId);
     if (!resource) throw notFound('AuthorizationResource');
@@ -91,7 +87,6 @@ export function authorizationResourceRoutes(ctx: RouteContext): void {
 
   // Memberships with access to a resource (by resource ID)
   app.get('/authorization/resources/:resource_id/organization_memberships', (c) => {
-    const ws = getWorkOSStore(store);
     const resourceId = c.req.param('resource_id');
     const resource = ws.authorizationResources.get(resourceId);
     if (!resource) throw notFound('AuthorizationResource');
@@ -106,7 +101,6 @@ export function authorizationResourceRoutes(ctx: RouteContext): void {
 
   // Get resource by type + external ID within an org
   app.get('/authorization/organizations/:orgId/resources/:type_slug/:external_id', (c) => {
-    const ws = getWorkOSStore(store);
     const orgId = c.req.param('orgId');
     const typeSlug = c.req.param('type_slug');
     const externalId = c.req.param('external_id');
@@ -120,7 +114,6 @@ export function authorizationResourceRoutes(ctx: RouteContext): void {
 
   // Memberships for resource by type + external ID within an org
   app.get('/authorization/organizations/:orgId/resources/:type_slug/:external_id/organization_memberships', (c) => {
-    const ws = getWorkOSStore(store);
     const orgId = c.req.param('orgId');
     const typeSlug = c.req.param('type_slug');
     const externalId = c.req.param('external_id');

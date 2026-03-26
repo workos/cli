@@ -4,9 +4,9 @@ import { formatRole, formatPermission, parseListParams } from '../helpers.js';
 
 export function authorizationOrgRoleRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
+  const ws = getWorkOSStore(store);
 
   app.post('/authorization/organizations/:orgId/roles', async (c) => {
-    const ws = getWorkOSStore(store);
     const orgId = c.req.param('orgId');
     const org = ws.organizations.get(orgId);
     if (!org) throw notFound('Organization');
@@ -47,7 +47,6 @@ export function authorizationOrgRoleRoutes(ctx: RouteContext): void {
   });
 
   app.get('/authorization/organizations/:orgId/roles', (c) => {
-    const ws = getWorkOSStore(store);
     const orgId = c.req.param('orgId');
     const url = new URL(c.req.url);
     const params = parseListParams(url);
@@ -66,7 +65,6 @@ export function authorizationOrgRoleRoutes(ctx: RouteContext): void {
 
   // Priority ordering — must be registered before :slug routes
   app.put('/authorization/organizations/:orgId/roles/priority', async (c) => {
-    const ws = getWorkOSStore(store);
     const orgId = c.req.param('orgId');
     const body = await parseJsonBody(c);
     const slugs = body.slugs as string[];
@@ -96,7 +94,6 @@ export function authorizationOrgRoleRoutes(ctx: RouteContext): void {
   });
 
   app.get('/authorization/organizations/:orgId/roles/:slug', (c) => {
-    const ws = getWorkOSStore(store);
     const orgId = c.req.param('orgId');
     const slug = c.req.param('slug');
     const role = ws.roles
@@ -107,7 +104,6 @@ export function authorizationOrgRoleRoutes(ctx: RouteContext): void {
   });
 
   app.put('/authorization/organizations/:orgId/roles/:slug', async (c) => {
-    const ws = getWorkOSStore(store);
     const orgId = c.req.param('orgId');
     const slug = c.req.param('slug');
     const role = ws.roles
@@ -127,7 +123,6 @@ export function authorizationOrgRoleRoutes(ctx: RouteContext): void {
   });
 
   app.delete('/authorization/organizations/:orgId/roles/:slug', (c) => {
-    const ws = getWorkOSStore(store);
     const orgId = c.req.param('orgId');
     const slug = c.req.param('slug');
     const role = ws.roles
@@ -147,7 +142,6 @@ export function authorizationOrgRoleRoutes(ctx: RouteContext): void {
 
   // Org role permissions
   app.get('/authorization/organizations/:orgId/roles/:slug/permissions', (c) => {
-    const ws = getWorkOSStore(store);
     const orgId = c.req.param('orgId');
     const slug = c.req.param('slug');
     const role = ws.roles
@@ -166,7 +160,6 @@ export function authorizationOrgRoleRoutes(ctx: RouteContext): void {
   });
 
   app.post('/authorization/organizations/:orgId/roles/:slug/permissions', async (c) => {
-    const ws = getWorkOSStore(store);
     const orgId = c.req.param('orgId');
     const slug = c.req.param('slug');
     const role = ws.roles
@@ -201,7 +194,6 @@ export function authorizationOrgRoleRoutes(ctx: RouteContext): void {
   });
 
   app.delete('/authorization/organizations/:orgId/roles/:slug/permissions/:permissionSlug', (c) => {
-    const ws = getWorkOSStore(store);
     const orgId = c.req.param('orgId');
     const slug = c.req.param('slug');
     const permissionSlug = c.req.param('permissionSlug');

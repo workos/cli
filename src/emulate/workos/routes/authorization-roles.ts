@@ -4,9 +4,9 @@ import { formatRole, formatPermission, parseListParams } from '../helpers.js';
 
 export function authorizationRoleRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
+  const ws = getWorkOSStore(store);
 
   app.post('/authorization/roles', async (c) => {
-    const ws = getWorkOSStore(store);
     const body = await parseJsonBody(c);
     const slug = body.slug as string;
     const name = body.name as string;
@@ -39,7 +39,6 @@ export function authorizationRoleRoutes(ctx: RouteContext): void {
   });
 
   app.get('/authorization/roles', (c) => {
-    const ws = getWorkOSStore(store);
     const url = new URL(c.req.url);
     const params = parseListParams(url);
 
@@ -56,7 +55,6 @@ export function authorizationRoleRoutes(ctx: RouteContext): void {
   });
 
   app.get('/authorization/roles/:slug', (c) => {
-    const ws = getWorkOSStore(store);
     const slug = c.req.param('slug');
     const role = ws.roles.findBy('slug', slug).find((r) => r.type === 'EnvironmentRole');
     if (!role) throw notFound('Role');
@@ -64,7 +62,6 @@ export function authorizationRoleRoutes(ctx: RouteContext): void {
   });
 
   app.put('/authorization/roles/:slug', async (c) => {
-    const ws = getWorkOSStore(store);
     const slug = c.req.param('slug');
     const role = ws.roles.findBy('slug', slug).find((r) => r.type === 'EnvironmentRole');
     if (!role) throw notFound('Role');
@@ -81,7 +78,6 @@ export function authorizationRoleRoutes(ctx: RouteContext): void {
   });
 
   app.delete('/authorization/roles/:slug', (c) => {
-    const ws = getWorkOSStore(store);
     const slug = c.req.param('slug');
     const role = ws.roles.findBy('slug', slug).find((r) => r.type === 'EnvironmentRole');
     if (!role) throw notFound('Role');
@@ -98,7 +94,6 @@ export function authorizationRoleRoutes(ctx: RouteContext): void {
 
   // Role permissions management
   app.get('/authorization/roles/:slug/permissions', (c) => {
-    const ws = getWorkOSStore(store);
     const slug = c.req.param('slug');
     const role = ws.roles.findBy('slug', slug).find((r) => r.type === 'EnvironmentRole');
     if (!role) throw notFound('Role');
@@ -114,7 +109,6 @@ export function authorizationRoleRoutes(ctx: RouteContext): void {
   });
 
   app.post('/authorization/roles/:slug/permissions', async (c) => {
-    const ws = getWorkOSStore(store);
     const slug = c.req.param('slug');
     const role = ws.roles.findBy('slug', slug).find((r) => r.type === 'EnvironmentRole');
     if (!role) throw notFound('Role');
