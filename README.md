@@ -264,6 +264,21 @@ connections:
     organization: Acme Corp
     connection_type: GenericSAML
     domains: [acme.com]
+
+roles:
+  - slug: admin
+    name: Admin
+    permissions: [posts:read, posts:write]
+
+permissions:
+  - slug: posts:read
+    name: Read Posts
+  - slug: posts:write
+    name: Write Posts
+
+webhookEndpoints:
+  - url: http://localhost:3000/webhooks
+    events: [user.created, organization.updated]
 ```
 
 #### Programmatic API
@@ -294,7 +309,7 @@ await emulator.close();
 
 #### Emulated endpoints
 
-The emulator covers all major WorkOS APIs:
+The emulator covers the full WorkOS API surface (~84% of OpenAPI spec endpoints). Run `pnpm check:coverage <openapi-spec>` to see exact coverage.
 
 | Endpoint Group           | Routes                                                                                              |
 | ------------------------ | --------------------------------------------------------------------------------------------------- |
@@ -303,16 +318,35 @@ The emulator covers all major WorkOS APIs:
 | Organization memberships | CRUD, role assignment, deactivate/reactivate                                                        |
 | Organization domains     | CRUD, verification                                                                                  |
 | SSO connections          | CRUD, domain-based lookup                                                                           |
-| SSO flow                 | Authorize, token exchange, profile, JWKS                                                            |
-| AuthKit                  | OAuth authorize, authenticate (password, magic auth, email verification, authorization code + PKCE) |
-| Sessions                 | List, revoke                                                                                        |
+| SSO flow                 | Authorize, token exchange, profile, JWKS, SSO logout                                                |
+| AuthKit                  | OAuth authorize (login_hint, multi-user), authenticate (7 grant types incl. refresh_token, MFA TOTP, org selection, device code), PKCE, sealed sessions, impersonation |
+| Sessions                 | List, revoke, logout redirect, JWKS per client                                                      |
 | Email verification       | Send code, confirm                                                                                  |
 | Password reset           | Create token, confirm                                                                               |
 | Magic auth               | Create code                                                                                         |
-| Auth factors             | TOTP enrollment                                                                                     |
+| Auth factors             | TOTP enrollment, delete                                                                             |
+| MFA challenges           | Create challenge, verify code                                                                       |
+| Invitations              | CRUD, accept, revoke, resend, get by token                                                          |
+| Config                   | Redirect URIs, CORS origins, JWT template                                                           |
+| User features            | Authorized apps, connected accounts, data providers                                                 |
+| Widgets                  | Token generation                                                                                    |
+| Authorization (RBAC)     | Environment roles, org roles (priority ordering), permissions, role-permission management            |
+| Authorization (FGA)      | Resources CRUD, permission checks, role assignments                                                 |
+| Directory Sync           | List/get/delete directories, users, groups                                                          |
+| Audit Logs               | Actions, schemas, events, exports, org config/retention                                             |
+| Feature Flags            | List/get, enable/disable, targets, org/user evaluations                                             |
+| Connect                  | Applications CRUD, client secrets                                                                   |
+| Data Integrations        | OAuth authorize + token exchange                                                                    |
+| Radar                    | Attempts list/get, allow/deny lists                                                                 |
+| API Keys                 | Validate, delete, list by org                                                                       |
+| Portal                   | Generate admin portal links                                                                         |
+| Legacy MFA               | Enroll/get/delete factors, challenge/verify                                                         |
+| Webhook Endpoints        | CRUD with auto-generated secrets, secret masking                                                    |
+| Events                   | Paginated event stream with type filtering                                                          |
+| Event Bus                | Auto-emits events on entity CRUD via collection hooks, fire-and-forget webhook delivery with HMAC signatures |
 | Pipes                    | Connection CRUD, mock `getAccessToken()`                                                            |
 
-All list endpoints support cursor pagination (`before`, `after`, `limit`, `order`). Error responses match the WorkOS format (`{ message, code, errors }`).
+JWT tokens include `role` and `permissions` claims for org-scoped sessions. All list endpoints support cursor pagination (`before`, `after`, `limit`, `order`). Error responses match the WorkOS format (`{ message, code, errors }`).
 
 ### Environment Management
 
