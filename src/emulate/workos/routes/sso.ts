@@ -82,7 +82,7 @@ export function ssoRoutes(ctx: RouteContext): void {
       throw new WorkOSApiError(400, 'code is required', 'invalid_request');
     }
 
-    const auth = ws.ssoAuthorizations.all().find((a) => a.code === code);
+    const auth = ws.ssoAuthorizations.findOneBy('code', code);
     if (!auth) {
       throw new WorkOSApiError(400, 'Invalid authorization code', 'invalid_code');
     }

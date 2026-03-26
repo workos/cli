@@ -33,57 +33,59 @@ export function createServer(plugin: ServicePlugin, options: ServerOptions = {})
     return c.json(jwt.getJWKS());
   });
 
-  // Auth middleware for API routes
-  app.use('/api/*', authMiddleware(apiKeys));
+  // Auth middleware — single instance, shared across all routes
+  const auth = authMiddleware(apiKeys);
+
+  const PUBLIC_PATHS = new Set([
+    '/user_management/authorize',
+    '/user_management/authenticate',
+    '/user_management/sessions/logout',
+  ]);
+
+  app.use('/api/*', auth);
   app.use('/user_management/*', async (c, next) => {
     const path = new URL(c.req.url).pathname;
-    // Public endpoints (no auth required)
-    if (
-      path === '/user_management/authorize' ||
-      path === '/user_management/authenticate' ||
-      path === '/user_management/sessions/logout' ||
-      path.startsWith('/user_management/sessions/jwks/')
-    ) {
+    if (PUBLIC_PATHS.has(path) || path.startsWith('/user_management/sessions/jwks/')) {
       return next();
     }
-    return authMiddleware(apiKeys)(c, next);
+    return auth(c, next);
   });
-  app.use('/x/authkit/*', authMiddleware(apiKeys));
-  app.use('/organizations', authMiddleware(apiKeys));
-  app.use('/organizations/*', authMiddleware(apiKeys));
-  app.use('/organization_memberships', authMiddleware(apiKeys));
-  app.use('/organization_memberships/*', authMiddleware(apiKeys));
-  app.use('/organization_domains', authMiddleware(apiKeys));
-  app.use('/organization_domains/*', authMiddleware(apiKeys));
-  app.use('/connections', authMiddleware(apiKeys));
-  app.use('/connections/*', authMiddleware(apiKeys));
-  app.use('/directories', authMiddleware(apiKeys));
-  app.use('/directories/*', authMiddleware(apiKeys));
-  app.use('/directory_groups', authMiddleware(apiKeys));
-  app.use('/directory_groups/*', authMiddleware(apiKeys));
-  app.use('/directory_users', authMiddleware(apiKeys));
-  app.use('/directory_users/*', authMiddleware(apiKeys));
-  app.use('/events', authMiddleware(apiKeys));
-  app.use('/events/*', authMiddleware(apiKeys));
-  app.use('/pipes/*', authMiddleware(apiKeys));
-  app.use('/audit_logs/*', authMiddleware(apiKeys));
-  app.use('/feature-flags', authMiddleware(apiKeys));
-  app.use('/feature-flags/*', authMiddleware(apiKeys));
-  app.use('/connect/*', authMiddleware(apiKeys));
+  app.use('/x/authkit/*', auth);
+  app.use('/organizations', auth);
+  app.use('/organizations/*', auth);
+  app.use('/organization_memberships', auth);
+  app.use('/organization_memberships/*', auth);
+  app.use('/organization_domains', auth);
+  app.use('/organization_domains/*', auth);
+  app.use('/connections', auth);
+  app.use('/connections/*', auth);
+  app.use('/directories', auth);
+  app.use('/directories/*', auth);
+  app.use('/directory_groups', auth);
+  app.use('/directory_groups/*', auth);
+  app.use('/directory_users', auth);
+  app.use('/directory_users/*', auth);
+  app.use('/events', auth);
+  app.use('/events/*', auth);
+  app.use('/pipes/*', auth);
+  app.use('/audit_logs/*', auth);
+  app.use('/feature-flags', auth);
+  app.use('/feature-flags/*', auth);
+  app.use('/connect/*', auth);
   app.use('/data-integrations/*', async (c, next) => {
     const path = new URL(c.req.url).pathname;
     if (path.endsWith('/authorize')) return next();
-    return authMiddleware(apiKeys)(c, next);
+    return auth(c, next);
   });
-  app.use('/radar/*', authMiddleware(apiKeys));
-  app.use('/api_keys', authMiddleware(apiKeys));
-  app.use('/api_keys/*', authMiddleware(apiKeys));
-  app.use('/portal/*', authMiddleware(apiKeys));
-  app.use('/webhook_endpoints', authMiddleware(apiKeys));
-  app.use('/webhook_endpoints/*', authMiddleware(apiKeys));
-  app.use('/auth/factors', authMiddleware(apiKeys));
-  app.use('/auth/factors/*', authMiddleware(apiKeys));
-  app.use('/auth/challenges/*', authMiddleware(apiKeys));
+  app.use('/radar/*', auth);
+  app.use('/api_keys', auth);
+  app.use('/api_keys/*', auth);
+  app.use('/portal/*', auth);
+  app.use('/webhook_endpoints', auth);
+  app.use('/webhook_endpoints/*', auth);
+  app.use('/auth/factors', auth);
+  app.use('/auth/factors/*', auth);
+  app.use('/auth/challenges/*', auth);
 
   // Rate limiting
   const rateLimitCounters = new Map<string, { remaining: number; resetAt: number }>();

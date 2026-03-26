@@ -4,9 +4,9 @@ import { formatPermission, parseListParams } from '../helpers.js';
 
 export function authorizationPermissionRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
+  const ws = getWorkOSStore(store);
 
   app.post('/authorization/permissions', async (c) => {
-    const ws = getWorkOSStore(store);
     const body = await parseJsonBody(c);
     const slug = body.slug as string;
     const name = body.name as string;
@@ -34,7 +34,6 @@ export function authorizationPermissionRoutes(ctx: RouteContext): void {
   });
 
   app.get('/authorization/permissions', (c) => {
-    const ws = getWorkOSStore(store);
     const url = new URL(c.req.url);
     const params = parseListParams(url);
 
@@ -47,7 +46,6 @@ export function authorizationPermissionRoutes(ctx: RouteContext): void {
   });
 
   app.get('/authorization/permissions/:slug', (c) => {
-    const ws = getWorkOSStore(store);
     const slug = c.req.param('slug');
     const permission = ws.permissions.findOneBy('slug', slug);
     if (!permission) throw notFound('Permission');
@@ -55,7 +53,6 @@ export function authorizationPermissionRoutes(ctx: RouteContext): void {
   });
 
   app.put('/authorization/permissions/:slug', async (c) => {
-    const ws = getWorkOSStore(store);
     const slug = c.req.param('slug');
     const permission = ws.permissions.findOneBy('slug', slug);
     if (!permission) throw notFound('Permission');
@@ -70,7 +67,6 @@ export function authorizationPermissionRoutes(ctx: RouteContext): void {
   });
 
   app.delete('/authorization/permissions/:slug', (c) => {
-    const ws = getWorkOSStore(store);
     const slug = c.req.param('slug');
     const permission = ws.permissions.findOneBy('slug', slug);
     if (!permission) throw notFound('Permission');

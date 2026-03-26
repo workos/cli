@@ -42,10 +42,10 @@ function getPermissionsForMembership(ws: ReturnType<typeof getWorkOSStore>, memb
 
 export function authorizationCheckRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
+  const ws = getWorkOSStore(store);
 
   // Permission check
   app.post('/authorization/organization_memberships/:id/check', async (c) => {
-    const ws = getWorkOSStore(store);
     const membershipId = c.req.param('id');
     const membership = ws.organizationMemberships.get(membershipId);
     if (!membership) throw notFound('OrganizationMembership');
@@ -62,7 +62,6 @@ export function authorizationCheckRoutes(ctx: RouteContext): void {
 
   // List resources accessible to a membership (all resources in the membership's org)
   app.get('/authorization/organization_memberships/:id/resources', (c) => {
-    const ws = getWorkOSStore(store);
     const membershipId = c.req.param('id');
     const membership = ws.organizationMemberships.get(membershipId);
     if (!membership) throw notFound('OrganizationMembership');
@@ -84,7 +83,6 @@ export function authorizationCheckRoutes(ctx: RouteContext): void {
 
   // List role assignments for a membership
   app.get('/authorization/organization_memberships/:id/role_assignments', (c) => {
-    const ws = getWorkOSStore(store);
     const membershipId = c.req.param('id');
     const membership = ws.organizationMemberships.get(membershipId);
     if (!membership) throw notFound('OrganizationMembership');
@@ -106,7 +104,6 @@ export function authorizationCheckRoutes(ctx: RouteContext): void {
 
   // Create role assignment
   app.post('/authorization/organization_memberships/:id/role_assignments', async (c) => {
-    const ws = getWorkOSStore(store);
     const membershipId = c.req.param('id');
     const membership = ws.organizationMemberships.get(membershipId);
     if (!membership) throw notFound('OrganizationMembership');
@@ -131,7 +128,6 @@ export function authorizationCheckRoutes(ctx: RouteContext): void {
 
   // Delete role assignment
   app.delete('/authorization/organization_memberships/:id/role_assignments/:assignmentId', (c) => {
-    const ws = getWorkOSStore(store);
     const membershipId = c.req.param('id');
     const assignmentId = c.req.param('assignmentId');
 

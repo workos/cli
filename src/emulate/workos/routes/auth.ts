@@ -116,7 +116,7 @@ export function authRoutes(ctx: RouteContext): void {
         const code = body.code as string;
         if (!code) throw new WorkOSApiError(400, 'code is required', 'invalid_request');
 
-        const authCode = ws.authCodes.all().find((ac) => ac.code === code);
+        const authCode = ws.authCodes.findOneBy('code', code);
         if (!authCode) throw new WorkOSApiError(400, 'Invalid code', 'invalid_code');
         if (isExpired(authCode.expires_at)) {
           throw new WorkOSApiError(400, 'Code has expired', 'expired_code');

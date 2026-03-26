@@ -113,6 +113,12 @@ export class Collection<T extends Entity> {
     return this.items.delete(id);
   }
 
+  deleteBy(field: keyof T, value: string | number): number {
+    const items = this.findBy(field, value);
+    for (const item of items) this.delete(item.id);
+    return items.length;
+  }
+
   setHooks(hooks: CollectionHooks<T>): void {
     this.hooks = hooks;
   }
