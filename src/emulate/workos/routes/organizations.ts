@@ -127,15 +127,8 @@ export function organizationRoutes(ctx: RouteContext): void {
     const org = ws.organizations.get(c.req.param('id'));
     if (!org) throw notFound('Organization');
 
-    const domains = ws.organizationDomains.findBy('organization_id', org.id);
-    for (const d of domains) {
-      ws.organizationDomains.delete(d.id);
-    }
-
-    const memberships = ws.organizationMemberships.findBy('organization_id', org.id);
-    for (const m of memberships) {
-      ws.organizationMemberships.delete(m.id);
-    }
+    ws.organizationDomains.deleteBy('organization_id', org.id);
+    ws.organizationMemberships.deleteBy('organization_id', org.id);
 
     ws.organizations.delete(org.id);
     return c.body(null, 204);

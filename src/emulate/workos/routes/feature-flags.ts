@@ -1,6 +1,19 @@
 import { type RouteContext, notFound, parseJsonBody, parseListParams } from '../../core/index.js';
-import { getWorkOSStore } from '../store.js';
-import { formatFeatureFlag, formatListResponse } from '../helpers.js';
+import { getWorkOSStore, type WorkOSStore } from '../store.js';
+import { formatFeatureFlag, formatFlagTarget, formatListResponse } from '../helpers.js';
+
+function evaluateFlags(ws: WorkOSStore, resourceId: string) {
+  const flags = ws.featureFlags.all();
+  return flags.map((flag) => {
+    const target = ws.flagTargets.findBy('flag_slug', flag.slug).find((t) => t.resource_id === resourceId);
+    return {
+      slug: flag.slug,
+      type: flag.type,
+      value: target ? target.value : flag.enabled ? flag.default_value : null,
+      enabled: flag.enabled,
+    };
+  });
+}
 
 export function featureFlagRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
@@ -53,14 +66,7 @@ export function featureFlagRoutes(ctx: RouteContext): void {
         value: body.value,
         resource_type: (body.resource_type as string) ?? existing.resource_type,
       });
-      return c.json({
-        object: 'flag_target',
-        id: updated!.id,
-        flag_slug: updated!.flag_slug,
-        resource_id: updated!.resource_id,
-        resource_type: updated!.resource_type,
-        value: updated!.value,
-      });
+      return c.json(formatFlagTarget(updated!));
     }
 
     const target = ws.flagTargets.insert({
@@ -71,17 +77,7 @@ export function featureFlagRoutes(ctx: RouteContext): void {
       value: body.value,
     });
 
-    return c.json(
-      {
-        object: 'flag_target',
-        id: target.id,
-        flag_slug: target.flag_slug,
-        resource_id: target.resource_id,
-        resource_type: target.resource_type,
-        value: target.value,
-      },
-      201,
-    );
+    return c.json(formatFlagTarget(target), 201);
   });
 
   // Remove target
@@ -99,46 +95,18 @@ export function featureFlagRoutes(ctx: RouteContext): void {
 
   // Evaluate flags for organization
   app.get('/organizations/:orgId/feature-flags', (c) => {
-    const orgId = c.req.param('orgId');
-    const flags = ws.featureFlags.all();
-
-    const evaluations = flags.map((flag) => {
-      const target = ws.flagTargets.findBy('flag_slug', flag.slug).find((t) => t.resource_id === orgId);
-
-      return {
-        slug: flag.slug,
-        type: flag.type,
-        value: target ? target.value : flag.enabled ? flag.default_value : null,
-        enabled: flag.enabled,
-      };
-    });
-
     return c.json({
       object: 'list',
-      data: evaluations,
+      data: evaluateFlags(ws, c.req.param('orgId')),
       list_metadata: { before: null, after: null },
     });
   });
 
-  // Evaluate flags for user (replaces stub in user-features.ts)
+  // Evaluate flags for user
   app.get('/user_management/users/:userId/feature-flags', (c) => {
-    const userId = c.req.param('userId');
-    const flags = ws.featureFlags.all();
-
-    const evaluations = flags.map((flag) => {
-      const target = ws.flagTargets.findBy('flag_slug', flag.slug).find((t) => t.resource_id === userId);
-
-      return {
-        slug: flag.slug,
-        type: flag.type,
-        value: target ? target.value : flag.enabled ? flag.default_value : null,
-        enabled: flag.enabled,
-      };
-    });
-
     return c.json({
       object: 'list',
-      data: evaluations,
+      data: evaluateFlags(ws, c.req.param('userId')),
       list_metadata: { before: null, after: null },
     });
   });

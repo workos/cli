@@ -68,10 +68,7 @@ export function authorizationPermissionRoutes(ctx: RouteContext): void {
     if (!permission) throw notFound('Permission');
 
     // Cascade: remove from all role-permission joins
-    const rps = ws.rolePermissions.findBy('permission_id', permission.id);
-    for (const rp of rps) {
-      ws.rolePermissions.delete(rp.id);
-    }
+    ws.rolePermissions.deleteBy('permission_id', permission.id);
 
     ws.permissions.delete(permission.id);
     return c.body(null, 204);

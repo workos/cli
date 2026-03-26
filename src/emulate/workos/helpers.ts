@@ -33,6 +33,7 @@ import type {
   WorkOSAuditLogEvent,
   WorkOSAuditLogExport,
   WorkOSFeatureFlag,
+  WorkOSFlagTarget,
   WorkOSConnectApplication,
   WorkOSClientSecret,
   WorkOSRadarAttempt,
@@ -259,6 +260,10 @@ export function formatAuditLogExport(ex: WorkOSAuditLogExport): Record<string, u
 
 export function formatFeatureFlag(f: WorkOSFeatureFlag): Record<string, unknown> {
   return formatEntity(f);
+}
+
+export function formatFlagTarget(t: WorkOSFlagTarget): Record<string, unknown> {
+  return formatEntity(t);
 }
 
 export function formatConnectApplication(a: WorkOSConnectApplication): Record<string, unknown> {
