@@ -178,6 +178,17 @@ export class Store {
     this._data.set(key, value);
   }
 
+  deleteDataByPrefix(prefix: string): number {
+    let count = 0;
+    for (const key of this._data.keys()) {
+      if (key.startsWith(prefix)) {
+        this._data.delete(key);
+        count++;
+      }
+    }
+    return count;
+  }
+
   reset(): void {
     for (const collection of this.collections.values()) {
       collection.clear();

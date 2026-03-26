@@ -432,6 +432,11 @@ export const workosPlugin: ServicePlugin = {
       onUpdate: (g) => eventBus.emit({ event: EVENTS.directoryGroupUpdated, data: formatDirectoryGroup(g) }),
       onDelete: (g) => eventBus.emit({ event: EVENTS.directoryGroupDeleted, data: formatDirectoryGroup(g) }),
     });
+    ws.webhookEndpoints.setHooks({
+      onInsert: () => eventBus.rebuildIndex(),
+      onUpdate: () => eventBus.rebuildIndex(),
+      onDelete: () => eventBus.rebuildIndex(),
+    });
   },
   seed(_store: Store, _baseUrl: string): void {
     // No default seed data — users provide their own via seedFromConfig

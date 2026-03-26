@@ -33,59 +33,37 @@ export function createServer(plugin: ServicePlugin, options: ServerOptions = {})
     return c.json(jwt.getJWKS());
   });
 
-  // Auth middleware — single instance, shared across all routes
+  // Auth middleware — single catch-all instance
   const auth = authMiddleware(apiKeys);
 
   const PUBLIC_PATHS = new Set([
+    '/health',
     '/user_management/authorize',
     '/user_management/authenticate',
     '/user_management/sessions/logout',
   ]);
 
-  app.use('/api/*', auth);
-  app.use('/user_management/*', async (c, next) => {
+  const PUBLIC_PATH_PREFIXES = [
+    '/sso/',
+    '/user_management/sessions/jwks/',
+    '/data-integrations/',
+  ];
+
+  app.use('*', async (c, next) => {
     const path = new URL(c.req.url).pathname;
-    if (PUBLIC_PATHS.has(path) || path.startsWith('/user_management/sessions/jwks/')) {
-      return next();
+
+    // Skip auth for public paths
+    if (PUBLIC_PATHS.has(path)) return next();
+    for (const prefix of PUBLIC_PATH_PREFIXES) {
+      if (path.startsWith(prefix)) {
+        // data-integrations: only /authorize subpath is public
+        if (prefix === '/data-integrations/' && !path.endsWith('/authorize')) break;
+        return next();
+      }
     }
+
     return auth(c, next);
   });
-  app.use('/x/authkit/*', auth);
-  app.use('/organizations', auth);
-  app.use('/organizations/*', auth);
-  app.use('/organization_memberships', auth);
-  app.use('/organization_memberships/*', auth);
-  app.use('/organization_domains', auth);
-  app.use('/organization_domains/*', auth);
-  app.use('/connections', auth);
-  app.use('/connections/*', auth);
-  app.use('/directories', auth);
-  app.use('/directories/*', auth);
-  app.use('/directory_groups', auth);
-  app.use('/directory_groups/*', auth);
-  app.use('/directory_users', auth);
-  app.use('/directory_users/*', auth);
-  app.use('/events', auth);
-  app.use('/events/*', auth);
-  app.use('/pipes/*', auth);
-  app.use('/audit_logs/*', auth);
-  app.use('/feature-flags', auth);
-  app.use('/feature-flags/*', auth);
-  app.use('/connect/*', auth);
-  app.use('/data-integrations/*', async (c, next) => {
-    const path = new URL(c.req.url).pathname;
-    if (path.endsWith('/authorize')) return next();
-    return auth(c, next);
-  });
-  app.use('/radar/*', auth);
-  app.use('/api_keys', auth);
-  app.use('/api_keys/*', auth);
-  app.use('/portal/*', auth);
-  app.use('/webhook_endpoints', auth);
-  app.use('/webhook_endpoints/*', auth);
-  app.use('/auth/factors', auth);
-  app.use('/auth/factors/*', auth);
-  app.use('/auth/challenges/*', auth);
 
   // Rate limiting
   const rateLimitCounters = new Map<string, { remaining: number; resetAt: number }>();

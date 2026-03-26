@@ -1,4 +1,5 @@
 import type { Context, Next } from 'hono';
+import { unauthorized } from './error-handler.js';
 
 export interface WorkOSAuthContext {
   environment: string;
@@ -17,38 +18,13 @@ export type ApiKeyMap = Record<string, { environment: string }>;
 export function authMiddleware(apiKeys: ApiKeyMap) {
   return async (c: Context, next: Next) => {
     const authHeader = c.req.header('Authorization');
-    if (!authHeader) {
-      return c.json(
-        {
-          message: 'Unauthorized',
-          code: 'unauthorized',
-        },
-        401,
-      );
-    }
+    if (!authHeader) throw unauthorized();
 
     const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-
-    if (!token.startsWith('sk_')) {
-      return c.json(
-        {
-          message: 'Unauthorized',
-          code: 'unauthorized',
-        },
-        401,
-      );
-    }
+    if (!token.startsWith('sk_')) throw unauthorized();
 
     const keyInfo = apiKeys[token];
-    if (!keyInfo) {
-      return c.json(
-        {
-          message: 'Unauthorized',
-          code: 'unauthorized',
-        },
-        401,
-      );
-    }
+    if (!keyInfo) throw unauthorized();
 
     c.set('auth', { environment: keyInfo.environment, apiKey: token } satisfies WorkOSAuthContext);
     await next();

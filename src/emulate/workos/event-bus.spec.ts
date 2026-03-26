@@ -54,6 +54,7 @@ describe('EventBus', () => {
       description: null,
     });
 
+    bus.rebuildIndex();
     // This should not attempt delivery (no fetch error even though URL is unreachable)
     bus.emit({ event: 'user.created', data: {} });
     expect(ws.events.all()).toHaveLength(1);
@@ -70,6 +71,7 @@ describe('EventBus', () => {
       description: null,
     });
 
+    bus.rebuildIndex();
     // user.created should not match the endpoint's filter
     bus.emit({ event: 'user.created', data: {} });
     expect(ws.events.all()).toHaveLength(1);
@@ -93,6 +95,7 @@ describe('EventBus', () => {
       description: null,
     });
 
+    bus.rebuildIndex();
     bus.emit({ event: 'user.created', data: { id: 'user_1' } });
 
     // Wait for async delivery
@@ -132,6 +135,7 @@ describe('EventBus', () => {
       description: null,
     });
 
+    bus.rebuildIndex();
     // emit() should return immediately (fire-and-forget)
     const start = Date.now();
     bus.emit({ event: 'user.created', data: {} });

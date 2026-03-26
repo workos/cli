@@ -1,6 +1,7 @@
 import { type RouteContext, notFound, validationError, parseJsonBody, parseListParams } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
 import { formatOrganization, generateVerificationToken, formatListResponse } from '../helpers.js';
+import type { WorkOSOrganizationDomain } from '../entities.js';
 
 export function organizationRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
@@ -61,7 +62,16 @@ export function organizationRoutes(ctx: RouteContext): void {
       },
     });
 
-    return c.json(formatListResponse(result, (org) => formatOrganization(org, ws)));
+    // Pre-fetch all domains once to avoid N+1 lookups per org
+    const allDomains = ws.organizationDomains.all();
+    const domainsByOrg = new Map<string, WorkOSOrganizationDomain[]>();
+    for (const d of allDomains) {
+      const list = domainsByOrg.get(d.organization_id) ?? [];
+      list.push(d);
+      domainsByOrg.set(d.organization_id, list);
+    }
+
+    return c.json(formatListResponse(result, (org) => formatOrganization(org, ws, { domains: domainsByOrg.get(org.id) ?? [] })));
   });
 
   app.get('/organizations/:id', (c) => {

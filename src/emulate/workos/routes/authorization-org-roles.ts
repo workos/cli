@@ -18,19 +18,27 @@ export function authorizationOrgRoleRoutes(ctx: RouteContext): void {
       throw validationError('slugs must be an array', [{ field: 'slugs', code: 'invalid' }]);
     }
 
+    // Fetch once, build slug map for O(1) lookups
+    const orgRoles = ws.roles
+      .findBy('organization_id', orgId)
+      .filter((r) => r.type === 'OrganizationRole');
+    const rolesBySlug = new Map(orgRoles.map((r) => [r.slug, r]));
+
     for (let i = 0; i < slugs.length; i++) {
-      const role = requireOrgRole(ws, orgId, slugs[i]!);
+      const role = rolesBySlug.get(slugs[i]!);
+      if (!role) throw notFound('Role');
       ws.roles.update(role.id, { priority: i });
     }
 
-    const roles = ws.roles
+    // Re-fetch for updated priority values
+    const updated = ws.roles
       .findBy('organization_id', orgId)
       .filter((r) => r.type === 'OrganizationRole')
       .sort((a, b) => a.priority - b.priority);
 
     return c.json({
       object: 'list',
-      data: roles.map(formatRole),
+      data: updated.map(formatRole),
       list_metadata: { before: null, after: null },
     });
   });

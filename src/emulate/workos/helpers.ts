@@ -67,8 +67,12 @@ export function formatListResponse<T>(
   };
 }
 
-export function formatOrganization(org: WorkOSOrganization, ws: WorkOSStore): Record<string, unknown> {
-  const domains = ws.organizationDomains.findBy('organization_id', org.id).map(formatDomain);
+export function formatOrganization(
+  org: WorkOSOrganization,
+  ws: WorkOSStore,
+  opts?: { domains?: WorkOSOrganizationDomain[] },
+): Record<string, unknown> {
+  const domains = (opts?.domains ?? ws.organizationDomains.findBy('organization_id', org.id)).map(formatDomain);
 
   return {
     object: 'organization',

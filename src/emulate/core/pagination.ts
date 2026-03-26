@@ -33,7 +33,8 @@ export function cursorPaginate<T extends Entity>(
   items: T[],
   options: CursorPaginationOptions<T> = {},
 ): CursorPaginatedResult<T> {
-  let filtered = options.filter ? items.filter(options.filter) : [...items];
+  // Callers must pass a fresh array (e.g. Collection.all()) — sort mutates in-place
+  let filtered = options.filter ? items.filter(options.filter) : items;
 
   const order = options.order ?? 'desc';
   const defaultSort = (a: T, b: T) =>
