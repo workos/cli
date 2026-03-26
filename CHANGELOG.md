@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0-beta.1](https://github.com/workos/cli/compare/v0.12.0-beta...v0.12.0-beta.1) (2026-03-26)
+
+
+### Bug Fixes
+
+* add tag_name input to workflow_dispatch trigger ([0924a4b](https://github.com/workos/cli/commit/0924a4bd7f3d6ebe44762e78273bcfa65933a3fe))
+* enforce OIDC-only beta publish path ([f8e74d6](https://github.com/workos/cli/commit/f8e74d61d2eade4af13b91db33837382dedb7da7))
+* remove environment to prevent org secret injection breaking OIDC ([28f0564](https://github.com/workos/cli/commit/28f05649b1a3df3b926830d4e885dfa6b80def83))
+* restore OIDC auth setup for npm trusted publishing ([d0f8b53](https://github.com/workos/cli/commit/d0f8b537d9a473adb65e3d4d60659457fa25fc32))
+* use pnpm publish to match working auth setup ([d79cf16](https://github.com/workos/cli/commit/d79cf163cabee593f21c8cf9030c46f7348a4657))
+
 ## [0.12.0-beta](https://github.com/workos/cli/compare/v0.11.2...v0.12.0-beta) (2026-03-26)
 
 
