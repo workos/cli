@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0-beta](https://github.com/workos/cli/compare/v0.11.2...v0.12.0-beta) (2026-03-26)
+
+
+### Features
+
+* full WorkOS API emulator (emulate, dev, RBAC, webhooks, events, 84% API coverage) ([#100](https://github.com/workos/cli/issues/100)) ([55371a9](https://github.com/workos/cli/commit/55371a9a2121b91dd48189752efc3c96681e1dee))
+
+
+### Bug Fixes
+
+* use prerelease versioning strategy for beta releases ([#104](https://github.com/workos/cli/issues/104)) ([8385201](https://github.com/workos/cli/commit/8385201ef25472be950e8ca1d4570fee0b7b31ea))
+
 ## [0.11.2](https://github.com/workos/cli/compare/v0.11.1...v0.11.2) (2026-03-17)
 
 
