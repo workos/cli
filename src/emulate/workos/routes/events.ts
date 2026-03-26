@@ -1,6 +1,6 @@
-import { type RouteContext } from '../../core/index.js';
+import { type RouteContext, parseListParams } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
-import { formatEvent, parseListParams } from '../helpers.js';
+import { formatEvent, formatListResponse } from '../helpers.js';
 
 export function eventRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
@@ -16,10 +16,6 @@ export function eventRoutes(ctx: RouteContext): void {
       filter: eventTypes.length > 0 ? (e) => eventTypes.includes(e.event) : undefined,
     });
 
-    return c.json({
-      object: 'list',
-      data: result.data.map(formatEvent),
-      list_metadata: result.list_metadata,
-    });
+    return c.json(formatListResponse(result, formatEvent));
   });
 }

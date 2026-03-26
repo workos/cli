@@ -1,6 +1,6 @@
-import { type RouteContext, notFound, validationError, parseJsonBody } from '../../core/index.js';
+import { type RouteContext, notFound, validationError, parseJsonBody, parseListParams } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
-import { formatPipeConnection, parseListParams } from '../helpers.js';
+import { formatPipeConnection, formatListResponse } from '../helpers.js';
 import type { PipeProvider } from '../entities.js';
 
 const VALID_PROVIDERS: PipeProvider[] = ['github', 'slack', 'google', 'salesforce'];
@@ -54,11 +54,7 @@ export function pipeRoutes(ctx: RouteContext): void {
       },
     });
 
-    return c.json({
-      object: 'list',
-      data: result.data.map(formatPipeConnection),
-      list_metadata: result.list_metadata,
-    });
+    return c.json(formatListResponse(result, formatPipeConnection));
   });
 
   app.get('/pipes/connections/:id', (c) => {

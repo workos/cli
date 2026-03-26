@@ -2,6 +2,7 @@ import { type RouteContext, parseJsonBody, WorkOSApiError, generateId } from '..
 import { getWorkOSStore } from '../store.js';
 import { formatSSOProfile, expiresIn, isExpired, assertLocalRedirectUri } from '../helpers.js';
 import type { WorkOSConnection } from '../entities.js';
+import { STORE_KEY_PREFIXES } from '../constants.js';
 
 export function ssoRoutes(ctx: RouteContext): void {
   const { app, store, jwt } = ctx;
@@ -104,7 +105,7 @@ export function ssoRoutes(ctx: RouteContext): void {
       org_id: auth.organization_id,
     });
 
-    store.setData(`sso_token:${accessToken}`, profile.id);
+    store.setData(`${STORE_KEY_PREFIXES.ssoToken}${accessToken}`, profile.id);
 
     return c.json({
       profile: formatSSOProfile(profile),
@@ -119,7 +120,7 @@ export function ssoRoutes(ctx: RouteContext): void {
     }
     const token = authHeader.replace(/^Bearer\s+/i, '').trim();
 
-    const profileId = store.getData<string>(`sso_token:${token}`);
+    const profileId = store.getData<string>(`${STORE_KEY_PREFIXES.ssoToken}${token}`);
     if (!profileId) {
       try {
         const payload = jwt.verify(token);
@@ -157,7 +158,7 @@ export function ssoRoutes(ctx: RouteContext): void {
     }
 
     const logoutToken = generateId('sso_logout');
-    store.setData(`sso_logout:${logoutToken}`, profile.id);
+    store.setData(`${STORE_KEY_PREFIXES.ssoLogout}${logoutToken}`, profile.id);
 
     return c.json({
       logout_token: logoutToken,
@@ -174,12 +175,12 @@ export function ssoRoutes(ctx: RouteContext): void {
       throw new WorkOSApiError(400, 'logout_token is required', 'invalid_request');
     }
 
-    const profileId = store.getData<string>(`sso_logout:${logoutToken}`);
+    const profileId = store.getData<string>(`${STORE_KEY_PREFIXES.ssoLogout}${logoutToken}`);
     if (!profileId) {
       throw new WorkOSApiError(400, 'Invalid logout token', 'invalid_logout_token');
     }
 
-    store.setData(`sso_logout:${logoutToken}`, undefined);
+    store.setData(`${STORE_KEY_PREFIXES.ssoLogout}${logoutToken}`, undefined);
     return c.json({ success: true });
   });
 }

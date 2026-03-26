@@ -21,6 +21,14 @@ export interface CursorPaginatedResult<T> {
   };
 }
 
+export function parseListParams(url: URL) {
+  const limit = parseInt(url.searchParams.get('limit') ?? '10') || 10;
+  const order = (url.searchParams.get('order') as 'asc' | 'desc') ?? 'desc';
+  const before = url.searchParams.get('before') ?? undefined;
+  const after = url.searchParams.get('after') ?? undefined;
+  return { limit, order, before, after };
+}
+
 export function cursorPaginate<T extends Entity>(
   items: T[],
   options: CursorPaginationOptions<T> = {},

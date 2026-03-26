@@ -1,6 +1,6 @@
-import { type RouteContext, notFound, validationError, parseJsonBody } from '../../core/index.js';
+import { type RouteContext, notFound, validationError, parseJsonBody, parseListParams } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
-import { formatRoleAssignment, formatAuthorizationResource, parseListParams } from '../helpers.js';
+import { formatRoleAssignment, formatAuthorizationResource, formatListResponse } from '../helpers.js';
 
 /**
  * Gather all permission slugs for a given membership:
@@ -74,11 +74,7 @@ export function authorizationCheckRoutes(ctx: RouteContext): void {
       filter: (r) => r.organization_id === membership.organization_id,
     });
 
-    return c.json({
-      object: 'list',
-      data: result.data.map(formatAuthorizationResource),
-      list_metadata: result.list_metadata,
-    });
+    return c.json(formatListResponse(result, formatAuthorizationResource));
   });
 
   // List role assignments for a membership
@@ -95,11 +91,7 @@ export function authorizationCheckRoutes(ctx: RouteContext): void {
       filter: (ra) => ra.organization_membership_id === membershipId,
     });
 
-    return c.json({
-      object: 'list',
-      data: result.data.map(formatRoleAssignment),
-      list_metadata: result.list_metadata,
-    });
+    return c.json(formatListResponse(result, formatRoleAssignment));
   });
 
   // Create role assignment

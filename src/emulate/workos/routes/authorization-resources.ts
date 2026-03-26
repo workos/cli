@@ -1,6 +1,6 @@
-import { type RouteContext, notFound, validationError, parseJsonBody } from '../../core/index.js';
+import { type RouteContext, notFound, validationError, parseJsonBody, parseListParams } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
-import { formatAuthorizationResource, formatMembership, parseListParams } from '../helpers.js';
+import { formatAuthorizationResource, formatMembership, formatListResponse } from '../helpers.js';
 
 export function authorizationResourceRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
@@ -49,11 +49,7 @@ export function authorizationResourceRoutes(ctx: RouteContext): void {
       },
     });
 
-    return c.json({
-      object: 'list',
-      data: result.data.map(formatAuthorizationResource),
-      list_metadata: result.list_metadata,
-    });
+    return c.json(formatListResponse(result, formatAuthorizationResource));
   });
 
   app.get('/authorization/resources/:resource_id', (c) => {

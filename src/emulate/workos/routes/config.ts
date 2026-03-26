@@ -1,6 +1,7 @@
 import { type RouteContext, parseJsonBody, WorkOSApiError, validationError } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
 import { formatRedirectUri, formatCorsOrigin } from '../helpers.js';
+import { STORE_KEYS } from '../constants.js';
 
 export function configRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
@@ -47,7 +48,7 @@ export function configRoutes(ctx: RouteContext): void {
   });
 
   app.get('/user_management/jwt_template', (c) => {
-    const template = store.getData<Record<string, unknown>>('jwt_template') ?? {
+    const template = store.getData<Record<string, unknown>>(STORE_KEYS.jwtTemplate) ?? {
       object: 'jwt_template',
       custom_claims: {},
     };
@@ -60,7 +61,7 @@ export function configRoutes(ctx: RouteContext): void {
       object: 'jwt_template',
       custom_claims: (body.custom_claims as Record<string, unknown>) ?? {},
     };
-    store.setData('jwt_template', template);
+    store.setData(STORE_KEYS.jwtTemplate, template);
     return c.json(template);
   });
 }

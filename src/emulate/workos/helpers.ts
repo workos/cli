@@ -1,5 +1,5 @@
 import { randomBytes, createHash, createCipheriv } from 'node:crypto';
-import { WorkOSApiError } from '../core/index.js';
+import { WorkOSApiError, type CursorPaginatedResult, type Entity } from '../core/index.js';
 import type { WorkOSStore } from './store.js';
 import type {
   WorkOSOrganization,
@@ -41,6 +41,31 @@ import type {
   WorkOSWebhookEndpoint,
 } from './entities.js';
 
+const INTERNAL_FIELDS = new Set<string>(['password_hash', 'code_challenge', 'code_challenge_method']);
+
+export function formatEntity<T extends Entity>(
+  entity: T,
+  opts?: { exclude?: Set<string> },
+): Record<string, unknown> {
+  const exclude = opts?.exclude ?? INTERNAL_FIELDS;
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(entity)) {
+    if (!exclude.has(key)) result[key] = value;
+  }
+  return result;
+}
+
+export function formatListResponse<T>(
+  result: CursorPaginatedResult<T>,
+  formatter: (item: T) => Record<string, unknown>,
+): { object: 'list'; data: Record<string, unknown>[]; list_metadata: { before: string | null; after: string | null } } {
+  return {
+    object: 'list',
+    data: result.data.map(formatter),
+    list_metadata: result.list_metadata,
+  };
+}
+
 export function formatOrganization(org: WorkOSOrganization, ws: WorkOSStore): Record<string, unknown> {
   const domains = ws.organizationDomains.findBy('organization_id', org.id).map(formatDomain);
 
@@ -58,128 +83,41 @@ export function formatOrganization(org: WorkOSOrganization, ws: WorkOSStore): Re
 }
 
 export function formatDomain(domain: WorkOSOrganizationDomain): Record<string, unknown> {
-  return {
-    object: 'organization_domain',
-    id: domain.id,
-    organization_id: domain.organization_id,
-    domain: domain.domain,
-    state: domain.state,
-    verification_strategy: domain.verification_strategy,
-    verification_token: domain.verification_token,
-    verification_prefix: domain.verification_prefix,
-    created_at: domain.created_at,
-    updated_at: domain.updated_at,
-  };
+  return formatEntity(domain);
 }
 
 export function formatMembership(m: WorkOSOrganizationMembership): Record<string, unknown> {
-  return {
-    object: 'organization_membership',
-    id: m.id,
-    organization_id: m.organization_id,
-    user_id: m.user_id,
-    role: m.role,
-    status: m.status,
-    external_id: m.external_id,
-    metadata: m.metadata,
-    created_at: m.created_at,
-    updated_at: m.updated_at,
-  };
+  return formatEntity(m);
 }
 
+const USER_EXCLUDE = new Set([...INTERNAL_FIELDS, 'impersonator']);
+
 export function formatUser(user: WorkOSUser): Record<string, unknown> {
-  return {
-    object: 'user',
-    id: user.id,
-    email: user.email,
-    first_name: user.first_name,
-    last_name: user.last_name,
-    email_verified: user.email_verified,
-    profile_picture_url: user.profile_picture_url,
-    last_sign_in_at: user.last_sign_in_at,
-    external_id: user.external_id,
-    metadata: user.metadata,
-    locale: user.locale,
-    created_at: user.created_at,
-    updated_at: user.updated_at,
-  };
+  return formatEntity(user, { exclude: USER_EXCLUDE });
 }
 
 export function formatSession(s: WorkOSSession): Record<string, unknown> {
-  return {
-    object: 'session',
-    id: s.id,
-    user_id: s.user_id,
-    organization_id: s.organization_id,
-    ip_address: s.ip_address,
-    user_agent: s.user_agent,
-    created_at: s.created_at,
-    updated_at: s.updated_at,
-  };
+  return formatEntity(s);
 }
 
 export function formatEmailVerification(ev: WorkOSEmailVerification): Record<string, unknown> {
-  return {
-    object: 'email_verification',
-    id: ev.id,
-    user_id: ev.user_id,
-    email: ev.email,
-    code: ev.code,
-    expires_at: ev.expires_at,
-    created_at: ev.created_at,
-    updated_at: ev.updated_at,
-  };
+  return formatEntity(ev);
 }
 
 export function formatPasswordReset(pr: WorkOSPasswordReset): Record<string, unknown> {
-  return {
-    object: 'password_reset',
-    id: pr.id,
-    user_id: pr.user_id,
-    email: pr.email,
-    token: pr.token,
-    expires_at: pr.expires_at,
-    created_at: pr.created_at,
-    updated_at: pr.updated_at,
-  };
+  return formatEntity(pr);
 }
 
 export function formatMagicAuth(ma: WorkOSMagicAuth): Record<string, unknown> {
-  return {
-    object: 'magic_auth',
-    id: ma.id,
-    user_id: ma.user_id,
-    email: ma.email,
-    code: ma.code,
-    expires_at: ma.expires_at,
-    created_at: ma.created_at,
-    updated_at: ma.updated_at,
-  };
+  return formatEntity(ma);
 }
 
 export function formatAuthFactor(f: WorkOSAuthenticationFactor): Record<string, unknown> {
-  return {
-    object: 'authentication_factor',
-    id: f.id,
-    user_id: f.user_id,
-    type: f.type,
-    totp: f.totp,
-    created_at: f.created_at,
-    updated_at: f.updated_at,
-  };
+  return formatEntity(f);
 }
 
 export function formatIdentity(i: WorkOSIdentity): Record<string, unknown> {
-  return {
-    object: 'identity',
-    id: i.id,
-    user_id: i.user_id,
-    provider: i.provider,
-    provider_id: i.provider_id,
-    type: i.type,
-    created_at: i.created_at,
-    updated_at: i.updated_at,
-  };
+  return formatEntity(i);
 }
 
 export function generateVerificationToken(): string {
@@ -207,118 +145,35 @@ export function isExpired(expiresAt: string): boolean {
 }
 
 export function formatConnection(conn: WorkOSConnection): Record<string, unknown> {
-  return {
-    object: 'connection',
-    id: conn.id,
-    organization_id: conn.organization_id,
-    connection_type: conn.connection_type,
-    name: conn.name,
-    state: conn.state,
-    domains: conn.domains,
-    created_at: conn.created_at,
-    updated_at: conn.updated_at,
-  };
+  return formatEntity(conn);
 }
 
 export function formatSSOProfile(p: WorkOSSSOProfile): Record<string, unknown> {
-  return {
-    object: 'profile',
-    id: p.id,
-    connection_id: p.connection_id,
-    connection_type: p.connection_type,
-    organization_id: p.organization_id,
-    idp_id: p.idp_id,
-    email: p.email,
-    first_name: p.first_name,
-    last_name: p.last_name,
-    groups: p.groups,
-    raw_attributes: p.raw_attributes,
-    created_at: p.created_at,
-    updated_at: p.updated_at,
-  };
+  return formatEntity(p);
 }
 
 export function formatPipeConnection(pc: WorkOSPipeConnection): Record<string, unknown> {
-  return {
-    object: 'pipe_connection',
-    id: pc.id,
-    user_id: pc.user_id,
-    provider: pc.provider,
-    scopes: pc.scopes,
-    status: pc.status,
-    external_account_id: pc.external_account_id,
-    created_at: pc.created_at,
-    updated_at: pc.updated_at,
-  };
+  return formatEntity(pc);
 }
 
 export function formatInvitation(inv: WorkOSInvitation): Record<string, unknown> {
-  return {
-    object: 'invitation',
-    id: inv.id,
-    email: inv.email,
-    state: inv.state,
-    token: inv.token,
-    accept_invitation_url: inv.accept_invitation_url,
-    organization_id: inv.organization_id,
-    inviter_user_id: inv.inviter_user_id,
-    role_slug: inv.role_slug,
-    expires_at: inv.expires_at,
-    created_at: inv.created_at,
-    updated_at: inv.updated_at,
-  };
+  return formatEntity(inv);
 }
 
 export function formatRedirectUri(r: WorkOSRedirectUri): Record<string, unknown> {
-  return {
-    object: 'redirect_uri',
-    id: r.id,
-    uri: r.uri,
-    created_at: r.created_at,
-    updated_at: r.updated_at,
-  };
+  return formatEntity(r);
 }
 
 export function formatCorsOrigin(o: WorkOSCorsOrigin): Record<string, unknown> {
-  return {
-    object: 'cors_origin',
-    id: o.id,
-    origin: o.origin,
-    created_at: o.created_at,
-    updated_at: o.updated_at,
-  };
+  return formatEntity(o);
 }
 
 export function formatAuthorizedApplication(a: WorkOSAuthorizedApplication): Record<string, unknown> {
-  return {
-    object: 'authorized_application',
-    id: a.id,
-    user_id: a.user_id,
-    name: a.name,
-    redirect_uri: a.redirect_uri,
-    created_at: a.created_at,
-    updated_at: a.updated_at,
-  };
+  return formatEntity(a);
 }
 
 export function formatConnectedAccount(a: WorkOSConnectedAccount): Record<string, unknown> {
-  return {
-    object: 'connected_account',
-    id: a.id,
-    user_id: a.user_id,
-    provider: a.provider,
-    provider_id: a.provider_id,
-    created_at: a.created_at,
-    updated_at: a.updated_at,
-  };
-}
-
-export function parseListParams(url: URL) {
-  const limit = Math.max(1, Math.min(parseInt(url.searchParams.get('limit') ?? '10'), 100));
-  const order = (url.searchParams.get('order') as 'asc' | 'desc') ?? 'desc';
-  const before = url.searchParams.get('before') ?? undefined;
-  const after = url.searchParams.get('after') ?? undefined;
-  return { limit, order, before, after };
+  return formatEntity(a);
 }
 
 /** Allowed redirect URI hosts for the emulator's authorize endpoints. */
@@ -344,68 +199,26 @@ export function assertLocalRedirectUri(uri: string): void {
   }
 }
 
+const AUTH_CHALLENGE_EXCLUDE = new Set([...INTERNAL_FIELDS, 'code']);
+
 export function formatAuthChallenge(c: WorkOSAuthenticationChallenge): Record<string, unknown> {
-  return {
-    object: 'authentication_challenge',
-    id: c.id,
-    user_id: c.user_id,
-    factor_id: c.factor_id,
-    expires_at: c.expires_at,
-    created_at: c.created_at,
-    updated_at: c.updated_at,
-  };
+  return formatEntity(c, { exclude: AUTH_CHALLENGE_EXCLUDE });
 }
 
 export function formatRole(role: WorkOSRole): Record<string, unknown> {
-  return {
-    object: 'role',
-    id: role.id,
-    slug: role.slug,
-    name: role.name,
-    description: role.description,
-    type: role.type,
-    organization_id: role.organization_id,
-    is_default_role: role.is_default_role,
-    priority: role.priority,
-    created_at: role.created_at,
-    updated_at: role.updated_at,
-  };
+  return formatEntity(role);
 }
 
 export function formatPermission(p: WorkOSPermission): Record<string, unknown> {
-  return {
-    object: 'permission',
-    id: p.id,
-    slug: p.slug,
-    name: p.name,
-    description: p.description,
-    created_at: p.created_at,
-    updated_at: p.updated_at,
-  };
+  return formatEntity(p);
 }
 
 export function formatAuthorizationResource(r: WorkOSAuthorizationResource): Record<string, unknown> {
-  return {
-    object: 'authorization_resource',
-    id: r.id,
-    resource_type_slug: r.resource_type_slug,
-    external_id: r.external_id,
-    organization_id: r.organization_id,
-    metadata: r.metadata,
-    created_at: r.created_at,
-    updated_at: r.updated_at,
-  };
+  return formatEntity(r);
 }
 
 export function formatRoleAssignment(ra: WorkOSRoleAssignment): Record<string, unknown> {
-  return {
-    object: 'role_assignment',
-    id: ra.id,
-    organization_membership_id: ra.organization_membership_id,
-    role_id: ra.role_id,
-    created_at: ra.created_at,
-    updated_at: ra.updated_at,
-  };
+  return formatEntity(ra);
 }
 
 export function formatDeviceAuthorization(d: WorkOSDeviceAuthorization): Record<string, unknown> {
@@ -421,167 +234,57 @@ export function formatDeviceAuthorization(d: WorkOSDeviceAuthorization): Record<
 // --- Phase 4: CRUD Domain formatters ---
 
 export function formatDirectory(d: WorkOSDirectory): Record<string, unknown> {
-  return {
-    object: 'directory',
-    id: d.id,
-    name: d.name,
-    organization_id: d.organization_id,
-    domain: d.domain,
-    type: d.type,
-    state: d.state,
-    external_key: d.external_key,
-    created_at: d.created_at,
-    updated_at: d.updated_at,
-  };
+  return formatEntity(d);
 }
 
 export function formatDirectoryUser(u: WorkOSDirectoryUser): Record<string, unknown> {
-  return {
-    object: 'directory_user',
-    id: u.id,
-    directory_id: u.directory_id,
-    organization_id: u.organization_id,
-    idp_id: u.idp_id,
-    first_name: u.first_name,
-    last_name: u.last_name,
-    email: u.email,
-    username: u.username,
-    state: u.state,
-    role: u.role,
-    custom_attributes: u.custom_attributes,
-    raw_attributes: u.raw_attributes,
-    groups: u.groups,
-    created_at: u.created_at,
-    updated_at: u.updated_at,
-  };
+  return formatEntity(u);
 }
 
 export function formatDirectoryGroup(g: WorkOSDirectoryGroup): Record<string, unknown> {
-  return {
-    object: 'directory_group',
-    id: g.id,
-    directory_id: g.directory_id,
-    organization_id: g.organization_id,
-    idp_id: g.idp_id,
-    name: g.name,
-    raw_attributes: g.raw_attributes,
-    created_at: g.created_at,
-    updated_at: g.updated_at,
-  };
+  return formatEntity(g);
 }
 
 export function formatAuditLogAction(a: WorkOSAuditLogAction): Record<string, unknown> {
-  return {
-    object: 'audit_log_action',
-    id: a.id,
-    name: a.name,
-    description: a.description,
-    condition: a.condition,
-    created_at: a.created_at,
-    updated_at: a.updated_at,
-  };
+  return formatEntity(a);
 }
 
 export function formatAuditLogEvent(e: WorkOSAuditLogEvent): Record<string, unknown> {
-  return {
-    object: 'audit_log_event',
-    id: e.id,
-    organization_id: e.organization_id,
-    action: e.action,
-    actor: e.actor,
-    targets: e.targets,
-    metadata: e.metadata,
-    occurred_at: e.occurred_at,
-    created_at: e.created_at,
-    updated_at: e.updated_at,
-  };
+  return formatEntity(e);
 }
 
 export function formatAuditLogExport(ex: WorkOSAuditLogExport): Record<string, unknown> {
-  return {
-    object: 'audit_log_export',
-    id: ex.id,
-    organization_id: ex.organization_id,
-    state: ex.state,
-    url: ex.url,
-    filters: ex.filters,
-    created_at: ex.created_at,
-    updated_at: ex.updated_at,
-  };
+  return formatEntity(ex);
 }
 
 export function formatFeatureFlag(f: WorkOSFeatureFlag): Record<string, unknown> {
-  return {
-    object: 'feature_flag',
-    id: f.id,
-    slug: f.slug,
-    name: f.name,
-    description: f.description,
-    type: f.type,
-    default_value: f.default_value,
-    enabled: f.enabled,
-    created_at: f.created_at,
-    updated_at: f.updated_at,
-  };
+  return formatEntity(f);
 }
 
 export function formatConnectApplication(a: WorkOSConnectApplication): Record<string, unknown> {
-  return {
-    object: 'connect_application',
-    id: a.id,
-    name: a.name,
-    redirect_uris: a.redirect_uris,
-    client_id: a.client_id,
-    logo_url: a.logo_url,
-    created_at: a.created_at,
-    updated_at: a.updated_at,
-  };
+  return formatEntity(a);
 }
 
+const CLIENT_SECRET_EXCLUDE = new Set([...INTERNAL_FIELDS, 'value']);
+
 export function formatClientSecret(s: WorkOSClientSecret): Record<string, unknown> {
-  return {
-    object: 'client_secret',
-    id: s.id,
-    application_id: s.application_id,
-    last_four: s.last_four,
-    created_at: s.created_at,
-    updated_at: s.updated_at,
-  };
+  return formatEntity(s, { exclude: CLIENT_SECRET_EXCLUDE });
 }
 
 export function formatRadarAttempt(a: WorkOSRadarAttempt): Record<string, unknown> {
-  return {
-    object: 'radar_attempt',
-    id: a.id,
-    user_id: a.user_id,
-    ip_address: a.ip_address,
-    user_agent: a.user_agent,
-    verdict: a.verdict,
-    signals: a.signals,
-    created_at: a.created_at,
-    updated_at: a.updated_at,
-  };
+  return formatEntity(a);
 }
+
+const API_KEY_EXCLUDE = new Set([...INTERNAL_FIELDS, 'key', 'environment']);
 
 export function formatApiKeyRecord(k: WorkOSApiKey): Record<string, unknown> {
-  return {
-    object: 'api_key',
-    id: k.id,
-    name: k.name,
-    created_at: k.created_at,
-    updated_at: k.updated_at,
-  };
+  return formatEntity(k, { exclude: API_KEY_EXCLUDE });
 }
 
+const EVENT_EXCLUDE = new Set([...INTERNAL_FIELDS, 'updated_at']);
+
 export function formatEvent(e: WorkOSEvent): Record<string, unknown> {
-  return {
-    object: 'event',
-    id: e.id,
-    event: e.event,
-    data: e.data,
-    environment_id: e.environment_id,
-    created_at: e.created_at,
-  };
+  return formatEntity(e, { exclude: EVENT_EXCLUDE });
 }
 
 export function formatWebhookEndpoint(

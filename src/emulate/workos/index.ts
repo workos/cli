@@ -37,6 +37,7 @@ import { dataIntegrationRoutes } from './routes/data-integrations.js';
 import { webhookEndpointRoutes } from './routes/webhook-endpoints.js';
 import { eventRoutes } from './routes/events.js';
 import { EventBus } from './event-bus.js';
+import { STORE_KEYS, EVENTS } from './constants.js';
 import {
   generateVerificationToken,
   hashPassword,
@@ -367,69 +368,69 @@ export const workosPlugin: ServicePlugin = {
     // Set up event bus with collection hooks (Option A from spec)
     // Store on ctx.store for route-level access (hybrid Option A+B for action events)
     const eventBus = new EventBus(ctx.store);
-    ctx.store.setData('eventBus', eventBus);
+    ctx.store.setData(STORE_KEYS.eventBus, eventBus);
     const ws = getWorkOSStore(ctx.store);
 
     ws.users.setHooks({
-      onInsert: (u) => eventBus.emit({ event: 'user.created', data: formatUser(u) }),
-      onUpdate: (u) => eventBus.emit({ event: 'user.updated', data: formatUser(u) }),
-      onDelete: (u) => eventBus.emit({ event: 'user.deleted', data: formatUser(u) }),
+      onInsert: (u) => eventBus.emit({ event: EVENTS.userCreated, data: formatUser(u) }),
+      onUpdate: (u) => eventBus.emit({ event: EVENTS.userUpdated, data: formatUser(u) }),
+      onDelete: (u) => eventBus.emit({ event: EVENTS.userDeleted, data: formatUser(u) }),
     });
     ws.organizations.setHooks({
-      onInsert: (o) => eventBus.emit({ event: 'organization.created', data: formatOrganization(o, ws) }),
-      onUpdate: (o) => eventBus.emit({ event: 'organization.updated', data: formatOrganization(o, ws) }),
-      onDelete: (o) => eventBus.emit({ event: 'organization.deleted', data: formatOrganization(o, ws) }),
+      onInsert: (o) => eventBus.emit({ event: EVENTS.organizationCreated, data: formatOrganization(o, ws) }),
+      onUpdate: (o) => eventBus.emit({ event: EVENTS.organizationUpdated, data: formatOrganization(o, ws) }),
+      onDelete: (o) => eventBus.emit({ event: EVENTS.organizationDeleted, data: formatOrganization(o, ws) }),
     });
     ws.organizationDomains.setHooks({
-      onInsert: (d) => eventBus.emit({ event: 'organization_domain.created', data: formatDomain(d) }),
+      onInsert: (d) => eventBus.emit({ event: EVENTS.organizationDomainCreated, data: formatDomain(d) }),
       onUpdate: (d) =>
         eventBus.emit({
-          event: d.state === 'verified' ? 'organization_domain.verified' : 'organization_domain.updated',
+          event: d.state === 'verified' ? EVENTS.organizationDomainVerified : EVENTS.organizationDomainUpdated,
           data: formatDomain(d),
         }),
-      onDelete: (d) => eventBus.emit({ event: 'organization_domain.deleted', data: formatDomain(d) }),
+      onDelete: (d) => eventBus.emit({ event: EVENTS.organizationDomainDeleted, data: formatDomain(d) }),
     });
     ws.organizationMemberships.setHooks({
-      onInsert: (m) => eventBus.emit({ event: 'organization_membership.created', data: formatMembership(m) }),
-      onUpdate: (m) => eventBus.emit({ event: 'organization_membership.updated', data: formatMembership(m) }),
-      onDelete: (m) => eventBus.emit({ event: 'organization_membership.deleted', data: formatMembership(m) }),
+      onInsert: (m) => eventBus.emit({ event: EVENTS.organizationMembershipCreated, data: formatMembership(m) }),
+      onUpdate: (m) => eventBus.emit({ event: EVENTS.organizationMembershipUpdated, data: formatMembership(m) }),
+      onDelete: (m) => eventBus.emit({ event: EVENTS.organizationMembershipDeleted, data: formatMembership(m) }),
     });
     ws.connections.setHooks({
-      onInsert: (c) => eventBus.emit({ event: 'connection.created', data: formatConnection(c) }),
-      onUpdate: (c) => eventBus.emit({ event: 'connection.updated', data: formatConnection(c) }),
-      onDelete: (c) => eventBus.emit({ event: 'connection.deleted', data: formatConnection(c) }),
+      onInsert: (c) => eventBus.emit({ event: EVENTS.connectionCreated, data: formatConnection(c) }),
+      onUpdate: (c) => eventBus.emit({ event: EVENTS.connectionUpdated, data: formatConnection(c) }),
+      onDelete: (c) => eventBus.emit({ event: EVENTS.connectionDeleted, data: formatConnection(c) }),
     });
     ws.sessions.setHooks({
-      onInsert: (s) => eventBus.emit({ event: 'session.created', data: formatSession(s) }),
-      onDelete: (s) => eventBus.emit({ event: 'session.revoked', data: formatSession(s) }),
+      onInsert: (s) => eventBus.emit({ event: EVENTS.sessionCreated, data: formatSession(s) }),
+      onDelete: (s) => eventBus.emit({ event: EVENTS.sessionRevoked, data: formatSession(s) }),
     });
     ws.invitations.setHooks({
-      onInsert: (i) => eventBus.emit({ event: 'invitation.created', data: formatInvitation(i) }),
+      onInsert: (i) => eventBus.emit({ event: EVENTS.invitationCreated, data: formatInvitation(i) }),
     });
     ws.roles.setHooks({
-      onInsert: (r) => eventBus.emit({ event: 'role.created', data: formatRole(r) }),
-      onUpdate: (r) => eventBus.emit({ event: 'role.updated', data: formatRole(r) }),
-      onDelete: (r) => eventBus.emit({ event: 'role.deleted', data: formatRole(r) }),
+      onInsert: (r) => eventBus.emit({ event: EVENTS.roleCreated, data: formatRole(r) }),
+      onUpdate: (r) => eventBus.emit({ event: EVENTS.roleUpdated, data: formatRole(r) }),
+      onDelete: (r) => eventBus.emit({ event: EVENTS.roleDeleted, data: formatRole(r) }),
     });
     ws.permissions.setHooks({
-      onInsert: (p) => eventBus.emit({ event: 'permission.created', data: formatPermission(p) }),
-      onUpdate: (p) => eventBus.emit({ event: 'permission.updated', data: formatPermission(p) }),
-      onDelete: (p) => eventBus.emit({ event: 'permission.deleted', data: formatPermission(p) }),
+      onInsert: (p) => eventBus.emit({ event: EVENTS.permissionCreated, data: formatPermission(p) }),
+      onUpdate: (p) => eventBus.emit({ event: EVENTS.permissionUpdated, data: formatPermission(p) }),
+      onDelete: (p) => eventBus.emit({ event: EVENTS.permissionDeleted, data: formatPermission(p) }),
     });
     ws.directories.setHooks({
-      onInsert: (d) => eventBus.emit({ event: 'directory.created', data: formatDirectory(d) }),
-      onUpdate: (d) => eventBus.emit({ event: 'directory.updated', data: formatDirectory(d) }),
-      onDelete: (d) => eventBus.emit({ event: 'directory.deleted', data: formatDirectory(d) }),
+      onInsert: (d) => eventBus.emit({ event: EVENTS.directoryCreated, data: formatDirectory(d) }),
+      onUpdate: (d) => eventBus.emit({ event: EVENTS.directoryUpdated, data: formatDirectory(d) }),
+      onDelete: (d) => eventBus.emit({ event: EVENTS.directoryDeleted, data: formatDirectory(d) }),
     });
     ws.directoryUsers.setHooks({
-      onInsert: (u) => eventBus.emit({ event: 'directory_user.created', data: formatDirectoryUser(u) }),
-      onUpdate: (u) => eventBus.emit({ event: 'directory_user.updated', data: formatDirectoryUser(u) }),
-      onDelete: (u) => eventBus.emit({ event: 'directory_user.deleted', data: formatDirectoryUser(u) }),
+      onInsert: (u) => eventBus.emit({ event: EVENTS.directoryUserCreated, data: formatDirectoryUser(u) }),
+      onUpdate: (u) => eventBus.emit({ event: EVENTS.directoryUserUpdated, data: formatDirectoryUser(u) }),
+      onDelete: (u) => eventBus.emit({ event: EVENTS.directoryUserDeleted, data: formatDirectoryUser(u) }),
     });
     ws.directoryGroups.setHooks({
-      onInsert: (g) => eventBus.emit({ event: 'directory_group.created', data: formatDirectoryGroup(g) }),
-      onUpdate: (g) => eventBus.emit({ event: 'directory_group.updated', data: formatDirectoryGroup(g) }),
-      onDelete: (g) => eventBus.emit({ event: 'directory_group.deleted', data: formatDirectoryGroup(g) }),
+      onInsert: (g) => eventBus.emit({ event: EVENTS.directoryGroupCreated, data: formatDirectoryGroup(g) }),
+      onUpdate: (g) => eventBus.emit({ event: EVENTS.directoryGroupUpdated, data: formatDirectoryGroup(g) }),
+      onDelete: (g) => eventBus.emit({ event: EVENTS.directoryGroupDeleted, data: formatDirectoryGroup(g) }),
     });
   },
   seed(_store: Store, _baseUrl: string): void {

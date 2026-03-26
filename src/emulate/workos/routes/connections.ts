@@ -1,6 +1,6 @@
-import { type RouteContext, notFound, parseJsonBody, generateId } from '../../core/index.js';
+import { type RouteContext, notFound, parseJsonBody, generateId, parseListParams } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
-import { formatConnection, parseListParams } from '../helpers.js';
+import { formatConnection, formatListResponse } from '../helpers.js';
 import type { WorkOSConnectionType } from '../entities.js';
 
 export function connectionRoutes(ctx: RouteContext): void {
@@ -55,11 +55,7 @@ export function connectionRoutes(ctx: RouteContext): void {
       },
     });
 
-    return c.json({
-      object: 'list',
-      data: result.data.map(formatConnection),
-      list_metadata: result.list_metadata,
-    });
+    return c.json(formatListResponse(result, formatConnection));
   });
 
   app.get('/connections/:id', (c) => {

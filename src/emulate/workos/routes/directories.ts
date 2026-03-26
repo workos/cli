@@ -1,6 +1,6 @@
-import { type RouteContext, notFound } from '../../core/index.js';
+import { type RouteContext, notFound, parseListParams } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
-import { formatDirectory, formatDirectoryUser, formatDirectoryGroup, parseListParams } from '../helpers.js';
+import { formatDirectory, formatDirectoryUser, formatDirectoryGroup, formatListResponse } from '../helpers.js';
 
 export function directoryRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
@@ -22,11 +22,7 @@ export function directoryRoutes(ctx: RouteContext): void {
       },
     });
 
-    return c.json({
-      object: 'list',
-      data: result.data.map(formatDirectory),
-      list_metadata: result.list_metadata,
-    });
+    return c.json(formatListResponse(result, formatDirectory));
   });
 
   // Get directory
@@ -67,11 +63,7 @@ export function directoryRoutes(ctx: RouteContext): void {
       },
     });
 
-    return c.json({
-      object: 'list',
-      data: result.data.map(formatDirectoryUser),
-      list_metadata: result.list_metadata,
-    });
+    return c.json(formatListResponse(result, formatDirectoryUser));
   });
 
   // Get directory user
@@ -95,11 +87,7 @@ export function directoryRoutes(ctx: RouteContext): void {
       },
     });
 
-    return c.json({
-      object: 'list',
-      data: result.data.map(formatDirectoryGroup),
-      list_metadata: result.list_metadata,
-    });
+    return c.json(formatListResponse(result, formatDirectoryGroup));
   });
 
   // Get directory group

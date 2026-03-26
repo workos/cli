@@ -1,6 +1,6 @@
-import { type RouteContext, notFound, validationError, parseJsonBody, WorkOSApiError } from '../../core/index.js';
+import { type RouteContext, notFound, validationError, parseJsonBody, WorkOSApiError, parseListParams } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
-import { formatUser, formatIdentity, hashPassword, parseListParams } from '../helpers.js';
+import { formatUser, formatIdentity, hashPassword, formatListResponse } from '../helpers.js';
 
 export function userRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
@@ -57,11 +57,7 @@ export function userRoutes(ctx: RouteContext): void {
       },
     });
 
-    return c.json({
-      object: 'list',
-      data: result.data.map(formatUser),
-      list_metadata: result.list_metadata,
-    });
+    return c.json(formatListResponse(result, formatUser));
   });
 
   app.get('/user_management/users/:id', (c) => {

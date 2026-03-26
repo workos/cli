@@ -1,6 +1,6 @@
-import { type RouteContext, notFound, validationError, parseJsonBody, WorkOSApiError } from '../../core/index.js';
+import { type RouteContext, notFound, validationError, parseJsonBody, WorkOSApiError, parseListParams } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
-import { formatMembership, parseListParams } from '../helpers.js';
+import { formatMembership, formatListResponse } from '../helpers.js';
 
 export function membershipRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
@@ -60,11 +60,7 @@ export function membershipRoutes(ctx: RouteContext): void {
       },
     });
 
-    return c.json({
-      object: 'list',
-      data: result.data.map(formatMembership),
-      list_metadata: result.list_metadata,
-    });
+    return c.json(formatListResponse(result, formatMembership));
   });
 
   app.get('/user_management/organization_memberships/:id', (c) => {

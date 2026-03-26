@@ -133,7 +133,11 @@ export class Collection<T extends Entity> {
 
   count(filter?: FilterFn<T>): number {
     if (!filter) return this.items.size;
-    return this.all().filter(filter).length;
+    let n = 0;
+    for (const item of this.items.values()) {
+      if (filter(item)) n++;
+    }
+    return n;
   }
 
   clear(): void {

@@ -1,7 +1,8 @@
-import { type RouteContext, notFound, parseJsonBody } from '../../core/index.js';
+import { type RouteContext, notFound, parseJsonBody, parseListParams } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
-import { formatApiKeyRecord, parseListParams } from '../helpers.js';
+import { formatApiKeyRecord, formatListResponse } from '../helpers.js';
 import type { ApiKeyMap } from '../../core/index.js';
+import { STORE_KEYS } from '../constants.js';
 
 export function apiKeyRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
@@ -11,7 +12,7 @@ export function apiKeyRoutes(ctx: RouteContext): void {
   app.post('/api_keys/validations', async (c) => {
     const body = await parseJsonBody(c);
     const key = body.key as string | undefined;
-    const apiKeyMap = store.getData<ApiKeyMap>('apiKeyMap') ?? {};
+    const apiKeyMap = store.getData<ApiKeyMap>(STORE_KEYS.apiKeyMap) ?? {};
     const valid = !!key && key in apiKeyMap;
     return c.json({ valid });
   });
@@ -29,10 +30,6 @@ export function apiKeyRoutes(ctx: RouteContext): void {
     const url = new URL(c.req.url);
     const params = parseListParams(url);
     const result = ws.apiKeyRecords.list({ ...params });
-    return c.json({
-      object: 'list',
-      data: result.data.map(formatApiKeyRecord),
-      list_metadata: result.list_metadata,
-    });
+    return c.json(formatListResponse(result, formatApiKeyRecord));
   });
 }

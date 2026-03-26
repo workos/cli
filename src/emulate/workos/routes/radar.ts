@@ -1,6 +1,6 @@
-import { type RouteContext, notFound, parseJsonBody } from '../../core/index.js';
+import { type RouteContext, notFound, parseJsonBody, parseListParams } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
-import { formatRadarAttempt, parseListParams } from '../helpers.js';
+import { formatRadarAttempt, formatListResponse } from '../helpers.js';
 
 export function radarRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
@@ -11,11 +11,7 @@ export function radarRoutes(ctx: RouteContext): void {
     const url = new URL(c.req.url);
     const params = parseListParams(url);
     const result = ws.radarAttempts.list({ ...params });
-    return c.json({
-      object: 'list',
-      data: result.data.map(formatRadarAttempt),
-      list_metadata: result.list_metadata,
-    });
+    return c.json(formatListResponse(result, formatRadarAttempt));
   });
 
   // Get attempt

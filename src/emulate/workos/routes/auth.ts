@@ -11,6 +11,7 @@ import {
   sealSession,
 } from '../helpers.js';
 import type { EventBus } from '../event-bus.js';
+import { STORE_KEYS, STORE_KEY_PREFIXES } from '../constants.js';
 
 interface PendingAuth {
   user_id: string;
@@ -246,7 +247,7 @@ export function authRoutes(ctx: RouteContext): void {
           );
         }
 
-        const pending = store.getData<PendingAuth>(`pending_auth:${pendingToken}`);
+        const pending = store.getData<PendingAuth>(`${STORE_KEY_PREFIXES.pendingAuth}${pendingToken}`);
         if (!pending) {
           throw new WorkOSApiError(400, 'Invalid pending authentication token', 'invalid_pending_authentication_token');
         }
@@ -266,7 +267,7 @@ export function authRoutes(ctx: RouteContext): void {
         }
 
         ws.authChallenges.delete(challenge.id);
-        store.setData(`pending_auth:${pendingToken}`, undefined);
+        store.setData(`${STORE_KEY_PREFIXES.pendingAuth}${pendingToken}`, undefined);
 
         user = ws.users.get(pending.user_id);
         organizationId = pending.organization_id;
@@ -286,7 +287,7 @@ export function authRoutes(ctx: RouteContext): void {
           );
         }
 
-        const pending = store.getData<PendingAuth>(`pending_auth:${pendingToken}`);
+        const pending = store.getData<PendingAuth>(`${STORE_KEY_PREFIXES.pendingAuth}${pendingToken}`);
         if (!pending) {
           throw new WorkOSApiError(400, 'Invalid pending authentication token', 'invalid_pending_authentication_token');
         }
@@ -294,7 +295,7 @@ export function authRoutes(ctx: RouteContext): void {
         const org = ws.organizations.get(orgId);
         if (!org) throw notFound('Organization');
 
-        store.setData(`pending_auth:${pendingToken}`, undefined);
+        store.setData(`${STORE_KEY_PREFIXES.pendingAuth}${pendingToken}`, undefined);
 
         user = ws.users.get(pending.user_id);
         organizationId = orgId;
@@ -397,7 +398,7 @@ export function authRoutes(ctx: RouteContext): void {
       : null;
 
     // Emit authentication event (hybrid Option B for action-specific events)
-    const eventBus = store.getData<EventBus>('eventBus');
+    const eventBus = store.getData<EventBus>(STORE_KEYS.eventBus);
     if (eventBus) {
       const authEventType = `authentication.${authMethod.toLowerCase()}_succeeded`;
       eventBus.emit({

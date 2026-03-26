@@ -1,6 +1,6 @@
-import { type RouteContext, notFound, validationError, parseJsonBody } from '../../core/index.js';
+import { type RouteContext, notFound, validationError, parseJsonBody, parseListParams } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
-import { formatRole, formatPermission, parseListParams } from '../helpers.js';
+import { formatRole, formatPermission, formatListResponse } from '../helpers.js';
 
 export function authorizationRoleRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
@@ -47,11 +47,7 @@ export function authorizationRoleRoutes(ctx: RouteContext): void {
       filter: (r) => r.type === 'EnvironmentRole',
     });
 
-    return c.json({
-      object: 'list',
-      data: result.data.map(formatRole),
-      list_metadata: result.list_metadata,
-    });
+    return c.json(formatListResponse(result, formatRole));
   });
 
   app.get('/authorization/roles/:slug', (c) => {

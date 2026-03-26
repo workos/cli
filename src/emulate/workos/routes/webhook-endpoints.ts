@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
-import { type RouteContext, notFound, validationError, parseJsonBody } from '../../core/index.js';
+import { type RouteContext, notFound, validationError, parseJsonBody, parseListParams } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
-import { formatWebhookEndpoint, parseListParams } from '../helpers.js';
+import { formatWebhookEndpoint, formatListResponse } from '../helpers.js';
 
 export function webhookEndpointRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
@@ -33,11 +33,7 @@ export function webhookEndpointRoutes(ctx: RouteContext): void {
     const params = parseListParams(url);
 
     const result = ws.webhookEndpoints.list(params);
-    return c.json({
-      object: 'list',
-      data: result.data.map((ep) => formatWebhookEndpoint(ep)),
-      list_metadata: result.list_metadata,
-    });
+    return c.json(formatListResponse(result, (ep) => formatWebhookEndpoint(ep)));
   });
 
   app.get('/webhook_endpoints/:id', (c) => {

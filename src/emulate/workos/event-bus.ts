@@ -2,9 +2,10 @@ import type { Store } from '../core/index.js';
 import { getWorkOSStore } from './store.js';
 import type { WorkOSWebhookEndpoint, WorkOSEvent } from './entities.js';
 import { signWebhookPayload } from './webhook-signer.js';
+import type { WorkOSEventName } from './constants.js';
 
 export interface EventPayload {
-  event: string;
+  event: WorkOSEventName | string;
   data: Record<string, unknown>;
   environment_id?: string;
 }

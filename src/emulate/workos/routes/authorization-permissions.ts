@@ -1,6 +1,6 @@
-import { type RouteContext, notFound, validationError, parseJsonBody } from '../../core/index.js';
+import { type RouteContext, notFound, validationError, parseJsonBody, parseListParams } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
-import { formatPermission, parseListParams } from '../helpers.js';
+import { formatPermission, formatListResponse } from '../helpers.js';
 
 export function authorizationPermissionRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
@@ -38,11 +38,7 @@ export function authorizationPermissionRoutes(ctx: RouteContext): void {
     const params = parseListParams(url);
 
     const result = ws.permissions.list(params);
-    return c.json({
-      object: 'list',
-      data: result.data.map(formatPermission),
-      list_metadata: result.list_metadata,
-    });
+    return c.json(formatListResponse(result, formatPermission));
   });
 
   app.get('/authorization/permissions/:slug', (c) => {

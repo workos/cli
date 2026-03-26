@@ -1,6 +1,7 @@
-import { type RouteContext, notFound, parseJsonBody, validationError } from '../../core/index.js';
+import { type RouteContext, notFound, parseJsonBody, validationError, parseListParams } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
-import { formatAuditLogAction, formatAuditLogEvent, formatAuditLogExport, parseListParams } from '../helpers.js';
+import { formatAuditLogAction, formatAuditLogEvent, formatAuditLogExport, formatListResponse } from '../helpers.js';
+import { STORE_KEY_PREFIXES } from '../constants.js';
 
 export function auditLogRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
@@ -11,11 +12,7 @@ export function auditLogRoutes(ctx: RouteContext): void {
     const url = new URL(c.req.url);
     const params = parseListParams(url);
     const result = ws.auditLogActions.list({ ...params });
-    return c.json({
-      object: 'list',
-      data: result.data.map(formatAuditLogAction),
-      list_metadata: result.list_metadata,
-    });
+    return c.json(formatListResponse(result, formatAuditLogAction));
   });
 
   // Create/update action schema
@@ -27,7 +24,7 @@ export function auditLogRoutes(ctx: RouteContext): void {
     let action = ws.auditLogActions.findOneBy('name', actionName);
     if (action) {
       // Store schema in store data keyed by action name
-      store.setData(`audit_schema_${actionName}`, body);
+      store.setData(`${STORE_KEY_PREFIXES.auditSchema}${actionName}`, body);
       return c.json(formatAuditLogAction(action));
     }
 
@@ -37,7 +34,7 @@ export function auditLogRoutes(ctx: RouteContext): void {
       description: null,
       condition: null,
     });
-    store.setData(`audit_schema_${actionName}`, body);
+    store.setData(`${STORE_KEY_PREFIXES.auditSchema}${actionName}`, body);
     return c.json(formatAuditLogAction(action), 201);
   });
 

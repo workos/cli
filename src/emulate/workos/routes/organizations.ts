@@ -1,6 +1,6 @@
-import { type RouteContext, notFound, validationError, parseJsonBody } from '../../core/index.js';
+import { type RouteContext, notFound, validationError, parseJsonBody, parseListParams } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
-import { formatOrganization, generateVerificationToken, parseListParams } from '../helpers.js';
+import { formatOrganization, generateVerificationToken, formatListResponse } from '../helpers.js';
 
 export function organizationRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
@@ -61,11 +61,7 @@ export function organizationRoutes(ctx: RouteContext): void {
       },
     });
 
-    return c.json({
-      object: 'list',
-      data: result.data.map((org) => formatOrganization(org, ws)),
-      list_metadata: result.list_metadata,
-    });
+    return c.json(formatListResponse(result, (org) => formatOrganization(org, ws)));
   });
 
   app.get('/organizations/:id', (c) => {

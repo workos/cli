@@ -1,6 +1,6 @@
-import { type RouteContext, notFound, validationError, parseJsonBody } from '../../core/index.js';
+import { type RouteContext, notFound, validationError, parseJsonBody, parseListParams } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
-import { formatRole, formatPermission, parseListParams } from '../helpers.js';
+import { formatRole, formatPermission, formatListResponse } from '../helpers.js';
 
 export function authorizationOrgRoleRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;
@@ -56,11 +56,7 @@ export function authorizationOrgRoleRoutes(ctx: RouteContext): void {
       filter: (r) => r.organization_id === orgId && r.type === 'OrganizationRole',
     });
 
-    return c.json({
-      object: 'list',
-      data: result.data.map(formatRole),
-      list_metadata: result.list_metadata,
-    });
+    return c.json(formatListResponse(result, formatRole));
   });
 
   // Priority ordering — must be registered before :slug routes
