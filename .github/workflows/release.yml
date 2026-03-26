@@ -3,6 +3,11 @@ name: Release
 on:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      tag_name:
+        description: Release tag name (e.g., v1.0.0-beta.1)
+        type: string
+        default: ""
 
 jobs:
   publish:
@@ -28,5 +33,16 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Determine npm tag
+        id: npm-tag
+        env:
+          TAG_NAME: ${{ inputs.tag_name }}
+        run: |
+          if [[ "$TAG_NAME" == *"-"* ]]; then
+            echo "tag=beta" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish
-        run: npm publish --tag latest --access public --provenance
+        run: npm publish --tag ${{ steps.npm-tag.outputs.tag }} --access public --provenance
