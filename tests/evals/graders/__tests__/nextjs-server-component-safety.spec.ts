@@ -47,7 +47,10 @@ export default async function NavAuth() {
     await writeFile(join(workDir, 'app/page.tsx'), `
 'use client';
 import { getSignInUrl } from '@workos-inc/authkit-nextjs';
-// client component — safe
+export default function Page() {
+  const handleClick = async () => { const url = await getSignInUrl(); window.location.href = url; };
+  return <button onClick={handleClick}>Sign in</button>;
+}
 `);
     const result = await findUnsafeGetSignInUrlUsage(workDir);
     expect(result).toBeNull();
