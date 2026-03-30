@@ -14,10 +14,7 @@ export function hasTopLevelDirective(content: string, directive: string): boolea
   // Strip leading whitespace, single-line comments, and multi-line comments
   const stripped = content.replace(/^\s*(\/\/[^\n]*\n|\/\*[\s\S]*?\*\/\s*)*/g, '');
   // Check if the file starts with the directive (single or double quotes, with semicolon optional)
-  return (
-    stripped.startsWith(`'${directive}'`) ||
-    stripped.startsWith(`"${directive}"`)
-  );
+  return stripped.startsWith(`'${directive}'`) || stripped.startsWith(`"${directive}"`);
 }
 
 const INVOCATION_PATTERN = /\bgetSignInUrl\s*\(/;
@@ -30,9 +27,7 @@ function stripComments(content: string): string {
   return content.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
 }
 
-export async function findUnsafeGetSignInUrlUsage(
-  workDir: string,
-): Promise<{ file: string } | null> {
+export async function findUnsafeGetSignInUrlUsage(workDir: string): Promise<{ file: string } | null> {
   const files = await fg('{app,src/app}/**/*.tsx', {
     cwd: workDir,
     ignore: ['**/callback/**', '**/node_modules/**'],
