@@ -1,12 +1,58 @@
+import fg from 'fast-glob';
+import { readFile } from 'node:fs/promises';
 import { FileGrader } from './file-grader.js';
 import { BuildGrader } from './build-grader.js';
 import type { Grader, GradeResult, GradeCheck } from '../types.js';
 
+/**
+ * Module prologue directive check.
+ * Only matches 'use client' / 'use server' when they appear as the
+ * first statement in the file (ignoring leading comments and whitespace).
+ * Does NOT match inline 'use server' inside function bodies.
+ */
+export function hasTopLevelDirective(content: string, directive: string): boolean {
+  // Strip leading whitespace, single-line comments, and multi-line comments
+  const stripped = content.replace(/^\s*(\/\/[^\n]*\n|\/\*[\s\S]*?\*\/\s*)*/g, '');
+  // Check if the file starts with the directive (single or double quotes, with semicolon optional)
+  return (
+    stripped.startsWith(`'${directive}'`) ||
+    stripped.startsWith(`"${directive}"`)
+  );
+}
+
+const INVOCATION_PATTERN = /\bgetSignInUrl\s*\(/;
+
+export async function findUnsafeGetSignInUrlUsage(
+  workDir: string,
+): Promise<{ file: string } | null> {
+  const files = await fg('{app,src/app}/**/*.tsx', {
+    cwd: workDir,
+    ignore: ['**/callback/**', '**/node_modules/**'],
+    absolute: true,
+  });
+
+  for (const file of files) {
+    const content = await readFile(file, 'utf-8');
+
+    if (
+      INVOCATION_PATTERN.test(content) &&
+      !hasTopLevelDirective(content, 'use client') &&
+      !hasTopLevelDirective(content, 'use server')
+    ) {
+      return { file: file.replace(workDir + '/', '') };
+    }
+  }
+
+  return null;
+}
+
 export class NextjsGrader implements Grader {
   private fileGrader: FileGrader;
   private buildGrader: BuildGrader;
+  private workDir: string;
 
   constructor(workDir: string) {
+    this.workDir = workDir;
     this.fileGrader = new FileGrader(workDir);
     this.buildGrader = new BuildGrader(workDir);
   }
@@ -90,6 +136,16 @@ export class NextjsGrader implements Grader {
       'AuthKitProvider in app',
     );
     checks.push(authKitProviderCheck);
+
+    // Check for getSignInUrl() in server components (no top-level directive)
+    const unsafeUsage = await findUnsafeGetSignInUrlUsage(this.workDir);
+    checks.push({
+      name: 'No getSignInUrl in Server Components',
+      passed: unsafeUsage === null,
+      message: unsafeUsage
+        ? `${unsafeUsage.file} calls getSignInUrl() without a top-level 'use client' or 'use server' directive — will throw in Next.js 15+`
+        : 'No unsafe getSignInUrl usage in Server Components',
+    });
 
     // Check build succeeds
     checks.push(await this.buildGrader.checkBuild());
