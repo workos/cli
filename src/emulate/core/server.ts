@@ -43,11 +43,7 @@ export function createServer(plugin: ServicePlugin, options: ServerOptions = {})
     '/user_management/sessions/logout',
   ]);
 
-  const PUBLIC_PATH_PREFIXES = [
-    '/sso/',
-    '/user_management/sessions/jwks/',
-    '/data-integrations/',
-  ];
+  const PUBLIC_PATH_PREFIXES = ['/sso/', '/user_management/sessions/jwks/', '/data-integrations/'];
 
   app.use('*', async (c, next) => {
     const path = new URL(c.req.url).pathname;

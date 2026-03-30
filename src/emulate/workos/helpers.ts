@@ -44,10 +44,7 @@ import type {
 
 const INTERNAL_FIELDS = new Set<string>(['password_hash', 'code_challenge', 'code_challenge_method']);
 
-export function formatEntity<T extends Entity>(
-  entity: T,
-  opts?: { exclude?: Set<string> },
-): Record<string, unknown> {
+export function formatEntity<T extends Entity>(entity: T, opts?: { exclude?: Set<string> }): Record<string, unknown> {
   const exclude = opts?.exclude ?? INTERNAL_FIELDS;
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(entity)) {

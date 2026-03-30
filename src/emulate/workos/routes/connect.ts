@@ -1,7 +1,12 @@
 import { type RouteContext, notFound, parseJsonBody, validationError, parseListParams } from '../../core/index.js';
 import { generateId } from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
-import { formatConnectApplication, formatClientSecret, generateVerificationToken, formatListResponse } from '../helpers.js';
+import {
+  formatConnectApplication,
+  formatClientSecret,
+  generateVerificationToken,
+  formatListResponse,
+} from '../helpers.js';
 
 export function connectRoutes(ctx: RouteContext): void {
   const { app, store } = ctx;

@@ -118,11 +118,9 @@ export function getWorkOSStore(store: Store): WorkOSStore {
       ID_PREFIXES.email_verification,
       ['user_id'],
     ),
-    passwordResets: store.collection<WorkOSPasswordReset>(
-      'workos.password_resets',
-      ID_PREFIXES.password_reset,
-      ['user_id'],
-    ),
+    passwordResets: store.collection<WorkOSPasswordReset>('workos.password_resets', ID_PREFIXES.password_reset, [
+      'user_id',
+    ]),
     magicAuths: store.collection<WorkOSMagicAuth>('workos.magic_auths', ID_PREFIXES.magic_auth, ['user_id']),
     authFactors: store.collection<WorkOSAuthenticationFactor>(
       'workos.auth_factors',
@@ -191,11 +189,10 @@ export function getWorkOSStore(store: Store): WorkOSStore {
       ID_PREFIXES.authorization_resource,
       ['organization_id', 'resource_type_slug'],
     ),
-    roleAssignments: store.collection<WorkOSRoleAssignment>(
-      'workos.role_assignments',
-      ID_PREFIXES.role_assignment,
-      ['organization_membership_id', 'role_id'],
-    ),
+    roleAssignments: store.collection<WorkOSRoleAssignment>('workos.role_assignments', ID_PREFIXES.role_assignment, [
+      'organization_membership_id',
+      'role_id',
+    ]),
     directories: store.collection<WorkOSDirectory>('workos.directories', ID_PREFIXES.directory, ['organization_id']),
     directoryUsers: store.collection<WorkOSDirectoryUser>('workos.directory_users', ID_PREFIXES.directory_user, [
       'directory_id',
@@ -205,19 +202,15 @@ export function getWorkOSStore(store: Store): WorkOSStore {
       'directory_id',
       'organization_id',
     ]),
-    auditLogActions: store.collection<WorkOSAuditLogAction>(
-      'workos.audit_log_actions',
-      ID_PREFIXES.audit_log_action,
-      ['name'],
-    ),
+    auditLogActions: store.collection<WorkOSAuditLogAction>('workos.audit_log_actions', ID_PREFIXES.audit_log_action, [
+      'name',
+    ]),
     auditLogEvents: store.collection<WorkOSAuditLogEvent>('workos.audit_log_events', ID_PREFIXES.audit_log_event, [
       'organization_id',
     ]),
-    auditLogExports: store.collection<WorkOSAuditLogExport>(
-      'workos.audit_log_exports',
-      ID_PREFIXES.audit_log_export,
-      ['organization_id'],
-    ),
+    auditLogExports: store.collection<WorkOSAuditLogExport>('workos.audit_log_exports', ID_PREFIXES.audit_log_export, [
+      'organization_id',
+    ]),
     featureFlags: store.collection<WorkOSFeatureFlag>('workos.feature_flags', ID_PREFIXES.feature_flag, ['slug']),
     flagTargets: store.collection<WorkOSFlagTarget>('workos.flag_targets', ID_PREFIXES.flag_target, [
       'flag_slug',
@@ -228,11 +221,9 @@ export function getWorkOSStore(store: Store): WorkOSStore {
       ID_PREFIXES.connect_application,
       ['client_id'],
     ),
-    clientSecrets: store.collection<WorkOSClientSecret>(
-      'workos.client_secrets',
-      ID_PREFIXES.client_secret,
-      ['application_id'],
-    ),
+    clientSecrets: store.collection<WorkOSClientSecret>('workos.client_secrets', ID_PREFIXES.client_secret, [
+      'application_id',
+    ]),
     dataIntegrationAuths: store.collection<WorkOSDataIntegrationAuth>(
       'workos.data_integration_auths',
       ID_PREFIXES.data_integration_auth,

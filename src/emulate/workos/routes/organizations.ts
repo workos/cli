@@ -71,7 +71,9 @@ export function organizationRoutes(ctx: RouteContext): void {
       domainsByOrg.set(d.organization_id, list);
     }
 
-    return c.json(formatListResponse(result, (org) => formatOrganization(org, ws, { domains: domainsByOrg.get(org.id) ?? [] })));
+    return c.json(
+      formatListResponse(result, (org) => formatOrganization(org, ws, { domains: domainsByOrg.get(org.id) ?? [] })),
+    );
   });
 
   app.get('/organizations/:id', (c) => {

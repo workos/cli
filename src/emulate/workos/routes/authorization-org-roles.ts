@@ -19,9 +19,7 @@ export function authorizationOrgRoleRoutes(ctx: RouteContext): void {
     }
 
     // Fetch once, build slug map for O(1) lookups
-    const orgRoles = ws.roles
-      .findBy('organization_id', orgId)
-      .filter((r) => r.type === 'OrganizationRole');
+    const orgRoles = ws.roles.findBy('organization_id', orgId).filter((r) => r.type === 'OrganizationRole');
     const rolesBySlug = new Map(orgRoles.map((r) => [r.slug, r]));
 
     for (let i = 0; i < slugs.length; i++) {

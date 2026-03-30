@@ -1,4 +1,11 @@
-import { type RouteContext, notFound, validationError, parseJsonBody, WorkOSApiError, parseListParams } from '../../core/index.js';
+import {
+  type RouteContext,
+  notFound,
+  validationError,
+  parseJsonBody,
+  WorkOSApiError,
+  parseListParams,
+} from '../../core/index.js';
 import { getWorkOSStore } from '../store.js';
 import { formatUser, formatIdentity, hashPassword, formatListResponse } from '../helpers.js';
 
