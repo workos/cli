@@ -1,5 +1,6 @@
 import fg from 'fast-glob';
 import { readFile } from 'node:fs/promises';
+import { relative } from 'node:path';
 import { FileGrader } from './file-grader.js';
 import { BuildGrader } from './build-grader.js';
 import type { Grader, GradeResult, GradeCheck } from '../types.js';
@@ -24,7 +25,7 @@ const INVOCATION_PATTERN = /\bgetSignInUrl\s*\(/;
  * so the invocation regex doesn't match commented-out calls.
  */
 function stripComments(content: string): string {
-  return content.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  return content.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
 }
 
 export async function findUnsafeGetSignInUrlUsage(workDir: string): Promise<{ file: string } | null> {
@@ -43,7 +44,7 @@ export async function findUnsafeGetSignInUrlUsage(workDir: string): Promise<{ fi
       !hasTopLevelDirective(content, 'use client') &&
       !hasTopLevelDirective(content, 'use server')
     ) {
-      return { file: file.replace(workDir + '/', '') };
+      return { file: relative(workDir, file) };
     }
   }
 
