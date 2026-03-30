@@ -98,4 +98,14 @@ export default function Page() { return <h1>Home</h1>; }
     const result = await findUnsafeGetSignInUrlUsage(workDir);
     expect(result).toBeNull();
   });
+
+  it('ignores commented-out getSignInUrl() calls', async () => {
+    await writeFile(join(workDir, 'app/page.tsx'), `
+// don't call getSignInUrl() here
+/* const url = await getSignInUrl(); */
+export default function Page() { return <h1>Home</h1>; }
+`);
+    const result = await findUnsafeGetSignInUrlUsage(workDir);
+    expect(result).toBeNull();
+  });
 });

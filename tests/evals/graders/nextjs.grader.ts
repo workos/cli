@@ -22,6 +22,14 @@ export function hasTopLevelDirective(content: string, directive: string): boolea
 
 const INVOCATION_PATTERN = /\bgetSignInUrl\s*\(/;
 
+/**
+ * Strip single-line (//) and multi-line comments from source code
+ * so the invocation regex doesn't match commented-out calls.
+ */
+function stripComments(content: string): string {
+  return content.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
 export async function findUnsafeGetSignInUrlUsage(
   workDir: string,
 ): Promise<{ file: string } | null> {
@@ -33,9 +41,10 @@ export async function findUnsafeGetSignInUrlUsage(
 
   for (const file of files) {
     const content = await readFile(file, 'utf-8');
+    const code = stripComments(content);
 
     if (
-      INVOCATION_PATTERN.test(content) &&
+      INVOCATION_PATTERN.test(code) &&
       !hasTopLevelDirective(content, 'use client') &&
       !hasTopLevelDirective(content, 'use server')
     ) {
