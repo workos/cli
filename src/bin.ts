@@ -2130,7 +2130,7 @@ yargs(rawArgs)
   )
   .command(
     'emulate',
-    'Start a local WorkOS API emulator',
+    false, // Hidden: unreleased beta feature
     (yargs) =>
       yargs.options({
         port: { type: 'number', default: 4100, describe: 'Port to listen on' },
@@ -2143,7 +2143,7 @@ yargs(rawArgs)
   )
   .command(
     'dev',
-    'Start emulator + your app in one command',
+    false, // Hidden: unreleased beta feature
     (yargs) =>
       yargs.options({
         port: { type: 'number', default: 4100, describe: 'Emulator port' },

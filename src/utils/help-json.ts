@@ -1048,29 +1048,7 @@ const commands: CommandSchema[] = [
       },
     ],
   },
-  // --- Emulator ---
-  {
-    name: 'emulate',
-    description: 'Start a local WorkOS API emulator',
-    options: [
-      { name: 'port', type: 'number', description: 'Port to listen on', required: false, default: 4100, hidden: false },
-      {
-        name: 'seed',
-        type: 'string',
-        description: 'Path to seed config file (YAML or JSON)',
-        required: false,
-        hidden: false,
-      },
-    ],
-  },
-  {
-    name: 'dev',
-    description: 'Start emulator + your app in one command',
-    options: [
-      { name: 'port', type: 'number', description: 'Emulator port', required: false, default: 4100, hidden: false },
-      { name: 'seed', type: 'string', description: 'Path to seed config file', required: false, hidden: false },
-    ],
-  },
+  // --- Emulator (hidden: unreleased beta feature) ---
   // --- Workflow Commands ---
   {
     name: 'seed',

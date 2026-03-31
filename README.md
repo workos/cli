@@ -77,10 +77,6 @@ Resource Management:
   api-key                Manage per-org API keys
   org-domain             Manage organization domains
 
-Local Development:
-  emulate                Start a local WorkOS API emulator
-  dev                    Start emulator + your app in one command
-
 Workflows:
   seed                   Declarative resource provisioning from YAML
   setup-org              One-shot organization onboarding
@@ -195,6 +191,10 @@ Inspects a directory's sync state, user/group counts, recent events, and detects
 ```bash
 workos debug-sync directory_01ABC123
 ```
+
+<!-- UNRELEASED: Local Development (emulator) — hidden until beta testing is complete.
+     To restore, uncomment this section and re-enable the `emulate` and `dev` commands
+     in src/bin.ts and src/utils/help-json.ts.
 
 ### Local Development
 
@@ -347,6 +347,8 @@ The emulator covers the full WorkOS API surface (~84% of OpenAPI spec endpoints)
 | Pipes                    | Connection CRUD, mock `getAccessToken()`                                                                                                                               |
 
 JWT tokens include `role` and `permissions` claims for org-scoped sessions. All list endpoints support cursor pagination (`before`, `after`, `limit`, `order`). Error responses match the WorkOS format (`{ message, code, errors }`).
+
+END UNRELEASED -->
 
 ### Environment Management
 
