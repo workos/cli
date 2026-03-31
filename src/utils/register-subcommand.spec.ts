@@ -16,12 +16,7 @@ describe('registerSubcommand', () => {
     );
 
     // Command string should be the original usage (no --options appended)
-    expect(commandSpy).toHaveBeenCalledWith(
-      'create',
-      'Create a resource',
-      expect.any(Function),
-      expect.any(Function),
-    );
+    expect(commandSpy).toHaveBeenCalledWith('create', 'Create a resource', expect.any(Function), expect.any(Function));
 
     // The enriched builder should set .usage() with the enriched string
     const wrappedBuilder = commandSpy.mock.calls[0]![2] as (y: yargs.Argv) => yargs.Argv;
@@ -136,12 +131,7 @@ describe('registerSubcommand', () => {
       async () => {},
     );
 
-    expect(commandSpy).toHaveBeenCalledWith(
-      'set',
-      'Set a value',
-      expect.any(Function),
-      expect.any(Function),
-    );
+    expect(commandSpy).toHaveBeenCalledWith('set', 'Set a value', expect.any(Function), expect.any(Function));
 
     const wrappedBuilder = commandSpy.mock.calls[0]![2] as (y: yargs.Argv) => yargs.Argv;
     const probe = yargs([]);
