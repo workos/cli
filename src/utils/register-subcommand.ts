@@ -3,9 +3,6 @@ import type { Argv } from 'yargs';
 
 interface YargsOptions {
   demandedOptions: Record<string, unknown>;
-  string: string[];
-  number: string[];
-  boolean: string[];
 }
 
 /**
