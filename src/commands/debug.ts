@@ -322,7 +322,6 @@ interface EnvVarInfo {
 
 const ENV_VAR_CATALOG: { name: string; effect: string }[] = [
   { name: 'WORKOS_API_KEY', effect: 'Bypasses credential resolution — used directly for API calls' },
-  { name: 'WORKOS_CLIENT_ID', effect: 'Overrides client ID from settings' },
   { name: 'WORKOS_FORCE_TTY', effect: 'Forces human (non-JSON) output mode, even when piped' },
   { name: 'WORKOS_NO_PROMPT', effect: 'Forces non-interactive/JSON mode' },
   { name: 'WORKOS_TELEMETRY', effect: 'Set to "false" to disable telemetry' },

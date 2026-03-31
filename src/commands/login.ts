@@ -106,11 +106,6 @@ export async function provisionStagingEnvironment(accessToken: string): Promise<
 export async function runLogin(): Promise<void> {
   const clientId = getCliAuthClientId();
 
-  if (!clientId) {
-    clack.log.error('CLI auth not configured. Set WORKOS_CLI_CLIENT_ID environment variable.');
-    process.exit(1);
-  }
-
   // Check if already logged in with valid token
   if (getAccessToken()) {
     const creds = getCredentials();

@@ -329,10 +329,6 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         const clientId = getCliAuthClientId();
         const authkitDomain = getAuthkitDomain();
 
-        if (!clientId) {
-          throw new Error('CLI auth not configured. Set WORKOS_CLI_CLIENT_ID environment variable.');
-        }
-
         const deviceAuth = await requestDeviceCode({
           clientId,
           authkitDomain,

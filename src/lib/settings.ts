@@ -60,7 +60,7 @@ export function getConfig(): InstallerConfig {
  * Env var overrides config default.
  */
 export function getCliAuthClientId(): string {
-  return process.env.WORKOS_CLIENT_ID || config.workos.clientId;
+  return config.workos.clientId;
 }
 
 /**
