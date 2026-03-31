@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0](https://github.com/workos/cli/compare/v0.11.2...v0.12.0) (2026-03-31)
+
+
+### Features
+
+* full WorkOS API emulator (emulate, dev, RBAC, webhooks, events, 84% API coverage) ([#100](https://github.com/workos/cli/issues/100)) ([55371a9](https://github.com/workos/cli/commit/55371a9a2121b91dd48189752efc3c96681e1dee))
+
+
+### Bug Fixes
+
+* add NextjsGrader check for getSignInUrl in Server Components ([#110](https://github.com/workos/cli/issues/110)) ([f2a6ec2](https://github.com/workos/cli/commit/f2a6ec29a88c4a769de57e879dfb4dbd0cbc6978))
+* add tag_name input to workflow_dispatch trigger ([0924a4b](https://github.com/workos/cli/commit/0924a4bd7f3d6ebe44762e78273bcfa65933a3fe))
+* enforce OIDC-only beta publish path ([f8e74d6](https://github.com/workos/cli/commit/f8e74d61d2eade4af13b91db33837382dedb7da7))
+* prevent registerSubcommand from injecting false positional args ([#111](https://github.com/workos/cli/issues/111)) ([effe187](https://github.com/workos/cli/commit/effe187629eecaf166542002115457c6933cf0eb))
+* remove environment to prevent org secret injection breaking OIDC ([28f0564](https://github.com/workos/cli/commit/28f05649b1a3df3b926830d4e885dfa6b80def83))
+* restore OIDC auth setup for npm trusted publishing ([d0f8b53](https://github.com/workos/cli/commit/d0f8b537d9a473adb65e3d4d60659457fa25fc32))
+* set release-please manifest to last stable tag (v0.11.2) ([850eee3](https://github.com/workos/cli/commit/850eee39c88fe344f3e0b7de6ff309c18ef81418))
+* stop reading WORKOS_CLIENT_ID for CLI auth ([#113](https://github.com/workos/cli/issues/113)) ([7bdd851](https://github.com/workos/cli/commit/7bdd851ab202173438f330522a2a32b743cf8708))
+* use pnpm publish to match working auth setup ([d79cf16](https://github.com/workos/cli/commit/d79cf163cabee593f21c8cf9030c46f7348a4657))
+* use prerelease versioning strategy for beta releases ([#104](https://github.com/workos/cli/issues/104)) ([8385201](https://github.com/workos/cli/commit/8385201ef25472be950e8ca1d4570fee0b7b31ea))
+
 ## [0.12.0-beta.1](https://github.com/workos/cli/compare/v0.12.0-beta...v0.12.0-beta.1) (2026-03-26)
 
 
