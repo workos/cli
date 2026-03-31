@@ -15,9 +15,11 @@ import { registerSubcommand } from './register-subcommand.js';
 function buildParser(usage: string, builder: (y: yargs.Argv) => yargs.Argv) {
   let failMessage: string | undefined;
   let handlerArgs: Record<string, unknown> | undefined;
-  const parser = yargs([]).exitProcess(false).fail((msg) => {
-    failMessage = msg;
-  });
+  const parser = yargs([])
+    .exitProcess(false)
+    .fail((msg) => {
+      failMessage = msg;
+    });
   registerSubcommand(parser, usage, 'test', builder, async (argv) => {
     handlerArgs = argv;
   });
@@ -120,7 +122,15 @@ describe('registerSubcommand parsing (regression)', () => {
         'range-end': { type: 'string', demandOption: true },
       }),
     );
-    const argv = await parseAsync(['export', '--org', 'org_1', '--range-start', '2026-01-01', '--range-end', '2026-01-31']);
+    const argv = await parseAsync([
+      'export',
+      '--org',
+      'org_1',
+      '--range-start',
+      '2026-01-01',
+      '--range-end',
+      '2026-01-31',
+    ]);
     expect(getError()).toBeUndefined();
     expect(argv.org).toBe('org_1');
   });

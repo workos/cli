@@ -103,18 +103,12 @@ describe('registerSubcommand', () => {
   it('passes original builder directly (no wrapper)', () => {
     const parent = yargs([]);
     const commandSpy = vi.spyOn(parent, 'command');
-    const builder = (y: yargs.Argv) =>
-      y.options({ count: { type: 'number', demandOption: true, describe: 'Count' } });
+    const builder = (y: yargs.Argv) => y.options({ count: { type: 'number', demandOption: true, describe: 'Count' } });
 
     registerSubcommand(parent, 'set', 'Set a value', builder, async () => {});
 
     // Builder is passed through directly — no wrapper
-    expect(commandSpy).toHaveBeenCalledWith(
-      'set',
-      'Set a value (requires --count)',
-      builder,
-      expect.any(Function),
-    );
+    expect(commandSpy).toHaveBeenCalledWith('set', 'Set a value (requires --count)', builder, expect.any(Function));
   });
 
   it('skips enrichment when description already mentions the flag', () => {
@@ -166,11 +160,6 @@ describe('registerSubcommand', () => {
       async () => {},
     );
 
-    expect(commandSpy).toHaveBeenCalledWith(
-      'broken',
-      'Broken command',
-      expect.any(Function),
-      expect.any(Function),
-    );
+    expect(commandSpy).toHaveBeenCalledWith('broken', 'Broken command', expect.any(Function), expect.any(Function));
   });
 });
