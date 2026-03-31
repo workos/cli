@@ -36,8 +36,10 @@ export function registerSubcommand<T>(
     const positionalNames = new Set([...usage.matchAll(/<([^>]+?)(?:\.\.\.)?>/g)].map((m) => m[1]));
     const namedOnly = demanded.filter((k) => !positionalNames.has(k));
 
-    if (namedOnly.length > 0) {
-      const flagList = namedOnly.map((k) => `--${k}`).join(', ');
+    // Skip enrichment when the description already mentions every flag
+    const newFlags = namedOnly.filter((k) => !description.includes(`--${k}`));
+    if (newFlags.length > 0) {
+      const flagList = newFlags.map((k) => `--${k}`).join(', ');
       enrichedDescription = `${description} (requires ${flagList})`;
     }
   } catch {

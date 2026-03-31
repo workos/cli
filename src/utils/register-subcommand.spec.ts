@@ -117,6 +117,29 @@ describe('registerSubcommand', () => {
     );
   });
 
+  it('skips enrichment when description already mentions the flag', () => {
+    const parent = yargs([]);
+    const commandSpy = vi.spyOn(parent, 'command');
+
+    registerSubcommand(
+      parent,
+      'delete <slug>',
+      'Delete an org-scoped role (requires --org)',
+      (y) =>
+        y
+          .positional('slug', { type: 'string', demandOption: true })
+          .options({ org: { type: 'string', demandOption: true } }),
+      async () => {},
+    );
+
+    expect(commandSpy).toHaveBeenCalledWith(
+      'delete <slug>',
+      'Delete an org-scoped role (requires --org)',
+      expect.any(Function),
+      expect.any(Function),
+    );
+  });
+
   it('returns the parent yargs instance', () => {
     const parent = yargs([]);
     const result = registerSubcommand(
