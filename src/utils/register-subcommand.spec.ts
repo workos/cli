@@ -3,7 +3,7 @@ import yargs from 'yargs';
 import { registerSubcommand } from './register-subcommand.js';
 
 describe('registerSubcommand', () => {
-  it('passes original usage as command, enriched usage via .usage()', () => {
+  it('enriches description with required flag names', () => {
     const parent = yargs([]);
     const commandSpy = vi.spyOn(parent, 'command');
 
@@ -15,18 +15,15 @@ describe('registerSubcommand', () => {
       async () => {},
     );
 
-    // Command string should be the original usage (no --options appended)
-    expect(commandSpy).toHaveBeenCalledWith('create', 'Create a resource', expect.any(Function), expect.any(Function));
-
-    // The enriched builder should set .usage() with the enriched string
-    const wrappedBuilder = commandSpy.mock.calls[0]![2] as (y: yargs.Argv) => yargs.Argv;
-    const probe = yargs([]);
-    const usageSpy = vi.spyOn(probe, 'usage');
-    wrappedBuilder(probe);
-    expect(usageSpy).toHaveBeenCalledWith(expect.stringContaining('--name <string>'));
+    expect(commandSpy).toHaveBeenCalledWith(
+      'create',
+      'Create a resource (requires --name)',
+      expect.any(Function),
+      expect.any(Function),
+    );
   });
 
-  it('enriches usage with multiple required options', () => {
+  it('enriches description with multiple required flags', () => {
     const parent = yargs([]);
     const commandSpy = vi.spyOn(parent, 'command');
 
@@ -42,21 +39,13 @@ describe('registerSubcommand', () => {
       async () => {},
     );
 
-    // Command string is plain
-    const cmdArg = commandSpy.mock.calls[0]![0] as string;
-    expect(cmdArg).toBe('send');
-
-    // Usage contains enriched options
-    const wrappedBuilder = commandSpy.mock.calls[0]![2] as (y: yargs.Argv) => yargs.Argv;
-    const probe = yargs([]);
-    const usageSpy = vi.spyOn(probe, 'usage');
-    wrappedBuilder(probe);
-    const usageStr = usageSpy.mock.calls[0]![0] as string;
-    expect(usageStr).toContain('--email <string>');
-    expect(usageStr).toContain('--org-id <string>');
+    const descArg = commandSpy.mock.calls[0]![1] as string;
+    expect(descArg).toContain('requires');
+    expect(descArg).toContain('--email');
+    expect(descArg).toContain('--org-id');
   });
 
-  it('leaves usage unchanged when no required options', () => {
+  it('leaves description unchanged when no required options', () => {
     const parent = yargs([]);
     const commandSpy = vi.spyOn(parent, 'command');
 
@@ -71,33 +60,29 @@ describe('registerSubcommand', () => {
     expect(commandSpy).toHaveBeenCalledWith('list', 'List resources', expect.any(Function), expect.any(Function));
   });
 
-  it('preserves positional args in command, appends required options to usage', () => {
+  it('excludes positional args from description enrichment', () => {
     const parent = yargs([]);
     const commandSpy = vi.spyOn(parent, 'command');
 
     registerSubcommand(
       parent,
-      'remove <name>',
-      'Remove a resource',
-      (y) => y.options({ force: { type: 'boolean', demandOption: true, describe: 'Force removal' } }),
+      'update <slug>',
+      'Update a resource',
+      (y) =>
+        y
+          .positional('slug', { type: 'string', demandOption: true })
+          .options({ value: { type: 'string', demandOption: true, describe: 'Value' } }),
       async () => {},
     );
 
-    // Command retains positionals
     const cmdArg = commandSpy.mock.calls[0]![0] as string;
-    expect(cmdArg).toBe('remove <name>');
-
-    // Usage has both positionals and enriched options
-    const wrappedBuilder = commandSpy.mock.calls[0]![2] as (y: yargs.Argv) => yargs.Argv;
-    const probe = yargs([]);
-    const usageSpy = vi.spyOn(probe, 'usage');
-    wrappedBuilder(probe);
-    const usageStr = usageSpy.mock.calls[0]![0] as string;
-    expect(usageStr).toContain('remove <name>');
-    expect(usageStr).toContain('--force <boolean>');
+    const descArg = commandSpy.mock.calls[0]![1] as string;
+    expect(cmdArg).toBe('update <slug>');
+    expect(descArg).toContain('--value');
+    expect(descArg).not.toContain('--slug');
   });
 
-  it('filters out help and version from enriched options', () => {
+  it('filters out help and version from enriched flags', () => {
     const parent = yargs([]);
     const commandSpy = vi.spyOn(parent, 'command');
 
@@ -109,35 +94,27 @@ describe('registerSubcommand', () => {
       async () => {},
     );
 
-    const wrappedBuilder = commandSpy.mock.calls[0]![2] as (y: yargs.Argv) => yargs.Argv;
-    const probe = yargs([]);
-    const usageSpy = vi.spyOn(probe, 'usage');
-    wrappedBuilder(probe);
-    const usageStr = usageSpy.mock.calls[0]![0] as string;
-    expect(usageStr).not.toContain('--help');
-    expect(usageStr).not.toContain('--version');
-    expect(usageStr).toContain('--id <string>');
+    const descArg = commandSpy.mock.calls[0]![1] as string;
+    expect(descArg).not.toContain('--help');
+    expect(descArg).not.toContain('--version');
+    expect(descArg).toContain('--id');
   });
 
-  it('handles number type option', () => {
+  it('passes original builder directly (no wrapper)', () => {
     const parent = yargs([]);
     const commandSpy = vi.spyOn(parent, 'command');
+    const builder = (y: yargs.Argv) =>
+      y.options({ count: { type: 'number', demandOption: true, describe: 'Count' } });
 
-    registerSubcommand(
-      parent,
+    registerSubcommand(parent, 'set', 'Set a value', builder, async () => {});
+
+    // Builder is passed through directly — no wrapper
+    expect(commandSpy).toHaveBeenCalledWith(
       'set',
-      'Set a value',
-      (y) => y.options({ count: { type: 'number', demandOption: true, describe: 'Count' } }),
-      async () => {},
+      'Set a value (requires --count)',
+      builder,
+      expect.any(Function),
     );
-
-    expect(commandSpy).toHaveBeenCalledWith('set', 'Set a value', expect.any(Function), expect.any(Function));
-
-    const wrappedBuilder = commandSpy.mock.calls[0]![2] as (y: yargs.Argv) => yargs.Argv;
-    const probe = yargs([]);
-    const usageSpy = vi.spyOn(probe, 'usage');
-    wrappedBuilder(probe);
-    expect(usageSpy).toHaveBeenCalledWith(expect.stringContaining('--count <number>'));
   });
 
   it('returns the parent yargs instance', () => {
@@ -152,7 +129,7 @@ describe('registerSubcommand', () => {
     expect(result).toBe(parent);
   });
 
-  it('falls back to unenriched usage when builder throws', () => {
+  it('falls back to unenriched description when builder throws', () => {
     const parent = yargs([]);
     const commandSpy = vi.spyOn(parent, 'command');
 
@@ -166,6 +143,11 @@ describe('registerSubcommand', () => {
       async () => {},
     );
 
-    expect(commandSpy).toHaveBeenCalledWith('broken', 'Broken command', expect.any(Function), expect.any(Function));
+    expect(commandSpy).toHaveBeenCalledWith(
+      'broken',
+      'Broken command',
+      expect.any(Function),
+      expect.any(Function),
+    );
   });
 });

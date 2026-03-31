@@ -9,9 +9,12 @@ interface YargsOptions {
 }
 
 /**
- * Register a subcommand with auto-enriched usage string.
+ * Register a subcommand with auto-enriched description.
  * Replays the builder on a probe yargs instance to discover demandOption fields,
- * then appends them to the usage string so parent help shows required args.
+ * then appends required flag names to the description so parent help shows them.
+ *
+ * Note: enrichment targets the description, not the command string, because yargs
+ * interprets `<...>` in command strings as required positional arguments.
  */
 export function registerSubcommand<T>(
   parentYargs: Argv<T>,
@@ -20,7 +23,7 @@ export function registerSubcommand<T>(
   builder: (y: Argv) => Argv,
   handler: (argv: any) => Promise<void>,
 ): Argv<T> {
-  let enrichedUsage = usage;
+  let enrichedDescription = description;
 
   try {
     const probe = yargs([]);
@@ -29,36 +32,17 @@ export function registerSubcommand<T>(
     const opts = (probe as unknown as { getOptions(): YargsOptions }).getOptions();
     const demanded = Object.keys(opts.demandedOptions || {}).filter((k) => !['help', 'version'].includes(k));
 
-    const requiredSuffix = demanded
-      .map((k) => {
-        const type = opts.string.includes(k)
-          ? 'string'
-          : opts.number.includes(k)
-            ? 'number'
-            : opts.boolean.includes(k)
-              ? 'boolean'
-              : 'value';
-        return `--${k} <${type}>`;
-      })
-      .join(' ');
+    // Exclude flags that correspond to positionals already visible in the usage string
+    const positionalNames = new Set([...usage.matchAll(/<([^>]+?)(?:\.\.\.)?>/g)].map((m) => m[1]));
+    const namedOnly = demanded.filter((k) => !positionalNames.has(k));
 
-    if (requiredSuffix) {
-      enrichedUsage = `${usage} ${requiredSuffix}`;
+    if (namedOnly.length > 0) {
+      const flagList = namedOnly.map((k) => `--${k}`).join(', ');
+      enrichedDescription = `${description} (requires ${flagList})`;
     }
   } catch {
-    // Builder threw during probe — fall back to unenriched usage
+    // Builder threw during probe — fall back to unenriched description
   }
 
-  return parentYargs.command(
-    usage,
-    description,
-    (y) => {
-      const built = builder(y);
-      if (enrichedUsage !== usage) {
-        built.usage(`$0 ${enrichedUsage}`);
-      }
-      return built;
-    },
-    handler,
-  );
+  return parentYargs.command(usage, enrichedDescription, builder, handler);
 }
