@@ -49,5 +49,16 @@ export function registerSubcommand<T>(
     // Builder threw during probe — fall back to unenriched usage
   }
 
-  return parentYargs.command(enrichedUsage, description, builder, handler);
+  return parentYargs.command(
+    usage,
+    description,
+    (y) => {
+      const built = builder(y);
+      if (enrichedUsage !== usage) {
+        built.usage(`$0 ${enrichedUsage}`);
+      }
+      return built;
+    },
+    handler,
+  );
 }
