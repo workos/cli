@@ -27,7 +27,7 @@ import {
   getStagingCredentials,
   saveStagingCredentials,
 } from './credentials.js';
-import { getConfig, saveConfig, getActiveEnvironment } from './config-store.js';
+import { getConfig, saveConfig, getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
 import { checkForEnvFiles, discoverCredentials } from './credential-discovery.js';
 import { requestDeviceCode, pollForToken } from './device-auth.js';
 import { fetchStagingCredentials as fetchStagingCredentialsApi } from './staging-api.js';
@@ -321,6 +321,11 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
       }),
 
       checkStoredAuth: fromPromise(async () => {
+        const activeEnv = getActiveEnvironment();
+        if (activeEnv?.apiKey && isUnclaimedEnvironment(activeEnv)) {
+          return true;
+        }
+
         const token = getAccessToken();
         return token !== null;
       }),
