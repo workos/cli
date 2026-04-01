@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.1](https://github.com/workos/cli/compare/v0.12.0...v0.12.1) (2026-04-01)
+
+
+### Bug Fixes
+
+* skip device auth when unclaimed environment is active ([#115](https://github.com/workos/cli/issues/115)) ([3c95642](https://github.com/workos/cli/commit/3c956429b6d1913195bac31534cfdd7736f25779))
+
 ## [0.12.0](https://github.com/workos/cli/compare/v0.11.2...v0.12.0) (2026-03-31)
 
 
