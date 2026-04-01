@@ -10,6 +10,8 @@ import type {
   InstallerMachineContext,
   BranchCheckOutput,
 } from './installer-core.types.js';
+import type { EnvFileInfo } from './credential-discovery.js';
+import type { StagingCredentials } from './staging-api.js';
 
 // Shared mock actors for reuse across tests
 const baseMockActors = {
@@ -375,6 +377,55 @@ describe('InstallerCore State Machine', () => {
 
       await new Promise((r) => setTimeout(r, 200));
 
+      expect(actor.getSnapshot().value).toBe('complete');
+      actor.stop();
+    });
+
+    it('skips device auth when checkStoredAuth returns true (unclaimed env)', async () => {
+      const emitter = createInstallerEventEmitter();
+      const options: InstallerOptions = {
+        debug: false,
+        forceInstall: false,
+        installDir: '/test/project',
+        default: false,
+        local: true,
+        ci: false,
+        skipAuth: true,
+        dashboard: false,
+        emitter,
+        // No CLI credentials — forces credential gathering flow
+      };
+
+      let deviceAuthStarted = false;
+
+      const machine = installerMachine.provide({
+        actors: {
+          ...baseMockActors,
+          detectEnvFiles: fromPromise<EnvFileInfo, { installDir: string }>(async () => ({
+            found: false,
+          })),
+          checkStoredAuth: fromPromise<boolean, void>(async () => true),
+          runDeviceAuth: fromPromise(async () => {
+            deviceAuthStarted = true;
+            throw new Error('device auth should not be called');
+          }),
+          fetchStagingCredentials: fromPromise<StagingCredentials, void>(async () => ({
+            clientId: 'client_unclaimed',
+            apiKey: 'sk_test_unclaimed',
+          })),
+        },
+      });
+
+      const actor = createActor(machine, {
+        input: { emitter, options },
+      });
+
+      actor.start();
+      actor.send({ type: 'START' });
+
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(deviceAuthStarted).toBe(false);
       expect(actor.getSnapshot().value).toBe('complete');
       actor.stop();
     });
