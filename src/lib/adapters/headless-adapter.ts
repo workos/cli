@@ -338,10 +338,27 @@ export class HeadlessAdapter implements InstallerAdapter {
   private handleError = ({ message, stack }: InstallerEvents['error']): void => {
     const isServiceError =
       /\b50[0-9]\b/.test(message) || /server_error|internal_error|overloaded|service.unavailable/i.test(message);
-    const code = isServiceError ? 'service_unavailable' : 'installer_error';
-    const displayMessage = isServiceError
-      ? 'The AI service is temporarily unavailable. Please try again in a few minutes.'
-      : message;
+    const isRateLimit = /\b429\b/.test(message) || /rate.limit/i.test(message);
+    const isNetworkError = /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|fetch failed/i.test(message);
+    const isProcessExit = /process exited with code/i.test(message);
+
+    let code = 'installer_error';
+    let displayMessage = message;
+
+    if (isServiceError) {
+      code = 'service_unavailable';
+      displayMessage = 'The AI service is temporarily unavailable. Please try again in a few minutes.';
+    } else if (isRateLimit) {
+      code = 'rate_limited';
+      displayMessage = 'The AI service is currently rate-limited. Please wait a minute and try again.';
+    } else if (isNetworkError) {
+      code = 'network_error';
+      displayMessage = 'Could not connect to the AI service. Check your internet connection and try again.';
+    } else if (isProcessExit) {
+      code = 'process_error';
+      displayMessage = 'The AI agent process exited unexpectedly. Try running again with --debug for details.';
+    }
+
     writeNDJSON({ type: 'error', code, message: displayMessage });
     this.debugLog(stack ?? '');
   };

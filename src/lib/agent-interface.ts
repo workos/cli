@@ -871,8 +871,13 @@ function handleSDKMessage(
         const resultText = typeof message.result === 'string' ? message.result : '';
         logError('Agent result marked as error:', resultText);
 
-        // Detect service unavailability (API 500, upstream outage)
-        if (/\b50[0-9]\b/.test(resultText) || /server_error|internal_error|overloaded/.test(resultText)) {
+        // Detect service unavailability (API 500, upstream outage) or rate limiting (429)
+        if (
+          /\b50[0-9]\b/.test(resultText) ||
+          /server_error|internal_error|overloaded/.test(resultText) ||
+          /\b429\b/.test(resultText) ||
+          /rate.limit/i.test(resultText)
+        ) {
           return `${SERVICE_UNAVAILABLE_PREFIX}${resultText}`;
         }
         return resultText || 'Agent execution failed';

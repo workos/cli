@@ -402,12 +402,25 @@ export class CLIAdapter implements InstallerAdapter {
     this.stopSpinner('Error');
     this.stopAgentUpdates();
 
-    // Rewrite raw API errors into user-friendly messages
+    // Rewrite raw API/SDK errors into user-friendly messages
     const isServiceError =
       /\b50[0-9]\b/.test(message) || /server_error|internal_error|overloaded|service.unavailable/i.test(message);
+    const isRateLimit = /\b429\b/.test(message) || /rate.limit/i.test(message);
+    const isNetworkError = /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|fetch failed/i.test(message);
+    const isProcessExit = /process exited with code/i.test(message);
+
     if (isServiceError) {
       clack.log.error('The AI service is temporarily unavailable.');
       clack.log.info('This is usually resolved within a few minutes. Please try again shortly.');
+    } else if (isRateLimit) {
+      clack.log.error('The AI service is currently rate-limited.');
+      clack.log.info('Please wait a minute and try again.');
+    } else if (isNetworkError) {
+      clack.log.error('Could not connect to the AI service.');
+      clack.log.info('Check your internet connection and try again.');
+    } else if (isProcessExit) {
+      clack.log.error('The AI agent process exited unexpectedly.');
+      clack.log.info('Try running again. If this persists, run with --debug for details.');
     } else {
       clack.log.error(message);
     }
