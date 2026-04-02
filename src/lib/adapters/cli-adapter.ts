@@ -402,7 +402,16 @@ export class CLIAdapter implements InstallerAdapter {
     this.stopSpinner('Error');
     this.stopAgentUpdates();
 
-    clack.log.error(message);
+    // Rewrite raw API errors into user-friendly messages
+    const isServiceError =
+      /\b50[0-9]\b/.test(message) ||
+      /server_error|internal_error|overloaded|service.unavailable/i.test(message);
+    if (isServiceError) {
+      clack.log.error('The AI service is temporarily unavailable.');
+      clack.log.info('This is usually resolved within a few minutes. Please try again shortly.');
+    } else {
+      clack.log.error(message);
+    }
 
     // Add actionable hints for common errors
     if (message.includes('authentication') || message.includes('auth')) {

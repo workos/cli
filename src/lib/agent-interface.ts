@@ -56,6 +56,9 @@ export const AgentSignals = {
 
 export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
 
+/** Internal prefix used to tag service-unavailability errors from handleSDKMessage */
+const SERVICE_UNAVAILABLE_PREFIX = '__SERVICE_UNAVAILABLE__';
+
 /**
  * Error types that can be returned from agent execution.
  * These correspond to the error signals that the agent emits.
@@ -67,6 +70,8 @@ export enum AgentErrorType {
   RESOURCE_MISSING = 'INSTALLER_RESOURCE_MISSING',
   /** Agent execution failed (API error, auth error, etc.) */
   EXECUTION_ERROR = 'INSTALLER_EXECUTION_ERROR',
+  /** AI service is unavailable (API 500, outage, etc.) */
+  SERVICE_UNAVAILABLE = 'INSTALLER_SERVICE_UNAVAILABLE',
 }
 
 export type AgentConfig = {
@@ -536,6 +541,11 @@ export async function runAgent(
     let resolveCurrentTurn!: () => void;
     let currentTurnDone!: Promise<void>;
 
+    // Set by the message loop when a fatal SDK error is detected (e.g. service
+    // unavailability).  The prompt stream checks this before yielding retry
+    // prompts so we fail fast instead of burning minutes on hopeless retries.
+    let abortRetries = false;
+
     function resetTurnSignal() {
       currentTurnDone = new Promise<void>((resolve) => {
         resolveCurrentTurn = resolve;
@@ -554,6 +564,12 @@ export async function runAgent(
       if (retryConfig && maxRetries > 0) {
         while (retryCount < maxRetries) {
           await currentTurnDone;
+
+          // Don't send correction prompts when the service itself is down
+          if (abortRetries) {
+            logInfo('Skipping validation retries due to service error');
+            break;
+          }
 
           emitter?.emit('validation:retry:start', { attempt: retryCount + 1 });
 
@@ -628,6 +644,8 @@ export async function runAgent(
       const messageError = handleSDKMessage(message, options, collectedText, emitter);
       if (messageError) {
         sdkError = messageError;
+        // Signal the prompt stream to stop yielding retry prompts
+        abortRetries = true;
       }
       if (message.type === 'result') {
         resolveCurrentTurn();
@@ -645,6 +663,14 @@ export async function runAgent(
     // Check for SDK errors first (e.g., API errors, auth failures)
     // Return error type + message - caller decides whether to throw or emit events
     if (sdkError) {
+      if (sdkError.startsWith(SERVICE_UNAVAILABLE_PREFIX)) {
+        const detail = sdkError.slice(SERVICE_UNAVAILABLE_PREFIX.length);
+        logError('AI service unavailable:', detail);
+        return {
+          error: AgentErrorType.SERVICE_UNAVAILABLE,
+          errorMessage: 'The AI service is temporarily unavailable. Please try again in a few minutes.',
+        };
+      }
       logError('Agent SDK error:', sdkError);
       return { error: AgentErrorType.EXECUTION_ERROR, errorMessage: sdkError };
     }
@@ -837,6 +863,23 @@ function handleSDKMessage(
     }
 
     case 'result': {
+      // The SDK may return subtype 'success' with is_error: true when API
+      // retries are exhausted (e.g., persistent 500s). Check is_error first.
+      const isResultError =
+        (message as Record<string, unknown>).is_error === true;
+
+      if (isResultError) {
+        const resultText =
+          typeof message.result === 'string' ? message.result : '';
+        logError('Agent result marked as error:', resultText);
+
+        // Detect service unavailability (API 500, upstream outage)
+        if (/\b50[0-9]\b/.test(resultText) || /server_error|internal_error|overloaded/.test(resultText)) {
+          return `${SERVICE_UNAVAILABLE_PREFIX}${resultText}`;
+        }
+        return resultText || 'Agent execution failed';
+      }
+
       if (message.subtype === 'success') {
         logInfo('Agent completed successfully');
         if (typeof message.result === 'string') {

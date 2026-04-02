@@ -67,7 +67,7 @@ vi.mock('../utils/urls.js', () => ({
   getLlmGatewayUrlFromHost: vi.fn(() => 'http://localhost:8000'),
 }));
 
-import { runAgent } from './agent-interface.js';
+import { runAgent, AgentErrorType } from './agent-interface.js';
 import { InstallerEventEmitter } from './events.js';
 import type { InstallerOptions } from '../utils/types.js';
 
@@ -75,8 +75,15 @@ import type { InstallerOptions } from '../utils/types.js';
  * Create a mock SDK response that consumes the prompt stream and yields
  * responses for each prompt message. This models the real SDK behavior:
  * the response generator stays alive as long as prompts keep coming.
+ *
+ * Turn options:
+ * - text: assistant text to yield
+ * - error: result subtype is 'error' with errors array
+ * - is_error: result has subtype 'success' but is_error: true (SDK exhausted retries)
  */
-function createMockSDKResponse(turns: Array<{ text?: string; error?: boolean }>) {
+function createMockSDKResponse(
+  turns: Array<{ text?: string; error?: boolean; is_error?: boolean }>,
+) {
   return function mockQueryImpl({ prompt }: { prompt: AsyncIterable<unknown>; options: unknown }) {
     let turnIndex = 0;
 
@@ -102,6 +109,7 @@ function createMockSDKResponse(turns: Array<{ text?: string; error?: boolean }>)
         yield {
           type: 'result',
           subtype: turn.error ? 'error' : 'success',
+          is_error: turn.is_error ?? false,
           result: turn.text ?? '',
           ...(turn.error ? { errors: ['Test error'] } : {}),
         };
@@ -263,5 +271,101 @@ describe('runAgent retry loop', () => {
     expect(result.retryCount).toBe(0);
     // Should have been called once, threw, treated as passed
     expect(validateAndFormat).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('service unavailability handling', () => {
+  let emitter: InstallerEventEmitter;
+  let emittedEvents: Array<{ event: string; payload: unknown }>;
+
+  beforeEach(() => {
+    mockQuery.mockReset();
+    emitter = new InstallerEventEmitter();
+    emittedEvents = [];
+
+    const originalEmit = emitter.emit.bind(emitter);
+    emitter.emit = ((event: string, payload: unknown) => {
+      emittedEvents.push({ event, payload });
+      return originalEmit(event, payload);
+    }) as typeof emitter.emit;
+  });
+
+  it('detects is_error result with API 500 as SERVICE_UNAVAILABLE', async () => {
+    const apiErrorText =
+      'API Error: 500 {"error":{"type":"internal_error","message":"An unexpected error occurred"}}';
+    mockQuery.mockImplementation(
+      createMockSDKResponse([{ text: apiErrorText, is_error: true }]),
+    );
+
+    const result = await runAgent(
+      makeAgentConfig(),
+      'Test prompt',
+      makeOptions(),
+      undefined,
+      emitter,
+    );
+
+    expect(result.error).toBe(AgentErrorType.SERVICE_UNAVAILABLE);
+    expect(result.errorMessage).toMatch(/temporarily unavailable/);
+  });
+
+  it('detects is_error result with server_error as SERVICE_UNAVAILABLE', async () => {
+    mockQuery.mockImplementation(
+      createMockSDKResponse([{ text: 'server_error: service overloaded', is_error: true }]),
+    );
+
+    const result = await runAgent(
+      makeAgentConfig(),
+      'Test prompt',
+      makeOptions(),
+      undefined,
+      emitter,
+    );
+
+    expect(result.error).toBe(AgentErrorType.SERVICE_UNAVAILABLE);
+  });
+
+  it('detects is_error result without service pattern as EXECUTION_ERROR', async () => {
+    mockQuery.mockImplementation(
+      createMockSDKResponse([{ text: 'Some other failure', is_error: true }]),
+    );
+
+    const result = await runAgent(
+      makeAgentConfig(),
+      'Test prompt',
+      makeOptions(),
+      undefined,
+      emitter,
+    );
+
+    expect(result.error).toBe(AgentErrorType.EXECUTION_ERROR);
+    expect(result.errorMessage).toBe('Some other failure');
+  });
+
+  it('skips validation retries when service is unavailable', async () => {
+    const apiErrorText =
+      'API Error: 500 {"error":{"type":"internal_error","message":"An unexpected error occurred"}}';
+    mockQuery.mockImplementation(
+      createMockSDKResponse([{ text: apiErrorText, is_error: true }]),
+    );
+
+    const validateAndFormat = vi.fn().mockResolvedValue('Still broken');
+
+    const result = await runAgent(
+      makeAgentConfig(),
+      'Test prompt',
+      makeOptions(),
+      undefined,
+      emitter,
+      { maxRetries: 2, validateAndFormat },
+    );
+
+    expect(result.error).toBe(AgentErrorType.SERVICE_UNAVAILABLE);
+    // validateAndFormat should never be called because retries are aborted
+    expect(validateAndFormat).not.toHaveBeenCalled();
+
+    // No retry events should be emitted
+    const retryEvents = emittedEvents.filter((e) => e.event === 'agent:retry');
+    expect(retryEvents).toHaveLength(0);
   });
 });
