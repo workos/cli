@@ -334,4 +334,33 @@ describe('service unavailability handling', () => {
     const retryEvents = emittedEvents.filter((e) => e.event === 'agent:retry');
     expect(retryEvents).toHaveLength(0);
   });
+
+  it('detects 429 rate limit as distinct from service unavailability', async () => {
+    mockQuery.mockImplementation(
+      createMockSDKResponse([{ text: 'API Error: 429 rate_limit_exceeded', is_error: true }]),
+    );
+
+    const result = await runAgent(makeAgentConfig(), 'Test prompt', makeOptions(), undefined, emitter);
+
+    expect(result.error).toBe(AgentErrorType.SERVICE_UNAVAILABLE);
+    expect(result.errorMessage).toMatch(/rate-limited/);
+    expect(result.errorMessage).not.toMatch(/temporarily unavailable/);
+  });
+
+  it('skips validation retries when rate-limited', async () => {
+    mockQuery.mockImplementation(
+      createMockSDKResponse([{ text: 'API Error: 429 rate_limit_exceeded', is_error: true }]),
+    );
+
+    const validateAndFormat = vi.fn().mockResolvedValue('Still broken');
+
+    const result = await runAgent(makeAgentConfig(), 'Test prompt', makeOptions(), undefined, emitter, {
+      maxRetries: 2,
+      validateAndFormat,
+    });
+
+    expect(result.error).toBe(AgentErrorType.SERVICE_UNAVAILABLE);
+    expect(result.errorMessage).toMatch(/rate-limited/);
+    expect(validateAndFormat).not.toHaveBeenCalled();
+  });
 });

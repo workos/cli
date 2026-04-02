@@ -139,7 +139,9 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
   if (agentResult.error) {
     await analytics.shutdown('error');
     const message = agentResult.errorMessage || agentResult.error;
-    throw new Error(`Agent SDK error: ${message}`);
+    // Pass user-friendly messages through without wrapping them in
+    // "Agent SDK error:" — that prefix obscures the actionable text.
+    throw new Error(message);
   }
 
   // Track retry metrics

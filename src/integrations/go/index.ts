@@ -213,7 +213,7 @@ Begin integration now.`;
   if (agentResult.error) {
     await analytics.shutdown('error');
     const message = agentResult.errorMessage || agentResult.error;
-    throw new Error(`Agent SDK error: ${message}`);
+    throw new Error(message);
   }
 
   // Post-installation validation (gracefully skips — no rules file for Go)

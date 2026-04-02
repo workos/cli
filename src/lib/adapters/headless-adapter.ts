@@ -337,7 +337,7 @@ export class HeadlessAdapter implements InstallerAdapter {
 
   private handleError = ({ message, stack }: InstallerEvents['error']): void => {
     const isServiceError =
-      /\b50[0-9]\b/.test(message) || /server_error|internal_error|overloaded|service.unavailable/i.test(message);
+      /\b50[0-9]\b/.test(message) || /server_error|internal_error|overloaded|service.*unavailable/i.test(message);
     const isRateLimit = /\b429\b/.test(message) || /rate.limit/i.test(message);
     const isNetworkError = /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|fetch failed/i.test(message);
     const isProcessExit = /process exited with code/i.test(message);

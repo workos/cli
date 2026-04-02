@@ -124,7 +124,7 @@ export async function run(options: InstallerOptions): Promise<string> {
   if (agentResult.error) {
     await analytics.shutdown('error');
     const message = agentResult.errorMessage || agentResult.error;
-    throw new Error(`Agent SDK error: ${message}`);
+    throw new Error(message);
   }
 
   // Build summary

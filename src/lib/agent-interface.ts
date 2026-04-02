@@ -59,6 +59,9 @@ export type AgentSignal = (typeof AgentSignals)[keyof typeof AgentSignals];
 /** Internal prefix used to tag service-unavailability errors from handleSDKMessage */
 const SERVICE_UNAVAILABLE_PREFIX = '__SERVICE_UNAVAILABLE__';
 
+/** Internal prefix used to tag rate-limit errors from handleSDKMessage */
+const RATE_LIMITED_PREFIX = '__RATE_LIMITED__';
+
 /**
  * Error types that can be returned from agent execution.
  * These correspond to the error signals that the agent emits.
@@ -671,6 +674,14 @@ export async function runAgent(
           errorMessage: 'The AI service is temporarily unavailable. Please try again in a few minutes.',
         };
       }
+      if (sdkError.startsWith(RATE_LIMITED_PREFIX)) {
+        const detail = sdkError.slice(RATE_LIMITED_PREFIX.length);
+        logError('AI service rate-limited:', detail);
+        return {
+          error: AgentErrorType.SERVICE_UNAVAILABLE,
+          errorMessage: 'The AI service is currently rate-limited. Please wait a minute and try again.',
+        };
+      }
       logError('Agent SDK error:', sdkError);
       return { error: AgentErrorType.EXECUTION_ERROR, errorMessage: sdkError };
     }
@@ -871,13 +882,13 @@ function handleSDKMessage(
         const resultText = typeof message.result === 'string' ? message.result : '';
         logError('Agent result marked as error:', resultText);
 
-        // Detect service unavailability (API 500, upstream outage) or rate limiting (429)
-        if (
-          /\b50[0-9]\b/.test(resultText) ||
-          /server_error|internal_error|overloaded/.test(resultText) ||
-          /\b429\b/.test(resultText) ||
-          /rate.limit/i.test(resultText)
-        ) {
+        // Detect rate limiting (429) — check before 5xx so it gets distinct messaging
+        if (/\b429\b/.test(resultText) || /rate.limit/i.test(resultText)) {
+          return `${RATE_LIMITED_PREFIX}${resultText}`;
+        }
+
+        // Detect service unavailability (API 500, upstream outage)
+        if (/\b50[0-9]\b/.test(resultText) || /server_error|internal_error|overloaded/.test(resultText)) {
           return `${SERVICE_UNAVAILABLE_PREFIX}${resultText}`;
         }
         return resultText || 'Agent execution failed';
