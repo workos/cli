@@ -337,8 +337,7 @@ export class HeadlessAdapter implements InstallerAdapter {
 
   private handleError = ({ message, stack }: InstallerEvents['error']): void => {
     const isServiceError =
-      /\b50[0-9]\b/.test(message) ||
-      /server_error|internal_error|overloaded|service.unavailable/i.test(message);
+      /\b50[0-9]\b/.test(message) || /server_error|internal_error|overloaded|service.unavailable/i.test(message);
     const code = isServiceError ? 'service_unavailable' : 'installer_error';
     const displayMessage = isServiceError
       ? 'The AI service is temporarily unavailable. Please try again in a few minutes.'

@@ -404,8 +404,7 @@ export class CLIAdapter implements InstallerAdapter {
 
     // Rewrite raw API errors into user-friendly messages
     const isServiceError =
-      /\b50[0-9]\b/.test(message) ||
-      /server_error|internal_error|overloaded|service.unavailable/i.test(message);
+      /\b50[0-9]\b/.test(message) || /server_error|internal_error|overloaded|service.unavailable/i.test(message);
     if (isServiceError) {
       clack.log.error('The AI service is temporarily unavailable.');
       clack.log.info('This is usually resolved within a few minutes. Please try again shortly.');

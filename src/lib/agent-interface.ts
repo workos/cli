@@ -865,12 +865,10 @@ function handleSDKMessage(
     case 'result': {
       // The SDK may return subtype 'success' with is_error: true when API
       // retries are exhausted (e.g., persistent 500s). Check is_error first.
-      const isResultError =
-        (message as Record<string, unknown>).is_error === true;
+      const isResultError = (message as Record<string, unknown>).is_error === true;
 
       if (isResultError) {
-        const resultText =
-          typeof message.result === 'string' ? message.result : '';
+        const resultText = typeof message.result === 'string' ? message.result : '';
         logError('Agent result marked as error:', resultText);
 
         // Detect service unavailability (API 500, upstream outage)
