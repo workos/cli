@@ -59,6 +59,8 @@ export interface InstallerMachineContext {
   prUrl?: string;
   /** Summary message from agent execution */
   agentSummary?: string;
+  /** Error from post-install steps (commit, push, PR) */
+  postInstallError?: string;
 }
 
 /**

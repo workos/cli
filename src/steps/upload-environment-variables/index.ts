@@ -37,6 +37,15 @@ export const uploadEnvironmentVariablesStep = async (
     return [];
   }
 
+  // Check for existing WorkOS env vars in the provider
+  const existingVars = await provider.checkExistingVars();
+  const existingWorkosVars = existingVars.filter((v) => v.includes('WORKOS'));
+  if (existingWorkosVars.length > 0) {
+    clack.log.warn(
+      `Found existing WorkOS variables in ${provider.name}: ${existingWorkosVars.join(', ')}. Uploading may fail for these keys.`,
+    );
+  }
+
   const upload: boolean = await abortIfCancelled(
     clack.select({
       message: `It looks like you are using ${provider.name}. Would you like to upload the environment variables?`,
@@ -44,7 +53,10 @@ export const uploadEnvironmentVariablesStep = async (
         {
           value: true,
           label: 'Yes',
-          hint: `Upload the environment variables to ${provider.name}`,
+          hint:
+            existingWorkosVars.length > 0
+              ? `Upload to ${provider.name} (some vars already exist)`
+              : `Upload the environment variables to ${provider.name}`,
         },
         {
           value: false,

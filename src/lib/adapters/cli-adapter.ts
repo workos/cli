@@ -32,6 +32,8 @@ export class CLIAdapter implements InstallerAdapter {
 
   // Long-running agent update interval
   private agentUpdateInterval: NodeJS.Timeout | null = null;
+  private agentStartTime: number | null = null;
+  private lastFileOperation: string | null = null;
 
   constructor(config: AdapterConfig) {
     this.emitter = config.emitter;
@@ -107,6 +109,8 @@ export class CLIAdapter implements InstallerAdapter {
     this.subscribe('config:complete', this.handleConfigComplete);
     this.subscribe('agent:start', this.handleAgentStart);
     this.subscribe('agent:progress', this.handleAgentProgress);
+    this.subscribe('file:write', this.handleFileWrite);
+    this.subscribe('file:edit', this.handleFileEdit);
     this.subscribe('validation:start', this.handleValidationStart);
     this.subscribe('validation:issues', this.handleValidationIssues);
     this.subscribe('validation:complete', this.handleValidationComplete);
@@ -161,6 +165,8 @@ export class CLIAdapter implements InstallerAdapter {
       clearInterval(this.agentUpdateInterval);
       this.agentUpdateInterval = null;
     }
+    this.agentStartTime = null;
+    this.lastFileOperation = null;
   };
 
   private stopSpinner(message: string): void {
@@ -346,21 +352,35 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handleAgentStart = (): void => {
+    this.agentStartTime = Date.now();
+    this.lastFileOperation = null;
     this.spinner = clack.spinner();
     this.spinner.start('Running AI agent...');
 
-    // Periodic status updates for long-running operations
-    let dots = 0;
+    // Periodic status updates with elapsed time
     this.agentUpdateInterval = setInterval(() => {
-      dots = (dots + 1) % 4;
-      const dotStr = '.'.repeat(dots + 1);
-      this.spinner?.message(`Running AI agent${dotStr}`);
+      const elapsed = Math.round((Date.now() - (this.agentStartTime ?? Date.now())) / 1000);
+      const timeStr = elapsed >= 60 ? `${Math.floor(elapsed / 60)}m ${elapsed % 60}s` : `${elapsed}s`;
+      const detail = this.lastFileOperation ?? 'Working';
+      this.spinner?.message(`${detail} (${timeStr})`);
     }, 2000);
   };
 
   private handleAgentProgress = ({ step, detail }: InstallerEvents['agent:progress']): void => {
     const message = detail ? `${step}: ${detail}` : step;
     this.spinner?.message(message);
+  };
+
+  private handleFileWrite = ({ path }: InstallerEvents['file:write']): void => {
+    const shortPath = path.split('/').slice(-2).join('/');
+    this.lastFileOperation = `Writing ${shortPath}`;
+    this.spinner?.message(this.lastFileOperation);
+  };
+
+  private handleFileEdit = ({ path }: InstallerEvents['file:edit']): void => {
+    const shortPath = path.split('/').slice(-2).join('/');
+    this.lastFileOperation = `Editing ${shortPath}`;
+    this.spinner?.message(this.lastFileOperation);
   };
 
   private handleValidationStart = (): void => {

@@ -11,7 +11,17 @@ export function detectChanges(): { hasChanges: boolean; files: string[] } {
 
 export function stageAndCommit(message: string, cwd: string): void {
   execFileSync('git', ['add', '-A'], { cwd, stdio: 'ignore' });
-  execFileSync('git', ['commit', '-m', message], { cwd, stdio: 'ignore' });
+  try {
+    execFileSync('git', ['commit', '-m', message], {
+      cwd,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (error: unknown) {
+    const execError = error as { stderr?: Buffer; stdout?: Buffer; message?: string };
+    const stderr = execError.stderr?.toString() ?? '';
+    const stdout = execError.stdout?.toString() ?? '';
+    throw new Error(`Git commit failed${stderr ? `:\n${stderr}` : stdout ? `:\n${stdout}` : `: ${execError.message}`}`);
+  }
 }
 
 export function pushBranch(cwd: string): void {

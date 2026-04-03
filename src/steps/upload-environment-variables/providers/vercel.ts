@@ -71,6 +71,28 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
     return true;
   }
 
+  async checkExistingVars(): Promise<string[]> {
+    try {
+      const result = spawnSync('vercel', ['env', 'ls'], {
+        cwd: this.options.installDir,
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          FORCE_COLOR: '0',
+          CI: '1',
+        },
+      });
+      if (result.status !== 0) return [];
+      return (result.stdout ?? '')
+        .split('\n')
+        .map((line) => line.trim().split(/\s+/)[0])
+        .filter((token): token is string => !!token && /^[A-Z_][A-Z0-9_]*$/.test(token));
+    } catch {
+      return [];
+    }
+  }
+
   async uploadEnvironmentVariable(key: string, value: string, environment: string): Promise<void> {
     await new Promise<void>((resolve, reject) => {
       const proc = spawn('vercel', ['env', 'add', key, environment], {
