@@ -95,7 +95,11 @@ export class TelemetryClient {
         this.events = [];
       } else {
         debug(`[Telemetry] Failed to send: ${response.status}`);
-        // Events remain in queue for store-forward to persist
+        // Clear on 4xx (permanent failures like 401/403 that won't succeed on retry).
+        // Retain only on 5xx (server errors that may be transient).
+        if (response.status >= 400 && response.status < 500) {
+          this.events = [];
+        }
       }
     } catch (error) {
       debug(`[Telemetry] Error sending events: ${error}`);
