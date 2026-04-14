@@ -45,15 +45,21 @@ export class TelemetryClient {
     this.events.push(...events);
   }
 
-  async flush(): Promise<void> {
-    if (this.events.length === 0) return;
+  /**
+   * Flush queued events. Returns true if events were sent or intentionally
+   * dropped (4xx), false if they should be retried (5xx/network error).
+   * Uses splice to only remove the events that were in the snapshot,
+   * protecting any events queued concurrently during the fetch.
+   */
+  async flush(): Promise<boolean> {
+    if (this.events.length === 0) return true;
     if (!this.gatewayUrl) {
       debug('[Telemetry] No gateway URL configured, skipping flush');
-      return;
+      return false;
     }
 
-    const payload: TelemetryRequest = { events: [...this.events] };
-    // DO NOT clear this.events yet — retain until success
+    const count = this.events.length;
+    const payload: TelemetryRequest = { events: this.events.slice(0, count) };
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -92,18 +98,22 @@ export class TelemetryClient {
       });
 
       if (response.ok) {
-        this.events = [];
+        this.events.splice(0, count);
+        return true;
       } else {
         debug(`[Telemetry] Failed to send: ${response.status}`);
-        // Clear on 4xx (permanent failures like 401/403 that won't succeed on retry).
-        // Retain only on 5xx (server errors that may be transient).
+        // Drop on 4xx (permanent failures like 401/403 won't succeed on retry).
+        // Retain on 5xx (transient server errors) for store-forward.
         if (response.status >= 400 && response.status < 500) {
-          this.events = [];
+          this.events.splice(0, count);
+          return true; // intentionally dropped
         }
+        return false;
       }
     } catch (error) {
       debug(`[Telemetry] Error sending events: ${error}`);
       // Events remain in queue for store-forward to persist
+      return false;
     } finally {
       clearTimeout(timeout);
     }

@@ -48,15 +48,15 @@ export async function recoverPendingEvents(): Promise<void> {
       }
     }
 
-    // Flush all recovered events in one batch
-    await telemetryClient.flush();
-
-    // Only delete files AFTER successful flush.
-    // If flush fails, events are retained in memory and will be
-    // re-persisted by the exit handler (store-forward).
+    // Delete source files — events are now in memory regardless of flush outcome.
+    // If flush succeeds: events sent, done.
+    // If flush fails: events stay in memory, exit handler re-persists to new PID file.
     for (const filePath of recoveredFiles) {
       try { unlinkSync(filePath); } catch { /* ignore */ }
     }
+
+    // Flush all recovered events in one batch
+    await telemetryClient.flush();
   } catch {
     debug('[Telemetry] Store-forward recovery failed silently');
   }

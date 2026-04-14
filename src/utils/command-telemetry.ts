@@ -1,9 +1,11 @@
 import { analytics } from './analytics.js';
+import { telemetryClient } from './telemetry-client.js';
 import { COMMAND_ALIASES } from '../lib/command-aliases.js';
 import { WORKOS_TELEMETRY_ENABLED } from '../lib/constants.js';
 
-/** Commands that have their own telemetry (e.g., installer session events). */
-const SKIP_TELEMETRY_COMMANDS = new Set(['install']);
+/** Commands that have their own telemetry (e.g., installer session events).
+ *  'root' is the default $0 handler which prompts to run the installer. */
+const SKIP_TELEMETRY_COMMANDS = new Set(['install', 'dashboard', 'root']);
 
 /**
  * Resolve user-typed command parts to their canonical name.
@@ -88,6 +90,10 @@ export function wrapCommandHandler(
         flags,
       });
       throw error;
+    } finally {
+      // Flush in-process so events are sent immediately, not deferred to next invocation.
+      // If flush fails, store-forward persists on exit.
+      await telemetryClient.flush().catch(() => {});
     }
   };
 }

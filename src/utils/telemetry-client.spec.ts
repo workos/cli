@@ -170,22 +170,33 @@ describe('TelemetryClient', () => {
       expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
-    it('handles network errors silently', async () => {
+    it('returns false on network errors (retryable)', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
       client.setGatewayUrl('http://localhost:8000');
       client.queueEvent({ type: 'session.start', sessionId: '123', timestamp: new Date().toISOString() });
 
-      // Should not throw
-      await expect(client.flush()).resolves.toBeUndefined();
+      await expect(client.flush()).resolves.toBe(false);
     });
 
-    it('handles non-ok responses silently', async () => {
+    it('returns false on 5xx (retryable, events retained)', async () => {
       mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
       client.setGatewayUrl('http://localhost:8000');
       client.queueEvent({ type: 'session.start', sessionId: '123', timestamp: new Date().toISOString() });
 
-      // Should not throw
-      await expect(client.flush()).resolves.toBeUndefined();
+      await expect(client.flush()).resolves.toBe(false);
+    });
+
+    it('drops events on 4xx and returns true (permanent failure)', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 401 });
+      client.setGatewayUrl('http://localhost:8000');
+      client.queueEvent({ type: 'session.start', sessionId: '123', timestamp: new Date().toISOString() });
+
+      const result = await client.flush();
+      expect(result).toBe(true);
+      // Verify events were cleared — second flush should be a no-op
+      mockFetch.mockClear();
+      await client.flush();
+      expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('sends correct Content-Type header', async () => {
