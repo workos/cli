@@ -2,6 +2,9 @@ import { analytics } from './analytics.js';
 import { COMMAND_ALIASES } from '../lib/command-aliases.js';
 import { WORKOS_TELEMETRY_ENABLED } from '../lib/constants.js';
 
+/** Commands that have their own telemetry (e.g., installer session events). */
+const SKIP_TELEMETRY_COMMANDS = new Set(['install']);
+
 /**
  * Resolve user-typed command parts to their canonical name.
  * Applies alias mapping to the top-level command only.
@@ -50,6 +53,10 @@ export function commandTelemetryMiddleware(rawArgs: string[]) {
     argv.__telemetryCommandName = commandName;
     argv.__telemetryStartTime = startTime;
     argv.__telemetryFlags = flags;
+
+    // Skip provisional event for commands with their own telemetry (e.g., install)
+    const topLevelCommand = commandParts[0] ?? '';
+    if (SKIP_TELEMETRY_COMMANDS.has(topLevelCommand)) return;
 
     // Queue provisional event NOW, before the handler runs.
     // If the handler calls process.exit(), store-forward persists this.

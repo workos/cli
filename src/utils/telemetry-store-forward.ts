@@ -29,28 +29,34 @@ export async function recoverPendingEvents(): Promise<void> {
       (f) => f.startsWith('pending-') && f.endsWith('.json'),
     );
 
+    const recoveredFiles: string[] = [];
     for (const file of files) {
       const filePath = join(PENDING_DIR, file);
       try {
         const raw = readFileSync(filePath, 'utf-8');
-        unlinkSync(filePath); // Delete immediately to avoid double-send
-
         const events = JSON.parse(raw);
         if (Array.isArray(events) && events.length > 0) {
           telemetryClient.queueEvents(events);
+          recoveredFiles.push(filePath);
+        } else {
+          // Empty file — delete immediately
+          try { unlinkSync(filePath); } catch { /* ignore */ }
         }
       } catch {
         // Corrupted file — delete and move on
-        try {
-          unlinkSync(filePath);
-        } catch {
-          /* ignore */
-        }
+        try { unlinkSync(filePath); } catch { /* ignore */ }
       }
     }
 
     // Flush all recovered events in one batch
     await telemetryClient.flush();
+
+    // Only delete files AFTER successful flush.
+    // If flush fails, events are retained in memory and will be
+    // re-persisted by the exit handler (store-forward).
+    for (const filePath of recoveredFiles) {
+      try { unlinkSync(filePath); } catch { /* ignore */ }
+    }
   } catch {
     debug('[Telemetry] Store-forward recovery failed silently');
   }

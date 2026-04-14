@@ -47,7 +47,7 @@ import { registerSubcommand } from './utils/register-subcommand.js';
 import { COMMAND_ALIASES } from './lib/command-aliases.js';
 import { installCrashReporter } from './utils/crash-reporter.js';
 import { installStoreForward, recoverPendingEvents } from './utils/telemetry-store-forward.js';
-import { commandTelemetryMiddleware } from './utils/command-telemetry.js';
+import { commandTelemetryMiddleware, wrapCommandHandler } from './utils/command-telemetry.js';
 import { analytics } from './utils/analytics.js';
 
 // Enable debug logging for all commands via env var.
@@ -410,10 +410,10 @@ yargs(rawArgs)
           description: 'Auto-update stale WorkOS skills (writes to <agent>/skills/workos/ and workos-widgets/ only)',
         },
       }),
-    async (argv) => {
+    wrapCommandHandler(async (argv) => {
       const { handleDoctor } = await import('./commands/doctor.js');
       await handleDoctor(argv);
-    },
+    }),
   )
   // NOTE: When adding commands here, also update src/utils/help-json.ts
   .command('env', 'Manage environment configurations (API keys, endpoints, active environment)', (yargs) => {
@@ -2167,7 +2167,7 @@ yargs(rawArgs)
         clean: { type: 'boolean', default: false, describe: 'Tear down seeded resources' },
         init: { type: 'boolean', default: false, describe: 'Create an example workos-seed.yml file' },
       }),
-    async (argv) => {
+    wrapCommandHandler(async (argv) => {
       await applyInsecureStorage(argv.insecureStorage);
       const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
       const { runSeed } = await import('./commands/seed.js');
@@ -2176,7 +2176,7 @@ yargs(rawArgs)
         resolveApiKey({ apiKey: argv.apiKey }),
         resolveApiBaseUrl(),
       );
-    },
+    }),
   )
   .command(
     'setup-org <name>',
@@ -2188,7 +2188,7 @@ yargs(rawArgs)
         domain: { type: 'string', describe: 'Domain to add and verify' },
         roles: { type: 'string', describe: 'Comma-separated role slugs to create' },
       }),
-    async (argv) => {
+    wrapCommandHandler(async (argv) => {
       await applyInsecureStorage(argv.insecureStorage);
       const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
       const { runSetupOrg } = await import('./commands/setup-org.js');
@@ -2197,7 +2197,7 @@ yargs(rawArgs)
         resolveApiKey({ apiKey: argv.apiKey }),
         resolveApiBaseUrl(),
       );
-    },
+    }),
   )
   .command(
     'onboard-user <email>',
@@ -2210,7 +2210,7 @@ yargs(rawArgs)
         role: { type: 'string', describe: 'Role slug to assign' },
         wait: { type: 'boolean', default: false, describe: 'Wait for invitation acceptance' },
       }),
-    async (argv) => {
+    wrapCommandHandler(async (argv) => {
       await applyInsecureStorage(argv.insecureStorage);
       const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
       const { runOnboardUser } = await import('./commands/onboard-user.js');
@@ -2219,7 +2219,7 @@ yargs(rawArgs)
         resolveApiKey({ apiKey: argv.apiKey }),
         resolveApiBaseUrl(),
       );
-    },
+    }),
   )
   .command(
     'debug-sso <connectionId>',
@@ -2229,12 +2229,12 @@ yargs(rawArgs)
         ...insecureStorageOption,
         'api-key': { type: 'string' as const, describe: 'WorkOS API key' },
       }),
-    async (argv) => {
+    wrapCommandHandler(async (argv) => {
       await applyInsecureStorage(argv.insecureStorage);
       const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
       const { runDebugSso } = await import('./commands/debug-sso.js');
       await runDebugSso(argv.connectionId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-    },
+    }),
   )
   .command(
     'debug-sync <directoryId>',
@@ -2244,12 +2244,12 @@ yargs(rawArgs)
         ...insecureStorageOption,
         'api-key': { type: 'string' as const, describe: 'WorkOS API key' },
       }),
-    async (argv) => {
+    wrapCommandHandler(async (argv) => {
       await applyInsecureStorage(argv.insecureStorage);
       const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
       const { runDebugSync } = await import('./commands/debug-sync.js');
       await runDebugSync(argv.directoryId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-    },
+    }),
   )
   // Alias — canonical command is `workos env claim`
   .command(
@@ -2259,11 +2259,11 @@ yargs(rawArgs)
       yargs.options({
         ...insecureStorageOption,
       }),
-    async (argv) => {
+    wrapCommandHandler(async (argv) => {
       await applyInsecureStorage(argv.insecureStorage);
       const { runClaim } = await import('./commands/claim.js');
       await runClaim();
-    },
+    }),
   )
   .command(
     'install',
@@ -2284,10 +2284,10 @@ yargs(rawArgs)
         port: { type: 'number', default: 4100, describe: 'Port to listen on' },
         seed: { type: 'string', describe: 'Path to seed config file (YAML or JSON)' },
       }),
-    async (argv) => {
+    wrapCommandHandler(async (argv) => {
       const { runEmulate } = await import('./commands/emulate.js');
       await runEmulate({ port: argv.port, seed: argv.seed, json: argv.json as boolean });
-    },
+    }),
   )
   .command(
     'dev',
@@ -2297,14 +2297,14 @@ yargs(rawArgs)
         port: { type: 'number', default: 4100, describe: 'Emulator port' },
         seed: { type: 'string', describe: 'Path to seed config file' },
       }),
-    async (argv) => {
+    wrapCommandHandler(async (argv) => {
       const { runDev } = await import('./commands/dev.js');
       await runDev({
         port: argv.port,
         seed: argv.seed,
         '--': argv['--'] as string[] | undefined,
       });
-    },
+    }),
   )
   .command('debug', false, (yargs) => {
     yargs.options(insecureStorageOption);

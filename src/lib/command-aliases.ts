@@ -7,4 +7,5 @@
  */
 export const COMMAND_ALIASES: Record<string, string> = {
   org: 'organization',
+  claim: 'env.claim',
 };
