@@ -1,3 +1,4 @@
+import os from 'node:os';
 import { v4 as uuidv4 } from 'uuid';
 import { debug } from './debug.js';
 import { telemetryClient } from './telemetry-client.js';
@@ -7,6 +8,8 @@ import type {
   StepEvent,
   AgentToolEvent,
   AgentLLMEvent,
+  CommandEvent,
+  CrashEvent,
 } from './telemetry-types.js';
 import { WORKOS_TELEMETRY_ENABLED } from '../lib/constants.js';
 
@@ -15,6 +18,7 @@ export class Analytics {
   private sessionId: string;
   private sessionStartTime: Date;
   private distinctId?: string;
+  private mode?: 'cli' | 'tui' | 'headless';
 
   // Agent metrics tracking
   private totalInputTokens = 0;
@@ -71,8 +75,39 @@ export class Analytics {
     return undefined;
   }
 
+  private detectCiProvider(): string | undefined {
+    if (process.env.GITHUB_ACTIONS) return 'github-actions';
+    if (process.env.BUILDKITE) return 'buildkite';
+    if (process.env.CIRCLECI) return 'circleci';
+    if (process.env.GITLAB_CI) return 'gitlab-ci';
+    if (process.env.JENKINS_URL) return 'jenkins';
+    return undefined;
+  }
+
+  private getEnvFingerprint() {
+    let osVersion: string;
+    try {
+      osVersion = os.release();
+    } catch {
+      osVersion = 'unknown';
+    }
+
+    const ciProvider = this.detectCiProvider();
+
+    return {
+      'env.os': process.platform,
+      'env.os_version': osVersion,
+      'env.node_version': process.version,
+      'env.shell': process.env.SHELL ?? process.env.COMSPEC ?? 'unknown',
+      'env.ci': Boolean(process.env.CI || process.env.GITHUB_ACTIONS || process.env.BUILDKITE),
+      ...(ciProvider ? { 'env.ci_provider': ciProvider } : {}),
+    };
+  }
+
   sessionStart(mode: 'cli' | 'tui' | 'headless', version: string) {
     if (!WORKOS_TELEMETRY_ENABLED) return;
+
+    this.mode = mode;
 
     const event: SessionStartEvent = {
       type: 'session.start',
@@ -82,6 +117,7 @@ export class Analytics {
         'installer.version': version,
         'installer.mode': mode,
         'workos.user_id': this.distinctId,
+        ...this.getEnvFingerprint(),
       },
     };
 
@@ -96,6 +132,7 @@ export class Analytics {
       sessionId: this.sessionId,
       timestamp: new Date().toISOString(),
       name,
+      startTimestamp: new Date(Date.now() - durationMs).toISOString(),
       durationMs,
       success,
       error: error ? { type: error.name, message: error.message } : undefined,
@@ -112,6 +149,7 @@ export class Analytics {
       sessionId: this.sessionId,
       timestamp: new Date().toISOString(),
       toolName,
+      startTimestamp: new Date(Date.now() - durationMs).toISOString(),
       durationMs,
       success,
     };
@@ -141,6 +179,61 @@ export class Analytics {
     this.agentIterations++;
   }
 
+  commandExecuted(
+    name: string,
+    durationMs: number,
+    success: boolean,
+    options?: { error?: Error; flags?: string[] },
+  ) {
+    if (!WORKOS_TELEMETRY_ENABLED) return;
+
+    const event: CommandEvent = {
+      type: 'command',
+      sessionId: this.sessionId,
+      timestamp: new Date().toISOString(),
+      attributes: {
+        'command.name': name,
+        'command.duration_ms': durationMs,
+        'command.success': success,
+        ...(options?.error
+          ? {
+              'command.error_type': options.error.name,
+              'command.error_message': options.error.message,
+            }
+          : {}),
+        ...(options?.flags?.length
+          ? { 'command.flags': options.flags.join(',') }
+          : {}),
+        ...this.getEnvFingerprint(),
+      },
+    };
+
+    telemetryClient.queueEvent(event);
+  }
+
+  captureUnhandledCrash(error: Error, options?: { command?: string; version?: string }) {
+    if (!WORKOS_TELEMETRY_ENABLED) return;
+
+    const stack = error.stack ?? '';
+    const truncatedStack = stack.length > 4096 ? stack.slice(0, 4096) : stack;
+
+    const event: CrashEvent = {
+      type: 'crash',
+      sessionId: this.sessionId,
+      timestamp: new Date().toISOString(),
+      attributes: {
+        'crash.error_type': error.name,
+        'crash.error_message': error.message,
+        'crash.stack': truncatedStack,
+        ...(options?.command ? { 'crash.command': options.command } : {}),
+        'installer.version': options?.version ?? 'unknown',
+        ...this.getEnvFingerprint(),
+      },
+    };
+
+    telemetryClient.queueEvent(event);
+  }
+
   async shutdown(status: 'success' | 'error' | 'cancelled') {
     if (!WORKOS_TELEMETRY_ENABLED) return;
 
@@ -152,6 +245,8 @@ export class Analytics {
       string | number | boolean
     >;
 
+    const envFingerprint = this.getEnvFingerprint();
+
     const event: SessionEndEvent = {
       type: 'session.end',
       sessionId: this.sessionId,
@@ -162,6 +257,8 @@ export class Analytics {
         'installer.agent.iterations': this.agentIterations,
         'installer.agent.tokens.input': this.totalInputTokens,
         'installer.agent.tokens.output': this.totalOutputTokens,
+        ...envFingerprint,
+        ...(this.mode ? { 'installer.mode': this.mode } : {}),
         ...extraAttributes,
       },
     };

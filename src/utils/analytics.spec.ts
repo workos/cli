@@ -206,6 +206,17 @@ describe('Analytics', () => {
           }),
         );
       });
+
+      it('includes environment fingerprint fields', () => {
+        analytics.sessionStart('cli', '1.0.0');
+
+        const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'session.start')[0];
+        expect(event.attributes).toHaveProperty('env.os');
+        expect(event.attributes).toHaveProperty('env.os_version');
+        expect(event.attributes).toHaveProperty('env.node_version');
+        expect(event.attributes).toHaveProperty('env.shell');
+        expect(typeof event.attributes['env.ci']).toBe('boolean');
+      });
     });
 
     describe('shutdown', () => {
@@ -260,6 +271,21 @@ describe('Analytics', () => {
           }),
         );
       });
+
+      it('includes env fingerprint and installer.mode', async () => {
+        analytics.sessionStart('tui', '1.0.0');
+        mockQueueEvent.mockClear();
+
+        await analytics.shutdown('success');
+
+        const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'session.end')[0];
+        expect(event.attributes).toHaveProperty('env.os');
+        expect(event.attributes).toHaveProperty('env.os_version');
+        expect(event.attributes).toHaveProperty('env.node_version');
+        expect(event.attributes).toHaveProperty('env.shell');
+        expect(typeof event.attributes['env.ci']).toBe('boolean');
+        expect(event.attributes['installer.mode']).toBe('tui');
+      });
     });
 
     describe('getFeatureFlag', () => {
@@ -306,6 +332,14 @@ describe('Analytics', () => {
         const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'step')[0];
         expect(event.error).toBeUndefined();
       });
+
+      it('includes startTimestamp as valid ISO 8601', () => {
+        analytics.stepCompleted('detect_framework', 150, true);
+
+        const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'step')[0];
+        expect(event.startTimestamp).toBeDefined();
+        expect(new Date(event.startTimestamp).toISOString()).toBe(event.startTimestamp);
+      });
     });
 
     describe('toolCalled', () => {
@@ -334,6 +368,14 @@ describe('Analytics', () => {
           }),
         );
       });
+
+      it('includes startTimestamp as valid ISO 8601', () => {
+        analytics.toolCalled('Write', 50, true);
+
+        const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'agent.tool')[0];
+        expect(event.startTimestamp).toBeDefined();
+        expect(new Date(event.startTimestamp).toISOString()).toBe(event.startTimestamp);
+      });
     });
 
     describe('llmRequest', () => {
@@ -349,6 +391,13 @@ describe('Analytics', () => {
             outputTokens: 500,
           }),
         );
+      });
+
+      it('does NOT include startTimestamp (point-in-time marker)', () => {
+        analytics.llmRequest('claude-sonnet-4-20250514', 1000, 500);
+
+        const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'agent.llm')[0];
+        expect(event.startTimestamp).toBeUndefined();
       });
 
       it('accumulates tokens for session.end', async () => {
@@ -373,6 +422,80 @@ describe('Analytics', () => {
 
         const sessionEnd = mockQueueEvent.mock.calls.find((c) => c[0].type === 'session.end')[0];
         expect(sessionEnd.attributes['installer.agent.iterations']).toBe(3);
+      });
+    });
+
+    describe('commandExecuted', () => {
+      it('queues a command event with correct attributes', () => {
+        analytics.commandExecuted('org.list', 200, true);
+
+        expect(mockQueueEvent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'command',
+            attributes: expect.objectContaining({
+              'command.name': 'org.list',
+              'command.duration_ms': 200,
+              'command.success': true,
+              'env.os': expect.any(String),
+              'env.node_version': expect.any(String),
+            }),
+          }),
+        );
+      });
+
+      it('includes error info when provided', () => {
+        const error = new TypeError('Not found');
+        analytics.commandExecuted('org.get', 50, false, { error });
+
+        const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'command')[0];
+        expect(event.attributes['command.error_type']).toBe('TypeError');
+        expect(event.attributes['command.error_message']).toBe('Not found');
+      });
+
+      it('includes flags as comma-separated names', () => {
+        analytics.commandExecuted('org.list', 100, true, { flags: ['json', 'limit'] });
+
+        const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'command')[0];
+        expect(event.attributes['command.flags']).toBe('json,limit');
+      });
+    });
+
+    describe('captureUnhandledCrash', () => {
+      it('queues a crash event with error details', () => {
+        const error = new Error('Unexpected failure');
+        error.stack = 'Error: Unexpected failure\n    at foo.ts:1';
+        analytics.captureUnhandledCrash(error, { command: 'install', version: '1.0.0' });
+
+        expect(mockQueueEvent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'crash',
+            attributes: expect.objectContaining({
+              'crash.error_type': 'Error',
+              'crash.error_message': 'Unexpected failure',
+              'crash.stack': 'Error: Unexpected failure\n    at foo.ts:1',
+              'crash.command': 'install',
+              'installer.version': '1.0.0',
+              'env.os': expect.any(String),
+              'env.node_version': expect.any(String),
+            }),
+          }),
+        );
+      });
+
+      it('truncates stack traces to 4KB', () => {
+        const error = new Error('Big stack');
+        error.stack = 'x'.repeat(5000);
+        analytics.captureUnhandledCrash(error);
+
+        const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'crash')[0];
+        expect(event.attributes['crash.stack'].length).toBe(4096);
+      });
+
+      it('defaults version to unknown when not provided', () => {
+        analytics.captureUnhandledCrash(new Error('test'));
+
+        const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'crash')[0];
+        expect(event.attributes['installer.version']).toBe('unknown');
       });
     });
   });
@@ -451,6 +574,24 @@ describe('Analytics', () => {
       const analytics = new Analytics();
 
       analytics.llmRequest('claude-sonnet-4-20250514', 1000, 500);
+
+      expect(mockQueueEvent).not.toHaveBeenCalled();
+    });
+
+    it('commandExecuted does nothing', async () => {
+      const { Analytics } = await import('./analytics.js');
+      const analytics = new Analytics();
+
+      analytics.commandExecuted('org.list', 100, true);
+
+      expect(mockQueueEvent).not.toHaveBeenCalled();
+    });
+
+    it('captureUnhandledCrash does nothing', async () => {
+      const { Analytics } = await import('./analytics.js');
+      const analytics = new Analytics();
+
+      analytics.captureUnhandledCrash(new Error('test'));
 
       expect(mockQueueEvent).not.toHaveBeenCalled();
     });
