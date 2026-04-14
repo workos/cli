@@ -5,6 +5,7 @@ const mockSetGatewayUrl = vi.fn();
 const mockSetAccessToken = vi.fn();
 const mockQueueEvent = vi.fn();
 const mockFlush = vi.fn().mockResolvedValue(undefined);
+const mockReplaceLastEventOfType = vi.fn();
 
 vi.mock('./telemetry-client.js', () => ({
   telemetryClient: {
@@ -12,6 +13,7 @@ vi.mock('./telemetry-client.js', () => ({
     setAccessToken: mockSetAccessToken,
     queueEvent: mockQueueEvent,
     flush: mockFlush,
+    replaceLastEventOfType: (...args: unknown[]) => mockReplaceLastEventOfType(...args),
   },
 }));
 
@@ -23,6 +25,27 @@ vi.mock('./debug.js', () => ({
 // Mock uuid to return predictable values
 vi.mock('uuid', () => ({
   v4: () => 'test-session-id-123',
+}));
+
+// Mock settings for initForNonInstaller
+const mockGetLlmGatewayUrl = vi.fn(() => 'https://api.workos.com/llm-gateway');
+const mockSettingsConfig = {
+  nodeVersion: '>=18',
+  logging: { debugMode: false },
+  telemetry: { enabled: true, eventName: 'installer_interaction' },
+  documentation: { workosDocsUrl: 'https://workos.com/docs', dashboardUrl: 'https://dashboard.workos.com', issuesUrl: 'https://github.com' },
+  legacy: { oauthPort: 3000 },
+};
+vi.mock('../lib/settings.js', () => ({
+  getLlmGatewayUrl: () => mockGetLlmGatewayUrl(),
+  getConfig: () => mockSettingsConfig,
+  getVersion: () => '0.12.1',
+}));
+
+// Mock credentials for initForNonInstaller
+const mockGetCredentials = vi.fn();
+vi.mock('../lib/credentials.js', () => ({
+  getCredentials: () => mockGetCredentials(),
 }));
 
 describe('Analytics', () => {
@@ -56,7 +79,16 @@ describe('Analytics', () => {
           setAccessToken: mockSetAccessToken,
           queueEvent: mockQueueEvent,
           flush: mockFlush,
+          replaceLastEventOfType: (...args: unknown[]) => mockReplaceLastEventOfType(...args),
         },
+      }));
+      vi.doMock('../lib/settings.js', () => ({
+        getLlmGatewayUrl: () => mockGetLlmGatewayUrl(),
+        getConfig: () => mockSettingsConfig,
+        getVersion: () => '0.12.1',
+      }));
+      vi.doMock('../lib/credentials.js', () => ({
+        getCredentials: () => mockGetCredentials(),
       }));
       const module = await import('./analytics.js');
       Analytics = module.Analytics;
@@ -498,6 +530,59 @@ describe('Analytics', () => {
         expect(event.attributes['installer.version']).toBe('unknown');
       });
     });
+
+    describe('initForNonInstaller', () => {
+      it('sets gatewayUrl from default config', () => {
+        mockGetLlmGatewayUrl.mockReturnValue('https://api.workos.com/llm-gateway');
+        analytics.initForNonInstaller();
+
+        expect(mockSetGatewayUrl).toHaveBeenCalledWith('https://api.workos.com/llm-gateway');
+      });
+
+      it('sets access token from stored credentials', () => {
+        mockGetCredentials.mockReturnValue({ accessToken: 'stored-jwt-token' });
+        analytics.initForNonInstaller();
+
+        expect(mockSetAccessToken).toHaveBeenCalledWith('stored-jwt-token');
+      });
+
+      it('skips access token when no credentials stored', () => {
+        mockGetCredentials.mockReturnValue(null);
+        analytics.initForNonInstaller();
+
+        expect(mockSetAccessToken).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('replaceLastCommandEvent', () => {
+      it('removes last command event and queues a new one', () => {
+        analytics.replaceLastCommandEvent('organization.list', 150, true, { flags: ['json'] });
+
+        expect(mockReplaceLastEventOfType).toHaveBeenCalledWith('command');
+        expect(mockQueueEvent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'command',
+            attributes: expect.objectContaining({
+              'command.name': 'organization.list',
+              'command.duration_ms': 150,
+              'command.success': true,
+              'command.flags': 'json',
+            }),
+          }),
+        );
+      });
+
+      it('includes error info on failure', () => {
+        const error = new Error('oops');
+        error.name = 'CommandError';
+        analytics.replaceLastCommandEvent('auth.login', 50, false, { error });
+
+        const event = mockQueueEvent.mock.calls[0][0];
+        expect(event.attributes['command.success']).toBe(false);
+        expect(event.attributes['command.error_type']).toBe('CommandError');
+        expect(event.attributes['command.error_message']).toBe('oops');
+      });
+    });
   });
 
   describe('with telemetry disabled', () => {
@@ -510,7 +595,16 @@ describe('Analytics', () => {
           setAccessToken: mockSetAccessToken,
           queueEvent: mockQueueEvent,
           flush: mockFlush,
+          replaceLastEventOfType: (...args: unknown[]) => mockReplaceLastEventOfType(...args),
         },
+      }));
+      vi.doMock('../lib/settings.js', () => ({
+        getLlmGatewayUrl: () => mockGetLlmGatewayUrl(),
+        getConfig: () => mockSettingsConfig,
+        getVersion: () => '0.12.1',
+      }));
+      vi.doMock('../lib/credentials.js', () => ({
+        getCredentials: () => mockGetCredentials(),
       }));
     });
 
@@ -593,6 +687,25 @@ describe('Analytics', () => {
 
       analytics.captureUnhandledCrash(new Error('test'));
 
+      expect(mockQueueEvent).not.toHaveBeenCalled();
+    });
+
+    it('initForNonInstaller does nothing', async () => {
+      const { Analytics } = await import('./analytics.js');
+      const analytics = new Analytics();
+
+      analytics.initForNonInstaller();
+
+      expect(mockSetGatewayUrl).not.toHaveBeenCalled();
+    });
+
+    it('replaceLastCommandEvent does nothing', async () => {
+      const { Analytics } = await import('./analytics.js');
+      const analytics = new Analytics();
+
+      analytics.replaceLastCommandEvent('org.list', 100, true);
+
+      expect(mockReplaceLastEventOfType).not.toHaveBeenCalled();
       expect(mockQueueEvent).not.toHaveBeenCalled();
     });
   });

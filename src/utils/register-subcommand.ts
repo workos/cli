@@ -1,5 +1,7 @@
 import yargs from 'yargs';
 import type { Argv } from 'yargs';
+import { wrapCommandHandler } from './command-telemetry.js';
+import { WORKOS_TELEMETRY_ENABLED } from '../lib/constants.js';
 
 interface YargsOptions {
   demandedOptions: Record<string, unknown>;
@@ -43,5 +45,6 @@ export function registerSubcommand<T>(
     // Builder threw during probe — fall back to unenriched description
   }
 
-  return parentYargs.command(usage, enrichedDescription, builder, handler);
+  const telemetryHandler = WORKOS_TELEMETRY_ENABLED ? wrapCommandHandler(handler) : handler;
+  return parentYargs.command(usage, enrichedDescription, builder, telemetryHandler);
 }

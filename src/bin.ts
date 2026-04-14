@@ -44,6 +44,20 @@ import {
 } from './utils/output.js';
 import clack from './utils/clack.js';
 import { registerSubcommand } from './utils/register-subcommand.js';
+import { COMMAND_ALIASES } from './lib/command-aliases.js';
+import { installCrashReporter } from './utils/crash-reporter.js';
+import { installStoreForward, recoverPendingEvents } from './utils/telemetry-store-forward.js';
+import { commandTelemetryMiddleware } from './utils/command-telemetry.js';
+import { analytics } from './utils/analytics.js';
+
+// Telemetry infrastructure: crash reporter, store-forward, and gateway init.
+// Must be before yargs so crashes during startup are captured.
+installCrashReporter();
+installStoreForward();
+analytics.initForNonInstaller();
+// Fire-and-forget: recover events from previous crashes/exits.
+// NO await — must not block startup (flush timeout is 3s).
+recoverPendingEvents();
 
 // Resolve output mode early from raw argv (before yargs parses)
 const rawArgs = hideBin(process.argv);
@@ -211,6 +225,7 @@ yargs(rawArgs)
     describe: 'Interaction mode: human, coding agent, or CI automation',
     global: true,
   })
+  .middleware(commandTelemetryMiddleware(rawArgs))
   .middleware(async (argv) => {
     // Warn about unclaimed environments before management commands.
     // Excluded: auth/claim/install/dashboard handle their own credential flows;

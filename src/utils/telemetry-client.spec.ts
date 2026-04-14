@@ -15,6 +15,18 @@ vi.mock('../lib/credentials.js', () => ({
   getCredentials: () => mockGetCredentials(),
 }));
 
+// Mock fs for persistToFile tests
+const mockMkdirSync = vi.fn();
+const mockWriteFileSync = vi.fn();
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    mkdirSync: (...args: unknown[]) => mockMkdirSync(...args),
+    writeFileSync: (...args: unknown[]) => mockWriteFileSync(...args),
+  };
+});
+
 // Import after mocks are set up
 const { TelemetryClient } = await import('./telemetry-client.js');
 
@@ -136,15 +148,26 @@ describe('TelemetryClient', () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
-    it('clears events even if flush fails', async () => {
+    it('retains events when flush fails (for store-forward)', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
       client.setGatewayUrl('http://localhost:8000');
       client.queueEvent({ type: 'session.start', sessionId: '123', timestamp: new Date().toISOString() });
 
-      await client.flush(); // Should not throw
-      await client.flush(); // Should be no-op
+      await client.flush(); // Should not throw, events retained
+      await client.flush(); // Should retry since events are still queued
 
-      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('retains events on non-ok response (for store-forward)', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
+      client.setGatewayUrl('http://localhost:8000');
+      client.queueEvent({ type: 'session.start', sessionId: '123', timestamp: new Date().toISOString() });
+
+      await client.flush(); // Events retained on 500
+      await client.flush(); // Should retry
+
+      expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
     it('handles network errors silently', async () => {
@@ -180,6 +203,81 @@ describe('TelemetryClient', () => {
           }),
         }),
       );
+    });
+  });
+
+  describe('replaceLastEventOfType', () => {
+    it('removes the last event of the specified type', async () => {
+      client.setGatewayUrl('http://localhost:8000');
+      client.queueEvent({ type: 'command', sessionId: '1', timestamp: '2024-01-01T00:00:00Z' });
+      client.queueEvent({ type: 'session.start', sessionId: '1', timestamp: '2024-01-01T00:00:01Z' });
+      client.queueEvent({ type: 'command', sessionId: '1', timestamp: '2024-01-01T00:00:02Z' });
+
+      client.replaceLastEventOfType('command');
+
+      await client.flush();
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.events).toHaveLength(2);
+      expect(body.events[0].type).toBe('command');
+      expect(body.events[1].type).toBe('session.start');
+    });
+
+    it('does nothing if no event of that type exists', () => {
+      client.queueEvent({ type: 'session.start', sessionId: '1', timestamp: '2024-01-01T00:00:00Z' });
+      // Should not throw
+      client.replaceLastEventOfType('command');
+    });
+  });
+
+  describe('queueEvents', () => {
+    it('queues multiple events at once', async () => {
+      client.setGatewayUrl('http://localhost:8000');
+      client.queueEvents([
+        { type: 'command', sessionId: '1', timestamp: '2024-01-01T00:00:00Z' },
+        { type: 'crash', sessionId: '1', timestamp: '2024-01-01T00:00:01Z' },
+      ]);
+
+      await client.flush();
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.events).toHaveLength(2);
+    });
+  });
+
+  describe('persistToFile', () => {
+    beforeEach(() => {
+      mockMkdirSync.mockReset();
+      mockWriteFileSync.mockReset();
+    });
+
+    it('writes events to file and clears queue', async () => {
+      client.queueEvent({ type: 'session.start', sessionId: '1', timestamp: '2024-01-01T00:00:00Z' });
+      client.persistToFile('/tmp/test-persist.json');
+
+      expect(mockMkdirSync).toHaveBeenCalledWith('/tmp', { recursive: true });
+      expect(mockWriteFileSync).toHaveBeenCalledWith(
+        '/tmp/test-persist.json',
+        expect.stringContaining('session.start'),
+        'utf-8',
+      );
+
+      // Queue should be empty after persist
+      client.setGatewayUrl('http://localhost:8000');
+      await client.flush();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when no events queued', () => {
+      client.persistToFile('/tmp/test-persist.json');
+      expect(mockWriteFileSync).not.toHaveBeenCalled();
+    });
+
+    it('fails silently on write error', () => {
+      mockMkdirSync.mockImplementation(() => {
+        throw new Error('EACCES');
+      });
+
+      client.queueEvent({ type: 'session.start', sessionId: '1', timestamp: '2024-01-01T00:00:00Z' });
+      expect(() => client.persistToFile('/tmp/test-persist.json')).not.toThrow();
     });
   });
 });

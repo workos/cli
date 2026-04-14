@@ -1,3 +1,5 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { debug } from './debug.js';
 import type { TelemetryEvent, TelemetryRequest } from './telemetry-types.js';
 import { getCredentials } from '../lib/credentials.js';
@@ -23,6 +25,26 @@ export class TelemetryClient {
     this.events.push(event);
   }
 
+  /**
+   * Remove the last queued event of a given type.
+   * Used to swap a provisional event with an updated one.
+   */
+  replaceLastEventOfType(type: TelemetryEvent['type']): void {
+    for (let i = this.events.length - 1; i >= 0; i--) {
+      if (this.events[i].type === type) {
+        this.events.splice(i, 1);
+        return;
+      }
+    }
+  }
+
+  /**
+   * Queue multiple pre-formed events (used by store-forward recovery).
+   */
+  queueEvents(events: TelemetryEvent[]): void {
+    this.events.push(...events);
+  }
+
   async flush(): Promise<void> {
     if (this.events.length === 0) return;
     if (!this.gatewayUrl) {
@@ -31,7 +53,7 @@ export class TelemetryClient {
     }
 
     const payload: TelemetryRequest = { events: [...this.events] };
-    this.events = [];
+    // DO NOT clear this.events yet — retain until success
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -56,13 +78,32 @@ export class TelemetryClient {
         signal: controller.signal,
       });
 
-      if (!response.ok) {
+      if (response.ok) {
+        this.events = [];
+      } else {
         debug(`[Telemetry] Failed to send: ${response.status}`);
+        // Events remain in queue for store-forward to persist
       }
     } catch (error) {
       debug(`[Telemetry] Error sending events: ${error}`);
+      // Events remain in queue for store-forward to persist
     } finally {
       clearTimeout(timeout);
+    }
+  }
+
+  /**
+   * Synchronously write pending events to a file.
+   * Used as last resort in process.on('exit') handler.
+   */
+  persistToFile(filePath: string): void {
+    if (this.events.length === 0) return;
+    try {
+      mkdirSync(dirname(filePath), { recursive: true });
+      writeFileSync(filePath, JSON.stringify(this.events), 'utf-8');
+      this.events = [];
+    } catch {
+      // Silent failure — telemetry must never block exit
     }
   }
 }

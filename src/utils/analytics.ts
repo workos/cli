@@ -12,6 +12,8 @@ import type {
   CrashEvent,
 } from './telemetry-types.js';
 import { WORKOS_TELEMETRY_ENABLED } from '../lib/constants.js';
+import { getLlmGatewayUrl } from '../lib/settings.js';
+import { getCredentials } from '../lib/credentials.js';
 
 export class Analytics {
   private tags: Record<string, string | boolean | number | null | undefined> = {};
@@ -41,6 +43,24 @@ export class Analytics {
 
   setGatewayUrl(url: string) {
     telemetryClient.setGatewayUrl(url);
+  }
+
+  /**
+   * Initialize telemetry for non-installer commands.
+   * Sets gatewayUrl from default config and loads stored JWT if available.
+   * The installer flow sets these itself in run-with-core.ts; this covers
+   * management commands like `org list`, `auth login`, etc.
+   */
+  initForNonInstaller(): void {
+    if (!WORKOS_TELEMETRY_ENABLED) return;
+
+    const gatewayUrl = getLlmGatewayUrl();
+    telemetryClient.setGatewayUrl(gatewayUrl);
+
+    const creds = getCredentials();
+    if (creds?.accessToken) {
+      telemetryClient.setAccessToken(creds.accessToken);
+    }
   }
 
   setTag(key: string, value: string | boolean | number | null | undefined) {
@@ -209,6 +229,24 @@ export class Analytics {
     };
 
     telemetryClient.queueEvent(event);
+  }
+
+  /**
+   * Replace the last queued command event with updated data.
+   * Used by the command handler wrapper to swap the provisional event
+   * (queued by middleware) with the real one after the handler completes.
+   */
+  replaceLastCommandEvent(
+    name: string,
+    durationMs: number,
+    success: boolean,
+    options?: { error?: Error; flags?: string[] },
+  ) {
+    if (!WORKOS_TELEMETRY_ENABLED) return;
+
+    telemetryClient.replaceLastEventOfType('command');
+
+    this.commandExecuted(name, durationMs, success, options);
   }
 
   captureUnhandledCrash(error: Error, options?: { command?: string; version?: string }) {
