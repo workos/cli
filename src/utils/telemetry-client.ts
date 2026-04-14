@@ -69,7 +69,20 @@ export class TelemetryClient {
     const timeout = setTimeout(() => controller.abort(), 3000);
 
     try {
-      debug(`[Telemetry] Sending ${payload.events.length} events to ${this.gatewayUrl}/telemetry`);
+      const eventSummary = payload.events.map((e) => {
+        const attrs = e.attributes ?? {};
+        switch (e.type) {
+          case 'session.start': return `session.start(mode=${attrs['installer.mode']}, os=${attrs['env.os']})`;
+          case 'session.end': return `session.end(outcome=${attrs['installer.outcome']}, duration=${attrs['installer.duration_ms']}ms)`;
+          case 'step': return `step(${(e as any).name}, ${(e as any).durationMs}ms, success=${(e as any).success})`;
+          case 'agent.tool': return `agent.tool(${(e as any).toolName}, ${(e as any).durationMs}ms)`;
+          case 'agent.llm': return `agent.llm(${(e as any).model}, in=${(e as any).inputTokens}, out=${(e as any).outputTokens})`;
+          case 'command': return `command(${attrs['command.name']}, ${attrs['command.duration_ms']}ms, success=${attrs['command.success']})`;
+          case 'crash': return `crash(${attrs['crash.error_type']}: ${attrs['crash.error_message']})`;
+          default: return e.type;
+        }
+      }).join('\n  ');
+      debug(`[Telemetry] Sending ${payload.events.length} events to ${this.gatewayUrl}/telemetry:\n  ${eventSummary}`);
 
       const response = await fetch(`${this.gatewayUrl}/telemetry`, {
         method: 'POST',

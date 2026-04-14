@@ -321,6 +321,7 @@ interface EnvVarInfo {
 }
 
 const ENV_VAR_CATALOG: { name: string; effect: string }[] = [
+  { name: 'WORKOS_DEBUG', effect: 'Set to "1" to enable verbose debug logging for all commands' },
   { name: 'WORKOS_API_KEY', effect: 'Bypasses credential resolution — used directly for API calls' },
   { name: 'WORKOS_MODE', effect: 'Controls interaction behavior: human, agent, or CI' },
   { name: 'WORKOS_FORCE_TTY', effect: 'Forces human (non-JSON) output mode, even when piped' },

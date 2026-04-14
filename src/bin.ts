@@ -50,6 +50,13 @@ import { installStoreForward, recoverPendingEvents } from './utils/telemetry-sto
 import { commandTelemetryMiddleware } from './utils/command-telemetry.js';
 import { analytics } from './utils/analytics.js';
 
+// Enable debug logging for all commands via env var.
+// Subsumes the installer's --debug flag for non-installer commands.
+if (process.env.WORKOS_DEBUG === '1') {
+  const { enableDebugLogs } = await import('./utils/debug.js');
+  enableDebugLogs();
+}
+
 // Telemetry infrastructure: crash reporter, store-forward, and gateway init.
 // Must be before yargs so crashes during startup are captured.
 installCrashReporter();
