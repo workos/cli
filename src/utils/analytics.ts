@@ -121,11 +121,7 @@ export class Analytics {
     return undefined;
   }
 
-  /**
-   * Single chokepoint for converting an Error into telemetry-safe fields.
-   * All capture methods that record error details MUST go through this.
-   * Sanitizes the message via sanitizeMessage (homedir + secret patterns + truncation).
-   */
+  /** All capture methods that record error details MUST go through this. */
   private extractErrorFields(error: Error): { type: string; message: string } {
     return {
       type: error.name,

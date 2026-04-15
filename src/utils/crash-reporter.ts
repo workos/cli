@@ -3,14 +3,14 @@ import { homedir } from 'node:os';
 
 const MAX_STACK_LENGTH = 4096;
 const MAX_MESSAGE_LENGTH = 1024;
+const HOME = homedir();
 let isCrashing = false;
 
 /**
- * Redact known credential patterns from a string:
- * Bearer tokens, sk_test_/sk_live_ keys, raw JWTs.
- * Used by both sanitizeStack and sanitizeMessage so secrets that appear
- * in error messages (which Node echoes into stack first lines) are removed
- * regardless of which path captures them.
+ * Redact known credential patterns (Bearer tokens, sk_test_/sk_live_ keys,
+ * raw JWTs). Shared by sanitizeStack and sanitizeMessage because Node echoes
+ * `.message` into the leading `Error.stack` line, so secrets in messages also
+ * surface in stacks.
  */
 function redactSecrets(s: string): string {
   return s
@@ -19,15 +19,10 @@ function redactSecrets(s: string): string {
     .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '<jwt-redacted>');
 }
 
-/**
- * Sanitize stack trace: strip absolute paths to relative, remove home dir,
- * redact credentials that may appear via the leading "Error: <message>" line.
- */
+/** Sanitize stack trace for telemetry: homedir, absolute-path collapse, secrets, truncation. */
 export function sanitizeStack(stack: string | undefined): string {
   if (!stack) return '';
-  const home = homedir();
-  let sanitized = stack;
-  sanitized = sanitized.replaceAll(home, '~');
+  let sanitized = stack.replaceAll(HOME, '~');
   sanitized = sanitized.replace(/\/[^\s:]+\/(node_modules|dist|src)\//g, '$1/');
   sanitized = redactSecrets(sanitized);
   return sanitized.length > MAX_STACK_LENGTH
@@ -35,17 +30,10 @@ export function sanitizeStack(stack: string | undefined): string {
     : sanitized;
 }
 
-/**
- * Sanitize an error message before sending to telemetry.
- * Strips home directory and redacts known credential patterns
- * (Bearer tokens, sk_test_/sk_live_ keys, raw JWTs).
- * Truncates to MAX_MESSAGE_LENGTH chars.
- */
+/** Sanitize an error message for telemetry (homedir, secrets, truncation). */
 export function sanitizeMessage(msg: string | undefined): string {
   if (!msg) return '';
-  const home = homedir();
-  let sanitized = msg.replaceAll(home, '~');
-  sanitized = redactSecrets(sanitized);
+  const sanitized = redactSecrets(msg.replaceAll(HOME, '~'));
   return sanitized.length > MAX_MESSAGE_LENGTH
     ? sanitized.slice(0, MAX_MESSAGE_LENGTH) + '...[truncated]'
     : sanitized;
@@ -76,11 +64,8 @@ function reportCrashSync(error: Error): void {
   if (isCrashing) return;
   isCrashing = true;
   try {
-    // Sanitize the stack before passing to analytics
-    const sanitized = new Error(error.message);
-    sanitized.name = error.name;
-    sanitized.stack = sanitizeStack(error.stack);
-    analytics.captureUnhandledCrash(sanitized);
+    // captureUnhandledCrash sanitizes both message and stack at the analytics boundary.
+    analytics.captureUnhandledCrash(error);
   } catch {
     // Telemetry must never prevent exit
   }
