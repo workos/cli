@@ -7,6 +7,8 @@
  */
 
 import chalk from 'chalk';
+import { analytics } from './analytics.js';
+import { resolveErrorCode } from './exit-codes.js';
 import { formatTable, type TableColumn } from './table.js';
 import type { RecoveryHints } from './recovery-hints.js';
 import type { InteractionModeInfo } from './interaction-mode.js';
@@ -132,8 +134,9 @@ export function outputTable(columns: TableColumn[], rows: string[][], rawData?: 
   }
 }
 
-/** Exit with a structured error. Writes error then exits with code 1. */
 export function exitWithError(error: StructuredError): never {
   outputError(error);
-  process.exit(1);
+  const { reason, exit } = resolveErrorCode(error.code);
+  analytics.recordTermination(reason, error.code);
+  process.exit(exit);
 }

@@ -12,6 +12,20 @@ export interface TelemetryEvent {
 
 export type AuthMode = 'jwt' | 'claim_token' | 'api_key' | 'none';
 
+/**
+ * Structured outcome dimension for command events. Supersedes the boolean
+ * `command.success` as the primary categorization (`command.success` remains
+ * for backward-compat). Populated by `analytics.recordTermination()` just
+ * before `process.exit`.
+ */
+export type TerminationReason =
+  | 'success'
+  | 'cancelled'
+  | 'auth_required'
+  | 'validation_error'
+  | 'api_error'
+  | 'crash';
+
 export interface SessionStartEvent extends TelemetryEvent {
   type: 'session.start';
   attributes: {
@@ -74,6 +88,11 @@ export interface CommandEvent extends TelemetryEvent {
     'command.error_type'?: string;
     'command.error_message'?: string;
     'command.flags'?: string;
+    'termination.reason'?: TerminationReason;
+    'error.code'?: string;
+    'api.status'?: number;
+    'api.code'?: string;
+    'api.resource'?: string;
     'cli.version': string;
     'workos.user_id'?: string;
     'device.id': string;

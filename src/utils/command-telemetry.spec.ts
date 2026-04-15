@@ -3,11 +3,13 @@ import { resolveCanonicalName, extractUserFlags, commandTelemetryMiddleware, wra
 
 const mockCommandExecuted = vi.fn();
 const mockReplaceLastCommandEvent = vi.fn();
+const mockRecordTermination = vi.fn();
 
 vi.mock('./analytics.js', () => ({
   analytics: {
     commandExecuted: (...args: unknown[]) => mockCommandExecuted(...args),
     replaceLastCommandEvent: (...args: unknown[]) => mockReplaceLastCommandEvent(...args),
+    recordTermination: (...args: unknown[]) => mockRecordTermination(...args),
   },
 }));
 
@@ -115,6 +117,23 @@ describe('command-telemetry', () => {
       expect(duration).toBeGreaterThanOrEqual(100);
     });
 
+    it('records termination reason "success" after replacing the provisional event', async () => {
+      const handler = vi.fn().mockResolvedValue(undefined);
+      const wrapped = wrapCommandHandler(handler);
+
+      await wrapped({
+        __telemetryCommandName: 'organization.list',
+        __telemetryStartTime: Date.now(),
+        __telemetryFlags: [],
+      });
+
+      expect(mockRecordTermination).toHaveBeenCalledWith('success');
+      // Order matters: replace re-queues the event, then recordTermination patches it.
+      const replaceCallOrder = mockReplaceLastCommandEvent.mock.invocationCallOrder[0];
+      const terminationCallOrder = mockRecordTermination.mock.invocationCallOrder[0];
+      expect(terminationCallOrder).toBeGreaterThan(replaceCallOrder);
+    });
+
     it('replaces provisional event on failure with error', async () => {
       const error = new Error('command failed');
       const handler = vi.fn().mockRejectedValue(error);
@@ -133,6 +152,26 @@ describe('command-telemetry', () => {
         false,
         { error, flags: [] },
       );
+    });
+
+    it('records termination reason "crash" with error name on uncaught throw', async () => {
+      const error = new TypeError('boom');
+      const handler = vi.fn().mockRejectedValue(error);
+      const wrapped = wrapCommandHandler(handler);
+
+      await expect(
+        wrapped({
+          __telemetryCommandName: 'organization.list',
+          __telemetryStartTime: Date.now(),
+          __telemetryFlags: [],
+        }),
+      ).rejects.toBe(error);
+
+      expect(mockRecordTermination).toHaveBeenCalledWith('crash', 'TypeError');
+      // Same ordering contract as success path: replace then patch.
+      const replaceCallOrder = mockReplaceLastCommandEvent.mock.invocationCallOrder[0];
+      const terminationCallOrder = mockRecordTermination.mock.invocationCallOrder[0];
+      expect(terminationCallOrder).toBeGreaterThan(replaceCallOrder);
     });
 
     it('re-throws the original error', async () => {

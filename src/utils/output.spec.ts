@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
+const mockRecordTermination = vi.fn();
+vi.mock('./analytics.js', () => ({
+  analytics: {
+    recordTermination: (...args: unknown[]) => mockRecordTermination(...args),
+  },
+}));
+
 const {
   resolveOutputMode,
   resolveEffectiveOutputMode,
@@ -184,7 +191,11 @@ describe('output', () => {
   });
 
   describe('exitWithError', () => {
-    it('writes error and exits with code 1', () => {
+    beforeEach(() => {
+      mockRecordTermination.mockClear();
+    });
+
+    it('writes error and exits with code 1 for unknown codes', () => {
       setOutputMode('json');
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
@@ -194,6 +205,72 @@ describe('output', () => {
       const output = JSON.parse(errorSpy.mock.calls[0][0]);
       expect(output.error.code).toBe('bad');
       expect(exitSpy).toHaveBeenCalledWith(1);
+
+      errorSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
+
+    it('exits with code 4 for auth_required', () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+
+      exitWithError({ code: 'auth_required', message: 'Not logged in' });
+
+      expect(exitSpy).toHaveBeenCalledWith(4);
+      expect(mockRecordTermination).toHaveBeenCalledWith('auth_required', 'auth_required');
+
+      errorSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
+
+    it('exits with code 2 for cancelled', () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+
+      exitWithError({ code: 'cancelled', message: 'User cancelled' });
+
+      expect(exitSpy).toHaveBeenCalledWith(2);
+      expect(mockRecordTermination).toHaveBeenCalledWith('cancelled', 'cancelled');
+
+      errorSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
+
+    it('records validation_error reason for unknown codes', () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+
+      exitWithError({ code: 'bad_email', message: 'bad input' });
+
+      expect(mockRecordTermination).toHaveBeenCalledWith('validation_error', 'bad_email');
+      expect(exitSpy).toHaveBeenCalledWith(1);
+
+      errorSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
+
+    it('records api_error reason for http_* codes', () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+
+      exitWithError({ code: 'http_429', message: 'rate limited' });
+
+      expect(mockRecordTermination).toHaveBeenCalledWith('api_error', 'http_429');
+      expect(exitSpy).toHaveBeenCalledWith(1);
+
+      errorSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
+
+    it('writes stderr before recording termination (flush order)', () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+
+      exitWithError({ code: 'auth_required', message: 'bye' });
+
+      const stderrOrder = errorSpy.mock.invocationCallOrder[0];
+      const terminationOrder = mockRecordTermination.mock.invocationCallOrder[0];
+      expect(stderrOrder).toBeLessThan(terminationOrder);
 
       errorSpy.mockRestore();
       exitSpy.mockRestore();

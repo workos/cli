@@ -11,6 +11,7 @@ import type {
   AgentLLMEvent,
   CommandEvent,
   CrashEvent,
+  TerminationReason,
 } from './telemetry-types.js';
 import { WORKOS_TELEMETRY_ENABLED } from '../lib/constants.js';
 import { getLlmGatewayUrl, getVersion } from '../lib/settings.js';
@@ -308,6 +309,36 @@ export class Analytics {
     telemetryClient.replaceLastEventOfType('command');
 
     this.commandExecuted(name, durationMs, success, options);
+  }
+
+  /**
+   * Patch the last queued command event with structured termination info.
+   * Sets `termination.reason` and (optionally) `error.code` / `api.*`.
+   * Also syncs `command.success` so the legacy boolean stays consistent
+   * with the new reason enum.
+   *
+   * No-op when no command event is queued — covers helpers fired from
+   * installer context (session events) rather than command context.
+   *
+   * `apiContext` is included now so Phase 3 can enrich API-failure events
+   * without adding another method.
+   */
+  recordTermination(
+    reason: TerminationReason,
+    errorCode?: string,
+    apiContext?: { status?: number; code?: string; resource?: string },
+  ): void {
+    if (!WORKOS_TELEMETRY_ENABLED) return;
+
+    telemetryClient.patchLastEventOfType('command', (event) => {
+      const attrs = (event as CommandEvent).attributes;
+      attrs['termination.reason'] = reason;
+      attrs['command.success'] = reason === 'success';
+      if (errorCode) attrs['error.code'] = errorCode;
+      if (apiContext?.status !== undefined) attrs['api.status'] = apiContext.status;
+      if (apiContext?.code) attrs['api.code'] = apiContext.code;
+      if (apiContext?.resource) attrs['api.resource'] = apiContext.resource;
+    });
   }
 
   captureUnhandledCrash(error: Error, options?: { command?: string; version?: string }) {

@@ -81,14 +81,20 @@ export function wrapCommandHandler(
 
     try {
       await handler(argv);
-      // Replace the provisional event with the real one
+      // Replace the provisional event with the real one, then patch in
+      // the structured termination reason. Order matters: replace re-queues,
+      // then recordTermination mutates the re-queued event in place.
       analytics.replaceLastCommandEvent(commandName, Date.now() - startTime, true, { flags });
+      analytics.recordTermination('success');
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       analytics.replaceLastCommandEvent(commandName, Date.now() - startTime, false, {
         error: err,
         flags,
       });
+      // Uncaught throw = crash. Clean exits (exitWithError/exitWithCode)
+      // already recorded their own termination reason before exiting.
+      analytics.recordTermination('crash', err.name);
       throw error;
     } finally {
       // Flush in-process so events are sent immediately, not deferred to next invocation.

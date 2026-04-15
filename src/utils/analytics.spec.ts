@@ -7,6 +7,19 @@ const mockSetClaimTokenAuth = vi.fn();
 const mockQueueEvent = vi.fn();
 const mockFlush = vi.fn().mockResolvedValue(undefined);
 const mockReplaceLastEventOfType = vi.fn();
+// Holds the queue of events that patchLastEventOfType should operate on.
+// Tests populate via mockQueueEvent.mock.calls + manual reset.
+const patchedEvents: Array<{ type: string; attributes: Record<string, unknown> }> = [];
+const mockPatchLastEventOfType = vi.fn(
+  (type: string, mutator: (event: { type: string; attributes: Record<string, unknown> }) => void) => {
+    for (let i = patchedEvents.length - 1; i >= 0; i--) {
+      if (patchedEvents[i].type === type) {
+        mutator(patchedEvents[i]);
+        return;
+      }
+    }
+  },
+);
 
 vi.mock('./telemetry-client.js', () => ({
   telemetryClient: {
@@ -16,6 +29,10 @@ vi.mock('./telemetry-client.js', () => ({
     queueEvent: mockQueueEvent,
     flush: mockFlush,
     replaceLastEventOfType: (...args: unknown[]) => mockReplaceLastEventOfType(...args),
+    patchLastEventOfType: (
+      type: string,
+      mutator: (event: { type: string; attributes: Record<string, unknown> }) => void,
+    ) => mockPatchLastEventOfType(type, mutator),
   },
 }));
 
@@ -96,6 +113,10 @@ describe('Analytics', () => {
           queueEvent: mockQueueEvent,
           flush: mockFlush,
           replaceLastEventOfType: (...args: unknown[]) => mockReplaceLastEventOfType(...args),
+          patchLastEventOfType: (
+            type: string,
+            mutator: (event: { type: string; attributes: Record<string, unknown> }) => void,
+          ) => mockPatchLastEventOfType(type, mutator),
         },
       }));
       vi.doMock('../lib/settings.js', () => ({
@@ -729,6 +750,82 @@ describe('Analytics', () => {
         expect(event.attributes['command.error_message']).toBe('oops');
       });
     });
+
+    describe('recordTermination', () => {
+      beforeEach(() => {
+        patchedEvents.length = 0;
+      });
+
+      it('patches the last command event with termination.reason and syncs command.success', () => {
+        const commandEvent = {
+          type: 'command',
+          attributes: { 'command.success': true } as Record<string, unknown>,
+        };
+        patchedEvents.push(commandEvent);
+
+        analytics.recordTermination('auth_required', 'auth_required');
+
+        expect(mockPatchLastEventOfType).toHaveBeenCalledWith('command', expect.any(Function));
+        expect(commandEvent.attributes['termination.reason']).toBe('auth_required');
+        expect(commandEvent.attributes['error.code']).toBe('auth_required');
+        expect(commandEvent.attributes['command.success']).toBe(false);
+      });
+
+      it('sets command.success true only when reason is success', () => {
+        const commandEvent = {
+          type: 'command',
+          attributes: { 'command.success': false } as Record<string, unknown>,
+        };
+        patchedEvents.push(commandEvent);
+
+        analytics.recordTermination('success');
+
+        expect(commandEvent.attributes['termination.reason']).toBe('success');
+        expect(commandEvent.attributes['command.success']).toBe(true);
+        expect(commandEvent.attributes['error.code']).toBeUndefined();
+      });
+
+      it('applies api context when provided', () => {
+        const commandEvent = {
+          type: 'command',
+          attributes: {} as Record<string, unknown>,
+        };
+        patchedEvents.push(commandEvent);
+
+        analytics.recordTermination('api_error', 'http_500', {
+          status: 500,
+          code: 'internal_server_error',
+          resource: 'organizations',
+        });
+
+        expect(commandEvent.attributes['api.status']).toBe(500);
+        expect(commandEvent.attributes['api.code']).toBe('internal_server_error');
+        expect(commandEvent.attributes['api.resource']).toBe('organizations');
+      });
+
+      it('skips undefined api context fields', () => {
+        const commandEvent = {
+          type: 'command',
+          attributes: {} as Record<string, unknown>,
+        };
+        patchedEvents.push(commandEvent);
+
+        analytics.recordTermination('api_error', 'http_404', { resource: 'users' });
+
+        expect(commandEvent.attributes['api.resource']).toBe('users');
+        expect(commandEvent.attributes['api.status']).toBeUndefined();
+        expect(commandEvent.attributes['api.code']).toBeUndefined();
+      });
+
+      it('is a no-op when no command event is queued', () => {
+        // patchedEvents is empty — helper called from non-command context.
+        expect(() => analytics.recordTermination('cancelled')).not.toThrow();
+        // The mock still forwards the call; the real telemetryClient would
+        // iterate its queue and return silently. Smoke test: mutator never
+        // fires because there's no matching event.
+        expect(mockPatchLastEventOfType).toHaveBeenCalledWith('command', expect.any(Function));
+      });
+    });
   });
 
   describe('with telemetry disabled', () => {
@@ -743,6 +840,10 @@ describe('Analytics', () => {
           queueEvent: mockQueueEvent,
           flush: mockFlush,
           replaceLastEventOfType: (...args: unknown[]) => mockReplaceLastEventOfType(...args),
+          patchLastEventOfType: (
+            type: string,
+            mutator: (event: { type: string; attributes: Record<string, unknown> }) => void,
+          ) => mockPatchLastEventOfType(type, mutator),
         },
       }));
       vi.doMock('../lib/settings.js', () => ({
@@ -861,6 +962,15 @@ describe('Analytics', () => {
 
       expect(mockReplaceLastEventOfType).not.toHaveBeenCalled();
       expect(mockQueueEvent).not.toHaveBeenCalled();
+    });
+
+    it('recordTermination does nothing', async () => {
+      const { Analytics } = await import('./analytics.js');
+      const analytics = new Analytics();
+
+      analytics.recordTermination('success');
+
+      expect(mockPatchLastEventOfType).not.toHaveBeenCalled();
     });
   });
 });
