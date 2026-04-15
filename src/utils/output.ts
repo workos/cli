@@ -134,9 +134,14 @@ export function outputTable(columns: TableColumn[], rows: string[][], rawData?: 
   }
 }
 
-export function exitWithError(error: StructuredError): never {
+export function exitWithError(
+  error: StructuredError & {
+    apiContext?: { status?: number; code?: string; resource?: string };
+  },
+): never {
   outputError(error);
-  const { reason, exit } = resolveErrorCode(error.code);
-  analytics.recordTermination(reason, error.code);
+  const { reason: codeReason, exit } = resolveErrorCode(error.code);
+  const reason = error.apiContext ? 'api_error' : codeReason;
+  analytics.recordTermination(reason, error.code, error.apiContext);
   process.exit(exit);
 }

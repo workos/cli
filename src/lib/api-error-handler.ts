@@ -25,8 +25,9 @@ export function createApiErrorHandler(resourceName: string) {
   return (error: unknown): never => {
     // 1. Raw fetch errors (workos-api.ts)
     if (error instanceof WorkOSApiError) {
+      const code = error.code ?? `http_${error.statusCode}`;
       exitWithError({
-        code: error.code ?? `http_${error.statusCode}`,
+        code,
         message:
           error.statusCode === 401
             ? 'Invalid API key. Check your environment configuration.'
@@ -36,13 +37,19 @@ export function createApiErrorHandler(resourceName: string) {
                 ? error.errors.map((e) => e.message).join(', ')
                 : error.message,
         details: error.errors,
+        apiContext: {
+          status: error.statusCode,
+          code,
+          resource: resourceName,
+        },
       });
     }
 
     // 2. SDK exceptions (@workos-inc/node)
     if (isSdkException(error)) {
+      const code = error.code ?? `http_${error.status}`;
       exitWithError({
-        code: error.code ?? `http_${error.status}`,
+        code,
         message:
           error.status === 401
             ? 'Invalid API key. Check your environment configuration.'
@@ -52,6 +59,11 @@ export function createApiErrorHandler(resourceName: string) {
                 ? error.errors.map((e) => e.message).join(', ')
                 : error.message,
         details: error.errors,
+        apiContext: {
+          status: error.status,
+          code,
+          resource: resourceName,
+        },
       });
     }
 
@@ -59,6 +71,7 @@ export function createApiErrorHandler(resourceName: string) {
     exitWithError({
       code: 'unknown_error',
       message: error instanceof Error ? error.message : 'Unknown error',
+      apiContext: { resource: resourceName },
     });
   };
 }

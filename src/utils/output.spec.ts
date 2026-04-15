@@ -217,7 +217,7 @@ describe('output', () => {
       exitWithError({ code: 'auth_required', message: 'Not logged in' });
 
       expect(exitSpy).toHaveBeenCalledWith(4);
-      expect(mockRecordTermination).toHaveBeenCalledWith('auth_required', 'auth_required');
+      expect(mockRecordTermination).toHaveBeenCalledWith('auth_required', 'auth_required', undefined);
 
       errorSpy.mockRestore();
       exitSpy.mockRestore();
@@ -230,7 +230,7 @@ describe('output', () => {
       exitWithError({ code: 'cancelled', message: 'User cancelled' });
 
       expect(exitSpy).toHaveBeenCalledWith(2);
-      expect(mockRecordTermination).toHaveBeenCalledWith('cancelled', 'cancelled');
+      expect(mockRecordTermination).toHaveBeenCalledWith('cancelled', 'cancelled', undefined);
 
       errorSpy.mockRestore();
       exitSpy.mockRestore();
@@ -242,7 +242,7 @@ describe('output', () => {
 
       exitWithError({ code: 'bad_email', message: 'bad input' });
 
-      expect(mockRecordTermination).toHaveBeenCalledWith('validation_error', 'bad_email');
+      expect(mockRecordTermination).toHaveBeenCalledWith('validation_error', 'bad_email', undefined);
       expect(exitSpy).toHaveBeenCalledWith(1);
 
       errorSpy.mockRestore();
@@ -255,7 +255,7 @@ describe('output', () => {
 
       exitWithError({ code: 'http_429', message: 'rate limited' });
 
-      expect(mockRecordTermination).toHaveBeenCalledWith('api_error', 'http_429');
+      expect(mockRecordTermination).toHaveBeenCalledWith('api_error', 'http_429', undefined);
       expect(exitSpy).toHaveBeenCalledWith(1);
 
       errorSpy.mockRestore();
@@ -271,6 +271,26 @@ describe('output', () => {
       const stderrOrder = errorSpy.mock.invocationCallOrder[0];
       const terminationOrder = mockRecordTermination.mock.invocationCallOrder[0];
       expect(stderrOrder).toBeLessThan(terminationOrder);
+
+      errorSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
+
+    it('forwards apiContext to recordTermination', () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+
+      exitWithError({
+        code: 'http_500',
+        message: 'server exploded',
+        apiContext: { status: 500, code: 'http_500', resource: 'Organization' },
+      });
+
+      expect(mockRecordTermination).toHaveBeenCalledWith('api_error', 'http_500', {
+        status: 500,
+        code: 'http_500',
+        resource: 'Organization',
+      });
 
       errorSpy.mockRestore();
       exitSpy.mockRestore();

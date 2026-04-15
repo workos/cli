@@ -1,7 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { WorkOSApiError } from './workos-api.js';
-import { createApiErrorHandler } from './api-error-handler.js';
-import { setOutputMode } from '../utils/output.js';
+
+const mockRecordTermination = vi.fn();
+vi.mock('../utils/analytics.js', () => ({
+  analytics: {
+    recordTermination: (...args: unknown[]) => mockRecordTermination(...args),
+  },
+}));
+
+const { WorkOSApiError } = await import('./workos-api.js');
+const { createApiErrorHandler } = await import('./api-error-handler.js');
+const { setOutputMode } = await import('../utils/output.js');
 
 describe('createApiErrorHandler', () => {
   let stderrOutput: string[];
@@ -11,6 +19,7 @@ describe('createApiErrorHandler', () => {
     setOutputMode('json');
     stderrOutput = [];
     exitCode = undefined;
+    mockRecordTermination.mockClear();
     vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
       stderrOutput.push(args.map(String).join(' '));
     });
@@ -27,6 +36,24 @@ describe('createApiErrorHandler', () => {
 
   function parseError(): { error: { code: string; message: string; details?: unknown } } {
     return JSON.parse(stderrOutput[0]);
+  }
+
+  function makeSdkError(
+    status: number,
+    message: string,
+    extras?: { code?: string; requestID?: string; errors?: Array<{ message: string }> },
+  ) {
+    const err = new Error(message) as Error & {
+      status: number;
+      requestID: string;
+      code?: string;
+      errors?: Array<{ message: string }>;
+    };
+    err.status = status;
+    err.requestID = extras?.requestID ?? 'req_test';
+    if (extras?.code) err.code = extras.code;
+    if (extras?.errors) err.errors = extras.errors;
+    return err;
   }
 
   describe('WorkOSApiError (raw fetch)', () => {
@@ -69,24 +96,6 @@ describe('createApiErrorHandler', () => {
   });
 
   describe('SDK exceptions (@workos-inc/node)', () => {
-    function makeSdkError(
-      status: number,
-      message: string,
-      extras?: { code?: string; requestID?: string; errors?: Array<{ message: string }> },
-    ) {
-      const err = new Error(message) as Error & {
-        status: number;
-        requestID: string;
-        code?: string;
-        errors?: Array<{ message: string }>;
-      };
-      err.status = status;
-      err.requestID = extras?.requestID ?? 'req_test';
-      if (extras?.code) err.code = extras.code;
-      if (extras?.errors) err.errors = extras.errors;
-      return err;
-    }
-
     it('handles 401 (UnauthorizedException)', () => {
       const handler = createApiErrorHandler('Organization');
       handler(makeSdkError(401, 'Could not authorize the request'));
@@ -151,6 +160,69 @@ describe('createApiErrorHandler', () => {
       const handler = createApiErrorHandler('Thing');
       handler(null);
       expect(parseError().error.code).toBe('unknown_error');
+    });
+  });
+
+  describe('telemetry apiContext', () => {
+    // Note: process.exit is mocked (doesn't actually exit), so after the
+    // matched branch's exitWithError returns, the handler continues to the
+    // fallback branch and emits a second recordTermination call. We assert
+    // on `mock.calls[0]` (the branch-of-interest call) to keep branch
+    // assertions isolated from the trailing fallback.
+
+    it('WorkOSApiError path populates apiContext with status/code/resource', () => {
+      const handler = createApiErrorHandler('Organization');
+      handler(new WorkOSApiError('Unauthorized', 401));
+
+      expect(mockRecordTermination.mock.calls[0]).toEqual([
+        'api_error',
+        'http_401',
+        { status: 401, code: 'http_401', resource: 'Organization' },
+      ]);
+    });
+
+    it('WorkOSApiError uses error.code in apiContext when present', () => {
+      const handler = createApiErrorHandler('User');
+      handler(new WorkOSApiError('Validation failed', 422, 'validation_error'));
+
+      expect(mockRecordTermination.mock.calls[0]).toEqual([
+        'api_error',
+        'validation_error',
+        { status: 422, code: 'validation_error', resource: 'User' },
+      ]);
+    });
+
+    it('SDK exception path populates apiContext with status/code/resource', () => {
+      const handler = createApiErrorHandler('Organization');
+      handler(makeSdkError(429, 'Rate limit exceeded', { code: 'rate_limited' }));
+
+      expect(mockRecordTermination.mock.calls[0]).toEqual([
+        'api_error',
+        'rate_limited',
+        { status: 429, code: 'rate_limited', resource: 'Organization' },
+      ]);
+    });
+
+    it('SDK exception falls back to http_{status} when code absent', () => {
+      const handler = createApiErrorHandler('Role');
+      handler(makeSdkError(404, 'Not found'));
+
+      expect(mockRecordTermination.mock.calls[0]).toEqual([
+        'api_error',
+        'http_404',
+        { status: 404, code: 'http_404', resource: 'Role' },
+      ]);
+    });
+
+    it('fallback (generic Error) populates resource only — no status/code', () => {
+      const handler = createApiErrorHandler('Thing');
+      handler(new Error('Network timeout'));
+
+      expect(mockRecordTermination.mock.calls[0]).toEqual([
+        'api_error',
+        'unknown_error',
+        { resource: 'Thing' },
+      ]);
     });
   });
 });
