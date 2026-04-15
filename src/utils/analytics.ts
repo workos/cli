@@ -15,6 +15,7 @@ import { WORKOS_TELEMETRY_ENABLED } from '../lib/constants.js';
 import { getLlmGatewayUrl, getVersion } from '../lib/settings.js';
 import { getCredentials } from '../lib/credentials.js';
 import { getActiveEnvironment, isUnclaimedEnvironment } from '../lib/config-store.js';
+import { sanitizeMessage, sanitizeStack } from './crash-reporter.js';
 
 export class Analytics {
   private tags: Record<string, string | boolean | number | null | undefined> = {};
@@ -110,13 +111,26 @@ export class Analytics {
     if (!WORKOS_TELEMETRY_ENABLED) return;
 
     debug('[Analytics] captureException:', error.message, properties);
-    this.tags['error.type'] = error.name;
-    this.tags['error.message'] = error.message;
+    const { type, message } = this.extractErrorFields(error);
+    this.tags['error.type'] = type;
+    this.tags['error.message'] = message;
   }
 
   async getFeatureFlag(_flagKey: string): Promise<string | boolean | undefined> {
     // Feature flags not implemented yet
     return undefined;
+  }
+
+  /**
+   * Single chokepoint for converting an Error into telemetry-safe fields.
+   * All capture methods that record error details MUST go through this.
+   * Sanitizes the message via sanitizeMessage (homedir + secret patterns + truncation).
+   */
+  private extractErrorFields(error: Error): { type: string; message: string } {
+    return {
+      type: error.name,
+      message: sanitizeMessage(error.message),
+    };
   }
 
   private detectCiProvider(): string | undefined {
@@ -179,7 +193,7 @@ export class Analytics {
       startTimestamp: new Date(Date.now() - durationMs).toISOString(),
       durationMs,
       success,
-      error: error ? { type: error.name, message: error.message } : undefined,
+      error: error ? this.extractErrorFields(error) : undefined,
     };
 
     telemetryClient.queueEvent(event);
@@ -231,6 +245,8 @@ export class Analytics {
   ) {
     if (!WORKOS_TELEMETRY_ENABLED) return;
 
+    const errorFields = options?.error ? this.extractErrorFields(options.error) : undefined;
+
     const event: CommandEvent = {
       type: 'command',
       sessionId: this.sessionId,
@@ -241,10 +257,10 @@ export class Analytics {
         'command.success': success,
         'cli.version': getVersion(),
         ...(this.distinctId ? { 'workos.user_id': this.distinctId } : {}),
-        ...(options?.error
+        ...(errorFields
           ? {
-              'command.error_type': options.error.name,
-              'command.error_message': options.error.message,
+              'command.error_type': errorFields.type,
+              'command.error_message': errorFields.message,
             }
           : {}),
         ...(options?.flags?.length
@@ -278,17 +294,16 @@ export class Analytics {
   captureUnhandledCrash(error: Error, options?: { command?: string; version?: string }) {
     if (!WORKOS_TELEMETRY_ENABLED) return;
 
-    const stack = error.stack ?? '';
-    const truncatedStack = stack.length > 4096 ? stack.slice(0, 4096) : stack;
+    const { type, message } = this.extractErrorFields(error);
 
     const event: CrashEvent = {
       type: 'crash',
       sessionId: this.sessionId,
       timestamp: new Date().toISOString(),
       attributes: {
-        'crash.error_type': error.name,
-        'crash.error_message': error.message,
-        'crash.stack': truncatedStack,
+        'crash.error_type': type,
+        'crash.error_message': message,
+        'crash.stack': sanitizeStack(error.stack),
         ...(options?.command ? { 'crash.command': options.command } : {}),
         'cli.version': options?.version ?? getVersion(),
         ...(this.distinctId ? { 'workos.user_id': this.distinctId } : {}),

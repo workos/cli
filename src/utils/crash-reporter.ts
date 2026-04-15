@@ -2,11 +2,26 @@ import { analytics } from './analytics.js';
 import { homedir } from 'node:os';
 
 const MAX_STACK_LENGTH = 4096;
+const MAX_MESSAGE_LENGTH = 1024;
 let isCrashing = false;
 
 /**
- * Sanitize stack trace: strip absolute paths to relative, remove home dir.
- * Prevents leaking file system layout in telemetry events.
+ * Redact known credential patterns from a string:
+ * Bearer tokens, sk_test_/sk_live_ keys, raw JWTs.
+ * Used by both sanitizeStack and sanitizeMessage so secrets that appear
+ * in error messages (which Node echoes into stack first lines) are removed
+ * regardless of which path captures them.
+ */
+function redactSecrets(s: string): string {
+  return s
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/g, 'Bearer <redacted>')
+    .replace(/\bsk_(test|live)_[A-Za-z0-9]+/g, 'sk_<redacted>')
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '<jwt-redacted>');
+}
+
+/**
+ * Sanitize stack trace: strip absolute paths to relative, remove home dir,
+ * redact credentials that may appear via the leading "Error: <message>" line.
  */
 export function sanitizeStack(stack: string | undefined): string {
   if (!stack) return '';
@@ -14,8 +29,25 @@ export function sanitizeStack(stack: string | undefined): string {
   let sanitized = stack;
   sanitized = sanitized.replaceAll(home, '~');
   sanitized = sanitized.replace(/\/[^\s:]+\/(node_modules|dist|src)\//g, '$1/');
+  sanitized = redactSecrets(sanitized);
   return sanitized.length > MAX_STACK_LENGTH
     ? sanitized.slice(0, MAX_STACK_LENGTH) + '\n...[truncated]'
+    : sanitized;
+}
+
+/**
+ * Sanitize an error message before sending to telemetry.
+ * Strips home directory and redacts known credential patterns
+ * (Bearer tokens, sk_test_/sk_live_ keys, raw JWTs).
+ * Truncates to MAX_MESSAGE_LENGTH chars.
+ */
+export function sanitizeMessage(msg: string | undefined): string {
+  if (!msg) return '';
+  const home = homedir();
+  let sanitized = msg.replaceAll(home, '~');
+  sanitized = redactSecrets(sanitized);
+  return sanitized.length > MAX_MESSAGE_LENGTH
+    ? sanitized.slice(0, MAX_MESSAGE_LENGTH) + '...[truncated]'
     : sanitized;
 }
 

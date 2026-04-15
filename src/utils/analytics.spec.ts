@@ -514,13 +514,15 @@ describe('Analytics', () => {
         );
       });
 
-      it('truncates stack traces to 4KB', () => {
+      it('truncates stack traces to 4KB with a truncation marker', () => {
         const error = new Error('Big stack');
         error.stack = 'x'.repeat(5000);
         analytics.captureUnhandledCrash(error);
 
         const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'crash')[0];
-        expect(event.attributes['crash.stack'].length).toBe(4096);
+        // sanitizeStack truncates at 4096 and appends '\n...[truncated]'
+        expect(event.attributes['crash.stack']).toMatch(/\n\.\.\.\[truncated\]$/);
+        expect(event.attributes['crash.stack'].startsWith('x'.repeat(4096))).toBe(true);
       });
 
       it('falls back to package version when not explicitly provided', () => {
