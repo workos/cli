@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { debug } from './debug.js';
 import { telemetryClient } from './telemetry-client.js';
 import type {
+  AuthMode,
   SessionStartEvent,
   SessionEndEvent,
   StepEvent,
@@ -15,6 +16,7 @@ import { WORKOS_TELEMETRY_ENABLED } from '../lib/constants.js';
 import { getLlmGatewayUrl, getVersion } from '../lib/settings.js';
 import { getCredentials } from '../lib/credentials.js';
 import { getActiveEnvironment, isUnclaimedEnvironment } from '../lib/config-store.js';
+import { getDeviceId } from '../lib/device-id.js';
 import { sanitizeMessage, sanitizeStack } from './crash-reporter.js';
 
 export class Analytics {
@@ -23,6 +25,7 @@ export class Analytics {
   private sessionStartTime: Date;
   private distinctId?: string;
   private mode?: 'cli' | 'tui' | 'headless';
+  private authMode: AuthMode = 'none';
 
   // Agent metrics tracking
   private totalInputTokens = 0;
@@ -41,6 +44,14 @@ export class Analytics {
 
   setAccessToken(token: string) {
     telemetryClient.setAccessToken(token);
+  }
+
+  /**
+   * Set the auth mode explicitly. Used by installer flows where credential
+   * resolution happens outside `initForNonInstaller` (see run-with-core.ts).
+   */
+  setAuthMode(mode: AuthMode) {
+    this.authMode = mode;
   }
 
   setGatewayUrl(url: string) {
@@ -69,6 +80,7 @@ export class Analytics {
     const creds = getCredentials();
     if (creds?.accessToken) {
       telemetryClient.setAccessToken(creds.accessToken);
+      this.authMode = 'jwt';
     }
     if (creds?.userId) {
       this.distinctId = creds.userId;
@@ -82,9 +94,18 @@ export class Analytics {
         telemetryClient.setClaimTokenAuth(env.clientId, env.claimToken);
         // Tag distinctId so unclaimed sessions are identifiable in analytics
         this.distinctId = this.distinctId ?? `unclaimed:${env.clientId}`;
+        if (this.authMode === 'none') this.authMode = 'claim_token';
       }
     } catch {
       // Config-store failure is non-fatal for telemetry
+    }
+
+    // WORKOS_API_KEY covers API-key-only users. Lowest priority — JWT and
+    // claim-token paths actually deliver telemetry, while api_key is silently
+    // dropped by the gateway guard; tagging it correctly still matters for
+    // cohort analysis.
+    if (this.authMode === 'none' && process.env.WORKOS_API_KEY) {
+      this.authMode = 'api_key';
     }
   }
 
@@ -149,6 +170,8 @@ export class Analytics {
     const ciProvider = this.detectCiProvider();
 
     return {
+      'device.id': getDeviceId(),
+      'auth.mode': this.authMode,
       'env.os': process.platform,
       'env.os_version': osVersion,
       'env.node_version': process.version,

@@ -242,6 +242,10 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         // Check for active environment with credentials (covers unclaimed environments)
         const activeEnv = getActiveEnvironment();
         if (activeEnv?.clientId && activeEnv?.apiKey) {
+          // Classify auth.mode: unclaimed envs deliver telemetry via claim token,
+          // claimed envs with just an API key use api_key path (dropped by gateway,
+          // but still worth tagging for cohort analysis).
+          analytics.setAuthMode(isUnclaimedEnvironment(activeEnv) ? 'claim_token' : 'api_key');
           return true;
         }
 
@@ -257,6 +261,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         if (creds) {
           analytics.setAccessToken(creds.accessToken);
           analytics.setDistinctId(creds.userId);
+          analytics.setAuthMode('jwt');
         }
         return true;
       }),

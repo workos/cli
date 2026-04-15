@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // Mock telemetry client
 const mockSetGatewayUrl = vi.fn();
 const mockSetAccessToken = vi.fn();
+const mockSetClaimTokenAuth = vi.fn();
 const mockQueueEvent = vi.fn();
 const mockFlush = vi.fn().mockResolvedValue(undefined);
 const mockReplaceLastEventOfType = vi.fn();
@@ -11,6 +12,7 @@ vi.mock('./telemetry-client.js', () => ({
   telemetryClient: {
     setGatewayUrl: mockSetGatewayUrl,
     setAccessToken: mockSetAccessToken,
+    setClaimTokenAuth: mockSetClaimTokenAuth,
     queueEvent: mockQueueEvent,
     flush: mockFlush,
     replaceLastEventOfType: (...args: unknown[]) => mockReplaceLastEventOfType(...args),
@@ -25,6 +27,12 @@ vi.mock('./debug.js', () => ({
 // Mock uuid to return predictable values
 vi.mock('uuid', () => ({
   v4: () => 'test-session-id-123',
+}));
+
+// Deterministic device ID for assertions
+const TEST_DEVICE_ID = '11111111-1111-4111-8111-111111111111';
+vi.mock('../lib/device-id.js', () => ({
+  getDeviceId: () => TEST_DEVICE_ID,
 }));
 
 // Mock settings for initForNonInstaller
@@ -46,6 +54,13 @@ vi.mock('../lib/settings.js', () => ({
 const mockGetCredentials = vi.fn();
 vi.mock('../lib/credentials.js', () => ({
   getCredentials: () => mockGetCredentials(),
+}));
+
+// Mock config-store so auth.mode derivation can exercise unclaimed-env path
+const mockGetActiveEnvironment = vi.fn();
+vi.mock('../lib/config-store.js', () => ({
+  getActiveEnvironment: () => mockGetActiveEnvironment(),
+  isUnclaimedEnvironment: (env: { type: string }) => env?.type === 'unclaimed',
 }));
 
 describe('Analytics', () => {
@@ -77,6 +92,7 @@ describe('Analytics', () => {
         telemetryClient: {
           setGatewayUrl: mockSetGatewayUrl,
           setAccessToken: mockSetAccessToken,
+          setClaimTokenAuth: mockSetClaimTokenAuth,
           queueEvent: mockQueueEvent,
           flush: mockFlush,
           replaceLastEventOfType: (...args: unknown[]) => mockReplaceLastEventOfType(...args),
@@ -90,9 +106,24 @@ describe('Analytics', () => {
       vi.doMock('../lib/credentials.js', () => ({
         getCredentials: () => mockGetCredentials(),
       }));
+      vi.doMock('../lib/device-id.js', () => ({
+        getDeviceId: () => TEST_DEVICE_ID,
+      }));
+      vi.doMock('../lib/config-store.js', () => ({
+        getActiveEnvironment: () => mockGetActiveEnvironment(),
+        isUnclaimedEnvironment: (env: { type: string }) => env?.type === 'unclaimed',
+      }));
+      // Default: no credentials, no unclaimed env, no API key
+      mockGetCredentials.mockReturnValue(null);
+      mockGetActiveEnvironment.mockReturnValue(null);
+      delete process.env.WORKOS_API_KEY;
       const module = await import('./analytics.js');
       Analytics = module.Analytics;
       analytics = new Analytics();
+    });
+
+    afterEach(() => {
+      delete process.env.WORKOS_API_KEY;
     });
 
     describe('setDistinctId', () => {
@@ -558,6 +589,117 @@ describe('Analytics', () => {
       });
     });
 
+    describe('auth.mode derivation', () => {
+      const readAuthMode = () => {
+        analytics.commandExecuted('test', 1, true);
+        const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'command')[0];
+        return event.attributes['auth.mode'];
+      };
+
+      it('derives jwt when stored credentials have an access token', () => {
+        mockGetCredentials.mockReturnValue({ accessToken: 'jwt-token', userId: 'user-1' });
+        analytics.initForNonInstaller();
+
+        expect(readAuthMode()).toBe('jwt');
+      });
+
+      it('derives claim_token when only an unclaimed environment is active', () => {
+        mockGetCredentials.mockReturnValue(null);
+        mockGetActiveEnvironment.mockReturnValue({
+          type: 'unclaimed',
+          name: 'dev',
+          apiKey: 'sk_test',
+          clientId: 'client_123',
+          claimToken: 'claim_tok',
+        });
+        analytics.initForNonInstaller();
+
+        expect(mockSetClaimTokenAuth).toHaveBeenCalledWith('client_123', 'claim_tok');
+        expect(readAuthMode()).toBe('claim_token');
+      });
+
+      it('derives api_key when only WORKOS_API_KEY is set', () => {
+        mockGetCredentials.mockReturnValue(null);
+        mockGetActiveEnvironment.mockReturnValue(null);
+        process.env.WORKOS_API_KEY = 'sk_live_abc';
+        analytics.initForNonInstaller();
+
+        expect(readAuthMode()).toBe('api_key');
+      });
+
+      it('derives none when no credentials are available', () => {
+        mockGetCredentials.mockReturnValue(null);
+        mockGetActiveEnvironment.mockReturnValue(null);
+        analytics.initForNonInstaller();
+
+        expect(readAuthMode()).toBe('none');
+      });
+
+      it('prefers jwt over claim_token when both are present', () => {
+        mockGetCredentials.mockReturnValue({ accessToken: 'jwt-token' });
+        mockGetActiveEnvironment.mockReturnValue({
+          type: 'unclaimed',
+          name: 'dev',
+          apiKey: 'sk_test',
+          clientId: 'client_123',
+          claimToken: 'claim_tok',
+        });
+        analytics.initForNonInstaller();
+
+        expect(readAuthMode()).toBe('jwt');
+      });
+
+      it('prefers claim_token over api_key when both are present', () => {
+        mockGetCredentials.mockReturnValue(null);
+        mockGetActiveEnvironment.mockReturnValue({
+          type: 'unclaimed',
+          name: 'dev',
+          apiKey: 'sk_test',
+          clientId: 'client_123',
+          claimToken: 'claim_tok',
+        });
+        process.env.WORKOS_API_KEY = 'sk_live_abc';
+        analytics.initForNonInstaller();
+
+        expect(readAuthMode()).toBe('claim_token');
+      });
+
+      it('can be overridden by setAuthMode (installer flow)', () => {
+        analytics.setAuthMode('api_key');
+        expect(readAuthMode()).toBe('api_key');
+      });
+    });
+
+    describe('device.id and auth.mode on events', () => {
+      it('includes device.id on session.start events', () => {
+        analytics.sessionStart('cli', '1.0.0');
+        const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'session.start')[0];
+        expect(event.attributes['device.id']).toBe(TEST_DEVICE_ID);
+        expect(event.attributes['device.id']).toMatch(/^[0-9a-f-]{36}$/i);
+      });
+
+      it('includes device.id and auth.mode on command events', () => {
+        analytics.commandExecuted('org.list', 100, true);
+        const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'command')[0];
+        expect(event.attributes['device.id']).toBe(TEST_DEVICE_ID);
+        expect(event.attributes['auth.mode']).toBe('none');
+      });
+
+      it('includes device.id and auth.mode on crash events', () => {
+        analytics.captureUnhandledCrash(new Error('boom'));
+        const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'crash')[0];
+        expect(event.attributes['device.id']).toBe(TEST_DEVICE_ID);
+        expect(event.attributes['auth.mode']).toBe('none');
+      });
+
+      it('includes device.id and auth.mode on session.end events', async () => {
+        await analytics.shutdown('success');
+        const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'session.end')[0];
+        expect(event.attributes['device.id']).toBe(TEST_DEVICE_ID);
+        expect(event.attributes['auth.mode']).toBe('none');
+      });
+    });
+
     describe('replaceLastCommandEvent', () => {
       it('removes last command event and queues a new one', () => {
         analytics.replaceLastCommandEvent('organization.list', 150, true, { flags: ['json'] });
@@ -597,6 +739,7 @@ describe('Analytics', () => {
         telemetryClient: {
           setGatewayUrl: mockSetGatewayUrl,
           setAccessToken: mockSetAccessToken,
+          setClaimTokenAuth: mockSetClaimTokenAuth,
           queueEvent: mockQueueEvent,
           flush: mockFlush,
           replaceLastEventOfType: (...args: unknown[]) => mockReplaceLastEventOfType(...args),
@@ -609,6 +752,13 @@ describe('Analytics', () => {
       }));
       vi.doMock('../lib/credentials.js', () => ({
         getCredentials: () => mockGetCredentials(),
+      }));
+      vi.doMock('../lib/device-id.js', () => ({
+        getDeviceId: () => TEST_DEVICE_ID,
+      }));
+      vi.doMock('../lib/config-store.js', () => ({
+        getActiveEnvironment: () => mockGetActiveEnvironment(),
+        isUnclaimedEnvironment: (env: { type: string }) => env?.type === 'unclaimed',
       }));
     });
 

@@ -10,6 +10,8 @@ export interface TelemetryEvent {
   attributes?: Record<string, string | number | boolean>;
 }
 
+export type AuthMode = 'jwt' | 'claim_token' | 'api_key' | 'none';
+
 export interface SessionStartEvent extends TelemetryEvent {
   type: 'session.start';
   attributes: {
@@ -17,6 +19,8 @@ export interface SessionStartEvent extends TelemetryEvent {
     'installer.mode': 'cli' | 'tui' | 'headless';
     'workos.user_id'?: string;
     'workos.org_id'?: string;
+    'device.id': string;
+    'auth.mode': AuthMode;
     'env.os': string;
     'env.os_version': string;
     'env.node_version': string;
@@ -72,6 +76,8 @@ export interface CommandEvent extends TelemetryEvent {
     'command.flags'?: string;
     'cli.version': string;
     'workos.user_id'?: string;
+    'device.id': string;
+    'auth.mode': AuthMode;
     'env.os': string;
     'env.os_version': string;
     'env.node_version': string;
@@ -90,6 +96,8 @@ export interface CrashEvent extends TelemetryEvent {
     'crash.command'?: string;
     'cli.version': string;
     'workos.user_id'?: string;
+    'device.id': string;
+    'auth.mode': AuthMode;
     'env.os': string;
     'env.os_version': string;
     'env.node_version': string;
