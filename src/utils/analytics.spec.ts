@@ -506,7 +506,7 @@ describe('Analytics', () => {
               'crash.error_message': 'Unexpected failure',
               'crash.stack': 'Error: Unexpected failure\n    at foo.ts:1',
               'crash.command': 'install',
-              'installer.version': '1.0.0',
+              'cli.version': '1.0.0',
               'env.os': expect.any(String),
               'env.node_version': expect.any(String),
             }),
@@ -523,11 +523,13 @@ describe('Analytics', () => {
         expect(event.attributes['crash.stack'].length).toBe(4096);
       });
 
-      it('defaults version to unknown when not provided', () => {
+      it('falls back to package version when not explicitly provided', () => {
         analytics.captureUnhandledCrash(new Error('test'));
 
         const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'crash')[0];
-        expect(event.attributes['installer.version']).toBe('unknown');
+        // Falls back to getVersion() which reads from package.json — any real version string
+        expect(event.attributes['cli.version']).toEqual(expect.any(String));
+        expect(event.attributes['cli.version']).not.toBe('');
       });
     });
 

@@ -70,6 +70,8 @@ export interface CommandEvent extends TelemetryEvent {
     'command.error_type'?: string;
     'command.error_message'?: string;
     'command.flags'?: string;
+    'cli.version': string;
+    'workos.user_id'?: string;
     'env.os': string;
     'env.os_version': string;
     'env.node_version': string;
@@ -86,7 +88,8 @@ export interface CrashEvent extends TelemetryEvent {
     'crash.error_message': string;
     'crash.stack': string;
     'crash.command'?: string;
-    'installer.version': string;
+    'cli.version': string;
+    'workos.user_id'?: string;
     'env.os': string;
     'env.os_version': string;
     'env.node_version': string;

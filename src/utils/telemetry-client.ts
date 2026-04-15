@@ -11,6 +11,8 @@ import { getCredentials } from '../lib/credentials.js';
 export class TelemetryClient {
   private events: TelemetryEvent[] = [];
   private accessToken: string | null = null;
+  private claimToken: string | null = null;
+  private clientId: string | null = null;
   private gatewayUrl: string | null = null;
 
   setGatewayUrl(url: string) {
@@ -19,6 +21,16 @@ export class TelemetryClient {
 
   setAccessToken(token: string) {
     this.accessToken = token;
+  }
+
+  /**
+   * Set claim-token auth for unclaimed environments.
+   * The API's LlmGatewayGuard accepts either a JWT (Bearer) or claim token
+   * (x-workos-claim-token + x-workos-client-id headers).
+   */
+  setClaimTokenAuth(clientId: string, claimToken: string) {
+    this.clientId = clientId;
+    this.claimToken = claimToken;
   }
 
   queueEvent(event: TelemetryEvent) {
@@ -69,6 +81,10 @@ export class TelemetryClient {
     const token = freshCreds?.accessToken ?? this.accessToken;
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
+    } else if (this.claimToken && this.clientId) {
+      // Unclaimed environment auth path — guard accepts this instead of JWT
+      headers['x-workos-claim-token'] = this.claimToken;
+      headers['x-workos-client-id'] = this.clientId;
     }
 
     const controller = new AbortController();

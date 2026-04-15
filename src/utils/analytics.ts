@@ -12,8 +12,9 @@ import type {
   CrashEvent,
 } from './telemetry-types.js';
 import { WORKOS_TELEMETRY_ENABLED } from '../lib/constants.js';
-import { getLlmGatewayUrl } from '../lib/settings.js';
+import { getLlmGatewayUrl, getVersion } from '../lib/settings.js';
 import { getCredentials } from '../lib/credentials.js';
+import { getActiveEnvironment, isUnclaimedEnvironment } from '../lib/config-store.js';
 
 export class Analytics {
   private tags: Record<string, string | boolean | number | null | undefined> = {};
@@ -47,7 +48,14 @@ export class Analytics {
 
   /**
    * Initialize telemetry for non-installer commands.
-   * Sets gatewayUrl from default config and loads stored JWT if available.
+   * Sets gatewayUrl from default config and loads auth credentials.
+   *
+   * Auth priority:
+   *   1. Stored JWT (Bearer) — logged-in users
+   *   2. Claim token — unclaimed environments
+   *   3. None — API-key-only users (telemetry silently dropped by API guard)
+   *
+   * Also captures the user/environment identifier for per-user analytics.
    * The installer flow sets these itself in run-with-core.ts; this covers
    * management commands like `org list`, `auth login`, etc.
    */
@@ -60,6 +68,22 @@ export class Analytics {
     const creds = getCredentials();
     if (creds?.accessToken) {
       telemetryClient.setAccessToken(creds.accessToken);
+    }
+    if (creds?.userId) {
+      this.distinctId = creds.userId;
+    }
+
+    // Check for unclaimed environment — fall back to claim-token auth
+    // so unclaimed users' telemetry still reaches the backend.
+    try {
+      const env = getActiveEnvironment();
+      if (env && isUnclaimedEnvironment(env)) {
+        telemetryClient.setClaimTokenAuth(env.clientId, env.claimToken);
+        // Tag distinctId so unclaimed sessions are identifiable in analytics
+        this.distinctId = this.distinctId ?? `unclaimed:${env.clientId}`;
+      }
+    } catch {
+      // Config-store failure is non-fatal for telemetry
     }
   }
 
@@ -215,6 +239,8 @@ export class Analytics {
         'command.name': name,
         'command.duration_ms': durationMs,
         'command.success': success,
+        'cli.version': getVersion(),
+        ...(this.distinctId ? { 'workos.user_id': this.distinctId } : {}),
         ...(options?.error
           ? {
               'command.error_type': options.error.name,
@@ -264,7 +290,8 @@ export class Analytics {
         'crash.error_message': error.message,
         'crash.stack': truncatedStack,
         ...(options?.command ? { 'crash.command': options.command } : {}),
-        'installer.version': options?.version ?? 'unknown',
+        'cli.version': options?.version ?? getVersion(),
+        ...(this.distinctId ? { 'workos.user_id': this.distinctId } : {}),
         ...this.getEnvFingerprint(),
       },
     };
