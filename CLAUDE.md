@@ -48,6 +48,39 @@ pnpm typecheck    # Type check
 2. Register in `src/bin.ts` and update `src/utils/help-json.ts` command registry
 3. Include JSON mode tests in spec file
 
+## Telemetry Wiring for New Commands
+
+All commands auto-emit a `command` telemetry event with name, duration, and success/failure. How you register the command determines whether this is automatic:
+
+**Subcommands via `registerSubcommand()`** → auto-wired. Telemetry happens for free.
+
+```typescript
+.command('user', 'Manage users', (yargs) => {
+  registerSubcommand(yargs, 'reset-password', '...', (y) => y,
+    async (argv) => { await runResetPassword(argv); },  // auto-wrapped
+  );
+})
+```
+
+**Top-level `.command()` with inline handler** → MUST manually wrap with `wrapCommandHandler()`:
+
+```typescript
+.command(
+  'migrate',
+  'Migrate from another provider',
+  (yargs) => yargs.options({...}),
+  wrapCommandHandler(async (argv) => {  // <-- REQUIRED
+    await runMigrate(argv);
+  }),
+)
+```
+
+If you forget `wrapCommandHandler`, the command still emits a telemetry event (queued by middleware), but duration will be `0` and success will always be `true` -- misleading data in dashboards.
+
+**Skip list**: commands in `SKIP_TELEMETRY_COMMANDS` (`command-telemetry.ts`) are excluded from command-level telemetry because they have their own session-based telemetry. Currently: `install`, `dashboard`, `root` (the default `$0` handler). Add to this set if you're building another installer entry point.
+
+**Aliases**: if you register a command with multiple names (e.g., `['organization', 'org']`), add the alias to `src/lib/command-aliases.ts` so metrics don't fragment across `org.list` and `organization.list`.
+
 ## Do / Don't
 
 **Do:**

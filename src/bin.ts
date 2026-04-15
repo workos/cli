@@ -2156,6 +2156,10 @@ yargs(rawArgs)
     return yargs.demandCommand(1, 'Please specify an org-domain subcommand').strict();
   })
   // --- Workflow Commands ---
+  // NOTE: Top-level `.command()` registrations with inline handlers MUST wrap
+  // the handler with `wrapCommandHandler()` for correct command telemetry.
+  // Subcommands registered via `registerSubcommand()` are auto-wrapped.
+  // See CLAUDE.md "Telemetry Wiring for New Commands".
   .command(
     'seed',
     'Seed WorkOS environment from a YAML config file',
