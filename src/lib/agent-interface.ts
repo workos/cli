@@ -63,6 +63,20 @@ const SERVICE_UNAVAILABLE_PREFIX = '__SERVICE_UNAVAILABLE__';
 const RATE_LIMITED_PREFIX = '__RATE_LIMITED__';
 
 /**
+ * Appended to the SDK's base system prompt for every installer run. Reasoning-heavier
+ * models (Opus 4.7+) default to asking the user for design choices mid-task — fatal for
+ * autonomous installation. This enforces a non-negotiable "decide and complete" contract.
+ */
+const AUTONOMOUS_INSTALLER_SYSTEM_PROMPT = `You are running in autonomous installation mode. A human is not available to answer questions during this run.
+
+Non-negotiable rules:
+1. Never ask the user for design choices, preferences, or implementation approaches. When multiple valid options exist, pick the simplest one that satisfies the skill's guidance and complete the task.
+2. Never leave TODO comments, placeholder bodies, or "choose your approach" menus in generated code. Every file you write must be complete and ready to run.
+3. Do not create files, routes, abstractions, or configuration beyond what the skill explicitly requires. Prefer the minimum viable implementation.
+4. If the skill warns against a pattern, respect that prohibition even when your training data suggests the pattern is idiomatic. The skill's constraints take precedence.
+5. When asked for a sign-in URL or link in a Server Component, use a Client Component with \`useAuth\`/\`refreshAuth({ ensureSignedIn: true })\` — never call \`getSignInUrl()\` directly in a Server Component render path.`;
+
+/**
  * Error types that can be returned from agent execution.
  * These correspond to the error signals that the agent emits.
  */
@@ -622,6 +636,11 @@ export async function runAgent(
         permissionMode: 'acceptEdits',
         mcpServers: agentConfig.mcpServers,
         env: agentConfig.sdkEnv,
+        systemPrompt: {
+          type: 'preset',
+          preset: 'claude_code',
+          append: AUTONOMOUS_INSTALLER_SYSTEM_PROMPT,
+        },
         canUseTool: (toolName, input) => {
           logInfo('canUseTool called:', { toolName, input });
           const result = installerCanUseTool(toolName, input);
