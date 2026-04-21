@@ -3,7 +3,58 @@ import { QUALITY_RUBRICS, QUALITY_DIMENSIONS } from '../quality-rubrics.js';
 import type { QualityGrade, QualityInput } from '../types.js';
 import { formatKeyFilesForPrompt } from './collect-key-files.js';
 
-const QUALITY_MODEL = 'claude-3-5-haiku-20241022';
+const QUALITY_MODEL = 'claude-sonnet-4-6';
+
+// Forces the model to emit grades via a typed tool call instead of prompt-engineered
+// JSON. Eliminates parser brittleness and max_tokens truncation of free-form responses.
+const GRADING_TOOL: Anthropic.Messages.Tool = {
+  name: 'submit_quality_grades',
+  description:
+    'Submit integer quality grades (1-5) for each dimension along with a brief overall reasoning.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      reasoning: {
+        type: 'string',
+        description:
+          'Concise analysis (3-6 sentences) explaining the scores. Reference specific patterns from the code.',
+      },
+      codeStyle: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 5,
+        description: 'Adherence to project and framework conventions.',
+      },
+      minimalism: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 5,
+        description: 'Focused changes, no extra files or unused code.',
+      },
+      errorHandling: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 5,
+        description: 'Appropriate error handling and user-facing messages.',
+      },
+      idiomatic: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 5,
+        description: 'Follows framework best practices and recommended APIs.',
+      },
+    },
+    required: ['reasoning', 'codeStyle', 'minimalism', 'errorHandling', 'idiomatic'],
+  },
+};
+
+interface GradingToolInput {
+  reasoning: string;
+  codeStyle: number;
+  minimalism: number;
+  errorHandling: number;
+  idiomatic: number;
+}
 
 export class QualityGrader {
   private client: Anthropic;
@@ -22,16 +73,26 @@ export class QualityGrader {
     try {
       const response = await this.client.messages.create({
         model: QUALITY_MODEL,
-        max_tokens: 1024,
+        max_tokens: 2048,
+        tools: [GRADING_TOOL],
+        tool_choice: { type: 'tool', name: GRADING_TOOL.name },
         messages: [{ role: 'user', content: prompt }],
       });
 
-      const content = response.content[0];
-      if (content.type !== 'text') {
+      if (response.stop_reason === 'max_tokens') {
+        console.warn(`Quality grading hit max_tokens for ${input.framework} scenario`);
+      }
+
+      const toolUse = response.content.find(
+        (block): block is Anthropic.Messages.ToolUseBlock =>
+          block.type === 'tool_use' && block.name === GRADING_TOOL.name,
+      );
+      if (!toolUse) {
+        console.warn('Quality grading returned no tool_use block');
         return null;
       }
 
-      return this.parseResponse(content.text);
+      return this.toQualityGrade(toolUse.input as GradingToolInput);
     } catch (error) {
       console.warn('Quality grading failed:', error);
       return null;
@@ -49,7 +110,6 @@ export class QualityGrader {
 
     const keyFilesText = formatKeyFilesForPrompt(input.keyFiles);
 
-    // Chain-of-thought before scoring improves grading accuracy (Anthropic best practice)
     return `You are evaluating code written by an AI agent installing WorkOS AuthKit into a ${input.framework} project.
 
 ## Key Integration Files
@@ -65,63 +125,24 @@ ${keyFilesText}
 ## Grading Rubrics
 ${rubricText}
 
-## Instructions
-First, analyze the code thoroughly in <thinking> tags. For each dimension, examine the code and determine the appropriate score based on the rubric. Consider specific examples from the code.
-
-Then, output your final scores as JSON.
-
-<thinking>
-[Analyze each dimension here - what patterns do you see? What's done well? What could be better?]
-</thinking>
-
-{
-  "codeStyle": <1-5>,
-  "minimalism": <1-5>,
-  "errorHandling": <1-5>,
-  "idiomatic": <1-5>
-}`;
+Analyze the code against each rubric, then call the submit_quality_grades tool with your scores and a concise reasoning.`;
   }
 
-  private parseResponse(text: string): QualityGrade | null {
-    try {
-      // Extract chain-of-thought reasoning from <thinking> tags
-      const thinkingMatch = text.match(/<thinking>([\s\S]*?)<\/thinking>/);
-      const reasoning = thinkingMatch?.[1]?.trim() || 'No reasoning provided';
+  private toQualityGrade(input: GradingToolInput): QualityGrade {
+    const dimensions = {
+      codeStyle: this.clampScore(input.codeStyle),
+      minimalism: this.clampScore(input.minimalism),
+      errorHandling: this.clampScore(input.errorHandling),
+      idiomatic: this.clampScore(input.idiomatic),
+    };
 
-      // Extract JSON scores — look after </thinking> tag to avoid matching braces in reasoning
-      const afterThinking = thinkingMatch ? text.slice(text.indexOf('</thinking>') + '</thinking>'.length) : text;
-      const jsonMatch = afterThinking.match(/\{[^{}]*\}/);
-      if (!jsonMatch) return null;
+    const score = Object.values(dimensions).reduce((a, b) => a + b, 0) / 4;
 
-      const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
-
-      // Handle both formats: direct scores or nested { score: n }
-      const getScore = (val: unknown): number => {
-        if (typeof val === 'number') return val;
-        if (typeof val === 'object' && val !== null && 'score' in val) {
-          return (val as { score: unknown }).score as number;
-        }
-        return 3;
-      };
-
-      const dimensions = {
-        codeStyle: this.clampScore(getScore(parsed.codeStyle)),
-        minimalism: this.clampScore(getScore(parsed.minimalism)),
-        errorHandling: this.clampScore(getScore(parsed.errorHandling)),
-        idiomatic: this.clampScore(getScore(parsed.idiomatic)),
-      };
-
-      const score = Object.values(dimensions).reduce((a, b) => a + b, 0) / 4;
-
-      return {
-        score: Math.round(score * 10) / 10,
-        dimensions,
-        reasoning,
-      };
-    } catch (error) {
-      console.warn('Failed to parse quality response:', error);
-      return null;
-    }
+    return {
+      score: Math.round(score * 10) / 10,
+      dimensions,
+      reasoning: input.reasoning || 'No reasoning provided',
+    };
   }
 
   private clampScore(score: unknown): number {
