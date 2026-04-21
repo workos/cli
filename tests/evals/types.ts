@@ -49,7 +49,7 @@ export interface QualityInput {
 }
 
 export interface EvalOptions {
-  framework?: string;
+  framework?: string[];
   state?: string;
   verbose?: boolean;
   sequential?: boolean;

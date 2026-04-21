@@ -1,5 +1,5 @@
 export interface CliOptions {
-  framework?: string;
+  framework?: string[];
   state?: string;
   verbose: boolean;
   debug: boolean;
@@ -129,11 +129,18 @@ export function parseArgs(args: string[]): CliOptions {
     } else if (arg.startsWith('--retry=')) {
       options.retry = parseInt(arg.split('=')[1], 10);
     } else if (arg.startsWith('--framework=')) {
-      const framework = arg.split('=')[1];
-      if (!FRAMEWORKS.includes(framework)) {
-        throw new Error(`Unknown framework: ${framework}. Valid: ${FRAMEWORKS.join(', ')}`);
+      const frameworks = arg
+        .split('=')[1]
+        .split(',')
+        .map((f) => f.trim())
+        .filter(Boolean);
+      const invalid = frameworks.filter((f) => !FRAMEWORKS.includes(f));
+      if (invalid.length > 0) {
+        throw new Error(
+          `Unknown framework(s): ${invalid.join(', ')}. Valid: ${FRAMEWORKS.join(', ')}`,
+        );
       }
-      options.framework = framework;
+      options.framework = [...(options.framework ?? []), ...frameworks];
     } else if (arg.startsWith('--state=')) {
       const state = arg.split('=')[1];
       if (!STATES.includes(state)) {
@@ -173,7 +180,9 @@ Commands:
   show <file>         Display formatted log summary
 
 Options:
-  --framework=<name>  Run only scenarios for this framework
+  --framework=<name>  Run only scenarios for this framework.
+                      Accepts comma-separated list (e.g., nextjs,react).
+                      Repeat the flag to append more.
                       Valid: ${FRAMEWORKS.join(', ')}
 
   --state=<state>     Run only scenarios for this project state

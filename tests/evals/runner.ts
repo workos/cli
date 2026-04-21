@@ -130,7 +130,9 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
   };
 
   const scenarios = SCENARIOS.filter(
-    (s) => (!options.framework || s.framework === options.framework) && (!options.state || s.state === options.state),
+    (s) =>
+      (!options.framework || options.framework.includes(s.framework)) &&
+      (!options.state || s.state === options.state),
   );
 
   const maxAttempts = (options.retry ?? 2) + 1;
@@ -335,11 +337,20 @@ function printValidationSummary(validation: ValidationResult): void {
 }
 
 function printQualitySummary(results: EvalResult[]): void {
+  const passed = results.filter((r) => r.passed);
   const withQuality = results.filter((r) => r.qualityGrade);
-  if (withQuality.length === 0) return;
+  const ungraded = passed.length - withQuality.length;
+
+  if (passed.length === 0) return;
 
   console.log('\nQuality Summary:');
   console.log('─'.repeat(40));
+  console.log(`  Graded: ${withQuality.length} of ${passed.length} passing scenarios`);
+  if (ungraded > 0) {
+    console.log(`  ⚠ ${ungraded} scenarios ungraded — grader errored, aggregates below exclude them`);
+  }
+
+  if (withQuality.length === 0) return;
 
   // Average by dimension
   const dimensionSums = { codeStyle: 0, minimalism: 0, errorHandling: 0, idiomatic: 0 };

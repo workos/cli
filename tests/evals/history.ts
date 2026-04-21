@@ -14,7 +14,7 @@ export interface EvalRun {
     passRate: number;
   };
   options: {
-    framework?: string;
+    framework?: string[];
     state?: string;
   };
   results: EvalResult[];
@@ -23,7 +23,7 @@ export interface EvalRun {
 
 export async function saveResults(
   results: EvalResult[],
-  options: { framework?: string; state?: string },
+  options: { framework?: string[]; state?: string },
   metadata?: EvalResultMetadata,
 ): Promise<string> {
   // Ensure results directory exists
