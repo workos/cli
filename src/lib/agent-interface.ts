@@ -876,10 +876,15 @@ function handleSDKMessage(
     case 'result': {
       // The SDK may return subtype 'success' with is_error: true when API
       // retries are exhausted (e.g., persistent 500s). Check is_error first.
-      const isResultError = (message as Record<string, unknown>).is_error === true;
-
-      if (isResultError) {
-        const resultText = typeof message.result === 'string' ? message.result : '';
+      // Error text lives in .result for success-subtype errors, .errors[] for
+      // SDKResultError subtypes (error_during_execution, error_max_turns, etc).
+      if (message.is_error === true) {
+        const resultText =
+          message.subtype === 'success'
+            ? typeof message.result === 'string'
+              ? message.result
+              : ''
+            : (message.errors?.join('\n') ?? '');
         logError('Agent result marked as error:', resultText);
 
         // Detect rate limiting (429) — check before 5xx so it gets distinct messaging
