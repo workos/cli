@@ -3,6 +3,7 @@ import { readFile } from 'fs/promises';
 import { join } from 'path';
 import type { QuickCheckResult, QuickChecksOutput, ValidationIssue } from './types.js';
 import { detectBuildCommand, detectPackageManager, parseBuildErrors } from './build-validator.js';
+import { runServerComponentAudit } from './server-component-audit.js';
 
 const DEFAULT_TYPECHECK_TIMEOUT_MS = 30_000;
 const DEFAULT_BUILD_TIMEOUT_MS = 60_000;
@@ -23,6 +24,14 @@ export async function runQuickChecks(
 
   if (typecheckResult.passed && !options?.skipBuild) {
     results.push(await runBuildQuickCheck(projectDir, options?.timeoutMs ?? DEFAULT_BUILD_TIMEOUT_MS));
+  }
+
+  // Catches a runtime-only Next.js trap (getSignInUrl in Server Component render) that
+  // typecheck + build cannot detect. Pushed only on failure to keep backends/non-Next.js
+  // projects silent.
+  const auditResult = await runServerComponentAudit(projectDir);
+  if (!auditResult.passed) {
+    results.push(auditResult);
   }
 
   const passed = results.every((r) => r.passed);

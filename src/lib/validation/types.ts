@@ -49,7 +49,7 @@ export interface ValidationRules {
 
 export interface QuickCheckResult {
   passed: boolean;
-  phase: 'typecheck' | 'build';
+  phase: 'typecheck' | 'build' | 'server-component-audit';
   issues: ValidationIssue[];
   /** Formatted for agent consumption — actionable, not just error messages */
   agentPrompt: string | null;
