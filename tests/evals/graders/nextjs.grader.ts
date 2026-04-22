@@ -113,24 +113,31 @@ export class NextjsGrader implements Grader {
     const sdkImportChecks = await this.fileGrader.checkFileContains(middlewareFile, ['@workos-inc/authkit-nextjs']);
     checks.push(...sdkImportChecks);
 
-    // Check for authkit integration: authkitMiddleware OR (authkit + handleAuthkitHeaders)
+    // Check for authkit integration. The SDK exports three valid entry points:
+    //   - authkitProxy       (Next.js 16+ preferred, used in proxy.ts)
+    //   - authkitMiddleware  (deprecated alias for authkitProxy, still works)
+    //   - authkit() + handleAuthkitHeaders (composable for custom middleware)
+    const proxyChecks = await this.fileGrader.checkFileContains(middlewareFile, ['authkitProxy']);
     const middlewareChecks = await this.fileGrader.checkFileContains(middlewareFile, ['authkitMiddleware']);
     const composableChecks = await this.fileGrader.checkFileContains(middlewareFile, [
       'authkit(',
       'handleAuthkitHeaders',
     ]);
 
+    const usesAuthkitProxy = proxyChecks.every((c) => c.passed);
     const usesAuthkitMiddleware = middlewareChecks.every((c) => c.passed);
     const usesComposable = composableChecks.every((c) => c.passed);
 
     const authkitCheck: GradeCheck = {
       name: 'AuthKit middleware integration',
-      passed: usesAuthkitMiddleware || usesComposable,
-      message: usesAuthkitMiddleware
-        ? 'Uses authkitMiddleware'
-        : usesComposable
-          ? 'Uses authkit() composable with handleAuthkitHeaders'
-          : 'Missing authkitMiddleware or authkit() composable integration',
+      passed: usesAuthkitProxy || usesAuthkitMiddleware || usesComposable,
+      message: usesAuthkitProxy
+        ? 'Uses authkitProxy'
+        : usesAuthkitMiddleware
+          ? 'Uses authkitMiddleware (deprecated; prefer authkitProxy)'
+          : usesComposable
+            ? 'Uses authkit() composable with handleAuthkitHeaders'
+            : 'Missing authkitProxy, authkitMiddleware, or authkit() composable integration',
     };
     checks.push(authkitCheck);
 
