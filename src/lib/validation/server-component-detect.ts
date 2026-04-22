@@ -19,15 +19,29 @@ export function hasTopLevelDirective(content: string, directive: string): boolea
 }
 
 /**
- * Finds .tsx files under app/ or src/app/ that call getSignInUrl() without a
- * top-level 'use client' or 'use server' directive. These calls throw in
- * Next.js 15+ because the helper sets PKCE cookies via cookies() — which is
- * only allowed in Server Actions or Route Handlers, not Server Component render.
+ * Finds .tsx/.jsx files that call getSignInUrl() without a top-level
+ * 'use client' or 'use server' directive. These calls throw in Next.js 15+
+ * because the helper sets PKCE cookies via cookies() — only allowed in
+ * Server Actions or Route Handlers, not Server Component render.
+ *
+ * TODO: this can emit a false positive when getSignInUrl() is called
+ * exclusively inside a nested function whose body begins with an inline
+ * 'use server' directive (an inline Server Action). Regex-based scope
+ * analysis can't reliably distinguish render-time calls from inline Server
+ * Action calls — an AST-based rewrite would fix it.
  */
 export async function findUnsafeGetSignInUrlUsage(workDir: string): Promise<string[]> {
-  const files = await fg('{app,src/app}/**/*.tsx', {
+  const files = await fg('**/*.{tsx,jsx}', {
     cwd: workDir,
-    ignore: ['**/callback/**', '**/node_modules/**'],
+    ignore: [
+      '**/node_modules/**',
+      '**/.next/**',
+      '**/dist/**',
+      '**/build/**',
+      '**/.turbo/**',
+      '**/coverage/**',
+      '**/callback/**',
+    ],
     absolute: true,
   });
 

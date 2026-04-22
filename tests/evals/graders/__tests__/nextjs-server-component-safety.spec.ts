@@ -133,4 +133,51 @@ export default function Page() { return <h1>Home</h1>; }
     const result = await findUnsafeGetSignInUrlUsage(workDir);
     expect(result).toEqual([]);
   });
+
+  it('flags .jsx files in the app tree (JavaScript App Router project)', async () => {
+    await writeFile(
+      join(workDir, 'app/page.jsx'),
+      `
+import { getSignInUrl } from '@workos-inc/authkit-nextjs';
+export default async function Page() {
+  const url = await getSignInUrl();
+  return <a href={url}>Sign in</a>;
+}
+`,
+    );
+    const result = await findUnsafeGetSignInUrlUsage(workDir);
+    expect(result).toEqual(['app/page.jsx']);
+  });
+
+  it('flags Server Components imported from outside the app tree', async () => {
+    await mkdir(join(workDir, 'components'), { recursive: true });
+    await writeFile(
+      join(workDir, 'components/NavAuth.tsx'),
+      `
+import { getSignInUrl } from '@workos-inc/authkit-nextjs';
+export default async function NavAuth() {
+  const url = await getSignInUrl();
+  return <a href={url}>Sign in</a>;
+}
+`,
+    );
+    const result = await findUnsafeGetSignInUrlUsage(workDir);
+    expect(result).toEqual(['components/NavAuth.tsx']);
+  });
+
+  it('skips node_modules, .next, dist, build, and coverage directories', async () => {
+    const ignored = ['node_modules', '.next', 'dist', 'build', 'coverage'];
+    for (const dir of ignored) {
+      await mkdir(join(workDir, dir), { recursive: true });
+      await writeFile(
+        join(workDir, dir, 'bogus.tsx'),
+        `
+import { getSignInUrl } from '@workos-inc/authkit-nextjs';
+export default async function X() { const url = await getSignInUrl(); return <a href={url}/>; }
+`,
+      );
+    }
+    const result = await findUnsafeGetSignInUrlUsage(workDir);
+    expect(result).toEqual([]);
+  });
 });
