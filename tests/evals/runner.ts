@@ -324,8 +324,15 @@ function printValidationSummary(validation: ValidationResult): void {
       console.log(`  - ${failure}`);
     }
   }
+  for (const warning of validation.warnings) {
+    console.log(`  ⚠ ${warning}`);
+  }
+  const firstAttemptLabel =
+    validation.criteria.firstAttemptTargetRate !== undefined
+      ? `floor: ${validation.criteria.firstAttemptPassRate * 100}%, target: ${validation.criteria.firstAttemptTargetRate * 100}%`
+      : `floor: ${validation.criteria.firstAttemptPassRate * 100}%`;
   console.log(
-    `\nFirst-attempt:    ${(validation.actual.firstAttemptPassRate * 100).toFixed(1)}% (required: ${validation.criteria.firstAttemptPassRate * 100}%)`,
+    `\nFirst-attempt:    ${(validation.actual.firstAttemptPassRate * 100).toFixed(1)}% (${firstAttemptLabel})`,
   );
   console.log(
     `With-correction:  ${(validation.actual.withCorrectionPassRate * 100).toFixed(1)}%${validation.criteria.withCorrectionPassRate !== undefined ? ` (required: ${validation.criteria.withCorrectionPassRate * 100}%)` : ''}`,

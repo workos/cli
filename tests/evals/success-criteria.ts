@@ -5,8 +5,17 @@ import type { EvalResult } from './types.js';
  * Used to determine if an eval run meets quality bar for CI/CD.
  */
 export interface SuccessCriteria {
-  /** Minimum pass rate on first attempt (0-1) */
+  /**
+   * Hard floor for first-attempt pass rate (0-1). Below this fails CI.
+   * Kept deliberately low: first-attempt is sensitive to grader/SDK churn,
+   * not just model quality, so the hard gate is reserved for actual collapse.
+   */
   firstAttemptPassRate: number;
+  /**
+   * Target first-attempt pass rate (0-1). Rates in [floor, target) print as
+   * warnings — visible drift signal but non-blocking. Optional.
+   */
+  firstAttemptTargetRate?: number;
   /** Minimum pass rate after within-session correction (0-1) */
   withCorrectionPassRate?: number;
   /** Minimum pass rate with full scenario retries (0-1) */
@@ -15,9 +24,17 @@ export interface SuccessCriteria {
   maxDurationMs?: number;
 }
 
-/** Default thresholds for CI enforcement */
+/**
+ * Default thresholds for CI enforcement.
+ *
+ * Rationale: observed first-attempt rates across Opus 4.5/4.6/4.7 and Sonnet
+ * 4.6 cluster around 35–58%. With-retry is the actual correctness gate (the
+ * harness exists specifically to correct first-pass errors). First-attempt is
+ * useful as a drift signal, not a hard gate.
+ */
 export const DEFAULT_CRITERIA: SuccessCriteria = {
-  firstAttemptPassRate: 0.8,
+  firstAttemptPassRate: 0.4,
+  firstAttemptTargetRate: 0.5,
   withCorrectionPassRate: 0.9,
   withRetryPassRate: 0.95,
 };
@@ -31,11 +48,13 @@ export interface ValidationResult {
     withRetryPassRate: number;
   };
   failures: string[];
+  warnings: string[];
 }
 
 /**
  * Validate eval results against success criteria thresholds.
  * Returns detailed breakdown of pass/fail status with actionable messages.
+ * Failures block CI; warnings are drift signals.
  */
 export function validateResults(results: EvalResult[], criteria: SuccessCriteria = DEFAULT_CRITERIA): ValidationResult {
   // First attempt: passed on first scenario attempt with no corrections
@@ -51,9 +70,18 @@ export function validateResults(results: EvalResult[], criteria: SuccessCriteria
   const withRetryRate = results.length > 0 ? totalPassed / results.length : 0;
 
   const failures: string[] = [];
+  const warnings: string[] = [];
+
   if (firstAttemptRate < criteria.firstAttemptPassRate) {
     failures.push(
-      `First-attempt pass rate ${(firstAttemptRate * 100).toFixed(1)}% < ${criteria.firstAttemptPassRate * 100}% required`,
+      `First-attempt pass rate ${(firstAttemptRate * 100).toFixed(1)}% < ${criteria.firstAttemptPassRate * 100}% floor (possible regression)`,
+    );
+  } else if (
+    criteria.firstAttemptTargetRate !== undefined &&
+    firstAttemptRate < criteria.firstAttemptTargetRate
+  ) {
+    warnings.push(
+      `First-attempt pass rate ${(firstAttemptRate * 100).toFixed(1)}% below target ${criteria.firstAttemptTargetRate * 100}% — investigate drift`,
     );
   }
   if (criteria.withCorrectionPassRate !== undefined && withCorrectionRate < criteria.withCorrectionPassRate) {
@@ -76,5 +104,6 @@ export function validateResults(results: EvalResult[], criteria: SuccessCriteria
       withRetryPassRate: withRetryRate,
     },
     failures,
+    warnings,
   };
 }

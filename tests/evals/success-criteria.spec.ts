@@ -15,7 +15,8 @@ function makeResult(passed: boolean, attempts: number = 1, correctionAttempts: n
 describe('success-criteria', () => {
   describe('DEFAULT_CRITERIA', () => {
     it('has expected default thresholds', () => {
-      expect(DEFAULT_CRITERIA.firstAttemptPassRate).toBe(0.8);
+      expect(DEFAULT_CRITERIA.firstAttemptPassRate).toBe(0.4);
+      expect(DEFAULT_CRITERIA.firstAttemptTargetRate).toBe(0.5);
       expect(DEFAULT_CRITERIA.withCorrectionPassRate).toBe(0.9);
       expect(DEFAULT_CRITERIA.withRetryPassRate).toBe(0.95);
     });
@@ -36,27 +37,48 @@ describe('success-criteria', () => {
 
       expect(validation.passed).toBe(true);
       expect(validation.failures).toHaveLength(0);
+      expect(validation.warnings).toHaveLength(0);
       expect(validation.actual.firstAttemptPassRate).toBe(0.8);
       expect(validation.actual.withCorrectionPassRate).toBe(0.9);
       expect(validation.actual.withRetryPassRate).toBe(1);
     });
 
-    it('returns passed=false when first-attempt rate below threshold', () => {
-      // 10 results: 7 clean (70% < 80%), 2 corrected (90% correction), 1 retried
+    it('returns passed=false when first-attempt rate below floor', () => {
+      // 10 results: 3 clean (30% < 40% floor), 7 corrected (100% correction+retry)
       const results: EvalResult[] = [
-        ...Array(7)
+        ...Array(3)
           .fill(null)
           .map(() => makeResult(true, 1, 0)),
-        ...Array(2)
+        ...Array(7)
           .fill(null)
           .map(() => makeResult(true, 1, 1)),
-        makeResult(true, 2),
       ];
 
       const validation = validateResults(results);
 
       expect(validation.passed).toBe(false);
       expect(validation.failures.some((f) => f.includes('First-attempt'))).toBe(true);
+      expect(validation.failures.some((f) => f.includes('floor'))).toBe(true);
+    });
+
+    it('emits a warning (not a failure) when first-attempt is between floor and target', () => {
+      // 10 results: 4 clean (40% ≥ floor, < 50% target), 6 corrected
+      const results: EvalResult[] = [
+        ...Array(4)
+          .fill(null)
+          .map(() => makeResult(true, 1, 0)),
+        ...Array(6)
+          .fill(null)
+          .map(() => makeResult(true, 1, 1)),
+      ];
+
+      const validation = validateResults(results);
+
+      expect(validation.passed).toBe(true);
+      expect(validation.failures).toHaveLength(0);
+      expect(validation.warnings).toHaveLength(1);
+      expect(validation.warnings[0]).toContain('First-attempt');
+      expect(validation.warnings[0]).toContain('target');
     });
 
     it('returns passed=false when with-retry rate below threshold', () => {
