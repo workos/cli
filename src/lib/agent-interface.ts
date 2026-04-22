@@ -249,7 +249,19 @@ function matchesAllowedPrefix(command: string): boolean {
  * - Stderr redirection (2>&1) is allowed
  */
 export function installerCanUseTool(toolName: string, input: Record<string, unknown>): PermissionResult {
-  // Allow all non-Bash tools
+  if (toolName.startsWith('mcp__') && !toolName.startsWith('mcp__workos__')) {
+    logWarn(`Denying MCP tool not in allowlist: ${toolName}`);
+    analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
+      action: 'mcp tool denied',
+      reason: 'not in allowlist',
+      toolName,
+    });
+    return {
+      behavior: 'deny',
+      message: `MCP server "${toolName}" is not available in this installer.`,
+    };
+  }
+
   if (toolName !== 'Bash') {
     return { behavior: 'allow', updatedInput: input };
   }
@@ -650,6 +662,7 @@ export async function runAgent(
         tools: { type: 'preset', preset: 'claude_code' },
         allowedTools: agentConfig.allowedTools,
         plugins: [{ type: 'local', path: pluginPath }],
+        settingSources: [],
         // Capture stderr from CLI subprocess for debugging
         stderr: (data: string) => {
           logInfo('CLI stderr:', data);
