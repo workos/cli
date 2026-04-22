@@ -62,6 +62,7 @@ async function main() {
           noFail: options.noFail,
           noCorrection: options.noCorrection,
           quality: options.quality,
+          json: options.json,
         });
 
         if (options.json) {

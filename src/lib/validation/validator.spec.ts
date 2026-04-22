@@ -243,8 +243,11 @@ describe('validateInstallation', () => {
         join(testDir, 'app', 'callback', 'route.ts'),
         "import { handleAuth } from '@workos-inc/authkit-nextjs';",
       );
-      // Has 'authkit' which satisfies mustContainAny
-      writeFileSync(join(testDir, 'middleware.ts'), "import { authkit } from 'some-package';");
+      // authkitProxy is one of the accepted middleware entry points
+      writeFileSync(
+        join(testDir, 'middleware.ts'),
+        "import { authkitProxy } from '@workos-inc/authkit-nextjs';\nexport default authkitProxy();",
+      );
       writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
 
       const result = await validateInstallation('nextjs', testDir);

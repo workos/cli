@@ -119,10 +119,13 @@ export interface ExtendedEvalOptions extends EvalOptions {
   noFail?: boolean;
   noCorrection?: boolean;
   quality?: boolean;
+  /** When true, all progress/summary output is routed to stderr so stdout
+   *  stays clean for the machine-readable JSON payload emitted by callers. */
+  json?: boolean;
 }
 
 export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult[]> {
-  // Capture version metadata at start
+  const info = options.json ? console.error : console.log;
   const versionMeta = await captureVersionMetadata();
   const metadata: EvalResultMetadata = {
     ...versionMeta,
@@ -176,24 +179,22 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
     dashboard.unmount();
   }
 
-  // Quality grading (optional, only for passing scenarios with key files)
   if (options.quality) {
     const credentials = loadCredentials();
     const qualityGrader = new QualityGrader(credentials.anthropicApiKey);
 
-    console.log('\nRunning quality grading on passing scenarios...');
+    info('\nRunning quality grading on passing scenarios...');
 
     for (const result of results) {
       if (result.passed && result.keyFiles && result.keyFiles.size > 0) {
         const framework = result.scenario.split('/')[0];
 
-        // Build metadata from result
         const qualityInput: QualityInput = {
           framework,
           keyFiles: result.keyFiles,
           metadata: {
-            filesCreated: [], // Could be extracted from tool calls if tracked
-            filesModified: [], // Could be extracted from tool calls if tracked
+            filesCreated: [],
+            filesModified: [],
             toolCallSummary: buildToolCallSummary(result),
             checksPassed: result.checks?.filter((c) => c.passed).map((c) => c.name) || [],
           },
@@ -202,33 +203,29 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
         result.qualityGrade = await qualityGrader.grade(qualityInput);
 
         if (result.qualityGrade) {
-          console.log(`  ${result.scenario}: ${result.qualityGrade.score}/5`);
+          info(`  ${result.scenario}: ${result.qualityGrade.score}/5`);
           if (options.verbose) {
             for (const line of result.qualityGrade.reasoning.split('\n')) {
-              console.log(`    ${line}`);
+              info(`    ${line}`);
             }
           }
         }
       }
     }
-
-    printQualitySummary(results);
   }
 
-  // Print summary
-  printSummary(results);
-  printLatencySummary(results);
-
-  // Validate against success criteria
   const validation = validateResults(results);
-  printValidationSummary(validation);
 
-  // Print log file location
-  console.log(`\nDetailed log: ${logWriter.getFilePath()}`);
+  if (!options.json) {
+    if (options.quality) printQualitySummary(results);
+    printSummary(results);
+    printLatencySummary(results);
+    printValidationSummary(validation);
+    console.log(`\nDetailed log: ${logWriter.getFilePath()}`);
+  }
 
   logWriter.cleanup();
 
-  // Save results with metadata
   const filepath = await saveResults(
     results,
     {
@@ -237,7 +234,7 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
     },
     metadata,
   );
-  console.log(`Results saved to: ${filepath}`);
+  info(`Results saved to: ${filepath}`);
 
   // Exit with error if thresholds not met (unless --no-fail)
   if (!validation.passed && !options.noFail) {

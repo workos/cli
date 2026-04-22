@@ -14,7 +14,7 @@
     },
     {
       "path": "{,src/}{middleware,proxy}.{ts,js}",
-      "mustContainAny": ["authkitMiddleware", "authkit"]
+      "mustContainAny": ["authkitProxy", "authkitMiddleware", "authkit("]
     },
     {
       "path": "{,src/}app/**/layout.{ts,tsx,js,jsx}",

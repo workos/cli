@@ -174,40 +174,46 @@ export async function validateFiles(rules: ValidationRules, projectDir: string):
       continue;
     }
 
-    // Check content patterns
     if (rule.mustContain || rule.mustContainAny) {
-      const filePath = join(projectDir, matches[0]);
-      let content: string;
-      try {
-        content = await readFile(filePath, 'utf-8');
-      } catch {
-        // File read error - skip content checks
-        continue;
-      }
+      const contents = await Promise.all(
+        matches.map(async (m) => {
+          try {
+            return { file: m, content: await readFile(join(projectDir, m), 'utf-8') };
+          } catch {
+            return null;
+          }
+        }),
+      );
+      const readable = contents.filter((c): c is { file: string; content: string } => c !== null);
 
-      // All must be present
+      if (readable.length === 0) continue;
+
       if (rule.mustContain) {
         for (const pattern of rule.mustContain) {
-          if (!content.includes(pattern)) {
+          const satisfied = readable.some(({ content }) => content.includes(pattern));
+          if (!satisfied) {
+            const locations = readable.map((r) => r.file).join(', ');
             issues.push({
               type: 'pattern',
               severity: 'warning',
-              message: `File ${matches[0]} missing expected pattern: "${pattern}"`,
-              hint: `Ensure ${matches[0]} contains: ${pattern}`,
+              message: `No file matching ${rule.path} contains expected pattern: "${pattern}"`,
+              hint: `Ensure one of [${locations}] contains: ${pattern}`,
             });
           }
         }
       }
 
-      // At least one must be present
       if (rule.mustContainAny) {
-        const hasAny = rule.mustContainAny.some((p) => content.includes(p));
-        if (!hasAny) {
+        const satisfied = readable.some(({ content }) =>
+          rule.mustContainAny!.some((p) => content.includes(p)),
+        );
+        if (!satisfied) {
+          const locations = readable.map((r) => r.file).join(', ');
           issues.push({
             type: 'pattern',
             severity: 'warning',
-            message: `File ${matches[0]} missing one of: ${rule.mustContainAny.join(', ')}`,
-            hint: `Ensure ${matches[0]} contains one of these patterns`,
+            message: `No file matching ${rule.path} contains one of: ${rule.mustContainAny.join(', ')}`,
+            hint: `Ensure one of [${locations}] contains one of these patterns`,
           });
         }
       }
