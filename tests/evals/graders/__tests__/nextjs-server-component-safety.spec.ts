@@ -28,8 +28,7 @@ export default async function Page() {
 `,
     );
     const result = await findUnsafeGetSignInUrlUsage(workDir);
-    expect(result).not.toBeNull();
-    expect(result!.file).toBe('app/page.tsx');
+    expect(result).toEqual(['app/page.tsx']);
   });
 
   it('fails when getSignInUrl() is in a shared component without directive', async () => {
@@ -45,8 +44,7 @@ export default async function NavAuth() {
 `,
     );
     const result = await findUnsafeGetSignInUrlUsage(workDir);
-    expect(result).not.toBeNull();
-    expect(result!.file).toContain('nav-auth.tsx');
+    expect(result[0]).toContain('nav-auth.tsx');
   });
 
   it('passes when getSignInUrl() is in a use client component', async () => {
@@ -62,7 +60,7 @@ export default function Page() {
 `,
     );
     const result = await findUnsafeGetSignInUrlUsage(workDir);
-    expect(result).toBeNull();
+    expect(result).toEqual([]);
   });
 
   it('passes when getSignInUrl() is in a top-level use server file', async () => {
@@ -76,7 +74,7 @@ export async function getUrl() { return getSignInUrl(); }
 `,
     );
     const result = await findUnsafeGetSignInUrlUsage(workDir);
-    expect(result).toBeNull();
+    expect(result).toEqual([]);
   });
 
   it('fails when use server is inline, not top-level', async () => {
@@ -95,7 +93,7 @@ export default async function Page() {
 `,
     );
     const result = await findUnsafeGetSignInUrlUsage(workDir);
-    expect(result).not.toBeNull();
+    expect(result.length).toBeGreaterThan(0);
   });
 
   it('passes when no files contain getSignInUrl()', async () => {
@@ -108,7 +106,7 @@ export default function Page() {
 `,
     );
     const result = await findUnsafeGetSignInUrlUsage(workDir);
-    expect(result).toBeNull();
+    expect(result).toEqual([]);
   });
 
   it('ignores mere mention of getSignInUrl without invocation', async () => {
@@ -120,7 +118,7 @@ export default function Page() { return <h1>Home</h1>; }
 `,
     );
     const result = await findUnsafeGetSignInUrlUsage(workDir);
-    expect(result).toBeNull();
+    expect(result).toEqual([]);
   });
 
   it('ignores commented-out getSignInUrl() calls', async () => {
@@ -133,6 +131,6 @@ export default function Page() { return <h1>Home</h1>; }
 `,
     );
     const result = await findUnsafeGetSignInUrlUsage(workDir);
-    expect(result).toBeNull();
+    expect(result).toEqual([]);
   });
 });

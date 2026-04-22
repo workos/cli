@@ -1,48 +1,7 @@
-import fg from 'fast-glob';
-import { readFile } from 'node:fs/promises';
-import { relative } from 'node:path';
 import type { QuickCheckResult } from './types.js';
+import { findUnsafeGetSignInUrlUsage } from './server-component-detect.js';
 
-const INVOCATION_PATTERN = /\bgetSignInUrl\s*\(/;
-
-function stripComments(content: string): string {
-  return content.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
-}
-
-function hasTopLevelDirective(content: string, directive: string): boolean {
-  const stripped = content.replace(/^\s*(\/\/[^\n]*\n|\/\*[\s\S]*?\*\/\s*)*/g, '');
-  return stripped.startsWith(`'${directive}'`) || stripped.startsWith(`"${directive}"`);
-}
-
-/**
- * Finds .tsx files under app/ or src/app/ that call getSignInUrl() without a
- * top-level 'use client' or 'use server' directive. These calls throw in
- * Next.js 15+ because the helper sets PKCE cookies via cookies() — which is
- * only allowed in Server Actions or Route Handlers, not Server Component render.
- */
-export async function findUnsafeGetSignInUrlUsage(workDir: string): Promise<string[]> {
-  const files = await fg('{app,src/app}/**/*.tsx', {
-    cwd: workDir,
-    ignore: ['**/callback/**', '**/node_modules/**'],
-    absolute: true,
-  });
-
-  const offending: string[] = [];
-  for (const file of files) {
-    const content = await readFile(file, 'utf-8');
-    const code = stripComments(content);
-
-    if (
-      INVOCATION_PATTERN.test(code) &&
-      !hasTopLevelDirective(content, 'use client') &&
-      !hasTopLevelDirective(content, 'use server')
-    ) {
-      offending.push(relative(workDir, file));
-    }
-  }
-
-  return offending;
-}
+export { findUnsafeGetSignInUrlUsage };
 
 export async function runServerComponentAudit(projectDir: string): Promise<QuickCheckResult> {
   const startTime = Date.now();

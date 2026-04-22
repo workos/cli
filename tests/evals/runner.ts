@@ -345,7 +345,7 @@ function printValidationSummary(validation: ValidationResult): void {
 
 function printQualitySummary(results: EvalResult[]): void {
   const passed = results.filter((r) => r.passed);
-  const withQuality = results.filter((r) => r.qualityGrade);
+  const withQuality = passed.filter((r) => r.qualityGrade);
   const ungraded = passed.length - withQuality.length;
 
   if (passed.length === 0) return;

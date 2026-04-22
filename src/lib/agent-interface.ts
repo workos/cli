@@ -63,9 +63,9 @@ const SERVICE_UNAVAILABLE_PREFIX = '__SERVICE_UNAVAILABLE__';
 const RATE_LIMITED_PREFIX = '__RATE_LIMITED__';
 
 /**
- * Appended to the SDK's base system prompt for every installer run. Reasoning-heavier
- * models (Opus 4.7+) default to asking the user for design choices mid-task — fatal for
- * autonomous installation. This enforces a non-negotiable "decide and complete" contract.
+ * Reasoning-heavier models (Opus 4.7+) default to asking the user for design
+ * choices mid-task — fatal for autonomous installation. This enforces a
+ * non-negotiable "decide and complete" contract.
  */
 const AUTONOMOUS_INSTALLER_SYSTEM_PROMPT = `You are running in autonomous installation mode. A human is not available to answer questions during this run.
 

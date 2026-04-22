@@ -26,9 +26,6 @@ export async function runQuickChecks(
     results.push(await runBuildQuickCheck(projectDir, options?.timeoutMs ?? DEFAULT_BUILD_TIMEOUT_MS));
   }
 
-  // Catches a runtime-only Next.js trap (getSignInUrl in Server Component render) that
-  // typecheck + build cannot detect. Pushed only on failure to keep backends/non-Next.js
-  // projects silent.
   const auditResult = await runServerComponentAudit(projectDir);
   if (!auditResult.passed) {
     results.push(auditResult);
