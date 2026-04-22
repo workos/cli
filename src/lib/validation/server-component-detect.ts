@@ -34,13 +34,31 @@ export async function findUnsafeGetSignInUrlUsage(workDir: string): Promise<stri
   const files = await fg('**/*.{tsx,jsx}', {
     cwd: workDir,
     ignore: [
+      // Build outputs / tooling state
       '**/node_modules/**',
       '**/.next/**',
+      '**/.turbo/**',
+      '**/.vercel/**',
       '**/dist/**',
       '**/build/**',
-      '**/.turbo/**',
+      '**/out/**',
       '**/coverage/**',
+      // Routes with their own directive contract (callbacks are Route Handlers)
       '**/callback/**',
+      // Non-runtime source: stories, tests, fixtures, examples, mocks, docs
+      '**/*.stories.{tsx,jsx}',
+      '**/*.{test,spec}.{tsx,jsx}',
+      '**/__tests__/**',
+      '**/__stories__/**',
+      '**/__mocks__/**',
+      '**/__fixtures__/**',
+      '**/tests/**',
+      '**/test/**',
+      '**/fixtures/**',
+      '**/stories/**',
+      '**/examples/**',
+      '**/docs/**',
+      '**/storybook-static/**',
     ],
     absolute: true,
   });

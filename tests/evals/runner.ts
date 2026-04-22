@@ -148,6 +148,7 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
     keepOnFail: options.keepOnFail,
     concurrency: options.sequential ? 1 : undefined,
     noCorrection: options.noCorrection,
+    quiet: options.json,
   });
 
   // Initialize log writer
@@ -162,8 +163,8 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
     },
   });
 
-  // Determine output mode: dashboard for TTY, logging otherwise
-  const useDashboard = !options.noDashboard && process.stdout.isTTY;
+  // Dashboard is TTY-only human UI; --json callers want stdout clean even in a TTY
+  const useDashboard = !options.noDashboard && !options.json && process.stdout.isTTY;
 
   let dashboard: { unmount: () => void } | null = null;
   if (useDashboard) {

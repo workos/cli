@@ -19,6 +19,9 @@ interface ParallelRunnerOptions {
   keepOnFail?: boolean;
   concurrency?: number; // Override auto-detection
   noCorrection?: boolean;
+  /** When true, all progress/result lines go to stderr so callers can keep
+   *  stdout reserved for structured output. */
+  quiet?: boolean;
 }
 
 export class ParallelRunner {
@@ -27,15 +30,17 @@ export class ParallelRunner {
   private concurrency: number;
   private activeFixtures: Set<FixtureManager> = new Set();
   private isShuttingDown = false;
+  private log: (msg: string) => void;
 
   constructor(scenarios: Scenario[], options: ParallelRunnerOptions) {
     this.scenarios = scenarios;
     this.options = options;
+    this.log = options.quiet ? console.error : console.log;
 
     const concurrencyInfo = detectConcurrency();
     this.concurrency = options.concurrency ?? concurrencyInfo.effective;
 
-    console.log(`Running with concurrency: ${this.concurrency} (${concurrencyInfo.reason})`);
+    this.log(`Running with concurrency: ${this.concurrency} (${concurrencyInfo.reason})`);
 
     this.setupShutdownHandler();
   }
@@ -88,7 +93,7 @@ export class ParallelRunner {
 
   private async runScenario(scenario: Scenario): Promise<EvalResult> {
     const scenarioName = `${scenario.framework}/${scenario.state}`;
-    console.log(`Starting: ${scenarioName}`);
+    this.log(`Starting: ${scenarioName}`);
 
     let lastResult: EvalResult | null = null;
     let lastToolCalls: ToolCall[] = [];
@@ -107,7 +112,7 @@ export class ParallelRunner {
       if (attempt === 1) {
         evalEvents.emitScenarioStart(eventPayload);
       } else {
-        console.log(`[${scenarioName}] Retry attempt ${attempt}/${this.options.maxAttempts}...`);
+        this.log(`[${scenarioName}] Retry attempt ${attempt}/${this.options.maxAttempts}...`);
         evalEvents.emitScenarioRetry(eventPayload);
       }
 
@@ -151,7 +156,7 @@ export class ParallelRunner {
         };
 
         if (gradeResult.passed) {
-          console.log(`✓ ${scenarioName} PASSED`);
+          this.log(`✓ ${scenarioName} PASSED`);
           evalEvents.emitScenarioPass({
             scenario: scenarioName,
             framework: scenario.framework,
@@ -176,7 +181,7 @@ export class ParallelRunner {
       } finally {
         const shouldKeep = this.options.keep || (this.options.keepOnFail && !lastResult?.passed);
         if (shouldKeep) {
-          console.log(`[${scenarioName}] Temp directory preserved: ${fixtureManager.getTempDir()}`);
+          this.log(`[${scenarioName}] Temp directory preserved: ${fixtureManager.getTempDir()}`);
         } else {
           await fixtureManager.cleanup();
         }
@@ -185,7 +190,7 @@ export class ParallelRunner {
     }
 
     if (lastResult && !lastResult.passed) {
-      console.log(`✗ ${scenarioName} FAILED`);
+      this.log(`✗ ${scenarioName} FAILED`);
       this.printFailureDetails(lastResult, !!this.options.verbose);
       evalEvents.emitScenarioFail({
         scenario: scenarioName,
@@ -206,16 +211,16 @@ export class ParallelRunner {
 
   private printFailureDetails(result: EvalResult, verbose: boolean): void {
     if (result.error) {
-      console.log(`  Error: ${result.error}`);
+      this.log(`  Error: ${result.error}`);
     } else if (result.checks) {
       const failedChecks = result.checks.filter((c: GradeCheck) => !c.passed);
       for (const check of failedChecks) {
-        console.log(`  - ${check.name}: ${check.message}`);
+        this.log(`  - ${check.name}: ${check.message}`);
         if (verbose && check.expected) {
-          console.log(`    Expected: ${check.expected}`);
+          this.log(`    Expected: ${check.expected}`);
         }
         if (verbose && check.actual) {
-          console.log(`    Actual: ${check.actual}`);
+          this.log(`    Actual: ${check.actual}`);
         }
       }
     }
@@ -226,7 +231,7 @@ export class ParallelRunner {
       if (this.isShuttingDown) return;
       this.isShuttingDown = true;
 
-      console.log('\nInterrupted. Cleaning up...');
+      this.log('\nInterrupted. Cleaning up...');
       await Promise.all(Array.from(this.activeFixtures).map((fm) => fm.cleanup()));
       process.exit(130);
     };

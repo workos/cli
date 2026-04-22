@@ -180,4 +180,35 @@ export default async function X() { const url = await getSignInUrl(); return <a 
     const result = await findUnsafeGetSignInUrlUsage(workDir);
     expect(result).toEqual([]);
   });
+
+  it('skips stories, tests, fixtures, examples, and docs', async () => {
+    const ignoredFiles = [
+      'components/Button.stories.tsx',
+      'components/Button.test.tsx',
+      'components/Button.spec.tsx',
+      '__tests__/page.tsx',
+      '__stories__/page.tsx',
+      '__mocks__/auth.tsx',
+      '__fixtures__/page.tsx',
+      'tests/page.tsx',
+      'test/page.tsx',
+      'fixtures/page.tsx',
+      'stories/page.tsx',
+      'examples/auth.tsx',
+      'docs/example.tsx',
+    ];
+    for (const rel of ignoredFiles) {
+      const dir = rel.split('/').slice(0, -1).join('/');
+      if (dir) await mkdir(join(workDir, dir), { recursive: true });
+      await writeFile(
+        join(workDir, rel),
+        `
+import { getSignInUrl } from '@workos-inc/authkit-nextjs';
+export default async function X() { const url = await getSignInUrl(); return <a href={url}/>; }
+`,
+      );
+    }
+    const result = await findUnsafeGetSignInUrlUsage(workDir);
+    expect(result).toEqual([]);
+  });
 });
