@@ -9,7 +9,7 @@ vi.mock('../../src/utils/exec-file.js', () => ({
 // Mock settings
 vi.mock('../../src/lib/settings.js', () => ({
   getVersion: vi.fn(() => '1.2.3'),
-  getConfig: vi.fn(() => ({ model: 'claude-opus-4-5-20251101' })),
+  getConfig: vi.fn(() => ({ model: 'claude-sonnet-4-6' })),
 }));
 
 import { execFileNoThrow } from '../../src/utils/exec-file.js';
@@ -69,7 +69,7 @@ describe('versioning', () => {
       const metadata = await captureVersionMetadata();
 
       expect(metadata.cliVersion).toBe('1.2.3');
-      expect(metadata.modelVersion).toBe('claude-opus-4-5-20251101');
+      expect(metadata.modelVersion).toBe('claude-sonnet-4-6');
       expect(metadata.skillVersions).toBeDefined();
       expect(typeof metadata.skillVersions.nextjs).toBe('string');
       expect(typeof metadata.skillVersions.react).toBe('string');

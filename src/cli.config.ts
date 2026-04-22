@@ -4,8 +4,8 @@ import pkg from '../package.json' with { type: 'json' };
 export const version = pkg.version;
 
 export const config = {
-  model: 'claude-opus-4-5-20251101',
-  doctorModel: 'claude-opus-4-5-20251101',
+  model: 'claude-sonnet-4-6',
+  doctorModel: 'claude-sonnet-4-6',
 
   // Production defaults - override via env vars for local dev
   workos: {
