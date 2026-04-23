@@ -455,26 +455,31 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
           }
 
           sdkEnv.ANTHROPIC_BASE_URL = gatewayUrl;
+          // Prevent the user's personal Anthropic key (if any) from being
+          // forwarded to the WorkOS gateway as an x-api-key header alongside
+          // the WorkOS access token we set below.
+          delete sdkEnv.ANTHROPIC_API_KEY;
           sdkEnv.ANTHROPIC_AUTH_TOKEN = creds.accessToken;
           authMode = options.local ? `local-gateway:${gatewayUrl}` : `workos-gateway:${gatewayUrl}`;
           logInfo('Sending access token to gateway (legacy mode)');
         }
       } else if (options.skipAuth) {
-        // Skip auth mode - direct to gateway without auth. Still seed a
-        // placeholder token so the SDK's local auth-source check passes; the
-        // gateway itself is expected to accept unauthenticated requests here.
+        // Skip auth mode - direct to gateway without a real token. The SDK's
+        // local auth-source check would otherwise fail with "Not logged in",
+        // so seed a placeholder bearer; the gateway is expected to accept
+        // unauthenticated requests here and ignore the placeholder value.
         sdkEnv.ANTHROPIC_BASE_URL = gatewayUrl;
         delete sdkEnv.ANTHROPIC_API_KEY;
         sdkEnv.ANTHROPIC_AUTH_TOKEN = PROXY_PLACEHOLDER_TOKEN;
         authMode = `skip-auth:${gatewayUrl}`;
-        logInfo('Skipping auth - no token sent to gateway');
+        logInfo('Skipping auth - placeholder bearer sent to gateway');
       } else {
         // Local mode without auth - same rationale as skip-auth above.
         sdkEnv.ANTHROPIC_BASE_URL = gatewayUrl;
         delete sdkEnv.ANTHROPIC_API_KEY;
         sdkEnv.ANTHROPIC_AUTH_TOKEN = PROXY_PLACEHOLDER_TOKEN;
         authMode = `local-gateway:${gatewayUrl}`;
-        logInfo('Local mode - no token sent to gateway');
+        logInfo('Local mode - placeholder bearer sent to gateway');
       }
 
       logInfo('Configured LLM gateway:', sdkEnv.ANTHROPIC_BASE_URL);

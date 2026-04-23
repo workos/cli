@@ -471,6 +471,23 @@ describe('initializeAgent sdkEnv auth', () => {
     expect(result.sdkEnv.ANTHROPIC_API_KEY).toBeUndefined();
   });
 
+  it('strips ANTHROPIC_API_KEY on legacy fallback path (no refresh token)', async () => {
+    vi.mocked(hasCredentials).mockReturnValue(true);
+    vi.mocked(getCredentials).mockReturnValue({
+      accessToken: 'real-workos-token',
+      refreshToken: null,
+      expiresAt: Date.now() + 60_000,
+    });
+
+    const result = await initializeAgent(makeAgentConfigForInit(), makeOptions({ skipAuth: false, local: false }));
+
+    // Legacy path sends the real WorkOS access token as the bearer; the
+    // user's personal Anthropic key must not tag along as an x-api-key
+    // header to the WorkOS gateway.
+    expect(result.sdkEnv.ANTHROPIC_AUTH_TOKEN).toBe('real-workos-token');
+    expect(result.sdkEnv.ANTHROPIC_API_KEY).toBeUndefined();
+  });
+
   it('preserves ANTHROPIC_API_KEY in direct mode', async () => {
     const result = await initializeAgent(
       makeAgentConfigForInit(),
