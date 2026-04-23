@@ -73,7 +73,7 @@ vi.mock('../utils/urls.js', () => ({
   getLlmGatewayUrlFromHost: vi.fn(() => 'http://localhost:8000'),
 }));
 
-import { runAgent, AgentErrorType, initializeAgent } from './agent-interface.js';
+import { runAgent, AgentErrorType, initializeAgent, type AgentConfig } from './agent-interface.js';
 import { startCredentialProxy, startClaimTokenProxy } from './credential-proxy.js';
 import { getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
 import { hasCredentials, getCredentials } from './credentials.js';
@@ -406,10 +406,11 @@ describe('initializeAgent sdkEnv auth', () => {
     }
   });
 
-  function makeAgentConfigForInit() {
+  function makeAgentConfigForInit(): AgentConfig {
     return {
       workingDirectory: '/tmp/test',
-      installDir: '/tmp/test',
+      workOSApiKey: 'sk_test_x',
+      workOSApiHost: 'https://api.workos.com',
     };
   }
 
@@ -419,6 +420,7 @@ describe('initializeAgent sdkEnv auth', () => {
       accessToken: 'real-workos-token',
       refreshToken: 'refresh-token',
       expiresAt: Date.now() + 60_000,
+      userId: 'user_x',
     });
     vi.mocked(startCredentialProxy).mockResolvedValue({
       port: 12345,
@@ -473,10 +475,11 @@ describe('initializeAgent sdkEnv auth', () => {
 
   it('strips ANTHROPIC_API_KEY on legacy fallback path (no refresh token)', async () => {
     vi.mocked(hasCredentials).mockReturnValue(true);
+    // No refreshToken - triggers the legacy fallback branch in initializeAgent.
     vi.mocked(getCredentials).mockReturnValue({
       accessToken: 'real-workos-token',
-      refreshToken: null,
       expiresAt: Date.now() + 60_000,
+      userId: 'user_x',
     });
 
     const result = await initializeAgent(makeAgentConfigForInit(), makeOptions({ skipAuth: false, local: false }));
