@@ -60,6 +60,14 @@ export interface FrameworkMetadata {
 
   /** Primary manifest file (e.g., 'pyproject.toml', 'Gemfile'). Optional for JS integrations. */
   manifestFile?: string;
+
+  /**
+   * Optional custom detection override for non-JS integrations. When present,
+   * the registry calls this instead of falling back to `manifestFile` existence.
+   * Use when a single manifest file isn't enough (e.g., Django projects may
+   * use `manage.py` + `requirements.txt` without a `pyproject.toml`).
+   */
+  detect?: (options: Pick<InstallerOptions, 'installDir'>) => boolean | Promise<boolean>;
 }
 
 /**

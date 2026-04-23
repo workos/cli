@@ -98,7 +98,7 @@ async function detectIntegrationFn(options: Pick<InstallerOptions, 'installDir'>
  * Detect if a single integration matches the project.
  * Uses package.json detection for JS integrations, manifest files for others.
  */
-async function detectSingleIntegration(
+export async function detectSingleIntegration(
   integration: string,
   options: Pick<InstallerOptions, 'installDir'>,
 ): Promise<boolean> {
@@ -115,6 +115,12 @@ async function detectSingleIntegration(
 
   // For JS integrations, check package.json
   if (config.metadata.language === 'javascript') {
+    // Without a package.json, no JS integration can match. Skip silently so
+    // non-JS integrations (Python/Django, Ruby, Go, ...) still get a chance —
+    // getPackageDotJson would otherwise call process.exit(1).
+    if (!existsSync(join(options.installDir, 'package.json'))) {
+      return false;
+    }
     const packageJson = await getPackageDotJson(options);
 
     switch (integration) {
@@ -151,7 +157,12 @@ async function detectSingleIntegration(
     }
   }
 
-  // For non-JS integrations, check manifest files
+  // For non-JS integrations, prefer a custom detect() if provided
+  // (e.g., Django matches manage.py | pyproject.toml | requirements.txt),
+  // otherwise fall back to manifest file existence.
+  if (config.metadata.detect) {
+    return await config.metadata.detect(options);
+  }
   if (config.metadata.manifestFile) {
     return existsSync(join(options.installDir, config.metadata.manifestFile));
   }
@@ -260,6 +271,15 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
 
         if (!integration || !credentials) {
           throw new Error('Missing integration or credentials');
+        }
+
+        // Non-JS integrations own their env file writing (e.g. Python writes
+        // .env inside its own run()). Skip here so we don't leak a .env.local
+        // with JS-flavored vars (WORKOS_COOKIE_PASSWORD, wrong redirect port).
+        const registry = await getRegistry();
+        const mod = registry.get(integration);
+        if (mod?.config.metadata.language !== 'javascript') {
+          return;
         }
 
         const port = detectPort(integration, installerOptions.installDir);

@@ -99,6 +99,7 @@ export const config: FrameworkConfig = {
     priority: 60,
     packageManager: 'pip',
     manifestFile: 'pyproject.toml',
+    detect: (options: Pick<InstallerOptions, 'installDir'>) => isDjangoProject(options.installDir),
     gatherContext: async (options: InstallerOptions) => {
       const pkgMgr = detectPythonPackageManager(options.installDir);
       return {

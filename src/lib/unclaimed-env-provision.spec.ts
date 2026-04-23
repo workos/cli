@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { existsSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -135,7 +135,8 @@ describe('unclaimed-env-provision', () => {
       );
     });
 
-    it('writes .env.local with all credentials including cookie password and claim token', async () => {
+    it('writes .env.local with all credentials including cookie password and claim token (JS project)', async () => {
+      writeFileSync(join(testDir, 'package.json'), '{}');
       mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
 
       await tryProvisionUnclaimedEnv({ installDir: testDir });
@@ -147,6 +148,21 @@ describe('unclaimed-env-provision', () => {
       expect(content).toContain('WORKOS_CLIENT_ID=client_01ABC');
       expect(content).toContain('WORKOS_COOKIE_PASSWORD=');
       expect(content).toContain('WORKOS_CLAIM_TOKEN=ct_token123');
+    });
+
+    it('writes .env (no cookie password) when no package.json present (non-JS project)', async () => {
+      mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
+
+      await tryProvisionUnclaimedEnv({ installDir: testDir });
+
+      expect(existsSync(join(testDir, '.env.local'))).toBe(false);
+      const envPath = join(testDir, '.env');
+      expect(existsSync(envPath)).toBe(true);
+      const content = readFileSync(envPath, 'utf-8');
+      expect(content).toContain('WORKOS_API_KEY=sk_test_oneshot');
+      expect(content).toContain('WORKOS_CLIENT_ID=client_01ABC');
+      expect(content).toContain('WORKOS_CLAIM_TOKEN=ct_token123');
+      expect(content).not.toContain('WORKOS_COOKIE_PASSWORD');
     });
 
     it('shows provisioning message to user', async () => {
@@ -199,7 +215,8 @@ describe('unclaimed-env-provision', () => {
       expect(result).toBe(false);
     });
 
-    it('writes redirect URI to .env.local when provided', async () => {
+    it('writes redirect URI to .env.local when provided (JS project)', async () => {
+      writeFileSync(join(testDir, 'package.json'), '{}');
       mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
 
       await tryProvisionUnclaimedEnv({
@@ -212,7 +229,8 @@ describe('unclaimed-env-provision', () => {
       expect(content).toContain('NEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback');
     });
 
-    it('uses WORKOS_REDIRECT_URI key by default when redirect URI provided', async () => {
+    it('uses WORKOS_REDIRECT_URI key by default when redirect URI provided (JS project)', async () => {
+      writeFileSync(join(testDir, 'package.json'), '{}');
       mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
 
       await tryProvisionUnclaimedEnv({

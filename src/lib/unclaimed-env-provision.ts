@@ -10,7 +10,7 @@ import chalk from 'chalk';
 import { provisionUnclaimedEnvironment, UnclaimedEnvApiError } from './unclaimed-env-api.js';
 import { getConfig, saveConfig, getActiveEnvironment } from './config-store.js';
 import type { CliConfig } from './config-store.js';
-import { writeEnvLocal } from './env-writer.js';
+import { writeCredentialsEnv } from './env-writer.js';
 import { logInfo, logError } from '../utils/debug.js';
 import { renderStderrBox } from '../utils/box.js';
 import clack from '../utils/clack.js';
@@ -50,7 +50,7 @@ export async function tryProvisionUnclaimedEnv(options: UnclaimedEnvProvisionOpt
       envVars[key] = options.redirectUri;
     }
 
-    writeEnvLocal(options.installDir, envVars);
+    writeCredentialsEnv(options.installDir, envVars);
 
     // Save to config store (after .env.local succeeds)
     const config: CliConfig = getConfig() ?? { environments: {} };

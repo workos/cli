@@ -57,6 +57,10 @@ export const config = {
       port: 5173,
       callbackPath: '/callback',
     },
+    python: {
+      port: 8000,
+      callbackPath: '/auth/callback/',
+    },
   },
 
   legacy: {

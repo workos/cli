@@ -5,12 +5,13 @@ import { getConfig } from './settings.js';
 
 const settings = getConfig();
 
-const INTEGRATION_TO_SETTINGS_KEY: Record<Integration, string> = {
+const INTEGRATION_TO_SETTINGS_KEY: Record<string, string> = {
   nextjs: 'nextjs',
   react: 'react',
   'tanstack-start': 'tanstackStart',
   'react-router': 'reactRouter',
   'vanilla-js': 'vanillaJs',
+  python: 'python',
 };
 
 const DEFAULT_PORT = 3000;
