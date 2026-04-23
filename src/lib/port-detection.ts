@@ -97,6 +97,103 @@ function parseTanStackPort(installDir: string): number | null {
 }
 
 /**
+ * Parse port from .NET Properties/launchSettings.json.
+ * VS/Rider scaffold: profiles[*].applicationUrl = "http://localhost:5000;https://localhost:5001"
+ */
+function parseDotnetPort(installDir: string): number | null {
+  try {
+    const configPath = join(installDir, 'Properties', 'launchSettings.json');
+    const content = fs.readFileSync(configPath, 'utf-8');
+    const parsed = JSON.parse(content) as { profiles?: Record<string, { applicationUrl?: string }> };
+    for (const profile of Object.values(parsed.profiles ?? {})) {
+      const match = profile.applicationUrl?.match(/http:\/\/[^:/]+:(\d+)/);
+      if (match) return parseInt(match[1], 10);
+    }
+  } catch {
+    // File doesn't exist or can't parse
+  }
+  return null;
+}
+
+/**
+ * Parse port from Phoenix config/dev.exs or config/runtime.exs.
+ * Looks for `port: NNNN` — typically inside `http: [...]` but a bare regex is fine.
+ */
+function parseElixirPort(installDir: string): number | null {
+  for (const relPath of ['config/dev.exs', 'config/runtime.exs']) {
+    try {
+      const content = fs.readFileSync(join(installDir, relPath), 'utf-8');
+      const match = content.match(/port:\s*(\d+)/);
+      if (match) return parseInt(match[1], 10);
+    } catch {
+      // skip
+    }
+  }
+  return null;
+}
+
+/**
+ * Parse port from Spring Boot application.properties or application.yml.
+ * Both the default `src/main/resources/` location and a top-level file are checked.
+ */
+function parseKotlinPort(installDir: string): number | null {
+  const propsPaths = [
+    join(installDir, 'src', 'main', 'resources', 'application.properties'),
+    join(installDir, 'application.properties'),
+  ];
+  for (const propsPath of propsPaths) {
+    try {
+      const content = fs.readFileSync(propsPath, 'utf-8');
+      const match = content.match(/^server\.port\s*=\s*(\d+)/m);
+      if (match) return parseInt(match[1], 10);
+    } catch {
+      // skip
+    }
+  }
+
+  const ymlPaths = [
+    join(installDir, 'src', 'main', 'resources', 'application.yml'),
+    join(installDir, 'src', 'main', 'resources', 'application.yaml'),
+    join(installDir, 'application.yml'),
+    join(installDir, 'application.yaml'),
+  ];
+  for (const ymlPath of ymlPaths) {
+    try {
+      const content = fs.readFileSync(ymlPath, 'utf-8');
+      // `server:\n  port: 8080` — shallow YAML parse via regex
+      const match = content.match(/server\s*:\s*\n[^\S\n]+port\s*:\s*(\d+)/);
+      if (match) return parseInt(match[1], 10);
+    } catch {
+      // skip
+    }
+  }
+  return null;
+}
+
+/**
+ * Parse port from Rails config/puma.rb.
+ * Common forms:
+ *   port ENV.fetch("PORT") { 3000 }
+ *   port ENV.fetch("PORT", 3000)
+ *   port 3000
+ */
+function parseRubyPort(installDir: string): number | null {
+  try {
+    const configPath = join(installDir, 'config', 'puma.rb');
+    const content = fs.readFileSync(configPath, 'utf-8');
+    const blockFetch = content.match(/port\s+ENV\.fetch\([^)]*\)\s*\{\s*(\d+)\s*\}/);
+    if (blockFetch) return parseInt(blockFetch[1], 10);
+    const argFetch = content.match(/port\s+ENV\.fetch\([^,]+,\s*(\d+)\)/);
+    if (argFetch) return parseInt(argFetch[1], 10);
+    const literal = content.match(/^\s*port\s+(\d+)/m);
+    if (literal) return parseInt(literal[1], 10);
+  } catch {
+    // skip
+  }
+  return null;
+}
+
+/**
  * Detect the dev server port for a framework.
  * Checks config files first, falls back to framework default.
  */
@@ -127,6 +224,22 @@ export function detectPort(integration: Integration, installDir: string): number
       }
       break;
     }
+
+    case 'dotnet':
+      detectedPort = parseDotnetPort(installDir);
+      break;
+
+    case 'elixir':
+      detectedPort = parseElixirPort(installDir);
+      break;
+
+    case 'kotlin':
+      detectedPort = parseKotlinPort(installDir);
+      break;
+
+    case 'ruby':
+      detectedPort = parseRubyPort(installDir);
+      break;
   }
 
   return detectedPort ?? getDefaultPort(integration);
