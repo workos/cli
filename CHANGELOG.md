@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.2](https://github.com/workos/cli/compare/v0.12.1...v0.12.2) (2026-04-23)
+
+
+### Bug Fixes
+
+* detect service unavailability and fail fast with clear error ([#118](https://github.com/workos/cli/issues/118)) ([524c709](https://github.com/workos/cli/commit/524c709ee864149190f79947a241f3f2c5e6367d))
+* unbreak non-JS integration install flow (Django, .NET, Kotlin + others) ([#125](https://github.com/workos/cli/issues/125)) ([bd9e068](https://github.com/workos/cli/commit/bd9e068642afad706376ff316fdc9c050d757977))
+
 ## [0.12.1](https://github.com/workos/cli/compare/v0.12.0...v0.12.1) (2026-04-01)
 
 
