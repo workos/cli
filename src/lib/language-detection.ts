@@ -23,7 +23,7 @@ function fileExists(cwd: string, filename: string): { found: boolean; manifestFi
   return { found: existsSync(fullPath), manifestFile: filename };
 }
 
-function globExists(cwd: string, pattern: string): { found: boolean; manifestFile: string } {
+export function globExists(cwd: string, pattern: string): { found: boolean; manifestFile: string } {
   // Simple glob for *.ext patterns in the root directory
   const ext = pattern.replace('*', '');
   try {
@@ -44,7 +44,7 @@ function detectPython(cwd: string): { found: boolean; manifestFile: string } {
   return { found: false, manifestFile: 'pyproject.toml' };
 }
 
-function detectKotlin(cwd: string): { found: boolean; manifestFile: string } {
+export function detectKotlin(cwd: string): { found: boolean; manifestFile: string } {
   const ktsPath = join(cwd, 'build.gradle.kts');
   if (existsSync(ktsPath)) {
     try {
@@ -64,6 +64,19 @@ function detectKotlin(cwd: string): { found: boolean; manifestFile: string } {
       const content = readFileSync(gradlePath, 'utf-8');
       if (/kotlin/.test(content)) {
         return { found: true, manifestFile: 'build.gradle' };
+      }
+    } catch {
+      // Can't read file
+    }
+  }
+
+  // And pom.xml (Maven) — common for Kotlin/Spring Boot projects
+  const pomPath = join(cwd, 'pom.xml');
+  if (existsSync(pomPath)) {
+    try {
+      const content = readFileSync(pomPath, 'utf-8');
+      if (/kotlin/i.test(content)) {
+        return { found: true, manifestFile: 'pom.xml' };
       }
     } catch {
       // Can't read file

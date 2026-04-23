@@ -12,6 +12,13 @@ const INTEGRATION_TO_SETTINGS_KEY: Record<string, string> = {
   'react-router': 'reactRouter',
   'vanilla-js': 'vanillaJs',
   python: 'python',
+  ruby: 'ruby',
+  php: 'php',
+  'php-laravel': 'phpLaravel',
+  go: 'go',
+  dotnet: 'dotnet',
+  elixir: 'elixir',
+  kotlin: 'kotlin',
 };
 
 const DEFAULT_PORT = 3000;

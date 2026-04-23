@@ -23,3 +23,19 @@ describe('port-detection — python/Django defaults', () => {
     expect(getCallbackPath('python')).toBe('/auth/callback/');
   });
 });
+
+describe('port-detection — non-JS integration defaults', () => {
+  const dir = '/';
+
+  it.each([
+    ['ruby', 3000],
+    ['php', 8000],
+    ['php-laravel', 8000],
+    ['go', 8080],
+    ['dotnet', 5000],
+    ['elixir', 4000],
+    ['kotlin', 8080],
+  ] as const)('%s defaults to port %i', (integration, expectedPort) => {
+    expect(detectPort(integration, dir)).toBe(expectedPort);
+  });
+});

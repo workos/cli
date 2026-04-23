@@ -61,6 +61,34 @@ export const config = {
       port: 8000,
       callbackPath: '/auth/callback/',
     },
+    ruby: {
+      port: 3000,
+      callbackPath: '/auth/callback',
+    },
+    php: {
+      port: 8000,
+      callbackPath: '/auth/callback',
+    },
+    phpLaravel: {
+      port: 8000,
+      callbackPath: '/auth/callback',
+    },
+    go: {
+      port: 8080,
+      callbackPath: '/auth/callback',
+    },
+    dotnet: {
+      port: 5000,
+      callbackPath: '/auth/callback',
+    },
+    elixir: {
+      port: 4000,
+      callbackPath: '/auth/callback',
+    },
+    kotlin: {
+      port: 8080,
+      callbackPath: '/auth/callback',
+    },
   },
 
   legacy: {

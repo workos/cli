@@ -53,4 +53,25 @@ describe('detectSingleIntegration', () => {
     const result = await detectSingleIntegration('python', { installDir: dir });
     expect(result).toBe(false);
   });
+
+  it('detects dotnet via any *.csproj file (glob, not literal match)', async () => {
+    await writeFile(join(dir, 'Example.csproj'), '<Project Sdk="Microsoft.NET.Sdk.Web" />\n');
+
+    const result = await detectSingleIntegration('dotnet', { installDir: dir });
+    expect(result).toBe(true);
+  });
+
+  it('detects kotlin via build.gradle (Groovy DSL), not just build.gradle.kts', async () => {
+    await writeFile(join(dir, 'build.gradle'), "plugins { id 'org.jetbrains.kotlin.jvm' version '1.9.0' }\n");
+
+    const result = await detectSingleIntegration('kotlin', { installDir: dir });
+    expect(result).toBe(true);
+  });
+
+  it('detects kotlin via pom.xml (Maven)', async () => {
+    await writeFile(join(dir, 'pom.xml'), '<project><dependencies><kotlin /></dependencies></project>\n');
+
+    const result = await detectSingleIntegration('kotlin', { installDir: dir });
+    expect(result).toBe(true);
+  });
 });

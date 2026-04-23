@@ -2,6 +2,7 @@
 import type { FrameworkConfig } from '../../lib/framework-config.js';
 import type { InstallerOptions } from '../../utils/types.js';
 import { enableDebugLogs } from '../../utils/debug.js';
+import { detectKotlin } from '../../lib/language-detection.js';
 
 export const config: FrameworkConfig = {
   metadata: {
@@ -14,6 +15,8 @@ export const config: FrameworkConfig = {
     priority: 40,
     packageManager: 'gradle',
     manifestFile: 'build.gradle.kts',
+    // Also match Groovy DSL (build.gradle) and Maven (pom.xml) Kotlin projects.
+    detect: (options) => detectKotlin(options.installDir).found,
   },
 
   detection: {
