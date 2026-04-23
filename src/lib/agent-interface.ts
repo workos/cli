@@ -345,6 +345,15 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 'true',
     };
 
+    // Placeholder bearer token for the Claude Agent SDK. The SDK's CLI
+    // subprocess runs a local auth-source check at startup and exits with
+    // "Not logged in · Please run /login" if no credentials are present in
+    // its environment — even when a proxy is handling auth upstream. Setting
+    // this token puts the SDK in custom-backend mode so it skips that check;
+    // the credential proxy rewrites the Authorization header with the real
+    // WorkOS token before forwarding upstream.
+    const PROXY_PLACEHOLDER_TOKEN = 'workos-cli-proxy-placeholder';
+
     if (options.direct) {
       // Direct mode: use user's Anthropic API key, skip gateway
       if (!process.env.ANTHROPIC_API_KEY) {
@@ -377,7 +386,10 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
         });
 
         sdkEnv.ANTHROPIC_BASE_URL = activeProxyHandle.url;
-        delete sdkEnv.ANTHROPIC_AUTH_TOKEN;
+        // Prevent the user's personal Anthropic key (if any) from being sent
+        // to the WorkOS gateway; auth is injected by the claim-token proxy.
+        delete sdkEnv.ANTHROPIC_API_KEY;
+        sdkEnv.ANTHROPIC_AUTH_TOKEN = PROXY_PLACEHOLDER_TOKEN;
         authMode = `claim-token-proxy:${activeProxyHandle.url}→${gatewayUrl}`;
         logInfo(`[agent-interface] Using claim token proxy for unclaimed environment`);
       } else if (!options.skipAuth && !options.local) {
@@ -419,8 +431,11 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
           sdkEnv.ANTHROPIC_BASE_URL = activeProxyHandle.url;
           logInfo(`[agent-interface] Using credential proxy at ${activeProxyHandle.url}`);
 
-          // Proxy handles auth, so we don't set ANTHROPIC_AUTH_TOKEN
-          delete sdkEnv.ANTHROPIC_AUTH_TOKEN;
+          // Prevent the user's personal Anthropic key (if any) from being
+          // sent to the WorkOS gateway; the credential proxy rewrites the
+          // Authorization header with the real WorkOS token.
+          delete sdkEnv.ANTHROPIC_API_KEY;
+          sdkEnv.ANTHROPIC_AUTH_TOKEN = PROXY_PLACEHOLDER_TOKEN;
           authMode = `proxy:${activeProxyHandle.url}→${gatewayUrl}`;
         } else {
           // No refresh token OR proxy disabled - fall back to old behavior (5 min limit)
@@ -445,15 +460,19 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
           logInfo('Sending access token to gateway (legacy mode)');
         }
       } else if (options.skipAuth) {
-        // Skip auth mode - direct to gateway without auth
+        // Skip auth mode - direct to gateway without auth. Still seed a
+        // placeholder token so the SDK's local auth-source check passes; the
+        // gateway itself is expected to accept unauthenticated requests here.
         sdkEnv.ANTHROPIC_BASE_URL = gatewayUrl;
-        delete sdkEnv.ANTHROPIC_AUTH_TOKEN;
+        delete sdkEnv.ANTHROPIC_API_KEY;
+        sdkEnv.ANTHROPIC_AUTH_TOKEN = PROXY_PLACEHOLDER_TOKEN;
         authMode = `skip-auth:${gatewayUrl}`;
         logInfo('Skipping auth - no token sent to gateway');
       } else {
-        // Local mode without auth
+        // Local mode without auth - same rationale as skip-auth above.
         sdkEnv.ANTHROPIC_BASE_URL = gatewayUrl;
-        delete sdkEnv.ANTHROPIC_AUTH_TOKEN;
+        delete sdkEnv.ANTHROPIC_API_KEY;
+        sdkEnv.ANTHROPIC_AUTH_TOKEN = PROXY_PLACEHOLDER_TOKEN;
         authMode = `local-gateway:${gatewayUrl}`;
         logInfo('Local mode - no token sent to gateway');
       }

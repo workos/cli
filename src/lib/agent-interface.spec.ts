@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const { mockQuery, mockConfig } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
@@ -61,13 +61,22 @@ vi.mock('./token-refresh.js', () => ({
 
 vi.mock('./credential-proxy.js', () => ({
   startCredentialProxy: vi.fn(),
+  startClaimTokenProxy: vi.fn(),
+}));
+
+vi.mock('./config-store.js', () => ({
+  getActiveEnvironment: vi.fn(() => null),
+  isUnclaimedEnvironment: vi.fn(() => false),
 }));
 
 vi.mock('../utils/urls.js', () => ({
   getLlmGatewayUrlFromHost: vi.fn(() => 'http://localhost:8000'),
 }));
 
-import { runAgent, AgentErrorType } from './agent-interface.js';
+import { runAgent, AgentErrorType, initializeAgent } from './agent-interface.js';
+import { startCredentialProxy, startClaimTokenProxy } from './credential-proxy.js';
+import { getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
+import { hasCredentials, getCredentials } from './credentials.js';
 import { InstallerEventEmitter } from './events.js';
 import type { InstallerOptions } from '../utils/types.js';
 
@@ -362,5 +371,116 @@ describe('service unavailability handling', () => {
     expect(result.error).toBe(AgentErrorType.SERVICE_UNAVAILABLE);
     expect(result.errorMessage).toMatch(/rate-limited/);
     expect(validateAndFormat).not.toHaveBeenCalled();
+  });
+});
+
+describe('initializeAgent sdkEnv auth', () => {
+  const PROXY_PLACEHOLDER_TOKEN = 'workos-cli-proxy-placeholder';
+  const originalAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
+  const originalAnthropicAuthToken = process.env.ANTHROPIC_AUTH_TOKEN;
+
+  beforeEach(() => {
+    vi.mocked(startCredentialProxy).mockReset();
+    vi.mocked(startClaimTokenProxy).mockReset();
+    vi.mocked(getActiveEnvironment).mockReset().mockReturnValue(null);
+    vi.mocked(isUnclaimedEnvironment).mockReset().mockReturnValue(false);
+    vi.mocked(hasCredentials).mockReset().mockReturnValue(false);
+    vi.mocked(getCredentials).mockReset().mockReturnValue(null);
+
+    // Simulate a user shell that has their own Anthropic key sitting in the
+    // environment. The SDK must NOT forward this to the WorkOS gateway.
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-user-personal-key';
+    delete process.env.ANTHROPIC_AUTH_TOKEN;
+  });
+
+  afterEach(() => {
+    if (originalAnthropicApiKey === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = originalAnthropicApiKey;
+    }
+    if (originalAnthropicAuthToken === undefined) {
+      delete process.env.ANTHROPIC_AUTH_TOKEN;
+    } else {
+      process.env.ANTHROPIC_AUTH_TOKEN = originalAnthropicAuthToken;
+    }
+  });
+
+  function makeAgentConfigForInit() {
+    return {
+      workingDirectory: '/tmp/test',
+      installDir: '/tmp/test',
+    };
+  }
+
+  it('seeds placeholder auth token on the credential proxy path', async () => {
+    vi.mocked(hasCredentials).mockReturnValue(true);
+    vi.mocked(getCredentials).mockReturnValue({
+      accessToken: 'real-workos-token',
+      refreshToken: 'refresh-token',
+      expiresAt: Date.now() + 60_000,
+    });
+    vi.mocked(startCredentialProxy).mockResolvedValue({
+      port: 12345,
+      url: 'http://127.0.0.1:12345',
+      stop: vi.fn(async () => {}),
+    });
+
+    const result = await initializeAgent(makeAgentConfigForInit(), makeOptions({ skipAuth: false, local: false }));
+
+    // The SDK runs a local auth-source check at startup and exits with
+    // "Not logged in" if nothing is present. A placeholder token prevents
+    // that false-positive; the proxy overwrites Authorization upstream.
+    expect(result.sdkEnv.ANTHROPIC_AUTH_TOKEN).toBe(PROXY_PLACEHOLDER_TOKEN);
+    // User's personal Anthropic key must not leak through to the gateway.
+    expect(result.sdkEnv.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(result.sdkEnv.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:12345');
+  });
+
+  it('seeds placeholder auth token on the claim-token proxy path', async () => {
+    vi.mocked(getActiveEnvironment).mockReturnValue({
+      apiKey: 'sk_test_x',
+      clientId: 'client_x',
+      claimToken: 'claim_xyz',
+    } as unknown as ReturnType<typeof getActiveEnvironment>);
+    vi.mocked(isUnclaimedEnvironment).mockReturnValue(true);
+    vi.mocked(startClaimTokenProxy).mockResolvedValue({
+      port: 23456,
+      url: 'http://127.0.0.1:23456',
+      stop: vi.fn(async () => {}),
+    });
+
+    const result = await initializeAgent(makeAgentConfigForInit(), makeOptions({ skipAuth: false, local: false }));
+
+    expect(result.sdkEnv.ANTHROPIC_AUTH_TOKEN).toBe(PROXY_PLACEHOLDER_TOKEN);
+    expect(result.sdkEnv.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(result.sdkEnv.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:23456');
+  });
+
+  it('seeds placeholder auth token in skip-auth mode', async () => {
+    const result = await initializeAgent(makeAgentConfigForInit(), makeOptions({ skipAuth: true, local: false }));
+
+    expect(result.sdkEnv.ANTHROPIC_AUTH_TOKEN).toBe(PROXY_PLACEHOLDER_TOKEN);
+    expect(result.sdkEnv.ANTHROPIC_API_KEY).toBeUndefined();
+  });
+
+  it('seeds placeholder auth token in local mode', async () => {
+    const result = await initializeAgent(makeAgentConfigForInit(), makeOptions({ skipAuth: false, local: true }));
+
+    expect(result.sdkEnv.ANTHROPIC_AUTH_TOKEN).toBe(PROXY_PLACEHOLDER_TOKEN);
+    expect(result.sdkEnv.ANTHROPIC_API_KEY).toBeUndefined();
+  });
+
+  it('preserves ANTHROPIC_API_KEY in direct mode', async () => {
+    const result = await initializeAgent(
+      makeAgentConfigForInit(),
+      makeOptions({ direct: true, skipAuth: false, local: false }),
+    );
+
+    // Direct mode talks to api.anthropic.com using the user's own key;
+    // the placeholder bearer must NOT be set here.
+    expect(result.sdkEnv.ANTHROPIC_API_KEY).toBe('sk-ant-user-personal-key');
+    expect(result.sdkEnv.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
+    expect(result.sdkEnv.ANTHROPIC_BASE_URL).toBeUndefined();
   });
 });
