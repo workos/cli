@@ -1,5 +1,9 @@
 import type { InstallerOptions } from '../utils/types.js';
-import type { Language } from './language-detection.js';
+
+/**
+ * Supported programming languages for framework integrations.
+ */
+export type Language = 'javascript' | 'python' | 'ruby' | 'php' | 'go' | 'kotlin' | 'dotnet' | 'elixir';
 
 /**
  * Configuration interface for framework-specific agent integrations.

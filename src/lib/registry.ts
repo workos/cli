@@ -1,8 +1,7 @@
 import { readdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { FrameworkConfig } from './framework-config.js';
-import type { Language } from './language-detection.js';
+import type { FrameworkConfig, Language } from './framework-config.js';
 import type { InstallerOptions } from '../utils/types.js';
 
 /**

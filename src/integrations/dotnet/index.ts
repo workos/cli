@@ -1,8 +1,16 @@
 /* .NET (ASP.NET Core) integration — auto-discovered by registry */
+import { readdirSync } from 'node:fs';
 import type { FrameworkConfig } from '../../lib/framework-config.js';
 import type { InstallerOptions } from '../../utils/types.js';
 import { enableDebugLogs } from '../../utils/debug.js';
-import { globExists } from '../../lib/language-detection.js';
+
+function hasCsproj(installDir: string): boolean {
+  try {
+    return readdirSync(installDir).some((f) => f.endsWith('.csproj'));
+  } catch {
+    return false;
+  }
+}
 import { SPINNER_MESSAGE } from '../../lib/framework-config.js';
 import { getOrAskForWorkOSCredentials } from '../../utils/clack-utils.js';
 import { analytics } from '../../utils/analytics.js';
@@ -24,7 +32,7 @@ export const config: FrameworkConfig = {
     packageManager: 'dotnet',
     manifestFile: '*.csproj',
     // existsSync cannot glob, so match any *.csproj in the install dir.
-    detect: (options) => globExists(options.installDir, '*.csproj').found,
+    detect: (options) => hasCsproj(options.installDir),
   },
 
   detection: {

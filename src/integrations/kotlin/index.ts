@@ -1,8 +1,30 @@
 /* Kotlin (Spring Boot) integration — auto-discovered by registry */
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { FrameworkConfig } from '../../lib/framework-config.js';
 import type { InstallerOptions } from '../../utils/types.js';
 import { enableDebugLogs } from '../../utils/debug.js';
-import { detectKotlin } from '../../lib/language-detection.js';
+
+function hasKotlinContent(path: string, pattern: RegExp): boolean {
+  try {
+    return pattern.test(readFileSync(path, 'utf-8'));
+  } catch {
+    return false;
+  }
+}
+
+function isKotlinProject(installDir: string): boolean {
+  const kts = join(installDir, 'build.gradle.kts');
+  if (existsSync(kts) && hasKotlinContent(kts, /org\.jetbrains\.kotlin|kotlin\(/)) return true;
+
+  const gradle = join(installDir, 'build.gradle');
+  if (existsSync(gradle) && hasKotlinContent(gradle, /kotlin/)) return true;
+
+  const pom = join(installDir, 'pom.xml');
+  if (existsSync(pom) && hasKotlinContent(pom, /kotlin/i)) return true;
+
+  return false;
+}
 
 export const config: FrameworkConfig = {
   metadata: {
@@ -16,7 +38,7 @@ export const config: FrameworkConfig = {
     packageManager: 'gradle',
     manifestFile: 'build.gradle.kts',
     // Also match Groovy DSL (build.gradle) and Maven (pom.xml) Kotlin projects.
-    detect: (options) => detectKotlin(options.installDir).found,
+    detect: (options) => isKotlinProject(options.installDir),
   },
 
   detection: {
