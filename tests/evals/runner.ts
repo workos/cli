@@ -134,8 +134,7 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
 
   const scenarios = SCENARIOS.filter(
     (s) =>
-      (!options.framework || options.framework.includes(s.framework)) &&
-      (!options.state || s.state === options.state),
+      (!options.framework || options.framework.includes(s.framework)) && (!options.state || s.state === options.state),
   );
 
   const maxAttempts = (options.retry ?? 2) + 1;

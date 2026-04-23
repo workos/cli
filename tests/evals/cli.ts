@@ -136,9 +136,7 @@ export function parseArgs(args: string[]): CliOptions {
         .filter(Boolean);
       const invalid = frameworks.filter((f) => !FRAMEWORKS.includes(f));
       if (invalid.length > 0) {
-        throw new Error(
-          `Unknown framework(s): ${invalid.join(', ')}. Valid: ${FRAMEWORKS.join(', ')}`,
-        );
+        throw new Error(`Unknown framework(s): ${invalid.join(', ')}. Valid: ${FRAMEWORKS.join(', ')}`);
       }
       options.framework = [...(options.framework ?? []), ...frameworks];
     } else if (arg.startsWith('--state=')) {

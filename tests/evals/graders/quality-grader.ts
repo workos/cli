@@ -9,8 +9,7 @@ const QUALITY_MODEL = 'claude-sonnet-4-6';
 // JSON. Eliminates parser brittleness and max_tokens truncation of free-form responses.
 const GRADING_TOOL: Anthropic.Messages.Tool = {
   name: 'submit_quality_grades',
-  description:
-    'Submit integer quality grades (1-5) for each dimension along with a brief overall reasoning.',
+  description: 'Submit integer quality grades (1-5) for each dimension along with a brief overall reasoning.',
   input_schema: {
     type: 'object',
     properties: {

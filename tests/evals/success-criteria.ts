@@ -76,10 +76,7 @@ export function validateResults(results: EvalResult[], criteria: SuccessCriteria
     failures.push(
       `First-attempt pass rate ${(firstAttemptRate * 100).toFixed(1)}% < ${criteria.firstAttemptPassRate * 100}% floor (possible regression)`,
     );
-  } else if (
-    criteria.firstAttemptTargetRate !== undefined &&
-    firstAttemptRate < criteria.firstAttemptTargetRate
-  ) {
+  } else if (criteria.firstAttemptTargetRate !== undefined && firstAttemptRate < criteria.firstAttemptTargetRate) {
     warnings.push(
       `First-attempt pass rate ${(firstAttemptRate * 100).toFixed(1)}% below target ${criteria.firstAttemptTargetRate * 100}% — investigate drift`,
     );

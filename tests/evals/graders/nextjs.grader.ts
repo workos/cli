@@ -128,11 +128,13 @@ export class NextjsGrader implements Grader {
     const usesAuthkitMiddleware = content.includes('authkitMiddleware');
     const usesComposable = content.includes('authkit(') && content.includes('handleAuthkitHeaders');
 
-    const integrationMessage =
-      usesAuthkitProxy ? 'Uses authkitProxy'
-      : usesAuthkitMiddleware ? 'Uses authkitMiddleware (deprecated; prefer authkitProxy)'
-      : usesComposable ? 'Uses authkit() composable with handleAuthkitHeaders'
-      : 'Missing authkitProxy, authkitMiddleware, or authkit() composable integration';
+    const integrationMessage = usesAuthkitProxy
+      ? 'Uses authkitProxy'
+      : usesAuthkitMiddleware
+        ? 'Uses authkitMiddleware (deprecated; prefer authkitProxy)'
+        : usesComposable
+          ? 'Uses authkit() composable with handleAuthkitHeaders'
+          : 'Missing authkitProxy, authkitMiddleware, or authkit() composable integration';
 
     return [
       {

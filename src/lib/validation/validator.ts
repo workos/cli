@@ -204,9 +204,7 @@ export async function validateFiles(rules: ValidationRules, projectDir: string):
       }
 
       if (rule.mustContainAny) {
-        const satisfied = readable.some(({ content }) =>
-          rule.mustContainAny!.some((p) => content.includes(p)),
-        );
+        const satisfied = readable.some(({ content }) => rule.mustContainAny!.some((p) => content.includes(p)));
         if (!satisfied) {
           const locations = readable.map((r) => r.file).join(', ');
           issues.push({
