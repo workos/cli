@@ -148,6 +148,22 @@ export function detectIssues(report: Omit<DoctorReport, 'issues' | 'summary'>): 
     }
   }
 
+  // Skill freshness — warn when agent-installed skills trail the bundled version.
+  // Surfaced so users know their coding agent is using older WorkOS guidance.
+  if (report.skills?.bundledVersion) {
+    const stale = report.skills.agents.filter((a) => a.stale);
+    if (stale.length > 0) {
+      const agentList = stale.map((a) => `${a.agent} (${a.installedVersion ?? 'unknown'})`).join(', ');
+      issues.push({
+        code: 'SKILLS_OUTDATED',
+        severity: 'warning',
+        message: `WorkOS skills outdated for ${agentList} — bundled: ${report.skills.bundledVersion}`,
+        remediation: 'Run: workos skills install',
+        details: { bundledVersion: report.skills.bundledVersion, stale: stale.map((a) => a.agent) },
+      });
+    }
+  }
+
   return issues;
 }
 

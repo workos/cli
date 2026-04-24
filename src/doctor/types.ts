@@ -108,6 +108,17 @@ export interface AuthPatternInfo {
   findings: AuthPatternFinding[];
 }
 
+export interface SkillAgentStatus {
+  agent: string;
+  installedVersion: string | null;
+  stale: boolean;
+}
+
+export interface SkillsInfo {
+  bundledVersion: string | null;
+  agents: SkillAgentStatus[];
+}
+
 export interface DoctorReport {
   version: string;
   timestamp: string;
@@ -127,6 +138,7 @@ export interface DoctorReport {
   credentialValidation?: CredentialValidation;
   authPatterns?: AuthPatternInfo;
   aiAnalysis?: AiAnalysis;
+  skills?: SkillsInfo;
   issues: Issue[];
   summary: {
     errors: number;

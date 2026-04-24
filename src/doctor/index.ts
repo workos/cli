@@ -7,6 +7,7 @@ import { checkConnectivity } from './checks/connectivity.js';
 import { checkDashboardSettings, compareRedirectUris } from './checks/dashboard.js';
 import { checkAuthPatterns } from './checks/auth-patterns.js';
 import { checkAiAnalysis } from './checks/ai-analysis.js';
+import { checkSkills } from './checks/skills.js';
 import { detectIssues } from './issues.js';
 import { formatReport } from './output.js';
 import { formatReportAsJson } from './json-output.js';
@@ -30,6 +31,8 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     checkLanguage(options.installDir),
   ]);
 
+  const skills = checkSkills() ?? undefined;
+
   // Dashboard settings + auth patterns + AI analysis (parallel, all need sdk/framework results)
   // AI analysis also receives early issues as context to avoid duplication
   const earlyIssues = detectIssues({
@@ -42,6 +45,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     framework,
     environment,
     connectivity,
+    skills,
   });
 
   const [dashboardResult, authPatterns, aiAnalysis] = await Promise.all([
@@ -86,6 +90,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     redirectUris,
     authPatterns,
     aiAnalysis,
+    skills,
   };
 
   // Detect issues based on collected data
