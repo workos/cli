@@ -9,8 +9,7 @@ export function getWorkOSCommand(env: NodeJS.ProcessEnv = process.env): string {
   const npmExecPath = env.npm_execpath ?? '';
   const npmUserAgent = env.npm_config_user_agent ?? '';
 
-  const launchedByNpmExec =
-    npmCommand === 'exec' || npmExecPath.includes('npx-cli') || /\bnpx\//.test(npmUserAgent);
+  const launchedByNpmExec = npmCommand === 'exec' || npmExecPath.includes('npx-cli') || /\bnpx\//.test(npmUserAgent);
 
   return launchedByNpmExec ? 'npx workos@latest' : 'workos';
 }
