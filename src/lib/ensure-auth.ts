@@ -9,6 +9,7 @@ import { runLogin } from '../commands/login.js';
 import { logInfo } from '../utils/debug.js';
 import { isNonInteractiveEnvironment } from '../utils/environment.js';
 import { exitWithAuthRequired } from '../utils/exit-codes.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 export interface EnsureAuthResult {
   /** Whether auth is now valid */
@@ -78,7 +79,7 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
         clearCredentials();
         if (isNonInteractiveEnvironment()) {
           exitWithAuthRequired(
-            'Session expired. Run `workos auth login` in an interactive terminal to re-authenticate.',
+            `Session expired. Run \`${formatWorkOSCommand('auth login')}\` in an interactive terminal to re-authenticate.`,
           );
         }
         logInfo('[ensure-auth] Refresh token expired, triggering login');
@@ -91,7 +92,7 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
       // Network or server error - keep credentials intact for retry
       if (isNonInteractiveEnvironment()) {
         exitWithAuthRequired(
-          `Authentication refresh failed (${refreshResult.errorType}). Run \`workos auth login\` in an interactive terminal.`,
+          `Authentication refresh failed (${refreshResult.errorType}). Run \`${formatWorkOSCommand('auth login')}\` in an interactive terminal.`,
         );
       }
       logInfo(`[ensure-auth] Refresh failed (${refreshResult.errorType}), triggering login`);
@@ -105,7 +106,9 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
   // Case 4: No refresh token available — clear stale creds, must login
   clearCredentials();
   if (isNonInteractiveEnvironment()) {
-    exitWithAuthRequired('Session expired. Run `workos auth login` in an interactive terminal to re-authenticate.');
+    exitWithAuthRequired(
+      `Session expired. Run \`${formatWorkOSCommand('auth login')}\` in an interactive terminal to re-authenticate.`,
+    );
   }
   logInfo('[ensure-auth] No refresh token, triggering login');
   await runLogin();

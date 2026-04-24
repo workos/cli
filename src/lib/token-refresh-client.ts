@@ -4,6 +4,7 @@
 
 import { logInfo, logError } from '../utils/debug.js';
 import { getCredentials } from './credentials.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 export interface RefreshResult {
   success: boolean;
@@ -73,7 +74,7 @@ export async function refreshAccessToken(authkitDomain: string, clientId: string
       if (errorData.error === 'invalid_grant') {
         return {
           success: false,
-          error: 'Session expired. Run `workos auth login` to re-authenticate.',
+          error: `Session expired. Run \`${formatWorkOSCommand('auth login')}\` to re-authenticate.`,
           errorType: 'invalid_grant',
         };
       }

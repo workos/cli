@@ -11,6 +11,7 @@ import { analytics } from '../utils/analytics.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from './constants.js';
 import { LINTING_TOOLS } from './safe-tools.js';
 import { getLlmGatewayUrlFromHost } from '../utils/urls.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 import { getConfig } from './settings.js';
 import { getCredentials, hasCredentials } from './credentials.js';
 import { ensureValidToken } from './token-refresh.js';
@@ -395,12 +396,12 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
       } else if (!options.skipAuth && !options.local) {
         // Check/refresh authentication for production (unless skipping auth)
         if (!hasCredentials()) {
-          throw new Error('Not authenticated. Run `workos auth login` to authenticate.');
+          throw new Error(`Not authenticated. Run \`${formatWorkOSCommand('auth login')}\` to authenticate.`);
         }
 
         const creds = getCredentials();
         if (!creds) {
-          throw new Error('Not authenticated. Run `workos auth login` to authenticate.');
+          throw new Error(`Not authenticated. Run \`${formatWorkOSCommand('auth login')}\` to authenticate.`);
         }
 
         // Check if we have refresh token capability and proxy is not disabled
@@ -421,7 +422,7 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
               onRefreshExpired: () => {
                 logError('[agent-interface] Session expired, refresh token invalid');
                 options.emitter?.emit('error', {
-                  message: 'Session expired. Run `workos auth login` to re-authenticate.',
+                  message: `Session expired. Run \`${formatWorkOSCommand('auth login')}\` to re-authenticate.`,
                 });
               },
             },
@@ -441,9 +442,9 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
           // No refresh token OR proxy disabled - fall back to old behavior (5 min limit)
           if (!creds.refreshToken) {
             logWarn('[agent-interface] No refresh token available, session limited to 5 minutes');
-            logWarn('[agent-interface] Run `workos auth login` to enable extended sessions');
+            logWarn(`[agent-interface] Run \`${formatWorkOSCommand('auth login')}\` to enable extended sessions`);
             options.emitter?.emit('status', {
-              message: 'Note: Run `workos auth login` to enable extended sessions',
+              message: `Note: Run \`${formatWorkOSCommand('auth login')}\` to enable extended sessions`,
             });
           } else {
             logWarn('[agent-interface] Proxy disabled via INSTALLER_DISABLE_PROXY');

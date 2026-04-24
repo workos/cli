@@ -1,5 +1,6 @@
 import { getCredentials, isTokenExpired, Credentials } from './credentials.js';
 import { logInfo } from '../utils/debug.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 export interface TokenValidationResult {
   success: boolean;
@@ -10,7 +11,7 @@ export interface TokenValidationResult {
 /**
  * Check if the current token is valid.
  * If expired, returns an error prompting re-authentication.
- * No refresh is attempted - refresh tokens are not stored for security.
+ * No refresh is attempted here; callers decide whether to refresh or re-authenticate.
  */
 export async function ensureValidToken(): Promise<TokenValidationResult> {
   const creds = getCredentials();
@@ -27,7 +28,7 @@ export async function ensureValidToken(): Promise<TokenValidationResult> {
     logInfo('[ensureValidToken] Token expired, re-authentication required');
     return {
       success: false,
-      error: 'Session expired. Run `workos auth login` to re-authenticate.',
+      error: `Session expired. Run \`${formatWorkOSCommand('auth login')}\` to re-authenticate.`,
     };
   }
 

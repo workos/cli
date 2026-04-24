@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import { getCredentials, isTokenExpired } from '../lib/credentials.js';
 import { getActiveEnvironment } from '../lib/config-store.js';
 import { isJsonMode, outputJson } from '../utils/output.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 function formatTimeRemaining(ms: number): string {
   if (ms <= 0) return 'expired';
@@ -23,7 +24,7 @@ export async function runAuthStatus(): Promise<void> {
       return;
     }
     console.log(chalk.yellow('Not logged in'));
-    console.log(chalk.dim('Run `workos auth login` to authenticate'));
+    console.log(chalk.dim(`Run \`${formatWorkOSCommand('auth login')}\` to authenticate`));
     return;
   }
 

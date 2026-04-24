@@ -8,6 +8,7 @@
  */
 
 import { outputError } from './output.js';
+import { formatWorkOSCommand } from './command-invocation.js';
 
 export const ExitCode = {
   SUCCESS: 0,
@@ -30,6 +31,8 @@ export function exitWithCode(code: ExitCodeValue, error?: { code: string; messag
 export function exitWithAuthRequired(message?: string): never {
   exitWithCode(ExitCode.AUTH_REQUIRED, {
     code: 'auth_required',
-    message: message ?? 'Not authenticated. Run `workos auth login` in an interactive terminal, or set WORKOS_API_KEY.',
+    message:
+      message ??
+      `Not authenticated. Run \`${formatWorkOSCommand('auth login')}\` in an interactive terminal, or set WORKOS_API_KEY.`,
   });
 }

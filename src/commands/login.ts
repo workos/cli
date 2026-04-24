@@ -8,6 +8,7 @@ import { logInfo, logError } from '../utils/debug.js';
 import { fetchStagingCredentials } from '../lib/staging-api.js';
 import { getConfig, saveConfig } from '../lib/config-store.js';
 import type { CliConfig } from '../lib/config-store.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 /**
  * Parse JWT payload
@@ -110,7 +111,7 @@ export async function runLogin(): Promise<void> {
   if (getAccessToken()) {
     const creds = getCredentials();
     console.log(chalk.green(`Already logged in as ${creds?.email ?? 'unknown'}`));
-    console.log(chalk.dim('Run `workos auth logout` to log out'));
+    console.log(chalk.dim(`Run \`${formatWorkOSCommand('auth logout')}\` to log out`));
     return;
   }
 
@@ -124,7 +125,7 @@ export async function runLogin(): Promise<void> {
         updateTokens(result.accessToken, result.expiresAt, result.refreshToken);
         logInfo('[login] Session refreshed via refresh token');
         console.log(chalk.green(`Already logged in as ${existingCreds.email ?? 'unknown'}`));
-        console.log(chalk.dim('Run `workos auth logout` to log out'));
+        console.log(chalk.dim(`Run \`${formatWorkOSCommand('auth logout')}\` to log out`));
         return;
       }
     } catch {

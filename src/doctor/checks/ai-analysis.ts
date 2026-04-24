@@ -4,6 +4,7 @@ import { getCredentials, isTokenExpired, updateTokens, diagnoseCredentials } fro
 import { refreshAccessToken } from '../../lib/token-refresh-client.js';
 import { buildDoctorPrompt, type AnalysisContext } from '../agent-prompt.js';
 import type { AiAnalysis, AiFinding } from '../types.js';
+import { formatWorkOSCommand } from '../../utils/command-invocation.js';
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
@@ -61,10 +62,11 @@ async function callModel(prompt: string, model: string): Promise<string> {
   if (!creds) throw new Error('Not authenticated');
 
   if (isTokenExpired(creds)) {
-    if (!creds.refreshToken) throw new Error('Session expired — run `workos auth login` to re-authenticate');
+    if (!creds.refreshToken)
+      throw new Error(`Session expired — run \`${formatWorkOSCommand('auth login')}\` to re-authenticate`);
     const result = await refreshAccessToken(getAuthkitDomain(), getCliAuthClientId());
     if (!result.success || !result.accessToken || !result.expiresAt) {
-      throw new Error('Session expired — run `workos auth login` to re-authenticate');
+      throw new Error(`Session expired — run \`${formatWorkOSCommand('auth login')}\` to re-authenticate`);
     }
     updateTokens(result.accessToken, result.expiresAt, result.refreshToken);
     creds = getCredentials()!;
@@ -111,7 +113,7 @@ export async function checkAiAnalysis(context: AnalysisContext, options: { skipA
       process.stderr.write(`    ${line}\n`);
     }
     process.stderr.write('\n');
-    return skippedResult('Not authenticated — run `workos auth login` for AI-powered analysis');
+    return skippedResult(`Not authenticated — run \`${formatWorkOSCommand('auth login')}\` for AI-powered analysis`);
   }
 
   const startTime = Date.now();

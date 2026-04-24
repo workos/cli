@@ -13,6 +13,10 @@ npm install -g workos
 workos install
 ```
 
+`npx workos@latest install` is recommended because it bypasses stale global shims and older shell-resolved binaries.
+If a global install reports `unknown command "install"`, run the npx command above or reinstall globally and clear your
+shell command cache.
+
 ## Features
 
 - **15 Framework Support:** Next.js, React Router, TanStack Start, React SPA, Vanilla JS, SvelteKit, Node.js (Express), Python (Django), Ruby (Rails), Go, .NET (ASP.NET Core), Kotlin (Spring Boot), Elixir (Phoenix), PHP (Laravel), PHP
@@ -93,7 +97,7 @@ When you run `workos install` without credentials, the CLI automatically provisi
 
 ```bash
 # Install with zero setup — environment provisioned automatically
-workos install
+npx workos@latest install
 
 # Check your environment
 workos env list
@@ -560,13 +564,13 @@ workos install [options]
 
 ```bash
 # Interactive (recommended)
-npx workos
+npx workos@latest install
 
 # Specify framework
-npx workos install --integration react-router
+npx workos@latest install --integration react-router
 
 # With visual dashboard (experimental)
-npx workos dashboard
+npx workos@latest dashboard
 
 # JSON output (explicit)
 workos org list --json --api-key sk_test_xxx
@@ -648,13 +652,13 @@ The CLI uses WorkOS Connect OAuth device flow for authentication:
 
 ```bash
 # Login (opens browser for authentication)
-workos auth login
+npx workos@latest auth login
 
 # Check current auth status
-workos auth status
+npx workos@latest auth status
 
 # Logout (clears stored credentials)
-workos auth logout
+npx workos@latest auth logout
 ```
 
 OAuth credentials are stored in the system keychain (with `~/.workos/credentials.json` fallback). Access tokens are not persisted long-term for security - users re-authenticate when tokens expire.
@@ -682,7 +686,7 @@ The installer collects anonymous usage telemetry to help improve the product:
 No code, credentials, or personal data is collected. Disable with:
 
 ```bash
-WORKOS_TELEMETRY=false npx workos
+WORKOS_TELEMETRY=false npx workos@latest install
 ```
 
 ## Logs

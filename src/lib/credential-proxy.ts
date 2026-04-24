@@ -10,6 +10,7 @@ import { logInfo, logError, logWarn } from '../utils/debug.js';
 import { getCredentials, updateTokens, type Credentials } from './credentials.js';
 import { analytics } from '../utils/analytics.js';
 import { refreshAccessToken } from './token-refresh-client.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 export interface RefreshConfig {
   /** AuthKit domain for refresh endpoint */
@@ -286,7 +287,7 @@ async function handleRequest(
     res.end(
       JSON.stringify({
         error: 'credentials_unavailable',
-        message: 'Not authenticated. Run `workos auth login` first.',
+        message: `Not authenticated. Run \`${formatWorkOSCommand('auth login')}\` first.`,
       }),
     );
     return;

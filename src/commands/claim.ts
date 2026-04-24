@@ -13,6 +13,7 @@ import { createClaimNonce, UnclaimedEnvApiError } from '../lib/unclaimed-env-api
 import { logInfo, logError } from '../utils/debug.js';
 import { isJsonMode, outputJson, exitWithError } from '../utils/output.js';
 import { sleep } from '../lib/helper-functions.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 const POLL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const POLL_INTERVAL_MS = 5_000; // 5 seconds
@@ -48,7 +49,7 @@ export async function runClaim(): Promise<void> {
         outputJson({ status: 'already_claimed', message: 'Environment already claimed!' });
       } else {
         clack.log.success('Environment already claimed!');
-        clack.log.info('Run `workos auth login` to connect your account.');
+        clack.log.info(`Run \`${formatWorkOSCommand('auth login')}\` to connect your account.`);
       }
       return;
     }
@@ -84,7 +85,7 @@ export async function runClaim(): Promise<void> {
         if (check.alreadyClaimed) {
           spinner.stop('Environment claimed!');
           markEnvironmentClaimed();
-          clack.log.info('Run `workos auth login` to connect your account.');
+          clack.log.info(`Run \`${formatWorkOSCommand('auth login')}\` to connect your account.`);
           return;
         }
         consecutiveFailures = 0;
@@ -95,7 +96,7 @@ export async function runClaim(): Promise<void> {
           // when the environment is claimed. Safe to promote to sandbox.
           spinner.stop('Claim token is invalid or expired.');
           markEnvironmentClaimed();
-          clack.log.warn('Run `workos auth login` to set up your environment.');
+          clack.log.warn(`Run \`${formatWorkOSCommand('auth login')}\` to set up your environment.`);
           return;
         }
         consecutiveFailures++;
