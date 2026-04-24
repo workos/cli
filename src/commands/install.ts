@@ -29,7 +29,13 @@ export async function handleInstall(argv: ArgumentsCamelCase<InstallerArgs>): Pr
 
   try {
     await runInstaller(options);
-    await autoInstallSkills();
+    const skillResult = await autoInstallSkills();
+    if (skillResult && !isJsonMode()) {
+      const skillWord = skillResult.skills.length === 1 ? 'skill' : 'skills';
+      clack.log.info(
+        `Installed ${skillResult.skills.length} WorkOS ${skillWord} for ${skillResult.agents.join(', ')}. Your coding agent now has up-to-date WorkOS guidance.`,
+      );
+    }
     process.exit(0);
   } catch (err) {
     const { getLogFilePath } = await import('../utils/debug.js');

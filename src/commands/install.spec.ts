@@ -25,6 +25,8 @@ vi.mock('../utils/debug.js', () => ({
 
 const { runInstaller } = await import('../run.js');
 const { autoInstallSkills } = await import('./install-skill.js');
+const clack = (await import('../utils/clack.js')).default;
+const { isJsonMode } = await import('../utils/output.js');
 
 vi.spyOn(process, 'exit').mockImplementation((() => {
   throw new Error('process.exit called');
@@ -39,7 +41,7 @@ describe('handleInstall', () => {
 
   it('calls autoInstallSkills after successful install', async () => {
     vi.mocked(runInstaller).mockResolvedValue(undefined as any);
-    vi.mocked(autoInstallSkills).mockResolvedValue(undefined);
+    vi.mocked(autoInstallSkills).mockResolvedValue(null);
 
     await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).rejects.toThrow('process.exit called');
 
@@ -50,6 +52,42 @@ describe('handleInstall', () => {
     const runInstallerOrder = vi.mocked(runInstaller).mock.invocationCallOrder[0];
     const autoInstallOrder = vi.mocked(autoInstallSkills).mock.invocationCallOrder[0];
     expect(autoInstallOrder).toBeGreaterThan(runInstallerOrder);
+  });
+
+  it('prints an info line when skills were installed in a TTY session', async () => {
+    vi.mocked(runInstaller).mockResolvedValue(undefined as any);
+    vi.mocked(autoInstallSkills).mockResolvedValue({
+      skills: ['workos', 'workos-widgets'],
+      agents: ['Claude Code'],
+    });
+    vi.mocked(isJsonMode).mockReturnValue(false);
+
+    await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).rejects.toThrow('process.exit called');
+
+    expect(clack.log.info).toHaveBeenCalledWith(expect.stringContaining('Installed 2 WorkOS skills for Claude Code'));
+  });
+
+  it('does not print the info line when autoInstallSkills returns null', async () => {
+    vi.mocked(runInstaller).mockResolvedValue(undefined as any);
+    vi.mocked(autoInstallSkills).mockResolvedValue(null);
+    vi.mocked(isJsonMode).mockReturnValue(false);
+
+    await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).rejects.toThrow('process.exit called');
+
+    expect(clack.log.info).not.toHaveBeenCalled();
+  });
+
+  it('suppresses the info line in JSON mode', async () => {
+    vi.mocked(runInstaller).mockResolvedValue(undefined as any);
+    vi.mocked(autoInstallSkills).mockResolvedValue({
+      skills: ['workos'],
+      agents: ['Claude Code'],
+    });
+    vi.mocked(isJsonMode).mockReturnValue(true);
+
+    await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).rejects.toThrow('process.exit called');
+
+    expect(clack.log.info).not.toHaveBeenCalled();
   });
 
   it('does not call autoInstallSkills when runInstaller throws', async () => {

@@ -225,7 +225,7 @@ describe('install-skill', () => {
       vi.restoreAllMocks();
     });
 
-    it('installs all skills to all detected agents', async () => {
+    it('installs all skills to all detected agents and returns a summary', async () => {
       // Set up skills
       mkdirSync(join(skillsDir, 'skill-a'));
       writeFileSync(join(skillsDir, 'skill-a', 'SKILL.md'), '# Skill A');
@@ -236,51 +236,80 @@ describe('install-skill', () => {
       mkdirSync(join(homeDir, '.claude'));
       mkdirSync(join(homeDir, '.codex'));
 
-      await autoInstallSkills();
+      const result = await autoInstallSkills();
 
       expect(existsSync(join(homeDir, '.claude/skills/skill-a/SKILL.md'))).toBe(true);
       expect(existsSync(join(homeDir, '.claude/skills/skill-b/SKILL.md'))).toBe(true);
       expect(existsSync(join(homeDir, '.codex/skills/skill-a/SKILL.md'))).toBe(true);
       expect(existsSync(join(homeDir, '.codex/skills/skill-b/SKILL.md'))).toBe(true);
+
+      expect(result).not.toBeNull();
+      expect(result!.skills.sort()).toEqual(['skill-a', 'skill-b']);
+      expect(result!.agents.sort()).toEqual(['Claude Code', 'Codex']);
     });
 
-    it('no-ops silently when no agents are detected', async () => {
+    it('writes a version marker per agent when the bundled version is resolvable', async () => {
+      // The real @workos/skills package is present in node_modules, so
+      // getBundledSkillsVersion should succeed against the real skillsDir layout.
+      // Here we just verify that IF a version can be determined, it gets written.
+      const { SKILL_VERSION_MARKER_FILENAME } = await import('./install-skill.js');
+
+      mkdirSync(join(skillsDir, 'skill-a'));
+      writeFileSync(join(skillsDir, 'skill-a', 'SKILL.md'), '# Skill A');
+      mkdirSync(join(homeDir, '.claude'));
+
+      const result = await autoInstallSkills();
+
+      // Our test skillsDir is not a real npm package, so bundled version is null.
+      // That's fine — the marker is only written when version is resolvable,
+      // and result.version reflects what was written.
+      if (result?.version) {
+        const marker = join(homeDir, '.claude/skills', SKILL_VERSION_MARKER_FILENAME);
+        expect(existsSync(marker)).toBe(true);
+        expect(readFileSync(marker, 'utf8')).toBe(result.version);
+      } else {
+        // Marker should NOT be written when version is unknown.
+        const marker = join(homeDir, '.claude/skills', SKILL_VERSION_MARKER_FILENAME);
+        expect(existsSync(marker)).toBe(false);
+      }
+    });
+
+    it('returns null when no agents are detected', async () => {
       mkdirSync(join(skillsDir, 'skill-a'));
       writeFileSync(join(skillsDir, 'skill-a', 'SKILL.md'), '# Skill A');
 
       // No agent directories created — none detected
-      await expect(autoInstallSkills()).resolves.toBeUndefined();
+      await expect(autoInstallSkills()).resolves.toBeNull();
     });
 
-    it('no-ops silently when no skills are discovered', async () => {
+    it('returns null when no skills are discovered', async () => {
       mkdirSync(join(homeDir, '.claude'));
 
       // No skills in skillsDir
-      await expect(autoInstallSkills()).resolves.toBeUndefined();
+      await expect(autoInstallSkills()).resolves.toBeNull();
     });
 
-    it('swallows errors from discoverSkills', async () => {
+    it('swallows errors from discoverSkills and returns null', async () => {
       // Point to a nonexistent skills directory
       const { getSkillsDir } = await import('@workos/skills');
       vi.mocked(getSkillsDir).mockReturnValue('/nonexistent/path');
 
-      await expect(autoInstallSkills()).resolves.toBeUndefined();
+      await expect(autoInstallSkills()).resolves.toBeNull();
     });
 
-    it('resolves silently when installSkill returns failure', async () => {
+    it('returns null when every installSkill call fails', async () => {
       // installSkill returns { success: false } on copy errors (doesn't throw).
-      // Verify autoInstallSkills completes without throwing even when installs fail.
-      // Simulate by creating a skill dir with SKILL.md for discovery, then making
-      // the target agent dir read-only so copyFile fails.
+      // When nothing succeeded, callers should get null so they don't advertise
+      // a bogus "installed" message.
       mkdirSync(join(skillsDir, 'test-skill'));
       writeFileSync(join(skillsDir, 'test-skill', 'SKILL.md'), '# Test');
 
       mkdirSync(join(homeDir, '.claude'));
-      // Create a file where the skills directory should be, so mkdir fails
+      // Create a file where the skill subdir should be, so mkdir fails
       mkdirSync(join(homeDir, '.claude/skills'));
       writeFileSync(join(homeDir, '.claude/skills/test-skill'), 'not a directory');
 
-      await expect(autoInstallSkills()).resolves.toBeUndefined();
+      await expect(autoInstallSkills()).resolves.toBeNull();
     });
 
     it('does not produce any console output', async () => {

@@ -1,9 +1,29 @@
 import { homedir } from 'os';
-import { join } from 'path';
-import { existsSync } from 'fs';
-import { mkdir, copyFile, readdir } from 'fs/promises';
+import { dirname, join } from 'path';
+import { existsSync, readFileSync } from 'fs';
+import { mkdir, copyFile, readdir, writeFile } from 'fs/promises';
 import chalk from 'chalk';
 import { getSkillsDir as getSkillsPackageDir } from '@workos/skills';
+
+export const SKILL_VERSION_MARKER_FILENAME = '.workos-skill-version';
+
+/**
+ * Read the bundled @workos/skills version by walking up from the skills
+ * directory to the package.json. The package's `exports` map doesn't expose
+ * package.json, so we resolve it by filesystem convention.
+ * Returns null if the version can't be determined — callers treat that as
+ * "no marker written" rather than failing the install.
+ */
+export function getBundledSkillsVersion(skillsDir: string = getSkillsPackageDir()): string | null {
+  try {
+    // skillsDir = <packageRoot>/plugins/workos/skills
+    const packageRoot = dirname(dirname(dirname(skillsDir)));
+    const pkgJson = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
+    return typeof pkgJson.version === 'string' ? pkgJson.version : null;
+  } catch {
+    return null;
+  }
+}
 
 export interface AgentConfig {
   name: string;
@@ -157,11 +177,20 @@ export async function runInstallSkill(options: InstallSkillOptions): Promise<voi
   console.log(chalk.green('\nDone!'));
 }
 
+export interface AutoInstallResult {
+  skills: string[];
+  agents: string[];
+  version: string | null;
+}
+
 /**
- * Silently install all bundled skills to all detected coding agents.
- * Errors are swallowed — this must never disrupt the calling flow.
+ * Install all bundled skills to all detected coding agents.
+ * Returns a summary when anything was installed, or null when nothing applied.
+ * Performs minimal IO: writes a version marker file alongside installed
+ * skills so `workos doctor` can detect staleness later. Errors are swallowed
+ * so skill install never disrupts the calling flow.
  */
-export async function autoInstallSkills(): Promise<void> {
+export async function autoInstallSkills(): Promise<AutoInstallResult | null> {
   try {
     const home = homedir();
     const agents = createAgents(home);
@@ -169,14 +198,37 @@ export async function autoInstallSkills(): Promise<void> {
     const skills = await discoverSkills(skillsDir);
     const targetAgents = detectAgents(agents);
 
-    if (skills.length === 0 || targetAgents.length === 0) return;
+    if (skills.length === 0 || targetAgents.length === 0) return null;
 
-    for (const skill of skills) {
-      for (const agent of targetAgents) {
-        await installSkill(skillsDir, skill, agent);
+    const version = getBundledSkillsVersion(skillsDir);
+    const succeededAgents: AgentConfig[] = [];
+
+    for (const agent of targetAgents) {
+      let agentSucceeded = false;
+      for (const skill of skills) {
+        const result = await installSkill(skillsDir, skill, agent);
+        if (result.success) agentSucceeded = true;
+      }
+      if (agentSucceeded) {
+        succeededAgents.push(agent);
+        if (version) {
+          try {
+            await writeFile(join(agent.globalSkillsDir, SKILL_VERSION_MARKER_FILENAME), version, 'utf8');
+          } catch {
+            // Marker is best-effort; doctor treats missing marker as "unknown"
+          }
+        }
       }
     }
+
+    if (succeededAgents.length === 0) return null;
+
+    return {
+      skills,
+      agents: succeededAgents.map((a) => a.displayName),
+      version,
+    };
   } catch {
-    // Intentionally swallowed — skill install is best-effort
+    return null;
   }
 }
