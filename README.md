@@ -5,12 +5,12 @@ WorkOS CLI for installing AuthKit integrations and managing WorkOS resources.
 ## Installation
 
 ```bash
-# Run directly with npx (recommended)
-npx workos
+# Run the installer directly with npx (recommended)
+npx workos@latest install
 
 # Or install globally
 npm install -g workos
-workos
+workos install
 ```
 
 ## Features

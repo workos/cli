@@ -5,6 +5,7 @@ import chalk from 'chalk';
 import { getConfig } from '../settings.js';
 import { ProgressTracker } from '../progress-tracker.js';
 import { renderCompletionSummary } from '../../utils/summary-box.js';
+import { formatWorkOSCommand } from '../../utils/command-invocation.js';
 
 /**
  * CLI adapter that renders wizard events via clack.
@@ -427,7 +428,7 @@ export class CLIAdapter implements InstallerAdapter {
 
     // Add actionable hints for common errors
     if (message.includes('authentication') || message.includes('auth')) {
-      clack.log.info('Try running: workos auth logout && workos install');
+      clack.log.info(`Try running: ${formatWorkOSCommand('auth logout')} && ${formatWorkOSCommand('install')}`);
     }
     if (message.includes('ENOENT') || message.includes('not found')) {
       clack.log.info('Ensure you are in a project directory');

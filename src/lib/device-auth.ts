@@ -54,6 +54,8 @@ export class DeviceAuthError extends Error {
 }
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const DEFAULT_POLL_INTERVAL_SECONDS = 5;
+const POLL_REQUEST_TIMEOUT_MS = 30_000;
 const DEFAULT_SCOPES = ['openid', 'email', 'staging-environment:credentials:read', 'offline_access'];
 
 function sleep(ms: number): Promise<void> {
@@ -122,7 +124,7 @@ export async function pollForToken(
 ): Promise<DeviceAuthResult> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const startTime = Date.now();
-  let pollInterval = options.interval * 1000;
+  let pollInterval = (options.interval || DEFAULT_POLL_INTERVAL_SECONDS) * 1000;
   const tokenUrl = `${options.authkitDomain}/oauth2/token`;
 
   logInfo('[device-auth] Starting token polling, timeout:', timeoutMs);
@@ -131,6 +133,8 @@ export async function pollForToken(
     options.onPoll?.();
 
     let res: Response;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), POLL_REQUEST_TIMEOUT_MS);
     try {
       res = await fetch(tokenUrl, {
         method: 'POST',
@@ -140,10 +144,16 @@ export async function pollForToken(
           device_code: deviceCode,
           client_id: options.clientId,
         }),
+        signal: controller.signal,
       });
-    } catch {
-      logInfo('[device-auth] Token poll network error, retrying');
+    } catch (error) {
+      logInfo(
+        '[device-auth] Token poll network error, retrying:',
+        error instanceof Error ? error.message : String(error),
+      );
       continue;
+    } finally {
+      clearTimeout(timeout);
     }
 
     let data;
@@ -178,7 +188,7 @@ export async function pollForToken(
   }
 
   logError('[device-auth] Authentication timed out');
-  throw new DeviceAuthError('Authentication timed out after 5 minutes');
+  throw new DeviceAuthError(`Authentication timed out after ${Math.round(timeoutMs / 1000)} seconds`);
 }
 
 function parseTokenResponse(data: TokenResponse): DeviceAuthResult {

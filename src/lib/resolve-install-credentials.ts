@@ -21,7 +21,7 @@ export async function resolveInstallCredentials(
 
   try {
     const { getActiveEnvironment, isUnclaimedEnvironment } = await import('./config-store.js');
-    const { hasCredentials } = await import('./credentials.js');
+    const { getAccessToken } = await import('./credentials.js');
     const activeEnv = getActiveEnvironment();
 
     if (activeEnv?.apiKey) {
@@ -30,11 +30,11 @@ export async function resolveInstallCredentials(
         // Unclaimed with claim token — claim token proxy will handle gateway
         return;
       }
-      if (hasCredentials()) {
-        // Has OAuth tokens — credential proxy will handle gateway
+      if (getAccessToken()) {
+        // Has a valid OAuth token — credential proxy will handle gateway.
         return;
       }
-      // Has API key but no gateway auth — need to log in
+      // Has API key but no valid gateway auth — refresh or log in.
       if (!skipAuth) await authenticate();
       return;
     }

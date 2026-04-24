@@ -9,9 +9,9 @@ vi.mock('./config-store.js', () => ({
 }));
 
 // Mock credentials
-const mockHasCredentials = vi.fn();
+const mockGetAccessToken = vi.fn();
 vi.mock('./credentials.js', () => ({
-  hasCredentials: () => mockHasCredentials(),
+  getAccessToken: () => mockGetAccessToken(),
 }));
 
 // Mock unclaimed-env-provision
@@ -70,26 +70,26 @@ describe('resolveInstallCredentials', () => {
     expect(mockTryProvisionUnclaimedEnv).not.toHaveBeenCalled();
   });
 
-  it('returns without auth when active env has API key and OAuth credentials', async () => {
+  it('returns without auth when active env has API key and a valid OAuth token', async () => {
     mockGetActiveEnvironment.mockReturnValue({
       type: 'sandbox',
       apiKey: 'sk_test_xxx',
     });
     mockIsUnclaimedEnvironment.mockReturnValue(false);
-    mockHasCredentials.mockReturnValue(true);
+    mockGetAccessToken.mockReturnValue('access_token');
 
     await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
 
     expect(mockAuthenticate).not.toHaveBeenCalled();
   });
 
-  it('authenticates when active env has API key but no gateway auth', async () => {
+  it('authenticates when active env has API key but no valid gateway auth', async () => {
     mockGetActiveEnvironment.mockReturnValue({
       type: 'sandbox',
       apiKey: 'sk_test_xxx',
     });
     mockIsUnclaimedEnvironment.mockReturnValue(false);
-    mockHasCredentials.mockReturnValue(false);
+    mockGetAccessToken.mockReturnValue(null);
 
     await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
 
@@ -102,7 +102,7 @@ describe('resolveInstallCredentials', () => {
       apiKey: 'sk_test_xxx',
     });
     mockIsUnclaimedEnvironment.mockReturnValue(false);
-    mockHasCredentials.mockReturnValue(false);
+    mockGetAccessToken.mockReturnValue(null);
 
     await resolveInstallCredentials(undefined, undefined, true, mockAuthenticate);
 

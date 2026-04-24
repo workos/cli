@@ -244,5 +244,27 @@ describe('CLIAdapter', () => {
       expect(output).toContain('Something went wrong');
       consoleSpy.mockRestore();
     });
+
+    it('keeps npx in auth recovery hints when launched through npm exec', async () => {
+      const originalNpmCommand = process.env.npm_command;
+      process.env.npm_command = 'exec';
+
+      try {
+        await adapter.start();
+        const clack = await import('../../utils/clack.js');
+
+        emitter.emit('error', { message: 'authentication failed', stack: undefined });
+
+        expect(clack.default.log.info).toHaveBeenCalledWith(
+          'Try running: npx workos@latest auth logout && npx workos@latest install',
+        );
+      } finally {
+        if (originalNpmCommand === undefined) {
+          delete process.env.npm_command;
+        } else {
+          process.env.npm_command = originalNpmCommand;
+        }
+      }
+    });
   });
 });

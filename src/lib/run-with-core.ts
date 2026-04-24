@@ -51,6 +51,7 @@ import { autoConfigureWorkOSEnvironment } from './workos-management.js';
 import { detectPort, getCallbackPath } from './port-detection.js';
 import { writeEnvLocal } from './env-writer.js';
 import { getRegistry } from './registry.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 async function runIntegrationInstallerFn(integration: Integration, options: InstallerOptions): Promise<string> {
   const registry = await getRegistry();
@@ -240,7 +241,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         if (!token) {
           // This should rarely happen since bin.ts handles auth first
           // But keep as safety net for programmatic usage
-          throw new Error('Not authenticated. Run `workos auth login` first.');
+          throw new Error(`Not authenticated. Run \`${formatWorkOSCommand('auth login')}\` first.`);
         }
 
         // Set telemetry from existing credentials
@@ -387,6 +388,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
           expiresAt: result.expiresAt,
           userId: result.userId,
           email: result.email,
+          refreshToken: result.refreshToken,
         });
 
         return { result, deviceAuth };
