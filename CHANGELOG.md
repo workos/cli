@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.3](https://github.com/workos/cli/compare/v0.12.2...v0.12.3) (2026-04-24)
+
+
+### Bug Fixes
+
+* improve installer auth recovery ([#128](https://github.com/workos/cli/issues/128)) ([64928cf](https://github.com/workos/cli/commit/64928cf7029c784d4a894e4dbfd0f13067c57f6f))
+* prevent SDK "Not logged in" error before reaching gateway ([#127](https://github.com/workos/cli/issues/127)) ([69c2d7d](https://github.com/workos/cli/commit/69c2d7dd940ac7d23f2ca41994e44958b40a1682))
+
 ## [0.12.2](https://github.com/workos/cli/compare/v0.12.1...v0.12.2) (2026-04-23)
 
 
