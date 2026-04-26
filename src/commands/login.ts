@@ -88,9 +88,7 @@ export async function installSkillsAfterLogin(): Promise<void> {
     const result = await autoInstallSkills();
     if (result && !isJsonMode()) {
       const skillWord = result.skills.length === 1 ? 'skill' : 'skills';
-      clack.log.info(
-        `Installed ${result.skills.length} WorkOS ${skillWord} for ${result.agents.join(', ')}.`,
-      );
+      clack.log.info(`Installed ${result.skills.length} WorkOS ${skillWord} for ${result.agents.join(', ')}.`);
     }
   } catch {
     // Skill install must never fail login.

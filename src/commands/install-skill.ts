@@ -161,8 +161,7 @@ async function cleanupStaleOrphans(parent: string, skillName: string): Promise<v
   const entries = await readdir(parent).catch(() => []);
   const cutoff = Date.now() - ORPHAN_STALE_MS;
   for (const entry of entries) {
-    const isOrphan =
-      entry.startsWith(`.workos.tmp-${skillName}-`) || entry.startsWith(`.workos.bak-${skillName}-`);
+    const isOrphan = entry.startsWith(`.workos.tmp-${skillName}-`) || entry.startsWith(`.workos.bak-${skillName}-`);
     if (!isOrphan) continue;
     const path = join(parent, entry);
     const st = await stat(path).catch(() => null);
