@@ -9,6 +9,8 @@ import { fetchStagingCredentials } from '../lib/staging-api.js';
 import { getConfig, saveConfig } from '../lib/config-store.js';
 import type { CliConfig } from '../lib/config-store.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
+import { autoInstallSkills } from './install-skill.js';
+import { isJsonMode } from '../utils/output.js';
 
 /**
  * Parse JWT payload
@@ -68,6 +70,31 @@ interface AuthErrorResponse {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Best-effort skill install after a successful auth-login.
+ *
+ * Mirrors the install.ts hook copy, but wraps `autoInstallSkills` in its own
+ * try/catch so a skill install failure (or hang inside install) NEVER fails
+ * the login itself. Login already succeeded by the time this runs — the user
+ * having a working session is the contract that must hold.
+ *
+ * Extracted from runLogin so it can be unit-tested without standing up the
+ * device-auth polling loop.
+ */
+export async function installSkillsAfterLogin(): Promise<void> {
+  try {
+    const result = await autoInstallSkills();
+    if (result && !isJsonMode()) {
+      const skillWord = result.skills.length === 1 ? 'skill' : 'skills';
+      clack.log.info(
+        `Installed ${result.skills.length} WorkOS ${skillWord} for ${result.agents.join(', ')}.`,
+      );
+    }
+  } catch {
+    // Skill install must never fail login.
+  }
 }
 
 /**
@@ -225,6 +252,10 @@ export async function runLogin(): Promise<void> {
         } else {
           clack.log.info(chalk.dim('Run `workos env add` to configure an environment manually'));
         }
+
+        // Best-effort skill install. Wrapped helper guarantees login never
+        // fails on skill errors.
+        await installSkillsAfterLogin();
         return;
       }
 

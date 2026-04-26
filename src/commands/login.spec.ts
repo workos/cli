@@ -33,6 +33,16 @@ vi.mock('../lib/staging-api.js', () => ({
   fetchStagingCredentials: (...args: unknown[]) => mockFetchStagingCredentials(...args),
 }));
 
+// Mock skill install + JSON mode — installSkillsAfterLogin tests drive both.
+vi.mock('./install-skill.js', () => ({
+  autoInstallSkills: vi.fn(),
+}));
+
+vi.mock('../utils/output.js', () => ({
+  isJsonMode: vi.fn(() => false),
+  exitWithError: vi.fn(),
+}));
+
 let testDir: string;
 
 vi.mock('node:os', async (importOriginal) => {
@@ -48,7 +58,10 @@ vi.mock('node:os', async (importOriginal) => {
 });
 
 const { getConfig, setInsecureConfigStorage, clearConfig } = await import('../lib/config-store.js');
-const { provisionStagingEnvironment } = await import('./login.js');
+const { provisionStagingEnvironment, installSkillsAfterLogin } = await import('./login.js');
+const { autoInstallSkills } = await import('./install-skill.js');
+const { isJsonMode } = await import('../utils/output.js');
+const clackMod = await import('../utils/clack.js');
 
 describe('login', () => {
   beforeEach(() => {
@@ -187,6 +200,87 @@ describe('login', () => {
       const result = await provisionStagingEnvironment('token');
 
       expect(result).toBe(false);
+    });
+  });
+
+  describe('installSkillsAfterLogin', () => {
+    it('invokes autoInstallSkills', async () => {
+      vi.mocked(autoInstallSkills).mockResolvedValueOnce(null);
+
+      await installSkillsAfterLogin();
+
+      expect(autoInstallSkills).toHaveBeenCalledOnce();
+    });
+
+    it('returns without throwing when autoInstallSkills rejects', async () => {
+      vi.mocked(autoInstallSkills).mockRejectedValueOnce(new Error('install boom'));
+
+      // The whole point of the helper: login must keep its success even when
+      // skill install fails. Asserting no rejection IS the test.
+      await expect(installSkillsAfterLogin()).resolves.toBeUndefined();
+    });
+
+    it('logs a one-line success message in human mode', async () => {
+      vi.mocked(autoInstallSkills).mockResolvedValueOnce({
+        skills: ['workos', 'workos-widgets'],
+        agents: ['Claude Code', 'Codex'],
+        version: '0.4.0',
+      });
+
+      const infoSpy = vi.mocked(clackMod.default.log.info);
+      infoSpy.mockClear();
+
+      await installSkillsAfterLogin();
+
+      expect(infoSpy).toHaveBeenCalledOnce();
+      const message = infoSpy.mock.calls[0]?.[0] as string;
+      expect(message).toContain('2 WorkOS skills');
+      expect(message).toContain('Claude Code');
+      expect(message).toContain('Codex');
+    });
+
+    it('uses singular "skill" when exactly one skill installed', async () => {
+      vi.mocked(autoInstallSkills).mockResolvedValueOnce({
+        skills: ['workos'],
+        agents: ['Claude Code'],
+        version: '0.4.0',
+      });
+
+      const infoSpy = vi.mocked(clackMod.default.log.info);
+      infoSpy.mockClear();
+
+      await installSkillsAfterLogin();
+
+      const message = infoSpy.mock.calls[0]?.[0] as string;
+      expect(message).toContain('1 WorkOS skill ');
+      expect(message).not.toContain('1 WorkOS skills');
+    });
+
+    it('skips logging in JSON mode', async () => {
+      vi.mocked(isJsonMode).mockReturnValueOnce(true);
+      vi.mocked(autoInstallSkills).mockResolvedValueOnce({
+        skills: ['workos'],
+        agents: ['Claude Code'],
+        version: '0.4.0',
+      });
+
+      const infoSpy = vi.mocked(clackMod.default.log.info);
+      infoSpy.mockClear();
+
+      await installSkillsAfterLogin();
+
+      expect(infoSpy).not.toHaveBeenCalled();
+    });
+
+    it('skips logging when autoInstallSkills returns null', async () => {
+      vi.mocked(autoInstallSkills).mockResolvedValueOnce(null);
+
+      const infoSpy = vi.mocked(clackMod.default.log.info);
+      infoSpy.mockClear();
+
+      await installSkillsAfterLogin();
+
+      expect(infoSpy).not.toHaveBeenCalled();
     });
   });
 });
