@@ -1,7 +1,7 @@
 import { homedir } from 'os';
 import { dirname, join } from 'path';
-import { existsSync, readFileSync } from 'fs';
-import { mkdir, mkdtemp, cp, rename, rm, readdir, stat, writeFile } from 'fs/promises';
+import { existsSync } from 'fs';
+import { mkdir, mkdtemp, cp, rename, rm, readdir, readFile, stat, access, writeFile } from 'fs/promises';
 import chalk from 'chalk';
 import { getSkillsDir as getSkillsPackageDir } from '@workos/skills';
 
@@ -12,6 +12,16 @@ export const SKILL_VERSION_MARKER_FILENAME = '.workos-skill-version';
 // and must NOT be removed.
 const ORPHAN_STALE_MS = 60 * 60 * 1000;
 
+/** Async equivalent of `existsSync` — `access` rejects with ENOENT when missing. */
+async function pathExists(p: string): Promise<boolean> {
+  try {
+    await access(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Read the bundled @workos/skills version by walking up from the skills
  * directory to the package.json. The package's `exports` map doesn't expose
@@ -19,11 +29,13 @@ const ORPHAN_STALE_MS = 60 * 60 * 1000;
  * Returns null if the version can't be determined — callers treat that as
  * "no marker written" rather than failing the install.
  */
-export function getBundledSkillsVersion(skillsDir: string = getSkillsPackageDir()): string | null {
+export async function getBundledSkillsVersion(
+  skillsDir: string = getSkillsPackageDir(),
+): Promise<string | null> {
   try {
     // skillsDir = <packageRoot>/plugins/workos/skills
     const packageRoot = dirname(dirname(dirname(skillsDir)));
-    const pkgJson = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
+    const pkgJson = JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8'));
     return typeof pkgJson.version === 'string' ? pkgJson.version : null;
   } catch {
     return null;
@@ -78,7 +90,9 @@ export function getSkillsDir(): string {
 export async function discoverSkills(skillsDir: string): Promise<string[]> {
   const entries = await readdir(skillsDir, { withFileTypes: true });
 
-  return entries.filter((e) => e.isDirectory() && existsSync(join(skillsDir, e.name, 'SKILL.md'))).map((e) => e.name);
+  const dirs = entries.filter((e) => e.isDirectory());
+  const checks = await Promise.all(dirs.map((e) => pathExists(join(skillsDir, e.name, 'SKILL.md'))));
+  return dirs.filter((_, i) => checks[i]).map((e) => e.name);
 }
 
 export function detectAgents(agents: Record<string, AgentConfig>, filter?: string[]): AgentConfig[] {
@@ -129,7 +143,7 @@ export async function installSkill(
 
     await cp(sourceDir, tempDir, { recursive: true, errorOnExist: false });
 
-    const targetExisted = existsSync(targetDir);
+    const targetExisted = await pathExists(targetDir);
     if (targetExisted) {
       await rename(targetDir, backupDir);
     }
@@ -164,7 +178,7 @@ export async function installSkill(
  * preserved — destroying them would race the other run's final rename.
  */
 async function cleanupStaleOrphans(parent: string, skillName: string): Promise<void> {
-  if (!existsSync(parent)) return;
+  if (!(await pathExists(parent))) return;
   const entries = await readdir(parent).catch(() => []);
   const cutoff = Date.now() - ORPHAN_STALE_MS;
   for (const entry of entries) {
@@ -232,17 +246,14 @@ export async function runInstallSkill(options: InstallSkillOptions): Promise<voi
 
   // Write per-agent version markers for any agent that had at least one
   // successful install, so `workos doctor` doesn't immediately flag the
-  // freshly-installed skills as stale or missing.
-  const version = getBundledSkillsVersion(skillsDir);
+  // freshly-installed skills as stale or missing. Same primitive as
+  // refreshWorkOSSkills — single source of truth for marker semantics.
+  const version = await getBundledSkillsVersion(skillsDir);
   if (version) {
     const succeededAgents = new Set<AgentConfig>();
     for (const r of successful) succeededAgents.add(r.agent);
     for (const agent of succeededAgents) {
-      try {
-        await writeFile(join(agent.globalSkillsDir, SKILL_VERSION_MARKER_FILENAME), version, 'utf8');
-      } catch {
-        // Marker is best-effort; doctor treats missing marker as "unknown".
-      }
+      await writeAgentSkillMarker(agent, version);
     }
   }
 
@@ -285,13 +296,25 @@ export interface RefreshResult {
   perAgentAfter: Record<string, string | null>;
 }
 
-function readSkillVersionMarker(agent: AgentConfig): string | null {
+async function readSkillVersionMarker(agent: AgentConfig): Promise<string | null> {
   const path = join(agent.globalSkillsDir, SKILL_VERSION_MARKER_FILENAME);
-  if (!existsSync(path)) return null;
   try {
-    return readFileSync(path, 'utf8').trim() || null;
+    return (await readFile(path, 'utf8')).trim() || null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Best-effort marker write — any failure is swallowed (filesystem permission
+ * errors shouldn't fail the install; doctor treats missing markers as "unknown").
+ * Single source of truth for the .workos-skill-version write semantics.
+ */
+async function writeAgentSkillMarker(agent: AgentConfig, version: string): Promise<void> {
+  try {
+    await writeFile(join(agent.globalSkillsDir, SKILL_VERSION_MARKER_FILENAME), version, 'utf8');
+  } catch {
+    // Marker is best-effort; doctor treats missing marker as "unknown".
   }
 }
 
@@ -315,7 +338,7 @@ export async function refreshWorkOSSkills(opts: RefreshOptions = {}): Promise<Re
 
   if (skills.length === 0 || detected.length === 0) return null;
 
-  const version = getBundledSkillsVersion(skillsDir);
+  const version = await getBundledSkillsVersion(skillsDir);
   const perAgentBefore: Record<string, string | null> = {};
   const perAgentAfter: Record<string, string | null> = {};
   const succeededAgents: AgentConfig[] = [];
@@ -325,7 +348,7 @@ export async function refreshWorkOSSkills(opts: RefreshOptions = {}): Promise<Re
   const installedSkills = new Set<string>();
 
   for (const agent of detected) {
-    perAgentBefore[agent.name] = readSkillVersionMarker(agent);
+    perAgentBefore[agent.name] = await readSkillVersionMarker(agent);
 
     let agentSucceeded = false;
     for (const skill of skills) {
@@ -339,15 +362,11 @@ export async function refreshWorkOSSkills(opts: RefreshOptions = {}): Promise<Re
     if (agentSucceeded) {
       succeededAgents.push(agent);
       if (writeMarker && version) {
-        try {
-          await writeFile(join(agent.globalSkillsDir, SKILL_VERSION_MARKER_FILENAME), version, 'utf8');
-        } catch {
-          // Marker is best-effort; doctor treats missing marker as "unknown".
-        }
+        await writeAgentSkillMarker(agent, version);
       }
     }
 
-    perAgentAfter[agent.name] = readSkillVersionMarker(agent);
+    perAgentAfter[agent.name] = await readSkillVersionMarker(agent);
   }
 
   if (succeededAgents.length === 0) return null;

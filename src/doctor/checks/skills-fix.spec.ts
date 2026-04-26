@@ -93,7 +93,7 @@ describe('maybeRefreshSkills', () => {
       perAgentBefore: { 'claude-code': '0.2.4', codex: null },
       perAgentAfter: { 'claude-code': '0.4.0', codex: '0.4.0' },
     });
-    vi.mocked(checkSkills).mockReturnValueOnce({
+    vi.mocked(checkSkills).mockResolvedValueOnce({
       bundledVersion: '0.4.0',
       agents: [
         { agent: 'Claude Code', installedVersion: '0.4.0', stale: false },

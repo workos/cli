@@ -60,7 +60,7 @@ export async function maybeRefreshSkills(
       after: refresh.perAgentAfter,
       skillsInstalled: refresh.skills,
     },
-    skills: checkSkills() ?? undefined,
+    skills: (await checkSkills()) ?? undefined,
   };
 }
 
@@ -78,7 +78,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     checkLanguage(options.installDir),
   ]);
 
-  let skills = checkSkills() ?? undefined;
+  let skills = (await checkSkills()) ?? undefined;
 
   // `--fix`: refresh stale WorkOS skills BEFORE earlyIssues + AI analysis so
   // every downstream consumer (issue detection, AI prompt context) sees the

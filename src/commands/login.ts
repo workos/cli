@@ -86,8 +86,14 @@ function sleep(ms: number): Promise<void> {
 export const SKILL_INSTALL_TIMEOUT_MS = 30 * 1000;
 
 export async function installSkillsAfterLogin(): Promise<void> {
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
   try {
-    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), SKILL_INSTALL_TIMEOUT_MS));
+    const timeout = new Promise<null>((resolve) => {
+      timeoutHandle = setTimeout(() => resolve(null), SKILL_INSTALL_TIMEOUT_MS);
+      // Don't keep the event loop alive on this timer — process should exit
+      // immediately if everything else has resolved.
+      timeoutHandle.unref?.();
+    });
     const result = await Promise.race([autoInstallSkills(), timeout]);
     if (result && !isJsonMode()) {
       const skillWord = result.skills.length === 1 ? 'skill' : 'skills';
@@ -95,6 +101,8 @@ export async function installSkillsAfterLogin(): Promise<void> {
     }
   } catch {
     // Skill install must never fail login.
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
   }
 }
 
