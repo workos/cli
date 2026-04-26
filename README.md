@@ -59,7 +59,7 @@ Commands:
   doctor                 Diagnose WorkOS integration issues
   skills                 Manage WorkOS skills for coding agents (install, uninstall, list)
 
-Skills are automatically installed to detected coding agents when you run `workos install`. Use `workos skills list` to check status.
+Skills auto-install to detected coding agents on `workos install` and `workos auth login`. Use `workos skills list` to check status, `workos doctor` to detect stale skills, or `workos doctor --fix` to refresh them in place (constrained to `workos/` and `workos-widgets/`).
 
 Resource Management:
   organization (org)     Manage organizations
