@@ -29,9 +29,7 @@ async function pathExists(p: string): Promise<boolean> {
  * Returns null if the version can't be determined — callers treat that as
  * "no marker written" rather than failing the install.
  */
-export async function getBundledSkillsVersion(
-  skillsDir: string = getSkillsPackageDir(),
-): Promise<string | null> {
+export async function getBundledSkillsVersion(skillsDir: string = getSkillsPackageDir()): Promise<string | null> {
   try {
     // skillsDir = <packageRoot>/plugins/workos/skills
     const packageRoot = dirname(dirname(dirname(skillsDir)));
