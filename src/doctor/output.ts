@@ -1,4 +1,6 @@
 import Chalk from 'chalk';
+import { homedir } from 'os';
+import { createAgents } from '../commands/install-skill.js';
 import type { DoctorReport, Issue } from './types.js';
 import { renderSummaryBox, type SummaryBoxItem } from '../utils/summary-box.js';
 import type { LockExpression } from '../utils/lock-art.js';
@@ -147,6 +149,22 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
         }
         console.log('');
       }
+    }
+  }
+
+  // Skills refresh (--fix path)
+  if (report.skillsRefresh) {
+    const agents = createAgents(homedir());
+    const displayName = (slug: string): string => agents[slug]?.displayName ?? slug;
+    const formatVersion = (v: string | null): string => v ?? '(none)';
+
+    console.log('');
+    console.log('Skills');
+    const slugs = Object.keys(report.skillsRefresh.before);
+    for (const slug of slugs) {
+      const before = formatVersion(report.skillsRefresh.before[slug] ?? null);
+      const after = formatVersion(report.skillsRefresh.after[slug] ?? null);
+      console.log(`   ${Chalk.green('✓')} Updated WorkOS skills for ${displayName(slug)}: ${before} → ${after}`);
     }
   }
 

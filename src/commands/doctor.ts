@@ -9,6 +9,7 @@ interface DoctorArgs {
   installDir?: string;
   json?: boolean;
   copy?: boolean;
+  fix?: boolean;
 }
 
 export async function handleDoctor(argv: ArgumentsCamelCase<DoctorArgs>): Promise<void> {
@@ -19,6 +20,7 @@ export async function handleDoctor(argv: ArgumentsCamelCase<DoctorArgs>): Promis
     skipAi: argv.skipAi ?? false,
     json: argv.json ?? false,
     copy: argv.copy ?? false,
+    fix: argv.fix ?? false,
   };
 
   try {

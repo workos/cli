@@ -119,6 +119,20 @@ export interface SkillsInfo {
   agents: SkillAgentStatus[];
 }
 
+/**
+ * Result of `workos doctor --fix` refreshing WorkOS skills. Captured per agent
+ * so the human-mode renderer can show a before/after line and the JSON consumer
+ * can reason about which agents changed.
+ */
+export interface SkillsRefreshResult {
+  /** Marker version per agent.name BEFORE refresh (null = no marker). */
+  before: Record<string, string | null>;
+  /** Marker version per agent.name AFTER refresh. */
+  after: Record<string, string | null>;
+  /** Skills the refresh was scoped to (the FIXABLE_SKILLS allowlist). */
+  skillsInstalled: string[];
+}
+
 export interface DoctorReport {
   version: string;
   timestamp: string;
@@ -139,6 +153,8 @@ export interface DoctorReport {
   authPatterns?: AuthPatternInfo;
   aiAnalysis?: AiAnalysis;
   skills?: SkillsInfo;
+  /** Present only when `--fix` actually performed a refresh. */
+  skillsRefresh?: SkillsRefreshResult;
   issues: Issue[];
   summary: {
     errors: number;
@@ -171,4 +187,6 @@ export interface DoctorOptions {
   skipAi?: boolean;
   json?: boolean;
   copy?: boolean;
+  /** When true, refresh stale WorkOS skills (constrained to workos/ + workos-widgets/). */
+  fix?: boolean;
 }

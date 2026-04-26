@@ -8,14 +8,61 @@ import { checkDashboardSettings, compareRedirectUris } from './checks/dashboard.
 import { checkAuthPatterns } from './checks/auth-patterns.js';
 import { checkAiAnalysis } from './checks/ai-analysis.js';
 import { checkSkills } from './checks/skills.js';
+import { refreshWorkOSSkills } from '../commands/install-skill.js';
 import { detectIssues } from './issues.js';
 import { formatReport } from './output.js';
 import { formatReportAsJson } from './json-output.js';
 import { copyToClipboard } from './clipboard.js';
 import Chalk from 'chalk';
-import type { DoctorOptions, DoctorReport } from './types.js';
+import type { DoctorOptions, DoctorReport, SkillsRefreshResult } from './types.js';
 
 const DOCTOR_VERSION = '1.0.0';
+
+/**
+ * Skills `--fix` is allowed to refresh. Hardcoded — NOT derived from
+ * discoverSkills — so future bundled skills require an explicit opt-in here
+ * before doctor will write to their target directory. This is the contract's
+ * promise that `--fix` only ever touches `workos/` and `workos-widgets/`.
+ */
+export const FIXABLE_SKILLS = ['workos', 'workos-widgets'] as const;
+
+/**
+ * Refresh stale WorkOS skills if `--fix` is set and at least one agent is
+ * stale or has no marker. Always re-reads `checkSkills()` after a successful
+ * refresh so detectIssues sees the post-refresh state and we don't ship a
+ * doctor report that simultaneously claims "fixed" and "still stale".
+ *
+ * Extracted from runDoctor for unit testability — runDoctor itself depends on
+ * eight upstream checks that are expensive to mock.
+ */
+export async function maybeRefreshSkills(
+  options: Pick<DoctorOptions, 'fix'>,
+  skills: DoctorReport['skills'],
+): Promise<{
+  skillsRefresh?: SkillsRefreshResult;
+  skills: DoctorReport['skills'];
+}> {
+  if (!options.fix || !skills) return { skills };
+
+  const stalePresent = skills.agents.some((a) => a.stale || a.installedVersion === null);
+  if (!stalePresent) return { skills };
+
+  const refresh = await refreshWorkOSSkills({
+    // Explicit allowlist — NOT discoverSkills — so the contract's
+    // workos/+workos-widgets-only constraint can't drift.
+    skills: [...FIXABLE_SKILLS],
+  });
+  if (!refresh) return { skills };
+
+  return {
+    skillsRefresh: {
+      before: refresh.perAgentBefore,
+      after: refresh.perAgentAfter,
+      skillsInstalled: refresh.skills,
+    },
+    skills: checkSkills() ?? undefined,
+  };
+}
 
 export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
   // Environment check first - loads project's .env/.env.local files
@@ -31,7 +78,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     checkLanguage(options.installDir),
   ]);
 
-  const skills = checkSkills() ?? undefined;
+  let skills = checkSkills() ?? undefined;
 
   // Dashboard settings + auth patterns + AI analysis (parallel, all need sdk/framework results)
   // AI analysis also receives early issues as context to avoid duplication
@@ -70,6 +117,13 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     ? compareRedirectUris(expectedRedirectUri, dashboardResult.settings.redirectUris, redirectUriSource)
     : undefined;
 
+  // `--fix`: refresh stale WorkOS skills BEFORE issue detection so the report
+  // reflects the post-refresh state (no lingering SKILLS_OUTDATED warning
+  // after the refresh has already fixed it).
+  const refreshOutcome = await maybeRefreshSkills(options, skills);
+  const skillsRefresh = refreshOutcome.skillsRefresh;
+  skills = refreshOutcome.skills;
+
   // Build partial report
   const partialReport = {
     version: DOCTOR_VERSION,
@@ -91,9 +145,10 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     authPatterns,
     aiAnalysis,
     skills,
+    skillsRefresh,
   };
 
-  // Detect issues based on collected data
+  // Detect issues based on (post-refresh) data.
   const issues = detectIssues(partialReport);
 
   // Calculate summary

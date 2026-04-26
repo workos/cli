@@ -343,6 +343,11 @@ yargs(rawArgs)
           default: false,
           description: 'Copy report to clipboard',
         },
+        fix: {
+          type: 'boolean',
+          default: false,
+          description: 'Auto-update stale WorkOS skills (writes to <agent>/skills/workos/ and workos-widgets/ only)',
+        },
       }),
     async (argv) => {
       const { handleDoctor } = await import('./commands/doctor.js');
