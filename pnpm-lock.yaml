@@ -30,8 +30,8 @@ importers:
         specifier: ^8.7.0
         version: 8.7.0
       '@workos/skills':
-        specifier: 0.2.4
-        version: 0.2.4
+        specifier: 0.4.0
+        version: 0.4.0
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
@@ -1071,8 +1071,8 @@ packages:
     resolution: {integrity: sha512-43HfXSR2Ez7M4ixpebuYVZzZf3gauh5jvv9lYnePg/x0XZMN2hjpEV3FD1LQX1vfMbqQ5gON3DN+/gH2rITm3A==}
     engines: {node: '>=20.15.0'}
 
-  '@workos/skills@0.2.4':
-    resolution: {integrity: sha512-Ku/8aD6zRwA7M4jREp/l1pUHOGCmDMBudlJAUfpkfZqFdDatxWJy+CQmYiIlMKt3IP4/GURe1rA72HpAcEkcaw==}
+  '@workos/skills@0.4.0':
+    resolution: {integrity: sha512-pH562ybfmXid9GcKsmer8bH/mNezhqIvXnwNN0T3UnR+m/ZHfBmiygI27GAxIf8Kl9ppNbOrTSGAVgzw1bG3Gg==}
 
   ansi-escapes@7.3.0:
     resolution: {integrity: sha512-BvU8nYgGQBxcmMuEeUEmNTvrMVjJNSH7RgW24vXexN4Ven6qCvy4TntnvlnwnMLTVlcRQQdbRY8NKnaIoeWDNg==}
@@ -2515,7 +2515,7 @@ snapshots:
       iron-webcrypto: 2.0.0
       jose: 6.1.3
 
-  '@workos/skills@0.2.4':
+  '@workos/skills@0.4.0':
     dependencies:
       yaml: 2.8.3
 
