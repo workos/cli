@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0](https://github.com/workos/cli/compare/v0.12.3...v0.13.0) (2026-04-26)
+
+
+### Features
+
+* complete WorkOS skill install + refresh loop with doctor --fix ([#130](https://github.com/workos/cli/issues/130)) ([c61f5a4](https://github.com/workos/cli/commit/c61f5a42d842adab64a199e85951a2259d6d4042))
+
 ## [0.12.3](https://github.com/workos/cli/compare/v0.12.2...v0.12.3) (2026-04-24)
 
 
