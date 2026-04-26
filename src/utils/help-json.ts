@@ -225,6 +225,14 @@ const commands: CommandSchema[] = [
         default: false,
         hidden: false,
       },
+      {
+        name: 'fix',
+        type: 'boolean',
+        description: 'Auto-update stale WorkOS skills (writes to <agent>/skills/workos/ and workos-widgets/ only)',
+        required: false,
+        default: false,
+        hidden: false,
+      },
     ],
   },
   {

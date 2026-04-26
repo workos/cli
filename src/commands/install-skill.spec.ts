@@ -387,29 +387,33 @@ describe('install-skill', () => {
     });
 
     it('writes a version marker per agent when the bundled version is resolvable', async () => {
-      // The real @workos/skills package is present in node_modules, so
-      // getBundledSkillsVersion should succeed against the real skillsDir layout.
-      // Here we just verify that IF a version can be determined, it gets written.
+      // Plant a deterministic package layout so getBundledSkillsVersion finds
+      // a real version. The function walks up 3 dirnames from skillsDir to
+      // locate the package.json, so we mirror that layout here:
+      //   <packageRoot>/package.json   ← version source
+      //   <packageRoot>/plugins/workos/skills   ← skillsDir
       const { SKILL_VERSION_MARKER_FILENAME } = await import('./install-skill.js');
+      const { getSkillsDir } = await import('@workos/skills');
 
-      mkdirSync(join(skillsDir, 'skill-a'));
-      writeFileSync(join(skillsDir, 'skill-a', 'SKILL.md'), '# Skill A');
+      const packageRoot = join(testDir, 'pkg');
+      mkdirSync(packageRoot);
+      writeFileSync(join(packageRoot, 'package.json'), JSON.stringify({ name: '@workos/skills', version: '9.9.9' }));
+      const deepSkillsDir = join(packageRoot, 'plugins/workos/skills');
+      mkdirSync(deepSkillsDir, { recursive: true });
+      mkdirSync(join(deepSkillsDir, 'skill-a'));
+      writeFileSync(join(deepSkillsDir, 'skill-a', 'SKILL.md'), '# Skill A');
+      vi.mocked(getSkillsDir).mockReturnValue(deepSkillsDir);
+
       mkdirSync(join(homeDir, '.claude'));
 
       const result = await autoInstallSkills();
 
-      // Our test skillsDir is not a real npm package, so bundled version is null.
-      // That's fine — the marker is only written when version is resolvable,
-      // and result.version reflects what was written.
-      if (result?.version) {
-        const marker = join(homeDir, '.claude/skills', SKILL_VERSION_MARKER_FILENAME);
-        expect(existsSync(marker)).toBe(true);
-        expect(readFileSync(marker, 'utf8')).toBe(result.version);
-      } else {
-        // Marker should NOT be written when version is unknown.
-        const marker = join(homeDir, '.claude/skills', SKILL_VERSION_MARKER_FILENAME);
-        expect(existsSync(marker)).toBe(false);
-      }
+      expect(result).not.toBeNull();
+      expect(result!.version).toBe('9.9.9');
+
+      const marker = join(homeDir, '.claude/skills', SKILL_VERSION_MARKER_FILENAME);
+      expect(existsSync(marker)).toBe(true);
+      expect(readFileSync(marker, 'utf8')).toBe('9.9.9');
     });
 
     it('returns null when no agents are detected', async () => {

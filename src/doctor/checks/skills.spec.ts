@@ -33,8 +33,20 @@ describe('checkSkills', () => {
     expect(checkSkills(testHome)).toBeNull();
   });
 
-  it('reports an agent with no marker as installedVersion=null and not stale', () => {
-    mkdirSync(join(testHome, '.claude/skills'), { recursive: true });
+  it('returns null when an agent skills dir exists but has no WorkOS skills (no marker, no workos/)', () => {
+    // The agent has its skills/ dir for unrelated user-installed skills. We
+    // must NOT report it as having WorkOS skills — `doctor --fix` would
+    // otherwise write workos/ + workos-widgets/ onto an agent that never
+    // opted in. Marker OR workos/ subdir is the signal.
+    mkdirSync(join(testHome, '.claude/skills/some-other-skill'), { recursive: true });
+    writeFileSync(join(testHome, '.claude/skills/some-other-skill/SKILL.md'), '# Other');
+
+    expect(checkSkills(testHome)).toBeNull();
+  });
+
+  it('reports an agent with workos/ subdir but no marker as installedVersion=null and not stale', () => {
+    // Pre-Phase-2 install (only SKILL.md was copied) — a real possible state.
+    mkdirSync(join(testHome, '.claude/skills/workos'), { recursive: true });
 
     const result = checkSkills(testHome);
 

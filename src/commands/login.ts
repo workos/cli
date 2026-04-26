@@ -76,16 +76,19 @@ function sleep(ms: number): Promise<void> {
  * Best-effort skill install after a successful auth-login.
  *
  * Mirrors the install.ts hook copy, but wraps `autoInstallSkills` in its own
- * try/catch so a skill install failure (or hang inside install) NEVER fails
- * the login itself. Login already succeeded by the time this runs — the user
- * having a working session is the contract that must hold.
+ * try/catch AND a 30s timeout so a skill install hang (e.g. blocked filesystem
+ * call) never blocks login completion. Login already succeeded by the time
+ * this runs — the user having a working session is the contract that must hold.
  *
  * Extracted from runLogin so it can be unit-tested without standing up the
  * device-auth polling loop.
  */
+export const SKILL_INSTALL_TIMEOUT_MS = 30 * 1000;
+
 export async function installSkillsAfterLogin(): Promise<void> {
   try {
-    const result = await autoInstallSkills();
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), SKILL_INSTALL_TIMEOUT_MS));
+    const result = await Promise.race([autoInstallSkills(), timeout]);
     if (result && !isJsonMode()) {
       const skillWord = result.skills.length === 1 ? 'skill' : 'skills';
       clack.log.info(`Installed ${result.skills.length} WorkOS ${skillWord} for ${result.agents.join(', ')}.`);

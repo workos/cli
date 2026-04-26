@@ -80,6 +80,14 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
 
   let skills = checkSkills() ?? undefined;
 
+  // `--fix`: refresh stale WorkOS skills BEFORE earlyIssues + AI analysis so
+  // every downstream consumer (issue detection, AI prompt context) sees the
+  // post-refresh skill state and doesn't reference a SKILLS_OUTDATED warning
+  // that was just resolved.
+  const refreshOutcome = await maybeRefreshSkills(options, skills);
+  const skillsRefresh = refreshOutcome.skillsRefresh;
+  skills = refreshOutcome.skills;
+
   // Dashboard settings + auth patterns + AI analysis (parallel, all need sdk/framework results)
   // AI analysis also receives early issues as context to avoid duplication
   const earlyIssues = detectIssues({
@@ -116,13 +124,6 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
   const redirectUris = dashboardResult.settings
     ? compareRedirectUris(expectedRedirectUri, dashboardResult.settings.redirectUris, redirectUriSource)
     : undefined;
-
-  // `--fix`: refresh stale WorkOS skills BEFORE issue detection so the report
-  // reflects the post-refresh state (no lingering SKILLS_OUTDATED warning
-  // after the refresh has already fixed it).
-  const refreshOutcome = await maybeRefreshSkills(options, skills);
-  const skillsRefresh = refreshOutcome.skillsRefresh;
-  skills = refreshOutcome.skills;
 
   // Build partial report
   const partialReport = {

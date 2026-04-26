@@ -112,16 +112,21 @@ export async function installSkill(
   const targetDir = join(agent.globalSkillsDir, skillName);
   const parent = dirname(targetDir);
 
-  await mkdir(parent, { recursive: true });
-  // Best-effort cleanup of OLD orphans only — never current-run paths.
-  await cleanupStaleOrphans(parent, skillName).catch(() => {});
-
-  // mkdtemp gives us atomic creation + a random suffix that prevents
-  // collisions between concurrent installers.
-  const tempDir = await mkdtemp(join(parent, `.workos.tmp-${skillName}-`));
-  const backupDir = tempDir.replace('.workos.tmp-', '.workos.bak-');
-
+  // Setup (mkdir parent, mkdtemp) is inside the try so EACCES / ENOTDIR / etc.
+  // surface as `{ success: false }` rather than rejecting — runInstallSkill and
+  // refreshWorkOSSkills accumulate failures across the (skill × agent) matrix
+  // and would otherwise abort the whole batch on a single bad agent dir.
+  let tempDir: string | undefined;
   try {
+    await mkdir(parent, { recursive: true });
+    // Best-effort cleanup of OLD orphans only — never current-run paths.
+    await cleanupStaleOrphans(parent, skillName).catch(() => {});
+
+    // mkdtemp gives us atomic creation + a random suffix that prevents
+    // collisions between concurrent installers.
+    tempDir = await mkdtemp(join(parent, `.workos.tmp-${skillName}-`));
+    const backupDir = tempDir.replace('.workos.tmp-', '.workos.bak-');
+
     await cp(sourceDir, tempDir, { recursive: true, errorOnExist: false });
 
     const targetExisted = existsSync(targetDir);
@@ -143,7 +148,9 @@ export async function installSkill(
     }
     return { success: true };
   } catch (error) {
-    await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    if (tempDir) {
+      await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    }
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -201,7 +208,7 @@ export async function runInstallSkill(options: InstallSkillOptions): Promise<voi
 
   const results: Array<{
     skill: string;
-    agent: string;
+    agent: AgentConfig;
     success: boolean;
     error?: string;
   }> = [];
@@ -209,11 +216,7 @@ export async function runInstallSkill(options: InstallSkillOptions): Promise<voi
   for (const skill of targetSkills) {
     for (const agent of targetAgents) {
       const result = await installSkill(skillsDir, skill, agent);
-      results.push({
-        skill,
-        agent: agent.displayName,
-        ...result,
-      });
+      results.push({ skill, agent, ...result });
     }
   }
 
@@ -223,14 +226,30 @@ export async function runInstallSkill(options: InstallSkillOptions): Promise<voi
   if (successful.length > 0) {
     console.log(chalk.green(`✓ Installed ${successful.length} skill(s):\n`));
     for (const r of successful) {
-      console.log(`  ${chalk.cyan(r.skill)} → ${chalk.dim(r.agent)}`);
+      console.log(`  ${chalk.cyan(r.skill)} → ${chalk.dim(r.agent.displayName)}`);
+    }
+  }
+
+  // Write per-agent version markers for any agent that had at least one
+  // successful install, so `workos doctor` doesn't immediately flag the
+  // freshly-installed skills as stale or missing.
+  const version = getBundledSkillsVersion(skillsDir);
+  if (version) {
+    const succeededAgents = new Set<AgentConfig>();
+    for (const r of successful) succeededAgents.add(r.agent);
+    for (const agent of succeededAgents) {
+      try {
+        await writeFile(join(agent.globalSkillsDir, SKILL_VERSION_MARKER_FILENAME), version, 'utf8');
+      } catch {
+        // Marker is best-effort; doctor treats missing marker as "unknown".
+      }
     }
   }
 
   if (failed.length > 0) {
     console.log(chalk.red(`\n✗ Failed to install ${failed.length}:\n`));
     for (const r of failed) {
-      console.log(`  ${r.skill} → ${r.agent}: ${chalk.dim(r.error)}`);
+      console.log(`  ${r.skill} → ${r.agent.displayName}: ${chalk.dim(r.error)}`);
     }
     process.exit(1);
   }
@@ -300,6 +319,10 @@ export async function refreshWorkOSSkills(opts: RefreshOptions = {}): Promise<Re
   const perAgentBefore: Record<string, string | null> = {};
   const perAgentAfter: Record<string, string | null> = {};
   const succeededAgents: AgentConfig[] = [];
+  // Union of skills that succeeded for at least one agent. Returning the full
+  // attempted list would inflate "Installed N skills" copy when some skills
+  // failed to copy; only count what actually landed somewhere.
+  const installedSkills = new Set<string>();
 
   for (const agent of detected) {
     perAgentBefore[agent.name] = readSkillVersionMarker(agent);
@@ -307,7 +330,10 @@ export async function refreshWorkOSSkills(opts: RefreshOptions = {}): Promise<Re
     let agentSucceeded = false;
     for (const skill of skills) {
       const result = await installSkill(skillsDir, skill, agent);
-      if (result.success) agentSucceeded = true;
+      if (result.success) {
+        agentSucceeded = true;
+        installedSkills.add(skill);
+      }
     }
 
     if (agentSucceeded) {
@@ -328,7 +354,7 @@ export async function refreshWorkOSSkills(opts: RefreshOptions = {}): Promise<Re
 
   return {
     agents: succeededAgents,
-    skills,
+    skills: skills.filter((s) => installedSkills.has(s)),
     version,
     perAgentBefore,
     perAgentAfter,

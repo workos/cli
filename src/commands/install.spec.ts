@@ -59,6 +59,7 @@ describe('handleInstall', () => {
     vi.mocked(autoInstallSkills).mockResolvedValue({
       skills: ['workos', 'workos-widgets'],
       agents: ['Claude Code'],
+      version: '0.4.0',
     });
     vi.mocked(isJsonMode).mockReturnValue(false);
 
@@ -82,6 +83,7 @@ describe('handleInstall', () => {
     vi.mocked(autoInstallSkills).mockResolvedValue({
       skills: ['workos'],
       agents: ['Claude Code'],
+      version: '0.4.0',
     });
     vi.mocked(isJsonMode).mockReturnValue(true);
 
