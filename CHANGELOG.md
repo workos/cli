@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.1](https://github.com/workos/cli/compare/v0.13.0...v0.13.1) (2026-04-27)
+
+
+### Bug Fixes
+
+* **deps:** bump @workos/skills to 0.5.0 ([653b97b](https://github.com/workos/cli/commit/653b97b499dffa63285c9b957cce3d748314f2be))
+
 ## [0.13.0](https://github.com/workos/cli/compare/v0.12.3...v0.13.0) (2026-04-26)
 
 
