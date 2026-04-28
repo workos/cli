@@ -47,7 +47,7 @@ describe('EventBus', () => {
     const ws = getWorkOSStore(store);
     ws.webhookEndpoints.insert({
       object: 'webhook_endpoint',
-      url: 'http://localhost:9999/webhook',
+      endpoint_url: 'http://localhost:9999/webhook',
       secret: 'whsec_test',
       enabled: false,
       events: [],
@@ -64,7 +64,7 @@ describe('EventBus', () => {
     const ws = getWorkOSStore(store);
     ws.webhookEndpoints.insert({
       object: 'webhook_endpoint',
-      url: 'http://localhost:9999/webhook',
+      endpoint_url: 'http://localhost:9999/webhook',
       secret: 'whsec_test',
       enabled: true,
       events: ['organization.created'],
@@ -88,7 +88,7 @@ describe('EventBus', () => {
 
     ws.webhookEndpoints.insert({
       object: 'webhook_endpoint',
-      url: 'http://localhost:9999/webhook',
+      endpoint_url: 'http://localhost:9999/webhook',
       secret,
       enabled: true,
       events: [],
@@ -128,7 +128,7 @@ describe('EventBus', () => {
 
     ws.webhookEndpoints.insert({
       object: 'webhook_endpoint',
-      url: 'http://localhost:9999/webhook',
+      endpoint_url: 'http://localhost:9999/webhook',
       secret: 'whsec_test',
       enabled: true,
       events: [],

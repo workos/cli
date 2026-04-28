@@ -12,7 +12,7 @@ import { resolveApiKey, resolveApiBaseUrl } from './api-key.js';
 
 export interface WebhookEndpoint {
   id: string;
-  url: string;
+  endpoint_url: string;
   events: string[];
   secret?: string;
   created_at: string;

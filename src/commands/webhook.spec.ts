@@ -19,7 +19,7 @@ const { runWebhookList, runWebhookCreate, runWebhookDelete } = await import('./w
 
 const mockWebhook = {
   id: 'we_123',
-  url: 'https://example.com/hook',
+  endpoint_url: 'https://example.com/hook',
   events: ['dsync.user.created'],
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',

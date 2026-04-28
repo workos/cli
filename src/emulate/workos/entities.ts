@@ -393,7 +393,7 @@ export interface WorkOSEvent extends Entity {
 
 export interface WorkOSWebhookEndpoint extends Entity {
   object: 'webhook_endpoint';
-  url: string;
+  endpoint_url: string;
   secret: string;
   enabled: boolean;
   events: string[];

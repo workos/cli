@@ -68,7 +68,7 @@ export class EventBus {
 
     const signature = signWebhookPayload(body, endpoint.secret);
 
-    await fetch(endpoint.url, {
+    await fetch(endpoint.endpoint_url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

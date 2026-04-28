@@ -237,7 +237,7 @@ export function getWorkOSStore(store: Store): WorkOSStore {
     webhookEndpoints: store.collection<WorkOSWebhookEndpoint>(
       'workos.webhook_endpoints',
       ID_PREFIXES.webhook_endpoint,
-      ['url'],
+      ['endpoint_url'],
     ),
   };
 

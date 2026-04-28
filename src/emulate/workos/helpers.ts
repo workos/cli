@@ -298,7 +298,7 @@ export function formatWebhookEndpoint(
   return {
     object: 'webhook_endpoint',
     id: ep.id,
-    url: ep.url,
+    endpoint_url: ep.endpoint_url,
     secret: opts?.includeSecret ? ep.secret : `${ep.secret.slice(0, 8)}****`,
     enabled: ep.enabled,
     events: ep.events,
