@@ -35,17 +35,18 @@ export async function runWebhookList(apiKey: string, baseUrl?: string): Promise<
       if (joined.length <= maxEventsChars) {
         return [ep.id, ep.endpoint_url, joined, ep.created_at];
       }
-      const visible: string[] = [];
-      let len = 0;
-      for (const evt of ep.events) {
-        const next = len === 0 ? evt.length : len + 2 + evt.length;
+      // Always include the first event so the cell isn't content-free when a single event name exceeds the budget.
+      const visible: string[] = [ep.events[0]];
+      let len = ep.events[0].length;
+      for (let i = 1; i < ep.events.length; i++) {
+        const next = len + 2 + ep.events[i].length;
         if (next > maxEventsChars) break;
-        visible.push(evt);
+        visible.push(ep.events[i]);
         len = next;
       }
       const hidden = ep.events.length - visible.length;
-      const prefix = visible.length > 0 ? `${visible.join(', ')}, ` : '';
-      return [ep.id, ep.endpoint_url, `${prefix}… (+${hidden} more)`, ep.created_at];
+      const suffix = hidden > 0 ? `, … (+${hidden} more)` : '';
+      return [ep.id, ep.endpoint_url, `${visible.join(', ')}${suffix}`, ep.created_at];
     });
 
     console.log(formatTable([{ header: 'ID' }, { header: 'URL' }, { header: 'Events' }, { header: 'Created' }], rows));

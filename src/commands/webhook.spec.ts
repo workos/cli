@@ -59,6 +59,39 @@ describe('webhook commands', () => {
       await runWebhookList('sk_test');
       expect(consoleOutput.some((l) => l.includes('No webhook endpoints found'))).toBe(true);
     });
+
+    it('truncates long event lists with a "+N more" suffix', async () => {
+      mockClient.webhooks.list.mockResolvedValue({
+        data: [
+          {
+            ...mockWebhook,
+            events: [
+              'user.created',
+              'user.updated',
+              'user.deleted',
+              'session.created',
+              'session.revoked',
+              'organization.created',
+              'organization.updated',
+            ],
+          },
+        ],
+        list_metadata: { before: null, after: null },
+      });
+      await runWebhookList('sk_test');
+      expect(consoleOutput.some((l) => /\+\d+ more/.test(l))).toBe(true);
+    });
+
+    it('always shows at least one event when a single event name exceeds the budget', async () => {
+      const longEvent = 'a.very.long.namespace.with.many.segments.that.exceeds.sixty.chars.event';
+      mockClient.webhooks.list.mockResolvedValue({
+        data: [{ ...mockWebhook, events: [longEvent, 'user.created'] }],
+        list_metadata: { before: null, after: null },
+      });
+      await runWebhookList('sk_test');
+      expect(consoleOutput.some((l) => l.includes(longEvent))).toBe(true);
+      expect(consoleOutput.some((l) => l.includes('(+1 more)'))).toBe(true);
+    });
   });
 
   describe('runWebhookCreate', () => {
