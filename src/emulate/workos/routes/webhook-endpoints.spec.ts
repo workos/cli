@@ -105,6 +105,31 @@ describe('Webhook endpoint routes', () => {
     expect(getRes.status).toBe(404);
   });
 
+  it('accepts legacy url on create for backward compatibility', async () => {
+    const res = await req('/webhook_endpoints', {
+      method: 'POST',
+      body: JSON.stringify({ url: 'http://localhost:3000/legacy' }),
+    });
+    expect(res.status).toBe(201);
+    const ep = await json(res);
+    expect(ep.endpoint_url).toBe('http://localhost:3000/legacy');
+  });
+
+  it('accepts legacy url on update for backward compatibility', async () => {
+    const createRes = await req('/webhook_endpoints', {
+      method: 'POST',
+      body: JSON.stringify({ endpoint_url: 'http://localhost:3000/webhooks' }),
+    });
+    const created = await json(createRes);
+    const updateRes = await req(`/webhook_endpoints/${created.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ url: 'http://localhost:3000/updated-legacy' }),
+    });
+    expect(updateRes.status).toBe(200);
+    const updated = await json(updateRes);
+    expect(updated.endpoint_url).toBe('http://localhost:3000/updated-legacy');
+  });
+
   it('returns 422 for missing url', async () => {
     const res = await req('/webhook_endpoints', {
       method: 'POST',

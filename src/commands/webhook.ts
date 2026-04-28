@@ -29,12 +29,23 @@ export async function runWebhookList(apiKey: string, baseUrl?: string): Promise<
       return;
     }
 
+    const maxEventsChars = 60;
     const rows = result.data.map((ep) => {
-      const eventStr = ep.events.join(', ');
-      const maxEvents = 60;
-      const truncatedEvents =
-        eventStr.length > maxEvents ? `${eventStr.slice(0, maxEvents)}… (+${ep.events.length})` : eventStr;
-      return [ep.id, ep.endpoint_url, truncatedEvents, ep.created_at];
+      const joined = ep.events.join(', ');
+      if (joined.length <= maxEventsChars) {
+        return [ep.id, ep.endpoint_url, joined, ep.created_at];
+      }
+      const visible: string[] = [];
+      let len = 0;
+      for (const evt of ep.events) {
+        const next = len === 0 ? evt.length : len + 2 + evt.length;
+        if (next > maxEventsChars) break;
+        visible.push(evt);
+        len = next;
+      }
+      const hidden = ep.events.length - visible.length;
+      const prefix = visible.length > 0 ? `${visible.join(', ')}, ` : '';
+      return [ep.id, ep.endpoint_url, `${prefix}… (+${hidden} more)`, ep.created_at];
     });
 
     console.log(formatTable([{ header: 'ID' }, { header: 'URL' }, { header: 'Events' }, { header: 'Created' }], rows));
