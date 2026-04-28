@@ -318,7 +318,7 @@ export function seedFromConfig(store: Store, _baseUrl: string, config: WorkOSSee
   if (config.webhookEndpoints) {
     for (const whConfig of config.webhookEndpoints) {
       const endpointUrl = whConfig.endpoint_url ?? whConfig.url;
-      if (!endpointUrl) {
+      if (!endpointUrl || typeof endpointUrl !== 'string') {
         throw new Error('workos seed config: webhookEndpoints[].endpoint_url is required');
       }
       ws.webhookEndpoints.insert({
