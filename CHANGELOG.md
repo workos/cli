@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.2](https://github.com/workos/cli/compare/v0.13.1...v0.13.2) (2026-04-28)
+
+
+### Bug Fixes
+
+* webhook list empty URL column and truncate long event lists ([#134](https://github.com/workos/cli/issues/134)) ([643f483](https://github.com/workos/cli/commit/643f4836a7cef449f949b2540b94ca43ee9225bc))
+
 ## [0.13.1](https://github.com/workos/cli/compare/v0.13.0...v0.13.1) (2026-04-27)
 
 
