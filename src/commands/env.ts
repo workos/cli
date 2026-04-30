@@ -172,7 +172,10 @@ export async function runEnvSwitch(name?: string): Promise<void> {
   saveConfig(config);
 
   const env = config.environments[name];
-  outputSuccess('Switched environment', { name, type: env.type });
+  const warnings = process.env.WORKOS_API_KEY
+    ? [{ code: 'env_var_override', message: "WORKOS_API_KEY is set in your shell. It will override this environment's stored key unless you pass --api-key." }]
+    : undefined;
+  outputSuccess('Switched environment', { name, type: env.type }, { warnings });
 }
 
 export async function runEnvList(): Promise<void> {

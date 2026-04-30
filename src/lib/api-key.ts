@@ -2,8 +2,8 @@
  * API key resolution for management commands.
  *
  * Priority chain:
- * 1. WORKOS_API_KEY environment variable
- * 2. --api-key flag
+ * 1. --api-key flag
+ * 2. WORKOS_API_KEY environment variable
  * 3. Active environment's stored API key
  */
 
@@ -17,10 +17,10 @@ export interface ApiKeyOptions {
 }
 
 export function resolveApiKey(options?: ApiKeyOptions): string {
+  if (options?.apiKey) return options.apiKey;
+
   const envVar = process.env.WORKOS_API_KEY;
   if (envVar) return envVar;
-
-  if (options?.apiKey) return options.apiKey;
 
   const activeEnv = getActiveEnvironment();
   if (activeEnv?.apiKey) return activeEnv.apiKey;

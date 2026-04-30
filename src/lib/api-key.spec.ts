@@ -63,21 +63,22 @@ describe('api-key', () => {
   });
 
   describe('resolveApiKey', () => {
-    it('returns WORKOS_API_KEY env var when set', () => {
+    it('returns --api-key flag over env var and stored key', () => {
       process.env.WORKOS_API_KEY = 'sk_env_var';
       saveConfig({
         activeEnvironment: 'prod',
         environments: { prod: { name: 'prod', type: 'production', apiKey: 'sk_stored' } },
       });
-      expect(resolveApiKey({ apiKey: 'sk_flag' })).toBe('sk_env_var');
+      expect(resolveApiKey({ apiKey: 'sk_flag' })).toBe('sk_flag');
     });
 
-    it('returns --api-key flag when env var not set', () => {
+    it('returns WORKOS_API_KEY env var when no flag provided', () => {
+      process.env.WORKOS_API_KEY = 'sk_env_var';
       saveConfig({
         activeEnvironment: 'prod',
         environments: { prod: { name: 'prod', type: 'production', apiKey: 'sk_stored' } },
       });
-      expect(resolveApiKey({ apiKey: 'sk_flag' })).toBe('sk_flag');
+      expect(resolveApiKey()).toBe('sk_env_var');
     });
 
     it('returns active environment API key when no env var or flag', () => {

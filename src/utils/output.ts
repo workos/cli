@@ -51,13 +51,25 @@ export function outputJson(data: unknown): void {
 }
 
 /** Write a success result — chalk in human mode, JSON in json mode. */
-export function outputSuccess(message: string, data?: object): void {
+export function outputSuccess(
+  message: string,
+  data?: object,
+  options?: { warnings?: Array<{ code: string; message: string }> },
+): void {
   if (currentMode === 'json') {
-    console.log(JSON.stringify(data ? { status: 'ok', message, data } : { status: 'ok', message }));
+    const result: Record<string, unknown> = { status: 'ok', message };
+    if (data) result.data = data;
+    if (options?.warnings?.length) result.warnings = options.warnings;
+    console.log(JSON.stringify(result));
   } else {
     console.log(chalk.green(message));
     if (data) {
       console.log(JSON.stringify(data, null, 2));
+    }
+    if (options?.warnings?.length) {
+      for (const w of options.warnings) {
+        console.error(chalk.yellow(w.message));
+      }
     }
   }
 }
@@ -68,6 +80,14 @@ export function outputError(error: { code: string; message: string; details?: un
     console.error(JSON.stringify({ error }));
   } else {
     console.error(chalk.red(error.message));
+  }
+}
+
+export function outputWarning(warning: { code: string; message: string }): void {
+  if (currentMode === 'json') {
+    console.error(JSON.stringify({ warning }));
+  } else {
+    console.error(chalk.yellow(warning.message));
   }
 }
 

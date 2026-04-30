@@ -16,6 +16,7 @@ vi.mock('../utils/clack.js', () => ({
       error: vi.fn(),
       info: vi.fn(),
       step: vi.fn(),
+      warn: vi.fn(),
     },
     text: vi.fn(),
     select: vi.fn(),
@@ -148,6 +149,36 @@ describe('env commands', () => {
     it('errors when no environments configured', async () => {
       await expect(runEnvSwitch('anything')).rejects.toThrow('process.exit');
     });
+
+    it('warns when WORKOS_API_KEY env var is set', async () => {
+      const original = process.env.WORKOS_API_KEY;
+      process.env.WORKOS_API_KEY = 'sk_test_override';
+      const stderrOutput: string[] = [];
+      vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+        stderrOutput.push(args.map(String).join(' '));
+      });
+      try {
+        await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+        await runEnvAdd({ name: 'sandbox', apiKey: 'sk_test_abc' });
+        await runEnvSwitch('sandbox');
+        expect(stderrOutput.some((s) => s.includes('WORKOS_API_KEY'))).toBe(true);
+      } finally {
+        if (original === undefined) delete process.env.WORKOS_API_KEY;
+        else process.env.WORKOS_API_KEY = original;
+      }
+    });
+
+    it('does not warn when WORKOS_API_KEY env var is not set', async () => {
+      delete process.env.WORKOS_API_KEY;
+      const stderrOutput: string[] = [];
+      vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+        stderrOutput.push(args.map(String).join(' '));
+      });
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      await runEnvAdd({ name: 'sandbox', apiKey: 'sk_test_abc' });
+      await runEnvSwitch('sandbox');
+      expect(stderrOutput).toHaveLength(0);
+    });
   });
 
   describe('runEnvList', () => {
@@ -206,6 +237,24 @@ describe('env commands', () => {
       expect(output.status).toBe('ok');
       expect(output.message).toBe('Switched environment');
       expect(output.data.name).toBe('sandbox');
+    });
+
+    it('runEnvSwitch includes warnings in JSON when WORKOS_API_KEY is set', async () => {
+      const original = process.env.WORKOS_API_KEY;
+      process.env.WORKOS_API_KEY = 'sk_test_override';
+      try {
+        await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+        await runEnvAdd({ name: 'sandbox', apiKey: 'sk_test_abc' });
+        consoleOutput = [];
+        await runEnvSwitch('sandbox');
+        const output = JSON.parse(consoleOutput[0]);
+        expect(output.status).toBe('ok');
+        expect(output.warnings).toHaveLength(1);
+        expect(output.warnings[0].code).toBe('env_var_override');
+      } finally {
+        if (original === undefined) delete process.env.WORKOS_API_KEY;
+        else process.env.WORKOS_API_KEY = original;
+      }
     });
 
     it('runEnvList outputs JSON with data array', async () => {
