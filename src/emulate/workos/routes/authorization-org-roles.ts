@@ -44,13 +44,13 @@ export function authorizationOrgRoleRoutes(ctx: RouteContext): void {
   registerRoleRoutes(ctx, {
     pathPrefix: prefix,
     roleType: 'OrganizationRole',
-    requireRole: (ws, c) => requireOrgRole(ws, c.req.param('orgId'), c.req.param('slug')),
-    findRole: (ws, c, slug) => findOrgRole(ws, c.req.param('orgId'), slug),
+    requireRole: (ws, c) => requireOrgRole(ws, c.req.param('orgId')!, c.req.param('slug')!),
+    findRole: (ws, c, slug) => findOrgRole(ws, c.req.param('orgId')!, slug),
     listFilter: (c) => (r) => r.organization_id === c.req.param('orgId') && r.type === 'OrganizationRole',
-    insertDefaults: (c) => ({ organization_id: c.req.param('orgId') }),
+    insertDefaults: (c) => ({ organization_id: c.req.param('orgId')! }),
     duplicateMessage: 'Role with this slug already exists in this organization',
     validateBeforeCreate: (ws, c) => {
-      const org = ws.organizations.get(c.req.param('orgId'));
+      const org = ws.organizations.get(c.req.param('orgId')!);
       if (!org) throw notFound('Organization');
     },
   });

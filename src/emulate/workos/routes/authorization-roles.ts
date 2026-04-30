@@ -5,7 +5,7 @@ export function authorizationRoleRoutes(ctx: RouteContext): void {
   registerRoleRoutes(ctx, {
     pathPrefix: '/authorization/roles',
     roleType: 'EnvironmentRole',
-    requireRole: (ws, c) => requireEnvRole(ws, c.req.param('slug')),
+    requireRole: (ws, c) => requireEnvRole(ws, c.req.param('slug')!),
     findRole: (ws, _c, slug) => findEnvRole(ws, slug),
     listFilter: () => (r) => r.type === 'EnvironmentRole',
     insertDefaults: () => ({ organization_id: null }),
