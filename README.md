@@ -367,7 +367,7 @@ API keys are stored in the system keychain via `@napi-rs/keyring`, with a JSON f
 
 ### Resource Management
 
-All resource commands follow the same pattern: `workos <resource> <action> [args] [--options]`. API keys resolve via: `WORKOS_API_KEY` env var → `--api-key` flag → active environment's stored key.
+All resource commands follow the same pattern: `workos <resource> <action> [args] [--options]`. API keys resolve via: `--api-key` flag → `WORKOS_API_KEY` env var → active environment's stored key.
 
 #### organization
 
