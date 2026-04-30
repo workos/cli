@@ -83,14 +83,6 @@ export function outputError(error: { code: string; message: string; details?: un
   }
 }
 
-export function outputWarning(warning: { code: string; message: string }): void {
-  if (currentMode === 'json') {
-    console.error(JSON.stringify({ warning }));
-  } else {
-    console.error(chalk.yellow(warning.message));
-  }
-}
-
 /** Write tabular data — chalk table in human mode, JSON array in json mode. */
 export function outputTable(columns: TableColumn[], rows: string[][], rawData?: unknown[]): void {
   if (currentMode === 'json') {

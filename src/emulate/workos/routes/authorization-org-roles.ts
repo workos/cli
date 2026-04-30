@@ -46,7 +46,7 @@ export function authorizationOrgRoleRoutes(ctx: RouteContext): void {
     roleType: 'OrganizationRole',
     requireRole: (ws, c) => requireOrgRole(ws, c.req.param('orgId')!, c.req.param('slug')!),
     findRole: (ws, c, slug) => findOrgRole(ws, c.req.param('orgId')!, slug),
-    listFilter: (c) => (r) => r.organization_id === c.req.param('orgId') && r.type === 'OrganizationRole',
+    listFilter: (c) => (r) => r.organization_id === c.req.param('orgId')! && r.type === 'OrganizationRole',
     insertDefaults: (c) => ({ organization_id: c.req.param('orgId')! }),
     duplicateMessage: 'Role with this slug already exists in this organization',
     validateBeforeCreate: (ws, c) => {

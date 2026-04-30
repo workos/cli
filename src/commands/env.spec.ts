@@ -169,15 +169,21 @@ describe('env commands', () => {
     });
 
     it('does not warn when WORKOS_API_KEY env var is not set', async () => {
+      const original = process.env.WORKOS_API_KEY;
       delete process.env.WORKOS_API_KEY;
       const stderrOutput: string[] = [];
       vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
         stderrOutput.push(args.map(String).join(' '));
       });
-      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
-      await runEnvAdd({ name: 'sandbox', apiKey: 'sk_test_abc' });
-      await runEnvSwitch('sandbox');
-      expect(stderrOutput).toHaveLength(0);
+      try {
+        await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+        await runEnvAdd({ name: 'sandbox', apiKey: 'sk_test_abc' });
+        await runEnvSwitch('sandbox');
+        expect(stderrOutput).toHaveLength(0);
+      } finally {
+        if (original === undefined) delete process.env.WORKOS_API_KEY;
+        else process.env.WORKOS_API_KEY = original;
+      }
     });
   });
 
