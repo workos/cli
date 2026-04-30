@@ -94,14 +94,22 @@ export async function requestDeviceCode(options: DeviceAuthOptions): Promise<Dev
   const url = `${options.authkitDomain}/oauth2/device_authorization`;
 
   logInfo('[device-auth] Requesting device code from:', url);
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: options.clientId,
-      scope: scopes.join(' '),
-    }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), POLL_REQUEST_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: options.clientId,
+        scope: scopes.join(' '),
+      }),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   logInfo('[device-auth] Device code response status:', res.status);
   if (!res.ok) {
