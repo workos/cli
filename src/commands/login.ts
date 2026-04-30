@@ -11,7 +11,7 @@ import type { CliConfig } from '../lib/config-store.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
 import { autoInstallSkills } from './install-skill.js';
 import { isJsonMode } from '../utils/output.js';
-import { requestDeviceCode, pollForToken, DeviceAuthError } from '../lib/device-auth.js';
+import { requestDeviceCode, pollForToken, DeviceAuthTimeoutError } from '../lib/device-auth.js';
 
 /**
  * Best-effort skill install after a successful auth-login.
@@ -167,7 +167,7 @@ export async function runLogin(): Promise<void> {
 
     await installSkillsAfterLogin();
   } catch (error) {
-    if (error instanceof DeviceAuthError && error.message.includes('timed out')) {
+    if (error instanceof DeviceAuthTimeoutError) {
       spinner.stop('Authentication timed out');
       clack.log.error('Authentication timed out. Please try again.');
     } else {

@@ -54,6 +54,13 @@ export class DeviceAuthError extends Error {
   }
 }
 
+export class DeviceAuthTimeoutError extends DeviceAuthError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DeviceAuthTimeoutError';
+  }
+}
+
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const DEFAULT_POLL_INTERVAL_SECONDS = 5;
 const POLL_REQUEST_TIMEOUT_MS = 30_000;
@@ -107,6 +114,12 @@ export async function requestDeviceCode(options: DeviceAuthOptions): Promise<Dev
       }),
       signal: controller.signal,
     });
+  } catch (error) {
+    clearTimeout(timeout);
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new DeviceAuthTimeoutError('Device authorization request timed out');
+    }
+    throw new DeviceAuthError(`Device authorization request failed: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
     clearTimeout(timeout);
   }
@@ -204,7 +217,7 @@ export async function pollForToken(
   }
 
   logError('[device-auth] Authentication timed out, last poll:', lastPollSummary);
-  throw new DeviceAuthError(
+  throw new DeviceAuthTimeoutError(
     `Authentication timed out after ${Math.round(timeoutMs / 1000)} seconds (last token response: ${lastPollSummary})`,
   );
 }
