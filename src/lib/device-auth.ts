@@ -119,7 +119,9 @@ export async function requestDeviceCode(options: DeviceAuthOptions): Promise<Dev
     if (error instanceof DOMException && error.name === 'AbortError') {
       throw new DeviceAuthTimeoutError('Device authorization request timed out');
     }
-    throw new DeviceAuthError(`Device authorization request failed: ${error instanceof Error ? error.message : String(error)}`);
+    throw new DeviceAuthError(
+      `Device authorization request failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
   } finally {
     clearTimeout(timeout);
   }
