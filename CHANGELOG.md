@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.3](https://github.com/workos/cli/compare/v0.13.2...v0.13.3) (2026-04-30)
+
+
+### Bug Fixes
+
+* --api-key flag takes precedence over WORKOS_API_KEY env var ([#137](https://github.com/workos/cli/issues/137)) ([4a18de1](https://github.com/workos/cli/commit/4a18de16d66fc3ce1485ac3294a8b4ff70d059a3))
+* prevent workos auth login from hanging indefinitely ([#139](https://github.com/workos/cli/issues/139)) ([1154090](https://github.com/workos/cli/commit/11540902181e72751da0a0ba356d18291cccb9df))
+
 ## [0.13.2](https://github.com/workos/cli/compare/v0.13.1...v0.13.2) (2026-04-28)
 
 
