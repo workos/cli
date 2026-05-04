@@ -1056,6 +1056,18 @@ const commands: CommandSchema[] = [
       },
     ],
   },
+  {
+    name: 'completion',
+    description: 'Generate shell autocompletion script',
+    positionals: [
+      {
+        name: 'shell',
+        type: 'string',
+        description: 'Shell type',
+        required: true,
+      },
+    ],
+  },
   // --- Emulator (hidden: unreleased beta feature) ---
   // --- Workflow Commands ---
   {

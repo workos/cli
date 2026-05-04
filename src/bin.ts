@@ -47,6 +47,14 @@ if (hasJsonFlag && (rawArgs.includes('--help') || rawArgs.includes('-h'))) {
   process.exit(0);
 }
 
+// Fast path for shell completion — intercept before yargs parses
+// to avoid validation errors on partial input from Tab presses.
+if (rawArgs[0] === '--get-yargs-completions') {
+  const { completeHandler } = await import('./utils/completion.js');
+  completeHandler(rawArgs.slice(1));
+  process.exit(0);
+}
+
 /** Apply insecure storage flag if set */
 async function applyInsecureStorage(insecureStorage?: boolean): Promise<void> {
   if (insecureStorage) {
@@ -2272,6 +2280,29 @@ yargs(rawArgs)
     );
     return yargs.demandCommand(1, 'Run "workos debug <command>" for debug tools.').strict();
   })
+  .command(
+    'completion [shell]',
+    'Generate shell autocompletion script',
+    (yargs) =>
+      yargs.positional('shell', {
+        type: 'string',
+        describe: 'Shell type (bash, zsh, fish, powershell)',
+        choices: ['bash', 'zsh', 'fish', 'powershell'] as const,
+      }),
+    async (argv) => {
+      const shell = argv.shell;
+      if (!shell) {
+        console.error(`Usage: workos completion <shell>\nSupported shells: bash, zsh, fish, powershell`);
+        process.exit(1);
+      }
+      const { generateShellScript, SUPPORTED_SHELLS } = await import('./utils/completion.js');
+      if (!(SUPPORTED_SHELLS as readonly string[]).includes(shell)) {
+        console.error(`Unsupported shell: ${shell}. Supported: ${SUPPORTED_SHELLS.join(', ')}`);
+        process.exit(1);
+      }
+      process.stdout.write(generateShellScript(shell, 'workos'));
+    },
+  )
   .command(
     'dashboard',
     false, // hidden from help
