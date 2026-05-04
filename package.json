@@ -93,7 +93,7 @@
     "prebuild": "pnpm clean",
     "build:watch": "pnpm tsc -w",
     "build": "pnpm tsc",
-    "postbuild": "chmod +x ./dist/bin.js && cp -r scripts/** dist",
+    "postbuild": "chmod +x ./dist/bin.js && cp -r scripts/** dist && cp src/commands/api/workos-openapi-spec.yaml dist/commands/api/",
     "lint": "oxlint",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
