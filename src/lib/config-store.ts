@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { logWarn } from '../utils/debug.js';
+import { observeHostFailure } from './host-probe.js';
 
 interface BaseEnvironmentConfig {
   name: string;
@@ -109,6 +110,7 @@ function readFromKeyring(): CliConfig | null {
     return JSON.parse(data);
   } catch (error) {
     logWarn('Failed to read config from keyring:', error);
+    observeHostFailure('keychain', error);
     return null;
   }
 }
@@ -120,6 +122,7 @@ function writeToKeyring(config: CliConfig): boolean {
     return true;
   } catch (error) {
     logWarn('Failed to write config to keyring:', error);
+    observeHostFailure('keychain', error);
     return false;
   }
 }

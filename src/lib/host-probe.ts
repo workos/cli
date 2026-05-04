@@ -1,0 +1,128 @@
+/**
+ * Host capability probes for non-interactive / sandboxed environments.
+ *
+ * When the CLI runs inside an AI agent sandbox (Claude Code, Codex, Cursor),
+ * the keyring, home directory, network, or browser may be unavailable.
+ * These helpers detect that situation and emit a single actionable warning
+ * per session instead of letting opaque EPERM errors confuse the agent.
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { randomUUID } from 'node:crypto';
+import { isNonInteractiveEnvironment } from '../utils/environment.js';
+import { logWarn, logInfo } from '../utils/debug.js';
+
+export type HostCapability = 'home-fs' | 'keychain' | 'network' | 'browser-launch';
+
+export interface ProbeFailure {
+  capability: HostCapability;
+  detail: string;
+}
+
+export interface ProbeResult {
+  ok: boolean;
+  failures: ProbeFailure[];
+}
+
+let warnedThisSession = false;
+let cachedProbe: ProbeResult | undefined;
+
+const PERMISSION_PATTERNS = [
+  /\bEPERM\b/i,
+  /\bEACCES\b/i,
+  /operation not permitted/i,
+  /permission denied/i,
+  /sandbox/i,
+  /interaction is not allowed/i,
+  /access denied/i,
+];
+
+function isPermissionError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  return PERMISSION_PATTERNS.some((p) => p.test(msg));
+}
+
+function probeHomeFs(): ProbeFailure | null {
+  const dir = path.join(os.homedir(), '.workos');
+  const probePath = path.join(dir, `.probe-${process.pid}-${randomUUID()}`);
+
+  try {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    }
+    fs.writeFileSync(probePath, new Date().toISOString(), { mode: 0o600 });
+    fs.unlinkSync(probePath);
+    return null;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    return { capability: 'home-fs', detail };
+  }
+}
+
+function probeKeychain(): ProbeFailure | null {
+  try {
+    const { Entry } = require('@napi-rs/keyring');
+    const entry = new Entry('workos-cli', 'probe');
+    entry.getPassword();
+    return null;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    return { capability: 'keychain', detail };
+  }
+}
+
+export function runHostProbe(): ProbeResult {
+  if (cachedProbe) return cachedProbe;
+
+  const failures: ProbeFailure[] = [];
+
+  const fsResult = probeHomeFs();
+  if (fsResult) failures.push(fsResult);
+
+  const keychainResult = probeKeychain();
+  if (keychainResult) failures.push(keychainResult);
+
+  cachedProbe = { ok: failures.length === 0, failures };
+  return cachedProbe;
+}
+
+export function warnIfSandboxed(): void {
+  if (warnedThisSession) return;
+  if (!isNonInteractiveEnvironment()) return;
+
+  const probe = runHostProbe();
+  if (probe.ok) return;
+
+  warnedThisSession = true;
+
+  const caps = probe.failures.map((f) => f.capability).join(', ');
+  logWarn(
+    `Host capabilities may be unavailable (${caps}). This may be a sandboxed environment.`,
+    'Re-run this command on the host shell before trusting auth or API failures.',
+  );
+
+  for (const f of probe.failures) {
+    logInfo(`[host-probe] ${f.capability}: ${f.detail}`);
+  }
+}
+
+export function observeHostFailure(capability: HostCapability, error: unknown): void {
+  if (warnedThisSession) return;
+  if (!isNonInteractiveEnvironment()) return;
+  if (!isPermissionError(error)) return;
+
+  warnedThisSession = true;
+
+  const detail = error instanceof Error ? error.message : String(error);
+  logWarn(
+    `Host capability "${capability}" failed (${detail}). This may be a sandboxed environment.`,
+    'Re-run this command on the host shell before trusting auth or API failures.',
+  );
+}
+
+export function _resetProbeState(): void {
+  cachedProbe = undefined;
+  warnedThisSession = false;
+}

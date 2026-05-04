@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { logWarn } from '../utils/debug.js';
+import { observeHostFailure } from './host-probe.js';
 
 export interface StagingCache {
   clientId: string;
@@ -94,6 +95,7 @@ function readFromKeyring(): Credentials | null {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logWarn(`[credential-store] keyring read failed: ${msg}`);
+    observeHostFailure('keychain', error);
     return null;
   }
 }
@@ -106,6 +108,7 @@ function writeToKeyring(creds: Credentials): boolean {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logWarn(`[credential-store] keyring write failed: ${msg}`);
+    observeHostFailure('keychain', error);
     return false;
   }
 }

@@ -10,6 +10,7 @@ import { logInfo } from '../utils/debug.js';
 import { isNonInteractiveEnvironment } from '../utils/environment.js';
 import { exitWithAuthRequired } from '../utils/exit-codes.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
+import { warnIfSandboxed } from './host-probe.js';
 
 export interface EnsureAuthResult {
   /** Whether auth is now valid */
@@ -36,6 +37,8 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
     loginTriggered: false,
     tokenRefreshed: false,
   };
+
+  warnIfSandboxed();
 
   // Case 1: No credentials or invalid credentials
   const creds = getCredentials();
