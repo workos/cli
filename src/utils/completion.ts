@@ -154,15 +154,9 @@ function walkCommandTree(
 
 // ── Completion generators ────────────────────────────────────────────────────
 
-function completeSubcommands(
-  command: CommandSchema | null,
-  topLevel: CommandSchema[],
-  partial: string,
-): Completion[] {
+function completeSubcommands(command: CommandSchema | null, topLevel: CommandSchema[], partial: string): Completion[] {
   const subs = command ? (command.commands ?? []) : topLevel;
-  return subs
-    .filter((c) => c.name.startsWith(partial))
-    .map((c) => ({ name: c.name, description: c.description }));
+  return subs.filter((c) => c.name.startsWith(partial)).map((c) => ({ name: c.name, description: c.description }));
 }
 
 function completeOptions(
