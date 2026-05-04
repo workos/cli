@@ -1,5 +1,16 @@
 #!/usr/bin/env bun
 
+// Fast path for shell completion — exit before loading yargs, clack, etc.
+// so Tab presses are fast (~50ms vs ~200ms+). Bun preserves the Node-style
+// [runtime, entrypoint, ...args] argv shape in both source mode and
+// standalone executables.
+const rawArgs = process.argv.slice(2);
+if (rawArgs[0] === '--get-yargs-completions') {
+  const { completeHandler } = await import('./utils/completion.js');
+  completeHandler(rawArgs.slice(1));
+  process.exit(0);
+}
+
 // Load .env.local for local development when --local flag is used
 if (process.argv.includes('--local') || process.env.WORKOS_DEV) {
   const { config } = await import('dotenv');
@@ -94,9 +105,6 @@ const environmentIdOption = {
 } as const;
 
 // Resolve output mode early from raw argv (before yargs parses)
-// Bun preserves the Node-style [runtime, entrypoint, ...args] argv shape in
-// both source mode and standalone executables.
-const rawArgs = process.argv.slice(2);
 const hasJsonFlag = rawArgs.includes('--json');
 const baseOutputMode = resolveOutputMode(hasJsonFlag);
 setOutputMode(baseOutputMode);
@@ -123,14 +131,6 @@ if (hasJsonFlag && (rawArgs.includes('--help') || rawArgs.includes('-h'))) {
   // does not wait for console.log's already-buffered data and so still
   // truncated.
   outputJsonSync(buildCommandTree(command));
-  process.exit(0);
-}
-
-// Fast path for shell completion — intercept before yargs parses
-// to avoid validation errors on partial input from Tab presses.
-if (rawArgs[0] === '--get-yargs-completions') {
-  const { completeHandler } = await import('./utils/completion.js');
-  completeHandler(rawArgs.slice(1));
   process.exit(0);
 }
 
@@ -3434,17 +3434,14 @@ async function runCli(): Promise<void> {
           choices: ['bash', 'zsh', 'fish', 'powershell'] as const,
         }),
       async (argv) => {
-        const shell = argv.shell;
-        if (!shell) {
-          console.error(`Usage: workos completion <shell>\nSupported shells: bash, zsh, fish, powershell`);
-          process.exit(1);
+        if (!argv.shell) {
+          exitWithError({
+            code: 'missing_args',
+            message: 'Usage: workos completion <shell>\nSupported shells: bash, zsh, fish, powershell',
+          });
         }
-        const { generateShellScript, SUPPORTED_SHELLS } = await import('./utils/completion.js');
-        if (!(SUPPORTED_SHELLS as readonly string[]).includes(shell)) {
-          console.error(`Unsupported shell: ${shell}. Supported: ${SUPPORTED_SHELLS.join(', ')}`);
-          process.exit(1);
-        }
-        process.stdout.write(generateShellScript(shell, 'workos'));
+        const { generateShellScript } = await import('./utils/completion.js');
+        process.stdout.write(generateShellScript(argv.shell as string, 'workos'));
       },
     )
     .command(

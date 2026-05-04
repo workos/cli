@@ -2259,6 +2259,8 @@ const globalOptions: OptionSchema[] = [
   { name: 'version', type: 'boolean', description: 'Show version number', required: false, alias: 'v', hidden: false },
 ];
 
+export { commands as commandRegistry, globalOptions as globalOptionRegistry };
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
