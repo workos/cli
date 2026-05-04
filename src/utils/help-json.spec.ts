@@ -5,7 +5,7 @@ vi.mock('../lib/settings.js', async (importOriginal) => {
   return { ...actual, getVersion: vi.fn(() => '0.7.3') };
 });
 
-const { buildCommandTree, extractHelpJsonCommand } = await import('./help-json.js');
+const { buildCommandTree, commandRegistry, extractHelpJsonCommand } = await import('./help-json.js');
 
 describe('help-json', () => {
   describe('extractHelpJsonCommand()', () => {
@@ -225,6 +225,58 @@ describe('help-json', () => {
       // variable on the list operation); --environment-id targets the env.
       expect(optNames).toEqual(expect.arrayContaining(['email', 'environment-id']));
       expect(optNames).not.toContain('organization');
+    });
+  });
+
+  describe('registry parity with bin.ts', () => {
+    // Every public top-level command in bin.ts must have a matching entry in
+    // the help-json registry. If this test fails, you added a command to
+    // bin.ts but forgot to add it to help-json.ts (which also drives shell
+    // completion and --help --json).
+    const PUBLIC_COMMANDS = [
+      'auth',
+      'skills',
+      'doctor',
+      'env',
+      'organization',
+      'user',
+      'role',
+      'permission',
+      'membership',
+      'invitation',
+      'session',
+      'connection',
+      'directory',
+      'event',
+      'audit-log',
+      'feature-flag',
+      'webhook',
+      'config',
+      'portal',
+      'vault',
+      'api-key',
+      'org-domain',
+      'seed',
+      'setup-org',
+      'onboard-user',
+      'debug-sso',
+      'debug-sync',
+      'install',
+      'completion',
+    ];
+
+    function collectTopLevelNames(commands: { name: string }[]): Set<string> {
+      const names = new Set<string>();
+      for (const cmd of commands) {
+        const top = cmd.name.split(' ')[0]!;
+        names.add(top);
+      }
+      return names;
+    }
+
+    it.each(PUBLIC_COMMANDS)('%s is in the registry', (command) => {
+      const registryNames = collectTopLevelNames(commandRegistry);
+      expect(registryNames).toContain(command);
     });
   });
 });
