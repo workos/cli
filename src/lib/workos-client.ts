@@ -60,9 +60,12 @@ export function createWorkOSClient(apiKey?: string, baseUrl?: string): WorkOSCLI
   const key = apiKey ?? resolveApiKey();
   const base = baseUrl ?? resolveApiBaseUrl();
 
-  // Parse hostname from base URL for SDK init
-  const hostname = new URL(base).hostname;
-  const sdk = new WorkOS(key, { apiHostname: hostname });
+  const url = new URL(base);
+  const sdk = new WorkOS(key, {
+    apiHostname: url.hostname,
+    ...(url.port && { port: Number(url.port) }),
+    ...(url.protocol === 'http:' && { https: false }),
+  });
 
   return {
     sdk,
