@@ -7,10 +7,9 @@
  * the tab-separated output.
  */
 
-import { buildCommandTree, type CommandSchema, type OptionSchema } from './help-json.js';
+import { commandRegistry, globalOptionRegistry, type CommandSchema, type OptionSchema } from './help-json.js';
 
-const DIRECTIVE = { DEFAULT: 0, NO_FILE_COMP: 4 } as const;
-type Directive = (typeof DIRECTIVE)[keyof typeof DIRECTIVE];
+const NO_FILE_COMP = 4;
 
 interface Completion {
   name: string;
@@ -19,7 +18,7 @@ interface Completion {
 
 interface CompletionResult {
   completions: Completion[];
-  directive: Directive;
+  directive: number;
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
@@ -35,20 +34,17 @@ export function completeHandler(args: string[]): void {
 export function generateCompletions(args: string[]): CompletionResult {
   const partial = args.at(-1) ?? '';
   const preceding = args.slice(0, -1);
-
-  const tree = buildCommandTree();
-  const globalOptions = 'options' in tree ? (tree.options ?? []) : [];
   const normalized = getNormalizedCommands();
 
-  const { command, usedOptions } = walkCommandTree(normalized, globalOptions, preceding);
+  const { command, usedOptions } = walkCommandTree(normalized, globalOptionRegistry, preceding);
 
   if (partial.startsWith('-')) {
-    return noFileComp(completeOptions(command, globalOptions, partial, usedOptions));
+    return noFileComp(completeOptions(command, globalOptionRegistry, partial, usedOptions));
   }
 
   const completions = [
     ...completeSubcommands(command, normalized, partial),
-    ...completeOptions(command, globalOptions, '', usedOptions),
+    ...completeOptions(command, globalOptionRegistry, '', usedOptions),
   ];
   return noFileComp(completions);
 }
@@ -102,16 +98,9 @@ function normalizeRegistry(commands: CommandSchema[]): CommandSchema[] {
 
 let cachedNormalized: CommandSchema[] | null = null;
 
-/** Test-only: reset the cached normalized registry. */
-export function _resetCache(): void {
-  cachedNormalized = null;
-}
-
 function getNormalizedCommands(): CommandSchema[] {
   if (!cachedNormalized) {
-    const tree = buildCommandTree();
-    const raw = 'commands' in tree ? (tree.commands ?? []) : [];
-    cachedNormalized = normalizeRegistry(raw);
+    cachedNormalized = normalizeRegistry(commandRegistry);
   }
   return cachedNormalized;
 }
@@ -196,7 +185,7 @@ function optionTakesValue(opt: OptionSchema): boolean {
 }
 
 function noFileComp(completions: Completion[]): CompletionResult {
-  return { completions, directive: DIRECTIVE.NO_FILE_COMP };
+  return { completions, directive: NO_FILE_COMP };
 }
 
 // ── Shell script generators ──────────────────────────────────────────────────

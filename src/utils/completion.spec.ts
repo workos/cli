@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateCompletions, generateShellScript, SUPPORTED_SHELLS, _resetCache } from './completion.js';
+import { generateCompletions, generateShellScript, SUPPORTED_SHELLS } from './completion.js';
 
 describe('generateCompletions', () => {
   it('returns top-level commands for empty input', () => {
@@ -70,6 +70,56 @@ describe('generateCompletions', () => {
     const result = generateCompletions(['config', 'redirect', '']);
     const names = result.completions.map((c) => c.name);
     expect(names).toContain('add');
+  });
+
+  it('skips option values for non-boolean options', () => {
+    const result = generateCompletions(['doctor', '--install-dir', '/tmp/foo', '--']);
+    const names = result.completions.map((c) => c.name);
+    expect(names).toContain('--verbose');
+    expect(names).not.toContain('--install-dir');
+  });
+
+  it('does not skip next word after boolean options', () => {
+    const result = generateCompletions(['doctor', '--verbose', 'unknownword', '--']);
+    const names = result.completions.map((c) => c.name);
+    expect(names).not.toContain('--verbose');
+  });
+
+  it('returns top-level commands for completely empty args', () => {
+    const result = generateCompletions([]);
+    const names = result.completions.map((c) => c.name);
+    expect(names).toContain('auth');
+    expect(names.length).toBeGreaterThan(0);
+  });
+
+  it('returns options and subcommands when unknown word precedes partial', () => {
+    const result = generateCompletions(['env', 'nonexistent', '']);
+    const names = result.completions.map((c) => c.name);
+    expect(names).toContain('--json');
+  });
+
+  it('includes descriptions in completions', () => {
+    const result = generateCompletions(['']);
+    const doctor = result.completions.find((c) => c.name === 'doctor');
+    expect(doctor).toBeDefined();
+    expect(doctor!.description).toBeTruthy();
+    expect(doctor!.description.length).toBeGreaterThan(0);
+  });
+
+  it('filters options by partial prefix', () => {
+    const result = generateCompletions(['doctor', '--ver']);
+    const names = result.completions.map((c) => c.name);
+    expect(names).toContain('--verbose');
+    expect(names).toContain('--version');
+    expect(names).not.toContain('--fix');
+  });
+
+  it('does not complete hidden commands absent from registry', () => {
+    const result = generateCompletions(['']);
+    const names = result.completions.map((c) => c.name);
+    expect(names).not.toContain('emulate');
+    expect(names).not.toContain('dashboard');
+    expect(names).not.toContain('debug');
   });
 });
 
