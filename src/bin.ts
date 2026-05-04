@@ -430,6 +430,82 @@ yargs(rawArgs)
     );
     return yargs.demandCommand(1, 'Please specify an env subcommand').strict();
   })
+  .command(
+    'api [endpoint] [filter]',
+    'Make authenticated requests to the WorkOS API',
+    (yargs) =>
+      yargs
+        .positional('endpoint', {
+          type: 'string',
+          describe: "API endpoint path (e.g. /users), or 'ls' to list endpoints",
+        })
+        .positional('filter', {
+          type: 'string',
+          describe: 'Filter keyword (used with ls)',
+        })
+        .option('method', {
+          alias: 'X',
+          type: 'string',
+          describe: 'HTTP method (default: GET, or POST if body provided)',
+        })
+        .option('data', {
+          alias: 'd',
+          type: 'string',
+          describe: 'JSON request body',
+        })
+        .option('file', {
+          type: 'string',
+          describe: 'Read request body from a file (or - for stdin)',
+        })
+        .option('include', {
+          alias: 'i',
+          type: 'boolean',
+          default: false,
+          describe: 'Show response headers',
+        })
+        .option('api-key', {
+          type: 'string',
+          describe: 'Override the API key',
+        })
+        .option('dry-run', {
+          type: 'boolean',
+          default: false,
+          describe: 'Show the request without executing it',
+        })
+        .option('yes', {
+          alias: 'y',
+          type: 'boolean',
+          default: false,
+          describe: 'Skip confirmation for mutating requests',
+        })
+        .example('workos api ls', 'List all available endpoints')
+        .example('workos api ls users', 'List endpoints matching "users"')
+        .example('workos api /user_management/users', 'GET /user_management/users')
+        .example('workos api /organizations -d \'{"name":"Acme"}\'', 'POST with a JSON body')
+        .example('workos api /organizations/org_123 -X DELETE', 'DELETE an organization'),
+    async (argv) => {
+      await applyInsecureStorage(argv.insecureStorage as boolean | undefined);
+      const endpoint = argv.endpoint as string | undefined;
+      const filter = argv.filter as string | undefined;
+
+      const { runApiLs, runApiRequest } = await import('./commands/api/index.js');
+
+      if (!endpoint || endpoint === 'ls') {
+        runApiLs(filter);
+        return;
+      }
+
+      await runApiRequest(endpoint, {
+        method: argv.method,
+        data: argv.data,
+        file: argv.file,
+        include: argv.include,
+        apiKey: argv.apiKey,
+        dryRun: argv.dryRun,
+        yes: argv.yes,
+      });
+    },
+  )
   .command(['organization', 'org'], 'Manage WorkOS organizations (create, update, get, list, delete)', (yargs) => {
     yargs.options({
       ...insecureStorageOption,
