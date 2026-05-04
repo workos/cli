@@ -2,15 +2,16 @@
  * `workos api` — generic authenticated API gateway.
  *
  * Modes:
- *   workos api ls [filter]       — list endpoints from the embedded OpenAPI spec
- *   workos api <endpoint> [opts] — make an authenticated request
+ *   workos api                    — interactive request builder (TTY only)
+ *   workos api ls [filter]        — list endpoints from the embedded OpenAPI spec
+ *   workos api <endpoint> [opts]  — make an authenticated request
  */
 
 import chalk from 'chalk';
 import { readFileSync } from 'node:fs';
 import { loadCatalog, endpointsByTag } from './catalog.js';
 import { apiRequest } from './request.js';
-import { resolveApiKey, resolveApiBaseUrl } from '../../lib/api-key.js';
+import { resolveApiBaseUrl } from '../../lib/api-key.js';
 import { isJsonMode, outputJson } from '../../utils/output.js';
 import { isNonInteractiveEnvironment } from '../../utils/environment.js';
 
@@ -25,6 +26,26 @@ export interface ApiCommandOptions {
 }
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+// ── interactive ───────────────────────────────────────────────────────
+
+export async function runApiInteractive(): Promise<void> {
+  if (isNonInteractiveEnvironment()) {
+    console.log(
+      'Interactive mode requires a TTY.\n\n' +
+        'Usage:\n' +
+        '  workos api <endpoint>        Make an API request\n' +
+        '  workos api ls [filter]       List available endpoints\n' +
+        '\nExample:\n' +
+        '  workos api /user_management/users\n' +
+        '  workos api ls users',
+    );
+    return;
+  }
+
+  const { apiInteractive } = await import('./interactive.js');
+  await apiInteractive();
+}
 
 // ── ls ─────────────────────────────────────────────────────────────────
 
@@ -69,7 +90,7 @@ export function runApiLs(filter?: string): void {
   for (const [tag, eps] of grouped) {
     console.log(`\n${chalk.bold(tag)}`);
     for (const ep of eps) {
-      const method = colorMethod(ep.method).padEnd(18); // padEnd accounts for ANSI codes
+      const method = colorMethod(ep.method).padEnd(18);
       console.log(`  ${method} ${ep.path}  ${chalk.dim(ep.summary)}`);
     }
   }
@@ -81,7 +102,6 @@ export function runApiLs(filter?: string): void {
 export async function runApiRequest(endpoint: string, options: ApiCommandOptions): Promise<void> {
   const body = await resolveBody(options);
   const method = (options.method ?? (body ? 'POST' : 'GET')).toUpperCase();
-  const apiKey = options.apiKey ?? resolveApiKey();
   const baseUrl = resolveApiBaseUrl();
 
   if (options.dryRun) {
@@ -112,7 +132,7 @@ export async function runApiRequest(endpoint: string, options: ApiCommandOptions
   const response = await apiRequest({
     method,
     path: normalizePath(endpoint),
-    apiKey,
+    apiKey: options.apiKey,
     body: body ?? undefined,
     baseUrl,
   });
@@ -172,7 +192,7 @@ function printHeaders(status: number, headers: Headers): void {
   console.log();
 }
 
-function colorMethod(method: string): string {
+export function colorMethod(method: string): string {
   switch (method) {
     case 'GET':
       return chalk.green(method);

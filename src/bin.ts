@@ -488,9 +488,14 @@ yargs(rawArgs)
       const endpoint = argv.endpoint as string | undefined;
       const filter = argv.filter as string | undefined;
 
-      const { runApiLs, runApiRequest } = await import('./commands/api/index.js');
+      const { runApiLs, runApiRequest, runApiInteractive } = await import('./commands/api/index.js');
 
-      if (!endpoint || endpoint === 'ls') {
+      if (!endpoint) {
+        await runApiInteractive();
+        return;
+      }
+
+      if (endpoint === 'ls') {
         runApiLs(filter);
         return;
       }
