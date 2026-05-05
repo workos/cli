@@ -118,8 +118,27 @@ describe('runApiInteractive', () => {
 
   it('emits a structured tty_required error in JSON mode when non-interactive', async () => {
     setOutputMode('json');
-    vi.mocked(isNonInteractiveEnvironment).mockReturnValueOnce(true);
+    // JSON mode short-circuits before the TTY check, so the underlying environment doesn't matter.
     await expect(runApiInteractive()).rejects.toThrow(/__exit__:1/);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(consoleOutput).toEqual([]);
+    const errorLine = stderrOutput.find((line) => {
+      try {
+        const parsed = JSON.parse(line) as { error?: { code?: string } };
+        return parsed.error?.code === 'tty_required';
+      } catch {
+        return false;
+      }
+    });
+    expect(errorLine).toBeDefined();
+  });
+
+  it('refuses to enter interactive mode in JSON mode even when a TTY is present', async () => {
+    setOutputMode('json');
+    // Default mock returns false (TTY present); JSON mode must short-circuit
+    // before isNonInteractiveEnvironment() is even called.
+    await expect(runApiInteractive()).rejects.toThrow(/__exit__:1/);
+    expect(isNonInteractiveEnvironment).not.toHaveBeenCalled();
     expect(exitSpy).toHaveBeenCalledWith(1);
     expect(consoleOutput).toEqual([]);
     const errorLine = stderrOutput.find((line) => {

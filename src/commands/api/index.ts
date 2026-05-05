@@ -22,17 +22,20 @@ export interface ApiCommandOptions {
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 export async function runApiInteractive(): Promise<void> {
-  if (isNonInteractiveEnvironment()) {
-    if (isJsonMode()) {
-      exitWithError({
-        code: 'tty_required',
-        message: 'Interactive mode requires a TTY. Provide an endpoint or use `workos api ls`.',
-        details: {
-          usage: ['workos api <endpoint>', 'workos api ls [filter]'],
-        },
-      });
-    }
+  // Interactive mode is inherently human-oriented (clack prompts, preview text,
+  // etc.). Refuse to enter it whenever JSON output was requested, regardless of
+  // TTY status, so stdout stays machine-readable.
+  if (isJsonMode()) {
+    exitWithError({
+      code: 'tty_required',
+      message: 'Interactive mode is not available with --json. Provide an endpoint or use `workos api ls`.',
+      details: {
+        usage: ['workos api <endpoint>', 'workos api ls [filter]'],
+      },
+    });
+  }
 
+  if (isNonInteractiveEnvironment()) {
     console.log(
       'Interactive mode requires a TTY.\n\n' +
         'Usage:\n' +
