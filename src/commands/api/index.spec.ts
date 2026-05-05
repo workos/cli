@@ -221,9 +221,7 @@ describe('runApiRequest', () => {
 
   it('exits with a structured error in JSON dry-run mode when --data is not valid JSON', async () => {
     setOutputMode('json');
-    await expect(
-      runApiRequest('/organizations', { dryRun: true, data: 'not json' }),
-    ).rejects.toThrow(/__exit__:1/);
+    await expect(runApiRequest('/organizations', { dryRun: true, data: 'not json' })).rejects.toThrow(/__exit__:1/);
     expect(exitSpy).toHaveBeenCalledWith(1);
     const errorLine = stderrOutput.find((line) => {
       try {
@@ -270,9 +268,7 @@ describe('runApiRequest', () => {
 
   it('aborts when the user declines the confirmation prompt', async () => {
     mockConfirm.mockResolvedValueOnce(false);
-    await expect(runApiRequest('/organizations', { method: 'POST', data: '{}' })).rejects.toThrow(
-      /__exit__:0/,
-    );
+    await expect(runApiRequest('/organizations', { method: 'POST', data: '{}' })).rejects.toThrow(/__exit__:0/);
     expect(mockApiRequest).not.toHaveBeenCalled();
   });
 
@@ -296,5 +292,23 @@ describe('runApiRequest', () => {
     mockApiRequest.mockResolvedValue(buildResponse());
     await runApiRequest('/users', { apiKey: 'sk_override', yes: true });
     expect(mockApiRequest).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'sk_override' }));
+  });
+
+  it('exits with a structured error when --file points at a missing path', async () => {
+    setOutputMode('json');
+    await expect(
+      runApiRequest('/organizations', { file: '/tmp/__nonexistent_workos_api_body__.json', yes: true }),
+    ).rejects.toThrow(/__exit__:1/);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    const errorLine = stderrOutput.find((line) => {
+      try {
+        const parsed = JSON.parse(line) as { error?: { code?: string; message?: string } };
+        return parsed.error?.code === 'file_read_error';
+      } catch {
+        return false;
+      }
+    });
+    expect(errorLine).toBeDefined();
+    expect(mockApiRequest).not.toHaveBeenCalled();
   });
 });

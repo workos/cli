@@ -22,6 +22,19 @@ export function printResponse(
   response: ApiResponse,
   { includeStatus = false }: { includeStatus?: boolean } = {},
 ): void {
+  if (isJsonMode()) {
+    if (includeStatus) {
+      const headers: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        headers[key] = value;
+      });
+      outputJson({ status: response.status, headers, body: response.body });
+    } else {
+      outputJson(response.body);
+    }
+    return;
+  }
+
   if (includeStatus) {
     console.log(chalk.dim(`HTTP ${response.status}`));
     response.headers.forEach((value, key) => {
@@ -30,9 +43,7 @@ export function printResponse(
     console.log();
   }
 
-  if (isJsonMode()) {
-    outputJson(response.body);
-  } else if (typeof response.body === 'object' && response.body !== null) {
+  if (typeof response.body === 'object' && response.body !== null) {
     console.log(JSON.stringify(response.body, null, 2));
   } else {
     console.log(response.rawBody);

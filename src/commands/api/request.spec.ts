@@ -96,9 +96,7 @@ describe('apiRequest', () => {
   });
 
   it('preserves non-2xx status codes for the caller to inspect', async () => {
-    vi.spyOn(global, 'fetch').mockResolvedValue(
-      buildResponse('{"error":"unauthorized"}', { status: 401 }),
-    );
+    vi.spyOn(global, 'fetch').mockResolvedValue(buildResponse('{"error":"unauthorized"}', { status: 401 }));
     const response = await apiRequest({ method: 'GET', path: '/orgs' });
     expect(response.status).toBe(401);
     expect(response.body).toEqual({ error: 'unauthorized' });
@@ -106,8 +104,6 @@ describe('apiRequest', () => {
 
   it('throws a friendly error when the network request fails', async () => {
     vi.spyOn(global, 'fetch').mockRejectedValue(new Error('ECONNREFUSED'));
-    await expect(apiRequest({ method: 'GET', path: '/orgs' })).rejects.toThrow(
-      /Failed to connect to WorkOS API/,
-    );
+    await expect(apiRequest({ method: 'GET', path: '/orgs' })).rejects.toThrow(/Failed to connect to WorkOS API/);
   });
 });

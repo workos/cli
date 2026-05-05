@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { loadCatalog, endpointsByTag } from './catalog.js';
 import { apiRequest } from './request.js';
 import { resolveApiBaseUrl } from '../../lib/api-key.js';
@@ -151,7 +151,15 @@ async function resolveBody(options: ApiCommandOptions): Promise<string | undefin
       }
       return Buffer.concat(chunks).toString('utf-8');
     }
-    return readFileSync(options.file, 'utf-8');
+    try {
+      return await readFile(options.file, 'utf-8');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      exitWithError({
+        code: 'file_read_error',
+        message: `Could not read request body file "${options.file}": ${message}`,
+      });
+    }
   }
   return undefined;
 }

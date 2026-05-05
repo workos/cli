@@ -93,17 +93,30 @@ describe('printResponse', () => {
     expect(consoleOutput).toEqual([JSON.stringify({ ok: true })]);
   });
 
-  it('emits the JSON body on stdout in JSON mode regardless of includeStatus', () => {
+  it('emits a single structured JSON line in JSON mode when includeStatus is true', () => {
     setOutputMode('json');
     const headers = new Headers({ 'x-request-id': 'abc' });
     printResponse(buildResponse({ status: 201, headers, body: { ok: true } }), { includeStatus: true });
-    const jsonLine = consoleOutput.find((line) => {
-      try {
-        return JSON.parse(line)?.ok === true;
-      } catch {
-        return false;
-      }
-    });
-    expect(jsonLine).toBe(JSON.stringify({ ok: true }));
+
+    expect(consoleOutput).toHaveLength(1);
+    const parsed = JSON.parse(consoleOutput[0]!) as {
+      status: number;
+      headers: Record<string, string>;
+      body: { ok: boolean };
+    };
+    expect(parsed.status).toBe(201);
+    expect(parsed.headers['x-request-id']).toBe('abc');
+    expect(parsed.body).toEqual({ ok: true });
+  });
+
+  it('does not emit any human-readable status/header lines in JSON mode', () => {
+    setOutputMode('json');
+    const headers = new Headers({ 'x-request-id': 'abc' });
+    printResponse(buildResponse({ status: 201, headers, body: { ok: true } }), { includeStatus: true });
+
+    for (const line of consoleOutput) {
+      expect(line).not.toMatch(/^HTTP \d/);
+      expect(line).not.toMatch(/^x-request-id:/);
+    }
   });
 });
