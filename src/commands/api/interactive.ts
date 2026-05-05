@@ -46,7 +46,7 @@ export async function apiInteractive(): Promise<void> {
         },
       }),
     );
-    resolvedPath = resolvedPath.replace(`{${param.name}}`, value.trim());
+    resolvedPath = resolvedPath.replaceAll(`{${param.name}}`, value.trim());
   }
 
   let queryString = '';

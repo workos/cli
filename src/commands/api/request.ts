@@ -40,8 +40,9 @@ export async function apiRequest(options: ApiRequestOptions): Promise<ApiRespons
       headers,
       body: options.body,
     });
-  } catch {
-    throw new Error('Failed to connect to WorkOS API. Check your internet connection.');
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to connect to WorkOS API: ${detail}`, err instanceof Error ? { cause: err } : undefined);
   }
 
   const rawBody = await response.text();

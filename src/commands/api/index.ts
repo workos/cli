@@ -173,7 +173,15 @@ async function resolveBody(options: ApiCommandOptions): Promise<string | undefin
       for await (const chunk of process.stdin) {
         chunks.push(chunk);
       }
-      return Buffer.concat(chunks).toString('utf-8');
+      const stdinBody = Buffer.concat(chunks).toString('utf-8');
+      if (stdinBody.length === 0) {
+        exitWithError({
+          code: 'empty_stdin_body',
+          message:
+            'Reading request body from stdin (--file -) yielded no data. Pipe data into the command or pass --data instead.',
+        });
+      }
+      return stdinBody;
     }
     try {
       return await readFile(options.file, 'utf-8');

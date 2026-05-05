@@ -115,4 +115,18 @@ describe('apiRequest', () => {
     vi.spyOn(global, 'fetch').mockRejectedValue(new Error('ECONNREFUSED'));
     await expect(apiRequest({ method: 'GET', path: '/orgs' })).rejects.toThrow(/Failed to connect to WorkOS API/);
   });
+
+  it('preserves the original network error detail and cause for debugging', async () => {
+    const original = new Error('getaddrinfo ENOTFOUND api.workos.com');
+    vi.spyOn(global, 'fetch').mockRejectedValue(original);
+    let caught: unknown;
+    try {
+      await apiRequest({ method: 'GET', path: '/orgs' });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toContain('getaddrinfo ENOTFOUND api.workos.com');
+    expect((caught as Error).cause).toBe(original);
+  });
 });

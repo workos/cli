@@ -390,4 +390,28 @@ describe('runApiRequest', () => {
     });
     expect(errorLine).toBeDefined();
   });
+
+  it('exits with empty_stdin_body when --file - is used and stdin is empty', async () => {
+    setOutputMode('json');
+    // Replace process.stdin with an async iterator that yields no chunks (EOF immediately).
+    const emptyStdin = (async function* () {})();
+    const originalStdin = process.stdin;
+    Object.defineProperty(process, 'stdin', { value: emptyStdin, configurable: true });
+    try {
+      await expect(runApiRequest('/orgs', { file: '-', yes: true })).rejects.toThrow(/__exit__:1/);
+    } finally {
+      Object.defineProperty(process, 'stdin', { value: originalStdin, configurable: true });
+    }
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(mockApiRequest).not.toHaveBeenCalled();
+    const errorLine = stderrOutput.find((line) => {
+      try {
+        const parsed = JSON.parse(line) as { error?: { code?: string } };
+        return parsed.error?.code === 'empty_stdin_body';
+      } catch {
+        return false;
+      }
+    });
+    expect(errorLine).toBeDefined();
+  });
 });

@@ -34,6 +34,16 @@ const mockCatalog: Catalog = {
       queryParams: [],
       hasRequestBody: true,
     },
+    {
+      method: 'GET',
+      path: '/users/{id}/links/{id}',
+      summary: 'Repeated path param (defensive)',
+      tag: 'Users',
+      operationId: 'getUserLink',
+      pathParams: [{ name: 'id', description: 'Identifier reused twice', required: true }],
+      queryParams: [],
+      hasRequestBody: false,
+    },
   ],
   tags: ['Organizations', 'Users'],
 };
@@ -179,6 +189,18 @@ describe('apiInteractive', () => {
     await expect(apiInteractive()).rejects.toThrow(/__exit__:0/);
     expect(exitSpy).toHaveBeenCalledWith(0);
     expect(mockApiRequest).not.toHaveBeenCalled();
+  });
+
+  it('replaces every occurrence of a repeated path placeholder', async () => {
+    const repeated = mockCatalog.endpoints[3];
+    mockSelect.mockResolvedValueOnce('Users').mockResolvedValueOnce(repeated);
+    mockText.mockResolvedValueOnce('user_42');
+    mockConfirm.mockResolvedValueOnce(true);
+    mockApiRequest.mockResolvedValueOnce(buildResponse());
+
+    await apiInteractive();
+
+    expect(mockApiRequest).toHaveBeenCalledWith(expect.objectContaining({ path: '/users/user_42/links/user_42' }));
   });
 
   it('exits with code 1 when the response status is >= 400', async () => {
