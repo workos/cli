@@ -95,13 +95,14 @@ export function runApiLs(filter?: string): void {
 
 export async function runApiRequest(endpoint: string, options: ApiCommandOptions): Promise<void> {
   const body = await resolveBody(options);
-  const method = (options.method ?? (body ? 'POST' : 'GET')).toUpperCase();
+  const hasBody = body !== undefined;
+  const method = (options.method ?? (hasBody ? 'POST' : 'GET')).toUpperCase();
   const baseUrl = resolveApiBaseUrl();
 
   if (options.dryRun) {
     if (isJsonMode()) {
       let parsedBody: unknown;
-      if (body) {
+      if (hasBody) {
         try {
           parsedBody = JSON.parse(body);
         } catch {
@@ -116,18 +117,26 @@ export async function runApiRequest(endpoint: string, options: ApiCommandOptions
       });
     } else {
       console.log(`${chalk.dim('[dry-run]')} ${method} ${baseUrl}${normalizePath(endpoint)}`);
-      if (body) prettyPrint(body);
+      if (hasBody) prettyPrint(body);
     }
     return;
   }
 
-  if (MUTATING_METHODS.has(method) && !options.yes && !isNonInteractiveEnvironment()) {
-    const clack = (await import('../../utils/clack.js')).default;
-    console.log(`\n${chalk.yellow('About to')} ${method} ${endpoint}`);
-    if (body) prettyPrint(body);
-    const ok = await clack.confirm({ message: 'Proceed?' });
-    if (!ok || clack.isCancel(ok)) {
-      process.exit(0);
+  if (MUTATING_METHODS.has(method) && !options.yes) {
+    if (isJsonMode()) {
+      exitWithError({
+        code: 'confirmation_required',
+        message: 'Mutating requests in JSON mode require --yes to keep stdout machine-readable.',
+      });
+    }
+    if (!isNonInteractiveEnvironment()) {
+      const clack = (await import('../../utils/clack.js')).default;
+      console.log(`\n${chalk.yellow('About to')} ${method} ${endpoint}`);
+      if (hasBody) prettyPrint(body);
+      const ok = await clack.confirm({ message: 'Proceed?' });
+      if (!ok || clack.isCancel(ok)) {
+        process.exit(0);
+      }
     }
   }
 
@@ -152,7 +161,7 @@ function normalizePath(path: string): string {
 }
 
 async function resolveBody(options: ApiCommandOptions): Promise<string | undefined> {
-  if (options.data) return options.data;
+  if (options.data !== undefined) return options.data;
   if (options.file) {
     if (options.file === '-') {
       const chunks: Buffer[] = [];

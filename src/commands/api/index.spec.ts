@@ -338,4 +338,27 @@ describe('runApiRequest', () => {
     expect(errorLine).toBeDefined();
     expect(mockApiRequest).not.toHaveBeenCalled();
   });
+
+  it('treats an empty --data string as a body so method inference does not flip to GET', async () => {
+    mockApiRequest.mockResolvedValue(buildResponse());
+    await runApiRequest('/organizations', { data: '', yes: true });
+    expect(mockApiRequest).toHaveBeenCalledWith(expect.objectContaining({ method: 'POST', body: '' }));
+  });
+
+  it('exits with confirmation_required in JSON mode when a mutating request lacks --yes', async () => {
+    setOutputMode('json');
+    await expect(runApiRequest('/organizations', { method: 'POST', data: '{}' })).rejects.toThrow(/__exit__:1/);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(mockApiRequest).not.toHaveBeenCalled();
+    expect(mockConfirm).not.toHaveBeenCalled();
+    const errorLine = stderrOutput.find((line) => {
+      try {
+        const parsed = JSON.parse(line) as { error?: { code?: string } };
+        return parsed.error?.code === 'confirmation_required';
+      } catch {
+        return false;
+      }
+    });
+    expect(errorLine).toBeDefined();
+  });
 });
