@@ -38,7 +38,7 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
     tokenRefreshed: false,
   };
 
-  warnIfSandboxed();
+  await warnIfSandboxed();
 
   // Case 1: No credentials or invalid credentials
   const creds = getCredentials();
