@@ -1,0 +1,162 @@
+import { describe, it, expect } from 'vitest';
+import { parseSpec, endpointsByTag, type EndpointInfo } from './catalog.js';
+
+const SAMPLE_SPEC = `
+openapi: 3.0.0
+info:
+  title: Test
+  version: 1.0.0
+paths:
+  /organizations:
+    get:
+      operationId: listOrganizations
+      summary: List organizations
+      tags: [Organizations]
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Max items
+    post:
+      operationId: createOrganization
+      summary: Create organization
+      tags: [Organizations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /organizations/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Organization id
+    get:
+      operationId: getOrganization
+      summary: Get organization
+      tags: [Organizations]
+    delete:
+      operationId: deleteOrganization
+      summary: Delete organization
+      tags: [Organizations]
+  /users:
+    get:
+      operationId: listUsers
+      summary: List users
+      tags: [Users]
+`;
+
+describe('parseSpec', () => {
+  it('returns endpoints for each method on a path', () => {
+    const catalog = parseSpec(SAMPLE_SPEC);
+    const ops = catalog.endpoints.filter((e) => e.path === '/organizations').map((e) => e.method);
+    expect(ops.sort()).toEqual(['GET', 'POST']);
+  });
+
+  it('captures summary, tag, and operationId', () => {
+    const catalog = parseSpec(SAMPLE_SPEC);
+    const get = catalog.endpoints.find((e) => e.path === '/organizations' && e.method === 'GET');
+    expect(get).toMatchObject({
+      summary: 'List organizations',
+      tag: 'Organizations',
+      operationId: 'listOrganizations',
+    });
+  });
+
+  it('extracts path parameters from shared parameters block', () => {
+    const catalog = parseSpec(SAMPLE_SPEC);
+    const get = catalog.endpoints.find((e) => e.path === '/organizations/{id}' && e.method === 'GET');
+    expect(get?.pathParams).toEqual([{ name: 'id', description: 'Organization id', required: true }]);
+    expect(get?.queryParams).toEqual([]);
+  });
+
+  it('extracts query parameters from operation', () => {
+    const catalog = parseSpec(SAMPLE_SPEC);
+    const get = catalog.endpoints.find((e) => e.path === '/organizations' && e.method === 'GET');
+    expect(get?.queryParams).toEqual([{ name: 'limit', description: 'Max items', required: false }]);
+  });
+
+  it('flags hasRequestBody when requestBody is present', () => {
+    const catalog = parseSpec(SAMPLE_SPEC);
+    const post = catalog.endpoints.find((e) => e.path === '/organizations' && e.method === 'POST');
+    const get = catalog.endpoints.find((e) => e.path === '/organizations' && e.method === 'GET');
+    expect(post?.hasRequestBody).toBe(true);
+    expect(get?.hasRequestBody).toBe(false);
+  });
+
+  it('produces a sorted unique tags list', () => {
+    const catalog = parseSpec(SAMPLE_SPEC);
+    expect(catalog.tags).toEqual(['Organizations', 'Users']);
+  });
+
+  it('returns an empty catalog when paths is missing', () => {
+    const catalog = parseSpec('openapi: 3.0.0\ninfo:\n  title: t\n  version: 1.0.0\n');
+    expect(catalog.endpoints).toEqual([]);
+    expect(catalog.tags).toEqual([]);
+  });
+
+  it('falls back to "other" tag when none is provided', () => {
+    const yaml = `
+openapi: 3.0.0
+info:
+  title: Test
+  version: 1.0.0
+paths:
+  /noop:
+    get:
+      operationId: noop
+      summary: No tag
+`;
+    const catalog = parseSpec(yaml);
+    expect(catalog.endpoints[0]?.tag).toBe('other');
+    expect(catalog.tags).toEqual(['other']);
+  });
+});
+
+describe('endpointsByTag', () => {
+  const endpoints: EndpointInfo[] = [
+    {
+      method: 'GET',
+      path: '/users',
+      summary: '',
+      tag: 'Users',
+      operationId: 'listUsers',
+      pathParams: [],
+      queryParams: [],
+      hasRequestBody: false,
+    },
+    {
+      method: 'POST',
+      path: '/organizations',
+      summary: '',
+      tag: 'Organizations',
+      operationId: 'createOrg',
+      pathParams: [],
+      queryParams: [],
+      hasRequestBody: true,
+    },
+    {
+      method: 'DELETE',
+      path: '/users/{id}',
+      summary: '',
+      tag: 'Users',
+      operationId: 'deleteUser',
+      pathParams: [],
+      queryParams: [],
+      hasRequestBody: false,
+    },
+  ];
+
+  it('groups endpoints by tag preserving insertion order', () => {
+    const grouped = endpointsByTag(endpoints);
+    expect([...grouped.keys()]).toEqual(['Users', 'Organizations']);
+    expect(grouped.get('Users')?.map((e) => e.operationId)).toEqual(['listUsers', 'deleteUser']);
+    expect(grouped.get('Organizations')?.map((e) => e.operationId)).toEqual(['createOrg']);
+  });
+
+  it('returns an empty map when no endpoints are provided', () => {
+    expect(endpointsByTag([]).size).toBe(0);
+  });
+});

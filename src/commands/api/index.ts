@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { loadCatalog, endpointsByTag } from './catalog.js';
 import { apiRequest } from './request.js';
 import { resolveApiBaseUrl } from '../../lib/api-key.js';
-import { isJsonMode, outputJson } from '../../utils/output.js';
+import { exitWithError, isJsonMode, outputJson } from '../../utils/output.js';
 import { isNonInteractiveEnvironment } from '../../utils/environment.js';
 import { colorMethod, printResponse } from './format.js';
 
@@ -90,11 +90,19 @@ export async function runApiRequest(endpoint: string, options: ApiCommandOptions
 
   if (options.dryRun) {
     if (isJsonMode()) {
+      let parsedBody: unknown;
+      if (body) {
+        try {
+          parsedBody = JSON.parse(body);
+        } catch {
+          exitWithError({ code: 'invalid_json_body', message: 'Request body is not valid JSON.' });
+        }
+      }
       outputJson({
         dryRun: true,
         method,
         url: `${baseUrl}${normalizePath(endpoint)}`,
-        body: body ? JSON.parse(body) : undefined,
+        body: parsedBody,
       });
     } else {
       console.log(`${chalk.dim('[dry-run]')} ${method} ${baseUrl}${normalizePath(endpoint)}`);
