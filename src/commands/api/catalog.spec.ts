@@ -97,6 +97,91 @@ describe('parseSpec', () => {
     expect(catalog.tags).toEqual([]);
   });
 
+  it('resolves $ref parameters against components.parameters', () => {
+    const yaml = `
+openapi: 3.0.0
+info:
+  title: Test
+  version: 1.0.0
+components:
+  parameters:
+    SharedId:
+      name: id
+      in: path
+      required: true
+      description: Shared id parameter
+    SharedLimit:
+      name: limit
+      in: query
+      required: false
+      description: Page size
+paths:
+  /widgets/{id}:
+    parameters:
+      - $ref: '#/components/parameters/SharedId'
+    get:
+      operationId: getWidget
+      summary: Get widget
+      parameters:
+        - $ref: '#/components/parameters/SharedLimit'
+`;
+    const catalog = parseSpec(yaml);
+    const ep = catalog.endpoints.find((e) => e.path === '/widgets/{id}' && e.method === 'GET');
+    expect(ep?.pathParams).toEqual([{ name: 'id', description: 'Shared id parameter', required: true }]);
+    expect(ep?.queryParams).toEqual([{ name: 'limit', description: 'Page size', required: false }]);
+  });
+
+  it('skips $ref parameters that cannot be resolved instead of leaking placeholders', () => {
+    const yaml = `
+openapi: 3.0.0
+info:
+  title: Test
+  version: 1.0.0
+paths:
+  /widgets/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Missing'
+      - name: id
+        in: path
+        required: true
+        description: Inline id
+    get:
+      operationId: getWidget
+      summary: Get widget
+`;
+    const catalog = parseSpec(yaml);
+    const ep = catalog.endpoints[0];
+    // The unresolvable $ref should be silently dropped; the inline param survives.
+    expect(ep?.pathParams).toEqual([{ name: 'id', description: 'Inline id', required: true }]);
+  });
+
+  it('deduplicates params by (name, in) — operation-level overrides path-level', () => {
+    const yaml = `
+openapi: 3.0.0
+info:
+  title: Test
+  version: 1.0.0
+paths:
+  /widgets/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: From path-level
+    get:
+      operationId: getWidget
+      summary: Get widget
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: From operation-level (wins)
+`;
+    const catalog = parseSpec(yaml);
+    const ep = catalog.endpoints[0];
+    expect(ep?.pathParams).toEqual([{ name: 'id', description: 'From operation-level (wins)', required: true }]);
+  });
+
   it('falls back to "other" tag when none is provided', () => {
     const yaml = `
 openapi: 3.0.0

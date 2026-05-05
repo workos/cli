@@ -26,9 +26,40 @@ export interface Catalog {
 
 const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete'] as const;
 
+interface RawParam {
+  name?: string;
+  in?: string;
+  description?: string;
+  required?: boolean;
+  $ref?: string;
+}
+
+/**
+ * Resolve an OpenAPI 3.x parameter object that may itself be a $ref pointing
+ * into components.parameters. Returns undefined if the ref can't be resolved
+ * (so the parameter is skipped instead of producing a {param} placeholder
+ * that leaks into request URLs).
+ */
+function resolveParam(param: RawParam, componentParams: Record<string, RawParam>): RawParam | undefined {
+  if (!param || typeof param !== 'object') return undefined;
+  if (typeof param.$ref === 'string') {
+    const match = /^#\/components\/parameters\/(.+)$/.exec(param.$ref);
+    if (!match) return undefined;
+    const target = componentParams[match[1]!];
+    if (!target) return undefined;
+    // Recurse so a chain of $refs still resolves to a concrete definition.
+    return resolveParam(target, componentParams);
+  }
+  return param;
+}
+
 export function parseSpec(yamlText: string): Catalog {
-  const spec = parseYaml(yamlText);
+  const spec = parseYaml(yamlText) as {
+    paths?: Record<string, unknown>;
+    components?: { parameters?: Record<string, RawParam> };
+  };
   const endpoints: EndpointInfo[] = [];
+  const componentParams = spec.components?.parameters ?? {};
 
   for (const [path, pathItem] of Object.entries(spec.paths ?? {})) {
     const pathObj = pathItem as Record<string, unknown>;
@@ -40,15 +71,26 @@ export function parseSpec(yamlText: string): Catalog {
       const op = operation as Record<string, unknown>;
       const tag = ((op.tags as string[]) ?? ['other'])[0] ?? 'other';
 
-      const allParams = [...((pathObj.parameters as unknown[]) ?? []), ...((op.parameters as unknown[]) ?? [])];
+      // Resolve $ref and merge path-level + operation-level params.
+      // Operation-level params override path-level ones with the same (name, in)
+      // pair, per the OpenAPI 3.x spec.
+      const rawPathLevel = (pathObj.parameters as RawParam[] | undefined) ?? [];
+      const rawOpLevel = (op.parameters as RawParam[] | undefined) ?? [];
+      const merged = new Map<string, RawParam>();
+      for (const raw of [...rawPathLevel, ...rawOpLevel]) {
+        const resolved = resolveParam(raw, componentParams);
+        if (!resolved || !resolved.name || !resolved.in) continue;
+        merged.set(`${resolved.in}:${resolved.name}`, resolved);
+      }
+      const allParams = [...merged.values()];
 
       const pathParams: Param[] = allParams
-        .filter((p: any) => p.in === 'path')
-        .map((p: any) => ({ name: p.name, description: p.description ?? '', required: p.required ?? true }));
+        .filter((p) => p.in === 'path')
+        .map((p) => ({ name: p.name!, description: p.description ?? '', required: p.required ?? true }));
 
       const queryParams: Param[] = allParams
-        .filter((p: any) => p.in === 'query')
-        .map((p: any) => ({ name: p.name, description: p.description ?? '', required: p.required ?? false }));
+        .filter((p) => p.in === 'query')
+        .map((p) => ({ name: p.name!, description: p.description ?? '', required: p.required ?? false }));
 
       endpoints.push({
         method: method.toUpperCase(),
