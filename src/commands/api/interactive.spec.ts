@@ -155,10 +155,24 @@ describe('apiInteractive', () => {
 
     await apiInteractive();
 
-    // Path params are substituted verbatim; only query values are URL-encoded.
+    // Both path and query values are URL-encoded so fetch() doesn't throw "Invalid URL"
+    // on values containing spaces or other URL-unsafe characters.
     expect(mockApiRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ path: '/users/user 42?expand=first%20name' }),
+      expect.objectContaining({ path: '/users/user%2042?expand=first%20name' }),
     );
+  });
+
+  it('URL-encodes path param values containing reserved characters', async () => {
+    mockSelect.mockResolvedValueOnce('Users').mockResolvedValueOnce(mockCatalog.endpoints[1]);
+    // Value with characters that would break URL parsing if substituted verbatim.
+    mockText.mockResolvedValueOnce('a/b?c#d');
+    // No query params, then execute.
+    mockConfirm.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    mockApiRequest.mockResolvedValueOnce(buildResponse());
+
+    await apiInteractive();
+
+    expect(mockApiRequest).toHaveBeenCalledWith(expect.objectContaining({ path: '/users/a%2Fb%3Fc%23d' }));
   });
 
   it('collects a JSON request body when the user provides one', async () => {
