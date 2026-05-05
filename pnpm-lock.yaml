@@ -29,6 +29,9 @@ importers:
       '@workos-inc/node':
         specifier: ^8.7.0
         version: 8.7.0
+      '@workos/openapi-spec':
+        specifier: ^0.1.0
+        version: 0.1.0
       '@workos/skills':
         specifier: 0.5.0
         version: 0.5.0
@@ -1070,6 +1073,9 @@ packages:
   '@workos-inc/node@8.7.0':
     resolution: {integrity: sha512-43HfXSR2Ez7M4ixpebuYVZzZf3gauh5jvv9lYnePg/x0XZMN2hjpEV3FD1LQX1vfMbqQ5gON3DN+/gH2rITm3A==}
     engines: {node: '>=20.15.0'}
+
+  '@workos/openapi-spec@0.1.0':
+    resolution: {integrity: sha512-pVw8SPFsva6UR8Z2ovE1DC4Aq1fRdPXywT8JP7yN1G8Y02+/kDb6KgFXmpKiv76XinUXDOAmU9tr/G73UI8mHw==}
 
   '@workos/skills@0.5.0':
     resolution: {integrity: sha512-fScc+usjjvpyIOqSDq3AVmRpgpB5+yhyNfiqlSI/NsENe9C7Ynmbzx+XYwMJzGXpKIdUQQBHbvYRMOA1L+mWyw==}
@@ -2514,6 +2520,8 @@ snapshots:
     dependencies:
       iron-webcrypto: 2.0.0
       jose: 6.1.3
+
+  '@workos/openapi-spec@0.1.0': {}
 
   '@workos/skills@0.5.0':
     dependencies:

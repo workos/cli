@@ -3,9 +3,8 @@
  */
 
 import { parse as parseYaml } from 'yaml';
+import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 
 export interface PathParam {
   name: string;
@@ -83,8 +82,8 @@ let cachedCatalog: Catalog | undefined;
 export function loadCatalog(): Catalog {
   if (cachedCatalog) return cachedCatalog;
 
-  const specDir = dirname(fileURLToPath(import.meta.url));
-  const specPath = join(specDir, 'workos-openapi-spec.yaml');
+  const require = createRequire(import.meta.url);
+  const specPath = require.resolve('@workos/openapi-spec/spec');
   const yamlText = readFileSync(specPath, 'utf-8');
   cachedCatalog = parseSpec(yamlText);
   return cachedCatalog;
