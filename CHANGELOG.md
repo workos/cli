@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.4](https://github.com/workos/cli/compare/v0.13.3...v0.13.4) (2026-05-05)
+
+
+### Bug Fixes
+
+* pass port and https flag to WorkOS SDK when base URL requires it ([#140](https://github.com/workos/cli/issues/140)) ([b7909e8](https://github.com/workos/cli/commit/b7909e854c479ebaeb246ce6b42e90150ee5cfad))
+
 ## [0.13.3](https://github.com/workos/cli/compare/v0.13.2...v0.13.3) (2026-04-30)
 
 
