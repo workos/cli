@@ -10,7 +10,7 @@ function assertNotCancelled<T>(value: T | symbol): T {
 }
 
 export async function apiInteractive(): Promise<void> {
-  const catalog = loadCatalog();
+  const catalog = await loadCatalog();
   const grouped = endpointsByTag(catalog.endpoints);
 
   const tag = assertNotCancelled(

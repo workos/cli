@@ -1,6 +1,6 @@
 import { parse as parseYaml } from 'yaml';
 import { createRequire } from 'node:module';
-import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 
 export interface Param {
   name: string;
@@ -109,15 +109,20 @@ export function parseSpec(yamlText: string): Catalog {
   return { endpoints, tags };
 }
 
-let cachedCatalog: Catalog | undefined;
+let cachedCatalog: Promise<Catalog> | undefined;
 
-export function loadCatalog(): Catalog {
+export function loadCatalog(): Promise<Catalog> {
+  // Cache the in-flight Promise (not just the resolved value) so concurrent
+  // callers reuse the same readFile/parse pass — see request.ts callers.
   if (cachedCatalog) return cachedCatalog;
 
-  const require = createRequire(import.meta.url);
-  const specPath = require.resolve('@workos/openapi-spec/spec');
-  const yamlText = readFileSync(specPath, 'utf-8');
-  cachedCatalog = parseSpec(yamlText);
+  cachedCatalog = (async () => {
+    const require = createRequire(import.meta.url);
+    const specPath = require.resolve('@workos/openapi-spec/spec');
+    const yamlText = await readFile(specPath, 'utf-8');
+    return parseSpec(yamlText);
+  })();
+
   return cachedCatalog;
 }
 

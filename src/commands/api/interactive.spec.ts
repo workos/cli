@@ -54,7 +54,7 @@ vi.mock('./catalog.js', async () => {
   const actual = await vi.importActual<typeof import('./catalog.js')>('./catalog.js');
   return {
     ...actual,
-    loadCatalog: () => mockCatalog,
+    loadCatalog: async () => mockCatalog,
   };
 });
 

@@ -497,7 +497,7 @@ yargs(rawArgs)
       }
 
       if (endpoint === 'ls') {
-        runApiLs(filter);
+        await runApiLs(filter);
         return;
       }
 

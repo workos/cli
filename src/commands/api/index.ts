@@ -52,8 +52,8 @@ export async function runApiInteractive(): Promise<void> {
   await apiInteractive();
 }
 
-export function runApiLs(filter?: string): void {
-  const catalog = loadCatalog();
+export async function runApiLs(filter?: string): Promise<void> {
+  const catalog = await loadCatalog();
   let endpoints = catalog.endpoints;
 
   if (filter) {

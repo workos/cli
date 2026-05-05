@@ -44,7 +44,7 @@ vi.mock('./catalog.js', async () => {
   const actual = await vi.importActual<typeof import('./catalog.js')>('./catalog.js');
   return {
     ...actual,
-    loadCatalog: () => mockCatalog,
+    loadCatalog: async () => mockCatalog,
   };
 });
 
@@ -169,9 +169,9 @@ describe('runApiLs', () => {
     setOutputMode('human');
   });
 
-  it('lists endpoints grouped by tag in human mode', () => {
+  it('lists endpoints grouped by tag in human mode', async () => {
     setOutputMode('human');
-    runApiLs();
+    await runApiLs();
     const joined = consoleOutput.join('\n');
     expect(joined).toContain('Users');
     expect(joined).toContain('/users');
@@ -179,23 +179,23 @@ describe('runApiLs', () => {
     expect(joined).toContain('/organizations');
   });
 
-  it('filters endpoints by substring (path/tag/summary/operationId)', () => {
+  it('filters endpoints by substring (path/tag/summary/operationId)', async () => {
     setOutputMode('human');
-    runApiLs('organization');
+    await runApiLs('organization');
     const joined = consoleOutput.join('\n');
     expect(joined).toContain('/organizations');
     expect(joined).not.toContain('/users');
   });
 
-  it('prints a friendly message when no endpoint matches the filter', () => {
+  it('prints a friendly message when no endpoint matches the filter', async () => {
     setOutputMode('human');
-    runApiLs('does-not-exist');
+    await runApiLs('does-not-exist');
     expect(consoleOutput.some((l) => l.includes('No endpoints matching "does-not-exist"'))).toBe(true);
   });
 
-  it('emits structured JSON in JSON mode', () => {
+  it('emits structured JSON in JSON mode', async () => {
     setOutputMode('json');
-    runApiLs('users');
+    await runApiLs('users');
     expect(consoleOutput).toHaveLength(1);
     const parsed = JSON.parse(consoleOutput[0]!);
     expect(parsed.data).toEqual([
