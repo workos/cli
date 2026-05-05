@@ -1,7 +1,3 @@
-/**
- * Raw API request executor for `workos api <endpoint>`.
- */
-
 import { resolveApiKey, resolveApiBaseUrl } from '../../lib/api-key.js';
 
 export interface ApiRequestOptions {
@@ -37,11 +33,16 @@ export async function apiRequest(options: ApiRequestOptions): Promise<ApiRespons
     headers['Content-Type'] = 'application/json';
   }
 
-  const response = await fetch(url, {
-    method: options.method,
-    headers,
-    body: options.body ?? undefined,
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: options.method,
+      headers,
+      body: options.body ?? undefined,
+    });
+  } catch {
+    throw new Error('Failed to connect to WorkOS API. Check your internet connection.');
+  }
 
   const rawBody = await response.text();
 

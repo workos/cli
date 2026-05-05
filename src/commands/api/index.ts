@@ -1,12 +1,3 @@
-/**
- * `workos api` — generic authenticated API gateway.
- *
- * Modes:
- *   workos api                    — interactive request builder (TTY only)
- *   workos api ls [filter]        — list endpoints from the embedded OpenAPI spec
- *   workos api <endpoint> [opts]  — make an authenticated request
- */
-
 import chalk from 'chalk';
 import { readFileSync } from 'node:fs';
 import { loadCatalog, endpointsByTag } from './catalog.js';
@@ -14,6 +5,9 @@ import { apiRequest } from './request.js';
 import { resolveApiBaseUrl } from '../../lib/api-key.js';
 import { isJsonMode, outputJson } from '../../utils/output.js';
 import { isNonInteractiveEnvironment } from '../../utils/environment.js';
+import { colorMethod, printResponse } from './format.js';
+
+export { colorMethod } from './format.js';
 
 export interface ApiCommandOptions {
   method?: string;
@@ -26,8 +20,6 @@ export interface ApiCommandOptions {
 }
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-
-// ── interactive ───────────────────────────────────────────────────────
 
 export async function runApiInteractive(): Promise<void> {
   if (isNonInteractiveEnvironment()) {
@@ -47,8 +39,6 @@ export async function runApiInteractive(): Promise<void> {
   await apiInteractive();
 }
 
-// ── ls ─────────────────────────────────────────────────────────────────
-
 export function runApiLs(filter?: string): void {
   const catalog = loadCatalog();
   let endpoints = catalog.endpoints;
@@ -64,15 +54,6 @@ export function runApiLs(filter?: string): void {
     );
   }
 
-  if (endpoints.length === 0) {
-    if (isJsonMode()) {
-      outputJson({ data: [] });
-    } else {
-      console.log(filter ? `No endpoints matching "${filter}".` : 'No endpoints found.');
-    }
-    return;
-  }
-
   if (isJsonMode()) {
     outputJson({
       data: endpoints.map((e) => ({
@@ -85,7 +66,12 @@ export function runApiLs(filter?: string): void {
     return;
   }
 
-  const grouped = endpointsByTag({ endpoints, tags: [...new Set(endpoints.map((e) => e.tag))].sort() });
+  if (endpoints.length === 0) {
+    console.log(filter ? `No endpoints matching "${filter}".` : 'No endpoints found.');
+    return;
+  }
+
+  const grouped = endpointsByTag(endpoints);
 
   for (const [tag, eps] of grouped) {
     console.log(`\n${chalk.bold(tag)}`);
@@ -96,8 +82,6 @@ export function runApiLs(filter?: string): void {
   }
   console.log();
 }
-
-// ── request ────────────────────────────────────────────────────────────
 
 export async function runApiRequest(endpoint: string, options: ApiCommandOptions): Promise<void> {
   const body = await resolveBody(options);
@@ -133,35 +117,23 @@ export async function runApiRequest(endpoint: string, options: ApiCommandOptions
     method,
     path: normalizePath(endpoint),
     apiKey: options.apiKey,
-    body: body ?? undefined,
+    body,
     baseUrl,
   });
 
-  if (options.include) {
-    printHeaders(response.status, response.headers);
-  }
-
-  if (isJsonMode()) {
-    outputJson(response.body);
-  } else if (typeof response.body === 'object' && response.body !== null) {
-    console.log(JSON.stringify(response.body, null, 2));
-  } else {
-    console.log(response.rawBody);
-  }
+  printResponse(response, { includeStatus: options.include });
 
   if (response.status >= 400) {
     process.exit(1);
   }
 }
 
-// ── helpers ────────────────────────────────────────────────────────────
-
 function normalizePath(path: string): string {
   if (!path.startsWith('/')) return `/${path}`;
   return path;
 }
 
-async function resolveBody(options: ApiCommandOptions): Promise<string | null> {
+async function resolveBody(options: ApiCommandOptions): Promise<string | undefined> {
   if (options.data) return options.data;
   if (options.file) {
     if (options.file === '-') {
@@ -173,7 +145,7 @@ async function resolveBody(options: ApiCommandOptions): Promise<string | null> {
     }
     return readFileSync(options.file, 'utf-8');
   }
-  return null;
+  return undefined;
 }
 
 function prettyPrint(jsonString: string): void {
@@ -181,30 +153,5 @@ function prettyPrint(jsonString: string): void {
     console.log(JSON.stringify(JSON.parse(jsonString), null, 2));
   } catch {
     console.log(jsonString);
-  }
-}
-
-function printHeaders(status: number, headers: Headers): void {
-  console.log(chalk.dim(`HTTP ${status}`));
-  headers.forEach((value, key) => {
-    console.log(chalk.dim(`${key}: ${value}`));
-  });
-  console.log();
-}
-
-export function colorMethod(method: string): string {
-  switch (method) {
-    case 'GET':
-      return chalk.green(method);
-    case 'POST':
-      return chalk.blue(method);
-    case 'PUT':
-      return chalk.yellow(method);
-    case 'PATCH':
-      return chalk.yellow(method);
-    case 'DELETE':
-      return chalk.red(method);
-    default:
-      return method;
   }
 }

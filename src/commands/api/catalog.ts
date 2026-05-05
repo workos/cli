@@ -1,18 +1,8 @@
-/**
- * OpenAPI catalog: parsing the embedded spec into a queryable endpoint list.
- */
-
 import { parse as parseYaml } from 'yaml';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 
-export interface PathParam {
-  name: string;
-  description: string;
-  required: boolean;
-}
-
-export interface QueryParam {
+export interface Param {
   name: string;
   description: string;
   required: boolean;
@@ -24,8 +14,8 @@ export interface EndpointInfo {
   summary: string;
   tag: string;
   operationId: string;
-  pathParams: PathParam[];
-  queryParams: QueryParam[];
+  pathParams: Param[];
+  queryParams: Param[];
   hasRequestBody: boolean;
 }
 
@@ -52,11 +42,11 @@ export function parseSpec(yamlText: string): Catalog {
 
       const allParams = [...((pathObj.parameters as unknown[]) ?? []), ...((op.parameters as unknown[]) ?? [])];
 
-      const pathParams: PathParam[] = allParams
+      const pathParams: Param[] = allParams
         .filter((p: any) => p.in === 'path')
         .map((p: any) => ({ name: p.name, description: p.description ?? '', required: p.required ?? true }));
 
-      const queryParams: QueryParam[] = allParams
+      const queryParams: Param[] = allParams
         .filter((p: any) => p.in === 'query')
         .map((p: any) => ({ name: p.name, description: p.description ?? '', required: p.required ?? false }));
 
@@ -89,9 +79,9 @@ export function loadCatalog(): Catalog {
   return cachedCatalog;
 }
 
-export function endpointsByTag(catalog: Catalog): Map<string, EndpointInfo[]> {
+export function endpointsByTag(endpoints: EndpointInfo[]): Map<string, EndpointInfo[]> {
   const grouped = new Map<string, EndpointInfo[]>();
-  for (const ep of catalog.endpoints) {
+  for (const ep of endpoints) {
     const list = grouped.get(ep.tag) ?? [];
     list.push(ep);
     grouped.set(ep.tag, list);
