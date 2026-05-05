@@ -23,6 +23,16 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 export async function runApiInteractive(): Promise<void> {
   if (isNonInteractiveEnvironment()) {
+    if (isJsonMode()) {
+      exitWithError({
+        code: 'tty_required',
+        message: 'Interactive mode requires a TTY. Provide an endpoint or use `workos api ls`.',
+        details: {
+          usage: ['workos api <endpoint>', 'workos api ls [filter]'],
+        },
+      });
+    }
+
     console.log(
       'Interactive mode requires a TTY.\n\n' +
         'Usage:\n' +

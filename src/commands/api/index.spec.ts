@@ -86,13 +86,22 @@ function buildResponse(overrides: Partial<ApiResponse> = {}): ApiResponse {
 
 describe('runApiInteractive', () => {
   let consoleOutput: string[];
+  let stderrOutput: string[];
+  let exitSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     consoleOutput = [];
+    stderrOutput = [];
     vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
       consoleOutput.push(args.map(String).join(' '));
     });
+    vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      stderrOutput.push(args.map(String).join(' '));
+    });
+    exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      throw new Error(`__exit__:${code ?? 0}`);
+    }) as never);
   });
 
   afterEach(() => {
@@ -101,9 +110,27 @@ describe('runApiInteractive', () => {
   });
 
   it('prints usage instructions when stdin/stdout is non-interactive', async () => {
+    setOutputMode('human');
     vi.mocked(isNonInteractiveEnvironment).mockReturnValueOnce(true);
     await runApiInteractive();
     expect(consoleOutput.join('\n')).toContain('Interactive mode requires a TTY');
+  });
+
+  it('emits a structured tty_required error in JSON mode when non-interactive', async () => {
+    setOutputMode('json');
+    vi.mocked(isNonInteractiveEnvironment).mockReturnValueOnce(true);
+    await expect(runApiInteractive()).rejects.toThrow(/__exit__:1/);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(consoleOutput).toEqual([]);
+    const errorLine = stderrOutput.find((line) => {
+      try {
+        const parsed = JSON.parse(line) as { error?: { code?: string } };
+        return parsed.error?.code === 'tty_required';
+      } catch {
+        return false;
+      }
+    });
+    expect(errorLine).toBeDefined();
   });
 });
 
