@@ -306,6 +306,7 @@ const commands: CommandSchema[] = [
       { name: 'filter', type: 'string', description: 'Filter keyword (used with ls)', required: false },
     ],
     options: [
+      insecureStorageOpt,
       {
         name: 'method',
         type: 'string',
