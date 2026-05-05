@@ -29,7 +29,7 @@ export async function apiRequest(options: ApiRequestOptions): Promise<ApiRespons
     Accept: 'application/json',
   };
 
-  if (options.body) {
+  if (options.body !== undefined) {
     headers['Content-Type'] = 'application/json';
   }
 
@@ -38,7 +38,7 @@ export async function apiRequest(options: ApiRequestOptions): Promise<ApiRespons
     response = await fetch(url, {
       method: options.method,
       headers,
-      body: options.body ?? undefined,
+      body: options.body,
     });
   } catch {
     throw new Error('Failed to connect to WorkOS API. Check your internet connection.');

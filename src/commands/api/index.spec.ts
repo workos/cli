@@ -345,6 +345,16 @@ describe('runApiRequest', () => {
     expect(mockApiRequest).toHaveBeenCalledWith(expect.objectContaining({ method: 'POST', body: '' }));
   });
 
+  it('refuses mutating requests without --yes in non-interactive human mode', async () => {
+    setOutputMode('human');
+    vi.mocked(isNonInteractiveEnvironment).mockReturnValueOnce(true);
+    await expect(runApiRequest('/organizations', { method: 'POST', data: '{}' })).rejects.toThrow(/__exit__:1/);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(mockApiRequest).not.toHaveBeenCalled();
+    expect(mockConfirm).not.toHaveBeenCalled();
+    expect(stderrOutput.some((l) => l.includes('Refusing to POST'))).toBe(true);
+  });
+
   it('exits with confirmation_required in JSON mode when a mutating request lacks --yes', async () => {
     setOutputMode('json');
     await expect(runApiRequest('/organizations', { method: 'POST', data: '{}' })).rejects.toThrow(/__exit__:1/);

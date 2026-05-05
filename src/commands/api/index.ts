@@ -129,14 +129,16 @@ export async function runApiRequest(endpoint: string, options: ApiCommandOptions
         message: 'Mutating requests in JSON mode require --yes to keep stdout machine-readable.',
       });
     }
-    if (!isNonInteractiveEnvironment()) {
-      const clack = (await import('../../utils/clack.js')).default;
-      console.log(`\n${chalk.yellow('About to')} ${method} ${endpoint}`);
-      if (hasBody) prettyPrint(body);
-      const ok = await clack.confirm({ message: 'Proceed?' });
-      if (!ok || clack.isCancel(ok)) {
-        process.exit(0);
-      }
+    if (isNonInteractiveEnvironment()) {
+      console.error(`Refusing to ${method} ${endpoint} without --yes in a non-interactive environment.`);
+      process.exit(1);
+    }
+    const clack = (await import('../../utils/clack.js')).default;
+    console.log(`\n${chalk.yellow('About to')} ${method} ${endpoint}`);
+    if (hasBody) prettyPrint(body);
+    const ok = await clack.confirm({ message: 'Proceed?' });
+    if (!ok || clack.isCancel(ok)) {
+      process.exit(0);
     }
   }
 

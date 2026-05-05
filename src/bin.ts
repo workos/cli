@@ -435,6 +435,7 @@ yargs(rawArgs)
     'Make authenticated requests to the WorkOS API',
     (yargs) =>
       yargs
+        .options(insecureStorageOption)
         .positional('endpoint', {
           type: 'string',
           describe: "API endpoint path (e.g. /users), or 'ls' to list endpoints",

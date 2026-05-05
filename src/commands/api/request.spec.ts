@@ -80,6 +80,15 @@ describe('apiRequest', () => {
     expect(headers['Content-Type']).toBeUndefined();
   });
 
+  it('still sets Content-Type when an explicit empty-string body is provided', async () => {
+    const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(buildResponse('{}'));
+    await apiRequest({ method: 'POST', path: '/orgs', body: '' });
+    const init = fetchSpy.mock.calls[0]![1]!;
+    const headers = init.headers as Record<string, string>;
+    expect(headers['Content-Type']).toBe('application/json');
+    expect(init.body).toBe('');
+  });
+
   it('parses a JSON response body', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValue(buildResponse('{"id":"org_123"}', { status: 200 }));
     const response = await apiRequest({ method: 'GET', path: '/orgs/org_123' });
