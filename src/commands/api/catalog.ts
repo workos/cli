@@ -17,6 +17,7 @@ export interface EndpointInfo {
   pathParams: Param[];
   queryParams: Param[];
   hasRequestBody: boolean;
+  requestBodyRequired: boolean;
 }
 
 export interface Catalog {
@@ -92,6 +93,7 @@ export function parseSpec(yamlText: string): Catalog {
         .filter((p) => p.in === 'query')
         .map((p) => ({ name: p.name!, description: p.description ?? '', required: p.required ?? false }));
 
+      const reqBody = op.requestBody as Record<string, unknown> | undefined;
       endpoints.push({
         method: method.toUpperCase(),
         path,
@@ -100,7 +102,8 @@ export function parseSpec(yamlText: string): Catalog {
         operationId: (op.operationId as string) ?? '',
         pathParams,
         queryParams,
-        hasRequestBody: !!op.requestBody,
+        hasRequestBody: !!reqBody,
+        requestBodyRequired: !!reqBody?.required,
       });
     }
   }

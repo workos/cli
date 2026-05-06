@@ -21,7 +21,7 @@ export interface ApiCommandOptions {
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-export async function runApiInteractive(): Promise<void> {
+export async function runApiInteractive(options?: { apiKey?: string }): Promise<void> {
   // Interactive mode is inherently human-oriented (clack prompts, preview text,
   // etc.). Refuse to enter it whenever JSON output was requested, regardless of
   // TTY status, so stdout stays machine-readable.
@@ -49,7 +49,7 @@ export async function runApiInteractive(): Promise<void> {
   }
 
   const { apiInteractive } = await import('./interactive.js');
-  await apiInteractive();
+  await apiInteractive({ apiKey: options?.apiKey });
 }
 
 export async function runApiLs(filter?: string): Promise<void> {

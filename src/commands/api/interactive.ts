@@ -9,7 +9,7 @@ function assertNotCancelled<T>(value: T | symbol): T {
   return value as T;
 }
 
-export async function apiInteractive(): Promise<void> {
+export async function apiInteractive(options?: { apiKey?: string }): Promise<void> {
   const catalog = await loadCatalog();
   const grouped = endpointsByTag(catalog.endpoints);
 
@@ -51,49 +51,65 @@ export async function apiInteractive(): Promise<void> {
 
   let queryString = '';
   if (ep.queryParams.length > 0) {
-    const wantsQuery = assertNotCancelled(
-      await clack.confirm({
-        message: `Add query parameters? (${ep.queryParams.length} available)`,
-        initialValue: false,
-      }),
-    );
+    const requiredParams = ep.queryParams.filter((qp) => qp.required);
+    const optionalParams = ep.queryParams.filter((qp) => !qp.required);
+    const params: string[] = [];
 
-    if (wantsQuery) {
-      const params: string[] = [];
-      for (const qp of ep.queryParams) {
-        const label = qp.required ? `${qp.name} (required):` : `${qp.name}:`;
-        const value = assertNotCancelled(
-          await clack.text({
-            message: label,
-            placeholder: qp.description || undefined,
-            validate: qp.required
-              ? (v) => {
-                  if (!v?.trim()) return `${qp.name} is required`;
-                }
-              : undefined,
-          }),
-        );
-        const trimmed = value.trim();
-        if (trimmed) {
-          params.push(`${encodeURIComponent(qp.name)}=${encodeURIComponent(trimmed)}`);
+    for (const qp of requiredParams) {
+      const value = assertNotCancelled(
+        await clack.text({
+          message: `${qp.name} (required):`,
+          placeholder: qp.description || undefined,
+          validate: (v) => {
+            if (!v?.trim()) return `${qp.name} is required`;
+          },
+        }),
+      );
+      params.push(`${encodeURIComponent(qp.name)}=${encodeURIComponent(value.trim())}`);
+    }
+
+    if (optionalParams.length > 0) {
+      const wantsOptional = assertNotCancelled(
+        await clack.confirm({
+          message: `Add optional query parameters? (${optionalParams.length} available)`,
+          initialValue: false,
+        }),
+      );
+
+      if (wantsOptional) {
+        for (const qp of optionalParams) {
+          const value = assertNotCancelled(
+            await clack.text({
+              message: `${qp.name}:`,
+              placeholder: qp.description || undefined,
+            }),
+          );
+          const trimmed = value.trim();
+          if (trimmed) {
+            params.push(`${encodeURIComponent(qp.name)}=${encodeURIComponent(trimmed)}`);
+          }
         }
       }
-      if (params.length > 0) {
-        queryString = `?${params.join('&')}`;
-      }
+    }
+
+    if (params.length > 0) {
+      queryString = `?${params.join('&')}`;
     }
   }
 
   let body: string | undefined;
   if (ep.hasRequestBody) {
-    const wantsBody = assertNotCancelled(
-      await clack.confirm({
-        message: 'Provide a request body?',
-        initialValue: ep.method === 'POST' || ep.method === 'PUT',
-      }),
-    );
+    let collectBody = ep.requestBodyRequired;
+    if (!collectBody) {
+      collectBody = assertNotCancelled(
+        await clack.confirm({
+          message: 'Provide a request body?',
+          initialValue: ep.method === 'POST' || ep.method === 'PUT',
+        }),
+      );
+    }
 
-    if (wantsBody) {
+    if (collectBody) {
       body = assertNotCancelled(
         await clack.text({
           message: 'Request body (JSON):',
@@ -125,7 +141,7 @@ export async function apiInteractive(): Promise<void> {
   const response = await apiRequest({
     method: ep.method,
     path: fullPath,
-    apiKey: resolveApiKey(),
+    apiKey: options?.apiKey ?? resolveApiKey(),
     baseUrl: resolveApiBaseUrl(),
     body,
   });

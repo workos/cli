@@ -492,7 +492,7 @@ yargs(rawArgs)
       const { runApiLs, runApiRequest, runApiInteractive } = await import('./commands/api/index.js');
 
       if (!endpoint) {
-        await runApiInteractive();
+        await runApiInteractive({ apiKey: argv.apiKey as string | undefined });
         return;
       }
 

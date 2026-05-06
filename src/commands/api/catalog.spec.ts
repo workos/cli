@@ -86,6 +86,37 @@ describe('parseSpec', () => {
     expect(get?.hasRequestBody).toBe(false);
   });
 
+  it('captures requestBodyRequired from the spec', () => {
+    const catalog = parseSpec(SAMPLE_SPEC);
+    const post = catalog.endpoints.find((e) => e.path === '/organizations' && e.method === 'POST');
+    const get = catalog.endpoints.find((e) => e.path === '/organizations' && e.method === 'GET');
+    expect(post?.requestBodyRequired).toBe(true);
+    expect(get?.requestBodyRequired).toBe(false);
+  });
+
+  it('sets requestBodyRequired to false when requestBody exists but required is not set', () => {
+    const yaml = `
+openapi: 3.0.0
+info:
+  title: Test
+  version: 1.0.0
+paths:
+  /widgets:
+    patch:
+      operationId: patchWidget
+      summary: Patch widget
+      tags: [Widgets]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+`;
+    const catalog = parseSpec(yaml);
+    expect(catalog.endpoints[0]?.hasRequestBody).toBe(true);
+    expect(catalog.endpoints[0]?.requestBodyRequired).toBe(false);
+  });
+
   it('produces a sorted unique tags list', () => {
     const catalog = parseSpec(SAMPLE_SPEC);
     expect(catalog.tags).toEqual(['Organizations', 'Users']);
@@ -211,6 +242,7 @@ describe('endpointsByTag', () => {
       pathParams: [],
       queryParams: [],
       hasRequestBody: false,
+      requestBodyRequired: false,
     },
     {
       method: 'POST',
@@ -221,6 +253,7 @@ describe('endpointsByTag', () => {
       pathParams: [],
       queryParams: [],
       hasRequestBody: true,
+      requestBodyRequired: true,
     },
     {
       method: 'DELETE',
@@ -231,6 +264,7 @@ describe('endpointsByTag', () => {
       pathParams: [],
       queryParams: [],
       hasRequestBody: false,
+      requestBodyRequired: false,
     },
   ];
 

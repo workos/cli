@@ -13,6 +13,7 @@ const mockCatalog: Catalog = {
       pathParams: [],
       queryParams: [],
       hasRequestBody: false,
+      requestBodyRequired: false,
     },
     {
       method: 'GET',
@@ -23,6 +24,7 @@ const mockCatalog: Catalog = {
       pathParams: [{ name: 'id', description: 'User ID', required: true }],
       queryParams: [{ name: 'expand', description: 'Expand fields', required: false }],
       hasRequestBody: false,
+      requestBodyRequired: false,
     },
     {
       method: 'POST',
@@ -33,6 +35,7 @@ const mockCatalog: Catalog = {
       pathParams: [],
       queryParams: [],
       hasRequestBody: true,
+      requestBodyRequired: true,
     },
     {
       method: 'GET',
@@ -43,9 +46,35 @@ const mockCatalog: Catalog = {
       pathParams: [{ name: 'id', description: 'Identifier reused twice', required: true }],
       queryParams: [],
       hasRequestBody: false,
+      requestBodyRequired: false,
+    },
+    {
+      method: 'PATCH',
+      path: '/users/{id}',
+      summary: 'Update user',
+      tag: 'Users',
+      operationId: 'updateUser',
+      pathParams: [{ name: 'id', description: 'User ID', required: true }],
+      queryParams: [],
+      hasRequestBody: true,
+      requestBodyRequired: false,
+    },
+    {
+      method: 'GET',
+      path: '/authorize',
+      summary: 'Authorize',
+      tag: 'Auth',
+      operationId: 'authorize',
+      pathParams: [],
+      queryParams: [
+        { name: 'response_type', description: 'Response type', required: true },
+        { name: 'state', description: 'Optional state', required: false },
+      ],
+      hasRequestBody: false,
+      requestBodyRequired: false,
     },
   ],
-  tags: ['Organizations', 'Users'],
+  tags: ['Auth', 'Organizations', 'Users'],
 };
 
 const mockApiRequest = vi.fn<(...args: unknown[]) => Promise<ApiResponse>>();
@@ -134,7 +163,7 @@ describe('apiInteractive', () => {
   it('substitutes path params and prompts for them', async () => {
     mockSelect.mockResolvedValueOnce('Users').mockResolvedValueOnce(mockCatalog.endpoints[1]);
     mockText.mockResolvedValueOnce('user_42');
-    // ep has a query param, decline adding it
+    // ep has only optional query params, decline adding them
     mockConfirm.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
     mockApiRequest.mockResolvedValueOnce(buildResponse());
 
@@ -175,9 +204,10 @@ describe('apiInteractive', () => {
     expect(mockApiRequest).toHaveBeenCalledWith(expect.objectContaining({ path: '/users/a%2Fb%3Fc%23d' }));
   });
 
-  it('collects a JSON request body when the user provides one', async () => {
+  it('collects a required JSON request body without asking to confirm', async () => {
     mockSelect.mockResolvedValueOnce('Organizations').mockResolvedValueOnce(mockCatalog.endpoints[2]);
-    mockConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
+    // No confirm for body (requestBodyRequired=true); only confirm for execute
+    mockConfirm.mockResolvedValueOnce(true);
     mockText.mockResolvedValueOnce('{"name":"Acme"}');
     mockApiRequest.mockResolvedValueOnce(buildResponse({ status: 201 }));
 
@@ -186,6 +216,20 @@ describe('apiInteractive', () => {
     expect(mockApiRequest).toHaveBeenCalledWith(
       expect.objectContaining({ method: 'POST', path: '/organizations', body: '{"name":"Acme"}' }),
     );
+  });
+
+  it('prompts to confirm an optional request body and skips it when declined', async () => {
+    const patchUser = mockCatalog.endpoints[4]; // PATCH /users/{id}, requestBodyRequired: false
+    mockSelect.mockResolvedValueOnce('Users').mockResolvedValueOnce(patchUser);
+    mockText.mockResolvedValueOnce('user_42'); // path param
+    mockConfirm
+      .mockResolvedValueOnce(false) // decline optional body
+      .mockResolvedValueOnce(true); // execute
+    mockApiRequest.mockResolvedValueOnce(buildResponse());
+
+    await apiInteractive();
+
+    expect(mockApiRequest).toHaveBeenCalledWith(expect.objectContaining({ body: undefined }));
   });
 
   it('exits with code 0 when the user cancels at the category prompt', async () => {
@@ -215,6 +259,48 @@ describe('apiInteractive', () => {
     await apiInteractive();
 
     expect(mockApiRequest).toHaveBeenCalledWith(expect.objectContaining({ path: '/users/user_42/links/user_42' }));
+  });
+
+  it('always collects required query params without gating behind a confirm', async () => {
+    const authEp = mockCatalog.endpoints[5]; // GET /authorize with required response_type + optional state
+    mockSelect.mockResolvedValueOnce('Auth').mockResolvedValueOnce(authEp);
+    mockText.mockResolvedValueOnce('code'); // required: response_type
+    mockConfirm
+      .mockResolvedValueOnce(false) // decline optional query params
+      .mockResolvedValueOnce(true); // execute
+    mockApiRequest.mockResolvedValueOnce(buildResponse());
+
+    await apiInteractive();
+
+    expect(mockApiRequest).toHaveBeenCalledWith(expect.objectContaining({ path: '/authorize?response_type=code' }));
+  });
+
+  it('collects both required and optional query params when user opts in', async () => {
+    const authEp = mockCatalog.endpoints[5];
+    mockSelect.mockResolvedValueOnce('Auth').mockResolvedValueOnce(authEp);
+    mockText
+      .mockResolvedValueOnce('code') // required: response_type
+      .mockResolvedValueOnce('abc123'); // optional: state
+    mockConfirm
+      .mockResolvedValueOnce(true) // accept optional query params
+      .mockResolvedValueOnce(true); // execute
+    mockApiRequest.mockResolvedValueOnce(buildResponse());
+
+    await apiInteractive();
+
+    expect(mockApiRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/authorize?response_type=code&state=abc123' }),
+    );
+  });
+
+  it('uses the provided apiKey override instead of resolveApiKey()', async () => {
+    mockSelect.mockResolvedValueOnce('Users').mockResolvedValueOnce(mockCatalog.endpoints[0]);
+    mockConfirm.mockResolvedValueOnce(true);
+    mockApiRequest.mockResolvedValueOnce(buildResponse());
+
+    await apiInteractive({ apiKey: 'sk_override' });
+
+    expect(mockApiRequest).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'sk_override' }));
   });
 
   it('exits with code 1 when the response status is >= 400', async () => {

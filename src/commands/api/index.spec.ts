@@ -13,6 +13,7 @@ const mockCatalog: Catalog = {
       pathParams: [],
       queryParams: [],
       hasRequestBody: false,
+      requestBodyRequired: false,
     },
     {
       method: 'POST',
@@ -23,6 +24,7 @@ const mockCatalog: Catalog = {
       pathParams: [],
       queryParams: [],
       hasRequestBody: true,
+      requestBodyRequired: true,
     },
     {
       method: 'DELETE',
@@ -33,6 +35,7 @@ const mockCatalog: Catalog = {
       pathParams: [{ name: 'id', description: '', required: true }],
       queryParams: [],
       hasRequestBody: false,
+      requestBodyRequired: false,
     },
   ],
   tags: ['Organizations', 'Users'],
