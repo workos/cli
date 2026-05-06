@@ -100,6 +100,16 @@ describe('host-probe', () => {
       expect(result.failures).toContainEqual(expect.objectContaining({ capability: 'keychain' }));
     });
 
+    it('does not flag non-permission keychain errors as sandbox failures', async () => {
+      keyringMock.getPassword.mockImplementation(() => {
+        throw new Error('The user canceled the Keychain Services operation');
+      });
+
+      const result = await runHostProbe();
+      expect(result.ok).toBe(true);
+      expect(result.failures).toHaveLength(0);
+    });
+
     it('caches the result across calls', async () => {
       const first = await runHostProbe();
       const second = await runHostProbe();

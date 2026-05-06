@@ -79,6 +79,11 @@ function probeKeychain(): ProbeFailure | null {
     if (isMissingEntryError(error)) {
       return null;
     }
+    // Only treat permission-class errors as sandbox indicators. A user-canceled
+    // macOS prompt or a transient keyring daemon hiccup would otherwise produce
+    // a misleading "sandboxed environment" warning. Mirrors probeHomeFs() and
+    // observeHostFailure().
+    if (!isPermissionError(error)) return null;
     const detail = error instanceof Error ? error.message : String(error);
     return { capability: 'keychain', detail };
   }
