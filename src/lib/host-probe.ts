@@ -59,6 +59,10 @@ async function probeHomeFs(): Promise<ProbeFailure | null> {
     await fs.unlink(probePath);
     return null;
   } catch (error) {
+    // Only treat permission-class errors as sandbox indicators. Transient
+    // errors like ENOSPC/EIO would otherwise produce a misleading "sandboxed
+    // environment" warning. Mirrors the gating in observeHostFailure().
+    if (!isPermissionError(error)) return null;
     const detail = error instanceof Error ? error.message : String(error);
     return { capability: 'home-fs', detail };
   }

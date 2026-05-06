@@ -80,6 +80,16 @@ describe('host-probe', () => {
       expect(result.failures).toContainEqual(expect.objectContaining({ capability: 'home-fs' }));
     });
 
+    it('does not flag non-permission home-fs errors as sandbox failures', async () => {
+      vi.mocked(fs.writeFile).mockImplementation(() => {
+        throw new Error('ENOSPC: no space left on device');
+      });
+
+      const result = await runHostProbe();
+      expect(result.ok).toBe(true);
+      expect(result.failures).toHaveLength(0);
+    });
+
     it('detects keychain failure on permission error', async () => {
       keyringMock.getPassword.mockImplementation(() => {
         throw new Error('EACCES: keychain unavailable');
