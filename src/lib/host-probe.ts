@@ -10,7 +10,6 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { randomUUID } from 'node:crypto';
 import { Entry } from '@napi-rs/keyring';
 import { isNonInteractiveEnvironment } from '../utils/environment.js';
 import { logWarn, logInfo } from '../utils/debug.js';
@@ -52,7 +51,7 @@ function isMissingEntryError(error: unknown): boolean {
 
 async function probeHomeFs(): Promise<ProbeFailure | null> {
   const dir = path.join(os.homedir(), '.workos');
-  const probePath = path.join(dir, `.probe-${process.pid}-${randomUUID()}`);
+  const probePath = path.join(dir, `.probe-${process.pid}-${crypto.randomUUID()}`);
 
   try {
     await fs.mkdir(dir, { recursive: true, mode: 0o700 });
