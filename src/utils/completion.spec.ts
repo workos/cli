@@ -53,6 +53,19 @@ describe('generateCompletions', () => {
     expect(names).toContain('--fix');
   });
 
+  it('excludes options used by alias', () => {
+    const result = generateCompletions(['skills', 'install', '-s', 'authkit', '--']);
+    const names = result.completions.map((c) => c.name);
+    expect(names).not.toContain('--skill');
+    expect(names).toContain('--agent');
+  });
+
+  it('deduplicates command and global options', () => {
+    const result = generateCompletions(['doctor', '--']);
+    const names = result.completions.map((c) => c.name);
+    expect(names.filter((name) => name === '--json')).toHaveLength(1);
+  });
+
   it('sets NO_FILE_COMP directive', () => {
     const result = generateCompletions(['']);
     expect(result.directive).toBe(4);
