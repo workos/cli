@@ -140,8 +140,13 @@ function walkCommandTree(
     }
 
     if (word.startsWith('-')) {
-      usedOptions.add(word);
       const opt = findOption(current, globalOptions, word);
+      if (opt) {
+        usedOptions.add(`--${opt.name}`);
+        if (opt.alias) usedOptions.add(`-${opt.alias}`);
+      } else {
+        usedOptions.add(word);
+      }
       i += opt && optionTakesValue(opt) ? 2 : 1;
       continue;
     }
@@ -167,10 +172,13 @@ function completeOptions(
 ): Completion[] {
   const opts = [...(command?.options ?? []), ...globalOptions];
   const completions: Completion[] = [];
+  const emitted = new Set<string>();
 
   for (const opt of opts) {
     if (opt.hidden) continue;
     const flag = `--${opt.name}`;
+    if (emitted.has(flag)) continue;
+    emitted.add(flag);
     if (usedOptions.has(flag)) continue;
     if (!flag.startsWith(partial)) continue;
     completions.push({ name: flag, description: opt.description });
