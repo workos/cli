@@ -66,7 +66,7 @@ function normalizeRegistry(commands: CommandSchema[]): CommandSchema[] {
   for (const cmd of commands) {
     const spaceIdx = cmd.name.indexOf(' ');
     if (spaceIdx === -1) {
-      result.push(cmd);
+      result.push(cloneCommand(cmd));
       seen.add(cmd.name);
     } else {
       const prefix = cmd.name.slice(0, spaceIdx);
@@ -82,8 +82,12 @@ function normalizeRegistry(commands: CommandSchema[]): CommandSchema[] {
 
   for (const [prefix, children] of byPrefix) {
     if (seen.has(prefix)) {
-      const existing = result.find((c) => c.name === prefix)!;
-      existing.commands = [...(existing.commands ?? []), ...normalizeRegistry(children)];
+      const index = result.findIndex((c) => c.name === prefix);
+      const existing = result[index]!;
+      result[index] = {
+        ...existing,
+        commands: [...(existing.commands ?? []), ...normalizeRegistry(children)],
+      };
     } else {
       result.push({
         name: prefix,
@@ -94,6 +98,13 @@ function normalizeRegistry(commands: CommandSchema[]): CommandSchema[] {
   }
 
   return result;
+}
+
+function cloneCommand(command: CommandSchema): CommandSchema {
+  return {
+    ...command,
+    ...(command.commands ? { commands: normalizeRegistry(command.commands) } : {}),
+  };
 }
 
 let cachedNormalized: CommandSchema[] | null = null;
@@ -236,8 +247,8 @@ _${bin}_completions() {
     fi
 
     local directive
-    directive=$(echo "$output" | tail -n1 | tr -d ':')
-    output=$(echo "$output" | head -n-1)
+    directive=$(printf '%s\n' "$output" | tail -n1 | tr -d ':')
+    output=$(printf '%s\n' "$output" | sed '$d')
 
     local -a completions
     while IFS=$'\\t' read -r comp _desc; do
@@ -290,6 +301,7 @@ _${bin}() {
         if [[ "$comp" == "$desc" ]]; then
             candidates+=("$comp")
         else
+            desc="\${desc//:/\\:}"
             candidates+=("$comp:$desc")
         fi
     done
@@ -361,7 +373,7 @@ Register-ArgumentCompleter -Native -CommandName ${bin} -ScriptBlock {
         if ($line -match '^:(\\d+)$') {
             $directive = [int]$matches[1]
         } elseif ($line.Trim()) {
-            $parts = $line.Split("\\t", 2)
+            $parts = $line.Split("\`t", 2)
             $comp = $parts[0]
             $desc = if ($parts.Count -gt 1) { $parts[1] } else { '' }
             $completions += [System.Management.Automation.CompletionResult]::new(

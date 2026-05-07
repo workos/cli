@@ -1,7 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { generateCompletions, generateShellScript, SUPPORTED_SHELLS } from './completion.js';
+import { commandRegistry } from './help-json.js';
 
 describe('generateCompletions', () => {
+  it('does not mutate command registry during normalization', () => {
+    const skills = commandRegistry.find((c) => c.name === 'skills');
+    const originalCommands = skills?.commands;
+    generateCompletions(['auth', '']);
+    expect(skills?.commands).toBe(originalCommands);
+  });
+
   it('returns top-level commands for empty input', () => {
     const result = generateCompletions(['']);
     const names = result.completions.map((c) => c.name);
@@ -131,6 +139,23 @@ describe('generateShellScript', () => {
       expect(script).toContain('--get-yargs-completions');
     });
   }
+
+  it('uses portable bash output parsing', () => {
+    const script = generateShellScript('bash', 'workos');
+    expect(script).toContain("sed '$d'");
+    expect(script).not.toContain('head -n-1');
+  });
+
+  it('escapes zsh descriptions with colons', () => {
+    const script = generateShellScript('zsh', 'workos');
+    expect(script).toContain('desc="${desc//:/\\:}"');
+  });
+
+  it('splits PowerShell completions on tab characters', () => {
+    const script = generateShellScript('powershell', 'workos');
+    expect(script).toContain('$parts = $line.Split("`t", 2)');
+    expect(script).not.toContain('$line.Split("\\t", 2)');
+  });
 
   it('throws for unsupported shell', () => {
     expect(() => generateShellScript('cmd', 'workos')).toThrow('Unsupported shell');
