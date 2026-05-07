@@ -100,6 +100,14 @@ describe('generateCompletions', () => {
     expect(names).not.toContain('--install-dir');
   });
 
+  it('handles inline option values', () => {
+    const result = generateCompletions(['doctor', '--install-dir=/tmp/foo', '--verbose', '--']);
+    const names = result.completions.map((c) => c.name);
+    expect(names).not.toContain('--install-dir');
+    expect(names).not.toContain('--verbose');
+    expect(names).toContain('--fix');
+  });
+
   it('does not skip next word after boolean options', () => {
     const result = generateCompletions(['doctor', '--verbose', 'unknownword', '--']);
     const names = result.completions.map((c) => c.name);

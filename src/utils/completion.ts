@@ -141,13 +141,14 @@ function walkCommandTree(
 
     if (word.startsWith('-')) {
       const opt = findOption(current, globalOptions, word);
+      const hasInlineValue = word.includes('=');
       if (opt) {
         usedOptions.add(`--${opt.name}`);
         if (opt.alias) usedOptions.add(`-${opt.alias}`);
       } else {
         usedOptions.add(word);
       }
-      i += opt && optionTakesValue(opt) ? 2 : 1;
+      i += opt && optionTakesValue(opt) && !hasInlineValue ? 2 : 1;
       continue;
     }
 
@@ -194,7 +195,7 @@ function findOption(
   globalOptions: OptionSchema[],
   flag: string,
 ): OptionSchema | undefined {
-  const name = flag.replace(/^--?/, '');
+  const name = flag.replace(/^--?/, '').split('=')[0] ?? '';
   const opts = [...(command?.options ?? []), ...globalOptions];
   return opts.find((o) => o.name === name || o.alias === name);
 }
