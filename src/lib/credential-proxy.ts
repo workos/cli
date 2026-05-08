@@ -68,11 +68,15 @@ function filterHeaders(headers: Record<string, string | string[] | undefined>): 
 }
 
 /** Build the upstream path, stripping the `beta` query param (unsupported by WorkOS LLM gateway) */
-function buildUpstreamPath(reqUrl: string | undefined, upstream: URL): string {
+function buildUpstreamPath(reqUrl: string | undefined, upstream: URL): string | null {
   const requestPath = reqUrl || '/';
   const basePath = upstream.pathname.replace(/\/$/, '');
   const fullPath = basePath + requestPath;
   const upstreamUrl = new URL(fullPath, upstream.origin);
+  // Guard against path traversal: after normalization the path must still start with basePath
+  if (basePath && !upstreamUrl.pathname.startsWith(basePath)) {
+    return null;
+  }
   const searchParams = new URLSearchParams(upstreamUrl.search);
   searchParams.delete('beta');
   const queryString = searchParams.toString();
@@ -304,6 +308,11 @@ async function handleRequest(
   headers['authorization'] = `Bearer ${creds.accessToken}`;
   headers['host'] = upstream.host;
   const finalPath = buildUpstreamPath(req.url, upstream);
+  if (finalPath === null) {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'invalid_path', message: 'Invalid request path' }));
+    return;
+  }
 
   const requestOptions: http.RequestOptions = {
     hostname: upstream.hostname,
@@ -388,6 +397,13 @@ export async function startClaimTokenProxy(options: {
     headers['x-workos-client-id'] = options.clientId;
     headers['host'] = upstream.host;
     const finalPath = buildUpstreamPath(req.url, upstream);
+    if (finalPath === null) {
+      if (!res.headersSent) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'invalid_path', message: 'Invalid request path' }));
+      }
+      return;
+    }
 
     const transport = useHttps ? https : http;
 

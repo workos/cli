@@ -53,6 +53,12 @@ export async function createEmulator(options: EmulatorOptions = {}): Promise<Emu
 
   const httpServer = serve({ fetch: app.fetch, port, hostname: '127.0.0.1' });
 
+  // Wait for the server to be listening before reading the bound address
+  await new Promise<void>((resolve) => {
+    if (httpServer.listening) return resolve();
+    httpServer.once('listening', resolve);
+  });
+
   // Resolve actual port (important for port: 0)
   const addr = httpServer.address();
   const actualPort = typeof addr === 'object' && addr ? addr.port : port;
