@@ -8,6 +8,8 @@ import type {
 
 const WORKOS_API_URL = 'https://api.workos.com';
 
+const ALLOWED_API_HOST_RE = /^(api\.workos\.com|api\.workos\.dev|api\.workos-staging\.com|localhost|127\.0\.0\.1)(:\d+)?$/;
+
 export async function checkDashboardSettings(
   options: DoctorOptions,
   apiKeyType: 'staging' | 'production' | null,
@@ -36,6 +38,17 @@ export async function checkDashboardSettings(
 }
 
 async function fetchDashboardSettings(apiKey: string, baseUrlOverride: string | null): Promise<DashboardFetchResult> {
+  if (baseUrlOverride) {
+    let host: string;
+    try {
+      host = new URL(baseUrlOverride).host;
+    } catch {
+      throw new Error('Invalid base URL');
+    }
+    if (!ALLOWED_API_HOST_RE.test(host)) {
+      throw new Error(`Blocked: base URL host '${host}' is not an allowed WorkOS API host`);
+    }
+  }
   const baseUrl = baseUrlOverride ?? WORKOS_API_URL;
 
   const controller = new AbortController();
