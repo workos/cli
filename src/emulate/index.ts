@@ -51,7 +51,7 @@ export async function createEmulator(options: EmulatorOptions = {}): Promise<Emu
   };
   seedFn();
 
-  const httpServer = serve({ fetch: app.fetch, port });
+  const httpServer = serve({ fetch: app.fetch, port, hostname: '127.0.0.1' });
 
   // Resolve actual port (important for port: 0)
   const addr = httpServer.address();
