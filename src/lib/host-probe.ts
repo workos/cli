@@ -56,7 +56,6 @@ async function probeHomeFs(): Promise<ProbeFailure | null> {
   try {
     await fs.mkdir(dir, { recursive: true, mode: 0o700 });
     await fs.writeFile(probePath, new Date().toISOString(), { mode: 0o600 });
-    await fs.unlink(probePath);
     return null;
   } catch (error) {
     // Only treat permission-class errors as sandbox indicators. Transient
@@ -65,6 +64,12 @@ async function probeHomeFs(): Promise<ProbeFailure | null> {
     if (!isPermissionError(error)) return null;
     const detail = error instanceof Error ? error.message : String(error);
     return { capability: 'home-fs', detail };
+  } finally {
+    // Best-effort cleanup so a successful write never leaves an orphan file
+    // behind. Ignore unlink failures: if the file was never created the
+    // unlink will fail with ENOENT, and any other failure is unrelated to
+    // the probe's purpose (which is checking write access, not delete).
+    await fs.unlink(probePath).catch(() => {});
   }
 }
 

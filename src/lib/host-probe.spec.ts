@@ -90,6 +90,19 @@ describe('host-probe', () => {
       expect(result.failures).toHaveLength(0);
     });
 
+    it('reports success even when unlink cleanup fails', async () => {
+      vi.mocked(fs.unlink).mockRejectedValue(new Error('EACCES: permission denied'));
+
+      const result = await runHostProbe();
+      expect(result.ok).toBe(true);
+      expect(result.failures).toHaveLength(0);
+    });
+
+    it('always attempts to unlink the probe file after a successful write', async () => {
+      await runHostProbe();
+      expect(vi.mocked(fs.unlink)).toHaveBeenCalledTimes(1);
+    });
+
     it('detects keychain failure on permission error', async () => {
       keyringMock.getPassword.mockImplementation(() => {
         throw new Error('EACCES: keychain unavailable');
