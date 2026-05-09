@@ -51,6 +51,25 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
   );
   console.log(`   Base URL:         ${report.environment.baseUrl} ${Chalk.green('✓')}`);
 
+  // Host Execution
+  console.log('');
+  console.log('Host Execution');
+  if (report.hostExecution.mode === 'interactive') {
+    console.log(`   Shell:            ${Chalk.green('✓')} Interactive host shell`);
+  } else if (report.hostExecution.ok) {
+    console.log(`   Shell:            ${Chalk.green('✓')} Non-interactive, host state reachable`);
+  } else {
+    console.log(`   Shell:            ${Chalk.yellow('!')} Non-interactive, host state may be unavailable`);
+    for (const failure of report.hostExecution.failures) {
+      const label = failure.label ?? failure.capability;
+      const target = failure.target ? ` (${failure.target})` : '';
+      console.log(`   ${Chalk.yellow('!')} ${label}${target}`);
+      if (options?.verbose) {
+        console.log(`     ${Chalk.dim(failure.detail)}`);
+      }
+    }
+  }
+
   // Connectivity & Credential Validation
   console.log('');
   console.log('Connectivity');

@@ -10,6 +10,7 @@ import open from 'opn';
 import clack from '../utils/clack.js';
 import { getActiveEnvironment, isUnclaimedEnvironment, markEnvironmentClaimed } from '../lib/config-store.js';
 import { createClaimNonce, UnclaimedEnvApiError } from '../lib/unclaimed-env-api.js';
+import { observeHostFailure } from '../lib/host-probe.js';
 import { logInfo, logError } from '../utils/debug.js';
 import { isJsonMode, outputJson, exitWithError } from '../utils/output.js';
 import { sleep } from '../lib/helper-functions.js';
@@ -67,6 +68,11 @@ export async function runClaim(): Promise<void> {
       open(claimUrl, { wait: false });
       clack.log.info('Browser opened automatically');
     } catch (openError) {
+      observeHostFailure('browser-launch', openError, {
+        operation: 'open',
+        target: claimUrl,
+        label: 'environment claim browser',
+      });
       logError('[claim] Failed to open browser:', openError instanceof Error ? openError.message : String(openError));
       clack.log.info('Could not open browser — open the URL above manually.');
     }

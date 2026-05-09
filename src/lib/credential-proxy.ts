@@ -11,6 +11,7 @@ import { getCredentials, updateTokens, type Credentials } from './credentials.js
 import { analytics } from '../utils/analytics.js';
 import { refreshAccessToken } from './token-refresh-client.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
+import { observeHostFailure } from './host-probe.js';
 
 export interface RefreshConfig {
   /** AuthKit domain for refresh endpoint */
@@ -228,6 +229,11 @@ export async function startCredentialProxy(options: CredentialProxyOptions): Pro
           attempts++;
           tryListen(0); // Try random port
         } else {
+          observeHostFailure('localhost-bind', err, {
+            operation: 'listen',
+            target: `127.0.0.1:${p}`,
+            label: 'credential proxy',
+          });
           reject(err);
         }
       });
@@ -420,7 +426,14 @@ export async function startClaimTokenProxy(options: {
   });
 
   const port = await new Promise<number>((resolve, reject) => {
-    server.once('error', (err) => reject(err));
+    server.once('error', (err) => {
+      observeHostFailure('localhost-bind', err, {
+        operation: 'listen',
+        target: '127.0.0.1:0',
+        label: 'claim token proxy',
+      });
+      reject(err);
+    });
     server.listen(0, '127.0.0.1', () => {
       const addr = server.address();
       if (addr && typeof addr === 'object') resolve(addr.port);

@@ -12,11 +12,18 @@ import path from 'node:path';
 import os from 'node:os';
 import { Entry } from '@napi-rs/keyring';
 import { isNonInteractiveEnvironment } from '../utils/environment.js';
-import { logWarn, logInfo } from '../utils/debug.js';
+import { logInfo, logVisibleWarn } from '../utils/debug.js';
 
-export type HostCapability = 'home-fs' | 'keychain' | 'network' | 'browser-launch';
+export type HostCapability = 'home-fs' | 'keychain' | 'network' | 'browser-launch' | 'localhost-bind';
+export type HostOperation = 'read' | 'write' | 'delete' | 'connect' | 'open' | 'listen';
 
-export interface ProbeFailure {
+export interface HostCapabilityDetails {
+  operation?: HostOperation;
+  target?: string;
+  label?: string;
+}
+
+export interface ProbeFailure extends HostCapabilityDetails {
   capability: HostCapability;
   detail: string;
 }
@@ -28,6 +35,9 @@ export interface ProbeResult {
 
 let warnedThisSession = false;
 let cachedProbe: ProbeResult | undefined;
+
+const KEYCHAIN_SERVICE = 'workos-cli';
+const KEYCHAIN_PROBE_ACCOUNT = 'probe';
 
 const PERMISSION_PATTERNS = [
   /\bEPERM\b/i,
@@ -42,6 +52,14 @@ const PERMISSION_PATTERNS = [
 function isPermissionError(error: unknown): boolean {
   const msg = error instanceof Error ? error.message : String(error);
   return PERMISSION_PATTERNS.some((p) => p.test(msg));
+}
+
+function isLikelyHostFailure(capability: HostCapability, error: unknown): boolean {
+  if (capability === 'browser-launch' || capability === 'localhost-bind') {
+    return true;
+  }
+
+  return isPermissionError(error);
 }
 
 function isMissingEntryError(error: unknown): boolean {
@@ -63,7 +81,7 @@ async function probeHomeFs(): Promise<ProbeFailure | null> {
     // environment" warning. Mirrors the gating in observeHostFailure().
     if (!isPermissionError(error)) return null;
     const detail = error instanceof Error ? error.message : String(error);
-    return { capability: 'home-fs', detail };
+    return { capability: 'home-fs', detail, operation: 'write', target: dir, label: 'WorkOS home directory' };
   } finally {
     // Best-effort cleanup so a successful write never leaves an orphan file
     // behind. Ignore unlink failures: if the file was never created the
@@ -75,7 +93,7 @@ async function probeHomeFs(): Promise<ProbeFailure | null> {
 
 function probeKeychain(): ProbeFailure | null {
   try {
-    const entry = new Entry('workos-cli', 'probe');
+    const entry = new Entry(KEYCHAIN_SERVICE, KEYCHAIN_PROBE_ACCOUNT);
     entry.getPassword();
     return null;
   } catch (error) {
@@ -90,8 +108,26 @@ function probeKeychain(): ProbeFailure | null {
     // observeHostFailure().
     if (!isPermissionError(error)) return null;
     const detail = error instanceof Error ? error.message : String(error);
-    return { capability: 'keychain', detail };
+    return {
+      capability: 'keychain',
+      detail,
+      operation: 'read',
+      target: `${KEYCHAIN_SERVICE}/${KEYCHAIN_PROBE_ACCOUNT}`,
+      label: 'WorkOS keychain probe',
+    };
   }
+}
+
+export function formatHostProbeFailure(failure: ProbeFailure): string {
+  const parts = [failure.label ?? failure.capability];
+  if (failure.operation) parts.push(`operation=${failure.operation}`);
+  if (failure.target) parts.push(`target=${failure.target}`);
+  parts.push(`error=${failure.detail}`);
+  return parts.join(', ');
+}
+
+function formatHostFailureContext(capability: HostCapability, details: HostCapabilityDetails, detail: string): string {
+  return formatHostProbeFailure({ capability, ...details, detail });
 }
 
 export async function runHostProbe(): Promise<ProbeResult> {
@@ -119,28 +155,33 @@ export async function warnIfSandboxed(): Promise<void> {
   warnedThisSession = true;
 
   const caps = probe.failures.map((f) => f.capability).join(', ');
-  logWarn(
+  logVisibleWarn(
     `Host capabilities may be unavailable (${caps}). This may be a sandboxed environment.`,
     'Re-run this command on the host shell before trusting auth or API failures.',
   );
 
   for (const f of probe.failures) {
-    logInfo(`[host-probe] ${f.capability}: ${f.detail}`);
+    logInfo(`[host-probe] ${formatHostProbeFailure(f)}`);
   }
 }
 
-export function observeHostFailure(capability: HostCapability, error: unknown): void {
+export function observeHostFailure(
+  capability: HostCapability,
+  error: unknown,
+  details: HostCapabilityDetails = {},
+): void {
   if (warnedThisSession) return;
   if (!isNonInteractiveEnvironment()) return;
-  if (!isPermissionError(error)) return;
+  if (!isLikelyHostFailure(capability, error)) return;
 
   warnedThisSession = true;
 
   const detail = error instanceof Error ? error.message : String(error);
-  logWarn(
+  logVisibleWarn(
     `Host capability "${capability}" failed (${detail}). This may be a sandboxed environment.`,
     'Re-run this command on the host shell before trusting auth or API failures.',
   );
+  logInfo(`[host-probe] ${formatHostFailureContext(capability, details, detail)}`);
 }
 
 export function _resetProbeState(): void {

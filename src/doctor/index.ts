@@ -4,6 +4,7 @@ import { checkRuntime } from './checks/runtime.js';
 import { checkLanguage } from './checks/language.js';
 import { checkEnvironment } from './checks/environment.js';
 import { checkConnectivity } from './checks/connectivity.js';
+import { checkHostExecution } from './checks/host-execution.js';
 import { checkDashboardSettings, compareRedirectUris } from './checks/dashboard.js';
 import { checkAuthPatterns } from './checks/auth-patterns.js';
 import { checkAiAnalysis } from './checks/ai-analysis.js';
@@ -70,12 +71,13 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
   const { info: environment, raw: envRaw } = checkEnvironment(options);
 
   // Run remaining checks concurrently
-  const [sdk, framework, runtime, connectivity, language] = await Promise.all([
+  const [sdk, framework, runtime, connectivity, language, hostExecution] = await Promise.all([
     checkSdk(options),
     checkFramework(options),
     checkRuntime(options),
     checkConnectivity(options, environment.baseUrl ?? 'https://api.workos.com'),
     checkLanguage(options.installDir),
+    checkHostExecution(),
   ]);
 
   let skills = (await checkSkills()) ?? undefined;
@@ -99,6 +101,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     runtime,
     framework,
     environment,
+    hostExecution,
     connectivity,
     skills,
   });
@@ -138,6 +141,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     runtime,
     framework,
     environment,
+    hostExecution,
     connectivity,
     credentialValidation: dashboardResult.credentialValidation,
     dashboardSettings: dashboardResult.settings ?? undefined,

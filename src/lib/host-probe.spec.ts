@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 vi.mock('../utils/debug.js', () => ({
   logWarn: vi.fn(),
+  logVisibleWarn: vi.fn(),
   logInfo: vi.fn(),
 }));
 
@@ -39,7 +40,7 @@ vi.mock('@napi-rs/keyring', () => ({
 }));
 
 import { _resetProbeState, runHostProbe, warnIfSandboxed, observeHostFailure } from './host-probe.js';
-import { logWarn } from '../utils/debug.js';
+import { logInfo, logVisibleWarn } from '../utils/debug.js';
 import { isNonInteractiveEnvironment } from '../utils/environment.js';
 import { promises as fs } from 'node:fs';
 
@@ -138,7 +139,7 @@ describe('host-probe', () => {
       });
 
       await warnIfSandboxed();
-      expect(logWarn).toHaveBeenCalledWith(
+      expect(logVisibleWarn).toHaveBeenCalledWith(
         expect.stringContaining('unavailable'),
         expect.stringContaining('host shell'),
       );
@@ -151,7 +152,7 @@ describe('host-probe', () => {
       });
 
       await warnIfSandboxed();
-      expect(logWarn).not.toHaveBeenCalled();
+      expect(logVisibleWarn).not.toHaveBeenCalled();
     });
 
     it('warns at most once per session', async () => {
@@ -161,9 +162,9 @@ describe('host-probe', () => {
       });
 
       await warnIfSandboxed();
-      const callCount = vi.mocked(logWarn).mock.calls.length;
+      const callCount = vi.mocked(logVisibleWarn).mock.calls.length;
       await warnIfSandboxed();
-      expect(vi.mocked(logWarn).mock.calls.length).toBe(callCount);
+      expect(vi.mocked(logVisibleWarn).mock.calls.length).toBe(callCount);
     });
 
     it('does not warn on a healthy host (no false positive when probe entry is absent)', async () => {
@@ -173,35 +174,58 @@ describe('host-probe', () => {
       });
 
       await warnIfSandboxed();
-      expect(logWarn).not.toHaveBeenCalled();
+      expect(logVisibleWarn).not.toHaveBeenCalled();
     });
   });
 
   describe('observeHostFailure', () => {
     it('warns on permission errors in non-interactive mode', () => {
       vi.mocked(isNonInteractiveEnvironment).mockReturnValue(true);
-      observeHostFailure('keychain', new Error('EPERM: operation not permitted'));
-      expect(logWarn).toHaveBeenCalledWith(expect.stringContaining('keychain'), expect.stringContaining('host shell'));
+      observeHostFailure('keychain', new Error('EPERM: operation not permitted'), {
+        operation: 'read',
+        target: 'workos-cli/credentials',
+        label: 'credential keychain entry',
+      });
+      expect(logVisibleWarn).toHaveBeenCalledWith(
+        expect.stringContaining('keychain'),
+        expect.stringContaining('host shell'),
+      );
+      expect(logInfo).toHaveBeenCalledWith(expect.stringContaining('credential keychain entry'));
+      expect(logInfo).toHaveBeenCalledWith(expect.stringContaining('operation=read'));
+      expect(logInfo).toHaveBeenCalledWith(expect.stringContaining('target=workos-cli/credentials'));
+    });
+
+    it('warns on browser launch errors in non-interactive mode', () => {
+      vi.mocked(isNonInteractiveEnvironment).mockReturnValue(true);
+      observeHostFailure('browser-launch', new Error('No browser available'), {
+        operation: 'open',
+        target: 'https://example.com',
+        label: 'auth login browser',
+      });
+      expect(logVisibleWarn).toHaveBeenCalledWith(
+        expect.stringContaining('browser-launch'),
+        expect.stringContaining('host shell'),
+      );
     });
 
     it('ignores non-permission errors', () => {
       vi.mocked(isNonInteractiveEnvironment).mockReturnValue(true);
       observeHostFailure('keychain', new Error('JSON parse error'));
-      expect(logWarn).not.toHaveBeenCalled();
+      expect(logVisibleWarn).not.toHaveBeenCalled();
     });
 
     it('does not match unrelated words containing "sandbox" as a substring', () => {
       vi.mocked(isNonInteractiveEnvironment).mockReturnValue(true);
       observeHostFailure('keychain', new Error('failed to update sandboxes table: schema mismatch'));
-      expect(logWarn).not.toHaveBeenCalled();
+      expect(logVisibleWarn).not.toHaveBeenCalled();
     });
 
     it('does not warn twice even for different capabilities', () => {
       vi.mocked(isNonInteractiveEnvironment).mockReturnValue(true);
       observeHostFailure('keychain', new Error('EPERM'));
-      const callCount = vi.mocked(logWarn).mock.calls.length;
+      const callCount = vi.mocked(logVisibleWarn).mock.calls.length;
       observeHostFailure('home-fs', new Error('EACCES'));
-      expect(vi.mocked(logWarn).mock.calls.length).toBe(callCount);
+      expect(vi.mocked(logVisibleWarn).mock.calls.length).toBe(callCount);
     });
 
     it('does not double-warn across proactive and reactive paths', async () => {
@@ -211,9 +235,9 @@ describe('host-probe', () => {
       });
 
       await warnIfSandboxed();
-      const callCount = vi.mocked(logWarn).mock.calls.length;
+      const callCount = vi.mocked(logVisibleWarn).mock.calls.length;
       observeHostFailure('keychain', new Error('EPERM'));
-      expect(vi.mocked(logWarn).mock.calls.length).toBe(callCount);
+      expect(vi.mocked(logVisibleWarn).mock.calls.length).toBe(callCount);
     });
   });
 });

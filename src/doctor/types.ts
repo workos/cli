@@ -67,6 +67,21 @@ export interface ConnectivityInfo {
   error?: string;
 }
 
+export interface HostExecutionFailure {
+  capability: string;
+  detail: string;
+  operation?: string;
+  target?: string;
+  label?: string;
+}
+
+export interface HostExecutionInfo {
+  mode: 'interactive' | 'non-interactive';
+  ok: boolean;
+  failures: HostExecutionFailure[];
+  warning?: string;
+}
+
 export interface DashboardSettings {
   redirectUris: string[];
   authMethods: string[];
@@ -145,6 +160,7 @@ export interface DoctorReport {
   runtime: RuntimeInfo;
   framework: FrameworkInfo;
   environment: EnvironmentInfo;
+  hostExecution: HostExecutionInfo;
   connectivity: ConnectivityInfo;
   dashboardSettings?: DashboardSettings;
   dashboardError?: string;

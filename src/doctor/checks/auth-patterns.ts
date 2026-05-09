@@ -481,6 +481,14 @@ function checkMissingApiHostname(ctx: CheckContext): AuthPatternFinding[] {
 // --- Cross-language checks (run for ALL projects, not just JS/AuthKit) ---
 
 const SOURCE_EXTENSIONS = /\.(ts|tsx|js|jsx|py|rb|go|java|kt|php|cs|swift|dart)$/;
+const SECRET_SOURCE_IGNORED_SEGMENTS = new Set(['__fixtures__', '__tests__', 'evals', 'fixtures', 'test', 'tests']);
+
+function isIgnoredSecretSourcePath(relativePath: string): boolean {
+  const normalized = relativePath.replace(/\\/g, '/');
+  const parts = normalized.split('/');
+  if (parts.some((part) => SECRET_SOURCE_IGNORED_SEGMENTS.has(part))) return true;
+  return /\.(spec|test)\.[^.]+$/.test(normalized);
+}
 
 function checkApiKeyInSource(ctx: CheckContext): AuthPatternFinding[] {
   const API_KEY_PATTERN = /sk_(test|live)_[A-Za-z0-9]{10,}/;
@@ -488,6 +496,8 @@ function checkApiKeyInSource(ctx: CheckContext): AuthPatternFinding[] {
   const findings: AuthPatternFinding[] = [];
 
   for (const file of sourceFiles) {
+    const relativePath = relative(ctx.installDir, file);
+    if (isIgnoredSecretSourcePath(relativePath)) continue;
     const content = readFileSafe(file);
     if (!content) continue;
     if (API_KEY_PATTERN.test(content)) {
@@ -495,7 +505,7 @@ function checkApiKeyInSource(ctx: CheckContext): AuthPatternFinding[] {
         code: 'API_KEY_IN_SOURCE',
         severity: 'error',
         message: `WorkOS API key hardcoded in source file`,
-        filePath: relative(ctx.installDir, file),
+        filePath: relativePath,
         remediation:
           'Move the API key to an environment variable (WORKOS_API_KEY) and load it from .env or your secret manager.',
       });

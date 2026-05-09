@@ -73,10 +73,16 @@ function fileExists(): boolean {
 
 function readFromFile(): CliConfig | null {
   if (!fileExists()) return null;
+  const filePath = getConfigFilePath();
   try {
-    const content = fs.readFileSync(getConfigFilePath(), 'utf-8');
+    const content = fs.readFileSync(filePath, 'utf-8');
     return JSON.parse(content);
   } catch (error) {
+    observeHostFailure('home-fs', error, {
+      operation: 'read',
+      target: filePath,
+      label: 'config fallback file',
+    });
     logWarn('Failed to read config file:', error);
     return null;
   }
@@ -84,17 +90,37 @@ function readFromFile(): CliConfig | null {
 
 function writeToFile(config: CliConfig): void {
   const dir = getConfigDir();
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const filePath = getConfigFilePath();
+  try {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    }
+    fs.writeFileSync(filePath, JSON.stringify(config, null, 2), {
+      mode: 0o600,
+    });
+  } catch (error) {
+    observeHostFailure('home-fs', error, {
+      operation: 'write',
+      target: filePath,
+      label: 'config fallback file',
+    });
+    throw error;
   }
-  fs.writeFileSync(getConfigFilePath(), JSON.stringify(config, null, 2), {
-    mode: 0o600,
-  });
 }
 
 function deleteFile(): void {
+  const filePath = getConfigFilePath();
   if (fileExists()) {
-    fs.unlinkSync(getConfigFilePath());
+    try {
+      fs.unlinkSync(filePath);
+    } catch (error) {
+      observeHostFailure('home-fs', error, {
+        operation: 'delete',
+        target: filePath,
+        label: 'config fallback file',
+      });
+      throw error;
+    }
   }
 }
 
@@ -110,7 +136,11 @@ function readFromKeyring(): CliConfig | null {
     return JSON.parse(data);
   } catch (error) {
     logWarn('Failed to read config from keyring:', error);
-    observeHostFailure('keychain', error);
+    observeHostFailure('keychain', error, {
+      operation: 'read',
+      target: `${SERVICE_NAME}/${ACCOUNT_NAME}`,
+      label: 'config keychain entry',
+    });
     return null;
   }
 }
@@ -122,7 +152,11 @@ function writeToKeyring(config: CliConfig): boolean {
     return true;
   } catch (error) {
     logWarn('Failed to write config to keyring:', error);
-    observeHostFailure('keychain', error);
+    observeHostFailure('keychain', error, {
+      operation: 'write',
+      target: `${SERVICE_NAME}/${ACCOUNT_NAME}`,
+      label: 'config keychain entry',
+    });
     return false;
   }
 }
@@ -135,6 +169,11 @@ function deleteFromKeyring(): void {
     const msg = error instanceof Error ? error.message : String(error);
     if (!msg.includes('not found') && !msg.includes('No such')) {
       logWarn('Failed to delete config from keyring:', error);
+      observeHostFailure('keychain', error, {
+        operation: 'delete',
+        target: `${SERVICE_NAME}/${ACCOUNT_NAME}`,
+        label: 'config keychain entry',
+      });
     }
   }
 }

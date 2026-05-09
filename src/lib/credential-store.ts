@@ -54,10 +54,16 @@ function fileExists(): boolean {
 
 function readFromFile(): Credentials | null {
   if (!fileExists()) return null;
+  const filePath = getCredentialsPath();
   try {
-    const content = fs.readFileSync(getCredentialsPath(), 'utf-8');
+    const content = fs.readFileSync(filePath, 'utf-8');
     return JSON.parse(content);
   } catch (error) {
+    observeHostFailure('home-fs', error, {
+      operation: 'read',
+      target: filePath,
+      label: 'credential fallback file',
+    });
     logWarn('Failed to read credentials file:', error);
     return null;
   }
@@ -65,17 +71,37 @@ function readFromFile(): Credentials | null {
 
 function writeToFile(creds: Credentials): void {
   const dir = getCredentialsDir();
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const filePath = getCredentialsPath();
+  try {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    }
+    fs.writeFileSync(filePath, JSON.stringify(creds, null, 2), {
+      mode: 0o600,
+    });
+  } catch (error) {
+    observeHostFailure('home-fs', error, {
+      operation: 'write',
+      target: filePath,
+      label: 'credential fallback file',
+    });
+    throw error;
   }
-  fs.writeFileSync(getCredentialsPath(), JSON.stringify(creds, null, 2), {
-    mode: 0o600,
-  });
 }
 
 function deleteFile(): void {
+  const filePath = getCredentialsPath();
   if (fileExists()) {
-    fs.unlinkSync(getCredentialsPath());
+    try {
+      fs.unlinkSync(filePath);
+    } catch (error) {
+      observeHostFailure('home-fs', error, {
+        operation: 'delete',
+        target: filePath,
+        label: 'credential fallback file',
+      });
+      throw error;
+    }
   }
 }
 
@@ -95,7 +121,11 @@ function readFromKeyring(): Credentials | null {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logWarn(`[credential-store] keyring read failed: ${msg}`);
-    observeHostFailure('keychain', error);
+    observeHostFailure('keychain', error, {
+      operation: 'read',
+      target: `${SERVICE_NAME}/${ACCOUNT_NAME}`,
+      label: 'credential keychain entry',
+    });
     return null;
   }
 }
@@ -108,7 +138,11 @@ function writeToKeyring(creds: Credentials): boolean {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logWarn(`[credential-store] keyring write failed: ${msg}`);
-    observeHostFailure('keychain', error);
+    observeHostFailure('keychain', error, {
+      operation: 'write',
+      target: `${SERVICE_NAME}/${ACCOUNT_NAME}`,
+      label: 'credential keychain entry',
+    });
     return false;
   }
 }
@@ -121,6 +155,11 @@ function deleteFromKeyring(): void {
     const msg = error instanceof Error ? error.message : String(error);
     if (!msg.includes('not found') && !msg.includes('No such')) {
       logWarn('Failed to delete from keyring:', error);
+      observeHostFailure('keychain', error, {
+        operation: 'delete',
+        target: `${SERVICE_NAME}/${ACCOUNT_NAME}`,
+        label: 'credential keychain entry',
+      });
     }
   }
 }

@@ -58,6 +58,11 @@ export const ISSUE_DEFINITIONS = {
     remediation: 'Ensure WORKOS_CLIENT_ID matches the environment for your API key',
     docsUrl: 'https://dashboard.workos.com/configuration',
   },
+  HOST_EXECUTION_UNTRUSTED: {
+    severity: 'warning' as const,
+    message: 'Host-only WorkOS state may be unavailable in this shell',
+    remediation: 'Re-run this command on the host shell before trusting auth, config, or API failures',
+  },
 };
 
 export function detectIssues(report: Omit<DoctorReport, 'issues' | 'summary'>): Issue[] {
@@ -95,6 +100,14 @@ export function detectIssues(report: Omit<DoctorReport, 'issues' | 'summary'>): 
 
   if (report.sdk.isAuthKit && !report.environment.cookieDomain) {
     issues.push({ code: 'COOKIE_DOMAIN_NOT_SET', ...ISSUE_DEFINITIONS.COOKIE_DOMAIN_NOT_SET });
+  }
+
+  if (!report.hostExecution.ok) {
+    issues.push({
+      code: 'HOST_EXECUTION_UNTRUSTED',
+      ...ISSUE_DEFINITIONS.HOST_EXECUTION_UNTRUSTED,
+      details: { failures: report.hostExecution.failures },
+    });
   }
 
   // Connectivity issues

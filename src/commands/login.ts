@@ -12,6 +12,7 @@ import { formatWorkOSCommand } from '../utils/command-invocation.js';
 import { autoInstallSkills } from './install-skill.js';
 import { isJsonMode } from '../utils/output.js';
 import { requestDeviceCode, pollForToken, DeviceAuthTimeoutError } from '../lib/device-auth.js';
+import { observeHostFailure } from '../lib/host-probe.js';
 
 /**
  * Best-effort skill install after a successful auth-login.
@@ -130,7 +131,12 @@ export async function runLogin(): Promise<void> {
   try {
     open(deviceAuth.verification_uri_complete);
     clack.log.info('Browser opened automatically');
-  } catch {
+  } catch (error) {
+    observeHostFailure('browser-launch', error, {
+      operation: 'open',
+      target: deviceAuth.verification_uri_complete,
+      label: 'auth login browser',
+    });
     // User can open manually
   }
 

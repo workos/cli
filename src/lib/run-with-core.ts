@@ -51,6 +51,7 @@ import { autoConfigureWorkOSEnvironment } from './workos-management.js';
 import { detectPort, getCallbackPath } from './port-detection.js';
 import { writeEnvLocal } from './env-writer.js';
 import { getRegistry } from './registry.js';
+import { observeHostFailure } from './host-probe.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 async function runIntegrationInstallerFn(integration: Integration, options: InstallerOptions): Promise<string> {
@@ -371,7 +372,12 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         try {
           const { default: openFn } = await import('opn');
           await openFn(deviceAuth.verification_uri_complete);
-        } catch {
+        } catch (error) {
+          observeHostFailure('browser-launch', error, {
+            operation: 'open',
+            target: deviceAuth.verification_uri_complete,
+            label: 'installer device auth browser',
+          });
           // User can open manually
         }
 
@@ -493,7 +499,13 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         inspectUrl = msg;
         console.log = originalLog;
         console.log(`Opening XState inspector: ${inspectUrl}`);
-        void open(inspectUrl);
+        void open(inspectUrl).catch((error: unknown) => {
+          observeHostFailure('browser-launch', error, {
+            operation: 'open',
+            target: inspectUrl,
+            label: 'XState inspector browser',
+          });
+        });
       } else {
         originalLog.apply(console, args);
       }

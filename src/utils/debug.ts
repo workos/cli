@@ -61,7 +61,7 @@ export function getLogFilePath(): string | null {
   return sessionLogPath;
 }
 
-function writeLog(level: 'INFO' | 'WARN' | 'ERROR', emoji: string, args: unknown[]): void {
+function writeLog(level: 'INFO' | 'WARN' | 'ERROR', emoji: string, args: unknown[]): string {
   const redactedArgs = args.map((a) => (typeof a === 'object' && a !== null ? redactCredentials(a) : a));
   const msg = redactedArgs.map((a) => prepareMessage(a)).join(' ');
 
@@ -80,6 +80,8 @@ function writeLog(level: 'INFO' | 'WARN' | 'ERROR', emoji: string, args: unknown
       // Ignore write failures
     }
   }
+
+  return msg;
 }
 
 export function logInfo(...args: unknown[]): void {
@@ -88,6 +90,13 @@ export function logInfo(...args: unknown[]): void {
 
 export function logWarn(...args: unknown[]): void {
   writeLog('WARN', '⚠️ ', args);
+}
+
+export function logVisibleWarn(...args: unknown[]): void {
+  const msg = writeLog('WARN', '⚠️ ', args);
+  if (!debugEnabled) {
+    console.error(chalk.yellow(`⚠️  ${msg}`));
+  }
 }
 
 export function logError(...args: unknown[]): void {

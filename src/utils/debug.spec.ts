@@ -88,6 +88,29 @@ describe('debug logging', () => {
     expect(content).toContain('❌ ERROR: test error');
   });
 
+  it('writes visible warnings to stderr before log initialization', async () => {
+    vi.resetModules();
+    vi.doMock('os', async () => {
+      const actual = await vi.importActual('os');
+      return { ...actual, homedir: () => testDir };
+    });
+    vi.doMock('./clack.js', () => ({
+      default: { log: { info: vi.fn() } },
+    }));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const { getLogFilePath, logVisibleWarn } = await import('./debug.js');
+
+      logVisibleWarn('sandbox warning', 'host shell');
+
+      expect(getLogFilePath()).toBeNull();
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('sandbox warning host shell'));
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
   it('getLogFilePath returns null before init', async () => {
     vi.resetModules();
     vi.doMock('os', async () => {
