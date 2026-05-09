@@ -4,7 +4,9 @@ import { loadCatalog, endpointsByTag } from './catalog.js';
 import { apiRequest } from './request.js';
 import { resolveApiBaseUrl } from '../../lib/api-key.js';
 import { exitWithError, isJsonMode, outputJson } from '../../utils/output.js';
-import { isNonInteractiveEnvironment } from '../../utils/environment.js';
+import { isCiMode, isPromptAllowed } from '../../utils/interaction-mode.js';
+import { confirmationRecovery } from '../../utils/recovery-hints.js';
+import { formatWorkOSCommand } from '../../utils/command-invocation.js';
 import { colorMethod, printResponse } from './format.js';
 
 export { colorMethod } from './format.js';
@@ -35,17 +37,12 @@ export async function runApiInteractive(options?: { apiKey?: string }): Promise<
     });
   }
 
-  if (isNonInteractiveEnvironment()) {
-    console.log(
-      'Interactive mode requires a TTY.\n\n' +
-        'Usage:\n' +
-        '  workos api <endpoint>        Make an API request\n' +
-        '  workos api ls [filter]       List available endpoints\n' +
-        '\nExample:\n' +
-        '  workos api /user_management/users\n' +
-        '  workos api ls users',
-    );
-    return;
+  if (!isPromptAllowed()) {
+    exitWithError({
+      code: 'tty_required',
+      message:
+        'Interactive API mode requires human mode. Usage: workos api <endpoint> or workos api ls [filter]. Example: workos api /user_management/users',
+    });
   }
 
   const { apiInteractive } = await import('./interactive.js');
@@ -126,15 +123,22 @@ export async function runApiRequest(endpoint: string, options: ApiCommandOptions
   }
 
   if (MUTATING_METHODS.has(method) && !options.yes) {
+    const confirmCommand = formatWorkOSCommand(`api ${endpoint} --method ${method} --yes`);
+    if (!isPromptAllowed()) {
+      exitWithError({
+        code: 'confirmation_required',
+        message: isCiMode()
+          ? `Mutating requests in CI mode require --yes. Refusing to ${method} ${endpoint}.`
+          : `Mutating requests in agent mode require --yes. Refusing to ${method} ${endpoint}.`,
+        recovery: confirmationRecovery(confirmCommand),
+      });
+    }
     if (isJsonMode()) {
       exitWithError({
         code: 'confirmation_required',
         message: 'Mutating requests in JSON mode require --yes to keep stdout machine-readable.',
+        recovery: confirmationRecovery(confirmCommand),
       });
-    }
-    if (isNonInteractiveEnvironment()) {
-      console.error(`Refusing to ${method} ${endpoint} without --yes in a non-interactive environment.`);
-      process.exit(1);
     }
     const clack = (await import('../../utils/clack.js')).default;
     console.log(`\n${chalk.yellow('About to')} ${method} ${endpoint}`);

@@ -27,7 +27,12 @@ if (!satisfies(process.version, NODE_VERSION_RANGE)) {
   process.exit(1);
 }
 
-import { isNonInteractiveEnvironment } from './utils/environment.js';
+import {
+  InvalidInteractionModeError,
+  isPromptAllowed,
+  resolveInteractionMode,
+  setInteractionMode,
+} from './utils/interaction-mode.js';
 import { resolveOutputMode, setOutputMode, isJsonMode, outputJson, exitWithError } from './utils/output.js';
 import clack from './utils/clack.js';
 import { registerSubcommand } from './utils/register-subcommand.js';
@@ -36,13 +41,19 @@ import { registerSubcommand } from './utils/register-subcommand.js';
 const rawArgs = hideBin(process.argv);
 const hasJsonFlag = rawArgs.includes('--json');
 setOutputMode(resolveOutputMode(hasJsonFlag));
+try {
+  setInteractionMode(resolveInteractionMode({ argv: rawArgs }));
+} catch (error) {
+  if (error instanceof InvalidInteractionModeError) {
+    exitWithError({ code: 'invalid_mode', message: error.message });
+  }
+  throw error;
+}
 
 // Intercept --help --json before yargs parses (yargs exits on --help)
 if (hasJsonFlag && (rawArgs.includes('--help') || rawArgs.includes('-h'))) {
-  const { buildCommandTree } = await import('./utils/help-json.js');
-  const commandAliases: Record<string, string> = { org: 'organization' };
-  const rawCommand = rawArgs.find((a) => !a.startsWith('-'));
-  const command = rawCommand ? (commandAliases[rawCommand] ?? rawCommand) : undefined;
+  const { buildCommandTree, extractHelpJsonCommand } = await import('./utils/help-json.js');
+  const command = extractHelpJsonCommand(rawArgs);
   outputJson(buildCommandTree(command));
   process.exit(0);
 }
@@ -181,6 +192,12 @@ yargs(rawArgs)
     type: 'boolean',
     default: false,
     describe: 'Output results as JSON (auto-enabled in non-TTY)',
+    global: true,
+  })
+  .option('mode', {
+    type: 'string',
+    choices: ['human', 'agent', 'ci'] as const,
+    describe: 'Interaction mode: human, coding agent, or CI automation',
     global: true,
   })
   .middleware(async (argv) => {
@@ -395,7 +412,7 @@ yargs(rawArgs)
       'Switch active environment',
       (y) => y.positional('name', { type: 'string', describe: 'Environment name' }),
       async (argv) => {
-        if (!argv.name && isNonInteractiveEnvironment()) {
+        if (!argv.name && !isPromptAllowed()) {
           exitWithError({
             code: 'missing_args',
             message: 'Environment name required. Usage: workos env switch <name>',
@@ -2370,8 +2387,8 @@ yargs(rawArgs)
     'WorkOS AuthKit CLI',
     (yargs) => yargs.options(insecureStorageOption),
     async (argv) => {
-      // Non-TTY: show help
-      if (isNonInteractiveEnvironment()) {
+      // Non-human modes: show help instead of prompting
+      if (!isPromptAllowed()) {
         yargs(rawArgs).showHelp();
         return;
       }

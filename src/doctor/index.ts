@@ -14,6 +14,7 @@ import { detectIssues } from './issues.js';
 import { formatReport } from './output.js';
 import { formatReportAsJson } from './json-output.js';
 import { copyToClipboard } from './clipboard.js';
+import { getInteractionMode } from '../utils/interaction-mode.js';
 import Chalk from 'chalk';
 import type { DoctorOptions, DoctorReport, SkillsRefreshResult } from './types.js';
 
@@ -66,6 +67,8 @@ export async function maybeRefreshSkills(
 }
 
 export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
+  const interactionMode = getInteractionMode();
+
   // Environment check first - loads project's .env/.env.local files
   // Must run before connectivity so the resolved base URL is available
   const { info: environment, raw: envRaw } = checkEnvironment(options);
@@ -95,6 +98,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
   const earlyIssues = detectIssues({
     version: DOCTOR_VERSION,
     timestamp: '',
+    interactionMode,
     project: { path: options.installDir, packageManager: runtime.packageManager },
     sdk,
     language,
@@ -132,6 +136,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
   const partialReport = {
     version: DOCTOR_VERSION,
     timestamp: new Date().toISOString(),
+    interactionMode,
     project: {
       path: options.installDir,
       packageManager: runtime.packageManager,

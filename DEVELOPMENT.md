@@ -96,6 +96,33 @@ pnpm test:watch
 - **Strict mode** enabled
 - **JSX:** react-jsx (for Ink/React dashboard)
 
+## Output Mode vs Interaction Mode
+
+The CLI separates two axes:
+
+| Axis                 | Question                        | API                                                                                                      |
+| -------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **Output mode**      | How should output be formatted? | `isJsonMode()` from `src/utils/output.ts`                                                                |
+| **Interaction mode** | Who is driving the CLI?         | `isHumanMode()`, `isAgentMode()`, `isCiMode()`, `isPromptAllowed()` from `src/utils/interaction-mode.ts` |
+
+Guidelines for new code:
+
+- Use `isJsonMode()` **only** to choose between structured JSON and human-formatted output. Do not use it to decide whether to prompt, open a browser, or skip a confirmation.
+- Use `isPromptAllowed()` (== `isHumanMode()`) before any clack prompt or interactive flow.
+- Use `isAgentMode()` to add agent-specific recovery hints, manual-fallback wording, or host-execution warnings.
+- Use `isCiMode()` to refuse browser-based flows and to prefer terse failures over recovery handoff text.
+- For destructive operations, require an explicit `--yes`/`--force` flag whenever `!isPromptAllowed()` regardless of output mode.
+- For `auth_required` and other deterministic failures, attach recovery metadata via `src/utils/recovery-hints.ts` so agents can parse `error.recovery.hints[]`.
+
+Legacy compatibility — do not regress these:
+
+- `WORKOS_NO_PROMPT=1` keeps mapping to agent interaction behavior **and** JSON output (legacy alias).
+- `WORKOS_FORCE_TTY=1` only affects output mode (forces human). It must not change interaction mode.
+- Non-TTY stdout still defaults output to JSON and interaction to agent.
+- `isNonInteractiveEnvironment()` from `src/utils/environment.ts` is a thin wrapper over `!isHumanMode()` kept for backward compatibility. Prefer the explicit interaction-mode predicates in new code.
+
+The full backwards-compat matrix lives in `src/utils/mode-compatibility.spec.ts`.
+
 ## Making Changes
 
 ### Adding a New Framework

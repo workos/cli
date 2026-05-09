@@ -42,12 +42,6 @@ vi.mock('./settings.js', () => ({
   })),
 }));
 
-// Mock environment detection
-const mockIsNonInteractive = vi.fn(() => false);
-vi.mock('../utils/environment.js', () => ({
-  isNonInteractiveEnvironment: () => mockIsNonInteractive(),
-}));
-
 // Mock exit codes — must throw to halt execution like the real process.exit()
 class AuthRequiredExit extends Error {
   constructor() {
@@ -75,6 +69,7 @@ vi.mock('./token-refresh-client.js', () => ({
 
 // Import after mocks are set up
 const { saveCredentials, getCredentials, setInsecureStorage, hasCredentials } = await import('./credentials.js');
+const { resetInteractionModeForTests, setInteractionMode } = await import('../utils/interaction-mode.js');
 const { ensureAuthenticated } = await import('./ensure-auth.js');
 
 describe('ensure-auth', () => {
@@ -85,6 +80,7 @@ describe('ensure-auth', () => {
     vi.clearAllMocks();
     // Force file-based storage for these tests
     setInsecureStorage(true);
+    resetInteractionModeForTests();
   });
 
   afterEach(() => {
@@ -350,24 +346,24 @@ describe('ensure-auth', () => {
       });
     });
 
-    describe('non-TTY mode', () => {
+    describe('agent mode', () => {
       beforeEach(() => {
-        mockIsNonInteractive.mockReturnValue(true);
+        setInteractionMode({ mode: 'agent', source: 'env' });
       });
 
       afterEach(() => {
-        mockIsNonInteractive.mockReturnValue(false);
+        resetInteractionModeForTests();
       });
 
-      it('exits with auth required when no credentials in non-TTY', async () => {
-        // No credentials saved, non-TTY mode
+      it('exits with auth required when no credentials in agent mode', async () => {
+        // No credentials saved, agent mode
         await expect(ensureAuthenticated()).rejects.toThrow(AuthRequiredExit);
 
         expect(mockExitWithAuthRequired).toHaveBeenCalled();
         expect(mockRunLogin).not.toHaveBeenCalled();
       });
 
-      it('still refreshes tokens silently in non-TTY', async () => {
+      it('still refreshes tokens silently in agent mode', async () => {
         saveCredentials(expiredAccessCreds);
 
         mockRefreshAccessToken.mockResolvedValue({
@@ -385,7 +381,7 @@ describe('ensure-auth', () => {
         expect(mockRunLogin).not.toHaveBeenCalled();
       });
 
-      it('exits with auth required when refresh fails in non-TTY', async () => {
+      it('exits with auth required when refresh fails in agent mode', async () => {
         saveCredentials(expiredAccessCreds);
 
         mockRefreshAccessToken.mockResolvedValue({
@@ -397,6 +393,29 @@ describe('ensure-auth', () => {
         await expect(ensureAuthenticated()).rejects.toThrow(AuthRequiredExit);
 
         expect(mockExitWithAuthRequired).toHaveBeenCalled();
+        expect(mockRunLogin).not.toHaveBeenCalled();
+      });
+
+      it('uses agent-specific host-shell auth guidance', async () => {
+        await expect(ensureAuthenticated()).rejects.toThrow(AuthRequiredExit);
+
+        expect(mockExitWithAuthRequired).toHaveBeenCalledWith(expect.stringContaining('host shell'));
+      });
+    });
+
+    describe('CI mode', () => {
+      beforeEach(() => {
+        setInteractionMode({ mode: 'ci', source: 'env' });
+      });
+
+      afterEach(() => {
+        resetInteractionModeForTests();
+      });
+
+      it('uses CI-specific auth guidance', async () => {
+        await expect(ensureAuthenticated()).rejects.toThrow(AuthRequiredExit);
+
+        expect(mockExitWithAuthRequired).toHaveBeenCalledWith(expect.stringContaining('CI'));
         expect(mockRunLogin).not.toHaveBeenCalled();
       });
     });

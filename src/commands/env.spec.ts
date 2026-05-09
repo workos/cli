@@ -42,6 +42,7 @@ vi.mock('node:os', async (importOriginal) => {
 const { getConfig, setInsecureConfigStorage, clearConfig } = await import('../lib/config-store.js');
 const { runEnvAdd, runEnvRemove, runEnvSwitch, runEnvList } = await import('./env.js');
 const { setOutputMode } = await import('../utils/output.js');
+const { resetInteractionModeForTests, setInteractionMode } = await import('../utils/interaction-mode.js');
 const clack = (await import('../utils/clack.js')).default;
 
 // Spy on process.exit
@@ -53,11 +54,13 @@ describe('env commands', () => {
   beforeEach(() => {
     testDir = mkdtempSync(join(tmpdir(), 'env-cmd-test-'));
     setInsecureConfigStorage(true);
+    resetInteractionModeForTests();
     vi.clearAllMocks();
   });
 
   afterEach(() => {
     clearConfig();
+    resetInteractionModeForTests();
     try {
       rmdirSync(join(testDir, '.workos'), { recursive: true });
     } catch {}
@@ -102,6 +105,18 @@ describe('env commands', () => {
 
     it('rejects invalid environment name', async () => {
       await expect(runEnvAdd({ name: 'INVALID NAME', apiKey: 'sk_test' })).rejects.toThrow('process.exit');
+    });
+
+    it('requires name and API key in agent mode without prompting', async () => {
+      setInteractionMode({ mode: 'agent', source: 'env' });
+      await expect(runEnvAdd({ name: 'prod' })).rejects.toThrow('process.exit');
+      expect(clack.text).not.toHaveBeenCalled();
+    });
+
+    it('requires name and API key in CI mode without prompting', async () => {
+      setInteractionMode({ mode: 'ci', source: 'env' });
+      await expect(runEnvAdd({ name: 'prod' })).rejects.toThrow('process.exit');
+      expect(clack.text).not.toHaveBeenCalled();
     });
   });
 

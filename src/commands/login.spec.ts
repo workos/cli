@@ -3,6 +3,25 @@ import { mkdtempSync, rmdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
+const mockOpen = vi.fn();
+vi.mock('opn', () => ({ default: (...args: unknown[]) => mockOpen(...args) }));
+
+class MockDeviceAuthTimeoutError extends Error {}
+const mockRequestDeviceCode = vi.fn();
+const mockPollForToken = vi.fn();
+vi.mock('../lib/device-auth.js', () => ({
+  requestDeviceCode: (...args: unknown[]) => mockRequestDeviceCode(...args),
+  pollForToken: (...args: unknown[]) => mockPollForToken(...args),
+  DeviceAuthTimeoutError: MockDeviceAuthTimeoutError,
+}));
+
+const mockExitWithAuthRequired = vi.fn(() => {
+  throw new Error('auth_required');
+});
+vi.mock('../utils/exit-codes.js', () => ({
+  exitWithAuthRequired: (...args: unknown[]) => mockExitWithAuthRequired(...args),
+}));
+
 // Mock debug utilities
 vi.mock('../utils/debug.js', () => ({
   logInfo: vi.fn(),
@@ -58,20 +77,42 @@ vi.mock('node:os', async (importOriginal) => {
 });
 
 const { getConfig, setInsecureConfigStorage, clearConfig } = await import('../lib/config-store.js');
-const { provisionStagingEnvironment, installSkillsAfterLogin } = await import('./login.js');
+const { provisionStagingEnvironment, installSkillsAfterLogin, runLogin } = await import('./login.js');
 const { autoInstallSkills } = await import('./install-skill.js');
 const { isJsonMode } = await import('../utils/output.js');
+const { clearCredentials, setInsecureStorage } = await import('../lib/credentials.js');
+const { resetInteractionModeForTests, setInteractionMode } = await import('../utils/interaction-mode.js');
 const clackMod = await import('../utils/clack.js');
 
 describe('login', () => {
   beforeEach(() => {
     testDir = mkdtempSync(join(tmpdir(), 'login-test-'));
     setInsecureConfigStorage(true);
+    setInsecureStorage(true);
+    resetInteractionModeForTests();
+    clearCredentials();
     vi.clearAllMocks();
+    mockOpen.mockResolvedValue({});
+    mockRequestDeviceCode.mockResolvedValue({
+      verification_uri: 'https://auth.example.com/device',
+      verification_uri_complete: 'https://auth.example.com/device?code=ABCD',
+      user_code: 'ABCD-EFGH',
+      device_code: 'device_123',
+      interval: 1,
+    });
+    mockPollForToken.mockResolvedValue({
+      accessToken: 'access_token',
+      expiresAt: Date.now() + 3600000,
+      userId: 'user_123',
+      email: 'user@example.com',
+      refreshToken: 'refresh_token',
+    });
   });
 
   afterEach(() => {
+    clearCredentials();
     clearConfig();
+    resetInteractionModeForTests();
     try {
       rmdirSync(join(testDir, '.workos'), { recursive: true });
     } catch {}
@@ -200,6 +241,29 @@ describe('login', () => {
       const result = await provisionStagingEnvironment('token');
 
       expect(result).toBe(false);
+    });
+  });
+
+  describe('runLogin', () => {
+    it('refuses browser/device auth in CI mode', async () => {
+      setInteractionMode({ mode: 'ci', source: 'env' });
+
+      await expect(runLogin()).rejects.toThrow('auth_required');
+
+      expect(mockExitWithAuthRequired).toHaveBeenCalledWith(expect.stringContaining('CI mode'));
+      expect(mockRequestDeviceCode).not.toHaveBeenCalled();
+      expect(mockOpen).not.toHaveBeenCalled();
+    });
+
+    it('prints manual fallback and attempts browser launch in agent mode', async () => {
+      setInteractionMode({ mode: 'agent', source: 'env' });
+      const infoSpy = vi.mocked(clackMod.default.log.info);
+
+      await runLogin();
+
+      expect(mockRequestDeviceCode).toHaveBeenCalledOnce();
+      expect(mockOpen).toHaveBeenCalledWith('https://auth.example.com/device?code=ABCD', { wait: false });
+      expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining('manual URL'));
     });
   });
 

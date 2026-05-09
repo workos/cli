@@ -1,3 +1,5 @@
+import type { InteractionModeInfo } from '../utils/interaction-mode.js';
+
 export type IssueSeverity = 'error' | 'warning';
 
 export interface Issue {
@@ -151,6 +153,7 @@ export interface SkillsRefreshResult {
 export interface DoctorReport {
   version: string;
   timestamp: string;
+  interactionMode: InteractionModeInfo;
   project: {
     path: string;
     packageManager: string | null;

@@ -64,10 +64,10 @@ vi.mock('../utils/clack.js', () => ({
   },
 }));
 
-// Mock environment
-const mockIsNonInteractive = vi.fn(() => false);
-vi.mock('../utils/environment.js', () => ({
-  isNonInteractiveEnvironment: () => mockIsNonInteractive(),
+// Mock interaction mode
+const mockIsPromptAllowed = vi.fn(() => true);
+vi.mock('../utils/interaction-mode.js', () => ({
+  isPromptAllowed: () => mockIsPromptAllowed(),
 }));
 
 const { runDebugState, runDebugReset, runDebugSimulate, runDebugToken, runDebugEnv } = await import('./debug.js');
@@ -101,6 +101,7 @@ describe('debug commands', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     jsonMode = false;
+    mockIsPromptAllowed.mockReturnValue(true);
     consoleOutput = [];
     consoleErrors = [];
     vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
@@ -277,11 +278,11 @@ describe('debug commands', () => {
       expect(mockClearConfig).toHaveBeenCalled();
     });
 
-    it('errors in non-interactive mode without --force', async () => {
-      mockIsNonInteractive.mockReturnValue(true);
+    it('errors in agent/CI mode without --force', async () => {
+      mockIsPromptAllowed.mockReturnValue(false);
 
       await expect(runDebugReset({ force: false, credentialsOnly: false, configOnly: false })).rejects.toThrow(
-        'Use --force to reset in non-interactive mode',
+        'Use --force to reset in agent or CI mode',
       );
     });
 

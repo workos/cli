@@ -11,6 +11,8 @@ import type { CliConfig } from '../lib/config-store.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
 import { autoInstallSkills } from './install-skill.js';
 import { isJsonMode } from '../utils/output.js';
+import { isAgentMode, isCiMode } from '../utils/interaction-mode.js';
+import { exitWithAuthRequired } from '../utils/exit-codes.js';
 import { requestDeviceCode, pollForToken, DeviceAuthTimeoutError } from '../lib/device-auth.js';
 import { observeHostFailure } from '../lib/host-probe.js';
 
@@ -111,6 +113,12 @@ export async function runLogin(): Promise<void> {
     }
   }
 
+  if (isCiMode()) {
+    exitWithAuthRequired(
+      'Browser authentication is not available in CI mode. Set WORKOS_API_KEY or configure credentials before running in CI.',
+    );
+  }
+
   const authkitDomain = getAuthkitDomain();
 
   clack.log.step('Starting authentication...');
@@ -129,15 +137,19 @@ export async function runLogin(): Promise<void> {
   console.log(`\nEnter code: ${deviceAuth.user_code}\n`);
 
   try {
-    open(deviceAuth.verification_uri_complete);
-    clack.log.info('Browser opened automatically');
+    await open(deviceAuth.verification_uri_complete, { wait: false });
+    if (isAgentMode()) {
+      clack.log.info('Browser launch attempted. If it did not open on the host, use the manual URL and code above.');
+    } else {
+      clack.log.info('Browser opened automatically');
+    }
   } catch (error) {
     observeHostFailure('browser-launch', error, {
       operation: 'open',
       target: deviceAuth.verification_uri_complete,
       label: 'auth login browser',
     });
-    // User can open manually
+    clack.log.info('Could not open browser — open the URL above manually.');
   }
 
   const spinner = clack.spinner();

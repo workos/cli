@@ -24,13 +24,8 @@ vi.mock('../utils/clack.js', () => ({
   },
 }));
 
-// Mock environment detection
-vi.mock('../utils/environment.js', () => ({
-  isNonInteractiveEnvironment: vi.fn(() => false),
-}));
-
 const { setOutputMode } = await import('../utils/output.js');
-const { isNonInteractiveEnvironment } = await import('../utils/environment.js');
+const { resetInteractionModeForTests, setInteractionMode } = await import('../utils/interaction-mode.js');
 
 const { runConnectionList, runConnectionGet, runConnectionDelete } = await import('./connection.js');
 
@@ -51,6 +46,7 @@ describe('connection commands', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resetInteractionModeForTests();
     consoleOutput = [];
     stderrOutput = [];
     vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
@@ -66,6 +62,7 @@ describe('connection commands', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     setOutputMode('human');
+    resetInteractionModeForTests();
   });
 
   describe('runConnectionList', () => {
@@ -151,13 +148,14 @@ describe('connection commands', () => {
       expect(mockSdk.sso.deleteConnection).not.toHaveBeenCalled();
     });
 
-    it('requires --force in non-interactive mode', async () => {
-      vi.mocked(isNonInteractiveEnvironment).mockReturnValue(true);
+    it('requires --force in agent mode', async () => {
+      setInteractionMode({ mode: 'agent', source: 'env' });
       const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
         throw new Error(`process.exit(${code})`);
       });
       await expect(runConnectionDelete('conn_01ABC', {}, 'sk_test')).rejects.toThrow('process.exit(1)');
       expect(mockSdk.sso.deleteConnection).not.toHaveBeenCalled();
+      expect(mockConfirm).not.toHaveBeenCalled();
       expect(exitSpy).toHaveBeenCalledWith(1);
     });
   });

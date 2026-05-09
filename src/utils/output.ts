@@ -1,13 +1,14 @@
 /**
  * Output mode system for non-TTY / JSON support.
  *
- * Resolves once at startup, drives all output formatting.
+ * Resolves once at startup, drives output formatting only.
  * In JSON mode: structured JSON to stdout, structured errors to stderr.
  * In human mode: chalk-formatted output (existing behavior).
  */
 
 import chalk from 'chalk';
 import { formatTable, type TableColumn } from './table.js';
+import type { RecoveryHints } from './recovery-hints.js';
 
 export type OutputMode = 'human' | 'json';
 
@@ -18,9 +19,10 @@ let currentMode: OutputMode = 'human';
  *
  * Priority:
  * 1. Explicit --json flag
- * 2. WORKOS_FORCE_TTY env var → human
- * 3. Non-TTY auto-detection → json
- * 4. Default → human
+ * 2. WORKOS_FORCE_TTY env var → human output compatibility
+ * 3. WORKOS_NO_PROMPT legacy compatibility → json
+ * 4. Non-TTY auto-detection → json
+ * 5. Default → human
  */
 export function resolveOutputMode(jsonFlag?: boolean): OutputMode {
   if (jsonFlag) return 'json';
@@ -74,12 +76,30 @@ export function outputSuccess(
   }
 }
 
+export interface StructuredError {
+  code: string;
+  message: string;
+  details?: unknown;
+  /**
+   * Optional structured recovery metadata for agents.
+   *
+   * Only include for deterministic recovery paths. Human output prints the
+   * first hint as a follow-up line; JSON output serializes the full structure.
+   */
+  recovery?: RecoveryHints;
+}
+
 /** Write a structured error to stderr. */
-export function outputError(error: { code: string; message: string; details?: unknown }): void {
+export function outputError(error: StructuredError): void {
   if (currentMode === 'json') {
     console.error(JSON.stringify({ error }));
   } else {
     console.error(chalk.red(error.message));
+    const firstHint = error.recovery?.hints[0];
+    if (firstHint) {
+      const suffix = firstHint.command ? ` Run: ${firstHint.command}` : '';
+      console.error(chalk.dim(`→ ${firstHint.description}${suffix}`));
+    }
   }
 }
 
@@ -105,7 +125,7 @@ export function outputTable(columns: TableColumn[], rows: string[][], rawData?: 
 }
 
 /** Exit with a structured error. Writes error then exits with code 1. */
-export function exitWithError(error: { code: string; message: string; details?: unknown }): never {
+export function exitWithError(error: StructuredError): never {
   outputError(error);
   process.exit(1);
 }

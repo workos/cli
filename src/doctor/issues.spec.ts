@@ -6,6 +6,7 @@ function baseReport(): Omit<DoctorReport, 'issues' | 'summary'> {
   return {
     version: '1.0.0',
     timestamp: '2026-01-01T00:00:00.000Z',
+    interactionMode: { mode: 'agent', source: 'env' },
     project: { path: '/tmp/app', packageManager: 'pnpm' },
     sdk: {
       name: '@workos-inc/node',
@@ -55,6 +56,7 @@ describe('detectIssues', () => {
       expect.objectContaining({
         code: 'HOST_EXECUTION_UNTRUSTED',
         severity: 'warning',
+        remediation: expect.stringContaining('Agent/CI host execution is untrusted'),
         details: { failures: report.hostExecution.failures },
       }),
     );

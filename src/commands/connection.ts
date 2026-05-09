@@ -4,7 +4,7 @@ import { createWorkOSClient } from '../lib/workos-client.js';
 import { formatTable } from '../utils/table.js';
 import { outputSuccess, outputJson, isJsonMode, exitWithError } from '../utils/output.js';
 import { createApiErrorHandler } from '../lib/api-error-handler.js';
-import { isNonInteractiveEnvironment } from '../utils/environment.js';
+import { isCiMode, isPromptAllowed } from '../utils/interaction-mode.js';
 import clack from '../utils/clack.js';
 
 const handleApiError = createApiErrorHandler('Connection');
@@ -99,10 +99,12 @@ export async function runConnectionDelete(
   baseUrl?: string,
 ): Promise<void> {
   if (!options.force) {
-    if (isNonInteractiveEnvironment()) {
+    if (!isPromptAllowed()) {
       exitWithError({
         code: 'confirmation_required',
-        message: 'Destructive operation requires --force flag in non-interactive mode.',
+        message: isCiMode()
+          ? 'Destructive operation requires --force flag in CI mode.'
+          : 'Destructive operation requires --force flag in agent mode.',
       });
     }
 

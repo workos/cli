@@ -1311,6 +1311,14 @@ const globalOptions: OptionSchema[] = [
     default: false,
     hidden: false,
   },
+  {
+    name: 'mode',
+    type: 'string',
+    description: 'Interaction mode: human, coding agent, or CI automation',
+    required: false,
+    choices: ['human', 'agent', 'ci'],
+    hidden: false,
+  },
   { name: 'help', type: 'boolean', description: 'Show help', required: false, alias: 'h', hidden: false },
   { name: 'version', type: 'boolean', description: 'Show version number', required: false, alias: 'v', hidden: false },
 ];
@@ -1318,6 +1326,23 @@ const globalOptions: OptionSchema[] = [
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
+
+const commandAliases: Record<string, string> = { org: 'organization' };
+const helpJsonCommandNames = new Set([
+  ...commands.map((command) => command.name.split(' ')[0]),
+  ...Object.keys(commandAliases),
+]);
+
+/**
+ * Extract the requested command from raw argv before yargs parses --help.
+ *
+ * This intentionally matches only known command names so option values from
+ * global flags like `--mode agent` are not mistaken for commands.
+ */
+export function extractHelpJsonCommand(argv: string[]): string | undefined {
+  const command = argv.find((arg) => !arg.startsWith('-') && helpJsonCommandNames.has(arg));
+  return command ? (commandAliases[command] ?? command) : undefined;
+}
 
 /**
  * Build a machine-readable command tree for --help --json output.

@@ -1,4 +1,4 @@
-import { isNonInteractiveEnvironment } from '../../utils/environment.js';
+import { getInteractionMode } from '../../utils/interaction-mode.js';
 import { runHostProbe } from '../../lib/host-probe.js';
 import type { HostExecutionInfo } from '../types.js';
 
@@ -6,9 +6,9 @@ const HOST_EXECUTION_WARNING =
   'This may be a sandboxed run. Re-run the command on the host shell before trusting auth, config, or API failures.';
 
 export async function checkHostExecution(): Promise<HostExecutionInfo> {
-  const nonInteractive = isNonInteractiveEnvironment();
+  const interactionMode = getInteractionMode();
 
-  if (!nonInteractive) {
+  if (interactionMode.mode === 'human') {
     return {
       mode: 'interactive',
       ok: true,

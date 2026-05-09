@@ -11,7 +11,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { Entry } from '@napi-rs/keyring';
-import { isNonInteractiveEnvironment } from '../utils/environment.js';
+import { isAgentMode, isCiMode } from '../utils/interaction-mode.js';
 import { logInfo, logVisibleWarn } from '../utils/debug.js';
 
 export type HostCapability = 'home-fs' | 'keychain' | 'network' | 'browser-launch' | 'localhost-bind';
@@ -145,9 +145,13 @@ export async function runHostProbe(): Promise<ProbeResult> {
   return cachedProbe;
 }
 
+function shouldWarnForHostTrust(): boolean {
+  return isAgentMode() || isCiMode();
+}
+
 export async function warnIfSandboxed(): Promise<void> {
   if (warnedThisSession) return;
-  if (!isNonInteractiveEnvironment()) return;
+  if (!shouldWarnForHostTrust()) return;
 
   const probe = await runHostProbe();
   if (probe.ok) return;
@@ -171,7 +175,7 @@ export function observeHostFailure(
   details: HostCapabilityDetails = {},
 ): void {
   if (warnedThisSession) return;
-  if (!isNonInteractiveEnvironment()) return;
+  if (!shouldWarnForHostTrust()) return;
   if (!isLikelyHostFailure(capability, error)) return;
 
   warnedThisSession = true;

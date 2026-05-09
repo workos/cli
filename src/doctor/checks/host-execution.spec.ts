@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-vi.mock('../../utils/environment.js', () => ({
-  isNonInteractiveEnvironment: vi.fn(),
+vi.mock('../../utils/interaction-mode.js', () => ({
+  getInteractionMode: vi.fn(),
 }));
 
 vi.mock('../../lib/host-probe.js', () => ({
@@ -9,7 +9,7 @@ vi.mock('../../lib/host-probe.js', () => ({
 }));
 
 import { checkHostExecution } from './host-execution.js';
-import { isNonInteractiveEnvironment } from '../../utils/environment.js';
+import { getInteractionMode } from '../../utils/interaction-mode.js';
 import { runHostProbe } from '../../lib/host-probe.js';
 
 describe('checkHostExecution', () => {
@@ -17,8 +17,8 @@ describe('checkHostExecution', () => {
     vi.resetAllMocks();
   });
 
-  it('passes without probing in an interactive host shell', async () => {
-    vi.mocked(isNonInteractiveEnvironment).mockReturnValue(false);
+  it('passes without probing in human interaction mode', async () => {
+    vi.mocked(getInteractionMode).mockReturnValue({ mode: 'human', source: 'default' });
 
     const result = await checkHostExecution();
 
@@ -26,17 +26,18 @@ describe('checkHostExecution', () => {
     expect(runHostProbe).not.toHaveBeenCalled();
   });
 
-  it('passes when non-interactive host state is reachable', async () => {
-    vi.mocked(isNonInteractiveEnvironment).mockReturnValue(true);
+  it('passes when agent-mode host state is reachable', async () => {
+    vi.mocked(getInteractionMode).mockReturnValue({ mode: 'agent', source: 'env' });
     vi.mocked(runHostProbe).mockResolvedValue({ ok: true, failures: [] });
 
     const result = await checkHostExecution();
 
     expect(result).toEqual({ mode: 'non-interactive', ok: true, failures: [], warning: undefined });
+    expect(runHostProbe).toHaveBeenCalledOnce();
   });
 
-  it('warns when non-interactive host state is blocked', async () => {
-    vi.mocked(isNonInteractiveEnvironment).mockReturnValue(true);
+  it('warns when agent-mode host state is blocked', async () => {
+    vi.mocked(getInteractionMode).mockReturnValue({ mode: 'agent', source: 'env' });
     vi.mocked(runHostProbe).mockResolvedValue({
       ok: false,
       failures: [
@@ -59,5 +60,22 @@ describe('checkHostExecution', () => {
       operation: 'write',
       label: 'WorkOS home directory',
     });
+  });
+
+  it('warns when CI-mode host state is blocked', async () => {
+    vi.mocked(getInteractionMode).mockReturnValue({ mode: 'ci', source: 'ci_env' });
+    vi.mocked(runHostProbe).mockResolvedValue({
+      ok: false,
+      failures: [{ capability: 'keychain', detail: 'interaction is not allowed' }],
+    });
+
+    const result = await checkHostExecution();
+
+    expect(result).toMatchObject({
+      mode: 'non-interactive',
+      ok: false,
+      warning: expect.stringContaining('host shell'),
+    });
+    expect(runHostProbe).toHaveBeenCalledOnce();
   });
 });

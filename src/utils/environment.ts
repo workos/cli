@@ -1,28 +1,16 @@
 import { getPackageDotJson } from './clack-utils.js';
 import type { InstallerOptions } from './types.js';
 import fg from 'fast-glob';
-import { IS_DEV } from '../lib/constants.js';
+import { isHumanMode } from './interaction-mode.js';
 
+/**
+ * Compatibility wrapper for legacy call sites.
+ *
+ * Interaction mode now owns prompt/browser behavior. Keep this helper while
+ * call sites migrate, but do not reimplement env/TTY detection here.
+ */
 export function isNonInteractiveEnvironment(): boolean {
-  // WORKOS_NO_PROMPT forces non-interactive regardless of TTY
-  if (process.env.WORKOS_NO_PROMPT === '1' || process.env.WORKOS_NO_PROMPT === 'true') {
-    return true;
-  }
-
-  // WORKOS_FORCE_TTY forces interactive regardless of TTY
-  if (process.env.WORKOS_FORCE_TTY === '1' || process.env.WORKOS_FORCE_TTY === 'true') {
-    return false;
-  }
-
-  if (IS_DEV) {
-    return false;
-  }
-
-  if (!process.stdout.isTTY || !process.stderr.isTTY) {
-    return true;
-  }
-
-  return false;
+  return !isHumanMode();
 }
 
 export function readEnvironment(): Record<string, unknown> {

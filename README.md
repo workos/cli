@@ -584,7 +584,18 @@ workos --help --json | jq '.commands[].name'
 
 ## Scripting & Automation
 
-The CLI auto-detects non-TTY environments (piped output, CI, coding agents) and switches to machine-friendly behavior. No flags required — just pipe it.
+The CLI separates **output mode** from **interaction mode**:
+
+- `--json` (or `WORKOS_NO_PROMPT=1`, or non-TTY auto-detection) controls **output formatting** only.
+- `--mode human|agent|ci` (or `WORKOS_MODE=...`) controls **interaction behavior** — prompts, browser launch, host trust, destructive confirmation.
+
+For coding agents, set both axes explicitly:
+
+```bash
+WORKOS_MODE=agent workos doctor --json --skip-ai
+```
+
+The CLI also auto-detects non-TTY environments (piped output, CI, coding agents) and falls back to machine-friendly defaults. No flags are required — just pipe it — but explicit mode is recommended for agents.
 
 ### JSON Output
 
@@ -604,6 +615,30 @@ Errors go to stderr as structured JSON:
 workos org list 2>&1
 # → { "error": { "code": "no_api_key", "message": "No API key configured..." } }
 ```
+
+### Agent Mode
+
+When a coding agent drives the CLI, set agent mode explicitly so behavior is deterministic regardless of TTY:
+
+```bash
+WORKOS_MODE=agent workos doctor --json --skip-ai
+WORKOS_MODE=agent workos install --api-key ... --client-id ...
+```
+
+In agent mode the CLI:
+
+- Never prompts. Missing required arguments fail with structured errors instead of opening prompts.
+- Treats browser launch as best-effort. Auth flows always print the manual URL and code.
+- Probes host capabilities (home directory, keychain, browser launch). Host failures emit a `HOST_EXECUTION_UNTRUSTED` issue from `workos doctor` so agents can recognize sandboxed runs.
+- Requires explicit confirmation flags (e.g. `--yes`, `--force`) for destructive operations.
+
+In `ci` mode the CLI additionally refuses browser-based auth flows and prefers terse failures over recovery handoff text.
+
+Legacy compatibility:
+
+- `WORKOS_NO_PROMPT=1` continues to work and is treated as agent interaction behavior plus JSON output.
+- `WORKOS_FORCE_TTY=1` continues to force human **output** mode but does not change interaction mode.
+- Non-TTY without an explicit mode still defaults output to JSON and interaction to agent.
 
 ### Headless Installer
 
@@ -632,8 +667,9 @@ workos install --api-key sk_test_xxx --client-id client_xxx --no-commit 2>/dev/n
 | ------------------------ | --------------------------------------------------------- |
 | `WORKOS_API_KEY`         | API key for management commands (bypasses stored config)  |
 | `WORKOS_API_BASE_URL`    | Override API base URL (set automatically by `workos dev`) |
-| `WORKOS_NO_PROMPT=1`     | Force non-interactive mode + JSON output                  |
-| `WORKOS_FORCE_TTY=1`     | Force interactive mode even when piped                    |
+| `WORKOS_MODE`            | Interaction mode: `human`, `agent`, or `ci`               |
+| `WORKOS_NO_PROMPT=1`     | Legacy alias: agent interaction behavior + JSON output    |
+| `WORKOS_FORCE_TTY=1`     | Force human (non-JSON) **output** mode even when piped    |
 | `WORKOS_TELEMETRY=false` | Disable telemetry                                         |
 
 ### Command Discovery

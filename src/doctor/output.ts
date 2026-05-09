@@ -1,6 +1,7 @@
 import Chalk from 'chalk';
 import { homedir } from 'os';
 import { createAgents } from '../commands/install-skill.js';
+import type { InteractionModeSource } from '../utils/interaction-mode.js';
 import type { DoctorReport, Issue } from './types.js';
 import { renderSummaryBox, type SummaryBoxItem } from '../utils/summary-box.js';
 import type { LockExpression } from '../utils/lock-art.js';
@@ -51,15 +52,22 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
   );
   console.log(`   Base URL:         ${report.environment.baseUrl} ${Chalk.green('✓')}`);
 
+  // Interaction Mode
+  console.log('');
+  console.log('Interaction Mode');
+  console.log(
+    `   Mode:             ${report.interactionMode.mode} (${formatInteractionModeSource(report.interactionMode.source)})`,
+  );
+
   // Host Execution
   console.log('');
   console.log('Host Execution');
   if (report.hostExecution.mode === 'interactive') {
     console.log(`   Shell:            ${Chalk.green('✓')} Interactive host shell`);
   } else if (report.hostExecution.ok) {
-    console.log(`   Shell:            ${Chalk.green('✓')} Non-interactive, host state reachable`);
+    console.log(`   Shell:            ${Chalk.green('✓')} Agent/CI context, host state reachable`);
   } else {
-    console.log(`   Shell:            ${Chalk.yellow('!')} Non-interactive, host state may be unavailable`);
+    console.log(`   Shell:            ${Chalk.yellow('!')} Agent/CI context, host state may be unavailable`);
     for (const failure of report.hostExecution.failures) {
       const label = failure.label ?? failure.capability;
       const target = failure.target ? ` (${failure.target})` : '';
@@ -251,6 +259,25 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
     }),
   );
   console.log('');
+}
+
+export function formatInteractionModeSource(source: InteractionModeSource): string {
+  switch (source) {
+    case 'flag':
+      return '--mode';
+    case 'env':
+      return 'WORKOS_MODE';
+    case 'workos_no_prompt':
+      return 'WORKOS_NO_PROMPT';
+    case 'ci_env':
+      return 'CI environment';
+    case 'agent_env':
+      return 'agent environment';
+    case 'non_tty':
+      return 'non-TTY';
+    case 'default':
+      return 'default';
+  }
 }
 
 function formatIssue(issue: Issue): void {

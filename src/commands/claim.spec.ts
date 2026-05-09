@@ -40,6 +40,13 @@ vi.mock('../utils/output.js', () => ({
   exitWithError: (...args: unknown[]) => mockExitWithError(...args),
 }));
 
+const mockIsAgentMode = vi.fn(() => false);
+const mockIsCiMode = vi.fn(() => false);
+vi.mock('../utils/interaction-mode.js', () => ({
+  isAgentMode: () => mockIsAgentMode(),
+  isCiMode: () => mockIsCiMode(),
+}));
+
 // Mock helper-functions
 vi.mock('../lib/helper-functions.js', () => ({
   sleep: vi.fn((ms: number) => new Promise((resolve) => setTimeout(resolve, ms))),
@@ -73,6 +80,8 @@ describe('claim command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     jsonMode = false;
+    mockIsAgentMode.mockReturnValue(false);
+    mockIsCiMode.mockReturnValue(false);
     vi.useFakeTimers({ shouldAdvanceTime: true });
   });
 
@@ -192,6 +201,32 @@ describe('claim command', () => {
       // Should NOT open browser or start polling in JSON mode
       expect(mockOpen).not.toHaveBeenCalled();
       expect(mockSpinner.start).not.toHaveBeenCalled();
+    });
+
+    it('refuses claim browser flow in CI mode', async () => {
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'unclaimed',
+        type: 'unclaimed',
+        apiKey: 'sk_test_xxx',
+        clientId: 'client_01ABC',
+        claimToken: 'ct_token',
+      });
+      mockIsUnclaimedEnvironment.mockReturnValue(true);
+      mockCreateClaimNonce.mockResolvedValueOnce({
+        nonce: 'nonce_abc123',
+        alreadyClaimed: false,
+      });
+      mockIsCiMode.mockReturnValue(true);
+
+      await expect(runClaim()).rejects.toThrow('exitWithError');
+
+      expect(mockExitWithError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          code: 'unsupported_in_ci',
+          details: expect.objectContaining({ claimUrl: expect.stringContaining('nonce_abc123') }),
+        }),
+      );
+      expect(mockOpen).not.toHaveBeenCalled();
     });
 
     it('outputs JSON for already-claimed in JSON mode', async () => {
@@ -394,10 +429,7 @@ describe('claim command', () => {
       });
       // Poll returns claimed immediately
       mockCreateClaimNonce.mockResolvedValueOnce({ alreadyClaimed: true });
-      // Browser open throws synchronously (open() is called without await)
-      mockOpen.mockImplementationOnce(() => {
-        throw new Error('No browser available');
-      });
+      mockOpen.mockRejectedValueOnce(new Error('No browser available'));
 
       const claimPromise = runClaim();
       await vi.advanceTimersByTimeAsync(6_000);

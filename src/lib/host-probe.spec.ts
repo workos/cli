@@ -6,8 +6,9 @@ vi.mock('../utils/debug.js', () => ({
   logInfo: vi.fn(),
 }));
 
-vi.mock('../utils/environment.js', () => ({
-  isNonInteractiveEnvironment: vi.fn(),
+vi.mock('../utils/interaction-mode.js', () => ({
+  isAgentMode: vi.fn(),
+  isCiMode: vi.fn(),
 }));
 
 vi.mock('node:os', () => ({
@@ -41,7 +42,7 @@ vi.mock('@napi-rs/keyring', () => ({
 
 import { _resetProbeState, runHostProbe, warnIfSandboxed, observeHostFailure } from './host-probe.js';
 import { logInfo, logVisibleWarn } from '../utils/debug.js';
-import { isNonInteractiveEnvironment } from '../utils/environment.js';
+import { isAgentMode, isCiMode } from '../utils/interaction-mode.js';
 import { promises as fs } from 'node:fs';
 
 describe('host-probe', () => {
@@ -52,6 +53,8 @@ describe('host-probe', () => {
     vi.mocked(fs.mkdir).mockResolvedValue(undefined);
     vi.mocked(fs.writeFile).mockResolvedValue(undefined);
     vi.mocked(fs.unlink).mockResolvedValue(undefined);
+    vi.mocked(isAgentMode).mockReturnValue(false);
+    vi.mocked(isCiMode).mockReturnValue(false);
   });
 
   describe('runHostProbe', () => {
@@ -132,8 +135,8 @@ describe('host-probe', () => {
   });
 
   describe('warnIfSandboxed', () => {
-    it('warns in non-interactive mode when probe fails', async () => {
-      vi.mocked(isNonInteractiveEnvironment).mockReturnValue(true);
+    it('warns in agent mode when probe fails', async () => {
+      vi.mocked(isAgentMode).mockReturnValue(true);
       vi.mocked(fs.writeFile).mockImplementation(() => {
         throw new Error('EACCES: permission denied');
       });
@@ -145,8 +148,9 @@ describe('host-probe', () => {
       );
     });
 
-    it('does not warn in interactive mode', async () => {
-      vi.mocked(isNonInteractiveEnvironment).mockReturnValue(false);
+    it('does not warn in human mode', async () => {
+      vi.mocked(isAgentMode).mockReturnValue(false);
+      vi.mocked(isCiMode).mockReturnValue(false);
       vi.mocked(fs.writeFile).mockImplementation(() => {
         throw new Error('EACCES');
       });
@@ -156,7 +160,7 @@ describe('host-probe', () => {
     });
 
     it('warns at most once per session', async () => {
-      vi.mocked(isNonInteractiveEnvironment).mockReturnValue(true);
+      vi.mocked(isAgentMode).mockReturnValue(true);
       vi.mocked(fs.writeFile).mockImplementation(() => {
         throw new Error('EPERM');
       });
@@ -168,7 +172,7 @@ describe('host-probe', () => {
     });
 
     it('does not warn on a healthy host (no false positive when probe entry is absent)', async () => {
-      vi.mocked(isNonInteractiveEnvironment).mockReturnValue(true);
+      vi.mocked(isAgentMode).mockReturnValue(true);
       keyringMock.getPassword.mockImplementation(() => {
         throw new Error('No such password in the keyring');
       });
@@ -176,11 +180,24 @@ describe('host-probe', () => {
       await warnIfSandboxed();
       expect(logVisibleWarn).not.toHaveBeenCalled();
     });
+
+    it('warns in CI mode when probe fails', async () => {
+      vi.mocked(isCiMode).mockReturnValue(true);
+      vi.mocked(fs.writeFile).mockImplementation(() => {
+        throw new Error('EACCES: permission denied');
+      });
+
+      await warnIfSandboxed();
+      expect(logVisibleWarn).toHaveBeenCalledWith(
+        expect.stringContaining('unavailable'),
+        expect.stringContaining('host shell'),
+      );
+    });
   });
 
   describe('observeHostFailure', () => {
-    it('warns on permission errors in non-interactive mode', () => {
-      vi.mocked(isNonInteractiveEnvironment).mockReturnValue(true);
+    it('warns on permission errors in agent mode', () => {
+      vi.mocked(isAgentMode).mockReturnValue(true);
       observeHostFailure('keychain', new Error('EPERM: operation not permitted'), {
         operation: 'read',
         target: 'workos-cli/credentials',
@@ -195,8 +212,8 @@ describe('host-probe', () => {
       expect(logInfo).toHaveBeenCalledWith(expect.stringContaining('target=workos-cli/credentials'));
     });
 
-    it('warns on browser launch errors in non-interactive mode', () => {
-      vi.mocked(isNonInteractiveEnvironment).mockReturnValue(true);
+    it('warns on browser launch errors in agent mode', () => {
+      vi.mocked(isAgentMode).mockReturnValue(true);
       observeHostFailure('browser-launch', new Error('No browser available'), {
         operation: 'open',
         target: 'https://example.com',
@@ -209,19 +226,19 @@ describe('host-probe', () => {
     });
 
     it('ignores non-permission errors', () => {
-      vi.mocked(isNonInteractiveEnvironment).mockReturnValue(true);
+      vi.mocked(isAgentMode).mockReturnValue(true);
       observeHostFailure('keychain', new Error('JSON parse error'));
       expect(logVisibleWarn).not.toHaveBeenCalled();
     });
 
     it('does not match unrelated words containing "sandbox" as a substring', () => {
-      vi.mocked(isNonInteractiveEnvironment).mockReturnValue(true);
+      vi.mocked(isAgentMode).mockReturnValue(true);
       observeHostFailure('keychain', new Error('failed to update sandboxes table: schema mismatch'));
       expect(logVisibleWarn).not.toHaveBeenCalled();
     });
 
     it('does not warn twice even for different capabilities', () => {
-      vi.mocked(isNonInteractiveEnvironment).mockReturnValue(true);
+      vi.mocked(isAgentMode).mockReturnValue(true);
       observeHostFailure('keychain', new Error('EPERM'));
       const callCount = vi.mocked(logVisibleWarn).mock.calls.length;
       observeHostFailure('home-fs', new Error('EACCES'));
@@ -229,7 +246,7 @@ describe('host-probe', () => {
     });
 
     it('does not double-warn across proactive and reactive paths', async () => {
-      vi.mocked(isNonInteractiveEnvironment).mockReturnValue(true);
+      vi.mocked(isAgentMode).mockReturnValue(true);
       vi.mocked(fs.writeFile).mockImplementation(() => {
         throw new Error('EACCES');
       });

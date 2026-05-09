@@ -61,7 +61,8 @@ export const ISSUE_DEFINITIONS = {
   HOST_EXECUTION_UNTRUSTED: {
     severity: 'warning' as const,
     message: 'Host-only WorkOS state may be unavailable in this shell',
-    remediation: 'Re-run this command on the host shell before trusting auth, config, or API failures',
+    remediation:
+      'Agent/CI host execution is untrusted. Re-run this command on the host shell before trusting auth, config, or API failures.',
   },
 };
 

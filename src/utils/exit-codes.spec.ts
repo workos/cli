@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./output.js', () => ({
   outputError: vi.fn(),
@@ -6,6 +6,7 @@ vi.mock('./output.js', () => ({
 
 const { outputError } = await import('./output.js');
 const { ExitCode, exitWithCode, exitWithAuthRequired } = await import('./exit-codes.js');
+const { setInteractionMode, resetInteractionModeForTests } = await import('./interaction-mode.js');
 
 describe('exit-codes', () => {
   beforeEach(() => {
@@ -47,6 +48,8 @@ describe('exit-codes', () => {
   });
 
   describe('exitWithAuthRequired', () => {
+    afterEach(() => resetInteractionModeForTests());
+
     it('exits with code 4 and auth_required error', () => {
       const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
       exitWithAuthRequired();
@@ -61,6 +64,28 @@ describe('exit-codes', () => {
       expect(outputError).toHaveBeenCalledWith(
         expect.objectContaining({ code: 'auth_required', message: 'Custom auth message' }),
       );
+      exitSpy.mockRestore();
+    });
+
+    it('attaches agent-mode recovery hints by default', () => {
+      setInteractionMode({ mode: 'agent', source: 'env' });
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+      exitWithAuthRequired();
+      const call = vi.mocked(outputError).mock.calls.at(-1)![0];
+      expect(call.recovery?.hints[0]).toMatchObject({
+        command: expect.stringContaining('auth login'),
+        hostShellRequired: true,
+      });
+      exitSpy.mockRestore();
+    });
+
+    it('attaches CI-mode recovery hints when in CI', () => {
+      setInteractionMode({ mode: 'ci', source: 'ci_env' });
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+      exitWithAuthRequired();
+      const call = vi.mocked(outputError).mock.calls.at(-1)![0];
+      expect(call.recovery?.hints[0].description).toMatch(/WORKOS_API_KEY/);
+      expect(call.recovery?.hints[0].command).toBeUndefined();
       exitSpy.mockRestore();
     });
   });

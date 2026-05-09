@@ -18,6 +18,7 @@ describe('output', () => {
   beforeEach(() => {
     process.env = { ...originalEnv };
     delete process.env.WORKOS_FORCE_TTY;
+    delete process.env.WORKOS_NO_PROMPT;
     setOutputMode('human');
   });
 
@@ -39,6 +40,12 @@ describe('output', () => {
 
     it('returns json when stdout is not a TTY', () => {
       Object.defineProperty(process.stdout, 'isTTY', { value: undefined, writable: true });
+      expect(resolveOutputMode()).toBe('json');
+    });
+
+    it('returns json when WORKOS_NO_PROMPT is set for legacy output compatibility', () => {
+      Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true });
+      process.env.WORKOS_NO_PROMPT = '1';
       expect(resolveOutputMode()).toBe('json');
     });
 
@@ -100,6 +107,44 @@ describe('output', () => {
       const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
       outputError({ code: 'test_error', message: 'something failed' });
       expect(spy.mock.calls[0][0]).toContain('something failed');
+      spy.mockRestore();
+    });
+
+    it('serializes recovery metadata in json mode', () => {
+      setOutputMode('json');
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      outputError({
+        code: 'auth_required',
+        message: 'Not authenticated.',
+        recovery: {
+          hints: [
+            { description: 'Authenticate on host shell.', command: 'workos auth login', hostShellRequired: true },
+          ],
+        },
+      });
+      const output = JSON.parse(spy.mock.calls[0][0]);
+      expect(output.error.recovery.hints[0]).toEqual({
+        description: 'Authenticate on host shell.',
+        command: 'workos auth login',
+        hostShellRequired: true,
+      });
+      spy.mockRestore();
+    });
+
+    it('prints the first recovery hint in human mode without dumping JSON', () => {
+      setOutputMode('human');
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      outputError({
+        code: 'confirmation_required',
+        message: 'Refusing to DELETE.',
+        recovery: {
+          hints: [{ description: 'Re-run with --yes.', command: 'workos api /x --method DELETE --yes' }],
+        },
+      });
+      const lines = spy.mock.calls.map((c) => c[0]);
+      expect(lines.some((l: string) => l.includes('Refusing to DELETE'))).toBe(true);
+      expect(lines.some((l: string) => l.includes('workos api /x --method DELETE --yes'))).toBe(true);
+      expect(lines.every((l: string) => !l.startsWith('{'))).toBe(true);
       spy.mockRestore();
     });
   });

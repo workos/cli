@@ -8,7 +8,7 @@ import { CLIAdapter } from './adapters/cli-adapter.js';
 import { DashboardAdapter } from './adapters/dashboard-adapter.js';
 import type { InstallerAdapter } from './adapters/types.js';
 import type { InstallerOptions } from '../utils/types.js';
-import { isNonInteractiveEnvironment } from '../utils/environment.js';
+import { isAgentMode, isCiMode } from '../utils/interaction-mode.js';
 import type {
   InstallerMachineContext,
   DetectionOutput,
@@ -207,8 +207,10 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
     }
   };
 
+  const headlessMode = isAgentMode() || isCiMode();
+
   let adapter: InstallerAdapter;
-  if (isNonInteractiveEnvironment()) {
+  if (headlessMode) {
     const { HeadlessAdapter } = await import('./adapters/headless-adapter.js');
     adapter = new HeadlessAdapter({
       emitter,
@@ -526,8 +528,9 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
 
   await adapter.start();
 
-  // Start telemetry session
-  const mode = isNonInteractiveEnvironment() ? 'headless' : augmentedOptions.dashboard ? 'tui' : 'cli';
+  // Start telemetry session. Analytics currently accepts cli/tui/headless only,
+  // so agent and CI mode both report through the existing headless bucket.
+  const mode = headlessMode ? 'headless' : augmentedOptions.dashboard ? 'tui' : 'cli';
   analytics.sessionStart(mode, getVersion());
 
   let installerStatus: 'success' | 'error' | 'cancelled' = 'success';

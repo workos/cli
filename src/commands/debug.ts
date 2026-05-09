@@ -18,7 +18,7 @@ import {
   diagnoseConfig,
 } from '../lib/config-store.js';
 import { isJsonMode, outputJson, exitWithError } from '../utils/output.js';
-import { isNonInteractiveEnvironment } from '../utils/environment.js';
+import { isPromptAllowed } from '../utils/interaction-mode.js';
 
 function maskSecret(value: string | undefined): string | undefined {
   if (!value) return undefined;
@@ -193,10 +193,10 @@ export async function runDebugReset({
   const targets = [clearCreds && 'credentials', clearConf && 'config'].filter(Boolean).join(' and ');
 
   if (!force) {
-    if (isNonInteractiveEnvironment()) {
+    if (!isPromptAllowed()) {
       exitWithError({
         code: 'non_interactive_reset',
-        message: 'Use --force to reset in non-interactive mode',
+        message: 'Use --force to reset in agent or CI mode',
       });
     }
 
@@ -322,8 +322,9 @@ interface EnvVarInfo {
 
 const ENV_VAR_CATALOG: { name: string; effect: string }[] = [
   { name: 'WORKOS_API_KEY', effect: 'Bypasses credential resolution — used directly for API calls' },
+  { name: 'WORKOS_MODE', effect: 'Controls interaction behavior: human, agent, or CI' },
   { name: 'WORKOS_FORCE_TTY', effect: 'Forces human (non-JSON) output mode, even when piped' },
-  { name: 'WORKOS_NO_PROMPT', effect: 'Forces non-interactive/JSON mode' },
+  { name: 'WORKOS_NO_PROMPT', effect: 'Legacy compatibility alias for agent interaction behavior and JSON output' },
   { name: 'WORKOS_TELEMETRY', effect: 'Set to "false" to disable telemetry' },
   { name: 'WORKOS_API_URL', effect: 'Overrides API base URL (default: https://api.workos.com)' },
   { name: 'WORKOS_DASHBOARD_URL', effect: 'Overrides dashboard URL (default: https://dashboard.workos.com)' },

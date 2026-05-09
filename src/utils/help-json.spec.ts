@@ -4,9 +4,31 @@ vi.mock('../lib/settings.js', () => ({
   getVersion: vi.fn(() => '0.7.3'),
 }));
 
-const { buildCommandTree } = await import('./help-json.js');
+const { buildCommandTree, extractHelpJsonCommand } = await import('./help-json.js');
 
 describe('help-json', () => {
+  describe('extractHelpJsonCommand()', () => {
+    it('extracts a direct command', () => {
+      expect(extractHelpJsonCommand(['doctor', '--help', '--json'])).toBe('doctor');
+    });
+
+    it('skips --mode values before the command', () => {
+      expect(extractHelpJsonCommand(['--mode', 'agent', 'doctor', '--help', '--json'])).toBe('doctor');
+    });
+
+    it('skips --mode= values before the command', () => {
+      expect(extractHelpJsonCommand(['--mode=agent', 'doctor', '--help', '--json'])).toBe('doctor');
+    });
+
+    it('returns undefined when only global flags are present', () => {
+      expect(extractHelpJsonCommand(['--mode', 'agent', '--help', '--json'])).toBeUndefined();
+    });
+
+    it('resolves command aliases', () => {
+      expect(extractHelpJsonCommand(['org', '--help', '--json'])).toBe('organization');
+    });
+  });
+
   describe('buildCommandTree() — full tree', () => {
     it('returns root with name "workos"', () => {
       const tree = buildCommandTree();
@@ -55,6 +77,15 @@ describe('help-json', () => {
       expect(jsonOpt).toBeDefined();
       expect(jsonOpt!.type).toBe('boolean');
       expect(jsonOpt!.default).toBe(false);
+    });
+
+    it('includes global interaction mode option with choices', () => {
+      const tree = buildCommandTree();
+      const opts = (tree as { options: { name: string; type: string; choices?: string[] }[] }).options;
+      const modeOpt = opts.find((o) => o.name === 'mode');
+      expect(modeOpt).toBeDefined();
+      expect(modeOpt!.type).toBe('string');
+      expect(modeOpt!.choices).toEqual(['human', 'agent', 'ci']);
     });
 
     it('output is valid JSON-serializable', () => {

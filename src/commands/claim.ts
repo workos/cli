@@ -13,6 +13,7 @@ import { createClaimNonce, UnclaimedEnvApiError } from '../lib/unclaimed-env-api
 import { observeHostFailure } from '../lib/host-probe.js';
 import { logInfo, logError } from '../utils/debug.js';
 import { isJsonMode, outputJson, exitWithError } from '../utils/output.js';
+import { isAgentMode, isCiMode } from '../utils/interaction-mode.js';
 import { sleep } from '../lib/helper-functions.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
@@ -62,11 +63,23 @@ export async function runClaim(): Promise<void> {
       return;
     }
 
+    if (isCiMode()) {
+      exitWithError({
+        code: 'unsupported_in_ci',
+        message: 'Environment claim requires opening the claim URL outside CI.',
+        details: { claimUrl, nonce: result.nonce },
+      });
+    }
+
     clack.log.info(`Open this URL to claim your environment:\n\n  ${claimUrl}`);
 
     try {
-      open(claimUrl, { wait: false });
-      clack.log.info('Browser opened automatically');
+      await open(claimUrl, { wait: false });
+      if (isAgentMode()) {
+        clack.log.info('Browser launch attempted. If it did not open on the host, use the URL above.');
+      } else {
+        clack.log.info('Browser opened automatically');
+      }
     } catch (openError) {
       observeHostFailure('browser-launch', openError, {
         operation: 'open',
