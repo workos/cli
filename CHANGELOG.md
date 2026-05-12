@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0](https://github.com/workos/cli/compare/v0.13.4...v0.14.0) (2026-05-12)
+
+
+### Features
+
+* add first-class CLI interaction modes ([#143](https://github.com/workos/cli/issues/143)) ([4a6e8cc](https://github.com/workos/cli/commit/4a6e8cc3e070908673ee133213e49450b9280787))
+* **api:** add generic `workos api` gateway ([#142](https://github.com/workos/cli/issues/142)) ([6cfa55b](https://github.com/workos/cli/commit/6cfa55ba6d768ebbb4cc7ed922ac94037404b412))
+
 ## [0.13.4](https://github.com/workos/cli/compare/v0.13.3...v0.13.4) (2026-05-05)
 
 
