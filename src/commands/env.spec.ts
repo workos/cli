@@ -61,6 +61,7 @@ describe('env commands', () => {
   afterEach(() => {
     clearConfig();
     resetInteractionModeForTests();
+    setOutputMode('human');
     try {
       rmdirSync(join(testDir, '.workos'), { recursive: true });
     } catch {}
@@ -117,6 +118,21 @@ describe('env commands', () => {
       setInteractionMode({ mode: 'ci', source: 'env' });
       await expect(runEnvAdd({ name: 'prod' })).rejects.toThrow('process.exit');
       expect(clack.text).not.toHaveBeenCalled();
+    });
+
+    it('does not include placeholder commands in missing-args recovery metadata', async () => {
+      setOutputMode('json');
+      setInteractionMode({ mode: 'agent', source: 'env' });
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        await expect(runEnvAdd({ name: 'prod' })).rejects.toThrow('process.exit');
+        const parsed = JSON.parse(errorSpy.mock.calls[0][0]);
+        expect(parsed.error.recovery.hints[0]).toEqual({
+          description: 'Provide environment name and API key as positional arguments.',
+        });
+      } finally {
+        errorSpy.mockRestore();
+      }
     });
   });
 

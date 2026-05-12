@@ -111,6 +111,30 @@ describe('debug logging', () => {
     }
   });
 
+  it('suppresses visible warnings in JSON mode', async () => {
+    vi.resetModules();
+    vi.doMock('os', async () => {
+      const actual = await vi.importActual('os');
+      return { ...actual, homedir: () => testDir };
+    });
+    vi.doMock('./clack.js', () => ({
+      default: { log: { info: vi.fn() } },
+    }));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const { setOutputMode } = await import('./output.js');
+      setOutputMode('json');
+      const { logVisibleWarn } = await import('./debug.js');
+
+      logVisibleWarn('sandbox warning', 'host shell');
+
+      expect(errorSpy).not.toHaveBeenCalled();
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
   it('getLogFilePath returns null before init', async () => {
     vi.resetModules();
     vi.doMock('os', async () => {

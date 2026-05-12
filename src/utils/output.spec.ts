@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const {
   resolveOutputMode,
+  resolveEffectiveOutputMode,
   setOutputMode,
   getOutputMode,
   isJsonMode,
@@ -57,6 +58,20 @@ describe('output', () => {
     it('--json flag overrides WORKOS_FORCE_TTY', () => {
       process.env.WORKOS_FORCE_TTY = '1';
       expect(resolveOutputMode(true)).toBe('json');
+    });
+  });
+
+  describe('resolveEffectiveOutputMode', () => {
+    it('keeps human output for human interaction mode', () => {
+      expect(resolveEffectiveOutputMode('human', { mode: 'human', source: 'default' })).toBe('human');
+    });
+
+    it('forces JSON output for explicit agent mode', () => {
+      expect(resolveEffectiveOutputMode('human', { mode: 'agent', source: 'env' })).toBe('json');
+    });
+
+    it('preserves non-TTY output compatibility decisions', () => {
+      expect(resolveEffectiveOutputMode('human', { mode: 'agent', source: 'non_tty' })).toBe('human');
     });
   });
 

@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { Catalog } from './catalog.js';
 import type { ApiResponse } from './request.js';
 
@@ -389,6 +392,74 @@ describe('runApiRequest', () => {
       }
     });
     expect(errorLine).toBeDefined();
+    const parsed = JSON.parse(errorLine!);
+    expect(parsed.error.recovery.hints[0].command).toBe("workos api /organizations --method POST '--data={}' --yes");
+  });
+
+  it('uses equals-form data flags so leading hyphens are preserved in confirmation recovery commands', async () => {
+    setOutputMode('json');
+    await expect(runApiRequest('/organizations', { method: 'POST', data: '-x' })).rejects.toThrow(/__exit__:1/);
+    const errorLine = stderrOutput.find((line) => {
+      try {
+        const parsed = JSON.parse(line) as { error?: { code?: string } };
+        return parsed.error?.code === 'confirmation_required';
+      } catch {
+        return false;
+      }
+    });
+    expect(errorLine).toBeDefined();
+    const parsed = JSON.parse(errorLine!);
+    expect(parsed.error.recovery.hints[0].command).toBe('workos api /organizations --method POST --data=-x --yes');
+  });
+
+  it('preserves --file in confirmation recovery commands', async () => {
+    setOutputMode('json');
+    const dir = mkdtempSync(join(tmpdir(), 'workos-api-'));
+    const file = join(dir, 'body.json');
+    writeFileSync(file, '{"name":"Acme"}');
+    try {
+      await expect(runApiRequest('/organizations', { method: 'PATCH', file })).rejects.toThrow(/__exit__:1/);
+      const errorLine = stderrOutput.find((line) => {
+        try {
+          const parsed = JSON.parse(line) as { error?: { code?: string } };
+          return parsed.error?.code === 'confirmation_required';
+        } catch {
+          return false;
+        }
+      });
+      expect(errorLine).toBeDefined();
+      const parsed = JSON.parse(errorLine!);
+      expect(parsed.error.recovery.hints[0].command).toBe(
+        `workos api /organizations --method PATCH --file=${file} --yes`,
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('omits confirmation recovery commands for stdin bodies', async () => {
+    setOutputMode('json');
+    const stdinBody = (async function* () {
+      yield Buffer.from('{"name":"Acme"}');
+    })();
+    const originalStdin = process.stdin;
+    Object.defineProperty(process, 'stdin', { value: stdinBody, configurable: true });
+    try {
+      await expect(runApiRequest('/organizations', { method: 'POST', file: '-' })).rejects.toThrow(/__exit__:1/);
+    } finally {
+      Object.defineProperty(process, 'stdin', { value: originalStdin, configurable: true });
+    }
+    const errorLine = stderrOutput.find((line) => {
+      try {
+        const parsed = JSON.parse(line) as { error?: { code?: string } };
+        return parsed.error?.code === 'confirmation_required';
+      } catch {
+        return false;
+      }
+    });
+    expect(errorLine).toBeDefined();
+    const parsed = JSON.parse(errorLine!);
+    expect(parsed.error.recovery.hints[0].command).toBeUndefined();
   });
 
   it('exits with empty_stdin_body when --file - is used and stdin is empty', async () => {

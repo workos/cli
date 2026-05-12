@@ -9,6 +9,7 @@
 import chalk from 'chalk';
 import { formatTable, type TableColumn } from './table.js';
 import type { RecoveryHints } from './recovery-hints.js';
+import type { InteractionModeInfo } from './interaction-mode.js';
 
 export type OutputMode = 'human' | 'json';
 
@@ -30,6 +31,13 @@ export function resolveOutputMode(jsonFlag?: boolean): OutputMode {
   if (process.env.WORKOS_NO_PROMPT === '1' || process.env.WORKOS_NO_PROMPT === 'true') return 'json';
   if (!process.stdout.isTTY) return 'json';
   return 'human';
+}
+
+export function resolveEffectiveOutputMode(mode: OutputMode, interaction: InteractionModeInfo): OutputMode {
+  if (interaction.mode === 'human' || interaction.source === 'non_tty') {
+    return mode;
+  }
+  return 'json';
 }
 
 export function setOutputMode(mode: OutputMode): void {

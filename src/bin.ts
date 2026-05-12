@@ -33,16 +33,26 @@ import {
   resolveInteractionMode,
   setInteractionMode,
 } from './utils/interaction-mode.js';
-import { resolveOutputMode, setOutputMode, isJsonMode, outputJson, exitWithError } from './utils/output.js';
+import {
+  resolveEffectiveOutputMode,
+  resolveOutputMode,
+  setOutputMode,
+  isJsonMode,
+  outputJson,
+  exitWithError,
+} from './utils/output.js';
 import clack from './utils/clack.js';
 import { registerSubcommand } from './utils/register-subcommand.js';
 
 // Resolve output mode early from raw argv (before yargs parses)
 const rawArgs = hideBin(process.argv);
 const hasJsonFlag = rawArgs.includes('--json');
-setOutputMode(resolveOutputMode(hasJsonFlag));
+const baseOutputMode = resolveOutputMode(hasJsonFlag);
+setOutputMode(baseOutputMode);
 try {
-  setInteractionMode(resolveInteractionMode({ argv: rawArgs }));
+  const interaction = resolveInteractionMode({ argv: rawArgs });
+  setInteractionMode(interaction);
+  setOutputMode(resolveEffectiveOutputMode(baseOutputMode, interaction));
 } catch (error) {
   if (error instanceof InvalidInteractionModeError) {
     exitWithError({ code: 'invalid_mode', message: error.message });
@@ -182,8 +192,8 @@ const installerOptions = {
   },
 };
 
-// Check for updates (blocks up to 500ms, skip in JSON mode to keep stdout clean)
-if (!isJsonMode()) await checkForUpdates();
+// Check for updates (blocks up to 500ms, skip in JSON/non-human modes to keep machine streams clean)
+if (!isJsonMode() && isPromptAllowed()) await checkForUpdates();
 
 yargs(rawArgs)
   .parserConfiguration({ 'populate--': true })

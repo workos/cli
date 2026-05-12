@@ -5,6 +5,7 @@ import chalk from 'chalk';
 import { prepareMessage } from './logging.js';
 import { redactCredentials } from './redact.js';
 import clack from './clack.js';
+import { isJsonMode } from './output.js';
 
 let debugEnabled = false;
 let sessionLogPath: string | null = null;
@@ -66,7 +67,7 @@ function writeLog(level: 'INFO' | 'WARN' | 'ERROR', emoji: string, args: unknown
   const msg = redactedArgs.map((a) => prepareMessage(a)).join(' ');
 
   // Write to console if debug enabled
-  if (debugEnabled) {
+  if (debugEnabled && !isJsonMode()) {
     const color = level === 'ERROR' ? chalk.red : level === 'WARN' ? chalk.yellow : chalk.dim;
     clack.log.info(color(`${emoji} ${msg}`));
   }
@@ -94,7 +95,7 @@ export function logWarn(...args: unknown[]): void {
 
 export function logVisibleWarn(...args: unknown[]): void {
   const msg = writeLog('WARN', '⚠️ ', args);
-  if (!debugEnabled) {
+  if (!debugEnabled && !isJsonMode()) {
     console.error(chalk.yellow(`⚠️  ${msg}`));
   }
 }
@@ -104,7 +105,7 @@ export function logError(...args: unknown[]): void {
 }
 
 export function debug(...args: unknown[]): void {
-  if (!debugEnabled) return;
+  if (!debugEnabled || isJsonMode()) return;
   const msg = args.map((a) => prepareMessage(a)).join(' ');
   clack.log.info(chalk.dim(msg));
 }

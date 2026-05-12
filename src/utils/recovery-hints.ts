@@ -79,25 +79,25 @@ export function authLoginRecovery(options: { mode: InteractionMode; env?: NodeJS
   };
 }
 
-/** Build a `confirmation_required` recovery hint when the exact command is known. */
-export function confirmationRecovery(command: string): RecoveryHints {
+/** Build a `confirmation_required` recovery hint, attaching a command only when the exact rerun is known. */
+export function confirmationRecovery(command?: string): RecoveryHints {
   return {
     hints: [
       {
         description: 'Re-run with explicit confirmation.',
-        command,
+        ...(command && { command }),
       },
     ],
   };
 }
 
-/** Build a `missing_args` recovery hint with a deterministic command shape. */
-export function missingArgsRecovery(command: string, description: string): RecoveryHints {
+/** Build a `missing_args` recovery hint, attaching a command only when it is directly runnable. */
+export function missingArgsRecovery(command: string | undefined, description: string): RecoveryHints {
   return {
     hints: [
       {
         description,
-        command,
+        ...(command && { command }),
       },
     ],
   };

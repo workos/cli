@@ -6,7 +6,7 @@ import { resolveApiBaseUrl } from '../../lib/api-key.js';
 import { exitWithError, isJsonMode, outputJson } from '../../utils/output.js';
 import { isCiMode, isPromptAllowed } from '../../utils/interaction-mode.js';
 import { confirmationRecovery } from '../../utils/recovery-hints.js';
-import { formatWorkOSCommand } from '../../utils/command-invocation.js';
+import { formatWorkOSCommandArgs } from '../../utils/command-invocation.js';
 import { colorMethod, printResponse } from './format.js';
 
 export { colorMethod } from './format.js';
@@ -123,7 +123,7 @@ export async function runApiRequest(endpoint: string, options: ApiCommandOptions
   }
 
   if (MUTATING_METHODS.has(method) && !options.yes) {
-    const confirmCommand = formatWorkOSCommand(`api ${endpoint} --method ${method} --yes`);
+    const confirmCommand = buildConfirmationCommand(endpoint, method, options);
     if (!isPromptAllowed()) {
       exitWithError({
         code: 'confirmation_required',
@@ -167,6 +167,25 @@ export async function runApiRequest(endpoint: string, options: ApiCommandOptions
 function normalizePath(path: string): string {
   if (!path.startsWith('/')) return `/${path}`;
   return path;
+}
+
+function buildConfirmationCommand(endpoint: string, method: string, options: ApiCommandOptions): string | undefined {
+  if (options.apiKey || options.file === '-') {
+    return undefined;
+  }
+
+  const args = ['api', endpoint, '--method', method];
+  if (options.data !== undefined) {
+    args.push(`--data=${options.data}`);
+  }
+  if (options.file) {
+    args.push(`--file=${options.file}`);
+  }
+  if (options.include) {
+    args.push('--include');
+  }
+  args.push('--yes');
+  return formatWorkOSCommandArgs(args);
 }
 
 async function resolveBody(options: ApiCommandOptions): Promise<string | undefined> {

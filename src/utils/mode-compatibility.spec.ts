@@ -1,18 +1,20 @@
 /**
  * Backcompat matrix tests for Phase 6.
  *
- * Encodes the contract's commitment to keeping output mode and interaction mode
- * separate while preserving legacy behavior of `--json`, non-TTY, `WORKOS_NO_PROMPT`,
- * `WORKOS_FORCE_TTY`, and CI/agent markers.
+ * Encodes the contract's commitment to resolving output mode and interaction mode
+ * separately, then coercing the effective output mode to JSON for explicit
+ * agent/CI modes so headless streams are not prefixed by human-only output.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { resolveOutputMode } from './output.js';
+import { resolveEffectiveOutputMode, resolveOutputMode } from './output.js';
 import { resolveInteractionMode } from './interaction-mode.js';
 
 describe('mode compatibility matrix', () => {
   const originalEnv = process.env;
   const originalIsTTY = process.stdout.isTTY;
+  const originalStderrIsTTY = process.stderr.isTTY;
+  const interactionEnvKeys = ['WORKOS_MODE', 'WORKOS_NO_PROMPT', 'CI', 'GITHUB_ACTIONS', 'WORKOS_AGENT'] as const;
 
   beforeEach(() => {
     process.env = { ...originalEnv };
@@ -26,8 +28,18 @@ describe('mode compatibility matrix', () => {
 
   afterEach(() => {
     Object.defineProperty(process.stdout, 'isTTY', { value: originalIsTTY, writable: true });
+    Object.defineProperty(process.stderr, 'isTTY', { value: originalStderrIsTTY, writable: true });
     process.env = originalEnv;
   });
+
+  function getInteractionTestEnv(): NodeJS.ProcessEnv {
+    return Object.fromEntries(
+      interactionEnvKeys.flatMap((key) => {
+        const value = process.env[key];
+        return value === undefined ? [] : [[key, value]];
+      }),
+    );
+  }
 
   // Each row asserts that output and interaction modes resolve independently.
   type Row = {
@@ -100,14 +112,14 @@ describe('mode compatibility matrix', () => {
       expectSource: 'env',
     },
     {
-      name: 'WORKOS_MODE=agent with TTY keeps human output unless --json is passed',
+      name: 'WORKOS_MODE=agent with TTY coerces effective output to json',
       setup: () => {
         Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true });
         Object.defineProperty(process.stderr, 'isTTY', { value: true, writable: true });
         process.env.WORKOS_MODE = 'agent';
         return {};
       },
-      expectOutput: 'human',
+      expectOutput: 'json',
       expectMode: 'agent',
       expectSource: 'env',
     },
@@ -120,7 +132,7 @@ describe('mode compatibility matrix', () => {
         process.env.WORKOS_AGENT = '1';
         return {};
       },
-      expectOutput: 'human',
+      expectOutput: 'json',
       expectMode: 'ci',
       expectSource: 'ci_env',
     },
@@ -133,7 +145,7 @@ describe('mode compatibility matrix', () => {
         process.env.GITHUB_ACTIONS = 'true';
         return { argv: ['--mode', 'agent'] };
       },
-      expectOutput: 'human',
+      expectOutput: 'json',
       expectMode: 'agent',
       expectSource: 'flag',
     },
@@ -142,8 +154,9 @@ describe('mode compatibility matrix', () => {
   for (const row of rows) {
     it(row.name, () => {
       const { argv = [], jsonFlag } = row.setup();
-      expect(resolveOutputMode(jsonFlag)).toBe(row.expectOutput);
-      expect(resolveInteractionMode({ argv })).toEqual({
+      const interaction = resolveInteractionMode({ argv, env: getInteractionTestEnv() });
+      expect(resolveEffectiveOutputMode(resolveOutputMode(jsonFlag), interaction)).toBe(row.expectOutput);
+      expect(interaction).toEqual({
         mode: row.expectMode,
         source: row.expectSource,
       });

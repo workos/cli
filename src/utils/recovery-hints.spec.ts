@@ -48,6 +48,11 @@ describe('recovery-hints', () => {
       expect(recovery.hints).toHaveLength(1);
       expect(recovery.hints[0].command).toBe('workos api /resource --method DELETE --yes');
     });
+
+    it('omits command when the rerun cannot be safely reconstructed', () => {
+      const recovery = confirmationRecovery();
+      expect(recovery.hints).toEqual([{ description: 'Re-run with explicit confirmation.' }]);
+    });
   });
 
   describe('missingArgsRecovery', () => {
@@ -56,6 +61,11 @@ describe('recovery-hints', () => {
       expect(recovery.hints).toEqual([
         { description: 'Pass name and api key', command: 'workos env add prod sk_test_xxx' },
       ]);
+    });
+
+    it('omits placeholder commands', () => {
+      const recovery = missingArgsRecovery(undefined, 'Pass name and api key');
+      expect(recovery.hints).toEqual([{ description: 'Pass name and api key' }]);
     });
   });
 });
