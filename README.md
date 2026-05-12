@@ -586,7 +586,7 @@ workos --help --json | jq '.commands[].name'
 
 The CLI separates **output mode** from **interaction mode**:
 
-- `--json` (or `WORKOS_NO_PROMPT=1`, or non-TTY auto-detection) controls **output formatting** only.
+- `--json` (or non-TTY auto-detection) controls **output formatting** only.
 - `--mode human|agent|ci` (or `WORKOS_MODE=...`) controls **interaction behavior** — prompts, browser launch, host trust, destructive confirmation.
 
 For coding agents, set both axes explicitly:

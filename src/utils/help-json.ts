@@ -1340,8 +1340,20 @@ const helpJsonCommandNames = new Set([
  * global flags like `--mode agent` are not mistaken for commands.
  */
 export function extractHelpJsonCommand(argv: string[]): string | undefined {
-  const command = argv.find((arg) => !arg.startsWith('-') && helpJsonCommandNames.has(arg));
-  return command ? (commandAliases[command] ?? command) : undefined;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '--mode') {
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith('--mode=')) {
+      continue;
+    }
+    if (!arg.startsWith('-') && helpJsonCommandNames.has(arg)) {
+      return commandAliases[arg] ?? arg;
+    }
+  }
+  return undefined;
 }
 
 /**

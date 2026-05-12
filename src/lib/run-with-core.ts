@@ -8,7 +8,8 @@ import { CLIAdapter } from './adapters/cli-adapter.js';
 import { DashboardAdapter } from './adapters/dashboard-adapter.js';
 import type { InstallerAdapter } from './adapters/types.js';
 import type { InstallerOptions } from '../utils/types.js';
-import { isAgentMode, isCiMode } from '../utils/interaction-mode.js';
+import { getInteractionMode, isAgentMode, isCiMode } from '../utils/interaction-mode.js';
+import { getOutputMode, isJsonMode, resolveEffectiveOutputMode, setOutputMode } from '../utils/output.js';
 import type {
   InstallerMachineContext,
   DetectionOutput,
@@ -207,7 +208,11 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
     }
   };
 
-  const headlessMode = isAgentMode() || isCiMode();
+  const nonHumanMode = isAgentMode() || isCiMode();
+  if (nonHumanMode && !isJsonMode()) {
+    setOutputMode(resolveEffectiveOutputMode(getOutputMode(), getInteractionMode()));
+  }
+  const headlessMode = nonHumanMode && isJsonMode();
 
   let adapter: InstallerAdapter;
   if (headlessMode) {
@@ -373,7 +378,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         // Open browser
         try {
           const { default: openFn } = await import('opn');
-          await openFn(deviceAuth.verification_uri_complete);
+          await openFn(deviceAuth.verification_uri_complete, { wait: false });
         } catch (error) {
           observeHostFailure('browser-launch', error, {
             operation: 'open',
