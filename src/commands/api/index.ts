@@ -4,6 +4,7 @@ import { loadCatalog, endpointsByTag } from './catalog.js';
 import { apiRequest } from './request.js';
 import { resolveApiBaseUrl } from '../../lib/api-key.js';
 import { exitWithError, isJsonMode, outputJson } from '../../utils/output.js';
+import { ExitCode, exitWithCode } from '../../utils/exit-codes.js';
 import { isCiMode, isPromptAllowed } from '../../utils/interaction-mode.js';
 import { confirmationRecovery } from '../../utils/recovery-hints.js';
 import { formatWorkOSCommandArgs } from '../../utils/command-invocation.js';
@@ -145,7 +146,7 @@ export async function runApiRequest(endpoint: string, options: ApiCommandOptions
     if (hasBody) prettyPrint(body);
     const ok = await clack.confirm({ message: 'Proceed?' });
     if (!ok || clack.isCancel(ok)) {
-      process.exit(0);
+      exitWithCode(ExitCode.CANCELLED);
     }
   }
 
@@ -160,7 +161,11 @@ export async function runApiRequest(endpoint: string, options: ApiCommandOptions
   printResponse(response, { includeStatus: options.include });
 
   if (response.status >= 400) {
-    process.exit(1);
+    exitWithError({
+      code: `http_${response.status}`,
+      message: `API request failed with status ${response.status}`,
+      apiContext: { status: response.status },
+    });
   }
 }
 

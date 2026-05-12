@@ -232,20 +232,20 @@ describe('apiInteractive', () => {
     expect(mockApiRequest).toHaveBeenCalledWith(expect.objectContaining({ body: undefined }));
   });
 
-  it('exits with code 0 when the user cancels at the category prompt', async () => {
+  it('exits with code 2 when the user cancels at the category prompt', async () => {
     mockSelect.mockResolvedValueOnce(cancelSymbol);
 
-    await expect(apiInteractive()).rejects.toThrow(/__exit__:0/);
-    expect(exitSpy).toHaveBeenCalledWith(0);
+    await expect(apiInteractive()).rejects.toThrow(/__exit__:2/);
+    expect(exitSpy).toHaveBeenCalledWith(2);
     expect(mockApiRequest).not.toHaveBeenCalled();
   });
 
-  it('exits with code 0 when the user declines the final confirmation', async () => {
+  it('exits with code 2 when the user declines the final confirmation', async () => {
     mockSelect.mockResolvedValueOnce('Users').mockResolvedValueOnce(mockCatalog.endpoints[0]);
     mockConfirm.mockResolvedValueOnce(false);
 
-    await expect(apiInteractive()).rejects.toThrow(/__exit__:0/);
-    expect(exitSpy).toHaveBeenCalledWith(0);
+    await expect(apiInteractive()).rejects.toThrow(/__exit__:2/);
+    expect(exitSpy).toHaveBeenCalledWith(2);
     expect(mockApiRequest).not.toHaveBeenCalled();
   });
 

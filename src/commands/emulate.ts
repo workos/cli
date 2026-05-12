@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import chalk from 'chalk';
 import { IS_WINDOWS } from '../utils/platform.js';
+import { exitWithError } from '../utils/output.js';
 
 export interface EmulateArgs {
   port: number;
@@ -14,8 +15,7 @@ export interface EmulateArgs {
 function loadSeedFile(filePath: string): EmulatorSeedConfig {
   const resolved = resolve(filePath);
   if (!existsSync(resolved)) {
-    console.error(`Seed file not found: ${resolved}`);
-    process.exit(1);
+    exitWithError({ code: 'seed_not_found', message: `Seed file not found: ${resolved}` });
   }
 
   const content = readFileSync(resolved, 'utf-8');

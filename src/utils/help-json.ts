@@ -7,6 +7,7 @@
  */
 
 import { getVersion } from '../lib/settings.js';
+import { COMMAND_ALIASES } from '../lib/command-aliases.js';
 
 export interface OptionSchema {
   name: string;
@@ -1346,10 +1347,9 @@ const globalOptions: OptionSchema[] = [
 // Public API
 // ---------------------------------------------------------------------------
 
-const commandAliases: Record<string, string> = { org: 'organization' };
 const helpJsonCommandNames = new Set([
   ...commands.map((command) => command.name.split(' ')[0]),
-  ...Object.keys(commandAliases),
+  ...Object.keys(COMMAND_ALIASES),
 ]);
 
 /**
@@ -1369,7 +1369,7 @@ export function extractHelpJsonCommand(argv: string[]): string | undefined {
       continue;
     }
     if (!arg.startsWith('-') && helpJsonCommandNames.has(arg)) {
-      return commandAliases[arg] ?? arg;
+      return COMMAND_ALIASES[arg] ?? arg;
     }
   }
   return undefined;

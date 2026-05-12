@@ -6,6 +6,8 @@ import { resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import chalk from 'chalk';
 import { IS_WINDOWS, SPAWN_OPTS } from '../utils/platform.js';
+import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
+import { exitWithError } from '../utils/output.js';
 
 export interface DevArgs {
   port: number;
@@ -16,8 +18,7 @@ export interface DevArgs {
 function loadSeedFile(filePath: string): EmulatorSeedConfig {
   const resolved = resolve(filePath);
   if (!existsSync(resolved)) {
-    console.error(`Seed file not found: ${resolved}`);
-    process.exit(1);
+    exitWithError({ code: 'seed_not_found', message: `Seed file not found: ${resolved}` });
   }
 
   const content = readFileSync(resolved, 'utf-8');
@@ -129,7 +130,7 @@ export async function runDev(argv: DevArgs): Promise<void> {
     console.error(chalk.red(`Failed to start: ${devCmd.command} ${devCmd.args.join(' ')}`));
     console.error(chalk.dim('Try specifying the command explicitly: workos dev -- <your-command>'));
     await emulator.close();
-    process.exit(1);
+    exitWithCode(ExitCode.GENERAL_ERROR);
   }
 
   child.on('error', async (err) => {
@@ -141,7 +142,7 @@ export async function runDev(argv: DevArgs): Promise<void> {
       console.error(chalk.dim(err.message));
     }
     await emulator.close();
-    process.exit(1);
+    exitWithCode(ExitCode.GENERAL_ERROR);
   });
 
   // 5. Signal handling — forward to child, then close emulator

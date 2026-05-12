@@ -6,6 +6,7 @@ import { outputSuccess, outputJson, exitWithError, isJsonMode } from '../utils/o
 import { isAgentMode, isCiMode, isPromptAllowed } from '../utils/interaction-mode.js';
 import { missingArgsRecovery } from '../utils/recovery-hints.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
+import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
 
 const ENV_NAME_REGEX = /^[a-z0-9\-_]+$/;
 
@@ -51,7 +52,7 @@ export async function runEnvAdd(options: {
       message: 'Enter a name for the environment (e.g., production, sandbox, local)',
       validate: (value) => validateEnvName(value),
     });
-    if (clack.isCancel(nameResult)) process.exit(0);
+    if (clack.isCancel(nameResult)) exitWithCode(ExitCode.CANCELLED);
     name = nameResult;
 
     const typeResult = await clack.select({
@@ -61,7 +62,7 @@ export async function runEnvAdd(options: {
         { value: 'sandbox', label: 'Sandbox' },
       ],
     });
-    if (clack.isCancel(typeResult)) process.exit(0);
+    if (clack.isCancel(typeResult)) exitWithCode(ExitCode.CANCELLED);
 
     const apiKeyResult = await clack.password({
       message: 'Enter the API key for this environment',
@@ -70,7 +71,7 @@ export async function runEnvAdd(options: {
         return undefined;
       },
     });
-    if (clack.isCancel(apiKeyResult)) process.exit(0);
+    if (clack.isCancel(apiKeyResult)) exitWithCode(ExitCode.CANCELLED);
     apiKey = apiKeyResult;
 
     const config = getOrCreateConfig();
@@ -174,7 +175,7 @@ export async function runEnvSwitch(name?: string): Promise<void> {
       message: 'Select an environment',
       options,
     });
-    if (clack.isCancel(selected)) process.exit(0);
+    if (clack.isCancel(selected)) exitWithCode(ExitCode.CANCELLED);
     name = selected as string;
   }
 

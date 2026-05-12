@@ -3,9 +3,11 @@ import { loadCatalog, endpointsByTag, type EndpointInfo } from './catalog.js';
 import { apiRequest } from './request.js';
 import { colorMethod, printResponse } from './format.js';
 import { resolveApiKey, resolveApiBaseUrl } from '../../lib/api-key.js';
+import { ExitCode, exitWithCode } from '../../utils/exit-codes.js';
+import { exitWithError } from '../../utils/output.js';
 
 function assertNotCancelled<T>(value: T | symbol): T {
-  if (clack.isCancel(value)) process.exit(0);
+  if (clack.isCancel(value)) exitWithCode(ExitCode.CANCELLED);
   return value as T;
 }
 
@@ -136,7 +138,7 @@ export async function apiInteractive(options?: { apiKey?: string }): Promise<voi
   console.log();
 
   const ok = assertNotCancelled(await clack.confirm({ message: 'Execute this request?' }));
-  if (!ok) process.exit(0);
+  if (!ok) exitWithCode(ExitCode.CANCELLED);
 
   const response = await apiRequest({
     method: ep.method,
@@ -149,6 +151,10 @@ export async function apiInteractive(options?: { apiKey?: string }): Promise<voi
   printResponse(response, { includeStatus: true });
 
   if (response.status >= 400) {
-    process.exit(1);
+    exitWithError({
+      code: `http_${response.status}`,
+      message: `API request failed with status ${response.status}`,
+      apiContext: { status: response.status },
+    });
   }
 }

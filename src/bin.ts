@@ -545,7 +545,7 @@ yargs(rawArgs)
         .example('workos api /user_management/users', 'GET /user_management/users')
         .example('workos api /organizations -d \'{"name":"Acme"}\'', 'POST with a JSON body')
         .example('workos api /organizations/org_123 -X DELETE', 'DELETE an organization'),
-    async (argv) => {
+    wrapCommandHandler(async (argv) => {
       await applyInsecureStorage(argv.insecureStorage as boolean | undefined);
       const endpoint = argv.endpoint as string | undefined;
       const filter = argv.filter as string | undefined;
@@ -571,7 +571,7 @@ yargs(rawArgs)
         dryRun: argv.dryRun,
         yes: argv.yes,
       });
-    },
+    }),
   )
   .command(['organization', 'org'], 'Manage WorkOS organizations (create, update, get, list, delete)', (yargs) => {
     yargs.options({

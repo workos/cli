@@ -317,7 +317,7 @@ describe('runApiRequest', () => {
 
   it('aborts when the user declines the confirmation prompt', async () => {
     mockConfirm.mockResolvedValueOnce(false);
-    await expect(runApiRequest('/organizations', { method: 'POST', data: '{}' })).rejects.toThrow(/__exit__:0/);
+    await expect(runApiRequest('/organizations', { method: 'POST', data: '{}' })).rejects.toThrow(/__exit__:2/);
     expect(mockApiRequest).not.toHaveBeenCalled();
   });
 

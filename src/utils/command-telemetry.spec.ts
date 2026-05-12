@@ -1,3 +1,5 @@
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { resolveCanonicalName, extractUserFlags, commandTelemetryMiddleware, wrapCommandHandler } from './command-telemetry.js';
 
@@ -195,6 +197,75 @@ describe('command-telemetry', () => {
       const errorArg = mockReplaceLastCommandEvent.mock.calls[0][3].error;
       expect(errorArg).toBeInstanceOf(Error);
       expect(errorArg.message).toBe('string error');
+    });
+  });
+
+  describe('telemetry coverage', () => {
+    it('all top-level .command() inline handlers in bin.ts use wrapCommandHandler or are in the skip list', () => {
+      const binSource = readFileSync(resolve(__dirname, '../bin.ts'), 'utf-8');
+
+      // Commands that intentionally skip wrapCommandHandler because they have their own
+      // session-based telemetry. Keep in sync with SKIP_TELEMETRY_COMMANDS in command-telemetry.ts
+      // (root maps to the $0 default handler).
+      const INTENTIONAL_SKIPS = new Set(['install', 'dashboard', '$0']);
+
+      const lines = binSource.split('\n');
+      const unwrapped: string[] = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // Match the start of an inline yargs handler: `async (argv) =>` or `async () =>`
+        if (!/async\s*\((?:argv)?\)\s*=>/.test(line)) continue;
+        // Already wrapped on this line
+        if (line.includes('wrapCommandHandler(')) continue;
+        // Skip yargs middleware (e.g. `.middleware(async (argv) => ...)`)
+        if (/\.middleware\(/.test(line)) continue;
+
+        // Walk backwards. The nearest preceding scope-opening line is either:
+        //   - `registerSubcommand(...)` — handler is auto-wrapped, skip
+        //   - `.command(` — this is the owning top-level command. Capture its name
+        //     argument (which may be on the same line or on the next non-empty line).
+        // Whichever comes FIRST (closest to this handler line) wins.
+        let commandName: string | null = null;
+        let isSubcommandHandler = false;
+        for (let j = i - 1; j >= Math.max(0, i - 100); j--) {
+          const prev = lines[j];
+          if (/registerSubcommand\(/.test(prev)) {
+            isSubcommandHandler = true;
+            break;
+          }
+          if (/\.command\(/.test(prev)) {
+            // Match name on same line, or look at the next non-empty line if .command( ends the line.
+            const inline = prev.match(/\.command\(\s*(?:'([^']+)'|"([^"]+)"|\[\s*'([^']+)'|\[\s*"([^"]+)")/);
+            if (inline) {
+              commandName = inline[1] ?? inline[2] ?? inline[3] ?? inline[4] ?? null;
+            } else {
+              // .command( with no name on this line — name is on the following line(s).
+              for (let k = j + 1; k < i; k++) {
+                const nameLine = lines[k].trim();
+                if (!nameLine) continue;
+                const m = nameLine.match(/^(?:'([^']+)'|"([^"]+)"|\[\s*'([^']+)'|\[\s*"([^"]+)")/);
+                if (m) {
+                  commandName = m[1] ?? m[2] ?? m[3] ?? m[4] ?? null;
+                }
+                break;
+              }
+            }
+            break;
+          }
+        }
+
+        if (isSubcommandHandler) continue;
+        if (!commandName) continue;
+
+        // Extract the leading token (e.g. "setup-org <name>" -> "setup-org") for the skip check.
+        const firstToken = commandName.split(/\s+/)[0];
+        if (INTENTIONAL_SKIPS.has(firstToken)) continue;
+
+        unwrapped.push(`"${commandName}" (bin.ts:${i + 1})`);
+      }
+
+      expect(unwrapped).toEqual([]);
     });
   });
 });

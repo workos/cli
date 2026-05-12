@@ -6,6 +6,7 @@ import chalk from 'chalk';
 import { logError, logInfo, logWarn } from '../utils/debug.js';
 import { exitWithError, isJsonMode, outputJson } from '../utils/output.js';
 import { createAgents, detectAgents, discoverSkills, getSkillsDir, type AgentConfig } from './install-skill.js';
+import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
 
 export interface UninstallSkillOptions {
   skill?: string[];
@@ -121,7 +122,7 @@ export async function runUninstallSkill(options: UninstallSkillOptions): Promise
   if (isJsonMode()) {
     outputJson({ removed, skipped, failed });
     if (failed.length > 0) {
-      process.exit(1);
+      exitWithCode(ExitCode.GENERAL_ERROR);
     }
     return;
   }
@@ -144,7 +145,7 @@ export async function runUninstallSkill(options: UninstallSkillOptions): Promise
     for (const r of failed) {
       console.log(`  ${r.skill} ← ${r.agent}: ${chalk.dim(r.error)}`);
     }
-    process.exit(1);
+    exitWithCode(ExitCode.GENERAL_ERROR);
   }
 
   console.log(chalk.green('\nDone!'));
