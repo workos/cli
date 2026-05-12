@@ -4,12 +4,14 @@ import { resolveCanonicalName, extractUserFlags, commandTelemetryMiddleware, wra
 const mockCommandExecuted = vi.fn();
 const mockReplaceLastCommandEvent = vi.fn();
 const mockRecordTermination = vi.fn();
+const mockSetCommandStart = vi.fn();
 
 vi.mock('./analytics.js', () => ({
   analytics: {
     commandExecuted: (...args: unknown[]) => mockCommandExecuted(...args),
     replaceLastCommandEvent: (...args: unknown[]) => mockReplaceLastCommandEvent(...args),
     recordTermination: (...args: unknown[]) => mockRecordTermination(...args),
+    setCommandStart: (...args: unknown[]) => mockSetCommandStart(...args),
   },
 }));
 

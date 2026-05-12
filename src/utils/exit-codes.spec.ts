@@ -44,13 +44,16 @@ describe('exit-codes', () => {
       });
     });
 
-    it('maps not_found and unknown_error to api_error + exit 1', () => {
+    it('does not hard-classify not_found / unknown_error as api_error', () => {
+      // These codes are reused for non-API local errors (e.g. env.ts missing
+      // config). API failures signal via `apiContext` on `exitWithError` so
+      // `resolveErrorCode` falls back to `validation_error` here.
       expect(resolveErrorCode('not_found')).toEqual({
-        reason: 'api_error',
+        reason: 'validation_error',
         exit: ExitCode.GENERAL_ERROR,
       });
       expect(resolveErrorCode('unknown_error')).toEqual({
-        reason: 'api_error',
+        reason: 'validation_error',
         exit: ExitCode.GENERAL_ERROR,
       });
     });

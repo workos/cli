@@ -538,8 +538,15 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
 
   await adapter.start();
 
-  // Start telemetry session. Analytics currently accepts cli/tui/headless only,
-  // so agent and CI mode both report through the existing headless bucket.
+  const preSessionEnv = getActiveEnvironment();
+  if (preSessionEnv?.clientId && preSessionEnv?.apiKey) {
+    analytics.setAuthMode(isUnclaimedEnvironment(preSessionEnv) ? 'claim_token' : 'api_key');
+  } else if (getAccessToken()) {
+    analytics.setAuthMode('jwt');
+  } else if (process.env.WORKOS_API_KEY) {
+    analytics.setAuthMode('api_key');
+  }
+
   const mode = headlessMode ? 'headless' : augmentedOptions.dashboard ? 'tui' : 'cli';
   analytics.sessionStart(mode, getVersion());
 

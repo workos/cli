@@ -56,6 +56,12 @@ export function commandTelemetryMiddleware(rawArgs: string[]) {
     argv.__telemetryStartTime = startTime;
     argv.__telemetryFlags = flags;
 
+    // Also stash on the analytics instance so exit-path helpers
+    // (exitWithError / exitWithCode) can compute real duration when they
+    // patch the provisional event — those paths never reach the wrapper's
+    // replaceLastCommandEvent call.
+    analytics.setCommandStart(startTime);
+
     // Skip provisional event for commands with their own telemetry (e.g., install)
     const topLevelCommand = commandParts[0] ?? '';
     if (SKIP_TELEMETRY_COMMANDS.has(topLevelCommand)) return;

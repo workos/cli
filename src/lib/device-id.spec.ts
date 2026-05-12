@@ -28,7 +28,7 @@ vi.mock('node:os', async (importOriginal) => {
 
 const { getDeviceId, __resetDeviceIdCache } = await import('./device-id.js');
 
-const UUID_REGEX = /^[0-9a-f-]{36}$/i;
+const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 describe('device-id', () => {
   beforeEach(() => {
@@ -48,7 +48,7 @@ describe('device-id', () => {
   it('creates the file on first call and returns a UUID', () => {
     const id = getDeviceId();
 
-    expect(id).toMatch(UUID_REGEX);
+    expect(id).toMatch(UUID_V4_REGEX);
     const filePath = join(testDir, '.workos', 'device-id');
     expect(existsSync(filePath)).toBe(true);
     expect(readFileSync(filePath, 'utf8')).toBe(id);
@@ -77,10 +77,23 @@ describe('device-id', () => {
     writeFileSync(join(workosDir, 'device-id'), 'not-a-uuid', 'utf8');
 
     const id = getDeviceId();
-    expect(id).toMatch(UUID_REGEX);
+    expect(id).toMatch(UUID_V4_REGEX);
     expect(id).not.toBe('not-a-uuid');
     // File should be rewritten with the new UUID.
     expect(readFileSync(join(workosDir, 'device-id'), 'utf8')).toBe(id);
+  });
+
+  it('regenerates when the file contains a 36-char non-v4 string', () => {
+    // Guard against overly permissive regex validation — 36 hyphens passes
+    // a naive `[0-9a-f-]{36}` check but is not a UUIDv4.
+    const workosDir = join(testDir, '.workos');
+    mkdirSync(workosDir, { recursive: true });
+    const bogus = '------------------------------------';
+    writeFileSync(join(workosDir, 'device-id'), bogus, 'utf8');
+
+    const id = getDeviceId();
+    expect(id).toMatch(UUID_V4_REGEX);
+    expect(id).not.toBe(bogus);
   });
 
   it('falls back to a one-shot UUID when the filesystem is readonly', () => {
@@ -88,7 +101,7 @@ describe('device-id', () => {
     chmodSync(testDir, 0o500);
 
     const id = getDeviceId();
-    expect(id).toMatch(UUID_REGEX);
+    expect(id).toMatch(UUID_V4_REGEX);
     // File was never created.
     expect(existsSync(join(testDir, '.workos', 'device-id'))).toBe(false);
   });

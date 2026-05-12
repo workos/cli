@@ -11,7 +11,9 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 
-const UUID_REGEX = /^[0-9a-f-]{36}$/i;
+// RFC 4122 v4 format — matches what `crypto.randomUUID()` produces.
+// Rejects non-UUID strings like "------------------------------------".
+const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 let cached: string | undefined;
 
@@ -31,7 +33,7 @@ export function getDeviceId(): string {
   try {
     if (fs.existsSync(filePath)) {
       const raw = fs.readFileSync(filePath, 'utf8').trim();
-      if (UUID_REGEX.test(raw)) {
+      if (UUID_V4_REGEX.test(raw)) {
         cached = raw;
         return raw;
       }

@@ -27,6 +27,9 @@ export class Analytics {
   private distinctId?: string;
   private mode?: 'cli' | 'tui' | 'headless';
   private authMode: AuthMode = 'none';
+  // Captured by the yargs middleware so exit-path helpers (exitWithError,
+  // exitWithCode) can compute real duration on the patched event.
+  private commandStartTime?: number;
 
   // Agent metrics tracking
   private totalInputTokens = 0;
@@ -53,6 +56,16 @@ export class Analytics {
    */
   setAuthMode(mode: AuthMode) {
     this.authMode = mode;
+  }
+
+  /**
+   * Record the command start time so `recordTermination` can compute real
+   * duration on exit-path code (exitWithError / exitWithCode). The wrapper's
+   * success/catch paths use argv-scoped start time directly; this is the
+   * fallback for `process.exit` callers that bypass the wrapper.
+   */
+  setCommandStart(time: number) {
+    this.commandStartTime = time;
   }
 
   setGatewayUrl(url: string) {
@@ -330,14 +343,56 @@ export class Analytics {
   ): void {
     if (!WORKOS_TELEMETRY_ENABLED) return;
 
+    // Compute real duration for exit-path callers. The middleware captures
+    // commandStartTime; wrapper callers still pass their own duration via
+    // replaceLastCommandEvent, which runs before recordTermination and sets
+    // the authoritative value — we only patch duration when the current
+    // event still has the provisional 0.
+    const durationMs = this.commandStartTime !== undefined
+      ? Date.now() - this.commandStartTime
+      : undefined;
+
     telemetryClient.patchLastEventOfType('command', (event) => {
       const attrs = (event as CommandEvent).attributes;
       attrs['termination.reason'] = reason;
       attrs['command.success'] = reason === 'success';
-      if (errorCode) attrs['error.code'] = errorCode;
-      if (apiContext?.status !== undefined) attrs['api.status'] = apiContext.status;
-      if (apiContext?.code) attrs['api.code'] = apiContext.code;
-      if (apiContext?.resource) attrs['api.resource'] = apiContext.resource;
+
+      // Duration: only overwrite if the event still carries the provisional 0
+      // (wrapper paths set real duration via replaceLastCommandEvent first).
+      if (durationMs !== undefined && !attrs['command.duration_ms']) {
+        attrs['command.duration_ms'] = durationMs;
+      }
+
+      if (errorCode) {
+        attrs['error.code'] = errorCode;
+      } else {
+        delete attrs['error.code'];
+      }
+
+      // api.* fields are last-writer-wins as a group: if apiContext is
+      // provided, set every subfield (or clear it); if not, clear all.
+      // Prevents stale api.* from a prior call leaking onto a later one.
+      if (apiContext) {
+        if (apiContext.status !== undefined) {
+          attrs['api.status'] = apiContext.status;
+        } else {
+          delete attrs['api.status'];
+        }
+        if (apiContext.code) {
+          attrs['api.code'] = apiContext.code;
+        } else {
+          delete attrs['api.code'];
+        }
+        if (apiContext.resource) {
+          attrs['api.resource'] = apiContext.resource;
+        } else {
+          delete attrs['api.resource'];
+        }
+      } else {
+        delete attrs['api.status'];
+        delete attrs['api.code'];
+        delete attrs['api.resource'];
+      }
     });
   }
 

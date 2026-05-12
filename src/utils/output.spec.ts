@@ -295,5 +295,51 @@ describe('output', () => {
       errorSpy.mockRestore();
       exitSpy.mockRestore();
     });
+
+    it('preserves auth_required reason even when apiContext is present', () => {
+      // A 401 with apiContext must still classify as auth_required, not
+      // api_error — the more specific reason wins over the override.
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+
+      exitWithError({
+        code: 'auth_required',
+        message: 'not authenticated',
+        apiContext: { status: 401, code: 'unauthorized', resource: 'Organization' },
+      });
+
+      expect(mockRecordTermination).toHaveBeenCalledWith(
+        'auth_required',
+        'auth_required',
+        { status: 401, code: 'unauthorized', resource: 'Organization' },
+      );
+      expect(exitSpy).toHaveBeenCalledWith(4);
+
+      errorSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
+
+    it('overrides validation_error fallback to api_error when apiContext is present', () => {
+      // WorkOS error codes like `rate_limited` that are not in ERROR_CODE_MAP
+      // fall through to validation_error. With apiContext, they should be
+      // reclassified as api_error so API-failure dashboards see them.
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+
+      exitWithError({
+        code: 'rate_limited',
+        message: 'slow down',
+        apiContext: { status: 429, code: 'rate_limited', resource: 'Organization' },
+      });
+
+      expect(mockRecordTermination).toHaveBeenCalledWith(
+        'api_error',
+        'rate_limited',
+        expect.objectContaining({ status: 429 }),
+      );
+
+      errorSpy.mockRestore();
+      exitSpy.mockRestore();
+    });
   });
 });

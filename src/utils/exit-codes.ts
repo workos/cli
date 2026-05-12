@@ -26,9 +26,8 @@ export type ExitCodeValue = (typeof ExitCode)[keyof typeof ExitCode];
 const ERROR_CODE_MAP: Record<string, { reason: TerminationReason; exit: ExitCodeValue }> = {
   auth_required: { reason: 'auth_required', exit: ExitCode.AUTH_REQUIRED },
   cancelled: { reason: 'cancelled', exit: ExitCode.CANCELLED },
-  not_found: { reason: 'api_error', exit: ExitCode.GENERAL_ERROR },
-  unknown_error: { reason: 'api_error', exit: ExitCode.GENERAL_ERROR },
 };
+
 
 export function resolveErrorCode(code: string): {
   reason: TerminationReason;

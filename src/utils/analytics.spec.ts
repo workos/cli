@@ -825,6 +825,68 @@ describe('Analytics', () => {
         // fires because there's no matching event.
         expect(mockPatchLastEventOfType).toHaveBeenCalledWith('command', expect.any(Function));
       });
+
+      it('patches command.duration_ms when the provisional value is 0 and a start time is set', () => {
+        const commandEvent = {
+          type: 'command',
+          attributes: { 'command.duration_ms': 0 } as Record<string, unknown>,
+        };
+        patchedEvents.push(commandEvent);
+
+        const start = Date.now() - 250;
+        analytics.setCommandStart(start);
+        analytics.recordTermination('auth_required', 'auth_required');
+
+        expect(commandEvent.attributes['command.duration_ms']).toBeGreaterThanOrEqual(250);
+      });
+
+      it('does not overwrite command.duration_ms when it is already non-zero', () => {
+        // Wrapper-path callers run replaceLastCommandEvent first (sets real
+        // duration), THEN recordTermination. Duration must not regress.
+        const commandEvent = {
+          type: 'command',
+          attributes: { 'command.duration_ms': 1234 } as Record<string, unknown>,
+        };
+        patchedEvents.push(commandEvent);
+
+        analytics.setCommandStart(Date.now() - 9999);
+        analytics.recordTermination('success');
+
+        expect(commandEvent.attributes['command.duration_ms']).toBe(1234);
+      });
+
+      it('clears stale api.* fields when called without apiContext', () => {
+        // Idempotency: if a prior call set api.* and a later call omits them,
+        // the later reason must not carry stale fields.
+        const commandEvent = {
+          type: 'command',
+          attributes: {
+            'api.status': 401,
+            'api.code': 'unauthorized',
+            'api.resource': 'Organization',
+          } as Record<string, unknown>,
+        };
+        patchedEvents.push(commandEvent);
+
+        analytics.recordTermination('validation_error', 'bad_email');
+
+        expect(commandEvent.attributes['api.status']).toBeUndefined();
+        expect(commandEvent.attributes['api.code']).toBeUndefined();
+        expect(commandEvent.attributes['api.resource']).toBeUndefined();
+        expect(commandEvent.attributes['error.code']).toBe('bad_email');
+      });
+
+      it('clears stale error.code when called without errorCode', () => {
+        const commandEvent = {
+          type: 'command',
+          attributes: { 'error.code': 'old_code' } as Record<string, unknown>,
+        };
+        patchedEvents.push(commandEvent);
+
+        analytics.recordTermination('success');
+
+        expect(commandEvent.attributes['error.code']).toBeUndefined();
+      });
     });
   });
 
