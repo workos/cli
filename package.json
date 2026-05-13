@@ -63,6 +63,7 @@
     "react": "^19.2.4",
     "semver": "^7.7.4",
     "uuid": "^13.0.0",
+    "workos-migrations": "link:../../workos-migrations",
     "xstate": "^5.28.0",
     "yaml": "^2.8.2",
     "yargs": "^18.0.0",
@@ -86,7 +87,7 @@
     "vitest": "^4.0.18"
   },
   "engines": {
-    "node": ">=20.20"
+    "node": ">=22.11"
   },
   "packageManager": "pnpm@10.28.2",
   "scripts": {

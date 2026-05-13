@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  workos-migrations: link:../../workos-migrations
+
 importers:
 
   .:
@@ -62,6 +65,9 @@ importers:
       uuid:
         specifier: ^13.0.0
         version: 13.0.0
+      workos-migrations:
+        specifier: link:../../workos-migrations
+        version: link:../../workos-migrations
       xstate:
         specifier: ^5.28.0
         version: 5.28.0

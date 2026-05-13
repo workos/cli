@@ -1,0 +1,2 @@
+overrides:
+  workos-migrations: link:../../workos-migrations

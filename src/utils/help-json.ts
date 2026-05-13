@@ -1300,6 +1300,25 @@ const commands: CommandSchema[] = [
       },
     ],
   },
+  {
+    name: 'migrations',
+    description: 'Migrate users from identity providers (Auth0, Cognito, Clerk, Firebase) to WorkOS',
+    options: [insecureStorageOpt, apiKeyOpt],
+    commands: [
+      { name: 'import', description: 'Import users from CSV into WorkOS' },
+      { name: 'import-package', description: 'Import a migration package directory' },
+      { name: 'validate', description: 'Validate a WorkOS migration CSV file' },
+      { name: 'export-auth0', description: 'Export users from Auth0' },
+      { name: 'export-cognito', description: 'Export users from AWS Cognito' },
+      { name: 'merge-passwords', description: 'Merge Auth0 password exports into CSV' },
+      { name: 'transform-clerk', description: 'Transform Clerk CSV to WorkOS format' },
+      { name: 'transform-firebase', description: 'Transform Firebase JSON to WorkOS format' },
+      { name: 'analyze', description: 'Analyze import errors and generate retry plan' },
+      { name: 'enroll-totp', description: 'Enroll TOTP MFA factors' },
+      { name: 'process-role-definitions', description: 'Create roles and assign in WorkOS' },
+      { name: 'wizard', description: 'Guided interactive migration wizard' },
+    ],
+  },
 ];
 
 const globalOptions: OptionSchema[] = [
