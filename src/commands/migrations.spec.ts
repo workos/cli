@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 const mockParseAsync = vi.fn();
 const mockName = vi.fn();
 
-vi.mock('workos-migrations/dist/cli/index.js', () => ({
+vi.mock('@workos/migrations/dist/cli/index.js', () => ({
   program: { parseAsync: mockParseAsync, name: mockName },
 }));
 
