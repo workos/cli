@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const mockParseAsync = vi.fn();
+const mockName = vi.fn();
 
 vi.mock('workos-migrations/dist/cli/index.js', () => ({
-  program: { parseAsync: mockParseAsync },
+  program: { parseAsync: mockParseAsync, name: mockName },
 }));
 
 const { runMigrations } = await import('./migrations.js');
