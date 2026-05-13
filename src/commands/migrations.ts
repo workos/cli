@@ -6,7 +6,24 @@ const workosOnlyMigrationsFlags = new Map([
 ]);
 
 export function getMigrationsPassthroughArgs(rawArgs: string[]): string[] {
-  const migrationsIdx = rawArgs.indexOf('migrations');
+  let migrationsIdx = rawArgs.indexOf('migrations');
+
+  for (let i = 0; i < rawArgs.length; i++) {
+    const arg = rawArgs[i];
+    const key = arg.split('=')[0];
+    const takesValue = workosOnlyMigrationsFlags.get(key);
+
+    if (takesValue !== undefined) {
+      if (takesValue && !arg.includes('=')) i++;
+      continue;
+    }
+
+    if (arg === 'migrations') {
+      migrationsIdx = i;
+      break;
+    }
+  }
+
   const after = rawArgs.slice(migrationsIdx + 1);
   const passthrough: string[] = [];
 

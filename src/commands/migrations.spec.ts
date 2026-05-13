@@ -65,4 +65,18 @@ describe('runMigrations', () => {
       ]),
     ).toEqual(['import', '--csv', 'users.csv']);
   });
+
+  it('starts passthrough at the migrations command, not a WorkOS flag value', () => {
+    expect(
+      getMigrationsPassthroughArgs([
+        '--mode',
+        'migrations',
+        '--api-key=migrations',
+        'migrations',
+        'import',
+        '--csv',
+        'users.csv',
+      ]),
+    ).toEqual(['import', '--csv', 'users.csv']);
+  });
 });
