@@ -118,6 +118,24 @@ describe('api-key', () => {
   });
 
   describe('resolveOptionalApiKey', () => {
+    it('returns --api-key flag over env var and stored key', () => {
+      process.env.WORKOS_API_KEY = 'sk_env_var';
+      saveConfig({
+        activeEnvironment: 'prod',
+        environments: { prod: { name: 'prod', type: 'production', apiKey: 'sk_stored' } },
+      });
+      expect(resolveOptionalApiKey({ apiKey: 'sk_flag' })).toBe('sk_flag');
+    });
+
+    it('returns WORKOS_API_KEY env var when no flag provided', () => {
+      process.env.WORKOS_API_KEY = 'sk_env_var';
+      saveConfig({
+        activeEnvironment: 'prod',
+        environments: { prod: { name: 'prod', type: 'production', apiKey: 'sk_stored' } },
+      });
+      expect(resolveOptionalApiKey()).toBe('sk_env_var');
+    });
+
     it('returns undefined when no API key is available', () => {
       mockExitWithError.mockClear();
       expect(resolveOptionalApiKey()).toBeUndefined();
