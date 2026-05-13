@@ -1,3 +1,31 @@
+const workosOnlyMigrationsFlags = new Map([
+  ['--api-key', true],
+  ['--insecure-storage', false],
+  ['--json', false],
+  ['--mode', true],
+]);
+
+export function getMigrationsPassthroughArgs(rawArgs: string[]): string[] {
+  const migrationsIdx = rawArgs.indexOf('migrations');
+  const after = rawArgs.slice(migrationsIdx + 1);
+  const passthrough: string[] = [];
+
+  for (let i = 0; i < after.length; i++) {
+    const arg = after[i];
+    const key = arg.split('=')[0];
+    const takesValue = workosOnlyMigrationsFlags.get(key);
+
+    if (takesValue !== undefined) {
+      if (takesValue && !arg.includes('=')) i++;
+      continue;
+    }
+
+    passthrough.push(arg);
+  }
+
+  return passthrough;
+}
+
 export async function runMigrations(args: string[], apiKey: string): Promise<void> {
   process.env.WORKOS_SECRET_KEY = apiKey;
 

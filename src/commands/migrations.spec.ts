@@ -7,7 +7,7 @@ vi.mock('@workos/migrations/dist/cli/index.js', () => ({
   program: { parseAsync: mockParseAsync, name: mockName },
 }));
 
-const { runMigrations } = await import('./migrations.js');
+const { getMigrationsPassthroughArgs, runMigrations } = await import('./migrations.js');
 
 describe('runMigrations', () => {
   beforeEach(() => {
@@ -34,5 +34,35 @@ describe('runMigrations', () => {
     const args = ['export-auth0', '--domain', 'example.auth0.com', '--client-id', 'abc', '--client-secret', 'xyz'];
     await runMigrations(args, 'sk_test_789');
     expect(mockParseAsync).toHaveBeenCalledWith(args, { from: 'user' });
+  });
+
+  it('removes WorkOS global flags from migrations passthrough args', () => {
+    expect(
+      getMigrationsPassthroughArgs([
+        'migrations',
+        'import',
+        '--csv',
+        'users.csv',
+        '--mode',
+        'agent',
+        '--api-key',
+        'sk_test_123',
+        '--insecure-storage',
+        '--json',
+      ]),
+    ).toEqual(['import', '--csv', 'users.csv']);
+  });
+
+  it('removes WorkOS global flags with inline values from migrations passthrough args', () => {
+    expect(
+      getMigrationsPassthroughArgs([
+        'migrations',
+        'import',
+        '--csv',
+        'users.csv',
+        '--mode=ci',
+        '--api-key=sk_test_123',
+      ]),
+    ).toEqual(['import', '--csv', 'users.csv']);
   });
 });
