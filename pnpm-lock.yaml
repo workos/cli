@@ -33,8 +33,8 @@ importers:
         specifier: ^0.1.0
         version: 0.1.0
       '@workos/skills':
-        specifier: 0.5.0
-        version: 0.5.0
+        specifier: 0.6.0
+        version: 0.6.0
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
@@ -1077,8 +1077,8 @@ packages:
   '@workos/openapi-spec@0.1.0':
     resolution: {integrity: sha512-pVw8SPFsva6UR8Z2ovE1DC4Aq1fRdPXywT8JP7yN1G8Y02+/kDb6KgFXmpKiv76XinUXDOAmU9tr/G73UI8mHw==}
 
-  '@workos/skills@0.5.0':
-    resolution: {integrity: sha512-fScc+usjjvpyIOqSDq3AVmRpgpB5+yhyNfiqlSI/NsENe9C7Ynmbzx+XYwMJzGXpKIdUQQBHbvYRMOA1L+mWyw==}
+  '@workos/skills@0.6.0':
+    resolution: {integrity: sha512-BhXpbAyIWRsd8hm97zAGdlfQ+bbjJpgBtmPZckVny5+3mXOSVFqIxY+vwa5mSqkd2N2PYTd/Q+CD7Or0vWE28Q==}
 
   ansi-escapes@7.3.0:
     resolution: {integrity: sha512-BvU8nYgGQBxcmMuEeUEmNTvrMVjJNSH7RgW24vXexN4Ven6qCvy4TntnvlnwnMLTVlcRQQdbRY8NKnaIoeWDNg==}
@@ -2523,7 +2523,7 @@ snapshots:
 
   '@workos/openapi-spec@0.1.0': {}
 
-  '@workos/skills@0.5.0':
+  '@workos/skills@0.6.0':
     dependencies:
       yaml: 2.8.3
 
