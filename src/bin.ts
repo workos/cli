@@ -2399,6 +2399,8 @@ yargs(rawArgs)
       yargs
         .strictCommands(false)
         .strict(false)
+        .help(false)
+        .version(false)
         .options({
           ...insecureStorageOption,
           'api-key': { type: 'string' as const, describe: 'WorkOS API key' },
