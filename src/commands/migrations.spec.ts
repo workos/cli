@@ -20,6 +20,12 @@ describe('runMigrations', () => {
     expect(process.env.WORKOS_SECRET_KEY).toBe('sk_test_123');
   });
 
+  it('does not require WORKOS_SECRET_KEY when no API key is provided', async () => {
+    await runMigrations(['wizard']);
+    expect(process.env.WORKOS_SECRET_KEY).toBeUndefined();
+    expect(mockParseAsync).toHaveBeenCalledWith(['wizard'], { from: 'user' });
+  });
+
   it('delegates to Commander parseAsync with correct args', async () => {
     await runMigrations(['import', '--csv', 'users.csv'], 'sk_test_123');
     expect(mockParseAsync).toHaveBeenCalledWith(['import', '--csv', 'users.csv'], { from: 'user' });

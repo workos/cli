@@ -43,8 +43,10 @@ export function getMigrationsPassthroughArgs(rawArgs: string[]): string[] {
   return passthrough;
 }
 
-export async function runMigrations(args: string[], apiKey: string): Promise<void> {
-  process.env.WORKOS_SECRET_KEY = apiKey;
+export async function runMigrations(args: string[], apiKey?: string): Promise<void> {
+  if (apiKey) {
+    process.env.WORKOS_SECRET_KEY = apiKey;
+  }
 
   const { program } = (await import('@workos/migrations/dist/cli/index.js')) as {
     program: {

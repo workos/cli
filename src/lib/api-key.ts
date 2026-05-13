@@ -17,6 +17,16 @@ export interface ApiKeyOptions {
 }
 
 export function resolveApiKey(options?: ApiKeyOptions): string {
+  const apiKey = resolveOptionalApiKey(options);
+  if (apiKey) return apiKey;
+
+  exitWithError({
+    code: 'no_api_key',
+    message: 'No API key configured. Run `workos env add` to configure an environment, or set WORKOS_API_KEY.',
+  });
+}
+
+export function resolveOptionalApiKey(options?: ApiKeyOptions): string | undefined {
   if (options?.apiKey) return options.apiKey;
 
   const envVar = process.env.WORKOS_API_KEY;
@@ -25,10 +35,7 @@ export function resolveApiKey(options?: ApiKeyOptions): string {
   const activeEnv = getActiveEnvironment();
   if (activeEnv?.apiKey) return activeEnv.apiKey;
 
-  exitWithError({
-    code: 'no_api_key',
-    message: 'No API key configured. Run `workos env add` to configure an environment, or set WORKOS_API_KEY.',
-  });
+  return undefined;
 }
 
 export function resolveApiBaseUrl(): string {

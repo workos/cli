@@ -39,7 +39,7 @@ vi.mock('node:os', async (importOriginal) => {
 });
 
 const { saveConfig, setInsecureConfigStorage, clearConfig } = await import('./config-store.js');
-const { resolveApiKey, resolveApiBaseUrl } = await import('./api-key.js');
+const { resolveApiKey, resolveOptionalApiKey, resolveApiBaseUrl } = await import('./api-key.js');
 
 describe('api-key', () => {
   const originalEnv = process.env;
@@ -114,6 +114,22 @@ describe('api-key', () => {
         environments: { prod: { name: 'prod', type: 'production', apiKey: 'sk_stored' } },
       });
       expect(resolveApiKey({ apiKey: '' })).toBe('sk_stored');
+    });
+  });
+
+  describe('resolveOptionalApiKey', () => {
+    it('returns undefined when no API key is available', () => {
+      mockExitWithError.mockClear();
+      expect(resolveOptionalApiKey()).toBeUndefined();
+      expect(mockExitWithError).not.toHaveBeenCalled();
+    });
+
+    it('returns configured API key when available', () => {
+      saveConfig({
+        activeEnvironment: 'prod',
+        environments: { prod: { name: 'prod', type: 'production', apiKey: 'sk_stored' } },
+      });
+      expect(resolveOptionalApiKey()).toBe('sk_stored');
     });
   });
 
