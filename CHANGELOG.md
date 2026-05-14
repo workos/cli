@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.1](https://github.com/workos/cli/compare/v0.15.0...v0.15.1) (2026-05-14)
+
+
+### Bug Fixes
+
+* Make migrations API key optional ([#153](https://github.com/workos/cli/issues/153)) ([471cc4f](https://github.com/workos/cli/commit/471cc4fac853b89c7de935727fcc6ea1fdb76f0a))
+
 ## [0.15.0](https://github.com/workos/cli/compare/v0.14.0...v0.15.0) (2026-05-13)
 
 
