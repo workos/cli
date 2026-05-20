@@ -1,4 +1,4 @@
-import open from 'opn';
+import open from 'open';
 import chalk from 'chalk';
 import clack from '../utils/clack.js';
 import { saveCredentials, getCredentials, getAccessToken, isTokenExpired, updateTokens } from '../lib/credentials.js';

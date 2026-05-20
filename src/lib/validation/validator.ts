@@ -741,7 +741,7 @@ async function validateDuplicateEnvVars(projectDir: string, issues: ValidationIs
   // Parse env files into key-value maps
   const parseEnv = (content: string): Map<string, string> => {
     const map = new Map<string, string>();
-    for (const line of content.split('\n')) {
+    for (const line of content.split(/\r?\n/)) {
       const match = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
       if (match) {
         map.set(match[1], match[2].trim());

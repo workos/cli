@@ -16,6 +16,7 @@ import { ISSUES_URL, type Integration } from '../lib/constants.js';
 import { analytics } from './analytics.js';
 import clack from './clack.js';
 import { INTEGRATION_CONFIG } from '../lib/config.js';
+import { SPAWN_OPTS } from './platform.js';
 
 /**
  * Redact sensitive info (API keys, client secrets) from a string.
@@ -318,29 +319,35 @@ export async function installPackage({
 
     try {
       await new Promise<void>((resolve, reject) => {
-        childProcess.exec(
-          `${pkgManager.installCommand} ${packageName} ${pkgManager.flags} ${
-            forceInstall ? pkgManager.forceInstallFlag : ''
-          } ${legacyPeerDepsFlag}`.trim(),
-          { cwd: installDir },
-          (err, stdout, stderr) => {
-            if (err) {
-              // Write a log file so we can better troubleshoot issues
-              fs.writeFileSync(
-                join(process.cwd(), `workos-installation-error-${Date.now()}.log`),
-                JSON.stringify({
-                  stdout: redactSensitiveInfo(stdout),
-                  stderr: redactSensitiveInfo(stderr),
-                }),
-                { encoding: 'utf8' },
-              );
-
-              reject(err);
-            } else {
-              resolve();
-            }
-          },
-        );
+        const [cmd, ...baseArgs] = pkgManager.installCommand.split(' ');
+        const args = [
+          ...baseArgs,
+          packageName,
+          ...pkgManager.flags.split(/\s+/).filter(Boolean),
+          ...(forceInstall && pkgManager.forceInstallFlag ? pkgManager.forceInstallFlag.split(/\s+/) : []),
+          ...(legacyPeerDepsFlag ? [legacyPeerDepsFlag] : []),
+        ];
+        const proc = childProcess.spawn(cmd, args, { cwd: installDir, ...SPAWN_OPTS });
+        let stdout = '';
+        let stderr = '';
+        proc.stdout?.on('data', (d: Buffer) => { stdout += d.toString(); });
+        proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
+        proc.on('close', (code) => {
+          if (code !== 0) {
+            fs.writeFileSync(
+              join(process.cwd(), `workos-installation-error-${Date.now()}.log`),
+              JSON.stringify({
+                stdout: redactSensitiveInfo(stdout),
+                stderr: redactSensitiveInfo(stderr),
+              }),
+              { encoding: 'utf8' },
+            );
+            reject(new Error(`${cmd} exited with code ${code}\n${stderr}`));
+          } else {
+            resolve();
+          }
+        });
+        proc.on('error', reject);
       });
     } catch (e) {
       sdkInstallSpinner.stop('Installation failed.');

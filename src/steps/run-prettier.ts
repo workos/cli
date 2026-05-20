@@ -5,7 +5,8 @@ import clack from '../utils/clack.js';
 import { getPackageDotJson, getUncommittedOrUntrackedFiles, isInGitRepo } from '../utils/clack-utils.js';
 import { hasPackageInstalled } from '../utils/package-json.js';
 import type { InstallerOptions } from '../utils/types.js';
-import * as childProcess from 'node:child_process';
+import { spawn } from 'node:child_process';
+import { SPAWN_OPTS } from '../utils/platform.js';
 
 export async function runPrettierStep({
   installDir,
@@ -20,14 +21,11 @@ export async function runPrettierStep({
       return;
     }
 
-    const changedOrUntrackedFiles = getUncommittedOrUntrackedFiles()
-      .map((filename) => {
-        return filename.startsWith('- ') ? filename.slice(2) : filename;
-      })
-      .join(' ');
+    const changedOrUntrackedFiles = getUncommittedOrUntrackedFiles().map((filename) => {
+      return filename.startsWith('- ') ? filename.slice(2) : filename;
+    });
 
     if (!changedOrUntrackedFiles.length) {
-      // Likewise, if we can't find changed or untracked files, there's no point in running Prettier.
       return;
     }
 
@@ -45,13 +43,12 @@ export async function runPrettierStep({
 
     try {
       await new Promise<void>((resolve, reject) => {
-        childProcess.exec(`npx prettier --ignore-unknown --write ${changedOrUntrackedFiles}`, (err) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve();
-          }
+        const proc = spawn('npx', ['prettier', '--ignore-unknown', '--write', ...changedOrUntrackedFiles], {
+          stdio: 'ignore',
+          ...SPAWN_OPTS,
         });
+        proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`prettier exited ${code}`))));
+        proc.on('error', reject);
       });
     } catch {
       prettierSpinner.stop('Prettier failed to run. You may want to format the changes manually.');

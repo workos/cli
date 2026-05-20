@@ -70,7 +70,7 @@ function findFilesShallow(dir: string, namePattern: RegExp, maxDepth = 3): strin
 
 function parseEnvFile(content: string): Record<string, string> {
   const result: Record<string, string> = {};
-  for (const line of content.split('\n')) {
+  for (const line of content.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
     const entry = trimmed.startsWith('export ') ? trimmed.slice(7) : trimmed;
@@ -525,7 +525,7 @@ function checkEnvFileNotGitignored(ctx: CheckContext): AuthPatternFinding[] {
   for (const envFile of envFiles) {
     const isIgnored =
       gitignore !== null &&
-      gitignore.split('\n').some((line) => {
+      gitignore.split(/\r?\n/).some((line) => {
         const trimmed = line.trim();
         if (trimmed.startsWith('#') || trimmed === '') return false;
         return trimmed === envFile || trimmed === '.env*' || trimmed === '.env.*' || trimmed === '.env';

@@ -4,6 +4,7 @@ import { existsSync } from 'fs';
 import { mkdir, mkdtemp, cp, rename, rm, readdir, readFile, stat, access, writeFile } from 'fs/promises';
 import chalk from 'chalk';
 import { getSkillsDir as getSkillsPackageDir } from '@workos/skills';
+import { IS_WINDOWS } from '../utils/platform.js';
 
 export const SKILL_VERSION_MARKER_FILENAME = '.workos-skill-version';
 
@@ -48,30 +49,36 @@ export interface AgentConfig {
 }
 
 export function createAgents(home: string): Record<string, AgentConfig> {
+  const appData = process.env.APPDATA ?? join(home, 'AppData', 'Roaming');
   return {
     'claude-code': {
       name: 'claude-code',
       displayName: 'Claude Code',
-      globalSkillsDir: join(home, '.claude/skills'),
+      globalSkillsDir: join(home, '.claude', 'skills'),
       detect: () => existsSync(join(home, '.claude')),
     },
     codex: {
       name: 'codex',
       displayName: 'Codex',
-      globalSkillsDir: join(home, '.codex/skills'),
+      globalSkillsDir: join(home, '.codex', 'skills'),
       detect: () => existsSync(join(home, '.codex')),
     },
     cursor: {
       name: 'cursor',
       displayName: 'Cursor',
-      globalSkillsDir: join(home, '.cursor/skills'),
+      globalSkillsDir: join(home, '.cursor', 'skills'),
       detect: () => existsSync(join(home, '.cursor')),
     },
     goose: {
       name: 'goose',
       displayName: 'Goose',
-      globalSkillsDir: join(home, '.config/goose/skills'),
-      detect: () => existsSync(join(home, '.config/goose')),
+      globalSkillsDir: IS_WINDOWS
+        ? join(appData, 'goose', 'skills')
+        : join(home, '.config', 'goose', 'skills'),
+      detect: () =>
+        IS_WINDOWS
+          ? existsSync(join(appData, 'goose'))
+          : existsSync(join(home, '.config', 'goose')),
     },
   };
 }

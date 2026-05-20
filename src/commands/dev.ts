@@ -5,6 +5,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import chalk from 'chalk';
+import { IS_WINDOWS, SPAWN_OPTS } from '../utils/platform.js';
 
 export interface DevArgs {
   port: number;
@@ -122,6 +123,7 @@ export async function runDev(argv: DevArgs): Promise<void> {
         ...process.env,
         ...buildDevEnv(emulator.url, emulator.apiKey),
       },
+      ...SPAWN_OPTS,
     });
   } catch {
     console.error(chalk.red(`Failed to start: ${devCmd.command} ${devCmd.args.join(' ')}`));
@@ -149,6 +151,9 @@ export async function runDev(argv: DevArgs): Promise<void> {
   };
   process.on('SIGINT', () => shutdown('SIGINT'));
   process.on('SIGTERM', () => shutdown('SIGTERM'));
+  if (IS_WINDOWS) {
+    process.on('SIGBREAK', () => shutdown('SIGINT'));
+  }
 
   // 6. If child exits, close emulator and exit with same code
   child.on('exit', (code) => {

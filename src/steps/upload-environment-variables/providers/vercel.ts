@@ -6,6 +6,7 @@ import type { InstallerOptions } from '../../../utils/types.js';
 import clack from '../../../utils/clack.js';
 import chalk from 'chalk';
 import { analytics } from '../../../utils/analytics.js';
+import { SPAWN_OPTS } from '../../../utils/platform.js';
 
 export class VercelEnvironmentProvider extends EnvironmentProvider {
   name = 'Vercel';
@@ -51,12 +52,13 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
   isAuthenticated(): boolean {
     const result = spawnSync('vercel', ['whoami'], {
       encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'], // suppress prompts
+      stdio: ['pipe', 'pipe', 'pipe'],
       env: {
         ...process.env,
-        FORCE_COLOR: '0', // avoid ANSI formatting
-        CI: '1', // hint to CLI that it's a non-interactive env
+        FORCE_COLOR: '0',
+        CI: '1',
       },
+      ...SPAWN_OPTS,
     });
 
     const output = (String(result.stdout) + String(result.stderr)).toLowerCase();
@@ -75,6 +77,7 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
     await new Promise<void>((resolve, reject) => {
       const proc = spawn('vercel', ['env', 'add', key, environment], {
         stdio: ['pipe', 'pipe', 'pipe'],
+        ...SPAWN_OPTS,
       });
 
       let stderr = '';

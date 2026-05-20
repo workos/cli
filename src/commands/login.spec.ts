@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const mockOpen = vi.fn();
-vi.mock('opn', () => ({ default: (...args: unknown[]) => mockOpen(...args) }));
+vi.mock('open', () => ({ default: (...args: unknown[]) => mockOpen(...args) }));
 
 class MockDeviceAuthTimeoutError extends Error {}
 const mockRequestDeviceCode = vi.fn();

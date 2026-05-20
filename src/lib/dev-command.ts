@@ -1,5 +1,6 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
+import { IS_WINDOWS } from '../utils/platform.js';
 
 export interface DevCommandResult {
   command: string;
@@ -67,7 +68,12 @@ function hasDependency(pkg: PackageJson, dep: string): boolean {
  * otherwise returns the bare command name (assumes it's globally available).
  */
 function resolveNodeBin(projectDir: string, command: string): string {
-  const binPath = join(projectDir, 'node_modules', '.bin', command);
+  const binDir = join(projectDir, 'node_modules', '.bin');
+  if (IS_WINDOWS) {
+    const cmdPath = join(binDir, `${command}.cmd`);
+    if (existsSync(cmdPath)) return cmdPath;
+  }
+  const binPath = join(binDir, command);
   if (existsSync(binPath)) return binPath;
   return command;
 }

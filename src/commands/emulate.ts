@@ -3,6 +3,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import chalk from 'chalk';
+import { IS_WINDOWS } from '../utils/platform.js';
 
 export interface EmulateArgs {
   port: number;
@@ -75,4 +76,7 @@ export async function runEmulate(argv: EmulateArgs): Promise<void> {
   };
   process.once('SIGINT', shutdown);
   process.once('SIGTERM', shutdown);
+  if (IS_WINDOWS) {
+    process.once('SIGBREAK', shutdown);
+  }
 }

@@ -6,9 +6,8 @@ vi.mock('../utils/debug.js', () => ({
   logError: vi.fn(),
 }));
 
-// Mock opn (browser open)
 const mockOpen = vi.fn().mockResolvedValue(undefined);
-vi.mock('opn', () => ({ default: mockOpen }));
+vi.mock('open', () => ({ default: mockOpen }));
 
 // Mock clack
 const mockSpinner = {

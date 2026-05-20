@@ -1,5 +1,5 @@
 import { createActor, fromPromise } from 'xstate';
-import open from 'opn';
+import open from 'open';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { installerMachine } from './installer-core.js';
@@ -377,7 +377,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
 
         // Open browser
         try {
-          const { default: openFn } = await import('opn');
+          const { default: openFn } = await import('open');
           await openFn(deviceAuth.verification_uri_complete, { wait: false });
         } catch (error) {
           observeHostFailure('browser-launch', error, {

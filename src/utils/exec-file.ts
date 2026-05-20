@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { SPAWN_OPTS } from './platform.js';
 
 export interface ExecResult {
   status: number;
@@ -22,7 +23,7 @@ export function execFileNoThrow(command: string, args: string[], options: ExecOp
       cwd: options.cwd,
       env: options.env ?? process.env,
       timeout: options.timeout,
-      shell: false,
+      ...SPAWN_OPTS,
     });
 
     let stdout = '';

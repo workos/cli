@@ -4,7 +4,8 @@
 if (process.argv.includes('--local') || process.env.INSTALLER_DEV) {
   const { config } = await import('dotenv');
   // bin.ts compiles to dist/bin.js, so go up one level to find .env.local
-  config({ path: new URL('../.env.local', import.meta.url).pathname });
+  const { fileURLToPath } = await import('node:url');
+  config({ path: fileURLToPath(new URL('../.env.local', import.meta.url)) });
 }
 
 import { satisfies } from 'semver';

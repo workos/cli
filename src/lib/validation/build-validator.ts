@@ -3,6 +3,7 @@ import { existsSync, readdirSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import type { ValidationIssue } from './types.js';
+import { IS_WINDOWS, SPAWN_OPTS } from '../../utils/platform.js';
 
 export interface BuildResult {
   success: boolean;
@@ -32,6 +33,7 @@ export async function runBuildValidation(projectDir: string, timeoutMs: number =
     const proc = spawn(pm, args, {
       cwd: projectDir,
       timeout: timeoutMs,
+      ...SPAWN_OPTS,
     });
 
     let stdout = '';
@@ -148,7 +150,10 @@ export async function detectBuildCommand(projectDir: string): Promise<BuildComma
   }
 
   if (existsSync(join(projectDir, 'build.gradle.kts')) || existsSync(join(projectDir, 'build.gradle'))) {
-    const gradlew = existsSync(join(projectDir, 'gradlew')) ? './gradlew' : 'gradle';
+    const hasWrapper = IS_WINDOWS
+      ? existsSync(join(projectDir, 'gradlew.bat'))
+      : existsSync(join(projectDir, 'gradlew'));
+    const gradlew = hasWrapper ? (IS_WINDOWS ? '.\\gradlew.bat' : './gradlew') : 'gradle';
     return { command: gradlew, args: ['build'] };
   }
 

@@ -6,7 +6,7 @@
  * until the environment is claimed.
  */
 
-import open from 'opn';
+import open from 'open';
 import clack from '../utils/clack.js';
 import { getActiveEnvironment, isUnclaimedEnvironment, markEnvironmentClaimed } from '../lib/config-store.js';
 import { createClaimNonce, UnclaimedEnvApiError } from '../lib/unclaimed-env-api.js';
