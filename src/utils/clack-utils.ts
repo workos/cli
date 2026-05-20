@@ -330,8 +330,12 @@ export async function installPackage({
         const proc = childProcess.spawn(cmd, args, { cwd: installDir, ...SPAWN_OPTS });
         let stdout = '';
         let stderr = '';
-        proc.stdout?.on('data', (d: Buffer) => { stdout += d.toString(); });
-        proc.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
+        proc.stdout?.on('data', (d: Buffer) => {
+          stdout += d.toString();
+        });
+        proc.stderr?.on('data', (d: Buffer) => {
+          stderr += d.toString();
+        });
         proc.on('close', (code) => {
           if (code !== 0) {
             fs.writeFileSync(

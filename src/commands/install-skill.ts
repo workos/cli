@@ -72,13 +72,8 @@ export function createAgents(home: string): Record<string, AgentConfig> {
     goose: {
       name: 'goose',
       displayName: 'Goose',
-      globalSkillsDir: IS_WINDOWS
-        ? join(appData, 'goose', 'skills')
-        : join(home, '.config', 'goose', 'skills'),
-      detect: () =>
-        IS_WINDOWS
-          ? existsSync(join(appData, 'goose'))
-          : existsSync(join(home, '.config', 'goose')),
+      globalSkillsDir: IS_WINDOWS ? join(appData, 'goose', 'skills') : join(home, '.config', 'goose', 'skills'),
+      detect: () => (IS_WINDOWS ? existsSync(join(appData, 'goose')) : existsSync(join(home, '.config', 'goose'))),
     },
   };
 }
