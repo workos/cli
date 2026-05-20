@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.2](https://github.com/workos/cli/compare/v0.15.1...v0.15.2) (2026-05-20)
+
+
+### Bug Fixes
+
+* use file URL for dynamic imports to support Windows ([#156](https://github.com/workos/cli/issues/156)) ([6efdbba](https://github.com/workos/cli/commit/6efdbba7fe194dc0a02ec1f0581795a345ac760b))
+
 ## [0.15.1](https://github.com/workos/cli/compare/v0.15.0...v0.15.1) (2026-05-14)
 
 
