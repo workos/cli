@@ -1,6 +1,6 @@
 import { readdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { FrameworkConfig, Language } from './framework-config.js';
 import type { InstallerOptions } from '../utils/types.js';
 
@@ -72,7 +72,7 @@ export async function buildRegistry(): Promise<IntegrationRegistry> {
     }
 
     try {
-      const mod = (await import(join(integrationsDir, dir, 'index.js'))) as IntegrationModule;
+      const mod = (await import(pathToFileURL(join(integrationsDir, dir, 'index.js')).href)) as IntegrationModule;
 
       if (!mod.config || !mod.run) {
         console.warn(`Integration ${dir} missing 'config' or 'run' export, skipping`);
