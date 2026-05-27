@@ -7,7 +7,7 @@
  */
 
 import chalk from 'chalk';
-import { analytics } from './analytics.js';
+import { CliExit } from './cli-exit.js';
 import { resolveErrorCode } from './exit-codes.js';
 import { formatTable, type TableColumn } from './table.js';
 import type { RecoveryHints } from './recovery-hints.js';
@@ -142,6 +142,9 @@ export function exitWithError(
   outputError(error);
   const { reason: codeReason, exit } = resolveErrorCode(error.code);
   const reason = error.apiContext && codeReason === 'validation_error' ? 'api_error' : codeReason;
-  analytics.recordTermination(reason, error.code, error.apiContext);
-  process.exit(exit);
+  throw new CliExit(exit, {
+    reason,
+    errorCode: error.code,
+    apiContext: error.apiContext,
+  });
 }

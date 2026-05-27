@@ -1,12 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-const mockRecordTermination = vi.fn();
-vi.mock('./analytics.js', () => ({
-  analytics: {
-    recordTermination: (...args: unknown[]) => mockRecordTermination(...args),
-  },
-}));
-
 const {
   resolveOutputMode,
   resolveEffectiveOutputMode,
@@ -18,6 +11,7 @@ const {
   outputSuccess,
   exitWithError,
 } = await import('./output.js');
+const { CliExit } = await import('./cli-exit.js');
 
 describe('output', () => {
   const originalIsTTY = process.stdout.isTTY;
@@ -191,155 +185,185 @@ describe('output', () => {
   });
 
   describe('exitWithError', () => {
-    beforeEach(() => {
-      mockRecordTermination.mockClear();
-    });
-
-    it('writes error and exits with code 1 for unknown codes', () => {
+    it('throws CliExit with exit code 1 for unknown codes', () => {
       setOutputMode('json');
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
 
-      exitWithError({ code: 'bad', message: 'something broke' });
+      try {
+        exitWithError({ code: 'bad', message: 'something broke' });
+        expect.fail('expected exitWithError to throw');
+      } catch (e) {
+        expect(e).toBeInstanceOf(CliExit);
+        expect((e as InstanceType<typeof CliExit>).exitCode).toBe(1);
+      }
 
       const output = JSON.parse(errorSpy.mock.calls[0][0]);
       expect(output.error.code).toBe('bad');
-      expect(exitSpy).toHaveBeenCalledWith(1);
 
       errorSpy.mockRestore();
-      exitSpy.mockRestore();
     });
 
-    it('exits with code 4 for auth_required', () => {
+    it('throws CliExit with exit code 4 for auth_required', () => {
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
 
-      exitWithError({ code: 'auth_required', message: 'Not logged in' });
-
-      expect(exitSpy).toHaveBeenCalledWith(4);
-      expect(mockRecordTermination).toHaveBeenCalledWith('auth_required', 'auth_required', undefined);
+      try {
+        exitWithError({ code: 'auth_required', message: 'Not logged in' });
+        expect.fail('expected exitWithError to throw');
+      } catch (e) {
+        expect(e).toBeInstanceOf(CliExit);
+        const exit = e as InstanceType<typeof CliExit>;
+        expect(exit.exitCode).toBe(4);
+        expect(exit.context).toEqual({
+          reason: 'auth_required',
+          errorCode: 'auth_required',
+          apiContext: undefined,
+        });
+      }
 
       errorSpy.mockRestore();
-      exitSpy.mockRestore();
     });
 
-    it('exits with code 2 for cancelled', () => {
+    it('throws CliExit with exit code 2 for cancelled', () => {
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
 
-      exitWithError({ code: 'cancelled', message: 'User cancelled' });
-
-      expect(exitSpy).toHaveBeenCalledWith(2);
-      expect(mockRecordTermination).toHaveBeenCalledWith('cancelled', 'cancelled', undefined);
+      try {
+        exitWithError({ code: 'cancelled', message: 'User cancelled' });
+        expect.fail('expected exitWithError to throw');
+      } catch (e) {
+        expect(e).toBeInstanceOf(CliExit);
+        const exit = e as InstanceType<typeof CliExit>;
+        expect(exit.exitCode).toBe(2);
+        expect(exit.context?.reason).toBe('cancelled');
+        expect(exit.context?.errorCode).toBe('cancelled');
+      }
 
       errorSpy.mockRestore();
-      exitSpy.mockRestore();
     });
 
-    it('records validation_error reason for unknown codes', () => {
+    it('puts validation_error reason in context for unknown codes', () => {
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
 
-      exitWithError({ code: 'bad_email', message: 'bad input' });
-
-      expect(mockRecordTermination).toHaveBeenCalledWith('validation_error', 'bad_email', undefined);
-      expect(exitSpy).toHaveBeenCalledWith(1);
+      try {
+        exitWithError({ code: 'bad_email', message: 'bad input' });
+        expect.fail('expected exitWithError to throw');
+      } catch (e) {
+        expect(e).toBeInstanceOf(CliExit);
+        const exit = e as InstanceType<typeof CliExit>;
+        expect(exit.exitCode).toBe(1);
+        expect(exit.context?.reason).toBe('validation_error');
+        expect(exit.context?.errorCode).toBe('bad_email');
+      }
 
       errorSpy.mockRestore();
-      exitSpy.mockRestore();
     });
 
-    it('records api_error reason for http_* codes', () => {
+    it('puts api_error reason in context for http_* codes', () => {
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
 
-      exitWithError({ code: 'http_429', message: 'rate limited' });
-
-      expect(mockRecordTermination).toHaveBeenCalledWith('api_error', 'http_429', undefined);
-      expect(exitSpy).toHaveBeenCalledWith(1);
+      try {
+        exitWithError({ code: 'http_429', message: 'rate limited' });
+        expect.fail('expected exitWithError to throw');
+      } catch (e) {
+        expect(e).toBeInstanceOf(CliExit);
+        const exit = e as InstanceType<typeof CliExit>;
+        expect(exit.exitCode).toBe(1);
+        expect(exit.context?.reason).toBe('api_error');
+        expect(exit.context?.errorCode).toBe('http_429');
+      }
 
       errorSpy.mockRestore();
-      exitSpy.mockRestore();
     });
 
-    it('writes stderr before recording termination (flush order)', () => {
+    it('writes the error to stderr before throwing', () => {
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
 
-      exitWithError({ code: 'auth_required', message: 'bye' });
+      try {
+        exitWithError({ code: 'auth_required', message: 'bye' });
+        expect.fail('expected exitWithError to throw');
+      } catch (e) {
+        expect(e).toBeInstanceOf(CliExit);
+      }
 
-      const stderrOrder = errorSpy.mock.invocationCallOrder[0];
-      const terminationOrder = mockRecordTermination.mock.invocationCallOrder[0];
-      expect(stderrOrder).toBeLessThan(terminationOrder);
+      expect(errorSpy).toHaveBeenCalled();
+      const output = errorSpy.mock.calls[0][0];
+      expect(typeof output === 'string' ? output : String(output)).toContain('bye');
 
       errorSpy.mockRestore();
-      exitSpy.mockRestore();
     });
 
-    it('forwards apiContext to recordTermination', () => {
+    it('includes apiContext in CliExit context when provided', () => {
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
 
-      exitWithError({
-        code: 'http_500',
-        message: 'server exploded',
-        apiContext: { status: 500, code: 'http_500', resource: 'Organization' },
-      });
-
-      expect(mockRecordTermination).toHaveBeenCalledWith('api_error', 'http_500', {
-        status: 500,
-        code: 'http_500',
-        resource: 'Organization',
-      });
+      try {
+        exitWithError({
+          code: 'http_500',
+          message: 'server exploded',
+          apiContext: { status: 500, code: 'http_500', resource: 'Organization' },
+        });
+        expect.fail('expected exitWithError to throw');
+      } catch (e) {
+        expect(e).toBeInstanceOf(CliExit);
+        const exit = e as InstanceType<typeof CliExit>;
+        expect(exit.context).toEqual({
+          reason: 'api_error',
+          errorCode: 'http_500',
+          apiContext: { status: 500, code: 'http_500', resource: 'Organization' },
+        });
+      }
 
       errorSpy.mockRestore();
-      exitSpy.mockRestore();
     });
 
     it('preserves auth_required reason even when apiContext is present', () => {
       // A 401 with apiContext must still classify as auth_required, not
       // api_error — the more specific reason wins over the override.
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
 
-      exitWithError({
-        code: 'auth_required',
-        message: 'not authenticated',
-        apiContext: { status: 401, code: 'unauthorized', resource: 'Organization' },
-      });
-
-      expect(mockRecordTermination).toHaveBeenCalledWith('auth_required', 'auth_required', {
-        status: 401,
-        code: 'unauthorized',
-        resource: 'Organization',
-      });
-      expect(exitSpy).toHaveBeenCalledWith(4);
+      try {
+        exitWithError({
+          code: 'auth_required',
+          message: 'not authenticated',
+          apiContext: { status: 401, code: 'unauthorized', resource: 'Organization' },
+        });
+        expect.fail('expected exitWithError to throw');
+      } catch (e) {
+        expect(e).toBeInstanceOf(CliExit);
+        const exit = e as InstanceType<typeof CliExit>;
+        expect(exit.exitCode).toBe(4);
+        expect(exit.context?.reason).toBe('auth_required');
+        expect(exit.context?.errorCode).toBe('auth_required');
+        expect(exit.context?.apiContext).toEqual({
+          status: 401,
+          code: 'unauthorized',
+          resource: 'Organization',
+        });
+      }
 
       errorSpy.mockRestore();
-      exitSpy.mockRestore();
     });
 
-    it('overrides validation_error fallback to api_error when apiContext is present', () => {
+    it('promotes validation_error to api_error when apiContext is present', () => {
       // WorkOS error codes like `rate_limited` that are not in ERROR_CODE_MAP
       // fall through to validation_error. With apiContext, they should be
       // reclassified as api_error so API-failure dashboards see them.
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
 
-      exitWithError({
-        code: 'rate_limited',
-        message: 'slow down',
-        apiContext: { status: 429, code: 'rate_limited', resource: 'Organization' },
-      });
-
-      expect(mockRecordTermination).toHaveBeenCalledWith(
-        'api_error',
-        'rate_limited',
-        expect.objectContaining({ status: 429 }),
-      );
+      try {
+        exitWithError({
+          code: 'rate_limited',
+          message: 'slow down',
+          apiContext: { status: 429, code: 'rate_limited', resource: 'Organization' },
+        });
+        expect.fail('expected exitWithError to throw');
+      } catch (e) {
+        expect(e).toBeInstanceOf(CliExit);
+        const exit = e as InstanceType<typeof CliExit>;
+        expect(exit.context?.reason).toBe('api_error');
+        expect(exit.context?.errorCode).toBe('rate_limited');
+        expect(exit.context?.apiContext).toMatchObject({ status: 429 });
+      }
 
       errorSpy.mockRestore();
-      exitSpy.mockRestore();
     });
   });
 });
