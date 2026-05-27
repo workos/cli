@@ -194,9 +194,11 @@ describe('Analytics: no PII or secrets in queued events', () => {
     assertCleanQueue();
   });
 
-  it('commandExecuted: poisoned error.message does not leak markers', () => {
+  it('replaceLastCommandEvent: poisoned error.message does not leak markers', () => {
     const err = new Error(POISON_MESSAGE);
-    analytics.commandExecuted('test-command', 100, false, { error: err });
+    analytics.queueProvisionalCommand('test-command', []);
+    mockQueueEvent.mockClear();
+    analytics.replaceLastCommandEvent('test-command', 100, false, { error: err });
     expect(mockQueueEvent).toHaveBeenCalled();
     assertCleanQueue();
   });
@@ -217,12 +219,10 @@ describe('Analytics: no PII or secrets in queued events', () => {
     assertCleanQueue();
   });
 
-  it('replaceLastCommandEvent: inherits sanitization via commandExecuted', () => {
+  it('replaceLastCommandEvent: inherits sanitization on swap', () => {
     const err = new Error(POISON_MESSAGE);
-    // First queue a provisional event (would normally happen in middleware).
-    analytics.commandExecuted('test-command', 0, true);
+    analytics.queueProvisionalCommand('test-command', []);
     mockQueueEvent.mockClear();
-    // Then replace it with the real one carrying the poisoned error.
     analytics.replaceLastCommandEvent('test-command', 100, false, { error: err });
     expect(mockReplaceLastEventOfType).toHaveBeenCalledWith('command');
     expect(mockQueueEvent).toHaveBeenCalled();

@@ -1,4 +1,5 @@
 import os from 'node:os';
+import { basename } from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
 import { debug } from './debug.js';
 import { telemetryClient } from './telemetry-client.js';
@@ -189,7 +190,7 @@ export class Analytics {
       'env.os': process.platform,
       'env.os_version': osVersion,
       'env.node_version': process.version,
-      'env.shell': process.env.SHELL ?? process.env.COMSPEC ?? 'unknown',
+      'env.shell': basename(process.env.SHELL ?? process.env.COMSPEC ?? 'unknown'),
       'env.ci': Boolean(process.env.CI || process.env.GITHUB_ACTIONS || process.env.BUILDKITE),
       ...(ciProvider ? { 'env.ci_provider': ciProvider } : {}),
     };
@@ -270,7 +271,21 @@ export class Analytics {
     this.agentIterations++;
   }
 
-  commandExecuted(name: string, durationMs: number, success: boolean, options?: { error?: Error; flags?: string[] }) {
+  /**
+   * Queue a provisional command event (success=true, duration=0) that
+   * store-forward can persist if the handler exits early. Replaced by
+   * replaceLastCommandEvent on normal completion.
+   */
+  queueProvisionalCommand(name: string, flags: string[]) {
+    this.commandExecuted(name, 0, true, { flags });
+  }
+
+  private commandExecuted(
+    name: string,
+    durationMs: number,
+    success: boolean,
+    options?: { error?: Error; flags?: string[] },
+  ) {
     if (!WORKOS_TELEMETRY_ENABLED) return;
 
     const errorFields = options?.error ? this.extractErrorFields(options.error) : undefined;

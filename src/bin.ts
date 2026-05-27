@@ -2431,7 +2431,7 @@ yargs(rawArgs)
           ...insecureStorageOption,
           'api-key': { type: 'string' as const, describe: 'WorkOS API key' },
         }),
-    async (argv) => {
+    wrapCommandHandler(async (argv) => {
       await applyInsecureStorage(argv.insecureStorage);
       const { resolveOptionalApiKey } = await import('./lib/api-key.js');
       const { getActiveEnvironment } = await import('./lib/config-store.js');
@@ -2439,7 +2439,7 @@ yargs(rawArgs)
       const passthrough = getMigrationsPassthroughArgs(rawArgs);
       const endpoint = getActiveEnvironment()?.endpoint;
       await runMigrations(passthrough, resolveOptionalApiKey({ apiKey: argv.apiKey }), endpoint);
-    },
+    }),
   )
   .command(
     'dashboard',

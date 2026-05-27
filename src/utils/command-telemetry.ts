@@ -68,7 +68,7 @@ export function commandTelemetryMiddleware(rawArgs: string[]) {
 
     // Queue provisional event NOW, before the handler runs.
     // If the handler calls process.exit(), store-forward persists this.
-    analytics.commandExecuted(commandName, 0, true, { flags });
+    analytics.queueProvisionalCommand(commandName, flags);
   };
 }
 

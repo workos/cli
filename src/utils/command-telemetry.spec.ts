@@ -15,7 +15,7 @@ const mockSetCommandStart = vi.fn();
 
 vi.mock('./analytics.js', () => ({
   analytics: {
-    commandExecuted: (...args: unknown[]) => mockCommandExecuted(...args),
+    queueProvisionalCommand: (...args: unknown[]) => mockCommandExecuted(...args),
     replaceLastCommandEvent: (...args: unknown[]) => mockReplaceLastCommandEvent(...args),
     recordTermination: (...args: unknown[]) => mockRecordTermination(...args),
     setCommandStart: (...args: unknown[]) => mockSetCommandStart(...args),
@@ -86,9 +86,7 @@ describe('command-telemetry', () => {
 
       await middleware(argv);
 
-      expect(mockCommandExecuted).toHaveBeenCalledWith('organization.list', 0, true, {
-        flags: ['json'],
-      });
+      expect(mockCommandExecuted).toHaveBeenCalledWith('organization.list', ['json']);
     });
 
     it('stores telemetry metadata on argv', async () => {

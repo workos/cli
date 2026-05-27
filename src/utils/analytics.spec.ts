@@ -513,16 +513,16 @@ describe('Analytics', () => {
       });
     });
 
-    describe('commandExecuted', () => {
-      it('queues a command event with correct attributes', () => {
-        analytics.commandExecuted('org.list', 200, true);
+    describe('command events', () => {
+      it('queueProvisionalCommand queues a command event with correct attributes', () => {
+        analytics.queueProvisionalCommand('org.list', []);
 
         expect(mockQueueEvent).toHaveBeenCalledWith(
           expect.objectContaining({
             type: 'command',
             attributes: expect.objectContaining({
               'command.name': 'org.list',
-              'command.duration_ms': 200,
+              'command.duration_ms': 0,
               'command.success': true,
               'env.os': expect.any(String),
               'env.node_version': expect.any(String),
@@ -531,9 +531,12 @@ describe('Analytics', () => {
         );
       });
 
-      it('includes error info when provided', () => {
+      it('replaceLastCommandEvent includes error info when provided', () => {
+        analytics.queueProvisionalCommand('org.get', []);
+        mockQueueEvent.mockClear();
+
         const error = new TypeError('Not found');
-        analytics.commandExecuted('org.get', 50, false, { error });
+        analytics.replaceLastCommandEvent('org.get', 50, false, { error });
 
         const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'command')[0];
         expect(event.attributes['command.error_type']).toBe('TypeError');
@@ -541,7 +544,7 @@ describe('Analytics', () => {
       });
 
       it('includes flags as comma-separated names', () => {
-        analytics.commandExecuted('org.list', 100, true, { flags: ['json', 'limit'] });
+        analytics.queueProvisionalCommand('org.list', ['json', 'limit']);
 
         const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'command')[0];
         expect(event.attributes['command.flags']).toBe('json,limit');
@@ -616,7 +619,7 @@ describe('Analytics', () => {
 
     describe('auth.mode derivation', () => {
       const readAuthMode = () => {
-        analytics.commandExecuted('test', 1, true);
+        analytics.queueProvisionalCommand('test', []);
         const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'command')[0];
         return event.attributes['auth.mode'];
       };
@@ -704,7 +707,7 @@ describe('Analytics', () => {
       });
 
       it('includes device.id and auth.mode on command events', () => {
-        analytics.commandExecuted('org.list', 100, true);
+        analytics.queueProvisionalCommand('org.list', []);
         const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'command')[0];
         expect(event.attributes['device.id']).toBe(TEST_DEVICE_ID);
         expect(event.attributes['auth.mode']).toBe('none');
@@ -993,11 +996,11 @@ describe('Analytics', () => {
       expect(mockQueueEvent).not.toHaveBeenCalled();
     });
 
-    it('commandExecuted does nothing', async () => {
+    it('queueProvisionalCommand does nothing', async () => {
       const { Analytics } = await import('./analytics.js');
       const analytics = new Analytics();
 
-      analytics.commandExecuted('org.list', 100, true);
+      analytics.queueProvisionalCommand('org.list', []);
 
       expect(mockQueueEvent).not.toHaveBeenCalled();
     });
