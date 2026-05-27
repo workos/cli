@@ -4,16 +4,10 @@ vi.mock('./output.js', () => ({
   outputError: vi.fn(),
 }));
 
-const mockRecordTermination = vi.fn();
-vi.mock('./analytics.js', () => ({
-  analytics: {
-    recordTermination: (...args: unknown[]) => mockRecordTermination(...args),
-  },
-}));
-
 const { outputError } = await import('./output.js');
 const { ExitCode, exitWithCode, exitWithAuthRequired, resolveErrorCode } = await import('./exit-codes.js');
 const { setInteractionMode, resetInteractionModeForTests } = await import('./interaction-mode.js');
+const { CliExit } = await import('./cli-exit.js');
 
 describe('exit-codes', () => {
   beforeEach(() => {
@@ -82,107 +76,128 @@ describe('exit-codes', () => {
   });
 
   describe('exitWithCode', () => {
-    it('exits with the given code', () => {
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-      exitWithCode(ExitCode.GENERAL_ERROR);
-      expect(exitSpy).toHaveBeenCalledWith(1);
-      exitSpy.mockRestore();
+    it('throws CliExit with the given code', () => {
+      expect(() => exitWithCode(ExitCode.GENERAL_ERROR)).toThrow(CliExit);
+      try {
+        exitWithCode(ExitCode.GENERAL_ERROR);
+      } catch (e) {
+        expect((e as InstanceType<typeof CliExit>).exitCode).toBe(1);
+      }
     });
 
-    it('writes error before exiting when error provided', () => {
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-      exitWithCode(ExitCode.AUTH_REQUIRED, { code: 'auth_required', message: 'Not logged in' });
+    it('writes error before throwing when error provided', () => {
+      try {
+        exitWithCode(ExitCode.AUTH_REQUIRED, { code: 'auth_required', message: 'Not logged in' });
+      } catch (e) {
+        expect(e).toBeInstanceOf(CliExit);
+        expect((e as InstanceType<typeof CliExit>).exitCode).toBe(4);
+      }
       expect(outputError).toHaveBeenCalledWith({ code: 'auth_required', message: 'Not logged in' });
-      expect(exitSpy).toHaveBeenCalledWith(4);
-      exitSpy.mockRestore();
     });
 
     it('does not write error when none provided', () => {
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-      exitWithCode(ExitCode.SUCCESS);
+      try {
+        exitWithCode(ExitCode.SUCCESS);
+      } catch (e) {
+        expect(e).toBeInstanceOf(CliExit);
+        expect((e as InstanceType<typeof CliExit>).exitCode).toBe(0);
+      }
       expect(outputError).not.toHaveBeenCalled();
-      expect(exitSpy).toHaveBeenCalledWith(0);
-      exitSpy.mockRestore();
     });
 
-    it('records termination reason derived from exit code before exiting', () => {
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+    it('includes termination reason derived from exit code in context', () => {
+      try {
+        exitWithCode(ExitCode.CANCELLED);
+      } catch (e) {
+        expect((e as InstanceType<typeof CliExit>).context?.reason).toBe('cancelled');
+      }
 
-      exitWithCode(ExitCode.CANCELLED);
-      expect(mockRecordTermination).toHaveBeenCalledWith('cancelled', undefined);
+      try {
+        exitWithCode(ExitCode.AUTH_REQUIRED);
+      } catch (e) {
+        expect((e as InstanceType<typeof CliExit>).context?.reason).toBe('auth_required');
+      }
 
-      mockRecordTermination.mockClear();
-      exitWithCode(ExitCode.AUTH_REQUIRED);
-      expect(mockRecordTermination).toHaveBeenCalledWith('auth_required', undefined);
+      try {
+        exitWithCode(ExitCode.GENERAL_ERROR);
+      } catch (e) {
+        expect((e as InstanceType<typeof CliExit>).context?.reason).toBe('validation_error');
+      }
 
-      mockRecordTermination.mockClear();
-      exitWithCode(ExitCode.GENERAL_ERROR);
-      expect(mockRecordTermination).toHaveBeenCalledWith('validation_error', undefined);
-
-      mockRecordTermination.mockClear();
-      exitWithCode(ExitCode.SUCCESS);
-      expect(mockRecordTermination).toHaveBeenCalledWith('success', undefined);
-
-      exitSpy.mockRestore();
+      try {
+        exitWithCode(ExitCode.SUCCESS);
+      } catch (e) {
+        expect((e as InstanceType<typeof CliExit>).context?.reason).toBe('success');
+      }
     });
 
-    it('forwards error.code to recordTermination when error provided', () => {
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-
-      exitWithCode(ExitCode.GENERAL_ERROR, { code: 'bad_email', message: 'bad' });
-      expect(mockRecordTermination).toHaveBeenCalledWith('validation_error', 'bad_email');
-
-      exitSpy.mockRestore();
+    it('forwards error.code to context.errorCode when error provided', () => {
+      try {
+        exitWithCode(ExitCode.GENERAL_ERROR, { code: 'bad_email', message: 'bad' });
+      } catch (e) {
+        expect((e as InstanceType<typeof CliExit>).context?.reason).toBe('validation_error');
+        expect((e as InstanceType<typeof CliExit>).context?.errorCode).toBe('bad_email');
+      }
     });
   });
 
   describe('exitWithAuthRequired', () => {
     afterEach(() => resetInteractionModeForTests());
 
-    it('exits with code 4 and auth_required error', () => {
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-      exitWithAuthRequired();
+    it('throws CliExit with code 4 and auth_required error', () => {
+      try {
+        exitWithAuthRequired();
+      } catch (e) {
+        expect(e).toBeInstanceOf(CliExit);
+        expect((e as InstanceType<typeof CliExit>).exitCode).toBe(4);
+      }
       expect(outputError).toHaveBeenCalledWith(expect.objectContaining({ code: 'auth_required' }));
-      expect(exitSpy).toHaveBeenCalledWith(4);
-      exitSpy.mockRestore();
     });
 
     it('uses custom message when provided', () => {
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-      exitWithAuthRequired('Custom auth message');
+      try {
+        exitWithAuthRequired('Custom auth message');
+      } catch {
+        // expected
+      }
       expect(outputError).toHaveBeenCalledWith(
         expect.objectContaining({ code: 'auth_required', message: 'Custom auth message' }),
       );
-      exitSpy.mockRestore();
     });
 
     it('attaches agent-mode recovery hints by default', () => {
       setInteractionMode({ mode: 'agent', source: 'env' });
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-      exitWithAuthRequired();
+      try {
+        exitWithAuthRequired();
+      } catch {
+        // expected
+      }
       const call = vi.mocked(outputError).mock.calls.at(-1)![0];
       expect(call.recovery?.hints[0]).toMatchObject({
         command: expect.stringContaining('auth login'),
         hostShellRequired: true,
       });
-      exitSpy.mockRestore();
     });
 
     it('attaches CI-mode recovery hints when in CI', () => {
       setInteractionMode({ mode: 'ci', source: 'ci_env' });
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-      exitWithAuthRequired();
+      try {
+        exitWithAuthRequired();
+      } catch {
+        // expected
+      }
       const call = vi.mocked(outputError).mock.calls.at(-1)![0];
       expect(call.recovery?.hints[0].description).toMatch(/WORKOS_API_KEY/);
       expect(call.recovery?.hints[0].command).toBeUndefined();
-      exitSpy.mockRestore();
     });
 
-    it('records termination reason auth_required with error.code before exit', () => {
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-      exitWithAuthRequired();
-      expect(mockRecordTermination).toHaveBeenCalledWith('auth_required', 'auth_required');
-      exitSpy.mockRestore();
+    it('sets context.reason to auth_required with error.code in context', () => {
+      try {
+        exitWithAuthRequired();
+      } catch (e) {
+        expect((e as InstanceType<typeof CliExit>).context?.reason).toBe('auth_required');
+        expect((e as InstanceType<typeof CliExit>).context?.errorCode).toBe('auth_required');
+      }
     });
   });
 });

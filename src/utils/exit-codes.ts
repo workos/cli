@@ -7,7 +7,7 @@
  * 4 = Authentication required
  */
 
-import { analytics } from './analytics.js';
+import { CliExit } from './cli-exit.js';
 import { outputError, type StructuredError } from './output.js';
 import { formatWorkOSCommand } from './command-invocation.js';
 import { authLoginRecovery } from './recovery-hints.js';
@@ -52,8 +52,10 @@ export function exitWithCode(code: ExitCodeValue, error?: StructuredError): neve
   if (error) {
     outputError(error);
   }
-  analytics.recordTermination(reasonForExitCode(code), error?.code);
-  process.exit(code);
+  throw new CliExit(code, {
+    reason: reasonForExitCode(code),
+    errorCode: error?.code,
+  });
 }
 
 /**
