@@ -308,11 +308,11 @@ describe('output', () => {
         apiContext: { status: 401, code: 'unauthorized', resource: 'Organization' },
       });
 
-      expect(mockRecordTermination).toHaveBeenCalledWith(
-        'auth_required',
-        'auth_required',
-        { status: 401, code: 'unauthorized', resource: 'Organization' },
-      );
+      expect(mockRecordTermination).toHaveBeenCalledWith('auth_required', 'auth_required', {
+        status: 401,
+        code: 'unauthorized',
+        resource: 'Organization',
+      });
       expect(exitSpy).toHaveBeenCalledWith(4);
 
       errorSpy.mockRestore();

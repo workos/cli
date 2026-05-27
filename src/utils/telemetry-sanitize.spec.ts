@@ -5,19 +5,15 @@ import { sanitizeMessage } from './crash-reporter.js';
 // Mock telemetry client so we can inspect queued events without HTTP.
 // Use vi.hoisted so these are available when the hoisted vi.mock factory runs
 // (importing sanitizeMessage transitively loads analytics.ts which loads telemetry-client.ts).
-const {
-  mockSetGatewayUrl,
-  mockSetAccessToken,
-  mockQueueEvent,
-  mockFlush,
-  mockReplaceLastEventOfType,
-} = vi.hoisted(() => ({
-  mockSetGatewayUrl: vi.fn(),
-  mockSetAccessToken: vi.fn(),
-  mockQueueEvent: vi.fn(),
-  mockFlush: vi.fn().mockResolvedValue(undefined),
-  mockReplaceLastEventOfType: vi.fn(),
-}));
+const { mockSetGatewayUrl, mockSetAccessToken, mockQueueEvent, mockFlush, mockReplaceLastEventOfType } = vi.hoisted(
+  () => ({
+    mockSetGatewayUrl: vi.fn(),
+    mockSetAccessToken: vi.fn(),
+    mockQueueEvent: vi.fn(),
+    mockFlush: vi.fn().mockResolvedValue(undefined),
+    mockReplaceLastEventOfType: vi.fn(),
+  }),
+);
 
 vi.mock('./telemetry-client.js', () => ({
   telemetryClient: {

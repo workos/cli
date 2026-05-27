@@ -25,18 +25,14 @@ export function sanitizeStack(stack: string | undefined): string {
   let sanitized = stack.replaceAll(HOME, '~');
   sanitized = sanitized.replace(/\/[^\s:]+\/(node_modules|dist|src)\//g, '$1/');
   sanitized = redactSecrets(sanitized);
-  return sanitized.length > MAX_STACK_LENGTH
-    ? sanitized.slice(0, MAX_STACK_LENGTH) + '\n...[truncated]'
-    : sanitized;
+  return sanitized.length > MAX_STACK_LENGTH ? sanitized.slice(0, MAX_STACK_LENGTH) + '\n...[truncated]' : sanitized;
 }
 
 /** Sanitize an error message for telemetry (homedir, secrets, truncation). */
 export function sanitizeMessage(msg: string | undefined): string {
   if (!msg) return '';
   const sanitized = redactSecrets(msg.replaceAll(HOME, '~'));
-  return sanitized.length > MAX_MESSAGE_LENGTH
-    ? sanitized.slice(0, MAX_MESSAGE_LENGTH) + '...[truncated]'
-    : sanitized;
+  return sanitized.length > MAX_MESSAGE_LENGTH ? sanitized.slice(0, MAX_MESSAGE_LENGTH) + '...[truncated]' : sanitized;
 }
 
 /**

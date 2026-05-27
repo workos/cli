@@ -141,9 +141,7 @@ export function exitWithError(
 ): never {
   outputError(error);
   const { reason: codeReason, exit } = resolveErrorCode(error.code);
-  const reason = error.apiContext && codeReason === 'validation_error'
-    ? 'api_error'
-    : codeReason;
+  const reason = error.apiContext && codeReason === 'validation_error' ? 'api_error' : codeReason;
   analytics.recordTermination(reason, error.code, error.apiContext);
   process.exit(exit);
 }

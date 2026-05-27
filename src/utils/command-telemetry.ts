@@ -77,9 +77,7 @@ export function commandTelemetryMiddleware(rawArgs: string[]) {
  * with actual duration and success/failure on completion.
  * Designed to be called inside registerSubcommand(), not at each call site.
  */
-export function wrapCommandHandler(
-  handler: (argv: any) => Promise<void>,
-): (argv: any) => Promise<void> {
+export function wrapCommandHandler(handler: (argv: any) => Promise<void>): (argv: any) => Promise<void> {
   return async (argv) => {
     const commandName = String(argv.__telemetryCommandName ?? 'unknown');
     const startTime = Number(argv.__telemetryStartTime ?? Date.now());

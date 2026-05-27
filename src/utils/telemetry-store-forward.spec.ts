@@ -87,9 +87,7 @@ describe('telemetry-store-forward', () => {
       mockReaddirSync.mockReturnValue(['pending-1234.json', 'pending-5678.json']);
       const events1 = [{ type: 'command', sessionId: '1', timestamp: '2024-01-01T00:00:00Z' }];
       const events2 = [{ type: 'crash', sessionId: '2', timestamp: '2024-01-01T00:00:01Z' }];
-      mockReadFileSync
-        .mockReturnValueOnce(JSON.stringify(events1))
-        .mockReturnValueOnce(JSON.stringify(events2));
+      mockReadFileSync.mockReturnValueOnce(JSON.stringify(events1)).mockReturnValueOnce(JSON.stringify(events2));
 
       vi.resetModules();
       const { recoverPendingEvents } = await import('./telemetry-store-forward.js');

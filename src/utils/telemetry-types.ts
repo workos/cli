@@ -18,13 +18,7 @@ export type AuthMode = 'jwt' | 'claim_token' | 'api_key' | 'none';
  * for backward-compat). Populated by `analytics.recordTermination()` just
  * before `process.exit`.
  */
-export type TerminationReason =
-  | 'success'
-  | 'cancelled'
-  | 'auth_required'
-  | 'validation_error'
-  | 'api_error'
-  | 'crash';
+export type TerminationReason = 'success' | 'cancelled' | 'auth_required' | 'validation_error' | 'api_error' | 'crash';
 
 export interface SessionStartEvent extends TelemetryEvent {
   type: 'session.start';

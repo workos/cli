@@ -44,7 +44,6 @@ import {
 } from './utils/output.js';
 import clack from './utils/clack.js';
 import { registerSubcommand } from './utils/register-subcommand.js';
-import { COMMAND_ALIASES } from './lib/command-aliases.js';
 import { installCrashReporter } from './utils/crash-reporter.js';
 import { installStoreForward, recoverPendingEvents } from './utils/telemetry-store-forward.js';
 import { commandTelemetryMiddleware, wrapCommandHandler } from './utils/command-telemetry.js';

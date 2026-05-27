@@ -8,9 +8,7 @@ import { z } from 'zod';
  * This ensures CLI and API stay in sync.
  */
 
-const attributesSchema = z
-  .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
-  .optional();
+const attributesSchema = z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional();
 
 const baseFields = {
   sessionId: z.string(),
@@ -18,13 +16,9 @@ const baseFields = {
   attributes: attributesSchema,
 };
 
-const SessionStartSchema = z
-  .object({ type: z.literal('session.start'), ...baseFields })
-  .passthrough();
+const SessionStartSchema = z.object({ type: z.literal('session.start'), ...baseFields }).passthrough();
 
-const SessionEndSchema = z
-  .object({ type: z.literal('session.end'), ...baseFields })
-  .passthrough();
+const SessionEndSchema = z.object({ type: z.literal('session.end'), ...baseFields }).passthrough();
 
 const StepSchema = z
   .object({
@@ -59,13 +53,9 @@ const AgentLlmSchema = z
   })
   .passthrough();
 
-const CommandSchema = z
-  .object({ type: z.literal('command'), ...baseFields })
-  .passthrough();
+const CommandSchema = z.object({ type: z.literal('command'), ...baseFields }).passthrough();
 
-const CrashSchema = z
-  .object({ type: z.literal('crash'), ...baseFields })
-  .passthrough();
+const CrashSchema = z.object({ type: z.literal('crash'), ...baseFields }).passthrough();
 
 const TelemetryEventSchema = z.discriminatedUnion('type', [
   SessionStartSchema,

@@ -1,7 +1,12 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { resolveCanonicalName, extractUserFlags, commandTelemetryMiddleware, wrapCommandHandler } from './command-telemetry.js';
+import {
+  resolveCanonicalName,
+  extractUserFlags,
+  commandTelemetryMiddleware,
+  wrapCommandHandler,
+} from './command-telemetry.js';
 
 const mockCommandExecuted = vi.fn();
 const mockReplaceLastCommandEvent = vi.fn();
@@ -111,12 +116,9 @@ describe('command-telemetry', () => {
       await wrapped(argv);
 
       expect(handler).toHaveBeenCalledWith(argv);
-      expect(mockReplaceLastCommandEvent).toHaveBeenCalledWith(
-        'organization.list',
-        expect.any(Number),
-        true,
-        { flags: ['json'] },
-      );
+      expect(mockReplaceLastCommandEvent).toHaveBeenCalledWith('organization.list', expect.any(Number), true, {
+        flags: ['json'],
+      });
       const duration = mockReplaceLastCommandEvent.mock.calls[0][1] as number;
       expect(duration).toBeGreaterThanOrEqual(100);
     });
@@ -150,12 +152,10 @@ describe('command-telemetry', () => {
 
       await expect(wrapped(argv)).rejects.toThrow('command failed');
 
-      expect(mockReplaceLastCommandEvent).toHaveBeenCalledWith(
-        'organization.list',
-        expect.any(Number),
-        false,
-        { error, flags: [] },
-      );
+      expect(mockReplaceLastCommandEvent).toHaveBeenCalledWith('organization.list', expect.any(Number), false, {
+        error,
+        flags: [],
+      });
     });
 
     it('records termination reason "crash" with error name on uncaught throw', async () => {

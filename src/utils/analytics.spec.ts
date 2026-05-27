@@ -58,7 +58,11 @@ const mockSettingsConfig = {
   nodeVersion: '>=18',
   logging: { debugMode: false },
   telemetry: { enabled: true, eventName: 'installer_interaction' },
-  documentation: { workosDocsUrl: 'https://workos.com/docs', dashboardUrl: 'https://dashboard.workos.com', issuesUrl: 'https://github.com' },
+  documentation: {
+    workosDocsUrl: 'https://workos.com/docs',
+    dashboardUrl: 'https://dashboard.workos.com',
+    issuesUrl: 'https://github.com',
+  },
   legacy: { oauthPort: 3000 },
 };
 vi.mock('../lib/settings.js', () => ({

@@ -218,11 +218,7 @@ describe('createApiErrorHandler', () => {
       const handler = createApiErrorHandler('Thing');
       handler(new Error('Network timeout'));
 
-      expect(mockRecordTermination.mock.calls[0]).toEqual([
-        'api_error',
-        'unknown_error',
-        { resource: 'Thing' },
-      ]);
+      expect(mockRecordTermination.mock.calls[0]).toEqual(['api_error', 'unknown_error', { resource: 'Thing' }]);
     });
   });
 });

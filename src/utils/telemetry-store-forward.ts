@@ -25,9 +25,7 @@ export function installStoreForward(): void {
 export async function recoverPendingEvents(): Promise<void> {
   try {
     if (!existsSync(PENDING_DIR)) return;
-    const files = readdirSync(PENDING_DIR).filter(
-      (f) => f.startsWith('pending-') && f.endsWith('.json'),
-    );
+    const files = readdirSync(PENDING_DIR).filter((f) => f.startsWith('pending-') && f.endsWith('.json'));
 
     const recoveredFiles: string[] = [];
     for (const file of files) {
@@ -40,11 +38,19 @@ export async function recoverPendingEvents(): Promise<void> {
           recoveredFiles.push(filePath);
         } else {
           // Empty file — delete immediately
-          try { unlinkSync(filePath); } catch { /* ignore */ }
+          try {
+            unlinkSync(filePath);
+          } catch {
+            /* ignore */
+          }
         }
       } catch {
         // Corrupted file — delete and move on
-        try { unlinkSync(filePath); } catch { /* ignore */ }
+        try {
+          unlinkSync(filePath);
+        } catch {
+          /* ignore */
+        }
       }
     }
 
@@ -52,7 +58,11 @@ export async function recoverPendingEvents(): Promise<void> {
     // If flush succeeds: events sent, done.
     // If flush fails: events stay in memory, exit handler re-persists to new PID file.
     for (const filePath of recoveredFiles) {
-      try { unlinkSync(filePath); } catch { /* ignore */ }
+      try {
+        unlinkSync(filePath);
+      } catch {
+        /* ignore */
+      }
     }
 
     // Flush all recovered events in one batch

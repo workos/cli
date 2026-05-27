@@ -270,12 +270,7 @@ export class Analytics {
     this.agentIterations++;
   }
 
-  commandExecuted(
-    name: string,
-    durationMs: number,
-    success: boolean,
-    options?: { error?: Error; flags?: string[] },
-  ) {
+  commandExecuted(name: string, durationMs: number, success: boolean, options?: { error?: Error; flags?: string[] }) {
     if (!WORKOS_TELEMETRY_ENABLED) return;
 
     const errorFields = options?.error ? this.extractErrorFields(options.error) : undefined;
@@ -296,9 +291,7 @@ export class Analytics {
               'command.error_message': errorFields.message,
             }
           : {}),
-        ...(options?.flags?.length
-          ? { 'command.flags': options.flags.join(',') }
-          : {}),
+        ...(options?.flags?.length ? { 'command.flags': options.flags.join(',') } : {}),
         ...this.getEnvFingerprint(),
       },
     };
@@ -348,9 +341,7 @@ export class Analytics {
     // replaceLastCommandEvent, which runs before recordTermination and sets
     // the authoritative value — we only patch duration when the current
     // event still has the provisional 0.
-    const durationMs = this.commandStartTime !== undefined
-      ? Date.now() - this.commandStartTime
-      : undefined;
+    const durationMs = this.commandStartTime !== undefined ? Date.now() - this.commandStartTime : undefined;
 
     telemetryClient.patchLastEventOfType('command', (event) => {
       const attrs = (event as CommandEvent).attributes;

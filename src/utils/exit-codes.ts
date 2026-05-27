@@ -28,7 +28,6 @@ const ERROR_CODE_MAP: Record<string, { reason: TerminationReason; exit: ExitCode
   cancelled: { reason: 'cancelled', exit: ExitCode.CANCELLED },
 };
 
-
 export function resolveErrorCode(code: string): {
   reason: TerminationReason;
   exit: ExitCodeValue;
