@@ -40,13 +40,18 @@ import {
   setOutputMode,
   isJsonMode,
   outputJson,
+  outputError,
   exitWithError,
 } from './utils/output.js';
 import clack from './utils/clack.js';
 import { registerSubcommand } from './utils/register-subcommand.js';
 import { installCrashReporter } from './utils/crash-reporter.js';
 import { installStoreForward, recoverPendingEvents } from './utils/telemetry-store-forward.js';
-import { commandTelemetryMiddleware, wrapCommandHandler } from './utils/command-telemetry.js';
+import { resolveCanonicalName, extractUserFlags, SKIP_TELEMETRY_COMMANDS } from './utils/command-telemetry.js';
+import { CliExit } from './utils/cli-exit.js';
+import { telemetryClient } from './utils/telemetry-client.js';
+import { WORKOS_TELEMETRY_ENABLED } from './lib/constants.js';
+import { ExitCode } from './utils/exit-codes.js';
 import { analytics } from './utils/analytics.js';
 
 // Enable debug logging for all commands via env var.
@@ -216,23 +221,38 @@ const installerOptions = {
 // Check for updates (blocks up to 500ms, skip in JSON/non-human modes to keep machine streams clean)
 if (!isJsonMode() && isPromptAllowed()) await checkForUpdates();
 
-yargs(rawArgs)
-  .parserConfiguration({ 'populate--': true })
-  .env('WORKOS_INSTALLER')
-  .option('json', {
-    type: 'boolean',
-    default: false,
-    describe: 'Output results as JSON (auto-enabled in non-TTY)',
-    global: true,
-  })
-  .option('mode', {
-    type: 'string',
-    choices: ['human', 'agent', 'ci'] as const,
-    describe: 'Interaction mode: human, coding agent, or CI automation',
-    global: true,
-  })
-  .middleware(commandTelemetryMiddleware(rawArgs))
-  .middleware(async (argv) => {
+async function runCli(): Promise<never> {
+  const startTime = Date.now();
+  let commandName = 'root';
+  const flags = extractUserFlags(rawArgs);
+
+  const parser = yargs(rawArgs)
+    .parserConfiguration({ 'populate--': true })
+    .exitProcess(false)
+    .fail((msg, _err) => {
+      if (msg) {
+        outputError({ code: 'invalid_usage', message: msg });
+      }
+      throw new CliExit(ExitCode.GENERAL_ERROR, { reason: 'validation_error' });
+    })
+    .env('WORKOS_INSTALLER')
+    .option('json', {
+      type: 'boolean',
+      default: false,
+      describe: 'Output results as JSON (auto-enabled in non-TTY)',
+      global: true,
+    })
+    .option('mode', {
+      type: 'string',
+      choices: ['human', 'agent', 'ci'] as const,
+      describe: 'Interaction mode: human, coding agent, or CI automation',
+      global: true,
+    })
+    .middleware((argv) => {
+      const commandParts = (argv._ as string[]) || [];
+      commandName = resolveCanonicalName(commandParts);
+    })
+    .middleware(async (argv) => {
     // Warn about unclaimed environments before management commands.
     // Excluded: auth/claim/install/dashboard handle their own credential flows;
     // skills/doctor/env/debug are utility commands where the warning is unnecessary.
@@ -268,7 +288,6 @@ yargs(rawArgs)
         await applyInsecureStorage(argv.insecureStorage);
         const { runLogin } = await import('./commands/login.js');
         await runLogin();
-        process.exit(0);
       },
     );
     registerSubcommand(
@@ -409,10 +428,10 @@ yargs(rawArgs)
           description: 'Auto-update stale WorkOS skills (writes to <agent>/skills/workos/ and workos-widgets/ only)',
         },
       }),
-    wrapCommandHandler(async (argv) => {
+    async (argv) => {
       const { handleDoctor } = await import('./commands/doctor.js');
       await handleDoctor(argv);
-    }),
+    },
   )
   // NOTE: When adding commands here, also update src/utils/help-json.ts
   .command('env', 'Manage environment configurations (API keys, endpoints, active environment)', (yargs) => {
@@ -544,7 +563,7 @@ yargs(rawArgs)
         .example('workos api /user_management/users', 'GET /user_management/users')
         .example('workos api /organizations -d \'{"name":"Acme"}\'', 'POST with a JSON body')
         .example('workos api /organizations/org_123 -X DELETE', 'DELETE an organization'),
-    wrapCommandHandler(async (argv) => {
+    async (argv) => {
       await applyInsecureStorage(argv.insecureStorage as boolean | undefined);
       const endpoint = argv.endpoint as string | undefined;
       const filter = argv.filter as string | undefined;
@@ -570,7 +589,7 @@ yargs(rawArgs)
         dryRun: argv.dryRun,
         yes: argv.yes,
       });
-    }),
+    },
   )
   .command(['organization', 'org'], 'Manage WorkOS organizations (create, update, get, list, delete)', (yargs) => {
     yargs.options({
@@ -2155,10 +2174,6 @@ yargs(rawArgs)
     return yargs.demandCommand(1, 'Please specify an org-domain subcommand').strict();
   })
   // --- Workflow Commands ---
-  // NOTE: Top-level `.command()` registrations with inline handlers MUST wrap
-  // the handler with `wrapCommandHandler()` for correct command telemetry.
-  // Subcommands registered via `registerSubcommand()` are auto-wrapped.
-  // See CLAUDE.md "Telemetry Wiring for New Commands".
   .command(
     'seed',
     'Seed WorkOS environment from a YAML config file',
@@ -2170,7 +2185,7 @@ yargs(rawArgs)
         clean: { type: 'boolean', default: false, describe: 'Tear down seeded resources' },
         init: { type: 'boolean', default: false, describe: 'Create an example workos-seed.yml file' },
       }),
-    wrapCommandHandler(async (argv) => {
+    async (argv) => {
       await applyInsecureStorage(argv.insecureStorage);
       const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
       const { runSeed } = await import('./commands/seed.js');
@@ -2179,7 +2194,7 @@ yargs(rawArgs)
         resolveApiKey({ apiKey: argv.apiKey }),
         resolveApiBaseUrl(),
       );
-    }),
+    },
   )
   .command(
     'setup-org <name>',
@@ -2191,7 +2206,7 @@ yargs(rawArgs)
         domain: { type: 'string', describe: 'Domain to add and verify' },
         roles: { type: 'string', describe: 'Comma-separated role slugs to create' },
       }),
-    wrapCommandHandler(async (argv) => {
+    async (argv) => {
       await applyInsecureStorage(argv.insecureStorage);
       const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
       const { runSetupOrg } = await import('./commands/setup-org.js');
@@ -2200,7 +2215,7 @@ yargs(rawArgs)
         resolveApiKey({ apiKey: argv.apiKey }),
         resolveApiBaseUrl(),
       );
-    }),
+    },
   )
   .command(
     'onboard-user <email>',
@@ -2213,7 +2228,7 @@ yargs(rawArgs)
         role: { type: 'string', describe: 'Role slug to assign' },
         wait: { type: 'boolean', default: false, describe: 'Wait for invitation acceptance' },
       }),
-    wrapCommandHandler(async (argv) => {
+    async (argv) => {
       await applyInsecureStorage(argv.insecureStorage);
       const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
       const { runOnboardUser } = await import('./commands/onboard-user.js');
@@ -2222,7 +2237,7 @@ yargs(rawArgs)
         resolveApiKey({ apiKey: argv.apiKey }),
         resolveApiBaseUrl(),
       );
-    }),
+    },
   )
   .command(
     'debug-sso <connectionId>',
@@ -2232,12 +2247,12 @@ yargs(rawArgs)
         ...insecureStorageOption,
         'api-key': { type: 'string' as const, describe: 'WorkOS API key' },
       }),
-    wrapCommandHandler(async (argv) => {
+    async (argv) => {
       await applyInsecureStorage(argv.insecureStorage);
       const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
       const { runDebugSso } = await import('./commands/debug-sso.js');
       await runDebugSso(argv.connectionId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-    }),
+    },
   )
   .command(
     'debug-sync <directoryId>',
@@ -2247,12 +2262,12 @@ yargs(rawArgs)
         ...insecureStorageOption,
         'api-key': { type: 'string' as const, describe: 'WorkOS API key' },
       }),
-    wrapCommandHandler(async (argv) => {
+    async (argv) => {
       await applyInsecureStorage(argv.insecureStorage);
       const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
       const { runDebugSync } = await import('./commands/debug-sync.js');
       await runDebugSync(argv.directoryId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
-    }),
+    },
   )
   // Alias — canonical command is `workos env claim`
   .command(
@@ -2262,11 +2277,11 @@ yargs(rawArgs)
       yargs.options({
         ...insecureStorageOption,
       }),
-    wrapCommandHandler(async (argv) => {
+    async (argv) => {
       await applyInsecureStorage(argv.insecureStorage);
       const { runClaim } = await import('./commands/claim.js');
       await runClaim();
-    }),
+    },
   )
   .command(
     'install',
@@ -2287,10 +2302,10 @@ yargs(rawArgs)
         port: { type: 'number', default: 4100, describe: 'Port to listen on' },
         seed: { type: 'string', describe: 'Path to seed config file (YAML or JSON)' },
       }),
-    wrapCommandHandler(async (argv) => {
+    async (argv) => {
       const { runEmulate } = await import('./commands/emulate.js');
       await runEmulate({ port: argv.port, seed: argv.seed, json: argv.json as boolean });
-    }),
+    },
   )
   .command(
     'dev',
@@ -2300,14 +2315,14 @@ yargs(rawArgs)
         port: { type: 'number', default: 4100, describe: 'Emulator port' },
         seed: { type: 'string', describe: 'Path to seed config file' },
       }),
-    wrapCommandHandler(async (argv) => {
+    async (argv) => {
       const { runDev } = await import('./commands/dev.js');
       await runDev({
         port: argv.port,
         seed: argv.seed,
         '--': argv['--'] as string[] | undefined,
       });
-    }),
+    },
   )
   .command('debug', false, (yargs) => {
     yargs.options(insecureStorageOption);
@@ -2431,7 +2446,7 @@ yargs(rawArgs)
           ...insecureStorageOption,
           'api-key': { type: 'string' as const, describe: 'WorkOS API key' },
         }),
-    wrapCommandHandler(async (argv) => {
+    async (argv) => {
       await applyInsecureStorage(argv.insecureStorage);
       const { resolveOptionalApiKey } = await import('./lib/api-key.js');
       const { getActiveEnvironment } = await import('./lib/config-store.js');
@@ -2439,7 +2454,7 @@ yargs(rawArgs)
       const passthrough = getMigrationsPassthroughArgs(rawArgs);
       const endpoint = getActiveEnvironment()?.endpoint;
       await runMigrations(passthrough, resolveOptionalApiKey({ apiKey: argv.apiKey }), endpoint);
-    }),
+    },
   )
   .command(
     'dashboard',
@@ -2469,7 +2484,7 @@ yargs(rawArgs)
       });
 
       if (clack.isCancel(shouldInstall) || !shouldInstall) {
-        process.exit(0);
+        return;
       }
 
       await applyInsecureStorage(argv.insecureStorage);
@@ -2477,7 +2492,6 @@ yargs(rawArgs)
 
       const { handleInstall } = await import('./commands/install.js');
       await handleInstall({ ...argv, dashboard: false });
-      process.exit(0);
     },
   )
   .strict()
@@ -2485,4 +2499,49 @@ yargs(rawArgs)
   .alias('help', 'h')
   .version(getVersion())
   .alias('version', 'v')
-  .wrap(process.stdout.isTTY && process.stdout.columns ? process.stdout.columns : 80).argv;
+  .wrap(process.stdout.isTTY && process.stdout.columns ? process.stdout.columns : 80);
+
+  const shouldSkipTelemetry = () =>
+    !WORKOS_TELEMETRY_ENABLED || SKIP_TELEMETRY_COMMANDS.has(commandName.split('.')[0]);
+
+  try {
+    await parser.parseAsync(rawArgs);
+
+    if (!shouldSkipTelemetry()) {
+      analytics.emitCommandEvent(commandName, Date.now() - startTime, true, {
+        flags,
+        reason: 'success',
+      });
+    }
+    process.exitCode = 0;
+  } catch (error) {
+    if (error instanceof CliExit) {
+      process.exitCode = error.exitCode;
+      if (!shouldSkipTelemetry()) {
+        analytics.emitCommandEvent(commandName, Date.now() - startTime, error.exitCode === 0, {
+          flags,
+          reason: error.context?.reason,
+          errorCode: error.context?.errorCode,
+          apiContext: error.context?.apiContext,
+        });
+      }
+    } else {
+      // Unexpected error (crash)
+      process.exitCode = 1;
+      const err = error instanceof Error ? error : new Error(String(error));
+      if (!shouldSkipTelemetry()) {
+        analytics.emitCommandEvent(commandName, Date.now() - startTime, false, {
+          flags,
+          reason: 'crash',
+          error: err,
+        });
+      }
+      analytics.captureUnhandledCrash(err, { command: commandName });
+    }
+  } finally {
+    await telemetryClient.flush().catch(() => {});
+    process.exit(process.exitCode ?? 0);
+  }
+}
+
+runCli();
