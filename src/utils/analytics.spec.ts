@@ -6,20 +6,6 @@ const mockSetAccessToken = vi.fn();
 const mockSetClaimTokenAuth = vi.fn();
 const mockQueueEvent = vi.fn();
 const mockFlush = vi.fn().mockResolvedValue(undefined);
-const mockReplaceLastEventOfType = vi.fn();
-// Holds the queue of events that patchLastEventOfType should operate on.
-// Tests populate via mockQueueEvent.mock.calls + manual reset.
-const patchedEvents: Array<{ type: string; attributes: Record<string, unknown> }> = [];
-const mockPatchLastEventOfType = vi.fn(
-  (type: string, mutator: (event: { type: string; attributes: Record<string, unknown> }) => void) => {
-    for (let i = patchedEvents.length - 1; i >= 0; i--) {
-      if (patchedEvents[i].type === type) {
-        mutator(patchedEvents[i]);
-        return;
-      }
-    }
-  },
-);
 
 vi.mock('./telemetry-client.js', () => ({
   telemetryClient: {
@@ -28,11 +14,6 @@ vi.mock('./telemetry-client.js', () => ({
     setClaimTokenAuth: mockSetClaimTokenAuth,
     queueEvent: mockQueueEvent,
     flush: mockFlush,
-    replaceLastEventOfType: (...args: unknown[]) => mockReplaceLastEventOfType(...args),
-    patchLastEventOfType: (
-      type: string,
-      mutator: (event: { type: string; attributes: Record<string, unknown> }) => void,
-    ) => mockPatchLastEventOfType(type, mutator),
   },
 }));
 
@@ -116,11 +97,6 @@ describe('Analytics', () => {
           setClaimTokenAuth: mockSetClaimTokenAuth,
           queueEvent: mockQueueEvent,
           flush: mockFlush,
-          replaceLastEventOfType: (...args: unknown[]) => mockReplaceLastEventOfType(...args),
-          patchLastEventOfType: (
-            type: string,
-            mutator: (event: { type: string; attributes: Record<string, unknown> }) => void,
-          ) => mockPatchLastEventOfType(type, mutator),
         },
       }));
       vi.doMock('../lib/settings.js', () => ({
@@ -513,41 +489,67 @@ describe('Analytics', () => {
       });
     });
 
-    describe('command events', () => {
-      it('queueProvisionalCommand queues a command event with correct attributes', () => {
-        analytics.queueProvisionalCommand('org.list', []);
+    describe('emitCommandEvent', () => {
+      it('queues a command event with name, duration, success, and flags', () => {
+        analytics.emitCommandEvent('organization.list', 150, true, { flags: ['json'] });
 
         expect(mockQueueEvent).toHaveBeenCalledWith(
           expect.objectContaining({
             type: 'command',
             attributes: expect.objectContaining({
-              'command.name': 'org.list',
-              'command.duration_ms': 0,
+              'command.name': 'organization.list',
+              'command.duration_ms': 150,
               'command.success': true,
+              'command.flags': 'json',
+              'cli.version': expect.any(String),
               'env.os': expect.any(String),
-              'env.node_version': expect.any(String),
+              'device.id': TEST_DEVICE_ID,
             }),
           }),
         );
       });
 
-      it('replaceLastCommandEvent includes error info when provided', () => {
-        analytics.queueProvisionalCommand('org.get', []);
-        mockQueueEvent.mockClear();
+      it('includes termination.reason when provided', () => {
+        analytics.emitCommandEvent('auth.login', 50, false, {
+          reason: 'auth_required',
+          errorCode: 'auth_required',
+        });
 
+        const event = mockQueueEvent.mock.calls.find((c: any) => c[0].type === 'command')[0];
+        expect(event.attributes['termination.reason']).toBe('auth_required');
+        expect(event.attributes['error.code']).toBe('auth_required');
+        expect(event.attributes['command.success']).toBe(false);
+      });
+
+      it('includes error info when provided', () => {
         const error = new TypeError('Not found');
-        analytics.replaceLastCommandEvent('org.get', 50, false, { error });
+        analytics.emitCommandEvent('org.get', 50, false, { error });
 
-        const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'command')[0];
+        const event = mockQueueEvent.mock.calls.find((c: any) => c[0].type === 'command')[0];
         expect(event.attributes['command.error_type']).toBe('TypeError');
         expect(event.attributes['command.error_message']).toBe('Not found');
       });
 
-      it('includes flags as comma-separated names', () => {
-        analytics.queueProvisionalCommand('org.list', ['json', 'limit']);
+      it('includes apiContext when provided', () => {
+        analytics.emitCommandEvent('org.get', 50, false, {
+          reason: 'api_error',
+          apiContext: { status: 500, code: 'internal_server_error', resource: 'organizations' },
+        });
 
-        const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'command')[0];
-        expect(event.attributes['command.flags']).toBe('json,limit');
+        const event = mockQueueEvent.mock.calls.find((c: any) => c[0].type === 'command')[0];
+        expect(event.attributes['api.status']).toBe(500);
+        expect(event.attributes['api.code']).toBe('internal_server_error');
+        expect(event.attributes['api.resource']).toBe('organizations');
+      });
+
+      it('omits optional fields when not provided', () => {
+        analytics.emitCommandEvent('doctor', 100, true);
+
+        const event = mockQueueEvent.mock.calls.find((c: any) => c[0].type === 'command')[0];
+        expect(event.attributes['command.flags']).toBeUndefined();
+        expect(event.attributes['command.error_type']).toBeUndefined();
+        expect(event.attributes['termination.reason']).toBeUndefined();
+        expect(event.attributes['api.status']).toBeUndefined();
       });
     });
 
@@ -619,8 +621,8 @@ describe('Analytics', () => {
 
     describe('auth.mode derivation', () => {
       const readAuthMode = () => {
-        analytics.queueProvisionalCommand('test', []);
-        const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'command')[0];
+        analytics.emitCommandEvent('test', 0, true);
+        const event = mockQueueEvent.mock.calls.find((c: any) => c[0].type === 'command')[0];
         return event.attributes['auth.mode'];
       };
 
@@ -707,7 +709,7 @@ describe('Analytics', () => {
       });
 
       it('includes device.id and auth.mode on command events', () => {
-        analytics.queueProvisionalCommand('org.list', []);
+        analytics.emitCommandEvent('org.list', 0, true);
         const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'command')[0];
         expect(event.attributes['device.id']).toBe(TEST_DEVICE_ID);
         expect(event.attributes['auth.mode']).toBe('none');
@@ -728,173 +730,6 @@ describe('Analytics', () => {
       });
     });
 
-    describe('replaceLastCommandEvent', () => {
-      it('removes last command event and queues a new one', () => {
-        analytics.replaceLastCommandEvent('organization.list', 150, true, { flags: ['json'] });
-
-        expect(mockReplaceLastEventOfType).toHaveBeenCalledWith('command');
-        expect(mockQueueEvent).toHaveBeenCalledWith(
-          expect.objectContaining({
-            type: 'command',
-            attributes: expect.objectContaining({
-              'command.name': 'organization.list',
-              'command.duration_ms': 150,
-              'command.success': true,
-              'command.flags': 'json',
-            }),
-          }),
-        );
-      });
-
-      it('includes error info on failure', () => {
-        const error = new Error('oops');
-        error.name = 'CommandError';
-        analytics.replaceLastCommandEvent('auth.login', 50, false, { error });
-
-        const event = mockQueueEvent.mock.calls[0][0];
-        expect(event.attributes['command.success']).toBe(false);
-        expect(event.attributes['command.error_type']).toBe('CommandError');
-        expect(event.attributes['command.error_message']).toBe('oops');
-      });
-    });
-
-    describe('recordTermination', () => {
-      beforeEach(() => {
-        patchedEvents.length = 0;
-      });
-
-      it('patches the last command event with termination.reason and syncs command.success', () => {
-        const commandEvent = {
-          type: 'command',
-          attributes: { 'command.success': true } as Record<string, unknown>,
-        };
-        patchedEvents.push(commandEvent);
-
-        analytics.recordTermination('auth_required', 'auth_required');
-
-        expect(mockPatchLastEventOfType).toHaveBeenCalledWith('command', expect.any(Function));
-        expect(commandEvent.attributes['termination.reason']).toBe('auth_required');
-        expect(commandEvent.attributes['error.code']).toBe('auth_required');
-        expect(commandEvent.attributes['command.success']).toBe(false);
-      });
-
-      it('sets command.success true only when reason is success', () => {
-        const commandEvent = {
-          type: 'command',
-          attributes: { 'command.success': false } as Record<string, unknown>,
-        };
-        patchedEvents.push(commandEvent);
-
-        analytics.recordTermination('success');
-
-        expect(commandEvent.attributes['termination.reason']).toBe('success');
-        expect(commandEvent.attributes['command.success']).toBe(true);
-        expect(commandEvent.attributes['error.code']).toBeUndefined();
-      });
-
-      it('applies api context when provided', () => {
-        const commandEvent = {
-          type: 'command',
-          attributes: {} as Record<string, unknown>,
-        };
-        patchedEvents.push(commandEvent);
-
-        analytics.recordTermination('api_error', 'http_500', {
-          status: 500,
-          code: 'internal_server_error',
-          resource: 'organizations',
-        });
-
-        expect(commandEvent.attributes['api.status']).toBe(500);
-        expect(commandEvent.attributes['api.code']).toBe('internal_server_error');
-        expect(commandEvent.attributes['api.resource']).toBe('organizations');
-      });
-
-      it('skips undefined api context fields', () => {
-        const commandEvent = {
-          type: 'command',
-          attributes: {} as Record<string, unknown>,
-        };
-        patchedEvents.push(commandEvent);
-
-        analytics.recordTermination('api_error', 'http_404', { resource: 'users' });
-
-        expect(commandEvent.attributes['api.resource']).toBe('users');
-        expect(commandEvent.attributes['api.status']).toBeUndefined();
-        expect(commandEvent.attributes['api.code']).toBeUndefined();
-      });
-
-      it('is a no-op when no command event is queued', () => {
-        // patchedEvents is empty — helper called from non-command context.
-        expect(() => analytics.recordTermination('cancelled')).not.toThrow();
-        // The mock still forwards the call; the real telemetryClient would
-        // iterate its queue and return silently. Smoke test: mutator never
-        // fires because there's no matching event.
-        expect(mockPatchLastEventOfType).toHaveBeenCalledWith('command', expect.any(Function));
-      });
-
-      it('patches command.duration_ms when the provisional value is 0 and a start time is set', () => {
-        const commandEvent = {
-          type: 'command',
-          attributes: { 'command.duration_ms': 0 } as Record<string, unknown>,
-        };
-        patchedEvents.push(commandEvent);
-
-        const start = Date.now() - 250;
-        analytics.setCommandStart(start);
-        analytics.recordTermination('auth_required', 'auth_required');
-
-        expect(commandEvent.attributes['command.duration_ms']).toBeGreaterThanOrEqual(250);
-      });
-
-      it('does not overwrite command.duration_ms when it is already non-zero', () => {
-        // Wrapper-path callers run replaceLastCommandEvent first (sets real
-        // duration), THEN recordTermination. Duration must not regress.
-        const commandEvent = {
-          type: 'command',
-          attributes: { 'command.duration_ms': 1234 } as Record<string, unknown>,
-        };
-        patchedEvents.push(commandEvent);
-
-        analytics.setCommandStart(Date.now() - 9999);
-        analytics.recordTermination('success');
-
-        expect(commandEvent.attributes['command.duration_ms']).toBe(1234);
-      });
-
-      it('clears stale api.* fields when called without apiContext', () => {
-        // Idempotency: if a prior call set api.* and a later call omits them,
-        // the later reason must not carry stale fields.
-        const commandEvent = {
-          type: 'command',
-          attributes: {
-            'api.status': 401,
-            'api.code': 'unauthorized',
-            'api.resource': 'Organization',
-          } as Record<string, unknown>,
-        };
-        patchedEvents.push(commandEvent);
-
-        analytics.recordTermination('validation_error', 'bad_email');
-
-        expect(commandEvent.attributes['api.status']).toBeUndefined();
-        expect(commandEvent.attributes['api.code']).toBeUndefined();
-        expect(commandEvent.attributes['api.resource']).toBeUndefined();
-        expect(commandEvent.attributes['error.code']).toBe('bad_email');
-      });
-
-      it('clears stale error.code when called without errorCode', () => {
-        const commandEvent = {
-          type: 'command',
-          attributes: { 'error.code': 'old_code' } as Record<string, unknown>,
-        };
-        patchedEvents.push(commandEvent);
-
-        analytics.recordTermination('success');
-
-        expect(commandEvent.attributes['error.code']).toBeUndefined();
-      });
-    });
   });
 
   describe('with telemetry disabled', () => {
@@ -908,11 +743,6 @@ describe('Analytics', () => {
           setClaimTokenAuth: mockSetClaimTokenAuth,
           queueEvent: mockQueueEvent,
           flush: mockFlush,
-          replaceLastEventOfType: (...args: unknown[]) => mockReplaceLastEventOfType(...args),
-          patchLastEventOfType: (
-            type: string,
-            mutator: (event: { type: string; attributes: Record<string, unknown> }) => void,
-          ) => mockPatchLastEventOfType(type, mutator),
         },
       }));
       vi.doMock('../lib/settings.js', () => ({
@@ -996,12 +826,10 @@ describe('Analytics', () => {
       expect(mockQueueEvent).not.toHaveBeenCalled();
     });
 
-    it('queueProvisionalCommand does nothing', async () => {
+    it('emitCommandEvent does nothing', async () => {
       const { Analytics } = await import('./analytics.js');
       const analytics = new Analytics();
-
-      analytics.queueProvisionalCommand('org.list', []);
-
+      analytics.emitCommandEvent('org.list', 100, true);
       expect(mockQueueEvent).not.toHaveBeenCalled();
     });
 
@@ -1023,23 +851,5 @@ describe('Analytics', () => {
       expect(mockSetGatewayUrl).not.toHaveBeenCalled();
     });
 
-    it('replaceLastCommandEvent does nothing', async () => {
-      const { Analytics } = await import('./analytics.js');
-      const analytics = new Analytics();
-
-      analytics.replaceLastCommandEvent('org.list', 100, true);
-
-      expect(mockReplaceLastEventOfType).not.toHaveBeenCalled();
-      expect(mockQueueEvent).not.toHaveBeenCalled();
-    });
-
-    it('recordTermination does nothing', async () => {
-      const { Analytics } = await import('./analytics.js');
-      const analytics = new Analytics();
-
-      analytics.recordTermination('success');
-
-      expect(mockPatchLastEventOfType).not.toHaveBeenCalled();
-    });
   });
 });

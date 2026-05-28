@@ -28,9 +28,6 @@ export class Analytics {
   private distinctId?: string;
   private mode?: 'cli' | 'tui' | 'headless';
   private authMode: AuthMode = 'none';
-  // Captured by the yargs middleware so exit-path helpers (exitWithError,
-  // exitWithCode) can compute real duration on the patched event.
-  private commandStartTime?: number;
 
   // Agent metrics tracking
   private totalInputTokens = 0;
@@ -57,16 +54,6 @@ export class Analytics {
    */
   setAuthMode(mode: AuthMode) {
     this.authMode = mode;
-  }
-
-  /**
-   * Record the command start time so `recordTermination` can compute real
-   * duration on exit-path code (exitWithError / exitWithCode). The wrapper's
-   * success/catch paths use argv-scoped start time directly; this is the
-   * fallback for `process.exit` callers that bypass the wrapper.
-   */
-  setCommandStart(time: number) {
-    this.commandStartTime = time;
   }
 
   setGatewayUrl(url: string) {
@@ -271,20 +258,17 @@ export class Analytics {
     this.agentIterations++;
   }
 
-  /**
-   * Queue a provisional command event (success=true, duration=0) that
-   * store-forward can persist if the handler exits early. Replaced by
-   * replaceLastCommandEvent on normal completion.
-   */
-  queueProvisionalCommand(name: string, flags: string[]) {
-    this.commandExecuted(name, 0, true, { flags });
-  }
-
-  private commandExecuted(
+  emitCommandEvent(
     name: string,
     durationMs: number,
     success: boolean,
-    options?: { error?: Error; flags?: string[] },
+    options?: {
+      error?: Error;
+      flags?: string[];
+      reason?: TerminationReason;
+      errorCode?: string;
+      apiContext?: { status?: number; code?: string; resource?: string };
+    },
   ) {
     if (!WORKOS_TELEMETRY_ENABLED) return;
 
@@ -307,99 +291,16 @@ export class Analytics {
             }
           : {}),
         ...(options?.flags?.length ? { 'command.flags': options.flags.join(',') } : {}),
+        ...(options?.reason ? { 'termination.reason': options.reason } : {}),
+        ...(options?.errorCode ? { 'error.code': options.errorCode } : {}),
+        ...(options?.apiContext?.status !== undefined ? { 'api.status': options.apiContext.status } : {}),
+        ...(options?.apiContext?.code ? { 'api.code': options.apiContext.code } : {}),
+        ...(options?.apiContext?.resource ? { 'api.resource': options.apiContext.resource } : {}),
         ...this.getEnvFingerprint(),
       },
     };
 
     telemetryClient.queueEvent(event);
-  }
-
-  /**
-   * Replace the last queued command event with updated data.
-   * Used by the command handler wrapper to swap the provisional event
-   * (queued by middleware) with the real one after the handler completes.
-   */
-  replaceLastCommandEvent(
-    name: string,
-    durationMs: number,
-    success: boolean,
-    options?: { error?: Error; flags?: string[] },
-  ) {
-    if (!WORKOS_TELEMETRY_ENABLED) return;
-
-    telemetryClient.replaceLastEventOfType('command');
-
-    this.commandExecuted(name, durationMs, success, options);
-  }
-
-  /**
-   * Patch the last queued command event with structured termination info.
-   * Sets `termination.reason` and (optionally) `error.code` / `api.*`.
-   * Also syncs `command.success` so the legacy boolean stays consistent
-   * with the new reason enum.
-   *
-   * No-op when no command event is queued — covers helpers fired from
-   * installer context (session events) rather than command context.
-   *
-   * `apiContext` is included now so Phase 3 can enrich API-failure events
-   * without adding another method.
-   */
-  recordTermination(
-    reason: TerminationReason,
-    errorCode?: string,
-    apiContext?: { status?: number; code?: string; resource?: string },
-  ): void {
-    if (!WORKOS_TELEMETRY_ENABLED) return;
-
-    // Compute real duration for exit-path callers. The middleware captures
-    // commandStartTime; wrapper callers still pass their own duration via
-    // replaceLastCommandEvent, which runs before recordTermination and sets
-    // the authoritative value — we only patch duration when the current
-    // event still has the provisional 0.
-    const durationMs = this.commandStartTime !== undefined ? Date.now() - this.commandStartTime : undefined;
-
-    telemetryClient.patchLastEventOfType('command', (event) => {
-      const attrs = (event as CommandEvent).attributes;
-      attrs['termination.reason'] = reason;
-      attrs['command.success'] = reason === 'success';
-
-      // Duration: only overwrite if the event still carries the provisional 0
-      // (wrapper paths set real duration via replaceLastCommandEvent first).
-      if (durationMs !== undefined && !attrs['command.duration_ms']) {
-        attrs['command.duration_ms'] = durationMs;
-      }
-
-      if (errorCode) {
-        attrs['error.code'] = errorCode;
-      } else {
-        delete attrs['error.code'];
-      }
-
-      // api.* fields are last-writer-wins as a group: if apiContext is
-      // provided, set every subfield (or clear it); if not, clear all.
-      // Prevents stale api.* from a prior call leaking onto a later one.
-      if (apiContext) {
-        if (apiContext.status !== undefined) {
-          attrs['api.status'] = apiContext.status;
-        } else {
-          delete attrs['api.status'];
-        }
-        if (apiContext.code) {
-          attrs['api.code'] = apiContext.code;
-        } else {
-          delete attrs['api.code'];
-        }
-        if (apiContext.resource) {
-          attrs['api.resource'] = apiContext.resource;
-        } else {
-          delete attrs['api.resource'];
-        }
-      } else {
-        delete attrs['api.status'];
-        delete attrs['api.code'];
-        delete attrs['api.resource'];
-      }
-    });
   }
 
   captureUnhandledCrash(error: Error, options?: { command?: string; version?: string }) {
