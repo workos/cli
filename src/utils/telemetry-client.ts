@@ -38,35 +38,6 @@ export class TelemetryClient {
   }
 
   /**
-   * Remove the last queued event of a given type.
-   * Used to swap a provisional event with an updated one.
-   */
-  replaceLastEventOfType(type: TelemetryEvent['type']): void {
-    for (let i = this.events.length - 1; i >= 0; i--) {
-      if (this.events[i].type === type) {
-        this.events.splice(i, 1);
-        return;
-      }
-    }
-  }
-
-  /**
-   * Apply a mutator to the last queued event of a given type, in place.
-   * Unlike `replaceLastEventOfType`, this preserves the event so multiple
-   * callers can update fields incrementally (e.g., termination reason +
-   * api context). No-op when no matching event is queued — which covers
-   * helpers called outside command context (installer session events).
-   */
-  patchLastEventOfType(type: TelemetryEvent['type'], mutator: (event: TelemetryEvent) => void): void {
-    for (let i = this.events.length - 1; i >= 0; i--) {
-      if (this.events[i].type === type) {
-        mutator(this.events[i]);
-        return;
-      }
-    }
-  }
-
-  /**
    * Queue multiple pre-formed events (used by store-forward recovery).
    */
   queueEvents(events: TelemetryEvent[]): void {
