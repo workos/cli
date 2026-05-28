@@ -611,6 +611,14 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
     throw error;
   } finally {
     process.off('SIGINT', handleSigint);
+    // Record the detected framework so session.end carries it (and the API can
+    // tag install metrics by integration). Known only after detection runs, so
+    // it's read from the final machine snapshot here; absent if the session
+    // aborted before detection.
+    const detectedIntegration = actor?.getSnapshot().context.integration;
+    if (detectedIntegration) {
+      analytics.setTag('installer.integration', detectedIntegration);
+    }
     await analytics.shutdown(installerStatus);
     await adapter.stop();
   }

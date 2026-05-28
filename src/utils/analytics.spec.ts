@@ -179,6 +179,23 @@ describe('Analytics', () => {
         );
       });
 
+      it('carries the detected integration into session.end', async () => {
+        // run-with-core sets this from the final machine snapshot; the API
+        // tags install metrics by `installer.integration`.
+        analytics.setTag('installer.integration', 'nextjs');
+
+        await analytics.shutdown('success');
+
+        expect(mockQueueEvent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            type: 'session.end',
+            attributes: expect.objectContaining({
+              'installer.integration': 'nextjs',
+            }),
+          }),
+        );
+      });
+
       it('ignores null and undefined values in shutdown', async () => {
         analytics.setTag('valid', 'yes');
         analytics.setTag('nullValue', null);
