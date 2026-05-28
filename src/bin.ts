@@ -81,7 +81,8 @@ try {
   setOutputMode(resolveEffectiveOutputMode(baseOutputMode, interaction));
 } catch (error) {
   if (error instanceof InvalidInteractionModeError) {
-    exitWithError({ code: 'invalid_mode', message: error.message });
+    outputError({ code: 'invalid_mode', message: error.message });
+    process.exit(ExitCode.GENERAL_ERROR);
   }
   if (error instanceof CliExit) process.exit(error.exitCode);
   throw error;
