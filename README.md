@@ -212,7 +212,7 @@ workos migrations export-template saml_connections --output saml_connections.csv
 workos migrations export-template oidc_connections --output oidc_connections.csv
 
 # Export from Auth0
-workos migrations export-auth0 --domain your-tenant.auth0.com --token <token>
+workos migrations export-auth0 --domain your-tenant.auth0.com --client-id <id> --client-secret <secret>
 
 # Import users from CSV
 workos migrations import --csv users.csv
