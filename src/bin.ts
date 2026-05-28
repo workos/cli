@@ -83,6 +83,7 @@ try {
   if (error instanceof InvalidInteractionModeError) {
     exitWithError({ code: 'invalid_mode', message: error.message });
   }
+  if (error instanceof CliExit) process.exit(error.exitCode);
   throw error;
 }
 
