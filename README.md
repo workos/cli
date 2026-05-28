@@ -215,7 +215,7 @@ workos migrations export-template oidc_connections --output oidc_connections.csv
 workos migrations export-auth0 --domain your-tenant.auth0.com --token <token>
 
 # Import users from CSV
-workos migrations import --file users.csv
+workos migrations import --csv users.csv
 ```
 
 Run `workos migrations --help` for all available subcommands.
