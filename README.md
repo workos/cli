@@ -81,6 +81,9 @@ Resource Management:
   api-key                Manage per-org API keys
   org-domain             Manage organization domains
 
+Migrations:
+  migrations             Migrate users and SSO connections into WorkOS
+
 Workflows:
   seed                   Declarative resource provisioning from YAML
   setup-org              One-shot organization onboarding
@@ -195,6 +198,27 @@ Inspects a directory's sync state, user/group counts, recent events, and detects
 ```bash
 workos debug-sync directory_01ABC123
 ```
+
+### Migrations
+
+Migrate users and SSO connections from other identity providers into WorkOS. The `migrations` namespace passes through to `@workos/migrations`.
+
+```bash
+# Interactive migration wizard
+workos migrations wizard
+
+# Export a blank CSV template
+workos migrations export-template saml_connections --output saml_connections.csv
+workos migrations export-template oidc_connections --output oidc_connections.csv
+
+# Export from Auth0
+workos migrations export-auth0 --domain your-tenant.auth0.com --token <token>
+
+# Import users from CSV
+workos migrations import --file users.csv
+```
+
+Run `workos migrations --help` for all available subcommands.
 
 <!-- UNRELEASED: Local Development (emulator) — hidden until beta testing is complete.
      To restore, uncomment this section and re-enable the `emulate` and `dev` commands
