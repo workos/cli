@@ -1,5 +1,6 @@
 import { runInstaller } from '../run.js';
 import type { InstallerArgs } from '../run.js';
+import { CliExit } from '../utils/cli-exit.js';
 import clack from '../utils/clack.js';
 import { exitWithError, isJsonMode } from '../utils/output.js';
 import type { ArgumentsCamelCase } from 'yargs';
@@ -36,7 +37,6 @@ export async function handleInstall(argv: ArgumentsCamelCase<InstallerArgs>): Pr
         `Installed ${skillResult.skills.length} WorkOS ${skillWord} for ${skillResult.agents.join(', ')}. Your coding agent now has up-to-date WorkOS guidance.`,
       );
     }
-    process.exit(0);
   } catch (err) {
     const { getLogFilePath } = await import('../utils/debug.js');
     const logPath = getLogFilePath();
@@ -54,6 +54,6 @@ export async function handleInstall(argv: ArgumentsCamelCase<InstallerArgs>): Pr
     if (logPath) {
       clack.log.info(`Debug logs: ${logPath}`);
     }
-    process.exit(1);
+    throw new CliExit(1, { reason: 'crash' });
   }
 }
