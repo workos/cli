@@ -15,7 +15,7 @@ import type {
   TerminationReason,
 } from './telemetry-types.js';
 import { WORKOS_TELEMETRY_ENABLED } from '../lib/constants.js';
-import { getLlmGatewayUrl, getVersion } from '../lib/settings.js';
+import { getTelemetryUrl, getVersion } from '../lib/settings.js';
 import { getCredentials } from '../lib/credentials.js';
 import { getActiveEnvironment, isUnclaimedEnvironment } from '../lib/config-store.js';
 import { getDeviceId } from '../lib/device-id.js';
@@ -48,6 +48,14 @@ export class Analytics {
     telemetryClient.setAccessToken(token);
   }
 
+  setApiKeyAuth(apiKey: string) {
+    telemetryClient.setApiKeyAuth(apiKey);
+  }
+
+  setClaimTokenAuth(clientId: string, claimToken: string) {
+    telemetryClient.setClaimTokenAuth(clientId, claimToken);
+  }
+
   /**
    * Set the auth mode explicitly. Used by installer flows where credential
    * resolution happens outside `initForNonInstaller` (see run-with-core.ts).
@@ -62,12 +70,12 @@ export class Analytics {
 
   /**
    * Initialize telemetry for non-installer commands.
-   * Sets gatewayUrl from default config and loads auth credentials.
+   * Sets telemetry URL from default config and loads auth credentials.
    *
    * Auth priority:
    *   1. Stored JWT (Bearer) — logged-in users
    *   2. Claim token — unclaimed environments
-   *   3. None — API-key-only users (telemetry silently dropped by API guard)
+   *   3. API key — API-key-only users
    *
    * Also captures the user/environment identifier for per-user analytics.
    * The installer flow sets these itself in run-with-core.ts; this covers
@@ -76,7 +84,7 @@ export class Analytics {
   initForNonInstaller(): void {
     if (!WORKOS_TELEMETRY_ENABLED) return;
 
-    const gatewayUrl = getLlmGatewayUrl();
+    const gatewayUrl = getTelemetryUrl();
     telemetryClient.setGatewayUrl(gatewayUrl);
 
     const creds = getCredentials();
@@ -97,16 +105,19 @@ export class Analytics {
         // Tag distinctId so unclaimed sessions are identifiable in analytics
         this.distinctId = this.distinctId ?? `unclaimed:${env.clientId}`;
         if (this.authMode === 'none') this.authMode = 'claim_token';
+      } else if (env?.apiKey && this.authMode === 'none') {
+        telemetryClient.setApiKeyAuth(env.apiKey);
+        if (env.clientId) this.distinctId = this.distinctId ?? `env:${env.clientId}`;
+        this.authMode = 'api_key';
       }
     } catch {
       // Config-store failure is non-fatal for telemetry
     }
 
     // WORKOS_API_KEY covers API-key-only users. Lowest priority — JWT and
-    // claim-token paths actually deliver telemetry, while api_key is silently
-    // dropped by the gateway guard; tagging it correctly still matters for
-    // cohort analysis.
+    // claim-token auth have richer identity context when available.
     if (this.authMode === 'none' && process.env.WORKOS_API_KEY) {
+      telemetryClient.setApiKeyAuth(process.env.WORKOS_API_KEY);
       this.authMode = 'api_key';
     }
   }

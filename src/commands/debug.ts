@@ -331,6 +331,7 @@ const ENV_VAR_CATALOG: { name: string; effect: string }[] = [
   { name: 'WORKOS_DASHBOARD_URL', effect: 'Overrides dashboard URL (default: https://dashboard.workos.com)' },
   { name: 'WORKOS_AUTHKIT_DOMAIN', effect: 'Overrides AuthKit domain from settings' },
   { name: 'WORKOS_LLM_GATEWAY_URL', effect: 'Overrides LLM gateway URL from settings' },
+  { name: 'WORKOS_TELEMETRY_URL', effect: 'Overrides CLI telemetry URL from settings' },
   { name: 'INSTALLER_DEV', effect: 'Enables dev mode — loads .env.local at startup' },
   { name: 'INSTALLER_DISABLE_PROXY', effect: 'Disables the credential proxy for gateway auth' },
 ];

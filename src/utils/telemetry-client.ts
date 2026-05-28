@@ -5,7 +5,7 @@ import type { TelemetryEvent, TelemetryRequest } from './telemetry-types.js';
 import { getCredentials } from '../lib/credentials.js';
 
 /**
- * HTTP client that queues telemetry events and flushes them to the gateway.
+ * HTTP client that queues telemetry events and flushes them to the API.
  * Failures are silent—telemetry should never crash the wizard.
  */
 export class TelemetryClient {
@@ -13,6 +13,7 @@ export class TelemetryClient {
   private accessToken: string | null = null;
   private claimToken: string | null = null;
   private clientId: string | null = null;
+  private apiKey: string | null = null;
   private gatewayUrl: string | null = null;
 
   setGatewayUrl(url: string) {
@@ -23,10 +24,15 @@ export class TelemetryClient {
     this.accessToken = token;
   }
 
+  setApiKeyAuth(apiKey: string) {
+    this.apiKey = apiKey;
+  }
+
   /**
    * Set claim-token auth for unclaimed environments.
-   * The API's LlmGatewayGuard accepts either a JWT (Bearer) or claim token
-   * (x-workos-claim-token + x-workos-client-id headers).
+   * The API accepts either a JWT (Bearer), claim token
+   * (x-workos-claim-token + x-workos-client-id), or API key
+   * (x-workos-api-key).
    */
   setClaimTokenAuth(clientId: string, claimToken: string) {
     this.clientId = clientId;
@@ -53,7 +59,7 @@ export class TelemetryClient {
   async flush(): Promise<boolean> {
     if (this.events.length === 0) return true;
     if (!this.gatewayUrl) {
-      debug('[Telemetry] No gateway URL configured, skipping flush');
+      debug('[Telemetry] No telemetry URL configured, skipping flush');
       return false;
     }
 
@@ -72,6 +78,8 @@ export class TelemetryClient {
       // Unclaimed environment auth path — guard accepts this instead of JWT
       headers['x-workos-claim-token'] = this.claimToken;
       headers['x-workos-client-id'] = this.clientId;
+    } else if (this.apiKey) {
+      headers['x-workos-api-key'] = this.apiKey;
     }
 
     const controller = new AbortController();

@@ -5,17 +5,22 @@ import { sanitizeMessage, sanitizeStack } from './crash-reporter.js';
 // Mock telemetry client so we can inspect queued events without HTTP.
 // Use vi.hoisted so these are available when the hoisted vi.mock factory runs
 // (importing sanitizeMessage transitively loads analytics.ts which loads telemetry-client.ts).
-const { mockSetGatewayUrl, mockSetAccessToken, mockQueueEvent, mockFlush } = vi.hoisted(() => ({
-  mockSetGatewayUrl: vi.fn(),
-  mockSetAccessToken: vi.fn(),
-  mockQueueEvent: vi.fn(),
-  mockFlush: vi.fn().mockResolvedValue(undefined),
-}));
+const { mockSetGatewayUrl, mockSetAccessToken, mockSetClaimTokenAuth, mockSetApiKeyAuth, mockQueueEvent, mockFlush } =
+  vi.hoisted(() => ({
+    mockSetGatewayUrl: vi.fn(),
+    mockSetAccessToken: vi.fn(),
+    mockSetClaimTokenAuth: vi.fn(),
+    mockSetApiKeyAuth: vi.fn(),
+    mockQueueEvent: vi.fn(),
+    mockFlush: vi.fn().mockResolvedValue(undefined),
+  }));
 
 vi.mock('./telemetry-client.js', () => ({
   telemetryClient: {
     setGatewayUrl: mockSetGatewayUrl,
     setAccessToken: mockSetAccessToken,
+    setClaimTokenAuth: mockSetClaimTokenAuth,
+    setApiKeyAuth: mockSetApiKeyAuth,
     queueEvent: mockQueueEvent,
     flush: mockFlush,
   },
@@ -30,7 +35,7 @@ vi.mock('uuid', () => ({
 }));
 
 vi.mock('../lib/settings.js', () => ({
-  getLlmGatewayUrl: () => 'https://api.workos.com/llm-gateway',
+  getTelemetryUrl: () => 'https://api.workos.com/cli',
   getConfig: () => ({
     nodeVersion: '>=18',
     logging: { debugMode: false },
@@ -149,12 +154,14 @@ describe('Analytics: no PII or secrets in queued events', () => {
       telemetryClient: {
         setGatewayUrl: mockSetGatewayUrl,
         setAccessToken: mockSetAccessToken,
+        setClaimTokenAuth: mockSetClaimTokenAuth,
+        setApiKeyAuth: mockSetApiKeyAuth,
         queueEvent: mockQueueEvent,
         flush: mockFlush,
       },
     }));
     vi.doMock('../lib/settings.js', () => ({
-      getLlmGatewayUrl: () => 'https://api.workos.com/llm-gateway',
+      getTelemetryUrl: () => 'https://api.workos.com/cli',
       getConfig: () => ({
         nodeVersion: '>=18',
         logging: { debugMode: false },

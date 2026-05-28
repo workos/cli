@@ -12,6 +12,7 @@ export const config = {
     clientId: 'client_01KFKHSZWK9ADVJV854PDFQCCR',
     authkitDomain: 'https://signin.workos.com',
     llmGatewayUrl: 'https://api.workos.com/llm-gateway',
+    telemetryUrl: 'https://api.workos.com/cli',
   },
 
   telemetry: {

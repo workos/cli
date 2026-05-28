@@ -104,6 +104,52 @@ describe('TelemetryClient', () => {
     });
   });
 
+  describe('setApiKeyAuth', () => {
+    it('sends API key auth when no JWT or claim token is available', async () => {
+      client.setGatewayUrl('http://localhost:8000');
+      client.setApiKeyAuth('sk_test_abc');
+      client.queueEvent({ type: 'session.start', sessionId: '123', timestamp: new Date().toISOString() });
+
+      await client.flush();
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'x-workos-api-key': 'sk_test_abc',
+          }),
+        }),
+      );
+    });
+
+    it('prefers claim token auth over API key auth', async () => {
+      client.setGatewayUrl('http://localhost:8000');
+      client.setClaimTokenAuth('client_123', 'claim_token');
+      client.setApiKeyAuth('sk_test_abc');
+      client.queueEvent({ type: 'session.start', sessionId: '123', timestamp: new Date().toISOString() });
+
+      await client.flush();
+
+      const callArgs = mockFetch.mock.calls[0][1];
+      expect(callArgs.headers['x-workos-claim-token']).toBe('claim_token');
+      expect(callArgs.headers['x-workos-client-id']).toBe('client_123');
+      expect(callArgs.headers['x-workos-api-key']).toBeUndefined();
+    });
+
+    it('prefers JWT auth over API key auth', async () => {
+      client.setGatewayUrl('http://localhost:8000');
+      client.setAccessToken('jwt-token');
+      client.setApiKeyAuth('sk_test_abc');
+      client.queueEvent({ type: 'session.start', sessionId: '123', timestamp: new Date().toISOString() });
+
+      await client.flush();
+
+      const callArgs = mockFetch.mock.calls[0][1];
+      expect(callArgs.headers.Authorization).toBe('Bearer jwt-token');
+      expect(callArgs.headers['x-workos-api-key']).toBeUndefined();
+    });
+  });
+
   describe('queueEvent', () => {
     it('accumulates events for later flush', async () => {
       client.setGatewayUrl('http://localhost:8000');

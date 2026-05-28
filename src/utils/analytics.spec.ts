@@ -4,6 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 const mockSetGatewayUrl = vi.fn();
 const mockSetAccessToken = vi.fn();
 const mockSetClaimTokenAuth = vi.fn();
+const mockSetApiKeyAuth = vi.fn();
 const mockQueueEvent = vi.fn();
 const mockFlush = vi.fn().mockResolvedValue(undefined);
 
@@ -12,6 +13,7 @@ vi.mock('./telemetry-client.js', () => ({
     setGatewayUrl: mockSetGatewayUrl,
     setAccessToken: mockSetAccessToken,
     setClaimTokenAuth: mockSetClaimTokenAuth,
+    setApiKeyAuth: mockSetApiKeyAuth,
     queueEvent: mockQueueEvent,
     flush: mockFlush,
   },
@@ -34,7 +36,7 @@ vi.mock('../lib/device-id.js', () => ({
 }));
 
 // Mock settings for initForNonInstaller
-const mockGetLlmGatewayUrl = vi.fn(() => 'https://api.workos.com/llm-gateway');
+const mockGetTelemetryUrl = vi.fn(() => 'https://api.workos.com/cli');
 const mockSettingsConfig = {
   nodeVersion: '>=18',
   logging: { debugMode: false },
@@ -47,7 +49,7 @@ const mockSettingsConfig = {
   legacy: { oauthPort: 3000 },
 };
 vi.mock('../lib/settings.js', () => ({
-  getLlmGatewayUrl: () => mockGetLlmGatewayUrl(),
+  getTelemetryUrl: () => mockGetTelemetryUrl(),
   getConfig: () => mockSettingsConfig,
   getVersion: () => '0.12.1',
 }));
@@ -95,12 +97,13 @@ describe('Analytics', () => {
           setGatewayUrl: mockSetGatewayUrl,
           setAccessToken: mockSetAccessToken,
           setClaimTokenAuth: mockSetClaimTokenAuth,
+          setApiKeyAuth: mockSetApiKeyAuth,
           queueEvent: mockQueueEvent,
           flush: mockFlush,
         },
       }));
       vi.doMock('../lib/settings.js', () => ({
-        getLlmGatewayUrl: () => mockGetLlmGatewayUrl(),
+        getTelemetryUrl: () => mockGetTelemetryUrl(),
         getConfig: () => mockSettingsConfig,
         getVersion: () => '0.12.1',
       }));
@@ -601,10 +604,10 @@ describe('Analytics', () => {
 
     describe('initForNonInstaller', () => {
       it('sets gatewayUrl from default config', () => {
-        mockGetLlmGatewayUrl.mockReturnValue('https://api.workos.com/llm-gateway');
+        mockGetTelemetryUrl.mockReturnValue('https://api.workos.com/cli');
         analytics.initForNonInstaller();
 
-        expect(mockSetGatewayUrl).toHaveBeenCalledWith('https://api.workos.com/llm-gateway');
+        expect(mockSetGatewayUrl).toHaveBeenCalledWith('https://api.workos.com/cli');
       });
 
       it('sets access token from stored credentials', () => {
@@ -657,6 +660,21 @@ describe('Analytics', () => {
         process.env.WORKOS_API_KEY = 'sk_live_abc';
         analytics.initForNonInstaller();
 
+        expect(mockSetApiKeyAuth).toHaveBeenCalledWith('sk_live_abc');
+        expect(readAuthMode()).toBe('api_key');
+      });
+
+      it('derives api_key from a claimed active environment', () => {
+        mockGetCredentials.mockReturnValue(null);
+        mockGetActiveEnvironment.mockReturnValue({
+          type: 'sandbox',
+          name: 'dev',
+          apiKey: 'sk_test_active',
+          clientId: 'client_123',
+        });
+        analytics.initForNonInstaller();
+
+        expect(mockSetApiKeyAuth).toHaveBeenCalledWith('sk_test_active');
         expect(readAuthMode()).toBe('api_key');
       });
 
@@ -743,12 +761,13 @@ describe('Analytics', () => {
           setGatewayUrl: mockSetGatewayUrl,
           setAccessToken: mockSetAccessToken,
           setClaimTokenAuth: mockSetClaimTokenAuth,
+          setApiKeyAuth: mockSetApiKeyAuth,
           queueEvent: mockQueueEvent,
           flush: mockFlush,
         },
       }));
       vi.doMock('../lib/settings.js', () => ({
-        getLlmGatewayUrl: () => mockGetLlmGatewayUrl(),
+        getTelemetryUrl: () => mockGetTelemetryUrl(),
         getConfig: () => mockSettingsConfig,
         getVersion: () => '0.12.1',
       }));

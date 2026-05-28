@@ -32,10 +32,9 @@ import { getConfig, saveConfig, getActiveEnvironment, isUnclaimedEnvironment } f
 import { checkForEnvFiles, discoverCredentials } from './credential-discovery.js';
 import { requestDeviceCode, pollForToken } from './device-auth.js';
 import { fetchStagingCredentials as fetchStagingCredentialsApi } from './staging-api.js';
-import { getCliAuthClientId, getAuthkitDomain } from './settings.js';
+import { getCliAuthClientId, getAuthkitDomain, getTelemetryUrl } from './settings.js';
 import { analytics } from '../utils/analytics.js';
 import { getVersion } from './settings.js';
-import { getLlmGatewayUrlFromHost } from '../utils/urls.js';
 import { isInGitRepo, getUncommittedOrUntrackedFiles } from '../utils/clack-utils.js';
 import {
   getCurrentBranch,
@@ -80,6 +79,34 @@ function readExistingCredentials(installDir: string): { apiKey?: string; clientI
   } catch {
     return {};
   }
+}
+
+function configureTelemetryAuthFromEnvironment(): boolean {
+  const env = getActiveEnvironment();
+  if (!env?.apiKey) {
+    return false;
+  }
+
+  if (isUnclaimedEnvironment(env)) {
+    analytics.setClaimTokenAuth(env.clientId, env.claimToken);
+    analytics.setAuthMode('claim_token');
+  } else {
+    analytics.setApiKeyAuth(env.apiKey);
+    analytics.setAuthMode('api_key');
+  }
+
+  return true;
+}
+
+function configureTelemetryAuthFromApiKeyEnv(): boolean {
+  const apiKey = process.env.WORKOS_API_KEY;
+  if (!apiKey) {
+    return false;
+  }
+
+  analytics.setApiKeyAuth(apiKey);
+  analytics.setAuthMode('api_key');
+  return true;
 }
 
 async function detectIntegrationFn(options: Pick<InstallerOptions, 'installDir'>): Promise<Integration | undefined> {
@@ -188,8 +215,8 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
     installDir: options.installDir,
   });
 
-  // Configure telemetry endpoint (same URL as LLM gateway)
-  const gatewayUrl = getLlmGatewayUrlFromHost();
+  // Configure telemetry endpoint separately from the LLM gateway proxy.
+  const gatewayUrl = getTelemetryUrl();
   analytics.setGatewayUrl(gatewayUrl);
 
   const existingCreds = readExistingCredentials(options.installDir);
@@ -239,13 +266,8 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   const machineWithActors = installerMachine.provide({
     actors: {
       checkAuthentication: fromPromise(async () => {
-        // Check for active environment with credentials (covers unclaimed environments)
-        const activeEnv = getActiveEnvironment();
-        if (activeEnv?.clientId && activeEnv?.apiKey) {
-          // Classify auth.mode: unclaimed envs deliver telemetry via claim token,
-          // claimed envs with just an API key use api_key path (dropped by gateway,
-          // but still worth tagging for cohort analysis).
-          analytics.setAuthMode(isUnclaimedEnvironment(activeEnv) ? 'claim_token' : 'api_key');
+        // Check for active environment with credentials (covers unclaimed environments).
+        if (configureTelemetryAuthFromEnvironment()) {
           return true;
         }
 
@@ -538,13 +560,12 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
 
   await adapter.start();
 
-  const preSessionEnv = getActiveEnvironment();
-  if (preSessionEnv?.clientId && preSessionEnv?.apiKey) {
-    analytics.setAuthMode(isUnclaimedEnvironment(preSessionEnv) ? 'claim_token' : 'api_key');
+  if (configureTelemetryAuthFromEnvironment()) {
+    // Auth mode and transport set from the active CLI environment.
   } else if (getAccessToken()) {
     analytics.setAuthMode('jwt');
-  } else if (process.env.WORKOS_API_KEY) {
-    analytics.setAuthMode('api_key');
+  } else {
+    configureTelemetryAuthFromApiKeyEnv();
   }
 
   const mode = headlessMode ? 'headless' : augmentedOptions.dashboard ? 'tui' : 'cli';
