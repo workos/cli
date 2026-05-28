@@ -2,6 +2,7 @@ import type { ArgumentsCamelCase } from 'yargs';
 import { runDoctor, outputReport } from '../doctor/index.js';
 import clack from '../utils/clack.js';
 import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
+import { CliExit } from '../utils/cli-exit.js';
 
 interface DoctorArgs {
   verbose?: boolean;
@@ -34,6 +35,7 @@ export async function handleDoctor(argv: ArgumentsCamelCase<DoctorArgs>): Promis
     }
     exitWithCode(ExitCode.SUCCESS);
   } catch (error) {
+    if (error instanceof CliExit) throw error;
     if (!options.json) {
       clack.log.error(`Doctor failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } else {

@@ -221,7 +221,7 @@ const installerOptions = {
 // Check for updates (blocks up to 500ms, skip in JSON/non-human modes to keep machine streams clean)
 if (!isJsonMode() && isPromptAllowed()) await checkForUpdates();
 
-async function runCli(): Promise<never> {
+async function runCli(): Promise<void> {
   const startTime = Date.now();
   let commandName = 'root';
   const flags = extractUserFlags(rawArgs);
@@ -229,7 +229,8 @@ async function runCli(): Promise<never> {
   const parser = yargs(rawArgs)
     .parserConfiguration({ 'populate--': true })
     .exitProcess(false)
-    .fail((msg, _err) => {
+    .fail((msg, err) => {
+      if (err instanceof CliExit) throw err;
       if (msg) {
         outputError({ code: 'invalid_usage', message: msg });
       }
@@ -2540,7 +2541,6 @@ async function runCli(): Promise<never> {
     }
   } finally {
     await telemetryClient.flush().catch(() => {});
-    process.exit(process.exitCode ?? 0);
   }
 }
 
