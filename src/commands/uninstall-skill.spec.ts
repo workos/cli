@@ -5,6 +5,18 @@ import { tmpdir } from 'os';
 import { createAgents, type AgentConfig } from './install-skill.js';
 import { findInstalledSkills, uninstallSkill } from './uninstall-skill.js';
 
+// Match a CLI exit thrown by any module instance (vi.resetModules() creates fresh module graphs,
+// so `instanceof CliExit` against the top-level import won't catch instances thrown from re-imports).
+async function expectCliExit(promise: Promise<unknown>): Promise<void> {
+  try {
+    await promise;
+  } catch (err) {
+    if (err instanceof Error && err.name === 'CliExit') return;
+    throw err;
+  }
+  throw new Error('Expected promise to reject with CliExit');
+}
+
 describe('uninstall-skill', () => {
   let testDir: string;
   let homeDir: string;
@@ -145,7 +157,6 @@ describe('runUninstallSkill', () => {
   let homeDir: string;
   let skillsDir: string;
   let agentSkillsDir: string;
-  let mockExit: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     testDir = mkdtempSync(join(tmpdir(), 'uninstall-run-test-'));
@@ -154,11 +165,9 @@ describe('runUninstallSkill', () => {
     agentSkillsDir = join(homeDir, '.test/skills');
     mkdirSync(homeDir);
     mkdirSync(skillsDir);
-    mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
   });
 
   afterEach(() => {
-    mockExit.mockRestore();
     vi.restoreAllMocks();
     vi.resetModules();
     rmSync(testDir, { recursive: true, force: true });
@@ -188,9 +197,7 @@ describe('runUninstallSkill', () => {
     writeFileSync(join(skillsDir, 'authkit-setup', 'SKILL.md'), '# AuthKit');
 
     const { runUninstallSkill } = await importMocked();
-    await runUninstallSkill({ skill: ['nonexistent-skill'] });
-
-    expect(mockExit).toHaveBeenCalledWith(1);
+    await expectCliExit(runUninstallSkill({ skill: ['nonexistent-skill'] }));
   });
 
   it('does not uninstall all skills when --skill filter partially matches', async () => {
@@ -271,7 +278,7 @@ describe('runUninstallSkill', () => {
       writeFileSync(join(skillsDir, 'authkit-setup', 'SKILL.md'), '# AuthKit');
 
       const { runUninstallSkill, resetMode } = await importMockedWithJsonMode();
-      await runUninstallSkill({ skill: ['nonexistent'] });
+      await expectCliExit(runUninstallSkill({ skill: ['nonexistent'] }));
 
       const jsonError = stderrSpy.mock.calls.find((call) => {
         try {

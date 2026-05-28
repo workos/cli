@@ -43,12 +43,8 @@ const { getConfig, setInsecureConfigStorage, clearConfig } = await import('../li
 const { runEnvAdd, runEnvRemove, runEnvSwitch, runEnvList } = await import('./env.js');
 const { setOutputMode } = await import('../utils/output.js');
 const { resetInteractionModeForTests, setInteractionMode } = await import('../utils/interaction-mode.js');
+const { CliExit } = await import('../utils/cli-exit.js');
 const clack = (await import('../utils/clack.js')).default;
-
-// Spy on process.exit
-vi.spyOn(process, 'exit').mockImplementation((() => {
-  throw new Error('process.exit called');
-}) as any);
 
 describe('env commands', () => {
   beforeEach(() => {
@@ -105,18 +101,18 @@ describe('env commands', () => {
     });
 
     it('rejects invalid environment name', async () => {
-      await expect(runEnvAdd({ name: 'INVALID NAME', apiKey: 'sk_test' })).rejects.toThrow('process.exit');
+      await expect(runEnvAdd({ name: 'INVALID NAME', apiKey: 'sk_test' })).rejects.toThrow(CliExit);
     });
 
     it('requires name and API key in agent mode without prompting', async () => {
       setInteractionMode({ mode: 'agent', source: 'env' });
-      await expect(runEnvAdd({ name: 'prod' })).rejects.toThrow('process.exit');
+      await expect(runEnvAdd({ name: 'prod' })).rejects.toThrow(CliExit);
       expect(clack.text).not.toHaveBeenCalled();
     });
 
     it('requires name and API key in CI mode without prompting', async () => {
       setInteractionMode({ mode: 'ci', source: 'env' });
-      await expect(runEnvAdd({ name: 'prod' })).rejects.toThrow('process.exit');
+      await expect(runEnvAdd({ name: 'prod' })).rejects.toThrow(CliExit);
       expect(clack.text).not.toHaveBeenCalled();
     });
 
@@ -125,7 +121,7 @@ describe('env commands', () => {
       setInteractionMode({ mode: 'agent', source: 'env' });
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       try {
-        await expect(runEnvAdd({ name: 'prod' })).rejects.toThrow('process.exit');
+        await expect(runEnvAdd({ name: 'prod' })).rejects.toThrow(CliExit);
         const parsed = JSON.parse(errorSpy.mock.calls[0][0]);
         expect(parsed.error.recovery.hints[0]).toEqual({
           description: 'Provide environment name and API key as positional arguments.',
@@ -155,11 +151,11 @@ describe('env commands', () => {
 
     it('errors for non-existent environment', async () => {
       await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
-      await expect(runEnvRemove('missing')).rejects.toThrow('process.exit');
+      await expect(runEnvRemove('missing')).rejects.toThrow(CliExit);
     });
 
     it('errors when no environments configured', async () => {
-      await expect(runEnvRemove('anything')).rejects.toThrow('process.exit');
+      await expect(runEnvRemove('anything')).rejects.toThrow(CliExit);
     });
   });
 
@@ -174,11 +170,11 @@ describe('env commands', () => {
 
     it('errors for non-existent environment', async () => {
       await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
-      await expect(runEnvSwitch('missing')).rejects.toThrow('process.exit');
+      await expect(runEnvSwitch('missing')).rejects.toThrow(CliExit);
     });
 
     it('errors when no environments configured', async () => {
-      await expect(runEnvSwitch('anything')).rejects.toThrow('process.exit');
+      await expect(runEnvSwitch('anything')).rejects.toThrow(CliExit);
     });
 
     it('warns when WORKOS_API_KEY env var is set', async () => {

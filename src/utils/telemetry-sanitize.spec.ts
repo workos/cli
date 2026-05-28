@@ -5,15 +5,12 @@ import { sanitizeMessage } from './crash-reporter.js';
 // Mock telemetry client so we can inspect queued events without HTTP.
 // Use vi.hoisted so these are available when the hoisted vi.mock factory runs
 // (importing sanitizeMessage transitively loads analytics.ts which loads telemetry-client.ts).
-const { mockSetGatewayUrl, mockSetAccessToken, mockQueueEvent, mockFlush, mockReplaceLastEventOfType } = vi.hoisted(
-  () => ({
-    mockSetGatewayUrl: vi.fn(),
-    mockSetAccessToken: vi.fn(),
-    mockQueueEvent: vi.fn(),
-    mockFlush: vi.fn().mockResolvedValue(undefined),
-    mockReplaceLastEventOfType: vi.fn(),
-  }),
-);
+const { mockSetGatewayUrl, mockSetAccessToken, mockQueueEvent, mockFlush } = vi.hoisted(() => ({
+  mockSetGatewayUrl: vi.fn(),
+  mockSetAccessToken: vi.fn(),
+  mockQueueEvent: vi.fn(),
+  mockFlush: vi.fn().mockResolvedValue(undefined),
+}));
 
 vi.mock('./telemetry-client.js', () => ({
   telemetryClient: {
@@ -21,7 +18,6 @@ vi.mock('./telemetry-client.js', () => ({
     setAccessToken: mockSetAccessToken,
     queueEvent: mockQueueEvent,
     flush: mockFlush,
-    replaceLastEventOfType: (...args: unknown[]) => mockReplaceLastEventOfType(...args),
   },
 }));
 
@@ -145,7 +141,6 @@ describe('Analytics: no PII or secrets in queued events', () => {
         setAccessToken: mockSetAccessToken,
         queueEvent: mockQueueEvent,
         flush: mockFlush,
-        replaceLastEventOfType: (...args: unknown[]) => mockReplaceLastEventOfType(...args),
       },
     }));
     vi.doMock('../lib/settings.js', () => ({
@@ -196,9 +191,7 @@ describe('Analytics: no PII or secrets in queued events', () => {
 
   it('replaceLastCommandEvent: poisoned error.message does not leak markers', () => {
     const err = new Error(POISON_MESSAGE);
-    analytics.queueProvisionalCommand('test-command', []);
-    mockQueueEvent.mockClear();
-    analytics.replaceLastCommandEvent('test-command', 100, false, { error: err });
+    analytics.emitCommandEvent('test-command', 100, false, { error: err });
     expect(mockQueueEvent).toHaveBeenCalled();
     assertCleanQueue();
   });
@@ -221,10 +214,7 @@ describe('Analytics: no PII or secrets in queued events', () => {
 
   it('replaceLastCommandEvent: inherits sanitization on swap', () => {
     const err = new Error(POISON_MESSAGE);
-    analytics.queueProvisionalCommand('test-command', []);
-    mockQueueEvent.mockClear();
-    analytics.replaceLastCommandEvent('test-command', 100, false, { error: err });
-    expect(mockReplaceLastEventOfType).toHaveBeenCalledWith('command');
+    analytics.emitCommandEvent('test-command', 100, false, { error: err });
     expect(mockQueueEvent).toHaveBeenCalled();
     assertCleanQueue();
   });

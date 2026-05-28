@@ -31,6 +31,7 @@ const { resetInteractionModeForTests, setInteractionMode } = await import('../ut
 
 const { runDirectoryList, runDirectoryGet, runDirectoryDelete, runDirectoryListUsers, runDirectoryListGroups } =
   await import('./directory.js');
+const { CliExit } = await import('../utils/cli-exit.js');
 
 const mockDirectory = {
   id: 'directory_01ABC',
@@ -180,13 +181,9 @@ describe('directory commands', () => {
 
     it('requires --force in agent mode', async () => {
       setInteractionMode({ mode: 'agent', source: 'env' });
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
-        throw new Error(`process.exit(${code})`);
-      });
-      await expect(runDirectoryDelete('directory_01ABC', {}, 'sk_test')).rejects.toThrow('process.exit(1)');
+      await expect(runDirectoryDelete('directory_01ABC', {}, 'sk_test')).rejects.toThrow(CliExit);
       expect(mockSdk.directorySync.deleteDirectory).not.toHaveBeenCalled();
       expect(mockConfirm).not.toHaveBeenCalled();
-      expect(exitSpy).toHaveBeenCalledWith(1);
     });
   });
 
@@ -215,12 +212,8 @@ describe('directory commands', () => {
     });
 
     it('requires --directory or --group', async () => {
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
-        throw new Error(`process.exit(${code})`);
-      });
-      await expect(runDirectoryListUsers({}, 'sk_test')).rejects.toThrow('process.exit(1)');
+      await expect(runDirectoryListUsers({}, 'sk_test')).rejects.toThrow(CliExit);
       expect(mockSdk.directorySync.listUsers).not.toHaveBeenCalled();
-      expect(exitSpy).toHaveBeenCalledWith(1);
     });
 
     it('handles empty results', async () => {

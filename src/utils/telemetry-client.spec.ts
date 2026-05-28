@@ -217,29 +217,6 @@ describe('TelemetryClient', () => {
     });
   });
 
-  describe('replaceLastEventOfType', () => {
-    it('removes the last event of the specified type', async () => {
-      client.setGatewayUrl('http://localhost:8000');
-      client.queueEvent({ type: 'command', sessionId: '1', timestamp: '2024-01-01T00:00:00Z' });
-      client.queueEvent({ type: 'session.start', sessionId: '1', timestamp: '2024-01-01T00:00:01Z' });
-      client.queueEvent({ type: 'command', sessionId: '1', timestamp: '2024-01-01T00:00:02Z' });
-
-      client.replaceLastEventOfType('command');
-
-      await client.flush();
-      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.events).toHaveLength(2);
-      expect(body.events[0].type).toBe('command');
-      expect(body.events[1].type).toBe('session.start');
-    });
-
-    it('does nothing if no event of that type exists', () => {
-      client.queueEvent({ type: 'session.start', sessionId: '1', timestamp: '2024-01-01T00:00:00Z' });
-      // Should not throw
-      client.replaceLastEventOfType('command');
-    });
-  });
-
   describe('queueEvents', () => {
     it('queues multiple events at once', async () => {
       client.setGatewayUrl('http://localhost:8000');

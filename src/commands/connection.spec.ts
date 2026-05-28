@@ -28,6 +28,7 @@ const { setOutputMode } = await import('../utils/output.js');
 const { resetInteractionModeForTests, setInteractionMode } = await import('../utils/interaction-mode.js');
 
 const { runConnectionList, runConnectionGet, runConnectionDelete } = await import('./connection.js');
+const { CliExit } = await import('../utils/cli-exit.js');
 
 const mockConnection = {
   id: 'conn_01ABC',
@@ -150,13 +151,9 @@ describe('connection commands', () => {
 
     it('requires --force in agent mode', async () => {
       setInteractionMode({ mode: 'agent', source: 'env' });
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
-        throw new Error(`process.exit(${code})`);
-      });
-      await expect(runConnectionDelete('conn_01ABC', {}, 'sk_test')).rejects.toThrow('process.exit(1)');
+      await expect(runConnectionDelete('conn_01ABC', {}, 'sk_test')).rejects.toThrow(CliExit);
       expect(mockSdk.sso.deleteConnection).not.toHaveBeenCalled();
       expect(mockConfirm).not.toHaveBeenCalled();
-      expect(exitSpy).toHaveBeenCalledWith(1);
     });
   });
 

@@ -33,6 +33,7 @@ vi.mock('../lib/workos-client.js', () => ({
 
 const { setOutputMode } = await import('../utils/output.js');
 const { runSeed, runSeedInit } = await import('./seed.js');
+const { CliExit } = await import('../utils/cli-exit.js');
 
 const mockExistsSync = vi.mocked(existsSync);
 const mockReadFileSync = vi.mocked(readFileSync);
@@ -258,37 +259,29 @@ config:
       mockSdk.authorization.createPermission.mockResolvedValue({ slug: 'read-users' });
       mockSdk.authorization.createEnvironmentRole.mockRejectedValue(new Error('Server exploded'));
 
-      const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-      await runSeed({ file: 'workos-seed.yml' }, 'sk_test');
+      await expect(runSeed({ file: 'workos-seed.yml' }, 'sk_test')).rejects.toThrow(CliExit);
 
       // State should be saved with the permission that was created
       expect(mockWriteFileSync).toHaveBeenCalled();
       const stateArg = JSON.parse(mockWriteFileSync.mock.calls[0][1] as string);
       expect(stateArg.permissions.length).toBeGreaterThan(0);
-      expect(mockExit).toHaveBeenCalledWith(1);
     });
 
     it('exits with error when file not found', async () => {
       mockExistsSync.mockReturnValue(false);
 
-      const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-      await runSeed({ file: 'missing.yml' }, 'sk_test');
-      expect(mockExit).toHaveBeenCalledWith(1);
+      await expect(runSeed({ file: 'missing.yml' }, 'sk_test')).rejects.toThrow(CliExit);
     });
 
     it('exits with error when no --file provided', async () => {
-      const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-      await runSeed({}, 'sk_test');
-      expect(mockExit).toHaveBeenCalledWith(1);
+      await expect(runSeed({}, 'sk_test')).rejects.toThrow(CliExit);
     });
 
     it('exits with error on invalid YAML', async () => {
       mockExistsSync.mockReturnValue(true);
       mockReadFileSync.mockReturnValue('{{{{invalid yaml');
 
-      const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-      await runSeed({ file: 'bad.yml' }, 'sk_test');
-      expect(mockExit).toHaveBeenCalledWith(1);
+      await expect(runSeed({ file: 'bad.yml' }, 'sk_test')).rejects.toThrow(CliExit);
     });
   });
 
@@ -353,9 +346,7 @@ config:
     it('exits with error when no state file', async () => {
       mockExistsSync.mockReturnValue(false);
 
-      const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-      await runSeed({ clean: true }, 'sk_test');
-      expect(mockExit).toHaveBeenCalledWith(1);
+      await expect(runSeed({ clean: true }, 'sk_test')).rejects.toThrow(CliExit);
     });
   });
 

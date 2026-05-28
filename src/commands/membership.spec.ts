@@ -28,6 +28,7 @@ const {
   runMembershipDeactivate,
   runMembershipReactivate,
 } = await import('./membership.js');
+const { CliExit } = await import('../utils/cli-exit.js');
 
 const mockMembership = {
   id: 'om_123',
@@ -43,7 +44,6 @@ const mockMembership = {
 
 describe('membership commands', () => {
   let consoleOutput: string[];
-  let processExitSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -52,7 +52,6 @@ describe('membership commands', () => {
       consoleOutput.push(args.map(String).join(' '));
     });
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    processExitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
   });
 
   afterEach(() => {
@@ -84,8 +83,7 @@ describe('membership commands', () => {
     });
 
     it('exits with error when neither --org nor --user provided', async () => {
-      await runMembershipList({}, 'sk_test');
-      expect(processExitSpy).toHaveBeenCalledWith(1);
+      await expect(runMembershipList({}, 'sk_test')).rejects.toThrow(CliExit);
     });
 
     it('handles empty results', async () => {
