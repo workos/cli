@@ -736,17 +736,18 @@ OAuth credentials are stored in the system keychain (with `~/.workos/credentials
 
 ## Telemetry
 
-The installer collects anonymous usage telemetry to help improve the product:
+The CLI collects anonymous usage telemetry to help improve the product:
 
-- Session outcome (success/error/cancelled)
-- Framework detected
-- Duration and step timing
-- Token usage (for capacity planning)
+- **Command events** -- command name, duration, success/failure, termination reason, and which flags were used (for all commands)
+- **Session events** -- framework detected, step timing, token usage (installer only)
+- **Crash events** -- sanitized error type and stack trace (no secrets, truncated to 4KB)
 
-No code, credentials, or personal data is collected. Disable with:
+Environment fingerprint (OS, Node version, shell, CI detection) is included on all events. No code, credentials, or personal data is collected.
+
+Disable with:
 
 ```bash
-WORKOS_TELEMETRY=false npx workos@latest install
+WORKOS_TELEMETRY=false workos <command>
 ```
 
 ## Logs
