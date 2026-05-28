@@ -1,10 +1,26 @@
 import chalk from 'chalk';
 import { createWorkOSClient } from '../lib/workos-client.js';
 import { formatTable } from '../utils/table.js';
-import { outputSuccess, outputJson, isJsonMode } from '../utils/output.js';
+import { outputSuccess, outputJson, isJsonMode, exitWithError } from '../utils/output.js';
 import { createApiErrorHandler } from '../lib/api-error-handler.js';
 
 const handleApiError = createApiErrorHandler('Vault');
+
+/**
+ * The Vault API returns 422 errors as `{"errors": {"field": ["msg"]}}` (an object),
+ * but the SDK's UnprocessableEntityException expects an array and crashes with
+ * "errors is not iterable". This wrapper catches that TypeError and extracts
+ * a readable message from the underlying response.
+ */
+function handleVaultSdkError(error: unknown, fallback: (e: unknown) => never): never {
+  if (error instanceof TypeError && error.message === 'errors is not iterable') {
+    exitWithError({
+      code: 'unprocessable_entity',
+      message: 'Vault API rejected the request. Check that all required fields (--org, --name, --value) are provided.',
+    });
+  }
+  fallback(error);
+}
 
 export interface VaultListOptions {
   limit?: number;
@@ -80,18 +96,24 @@ export interface VaultCreateOptions {
 }
 
 export async function runVaultCreate(options: VaultCreateOptions, apiKey: string, baseUrl?: string): Promise<void> {
+  if (!options.org) {
+    exitWithError({
+      code: 'missing_org',
+      message: 'The --org flag is required. Vault objects must be scoped to an organization.',
+    });
+  }
+
   const client = createWorkOSClient(apiKey, baseUrl);
 
   try {
-    const context = options.org ? { organizationId: options.org } : {};
     const result = await client.sdk.vault.createObject({
       name: options.name,
       value: options.value,
-      context,
+      context: { organizationId: options.org },
     });
     outputSuccess('Created vault object', result);
   } catch (error) {
-    handleApiError(error);
+    handleVaultSdkError(error, handleApiError);
   }
 }
 
@@ -112,7 +134,7 @@ export async function runVaultUpdate(options: VaultUpdateOptions, apiKey: string
     });
     outputSuccess('Updated vault object', result);
   } catch (error) {
-    handleApiError(error);
+    handleVaultSdkError(error, handleApiError);
   }
 }
 

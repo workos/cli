@@ -105,18 +105,7 @@ describe('vault commands', () => {
   });
 
   describe('runVaultCreate', () => {
-    it('creates object with name and value', async () => {
-      mockSdk.vault.createObject.mockResolvedValue(mockMetadata);
-      await runVaultCreate({ name: 'my-secret', value: 'secret-val' }, 'sk_test');
-      expect(mockSdk.vault.createObject).toHaveBeenCalledWith({
-        name: 'my-secret',
-        value: 'secret-val',
-        context: {},
-      });
-      expect(consoleOutput.some((l) => l.includes('Created vault object'))).toBe(true);
-    });
-
-    it('maps --org to context.organizationId', async () => {
+    it('creates object with org context', async () => {
       mockSdk.vault.createObject.mockResolvedValue(mockMetadata);
       await runVaultCreate({ name: 'my-secret', value: 'secret-val', org: 'org_456' }, 'sk_test');
       expect(mockSdk.vault.createObject).toHaveBeenCalledWith({
@@ -124,6 +113,19 @@ describe('vault commands', () => {
         value: 'secret-val',
         context: { organizationId: 'org_456' },
       });
+      expect(consoleOutput.some((l) => l.includes('Created vault object'))).toBe(true);
+    });
+
+    it('exits with error when --org is not provided', async () => {
+      const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+      const errOutput: string[] = [];
+      vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+        errOutput.push(args.map(String).join(' '));
+      });
+      await runVaultCreate({ name: 'my-secret', value: 'secret-val' }, 'sk_test');
+      expect(mockExit).toHaveBeenCalledWith(1);
+      expect(errOutput.some((l) => l.includes('--org'))).toBe(true);
+      mockExit.mockRestore();
     });
   });
 
@@ -196,7 +198,7 @@ describe('vault commands', () => {
 
     it('create outputs JSON success', async () => {
       mockSdk.vault.createObject.mockResolvedValue(mockMetadata);
-      await runVaultCreate({ name: 'my-secret', value: 'val' }, 'sk_test');
+      await runVaultCreate({ name: 'my-secret', value: 'val', org: 'org_456' }, 'sk_test');
       const output = JSON.parse(consoleOutput[0]);
       expect(output.status).toBe('ok');
       expect(output.data.id).toBe('obj_123');

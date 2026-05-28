@@ -1053,6 +1053,41 @@ const commands: CommandSchema[] = [
         description: 'List vault object versions',
         positionals: [{ name: 'id', type: 'string', description: 'Object ID', required: true }],
       },
+      {
+        name: 'run',
+        description: 'Run a command with Vault secrets injected as environment variables',
+        options: [
+          {
+            name: 'secret',
+            type: 'array',
+            description: 'Map a vault object to an env var: ENV_VAR=vault-name (repeatable)',
+            required: true,
+            hidden: false,
+          },
+          {
+            name: 'env',
+            type: 'string',
+            description: 'Environment name to read API key from (defaults to active)',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'org',
+            type: 'string',
+            description: 'Organization ID for org-scoped secrets',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'dry-run',
+            type: 'boolean',
+            description: 'Print which secrets would be injected, no fetch',
+            required: false,
+            default: false,
+            hidden: false,
+          },
+        ],
+      },
     ],
   },
   {

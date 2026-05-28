@@ -1990,7 +1990,7 @@ async function runCli(): Promise<void> {
           y.options({
             name: { type: 'string', demandOption: true },
             value: { type: 'string', demandOption: true },
-            org: { type: 'string' },
+            org: { type: 'string', demandOption: true, describe: 'Organization ID (required for key context)' },
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -2061,6 +2061,41 @@ async function runCli(): Promise<void> {
           const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runVaultListVersions } = await import('./commands/vault.js');
           await runVaultListVersions(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      );
+      registerSubcommand(
+        yargs,
+        'run',
+        'Run a command with Vault secrets injected as environment variables',
+        (y) =>
+          y.options({
+            secret: {
+              type: 'string',
+              array: true,
+              describe: 'Map a vault object to an env var: ENV_VAR=vault-name (repeatable)',
+              demandOption: true,
+            },
+            env: { type: 'string', describe: 'Environment name to read API key from (defaults to active)' },
+            org: { type: 'string', describe: 'Organization ID for org-scoped secrets' },
+            'dry-run': { type: 'boolean', default: false, describe: 'Print which secrets would be injected, no fetch' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+
+          const { resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runVaultRun } = await import('./commands/vault-run.js');
+          const childCommand = (argv['--'] as string[] | undefined) ?? [];
+          await runVaultRun(
+            {
+              secrets: argv.secret as string[],
+              command: childCommand,
+              env: argv.env,
+              org: argv.org,
+              dryRun: argv.dryRun,
+            },
+            argv.apiKey as string | undefined,
+            resolveApiBaseUrl(),
+          );
         },
       );
       return yargs.demandCommand(1, 'Please specify a vault subcommand').strict();
