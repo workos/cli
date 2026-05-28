@@ -729,7 +729,6 @@ describe('Analytics', () => {
         expect(event.attributes['auth.mode']).toBe('none');
       });
     });
-
   });
 
   describe('with telemetry disabled', () => {
@@ -850,6 +849,5 @@ describe('Analytics', () => {
 
       expect(mockSetGatewayUrl).not.toHaveBeenCalled();
     });
-
   });
 });
