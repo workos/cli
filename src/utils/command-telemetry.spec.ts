@@ -48,5 +48,13 @@ describe('command-telemetry', () => {
     it('ignores multi-char short flags (not real flags)', () => {
       expect(extractUserFlags(['-abc'])).toEqual([]);
     });
+
+    it('ignores the positional separator `--`', () => {
+      expect(extractUserFlags(['org', 'list', '--', 'extra'])).toEqual([]);
+    });
+
+    it('ignores negative number values, not flags', () => {
+      expect(extractUserFlags(['--limit', '-1'])).toEqual(['limit']);
+    });
   });
 });

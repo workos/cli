@@ -11,7 +11,17 @@ export function resolveCanonicalName(parts: string[]): string {
 
 export function extractUserFlags(rawArgs: string[]): string[] {
   const passedFlags = rawArgs
-    .filter((arg) => arg.startsWith('--') || (arg.startsWith('-') && arg.length === 2))
-    .map((arg) => arg.replace(/^-+/, '').split('=')[0]);
+    .filter((arg) => {
+      // `--` is the positional separator, not a flag.
+      if (arg === '--') return false;
+      // Long flags: --name or --name=value (must start with a letter, so
+      // negative numbers like -1 / --1 are not mistaken for flags).
+      if (/^--[A-Za-z][\w-]*(=.*)?$/.test(arg)) return true;
+      // Short flags: a single letter, e.g. -v.
+      if (/^-[A-Za-z]$/.test(arg)) return true;
+      return false;
+    })
+    .map((arg) => arg.replace(/^-+/, '').split('=')[0])
+    .filter(Boolean);
   return [...new Set(passedFlags)];
 }

@@ -581,9 +581,12 @@ describe('Analytics', () => {
         analytics.captureUnhandledCrash(error);
 
         const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'crash')[0];
-        // sanitizeStack truncates at 4096 and appends '\n...[truncated]'
+        // sanitizeStack truncates so the result (marker included) stays within
+        // the API's 4096-char per-attribute cap; an over-length value would be
+        // rejected by Zod and the whole crash event silently dropped.
         expect(event.attributes['crash.stack']).toMatch(/\n\.\.\.\[truncated\]$/);
-        expect(event.attributes['crash.stack'].startsWith('x'.repeat(4096))).toBe(true);
+        expect(event.attributes['crash.stack'].length).toBeLessThanOrEqual(4096);
+        expect(event.attributes['crash.stack'].startsWith('x')).toBe(true);
       });
 
       it('falls back to package version when not explicitly provided', () => {

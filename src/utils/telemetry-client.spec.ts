@@ -241,11 +241,11 @@ describe('TelemetryClient', () => {
       client.queueEvent({ type: 'session.start', sessionId: '1', timestamp: '2024-01-01T00:00:00Z' });
       client.persistToFile('/tmp/test-persist.json');
 
-      expect(mockMkdirSync).toHaveBeenCalledWith('/tmp', { recursive: true });
+      expect(mockMkdirSync).toHaveBeenCalledWith('/tmp', { recursive: true, mode: 0o700 });
       expect(mockWriteFileSync).toHaveBeenCalledWith(
         '/tmp/test-persist.json',
         expect.stringContaining('session.start'),
-        'utf-8',
+        { encoding: 'utf-8', mode: 0o600 },
       );
 
       // Queue should be empty after persist

@@ -133,8 +133,11 @@ export class Analytics {
   captureException(error: Error, properties: Record<string, unknown> = {}) {
     if (!WORKOS_TELEMETRY_ENABLED) return;
 
-    debug('[Analytics] captureException:', error.message, properties);
+    // Sanitize BEFORE logging — raw error.message can carry Bearer tokens /
+    // sk_ keys / JWTs on auth-failure paths, which would surface in stdout
+    // under WORKOS_DEBUG=1.
     const { type, message } = this.extractErrorFields(error);
+    debug('[Analytics] captureException:', message, properties);
     this.tags['error.type'] = type;
     this.tags['error.message'] = message;
   }

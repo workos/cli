@@ -738,7 +738,7 @@ OAuth credentials are stored in the system keychain (with `~/.workos/credentials
 
 The CLI collects anonymous usage telemetry to help improve the product:
 
-- **Command events** -- command name, duration, success/failure, termination reason, and which flags were used (for all commands)
+- **Command events** -- command name, duration, success/failure, termination reason, and which flags were used (for telemetry-enabled commands; `install` and `dashboard` use session events instead)
 - **Session events** -- framework detected, step timing, token usage (installer only)
 - **Crash events** -- sanitized error type and stack trace (no secrets, truncated to 4KB)
 

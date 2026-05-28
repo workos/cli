@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { homedir } from 'node:os';
-import { sanitizeMessage } from './crash-reporter.js';
+import { sanitizeMessage, sanitizeStack } from './crash-reporter.js';
 
 // Mock telemetry client so we can inspect queued events without HTTP.
 // Use vi.hoisted so these are available when the hoisted vi.mock factory runs
@@ -102,6 +102,16 @@ describe('sanitizeMessage', () => {
   it('returns empty string for undefined or empty input', () => {
     expect(sanitizeMessage(undefined)).toBe('');
     expect(sanitizeMessage('')).toBe('');
+  });
+
+  // The telemetry API caps every attribute value at 4096 chars
+  // (z.string().max(4096)); an over-length crash.stack fails Zod validation
+  // and the whole event is silently dropped server-side. The truncation marker
+  // must fit inside the cap, not push past it.
+  it('truncates stacks to at most 4096 chars including the marker', () => {
+    const out = sanitizeStack('a'.repeat(10000));
+    expect(out.length).toBeLessThanOrEqual(4096);
+    expect(out.endsWith('...[truncated]')).toBe(true);
   });
 
   it('redacts all marker types in a single string', () => {

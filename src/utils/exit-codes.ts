@@ -25,6 +25,9 @@ export type ExitCodeValue = (typeof ExitCode)[keyof typeof ExitCode];
 
 const ERROR_CODE_MAP: Record<string, { reason: TerminationReason; exit: ExitCodeValue }> = {
   auth_required: { reason: 'auth_required', exit: ExitCode.AUTH_REQUIRED },
+  // resolveApiKey() emits `no_api_key` when no key is configured; semantically
+  // an auth failure, so it must not fall through to `validation_error`.
+  no_api_key: { reason: 'auth_required', exit: ExitCode.AUTH_REQUIRED },
   cancelled: { reason: 'cancelled', exit: ExitCode.CANCELLED },
 };
 

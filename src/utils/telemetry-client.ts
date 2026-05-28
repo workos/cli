@@ -139,8 +139,9 @@ export class TelemetryClient {
   persistToFile(filePath: string): void {
     if (this.events.length === 0) return;
     try {
-      mkdirSync(dirname(filePath), { recursive: true });
-      writeFileSync(filePath, JSON.stringify(this.events), 'utf-8');
+      // Restrictive modes — the payload carries device/user identifiers.
+      mkdirSync(dirname(filePath), { recursive: true, mode: 0o700 });
+      writeFileSync(filePath, JSON.stringify(this.events), { encoding: 'utf-8', mode: 0o600 });
       this.events = [];
     } catch {
       // Silent failure — telemetry must never block exit

@@ -39,7 +39,14 @@ export async function handleDoctor(argv: ArgumentsCamelCase<DoctorArgs>): Promis
     if (!options.json) {
       clack.log.error(`Doctor failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } else {
-      console.error(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }));
+      console.error(
+        JSON.stringify({
+          error: {
+            code: 'doctor_failed',
+            message: error instanceof Error ? error.message : 'Unknown error',
+          },
+        }),
+      );
     }
     exitWithCode(ExitCode.GENERAL_ERROR);
   }
