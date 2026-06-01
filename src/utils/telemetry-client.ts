@@ -29,6 +29,7 @@ function summarizeEvent(event: TelemetryEvent): string {
  */
 export class TelemetryClient {
   private events: TelemetryEvent[] = [];
+  private flushInFlight: Promise<boolean> | null = null;
   private accessToken: string | null = null;
   private claimToken: string | null = null;
   private clientId: string | null = null;
@@ -76,6 +77,19 @@ export class TelemetryClient {
    * protecting any events queued concurrently during the fetch.
    */
   async flush(): Promise<boolean> {
+    // Coalesce overlapping flushes: a second caller during an in-flight flush
+    // would otherwise snapshot and POST the same events again (duplicate send),
+    // and its splice() could drop events queued after the first flush started.
+    if (this.flushInFlight) return this.flushInFlight;
+    this.flushInFlight = this.flushInternal();
+    try {
+      return await this.flushInFlight;
+    } finally {
+      this.flushInFlight = null;
+    }
+  }
+
+  private async flushInternal(): Promise<boolean> {
     if (this.events.length === 0) return true;
     if (!this.gatewayUrl) {
       debug('[Telemetry] No telemetry URL configured, skipping flush');

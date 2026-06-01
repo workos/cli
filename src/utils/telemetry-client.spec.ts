@@ -263,6 +263,30 @@ describe('TelemetryClient', () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
+    it('dedupes concurrent flushes so the same events are not sent twice', async () => {
+      client.setGatewayUrl('http://localhost:8000');
+      client.queueEvent({ type: 'session.start', sessionId: '123', timestamp: new Date().toISOString() });
+
+      // Hold the fetch open so the second flush() overlaps the first.
+      let release!: () => void;
+      mockFetch.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            release = () => resolve({ ok: true });
+          }),
+      );
+
+      const first = client.flush();
+      const second = client.flush();
+      release();
+      const [r1, r2] = await Promise.all([first, second]);
+
+      expect(r1).toBe(true);
+      expect(r2).toBe(true);
+      // Only one network call: the overlapping flush reused the in-flight one.
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
     it('sends correct Content-Type header', async () => {
       client.setGatewayUrl('http://localhost:8000');
       client.queueEvent({ type: 'session.start', sessionId: '123', timestamp: new Date().toISOString() });
