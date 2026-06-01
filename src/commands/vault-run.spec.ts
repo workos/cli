@@ -14,31 +14,23 @@ vi.mock('../lib/workos-client.js', () => ({
 }));
 
 const mockResolveApiKey = vi.fn(() => 'sk_test_resolved');
-const mockResolveApiBaseUrl = vi.fn(() => 'https://api.workos.com');
 vi.mock('../lib/api-key.js', () => ({
   resolveApiKey: (...args: unknown[]) => mockResolveApiKey(...(args as [])),
-  resolveApiBaseUrl: (...args: unknown[]) => mockResolveApiBaseUrl(...(args as [])),
+  resolveApiBaseUrl: () => 'https://api.workos.com',
 }));
 
 const mockConfig = {
-  environments: {} as Record<string, { apiKey?: string }>,
+  environments: {} as Record<string, { apiKey?: string; endpoint?: string }>,
 };
 vi.mock('../lib/config-store.js', () => ({
   getConfig: () => mockConfig,
 }));
 
-vi.mock('child_process', () => ({
-  spawn: vi.fn(),
-}));
-vi.mock('node:child_process', () => ({
-  spawn: vi.fn(),
-}));
+vi.mock('child_process', () => ({ spawn: vi.fn() }));
+vi.mock('node:child_process', () => ({ spawn: vi.fn() }));
 
-// Replace exitWithError with a throwing mock so we can assert on the structured error.
-// Keep the other exports intact (isJsonMode, outputJson, outputSuccess, outputError).
 let outputModeState: 'human' | 'json' = 'human';
 const exitErrors: Array<{ code: string; message: string }> = [];
-const successCalls: Array<{ message: string; data?: unknown }> = [];
 
 vi.mock('../utils/output.js', () => ({
   isJsonMode: () => outputModeState === 'json',
@@ -47,17 +39,7 @@ vi.mock('../utils/output.js', () => ({
   },
   getOutputMode: () => outputModeState,
   outputJson: vi.fn((data: unknown) => console.log(JSON.stringify(data))),
-  outputSuccess: vi.fn((message: string, data?: object) => {
-    successCalls.push({ message, data });
-    if (outputModeState === 'json') {
-      const out: Record<string, unknown> = { status: 'ok', message };
-      if (data) out.data = data;
-      console.log(JSON.stringify(out));
-    } else {
-      console.log(message);
-      if (data) console.log(JSON.stringify(data, null, 2));
-    }
-  }),
+  outputSuccess: vi.fn(),
   outputError: vi.fn((err: { code: string; message: string }) => {
     console.error(err.message);
   }),
@@ -77,66 +59,30 @@ const { parseSecretMappings, fetchSecrets, runVaultRun } = await import('./vault
 
 // ---------- Helpers ----------
 
-/**
- * Mock child process. Does NOT auto-emit 'exit' — the test triggers it after
- * spawn has been called so the child.on('exit') handler is registered first.
- *
- * `fireExit` swallows the throw from the mocked `process.exit` so the test
- * call site doesn't see it escape synchronously.
- */
 function createMockChild() {
   const proc = new EventEmitter() as EventEmitter & {
     kill: ReturnType<typeof vi.fn>;
     killed: boolean;
-    fireExit: (code: number) => void;
   };
   proc.kill = vi.fn();
   proc.killed = false;
-  proc.fireExit = (code: number) => {
-    try {
-      proc.emit('exit', code, null);
-    } catch (err) {
-      if (err instanceof Error && err.message.startsWith('__PROCESS_EXIT__:')) return;
-      throw err;
-    }
-  };
   return proc;
 }
 
-/**
- * Some code paths end with `process.exit(code)`. We install a per-test spy
- * that records the code and resolves a deferred promise so the test can await
- * the synchronous exit without the spy's throw escaping unhandled.
- */
-function withSpawnExitCapture(): {
-  exitSpy: ReturnType<typeof vi.spyOn>;
-  exited: Promise<number>;
-  restore: () => void;
-} {
-  let resolveExit!: (code: number) => void;
-  const exited = new Promise<number>((resolve) => {
-    resolveExit = resolve;
-  });
-  const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
-    resolveExit(code ?? 0);
-    // Throw so callers don't continue past process.exit — same shape as real.
-    // The throw is caught by the synchronous `swallow`/awaited promise.
-    throw new Error(`__PROCESS_EXIT__:${code ?? 0}`);
-  }) as never);
-  return {
-    exitSpy,
-    exited,
-    restore: () => exitSpy.mockRestore(),
-  };
+function exitChildAfterSpawn(child: EventEmitter, code: number): void {
+  const poll = setInterval(() => {
+    if (mockSpawn.mock.calls.length > 0) {
+      clearInterval(poll);
+      child.emit('exit', code, null);
+    }
+  }, 1);
 }
 
 async function swallow(promise: Promise<unknown> | unknown): Promise<void> {
   try {
     await promise;
   } catch (err) {
-    if (err instanceof Error && (err.message.startsWith('__EXIT__:') || err.message.startsWith('__PROCESS_EXIT__:'))) {
-      return;
-    }
+    if (err instanceof Error && err.message.startsWith('__EXIT__:')) return;
     throw err;
   }
 }
@@ -152,7 +98,6 @@ describe('vault-run', () => {
     consoleLog = [];
     consoleErr = [];
     exitErrors.length = 0;
-    successCalls.length = 0;
     outputModeState = 'human';
     mockConfig.environments = {};
     vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
@@ -228,7 +173,7 @@ describe('vault-run', () => {
       expect(mockSdk.vault.readObjectByName).toHaveBeenCalledWith('db');
     });
 
-    it('fetches multiple secrets sequentially', async () => {
+    it('fetches multiple secrets in parallel', async () => {
       mockSdk.vault.readObjectByName
         .mockResolvedValueOnce({ id: 'a', name: 'db', value: 'val-a', metadata: {} })
         .mockResolvedValueOnce({ id: 'b', name: 'api', value: 'val-b', metadata: {} });
@@ -302,20 +247,18 @@ describe('vault-run', () => {
         command: [],
         dryRun: true,
         env: 'production',
-        org: 'org_123',
       });
 
       expect(mockSpawn).not.toHaveBeenCalled();
       const parsed = JSON.parse(consoleLog[0]);
       expect(parsed.dryRun).toBe(true);
       expect(parsed.env).toBe('production');
-      expect(parsed.org).toBe('org_123');
       expect(parsed.mappings).toEqual([{ envVar: 'DB_URL', vaultName: 'db' }]);
     });
   });
 
   describe('runVaultRun — execution', () => {
-    it('spawns child with injected env vars and resolves the active env API key', async () => {
+    it('spawns child with injected env vars and returns exit code', async () => {
       mockSdk.vault.readObjectByName.mockResolvedValueOnce({
         id: 'a',
         name: 'db',
@@ -324,19 +267,15 @@ describe('vault-run', () => {
       });
       const child = createMockChild();
       mockSpawn.mockReturnValueOnce(child as never);
-      const { exited, restore } = withSpawnExitCapture();
 
-      await swallow(
-        runVaultRun({
-          secrets: ['DB_URL=db'],
-          command: ['printenv', 'DB_URL'],
-        }),
-      );
-      // runVaultRun has registered the spawn handler — now fire exit.
-      child.fireExit(0);
-      const code = await exited;
+      const promise = runVaultRun({
+        secrets: ['DB_URL=db'],
+        command: ['printenv', 'DB_URL'],
+      });
+      exitChildAfterSpawn(child, 0);
+      const exitCode = await promise;
 
-      expect(code).toBe(0);
+      expect(exitCode).toBe(0);
       expect(mockSpawn).toHaveBeenCalledTimes(1);
       const [cmd, args, opts] = mockSpawn.mock.calls[0];
       expect(cmd).toBe('printenv');
@@ -344,7 +283,6 @@ describe('vault-run', () => {
       const spawnOpts = opts as { env: NodeJS.ProcessEnv; stdio: string };
       expect(spawnOpts.stdio).toBe('inherit');
       expect(spawnOpts.env.DB_URL).toBe('real-db-value');
-      restore();
     });
 
     it('forwards child non-zero exit code', async () => {
@@ -356,19 +294,15 @@ describe('vault-run', () => {
       });
       const child = createMockChild();
       mockSpawn.mockReturnValueOnce(child as never);
-      const { exited, restore } = withSpawnExitCapture();
 
-      await swallow(
-        runVaultRun({
-          secrets: ['DB_URL=db'],
-          command: ['some-tool'],
-        }),
-      );
-      child.fireExit(42);
-      const code = await exited;
+      const promise = runVaultRun({
+        secrets: ['DB_URL=db'],
+        command: ['some-tool'],
+      });
+      exitChildAfterSpawn(child, 42);
+      const exitCode = await promise;
 
-      expect(code).toBe(42);
-      restore();
+      expect(exitCode).toBe(42);
     });
 
     it('exits with usage error when no command is supplied', async () => {
@@ -393,21 +327,16 @@ describe('vault-run', () => {
       });
       const child = createMockChild();
       mockSpawn.mockReturnValueOnce(child as never);
-      const { exited, restore } = withSpawnExitCapture();
 
-      await swallow(
-        runVaultRun({
-          secrets: ['DB_URL=db'],
-          command: ['echo'],
-          env: 'staging',
-        }),
-      );
-      child.fireExit(0);
-      await exited;
+      const promise = runVaultRun({
+        secrets: ['DB_URL=db'],
+        command: ['echo'],
+        env: 'staging',
+      });
+      exitChildAfterSpawn(child, 0);
+      await promise;
 
-      // resolveApiKey from api-key.js mock should not be called when --env is set.
       expect(mockResolveApiKey).not.toHaveBeenCalled();
-      restore();
     });
 
     it('exits when --env names an unknown environment', async () => {
@@ -433,7 +362,7 @@ describe('vault-run', () => {
       outputModeState = 'human';
     });
 
-    it('emits an ok status with the injection metadata (never the value)', async () => {
+    it('emits metadata to stderr (never the value)', async () => {
       mockSdk.vault.readObjectByName.mockResolvedValueOnce({
         id: 'a',
         name: 'db',
@@ -442,23 +371,20 @@ describe('vault-run', () => {
       });
       const child = createMockChild();
       mockSpawn.mockReturnValueOnce(child as never);
-      const { exited, restore } = withSpawnExitCapture();
 
-      await swallow(
-        runVaultRun({
-          secrets: ['DB_URL=db'],
-          command: ['true'],
-        }),
-      );
-      child.fireExit(0);
-      await exited;
+      const promise = runVaultRun({
+        secrets: ['DB_URL=db'],
+        command: ['true'],
+      });
+      exitChildAfterSpawn(child, 0);
+      await promise;
 
-      const meta = successCalls[0];
-      expect(meta).toBeDefined();
-      expect((meta.data as { injected: unknown }).injected).toEqual([{ envVar: 'DB_URL', vaultName: 'db' }]);
-      const serialized = JSON.stringify(meta);
-      expect(serialized).not.toMatch(/top-secret-db/);
-      restore();
+      const metaLine = consoleErr.find((l) => l.includes('"injected"'));
+      expect(metaLine).toBeDefined();
+      const parsed = JSON.parse(metaLine!);
+      expect(parsed.status).toBe('ok');
+      expect(parsed.injected).toEqual([{ envVar: 'DB_URL', vaultName: 'db' }]);
+      expect(metaLine).not.toMatch(/top-secret-db/);
     });
   });
 
@@ -470,11 +396,9 @@ describe('vault-run', () => {
       mockSdk.vault.readObjectByName.mockResolvedValueOnce({ id: 'a', name: 'db', value: SECRET, metadata: {} });
       const child = createMockChild();
       mockSpawn.mockReturnValueOnce(child as never);
-      const { exited, restore } = withSpawnExitCapture();
-      await swallow(runVaultRun({ secrets: ['DB_URL=db'], command: ['true'] }));
-      child.fireExit(0);
-      await exited;
-      restore();
+      const promise = runVaultRun({ secrets: ['DB_URL=db'], command: ['true'] });
+      exitChildAfterSpawn(child, 0);
+      await promise;
 
       // Path 2: fetch failure
       mockSdk.vault.readObjectByName.mockRejectedValueOnce(

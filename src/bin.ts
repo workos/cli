@@ -2076,26 +2076,23 @@ async function runCli(): Promise<void> {
               demandOption: true,
             },
             env: { type: 'string', describe: 'Environment name to read API key from (defaults to active)' },
-            org: { type: 'string', describe: 'Organization ID for org-scoped secrets' },
             'dry-run': { type: 'boolean', default: false, describe: 'Print which secrets would be injected, no fetch' },
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
 
-          const { resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runVaultRun } = await import('./commands/vault-run.js');
           const childCommand = (argv['--'] as string[] | undefined) ?? [];
-          await runVaultRun(
+          const exitCode = await runVaultRun(
             {
               secrets: argv.secret as string[],
               command: childCommand,
               env: argv.env,
-              org: argv.org,
               dryRun: argv.dryRun,
             },
             argv.apiKey as string | undefined,
-            resolveApiBaseUrl(),
           );
+          if (typeof exitCode === 'number') process.exit(exitCode);
         },
       );
       return yargs.demandCommand(1, 'Please specify a vault subcommand').strict();

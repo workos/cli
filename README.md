@@ -538,11 +538,12 @@ workos portal generate-link --intent <intent> --org <orgId> [--return-url] [--su
 workos vault list [--limit]
 workos vault get <id>
 workos vault get-by-name <name>
-workos vault create --name <name> --value <secret> [--org <orgId>]
+workos vault create --name <name> --value <secret> --org <orgId>
 workos vault update <id> --value <secret> [--version-check]
 workos vault delete <id>
 workos vault describe <id>
 workos vault list-versions <id>
+workos vault run --secret ENV_VAR=vault-name [...] [--env <name>] [--dry-run] -- <command>
 ```
 
 #### api-key

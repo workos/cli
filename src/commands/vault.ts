@@ -6,22 +6,6 @@ import { createApiErrorHandler } from '../lib/api-error-handler.js';
 
 const handleApiError = createApiErrorHandler('Vault');
 
-/**
- * The Vault API returns 422 errors as `{"errors": {"field": ["msg"]}}` (an object),
- * but the SDK's UnprocessableEntityException expects an array and crashes with
- * "errors is not iterable". This wrapper catches that TypeError and extracts
- * a readable message from the underlying response.
- */
-function handleVaultSdkError(error: unknown, fallback: (e: unknown) => never): never {
-  if (error instanceof TypeError && error.message === 'errors is not iterable') {
-    exitWithError({
-      code: 'unprocessable_entity',
-      message: 'Vault API rejected the request. Check that all required fields (--org, --name, --value) are provided.',
-    });
-  }
-  fallback(error);
-}
-
 export interface VaultListOptions {
   limit?: number;
   before?: string;
@@ -113,7 +97,7 @@ export async function runVaultCreate(options: VaultCreateOptions, apiKey: string
     });
     outputSuccess('Created vault object', result);
   } catch (error) {
-    handleVaultSdkError(error, handleApiError);
+    handleApiError(error);
   }
 }
 
@@ -134,7 +118,7 @@ export async function runVaultUpdate(options: VaultUpdateOptions, apiKey: string
     });
     outputSuccess('Updated vault object', result);
   } catch (error) {
-    handleVaultSdkError(error, handleApiError);
+    handleApiError(error);
   }
 }
 

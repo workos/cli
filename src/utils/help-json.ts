@@ -1026,7 +1026,7 @@ const commands: CommandSchema[] = [
         options: [
           { name: 'name', type: 'string', description: 'Object name', required: true, hidden: false },
           { name: 'value', type: 'string', description: 'Secret value', required: true, hidden: false },
-          { name: 'org', type: 'string', description: 'Organization ID', required: false, hidden: false },
+          { name: 'org', type: 'string', description: 'Organization ID (required)', required: true, hidden: false },
         ],
       },
       {
@@ -1068,13 +1068,6 @@ const commands: CommandSchema[] = [
             name: 'env',
             type: 'string',
             description: 'Environment name to read API key from (defaults to active)',
-            required: false,
-            hidden: false,
-          },
-          {
-            name: 'org',
-            type: 'string',
-            description: 'Organization ID for org-scoped secrets',
             required: false,
             hidden: false,
           },
