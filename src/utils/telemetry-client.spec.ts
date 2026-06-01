@@ -14,6 +14,7 @@ vi.mock('./debug.js', () => ({
 const mockGetCredentials = vi.fn();
 vi.mock('../lib/credentials.js', () => ({
   getCredentials: () => mockGetCredentials(),
+  isTokenExpired: (creds: { expiresAt: number }) => Date.now() >= creds.expiresAt,
 }));
 
 // Mock fs for persistToFile tests
@@ -135,6 +136,22 @@ describe('TelemetryClient', () => {
       expect(callArgs.headers['x-workos-claim-token']).toBe('claim_token');
       expect(callArgs.headers['x-workos-client-id']).toBe('client_123');
       expect(callArgs.headers['x-workos-api-key']).toBeUndefined();
+    });
+
+    it('does not send an expired stored token and falls back to api key', async () => {
+      // Logged-in user past their 5-min token, with a valid env API key.
+      // The dead Bearer would 401 and the event would be dropped, so the
+      // client must fall back to the API key instead.
+      mockGetCredentials.mockReturnValue({ accessToken: 'expired-jwt', expiresAt: Date.now() - 1000 });
+      client.setGatewayUrl('http://localhost:8000');
+      client.setApiKeyAuth('sk_test_abc');
+      client.queueEvent({ type: 'command', sessionId: '123', timestamp: new Date().toISOString() });
+
+      await client.flush();
+
+      const callArgs = mockFetch.mock.calls[0][1];
+      expect(callArgs.headers.Authorization).toBeUndefined();
+      expect(callArgs.headers['x-workos-api-key']).toBe('sk_test_abc');
     });
 
     it('prefers JWT auth over API key auth', async () => {

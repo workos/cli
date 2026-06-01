@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { debug, isDebugEnabled } from './debug.js';
 import type { TelemetryEvent, TelemetryRequest } from './telemetry-types.js';
-import { getCredentials } from '../lib/credentials.js';
+import { getCredentials, isTokenExpired } from '../lib/credentials.js';
 
 function summarizeEvent(event: TelemetryEvent): string {
   switch (event.type) {
@@ -88,9 +88,15 @@ export class TelemetryClient {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-    // Read fresh credentials to handle token refresh mid-session
+    // Read fresh credentials to handle token refresh mid-session. Skip an
+    // expired stored token — sending a dead Bearer 401s and the event is
+    // dropped, so fall through to claim-token / api-key auth instead.
     const freshCreds = getCredentials();
-    const token = freshCreds?.accessToken ?? this.accessToken;
+    const token = freshCreds?.accessToken
+      ? isTokenExpired(freshCreds)
+        ? null
+        : freshCreds.accessToken
+      : this.accessToken;
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     } else if (this.claimToken && this.clientId) {

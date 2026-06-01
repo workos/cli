@@ -58,6 +58,7 @@ vi.mock('../lib/settings.js', () => ({
 const mockGetCredentials = vi.fn();
 vi.mock('../lib/credentials.js', () => ({
   getCredentials: () => mockGetCredentials(),
+  isTokenExpired: (creds: { expiresAt: number }) => Date.now() >= creds.expiresAt,
 }));
 
 // Mock config-store so auth.mode derivation can exercise unclaimed-env path
@@ -109,6 +110,7 @@ describe('Analytics', () => {
       }));
       vi.doMock('../lib/credentials.js', () => ({
         getCredentials: () => mockGetCredentials(),
+        isTokenExpired: (creds: { expiresAt: number }) => Date.now() >= creds.expiresAt,
       }));
       vi.doMock('../lib/device-id.js', () => ({
         getDeviceId: () => TEST_DEVICE_ID,
@@ -736,6 +738,28 @@ describe('Analytics', () => {
         analytics.setAuthMode('api_key');
         expect(readAuthMode()).toBe('api_key');
       });
+
+      it('falls through to api_key when the stored JWT is expired', () => {
+        // Logged-in user whose 5-min access token has lapsed, but a valid
+        // active-environment API key is available. The expired JWT must NOT
+        // be used (it would 401 and the telemetry event would be dropped).
+        mockGetCredentials.mockReturnValue({
+          accessToken: 'expired-jwt',
+          userId: 'user-1',
+          expiresAt: Date.now() - 1000,
+        });
+        mockGetActiveEnvironment.mockReturnValue({
+          type: 'sandbox',
+          name: 'dev',
+          apiKey: 'sk_test_active',
+          clientId: 'client_123',
+        });
+        analytics.initForNonInstaller();
+
+        expect(mockSetAccessToken).not.toHaveBeenCalled();
+        expect(mockSetApiKeyAuth).toHaveBeenCalledWith('sk_test_active');
+        expect(readAuthMode()).toBe('api_key');
+      });
     });
 
     describe('device.id and auth.mode on events', () => {
@@ -790,6 +814,7 @@ describe('Analytics', () => {
       }));
       vi.doMock('../lib/credentials.js', () => ({
         getCredentials: () => mockGetCredentials(),
+        isTokenExpired: (creds: { expiresAt: number }) => Date.now() >= creds.expiresAt,
       }));
       vi.doMock('../lib/device-id.js', () => ({
         getDeviceId: () => TEST_DEVICE_ID,

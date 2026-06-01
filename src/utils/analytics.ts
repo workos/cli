@@ -17,7 +17,7 @@ import type {
 } from './telemetry-types.js';
 import { WORKOS_TELEMETRY_ENABLED } from '../lib/constants.js';
 import { getTelemetryUrl, getVersion } from '../lib/settings.js';
-import { getCredentials } from '../lib/credentials.js';
+import { getCredentials, isTokenExpired } from '../lib/credentials.js';
 import { getActiveEnvironment, isUnclaimedEnvironment } from '../lib/config-store.js';
 import { getDeviceId } from '../lib/device-id.js';
 import { sanitizeMessage, sanitizeStack } from './crash-reporter.js';
@@ -83,10 +83,14 @@ export class Analytics {
 
     this.authMode = 'none';
     const creds = getCredentials();
-    if (creds?.accessToken) {
+    // Only treat the JWT as usable auth when it is still valid. An expired
+    // access token would 401 against the telemetry guard and the event would
+    // be dropped, so fall through to claim-token / api-key auth instead.
+    if (creds?.accessToken && !isTokenExpired(creds)) {
       telemetryClient.setAccessToken(creds.accessToken);
       this.authMode = 'jwt';
     }
+    // Preserve identity even when the token is expired.
     if (creds?.userId) {
       this.distinctId = creds.userId;
     }
