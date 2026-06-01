@@ -1381,6 +1381,15 @@ export function extractHelpJsonCommand(argv: string[]): string | undefined {
  * @param subcommand - Optional command name to return a subtree for (e.g. "env").
  *                     Returns full tree if omitted or if command not found.
  */
+/**
+ * Top-level command names (first token of each registered command). Used by
+ * telemetry to recognise real commands without trusting arbitrary argv tokens
+ * (so option values / secrets are never recorded as a command name).
+ */
+export function getTopLevelCommandNames(): string[] {
+  return commands.map((c) => c.name.split(' ')[0]);
+}
+
 export function buildCommandTree(subcommand?: string): HelpOutput | CommandSchema {
   if (subcommand) {
     const match = commands.find((c) => c.name === subcommand);

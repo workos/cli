@@ -47,8 +47,21 @@ describe('command-telemetry', () => {
       expect(resolveCommandNameFromRawArgs(['--json', 'user', 'get'])).toBe('user');
     });
 
-    it('preserves unknown commands (bounded by the small top-level command space)', () => {
-      expect(resolveCommandNameFromRawArgs(['bogus'])).toBe('bogus');
+    it('returns root for unknown commands (does not emit typos as command names)', () => {
+      expect(resolveCommandNameFromRawArgs(['bogus'])).toBe('root');
+    });
+
+    it('never records an option value as the command name (--mode <value>)', () => {
+      // Without whitelisting, the first non-flag token would be `ci`.
+      expect(resolveCommandNameFromRawArgs(['--mode', 'ci', 'organization', 'create'])).toBe('organization');
+    });
+
+    it('never records a secret option value as the command name (--api-key <secret>)', () => {
+      // Regression: a value-taking option before the command must not leak the
+      // secret into command.name (which is then sent to the telemetry backend).
+      expect(resolveCommandNameFromRawArgs(['--api-key', 'sk_live_SECRET', 'organization', 'create'])).toBe(
+        'organization',
+      );
     });
   });
 
