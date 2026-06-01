@@ -19,6 +19,7 @@ vi.mock('./debug.js', () => ({
 const mockExistsSync = vi.fn();
 const mockReaddirSync = vi.fn();
 const mockReadFileSync = vi.fn();
+const mockStatSync = vi.fn();
 const mockUnlinkSync = vi.fn();
 
 vi.mock('node:fs', async (importOriginal) => {
@@ -28,6 +29,7 @@ vi.mock('node:fs', async (importOriginal) => {
     existsSync: (...args: unknown[]) => mockExistsSync(...args),
     readdirSync: (...args: unknown[]) => mockReaddirSync(...args),
     readFileSync: (...args: unknown[]) => mockReadFileSync(...args),
+    statSync: (...args: unknown[]) => mockStatSync(...args),
     unlinkSync: (...args: unknown[]) => mockUnlinkSync(...args),
   };
 });
@@ -35,6 +37,7 @@ vi.mock('node:fs', async (importOriginal) => {
 describe('telemetry-store-forward', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockStatSync.mockReturnValue({ mtimeMs: Date.now() });
   });
 
   describe('installStoreForward', () => {
@@ -152,6 +155,37 @@ describe('telemetry-store-forward', () => {
       await recoverPendingEvents();
 
       expect(mockQueueEvents).not.toHaveBeenCalled();
+    });
+
+    it('drops stale pending files without reading them', async () => {
+      mockExistsSync.mockReturnValue(true);
+      mockReaddirSync.mockReturnValue(['pending-old.json']);
+      mockStatSync.mockReturnValue({ mtimeMs: Date.now() - 8 * 24 * 60 * 60 * 1000 });
+
+      vi.resetModules();
+      const { recoverPendingEvents } = await import('./telemetry-store-forward.js');
+      await recoverPendingEvents();
+
+      expect(mockReadFileSync).not.toHaveBeenCalled();
+      expect(mockUnlinkSync).toHaveBeenCalledTimes(1);
+    });
+
+    it('caps recovered pending files and drops the oldest excess files', async () => {
+      mockExistsSync.mockReturnValue(true);
+      const files = Array.from({ length: 101 }, (_, i) => `pending-${i}.json`);
+      mockReaddirSync.mockReturnValue(files);
+      mockStatSync.mockImplementation((filePath: string) => {
+        const match = filePath.match(/pending-(\d+)\.json$/);
+        return { mtimeMs: Date.now() + Number(match?.[1] ?? 0) };
+      });
+      mockReadFileSync.mockReturnValue(JSON.stringify([{ type: 'command', sessionId: '1', timestamp: 'x' }]));
+
+      vi.resetModules();
+      const { recoverPendingEvents } = await import('./telemetry-store-forward.js');
+      await recoverPendingEvents();
+
+      expect(mockReadFileSync).toHaveBeenCalledTimes(100);
+      expect(mockUnlinkSync.mock.calls.some(([filePath]) => String(filePath).includes('pending-0.json'))).toBe(true);
     });
   });
 });

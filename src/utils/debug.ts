@@ -105,9 +105,13 @@ export function logError(...args: unknown[]): void {
 }
 
 export function debug(...args: unknown[]): void {
-  if (!debugEnabled || isJsonMode()) return;
+  if (!isDebugEnabled()) return;
   const msg = args.map((a) => prepareMessage(a)).join(' ');
   clack.log.info(chalk.dim(msg));
+}
+
+export function isDebugEnabled(): boolean {
+  return debugEnabled && !isJsonMode();
 }
 
 export function enableDebugLogs(): void {

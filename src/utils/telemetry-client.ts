@@ -1,8 +1,27 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { debug } from './debug.js';
+import { debug, isDebugEnabled } from './debug.js';
 import type { TelemetryEvent, TelemetryRequest } from './telemetry-types.js';
 import { getCredentials } from '../lib/credentials.js';
+
+function summarizeEvent(event: TelemetryEvent): string {
+  switch (event.type) {
+    case 'session.start':
+      return `session.start(mode=${event.attributes['installer.mode']}, os=${event.attributes['env.os']})`;
+    case 'session.end':
+      return `session.end(outcome=${event.attributes['installer.outcome']}, duration=${event.attributes['installer.duration_ms']}ms)`;
+    case 'step':
+      return `step(${event.name}, ${event.durationMs}ms, success=${event.success})`;
+    case 'agent.tool':
+      return `agent.tool(${event.toolName}, ${event.durationMs}ms)`;
+    case 'agent.llm':
+      return `agent.llm(${event.model}, in=${event.inputTokens}, out=${event.outputTokens})`;
+    case 'command':
+      return `command(${event.attributes['command.name']}, ${event.attributes['command.duration_ms']}ms, success=${event.attributes['command.success']})`;
+    case 'crash':
+      return `crash(${event.attributes['crash.error_type']}: ${event.attributes['crash.error_message']})`;
+  }
+}
 
 /**
  * HTTP client that queues telemetry events and flushes them to the API.
@@ -86,30 +105,12 @@ export class TelemetryClient {
     const timeout = setTimeout(() => controller.abort(), 3000);
 
     try {
-      const eventSummary = payload.events
-        .map((e) => {
-          const attrs = e.attributes ?? {};
-          switch (e.type) {
-            case 'session.start':
-              return `session.start(mode=${attrs['installer.mode']}, os=${attrs['env.os']})`;
-            case 'session.end':
-              return `session.end(outcome=${attrs['installer.outcome']}, duration=${attrs['installer.duration_ms']}ms)`;
-            case 'step':
-              return `step(${(e as any).name}, ${(e as any).durationMs}ms, success=${(e as any).success})`;
-            case 'agent.tool':
-              return `agent.tool(${(e as any).toolName}, ${(e as any).durationMs}ms)`;
-            case 'agent.llm':
-              return `agent.llm(${(e as any).model}, in=${(e as any).inputTokens}, out=${(e as any).outputTokens})`;
-            case 'command':
-              return `command(${attrs['command.name']}, ${attrs['command.duration_ms']}ms, success=${attrs['command.success']})`;
-            case 'crash':
-              return `crash(${attrs['crash.error_type']}: ${attrs['crash.error_message']})`;
-            default:
-              return e.type;
-          }
-        })
-        .join('\n  ');
-      debug(`[Telemetry] Sending ${payload.events.length} events to ${this.gatewayUrl}/telemetry:\n  ${eventSummary}`);
+      if (isDebugEnabled()) {
+        const eventSummary = payload.events.map(summarizeEvent).join('\n  ');
+        debug(
+          `[Telemetry] Sending ${payload.events.length} events to ${this.gatewayUrl}/telemetry:\n  ${eventSummary}`,
+        );
+      }
 
       const response = await fetch(`${this.gatewayUrl}/telemetry`, {
         method: 'POST',

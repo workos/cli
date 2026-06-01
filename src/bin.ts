@@ -2509,42 +2509,54 @@ async function runCli(): Promise<void> {
     .wrap(process.stdout.isTTY && process.stdout.columns ? process.stdout.columns : 80);
 
   const shouldSkipTelemetry = () => !WORKOS_TELEMETRY_ENABLED || SKIP_TELEMETRY_COMMANDS.has(commandName.split('.')[0]);
+  let commandOutcome:
+    | {
+        success: boolean;
+        options: Parameters<typeof analytics.emitCommandEvent>[3];
+      }
+    | undefined;
 
   try {
     await parser.parseAsync(rawArgs);
 
-    if (!shouldSkipTelemetry()) {
-      analytics.emitCommandEvent(commandName, Date.now() - startTime, true, {
+    process.exitCode = 0;
+    commandOutcome = {
+      success: true,
+      options: {
         flags,
         reason: 'success',
-      });
-    }
-    process.exitCode = 0;
+      },
+    };
   } catch (error) {
     if (error instanceof CliExit) {
       process.exitCode = error.exitCode;
-      if (!shouldSkipTelemetry()) {
-        analytics.emitCommandEvent(commandName, Date.now() - startTime, error.exitCode === 0, {
+      commandOutcome = {
+        success: error.exitCode === 0,
+        options: {
           flags,
           reason: error.context?.reason,
           errorCode: error.context?.errorCode,
           apiContext: error.context?.apiContext,
-        });
-      }
+        },
+      };
     } else {
       // Unexpected error (crash)
       process.exitCode = 1;
       const err = error instanceof Error ? error : new Error(String(error));
-      if (!shouldSkipTelemetry()) {
-        analytics.emitCommandEvent(commandName, Date.now() - startTime, false, {
+      commandOutcome = {
+        success: false,
+        options: {
           flags,
           reason: 'crash',
           error: err,
-        });
-      }
+        },
+      };
       analytics.captureUnhandledCrash(err, { command: commandName });
     }
   } finally {
+    if (commandOutcome && !shouldSkipTelemetry()) {
+      analytics.emitCommandEvent(commandName, Date.now() - startTime, commandOutcome.success, commandOutcome.options);
+    }
     await telemetryClient.flush().catch(() => {});
   }
 }

@@ -7,6 +7,7 @@ vi.stubGlobal('fetch', mockFetch);
 // Mock debug to avoid console output
 vi.mock('./debug.js', () => ({
   debug: vi.fn(),
+  isDebugEnabled: () => false,
 }));
 
 // Mock credentials module

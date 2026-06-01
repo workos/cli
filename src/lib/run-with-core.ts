@@ -21,13 +21,7 @@ import type { Integration } from './constants.js';
 import { parseEnvFile } from '../utils/env-parser.js';
 import { enableDebugLogs, initLogFile, logInfo, logError } from '../utils/debug.js';
 
-import {
-  getAccessToken,
-  getCredentials,
-  saveCredentials,
-  getStagingCredentials,
-  saveStagingCredentials,
-} from './credentials.js';
+import { getAccessToken, saveCredentials, getStagingCredentials, saveStagingCredentials } from './credentials.js';
 import { getConfig, saveConfig, getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
 import { checkForEnvFiles, discoverCredentials } from './credential-discovery.js';
 import { requestDeviceCode, pollForToken } from './device-auth.js';
@@ -79,34 +73,6 @@ function readExistingCredentials(installDir: string): { apiKey?: string; clientI
   } catch {
     return {};
   }
-}
-
-function configureTelemetryAuthFromEnvironment(): boolean {
-  const env = getActiveEnvironment();
-  if (!env?.apiKey) {
-    return false;
-  }
-
-  if (isUnclaimedEnvironment(env)) {
-    analytics.setClaimTokenAuth(env.clientId, env.claimToken);
-    analytics.setAuthMode('claim_token');
-  } else {
-    analytics.setApiKeyAuth(env.apiKey);
-    analytics.setAuthMode('api_key');
-  }
-
-  return true;
-}
-
-function configureTelemetryAuthFromApiKeyEnv(): boolean {
-  const apiKey = process.env.WORKOS_API_KEY;
-  if (!apiKey) {
-    return false;
-  }
-
-  analytics.setApiKeyAuth(apiKey);
-  analytics.setAuthMode('api_key');
-  return true;
 }
 
 async function detectIntegrationFn(options: Pick<InstallerOptions, 'installDir'>): Promise<Integration | undefined> {
@@ -267,7 +233,8 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
     actors: {
       checkAuthentication: fromPromise(async () => {
         // Check for active environment with credentials (covers unclaimed environments).
-        if (configureTelemetryAuthFromEnvironment()) {
+        const activeEnv = getActiveEnvironment();
+        if (activeEnv?.apiKey) {
           return true;
         }
 
@@ -278,13 +245,6 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
           throw new Error(`Not authenticated. Run \`${formatWorkOSCommand('auth login')}\` first.`);
         }
 
-        // Set telemetry from existing credentials
-        const creds = getCredentials();
-        if (creds) {
-          analytics.setAccessToken(creds.accessToken);
-          analytics.setDistinctId(creds.userId);
-          analytics.setAuthMode('jwt');
-        }
         return true;
       }),
 
@@ -560,14 +520,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
 
   await adapter.start();
 
-  if (configureTelemetryAuthFromEnvironment()) {
-    // Auth mode and transport set from the active CLI environment.
-  } else if (getAccessToken()) {
-    analytics.setAuthMode('jwt');
-  } else {
-    configureTelemetryAuthFromApiKeyEnv();
-  }
-
+  analytics.configureAuthFromAvailableSources();
   const mode = headlessMode ? 'headless' : augmentedOptions.dashboard ? 'tui' : 'cli';
   analytics.sessionStart(mode, getVersion());
 

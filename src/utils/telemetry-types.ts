@@ -3,11 +3,10 @@
  * The gateway converts these to OTel format.
  */
 
-export interface TelemetryEvent {
+export interface BaseTelemetryEvent {
   type: 'session.start' | 'session.end' | 'step' | 'agent.tool' | 'agent.llm' | 'command' | 'crash';
   sessionId: string;
   timestamp: string;
-  attributes?: Record<string, string | number | boolean>;
 }
 
 export type AuthMode = 'jwt' | 'claim_token' | 'api_key' | 'none';
@@ -15,30 +14,33 @@ export type AuthMode = 'jwt' | 'claim_token' | 'api_key' | 'none';
 /**
  * Structured outcome dimension for command events. Supersedes the boolean
  * `command.success` as the primary categorization (`command.success` remains
- * for backward-compat). Populated by `analytics.recordTermination()` just
- * before `process.exit`.
+ * for backward-compat). Populated by `analytics.emitCommandEvent()` from the
+ * top-level command lifecycle.
  */
 export type TerminationReason = 'success' | 'cancelled' | 'auth_required' | 'validation_error' | 'api_error' | 'crash';
 
-export interface SessionStartEvent extends TelemetryEvent {
+export interface EnvFingerprint {
+  'device.id': string;
+  'auth.mode': AuthMode;
+  'env.os': string;
+  'env.os_version': string;
+  'env.node_version': string;
+  'env.shell': string;
+  'env.ci': boolean;
+  'env.ci_provider'?: string;
+}
+
+export interface SessionStartEvent extends BaseTelemetryEvent {
   type: 'session.start';
   attributes: {
     'installer.version': string;
     'installer.mode': 'cli' | 'tui' | 'headless';
     'workos.user_id'?: string;
     'workos.org_id'?: string;
-    'device.id': string;
-    'auth.mode': AuthMode;
-    'env.os': string;
-    'env.os_version': string;
-    'env.node_version': string;
-    'env.shell': string;
-    'env.ci': boolean;
-    'env.ci_provider'?: string;
-  };
+  } & EnvFingerprint;
 }
 
-export interface SessionEndEvent extends TelemetryEvent {
+export interface SessionEndEvent extends BaseTelemetryEvent {
   type: 'session.end';
   attributes: {
     'installer.outcome': 'success' | 'error' | 'cancelled';
@@ -46,7 +48,7 @@ export interface SessionEndEvent extends TelemetryEvent {
   } & Record<string, string | number | boolean>;
 }
 
-export interface StepEvent extends TelemetryEvent {
+export interface StepEvent extends BaseTelemetryEvent {
   type: 'step';
   name: string;
   startTimestamp: string;
@@ -58,7 +60,7 @@ export interface StepEvent extends TelemetryEvent {
   };
 }
 
-export interface AgentToolEvent extends TelemetryEvent {
+export interface AgentToolEvent extends BaseTelemetryEvent {
   type: 'agent.tool';
   toolName: string;
   startTimestamp: string;
@@ -66,14 +68,14 @@ export interface AgentToolEvent extends TelemetryEvent {
   success: boolean;
 }
 
-export interface AgentLLMEvent extends TelemetryEvent {
+export interface AgentLLMEvent extends BaseTelemetryEvent {
   type: 'agent.llm';
   model: string;
   inputTokens: number;
   outputTokens: number;
 }
 
-export interface CommandEvent extends TelemetryEvent {
+export interface CommandEvent extends BaseTelemetryEvent {
   type: 'command';
   attributes: {
     'command.name': string;
@@ -89,18 +91,10 @@ export interface CommandEvent extends TelemetryEvent {
     'api.resource'?: string;
     'cli.version': string;
     'workos.user_id'?: string;
-    'device.id': string;
-    'auth.mode': AuthMode;
-    'env.os': string;
-    'env.os_version': string;
-    'env.node_version': string;
-    'env.shell': string;
-    'env.ci': boolean;
-    'env.ci_provider'?: string;
-  };
+  } & EnvFingerprint;
 }
 
-export interface CrashEvent extends TelemetryEvent {
+export interface CrashEvent extends BaseTelemetryEvent {
   type: 'crash';
   attributes: {
     'crash.error_type': string;
@@ -109,17 +103,18 @@ export interface CrashEvent extends TelemetryEvent {
     'crash.command'?: string;
     'cli.version': string;
     'workos.user_id'?: string;
-    'device.id': string;
-    'auth.mode': AuthMode;
-    'env.os': string;
-    'env.os_version': string;
-    'env.node_version': string;
-    'env.shell': string;
-    'env.ci': boolean;
-    'env.ci_provider'?: string;
-  };
+  } & EnvFingerprint;
 }
 
 export interface TelemetryRequest {
   events: TelemetryEvent[];
 }
+
+export type TelemetryEvent =
+  | SessionStartEvent
+  | SessionEndEvent
+  | StepEvent
+  | AgentToolEvent
+  | AgentLLMEvent
+  | CommandEvent
+  | CrashEvent;

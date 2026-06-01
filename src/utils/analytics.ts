@@ -13,6 +13,7 @@ import type {
   CommandEvent,
   CrashEvent,
   TerminationReason,
+  EnvFingerprint,
 } from './telemetry-types.js';
 import { WORKOS_TELEMETRY_ENABLED } from '../lib/constants.js';
 import { getTelemetryUrl, getVersion } from '../lib/settings.js';
@@ -57,8 +58,8 @@ export class Analytics {
   }
 
   /**
-   * Set the auth mode explicitly. Used by installer flows where credential
-   * resolution happens outside `initForNonInstaller` (see run-with-core.ts).
+   * Set the auth mode explicitly for special cases. Normal CLI flows should use
+   * `configureAuthFromAvailableSources()` so transport and auth.mode stay aligned.
    */
   setAuthMode(mode: AuthMode) {
     this.authMode = mode;
@@ -68,25 +69,19 @@ export class Analytics {
     telemetryClient.setGatewayUrl(url);
   }
 
+  private isEnabled(): boolean {
+    return WORKOS_TELEMETRY_ENABLED;
+  }
+
   /**
-   * Initialize telemetry for non-installer commands.
-   * Sets telemetry URL from default config and loads auth credentials.
-   *
-   * Auth priority:
-   *   1. Stored JWT (Bearer) — logged-in users
-   *   2. Claim token — unclaimed environments
-   *   3. API key — API-key-only users
-   *
-   * Also captures the user/environment identifier for per-user analytics.
-   * The installer flow sets these itself in run-with-core.ts; this covers
-   * management commands like `org list`, `auth login`, etc.
+   * Configure telemetry transport and auth.mode from all available CLI auth
+   * sources. Priority: stored JWT, unclaimed-environment claim token, active
+   * environment API key, then WORKOS_API_KEY.
    */
-  initForNonInstaller(): void {
-    if (!WORKOS_TELEMETRY_ENABLED) return;
+  configureAuthFromAvailableSources(): AuthMode {
+    if (!this.isEnabled()) return this.authMode;
 
-    const gatewayUrl = getTelemetryUrl();
-    telemetryClient.setGatewayUrl(gatewayUrl);
-
+    this.authMode = 'none';
     const creds = getCredentials();
     if (creds?.accessToken) {
       telemetryClient.setAccessToken(creds.accessToken);
@@ -120,6 +115,19 @@ export class Analytics {
       telemetryClient.setApiKeyAuth(process.env.WORKOS_API_KEY);
       this.authMode = 'api_key';
     }
+
+    return this.authMode;
+  }
+
+  /**
+   * Initialize telemetry for non-installer commands.
+   * Sets telemetry URL from default config and loads auth credentials.
+   */
+  initForNonInstaller(): void {
+    if (!this.isEnabled()) return;
+
+    telemetryClient.setGatewayUrl(getTelemetryUrl());
+    this.configureAuthFromAvailableSources();
   }
 
   setTag(key: string, value: string | boolean | number | null | undefined) {
@@ -127,7 +135,7 @@ export class Analytics {
   }
 
   capture(eventName: string, properties?: Record<string, unknown>) {
-    if (!WORKOS_TELEMETRY_ENABLED) return;
+    if (!this.isEnabled()) return;
 
     debug(`[Analytics] capture: ${eventName}`, properties);
 
@@ -142,7 +150,7 @@ export class Analytics {
   }
 
   captureException(error: Error, properties: Record<string, unknown> = {}) {
-    if (!WORKOS_TELEMETRY_ENABLED) return;
+    if (!this.isEnabled()) return;
 
     // Sanitize BEFORE logging — raw error.message can carry Bearer tokens /
     // sk_ keys / JWTs on auth-failure paths, which would surface in stdout
@@ -175,7 +183,7 @@ export class Analytics {
     return undefined;
   }
 
-  private getEnvFingerprint() {
+  private getEnvFingerprint(): EnvFingerprint {
     let osVersion: string;
     try {
       osVersion = os.release();
@@ -198,7 +206,7 @@ export class Analytics {
   }
 
   sessionStart(mode: 'cli' | 'tui' | 'headless', version: string) {
-    if (!WORKOS_TELEMETRY_ENABLED) return;
+    if (!this.isEnabled()) return;
 
     this.mode = mode;
 
@@ -218,7 +226,7 @@ export class Analytics {
   }
 
   stepCompleted(name: string, durationMs: number, success: boolean, error?: Error) {
-    if (!WORKOS_TELEMETRY_ENABLED) return;
+    if (!this.isEnabled()) return;
 
     const event: StepEvent = {
       type: 'step',
@@ -235,7 +243,7 @@ export class Analytics {
   }
 
   toolCalled(toolName: string, durationMs: number, success: boolean) {
-    if (!WORKOS_TELEMETRY_ENABLED) return;
+    if (!this.isEnabled()) return;
 
     const event: AgentToolEvent = {
       type: 'agent.tool',
@@ -251,7 +259,7 @@ export class Analytics {
   }
 
   llmRequest(model: string, inputTokens: number, outputTokens: number) {
-    if (!WORKOS_TELEMETRY_ENABLED) return;
+    if (!this.isEnabled()) return;
 
     this.totalInputTokens += inputTokens;
     this.totalOutputTokens += outputTokens;
@@ -284,7 +292,7 @@ export class Analytics {
       apiContext?: { status?: number; code?: string; resource?: string };
     },
   ) {
-    if (!WORKOS_TELEMETRY_ENABLED) return;
+    if (!this.isEnabled()) return;
 
     const errorFields = options?.error ? this.extractErrorFields(options.error) : undefined;
 
@@ -318,7 +326,7 @@ export class Analytics {
   }
 
   captureUnhandledCrash(error: Error, options?: { command?: string; version?: string }) {
-    if (!WORKOS_TELEMETRY_ENABLED) return;
+    if (!this.isEnabled()) return;
 
     const { type, message } = this.extractErrorFields(error);
 
@@ -341,7 +349,7 @@ export class Analytics {
   }
 
   async shutdown(status: 'success' | 'error' | 'cancelled') {
-    if (!WORKOS_TELEMETRY_ENABLED) return;
+    if (!this.isEnabled()) return;
 
     const duration = Date.now() - this.sessionStartTime.getTime();
 
