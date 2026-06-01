@@ -108,9 +108,10 @@ async function resolveRunBaseUrl(envName: string | undefined): Promise<string> {
     const { getConfig } = await import('../lib/config-store.js');
     const config = getConfig();
     const env = config?.environments[envName];
-    if (env?.endpoint) {
-      return env.endpoint;
-    }
+    // Use the named env's endpoint, or the default. Never fall through to
+    // the active env's endpoint -- that would send the wrong API key to
+    // the wrong host when active != selected.
+    return env?.endpoint ?? 'https://api.workos.com';
   }
   const { resolveApiBaseUrl } = await import('../lib/api-key.js');
   return resolveApiBaseUrl();
