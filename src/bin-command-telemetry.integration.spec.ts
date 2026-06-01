@@ -25,6 +25,7 @@ import { fileURLToPath } from 'node:url';
  * That captures the real event payload, independent of debug-log formatting.
  */
 const binPath = fileURLToPath(new URL('./bin.ts', import.meta.url));
+const forceInsecureStorageImport = new URL('./test/force-insecure-storage.ts', import.meta.url).href;
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 
 let sandboxTmp: string;
@@ -38,27 +39,33 @@ afterEach(() => {
 });
 
 function runCli(args: string[]) {
-  const result = spawnSync('node', ['--import', 'tsx', binPath, ...args], {
-    cwd: repoRoot,
-    encoding: 'utf-8',
-    env: {
-      ...process.env,
-      // Isolate the child from the developer's real home: ~/.workos (device-id,
-      // credentials) and store-forward output all resolve under the sandbox.
-      // (The keyring mock and temp-HOME isolation from Vitest do not cross into
-      // a spawned process, so we isolate HOME explicitly here.)
-      HOME: sandboxTmp,
-      TMPDIR: sandboxTmp, // PENDING_DIR = <tmpdir>/workos-cli-telemetry
-      // Force telemetry on so an inherited WORKOS_TELEMETRY=false can't make the
-      // test silently produce no event and fail.
-      WORKOS_TELEMETRY: 'true',
-      WORKOS_FORCE_TTY: '1',
-      // Unroutable URL: the flush fails, so the queued events are persisted to
-      // the pending file on exit where we can inspect the real payload.
-      WORKOS_TELEMETRY_URL: 'http://127.0.0.1:59999/cli',
-      WORKOS_API_KEY: 'sk_dummy_for_test',
+  const env: NodeJS.ProcessEnv = {
+    PATH: process.env.PATH,
+    HOME: sandboxTmp,
+    USERPROFILE: sandboxTmp,
+    TMPDIR: sandboxTmp,
+    TMP: sandboxTmp,
+    TEMP: sandboxTmp,
+    // Keep prompts/update checks disabled without inheriting host agent/CI env.
+    WORKOS_MODE: 'agent',
+    // Force telemetry on so a host WORKOS_TELEMETRY=false can't make the test
+    // silently produce no event and fail.
+    WORKOS_TELEMETRY: 'true',
+    // Unroutable URL: the flush fails, so the queued events are persisted to
+    // the pending file on exit where we can inspect the real payload.
+    WORKOS_TELEMETRY_URL: 'http://127.0.0.1:59999/cli',
+    WORKOS_API_KEY: 'sk_dummy_for_test',
+  };
+
+  const result = spawnSync(
+    process.execPath,
+    ['--import', 'tsx', '--import', forceInsecureStorageImport, binPath, ...args],
+    {
+      cwd: repoRoot,
+      encoding: 'utf-8',
+      env,
     },
-  });
+  );
 
   const events: Array<{ type: string; attributes?: Record<string, unknown> }> = [];
   const pendingDir = join(sandboxTmp, 'workos-cli-telemetry');
