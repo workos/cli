@@ -1,8 +1,8 @@
 import { runInstaller } from '../run.js';
 import type { InstallerArgs } from '../run.js';
-import { CliExit } from '../utils/cli-exit.js';
 import clack from '../utils/clack.js';
 import { exitWithError, isJsonMode } from '../utils/output.js';
+import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
 import type { ArgumentsCamelCase } from 'yargs';
 import { autoInstallSkills } from './install-skill.js';
 
@@ -54,6 +54,6 @@ export async function handleInstall(argv: ArgumentsCamelCase<InstallerArgs>): Pr
     if (logPath) {
       clack.log.info(`Debug logs: ${logPath}`);
     }
-    throw new CliExit(1, { reason: 'crash' });
+    exitWithCode(ExitCode.GENERAL_ERROR);
   }
 }
