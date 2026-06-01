@@ -135,15 +135,12 @@ describe('vault commands', () => {
     });
 
     it('exits with error when --org is not provided', async () => {
-      const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
       const errOutput: string[] = [];
       vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
         errOutput.push(args.map(String).join(' '));
       });
-      await runVaultCreate({ name: 'my-secret', value: 'secret-val' }, 'sk_test');
-      expect(mockExit).toHaveBeenCalledWith(1);
+      await expect(runVaultCreate({ name: 'my-secret', value: 'secret-val' }, 'sk_test')).rejects.toThrow();
       expect(errOutput.some((l) => l.includes('--org'))).toBe(true);
-      mockExit.mockRestore();
     });
   });
 
