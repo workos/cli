@@ -47,7 +47,12 @@ import clack from './utils/clack.js';
 import { registerSubcommand } from './utils/register-subcommand.js';
 import { installCrashReporter } from './utils/crash-reporter.js';
 import { installStoreForward, recoverPendingEvents } from './utils/telemetry-store-forward.js';
-import { resolveCanonicalName, extractUserFlags, SKIP_TELEMETRY_COMMANDS } from './utils/command-telemetry.js';
+import {
+  resolveCanonicalName,
+  resolveCommandNameFromRawArgs,
+  extractUserFlags,
+  SKIP_TELEMETRY_COMMANDS,
+} from './utils/command-telemetry.js';
 import { CliExit } from './utils/cli-exit.js';
 import { telemetryClient } from './utils/telemetry-client.js';
 import { WORKOS_TELEMETRY_ENABLED } from './lib/constants.js';
@@ -233,6 +238,16 @@ async function runCli(): Promise<void> {
     .exitProcess(false)
     .fail((msg, err) => {
       if (err instanceof CliExit) throw err;
+      // yargs runs its demand/strict validation before dispatching middleware,
+      // so the command-name middleware below has not run yet and commandName is
+      // still 'root' (which SKIP_TELEMETRY_COMMANDS would drop). Recover the
+      // top-level command from the raw args so the validation_error event is
+      // attributed to the real command instead of being silently skipped. Only
+      // the top-level token is used. Later positionals can be user values
+      // (org names, emails, IDs), so recording them would leak data.
+      if (commandName === 'root') {
+        commandName = resolveCommandNameFromRawArgs(rawArgs);
+      }
       if (msg) {
         outputError({ code: 'invalid_usage', message: msg });
       }
@@ -2405,6 +2420,11 @@ async function runCli(): Promise<void> {
               type: 'boolean',
               default: false,
               describe: 'Clear credentials, keep config',
+            })
+            .option('crash', {
+              type: 'boolean',
+              default: false,
+              describe: 'Throw an unexpected error to exercise the crash-telemetry path',
             }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -2414,6 +2434,7 @@ async function runCli(): Promise<void> {
             noKeyring: argv.noKeyring as boolean,
             unclaimed: argv.unclaimed as boolean,
             noAuth: argv.noAuth as boolean,
+            crash: argv.crash as boolean,
           });
         },
       );

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveCanonicalName, extractUserFlags } from './command-telemetry.js';
+import { resolveCanonicalName, resolveCommandNameFromRawArgs, extractUserFlags } from './command-telemetry.js';
 
 describe('command-telemetry', () => {
   describe('resolveCanonicalName', () => {
@@ -21,6 +21,34 @@ describe('command-telemetry', () => {
 
     it('only aliases the first part', () => {
       expect(resolveCanonicalName(['org', 'org'])).toBe('organization.org');
+    });
+  });
+
+  describe('resolveCommandNameFromRawArgs', () => {
+    it('resolves the top-level command (used when validation fails before middleware runs)', () => {
+      expect(resolveCommandNameFromRawArgs(['organization', 'create'])).toBe('organization');
+    });
+
+    it('applies aliases to the top-level token', () => {
+      expect(resolveCommandNameFromRawArgs(['org', 'create'])).toBe('organization');
+    });
+
+    it('records only the top-level command, never positional values (no PII/secret leak)', () => {
+      // `onboard-user <email>` takes a positional value; it must not reach command.name.
+      expect(resolveCommandNameFromRawArgs(['onboard-user', 'nick@example.com'])).toBe('onboard-user');
+    });
+
+    it('returns root when there is no command token', () => {
+      expect(resolveCommandNameFromRawArgs([])).toBe('root');
+      expect(resolveCommandNameFromRawArgs(['--json'])).toBe('root');
+    });
+
+    it('skips leading flags to find the command token', () => {
+      expect(resolveCommandNameFromRawArgs(['--json', 'user', 'get'])).toBe('user');
+    });
+
+    it('preserves unknown commands (bounded by the small top-level command space)', () => {
+      expect(resolveCommandNameFromRawArgs(['bogus'])).toBe('bogus');
     });
   });
 

@@ -9,6 +9,19 @@ export function resolveCanonicalName(parts: string[]): string {
   return resolved.join('.');
 }
 
+/**
+ * Resolve the command name from raw argv for paths where yargs validation
+ * fails before middleware runs (e.g. a missing required argument). Only the
+ * first non-flag token (the top-level command) is used: later positionals can
+ * be user values (org names, emails, IDs), so including them would leak data
+ * and explode telemetry cardinality. Returns 'root' when no command token is
+ * present (e.g. `--help` alone).
+ */
+export function resolveCommandNameFromRawArgs(rawArgs: string[]): string {
+  const topLevel = rawArgs.find((arg) => !arg.startsWith('-'));
+  return topLevel ? resolveCanonicalName([topLevel]) : 'root';
+}
+
 export function extractUserFlags(rawArgs: string[]): string[] {
   const passedFlags = rawArgs
     .filter((arg) => {

@@ -231,12 +231,21 @@ export async function runDebugSimulate({
   noKeyring,
   unclaimed,
   noAuth,
+  crash = false,
 }: {
   expiredToken: boolean;
   noKeyring: boolean;
   unclaimed: boolean;
   noAuth: boolean;
+  crash?: boolean;
 }): Promise<void> {
+  // Simulate an unexpected crash to exercise the crash-telemetry pipeline
+  // end-to-end. Throws a plain Error (not CliExit) so the bin.ts lifecycle
+  // records a `crash` event with a sanitized stack rather than a handled exit.
+  if (crash) {
+    throw new Error('Simulated crash for telemetry verification');
+  }
+
   // Validate: at least one flag
   if (!expiredToken && !noKeyring && !unclaimed && !noAuth) {
     exitWithError({

@@ -358,6 +358,20 @@ describe('debug commands', () => {
       ).rejects.toThrow("can't expire a cleared token");
     });
 
+    it('--crash throws a plain Error (drives the unhandled-crash telemetry path)', async () => {
+      const promise = runDebugSimulate({
+        expiredToken: false,
+        noKeyring: false,
+        unclaimed: false,
+        noAuth: false,
+        crash: true,
+      });
+      await expect(promise).rejects.toThrow(/simulated crash/i);
+      // Must NOT be a CliExit — the lifecycle only records a crash event for
+      // unexpected (non-CliExit) errors.
+      await expect(promise).rejects.toSatisfy((e: unknown) => e instanceof Error && e.constructor.name === 'Error');
+    });
+
     it('requires at least one flag', async () => {
       await expect(
         runDebugSimulate({
