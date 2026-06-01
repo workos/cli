@@ -13,6 +13,7 @@ describe('runMigrations', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.WORKOS_SECRET_KEY;
+    delete process.env.WORKOS_API_URL;
   });
 
   it('sets WORKOS_SECRET_KEY from the provided API key', async () => {
@@ -40,6 +41,16 @@ describe('runMigrations', () => {
     const args = ['export-auth0', '--domain', 'example.auth0.com', '--client-id', 'abc', '--client-secret', 'xyz'];
     await runMigrations(args, 'sk_test_789');
     expect(mockParseAsync).toHaveBeenCalledWith(args, { from: 'user' });
+  });
+
+  it('sets WORKOS_API_URL when apiBaseUrl is provided', async () => {
+    await runMigrations(['import', '--csv', 'users.csv'], 'sk_test_123', 'https://api.staging.workos.com');
+    expect(process.env.WORKOS_API_URL).toBe('https://api.staging.workos.com');
+  });
+
+  it('does not set WORKOS_API_URL when apiBaseUrl is undefined', async () => {
+    await runMigrations(['import', '--csv', 'users.csv'], 'sk_test_123');
+    expect(process.env.WORKOS_API_URL).toBeUndefined();
   });
 
   it('removes WorkOS global flags from migrations passthrough args', () => {

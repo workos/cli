@@ -2408,10 +2408,10 @@ yargs(rawArgs)
         }),
     async (argv) => {
       await applyInsecureStorage(argv.insecureStorage);
-      const { resolveOptionalApiKey } = await import('./lib/api-key.js');
+      const { resolveOptionalApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
       const { getMigrationsPassthroughArgs, runMigrations } = await import('./commands/migrations.js');
       const passthrough = getMigrationsPassthroughArgs(rawArgs);
-      await runMigrations(passthrough, resolveOptionalApiKey({ apiKey: argv.apiKey }));
+      await runMigrations(passthrough, resolveOptionalApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
     },
   )
   .command(
