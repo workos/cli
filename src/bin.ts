@@ -49,6 +49,7 @@ import { installCrashReporter, sanitizeMessage } from './utils/crash-reporter.js
 import { installStoreForward, recoverPendingEvents } from './utils/telemetry-store-forward.js';
 import { loadDeviceId } from './lib/device-id.js';
 import { loadPreferences, isTelemetryEnabled } from './lib/preferences.js';
+import { maybeShowTelemetryNotice } from './lib/telemetry-notice.js';
 import {
   resolveCanonicalName,
   resolveCommandNameFromRawArgs,
@@ -280,6 +281,16 @@ async function runCli(): Promise<void> {
     .middleware((argv) => {
       const commandParts = (argv._ as string[]) || [];
       commandName = resolveCanonicalName(commandParts);
+    })
+    .middleware((argv) => {
+      // First-run, stderr-only notice that telemetry is being collected.
+      // Skip while the user is actively managing telemetry, and on the
+      // empty/root command (bare `--help` / `--version` / `$0`). The notice
+      // is self-guarded — it no-ops in json mode, when already shown, when
+      // opted out, and after the first display this session.
+      const command = String(argv._?.[0] ?? '');
+      if (command === 'telemetry' || command === '') return;
+      maybeShowTelemetryNotice();
     })
     .middleware(async (argv) => {
       // Warn about unclaimed environments before management commands.

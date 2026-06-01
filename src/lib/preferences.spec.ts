@@ -24,6 +24,8 @@ const {
   savePreferences,
   isTelemetryOptedOut,
   setTelemetryOptedOut,
+  isNoticeShown,
+  markNoticeShown,
   envTelemetryOverride,
   isTelemetryEnabled,
   getTelemetrySource,
@@ -168,6 +170,45 @@ describe('preferences', () => {
       setTelemetryOptedOut(true);
       // No reset — the cache should reflect the write without re-reading disk.
       expect(getPreferences().telemetry?.optedOut).toBe(true);
+    });
+  });
+
+  describe('isNoticeShown / markNoticeShown', () => {
+    it('isNoticeShown is false when nothing is persisted', () => {
+      expect(isNoticeShown()).toBe(false);
+    });
+
+    it('markNoticeShown persists a timestamp that isNoticeShown reads back', () => {
+      markNoticeShown();
+      expect(isNoticeShown()).toBe(true);
+
+      const onDisk = JSON.parse(readFileSync(getPreferencesPath(), 'utf8'));
+      expect(typeof onDisk.telemetry.noticeShownAt).toBe('string');
+      // Round-trips as a valid ISO timestamp.
+      expect(Number.isNaN(Date.parse(onDisk.telemetry.noticeShownAt))).toBe(false);
+    });
+
+    it('isNoticeShown is true for an existing noticeShownAt on disk', () => {
+      writePrefs({ telemetry: { noticeShownAt: '2026-01-01T00:00:00.000Z' } });
+      expect(isNoticeShown()).toBe(true);
+    });
+
+    it('markNoticeShown preserves an existing optedOut flag (no clobber)', () => {
+      setTelemetryOptedOut(true);
+      markNoticeShown();
+
+      const onDisk = JSON.parse(readFileSync(getPreferencesPath(), 'utf8'));
+      expect(onDisk.telemetry.optedOut).toBe(true);
+      expect(typeof onDisk.telemetry.noticeShownAt).toBe('string');
+    });
+
+    it('setTelemetryOptedOut preserves an existing noticeShownAt (no clobber)', () => {
+      markNoticeShown();
+      setTelemetryOptedOut(true);
+
+      const onDisk = JSON.parse(readFileSync(getPreferencesPath(), 'utf8'));
+      expect(onDisk.telemetry.optedOut).toBe(true);
+      expect(typeof onDisk.telemetry.noticeShownAt).toBe('string');
     });
   });
 

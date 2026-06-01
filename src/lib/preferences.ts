@@ -116,9 +116,7 @@ export function savePreferences(next: CliPreferences): void {
   const merged: CliPreferences = {
     ...current,
     ...next,
-    ...(current.telemetry || next.telemetry
-      ? { telemetry: { ...current.telemetry, ...next.telemetry } }
-      : {}),
+    ...(current.telemetry || next.telemetry ? { telemetry: { ...current.telemetry, ...next.telemetry } } : {}),
   };
 
   fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
@@ -134,6 +132,21 @@ export function isTelemetryOptedOut(): boolean {
 /** Persist the opt-out flag. Throws on write failure (see savePreferences). */
 export function setTelemetryOptedOut(value: boolean): void {
   savePreferences({ telemetry: { optedOut: value } });
+}
+
+/** Whether the first-run telemetry notice has already been shown (ever). */
+export function isNoticeShown(): boolean {
+  return !!getPreferences().telemetry?.noticeShownAt;
+}
+
+/**
+ * Persist the first-run notice as shown, stamping the current time. Uses the
+ * read-modify-write savePreferences so it never clobbers the optedOut flag.
+ * Throws on write failure (see savePreferences) — the caller in
+ * telemetry-notice.ts swallows it so a read-only FS never blocks a command.
+ */
+export function markNoticeShown(): void {
+  savePreferences({ telemetry: { noticeShownAt: new Date().toISOString() } });
 }
 
 /**
