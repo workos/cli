@@ -45,7 +45,7 @@ import {
 } from './utils/output.js';
 import clack from './utils/clack.js';
 import { registerSubcommand } from './utils/register-subcommand.js';
-import { installCrashReporter } from './utils/crash-reporter.js';
+import { installCrashReporter, sanitizeMessage } from './utils/crash-reporter.js';
 import { installStoreForward, recoverPendingEvents } from './utils/telemetry-store-forward.js';
 import {
   resolveCanonicalName,
@@ -2573,6 +2573,10 @@ async function runCli(): Promise<void> {
         },
       };
       analytics.captureUnhandledCrash(err, { command: commandName });
+      // Don't exit silently on an unexpected error. Surface a sanitized
+      // message (secrets/paths stripped) so the user gets a diagnostic instead
+      // of a bare exit code 1. Full details are in the crash log / telemetry.
+      outputError({ code: 'internal_error', message: sanitizeMessage(err.message) });
     }
   } finally {
     if (commandOutcome && !shouldSkipTelemetry()) {

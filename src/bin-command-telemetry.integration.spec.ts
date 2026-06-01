@@ -43,8 +43,15 @@ function runCli(args: string[]) {
     encoding: 'utf-8',
     env: {
       ...process.env,
-      // Isolate store-forward output (PENDING_DIR = <tmpdir>/workos-cli-telemetry).
-      TMPDIR: sandboxTmp,
+      // Isolate the child from the developer's real home: ~/.workos (device-id,
+      // credentials) and store-forward output all resolve under the sandbox.
+      // (The keyring mock and temp-HOME isolation from Vitest do not cross into
+      // a spawned process, so we isolate HOME explicitly here.)
+      HOME: sandboxTmp,
+      TMPDIR: sandboxTmp, // PENDING_DIR = <tmpdir>/workos-cli-telemetry
+      // Force telemetry on so an inherited WORKOS_TELEMETRY=false can't make the
+      // test silently produce no event and fail.
+      WORKOS_TELEMETRY: 'true',
       WORKOS_FORCE_TTY: '1',
       // Unroutable URL: the flush fails, so the queued events are persisted to
       // the pending file on exit where we can inspect the real payload.
@@ -86,6 +93,9 @@ describe('command telemetry lifecycle', () => {
     // lifecycle must classify as a crash (not validation_error).
     const { result, events } = runCli(['debug', 'simulate', '--crash']);
     expect(result.status).not.toBe(0);
+
+    // A crash must not be a silent exit-1: the error surfaces on stderr.
+    expect(`${result.stdout}\n${result.stderr}`).toMatch(/Simulated crash/);
 
     const crash = events.find((e) => e.type === 'crash');
     expect(crash).toBeDefined();
