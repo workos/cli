@@ -47,6 +47,7 @@ import clack from './utils/clack.js';
 import { registerSubcommand } from './utils/register-subcommand.js';
 import { installCrashReporter, sanitizeMessage } from './utils/crash-reporter.js';
 import { installStoreForward, recoverPendingEvents } from './utils/telemetry-store-forward.js';
+import { loadDeviceId } from './lib/device-id.js';
 import {
   resolveCanonicalName,
   resolveCommandNameFromRawArgs,
@@ -71,6 +72,10 @@ if (process.env.WORKOS_DEBUG === '1') {
 installCrashReporter();
 installStoreForward();
 analytics.initForNonInstaller();
+// Prewarm the device id off the blocking-fs path so the synchronous telemetry
+// event path reads it from cache. Cheap (a tiny file read); awaited so it is
+// resolved before any command emits an event.
+await loadDeviceId();
 // Fire-and-forget: recover events from previous crashes/exits.
 // NO await — must not block startup (flush timeout is 3s).
 recoverPendingEvents();

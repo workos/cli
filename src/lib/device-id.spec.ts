@@ -18,7 +18,7 @@ vi.mock('node:os', async (importOriginal) => {
   };
 });
 
-const { getDeviceId, __resetDeviceIdCache } = await import('./device-id.js');
+const { getDeviceId, loadDeviceId, __resetDeviceIdCache } = await import('./device-id.js');
 
 const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -103,5 +103,33 @@ describe('device-id', () => {
     const first = getDeviceId();
     const second = getDeviceId();
     expect(first).toBe(second);
+  });
+
+  describe('loadDeviceId (async startup path)', () => {
+    it('creates the file on first call and returns a UUID', async () => {
+      const id = await loadDeviceId();
+      expect(id).toMatch(UUID_V4_REGEX);
+      expect(readFileSync(join(testDir, '.workos', 'device-id'), 'utf8')).toBe(id);
+    });
+
+    it('reads an existing UUID from disk', async () => {
+      const workosDir = join(testDir, '.workos');
+      mkdirSync(workosDir, { recursive: true });
+      const existing = '11111111-1111-4111-8111-111111111111';
+      writeFileSync(join(workosDir, 'device-id'), existing, 'utf8');
+
+      expect(await loadDeviceId()).toBe(existing);
+    });
+
+    it('memoizes: concurrent callers resolve to the same id (single write)', async () => {
+      const [a, b] = await Promise.all([loadDeviceId(), loadDeviceId()]);
+      expect(a).toBe(b);
+    });
+
+    it('warms the cache that the synchronous getDeviceId() reads', async () => {
+      const loaded = await loadDeviceId();
+      // No further IO: getDeviceId returns the prewarmed value.
+      expect(getDeviceId()).toBe(loaded);
+    });
   });
 });
