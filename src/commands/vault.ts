@@ -51,23 +51,38 @@ export async function runVaultList(options: VaultListOptions, apiKey: string, ba
   }
 }
 
-export async function runVaultGet(id: string, apiKey: string, baseUrl?: string): Promise<void> {
+export async function runVaultGet(id: string, decrypt: boolean, apiKey: string, baseUrl?: string): Promise<void> {
   const client = createWorkOSClient(apiKey, baseUrl);
 
   try {
-    const result = await client.sdk.vault.readObject({ id });
-    outputJson(result);
+    if (decrypt) {
+      const result = await client.sdk.vault.readObject({ id });
+      outputJson(result);
+    } else {
+      const result = await client.sdk.vault.describeObject({ id });
+      outputJson(result);
+    }
   } catch (error) {
     handleApiError(error);
   }
 }
 
-export async function runVaultGetByName(name: string, apiKey: string, baseUrl?: string): Promise<void> {
+export async function runVaultGetByName(
+  name: string,
+  decrypt: boolean,
+  apiKey: string,
+  baseUrl?: string,
+): Promise<void> {
   const client = createWorkOSClient(apiKey, baseUrl);
 
   try {
     const result = await client.sdk.vault.readObjectByName(name);
-    outputJson(result);
+    if (decrypt) {
+      outputJson(result);
+    } else {
+      const { value: _stripped, ...metadata } = result;
+      outputJson(metadata);
+    }
   } catch (error) {
     handleApiError(error);
   }
@@ -153,4 +168,19 @@ export async function runVaultListVersions(id: string, apiKey: string, baseUrl?:
   } catch (error) {
     handleApiError(error);
   }
+}
+
+export async function readValueFromStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk);
+  }
+  const value = Buffer.concat(chunks).toString('utf-8').trimEnd();
+  if (value.length === 0) {
+    exitWithError({
+      code: 'empty_stdin',
+      message: 'No value provided on stdin. Pipe a value or pass --value directly.',
+    });
+  }
+  return value;
 }

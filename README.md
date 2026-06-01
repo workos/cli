@@ -536,10 +536,10 @@ workos portal generate-link --intent <intent> --org <orgId> [--return-url] [--su
 
 ```bash
 workos vault list [--limit]
-workos vault get <id>
-workos vault get-by-name <name>
-workos vault create --name <name> --value <secret> --org <orgId>
-workos vault update <id> --value <secret> [--version-check]
+workos vault get <id> [--decrypt]
+workos vault get-by-name <name> [--decrypt]
+workos vault create --name <name> --org <orgId> [--value <secret>]   # omit --value to read from stdin
+workos vault update <id> [--value <secret>] [--version-check]        # omit --value to read from stdin
 workos vault delete <id>
 workos vault describe <id>
 workos vault list-versions <id>
