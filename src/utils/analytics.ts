@@ -15,7 +15,7 @@ import type {
   TerminationReason,
   EnvFingerprint,
 } from './telemetry-types.js';
-import { WORKOS_TELEMETRY_ENABLED } from '../lib/constants.js';
+import { isTelemetryEnabled } from '../lib/preferences.js';
 import { getTelemetryUrl, getVersion } from '../lib/settings.js';
 import { getCredentials, isTokenExpired } from '../lib/credentials.js';
 import { getActiveEnvironment, isUnclaimedEnvironment } from '../lib/config-store.js';
@@ -70,7 +70,7 @@ export class Analytics {
   }
 
   private isEnabled(): boolean {
-    return WORKOS_TELEMETRY_ENABLED;
+    return isTelemetryEnabled();
   }
 
   /**

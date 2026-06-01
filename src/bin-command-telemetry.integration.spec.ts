@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -38,7 +38,14 @@ afterEach(() => {
   rmSync(sandboxTmp, { recursive: true, force: true });
 });
 
-function runCli(args: string[]) {
+/** Seed ~/.workos/preferences.json inside the sandboxed HOME before a run. */
+function seedPreferences(prefs: unknown): void {
+  const workosDir = join(sandboxTmp, '.workos');
+  mkdirSync(workosDir, { recursive: true });
+  writeFileSync(join(workosDir, 'preferences.json'), JSON.stringify(prefs), 'utf-8');
+}
+
+function runCli(args: string[], envOverrides: NodeJS.ProcessEnv = {}) {
   const env: NodeJS.ProcessEnv = {
     PATH: process.env.PATH,
     HOME: sandboxTmp,
@@ -49,12 +56,14 @@ function runCli(args: string[]) {
     // Keep prompts/update checks disabled without inheriting host agent/CI env.
     WORKOS_MODE: 'agent',
     // Force telemetry on so a host WORKOS_TELEMETRY=false can't make the test
-    // silently produce no event and fail.
+    // silently produce no event and fail. Tests that exercise env precedence
+    // override this explicitly via envOverrides.
     WORKOS_TELEMETRY: 'true',
     // Unroutable URL: the flush fails, so the queued events are persisted to
     // the pending file on exit where we can inspect the real payload.
     WORKOS_TELEMETRY_URL: 'http://127.0.0.1:59999/cli',
     WORKOS_API_KEY: 'sk_dummy_for_test',
+    ...envOverrides,
   };
 
   const result = spawnSync(
@@ -69,7 +78,13 @@ function runCli(args: string[]) {
 
   const events: Array<{ type: string; attributes?: Record<string, unknown> }> = [];
   const pendingDir = join(sandboxTmp, 'workos-cli-telemetry');
-  for (const file of readdirSync(pendingDir, { withFileTypes: true })) {
+  let entries: ReturnType<typeof readdirSync> = [];
+  try {
+    entries = readdirSync(pendingDir, { withFileTypes: true });
+  } catch {
+    // No pending dir => no events were ever queued (e.g. opted out).
+  }
+  for (const file of entries) {
     if (file.isFile() && file.name.startsWith('pending-') && file.name.endsWith('.json')) {
       events.push(...JSON.parse(readFileSync(join(pendingDir, file.name), 'utf-8')));
     }
@@ -118,5 +133,24 @@ describe('command telemetry lifecycle', () => {
     expect(stack).toContain('Simulated crash');
     expect(stack).not.toMatch(/\/Users\/[^/]+\//); // POSIX home dir collapsed to ~
     expect(stack).not.toContain(repoRoot);
+  }, 20_000);
+
+  it('emits zero events when the saved preference is opted out', () => {
+    seedPreferences({ telemetry: { optedOut: true } });
+    // Clear the forced WORKOS_TELEMETRY so the saved preference is honored
+    // (an empty string is not the tri-state 'true'/'false', so it falls through).
+    const { events } = runCli(['organization', 'create'], { WORKOS_TELEMETRY: '' });
+    expect(events).toHaveLength(0);
+  }, 20_000);
+
+  it('env WORKOS_TELEMETRY=true overrides an opted-out preference (event IS emitted)', () => {
+    seedPreferences({ telemetry: { optedOut: true } });
+    const { events } = runCli(['organization', 'create'], { WORKOS_TELEMETRY: 'true' });
+    expect(events.find((e) => e.type === 'command')).toBeDefined();
+  }, 20_000);
+
+  it('env WORKOS_TELEMETRY=false suppresses events even when not opted out', () => {
+    const { events } = runCli(['organization', 'create'], { WORKOS_TELEMETRY: 'false' });
+    expect(events).toHaveLength(0);
   }, 20_000);
 });

@@ -35,6 +35,20 @@ vi.mock('../lib/device-id.js', () => ({
   getDeviceId: () => TEST_DEVICE_ID,
 }));
 
+// Resolve the telemetry kill switch from the env var alone so tests stay
+// deterministic regardless of any preferences.json on the dev machine.
+// Mirrors the real tri-state precedence: explicit 'true'/'false' override,
+// otherwise default-on (no opt-out preference in tests).
+const isTelemetryEnabledFromEnv = () => {
+  const value = process.env.WORKOS_TELEMETRY;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return true;
+};
+vi.mock('../lib/preferences.js', () => ({
+  isTelemetryEnabled: () => isTelemetryEnabledFromEnv(),
+}));
+
 // Mock settings for initForNonInstaller
 const mockGetTelemetryUrl = vi.fn(() => 'https://api.workos.com/cli');
 const mockSettingsConfig = {
@@ -69,7 +83,8 @@ vi.mock('../lib/config-store.js', () => ({
 }));
 
 describe('Analytics', () => {
-  // Need to handle WORKOS_TELEMETRY_ENABLED which is evaluated at import time
+  // isEnabled() now resolves via isTelemetryEnabled() (mocked above to read the
+  // WORKOS_TELEMETRY env var at call time), so toggling the var per-test works.
   const originalEnv = process.env.WORKOS_TELEMETRY;
 
   beforeEach(() => {
@@ -114,6 +129,9 @@ describe('Analytics', () => {
       }));
       vi.doMock('../lib/device-id.js', () => ({
         getDeviceId: () => TEST_DEVICE_ID,
+      }));
+      vi.doMock('../lib/preferences.js', () => ({
+        isTelemetryEnabled: () => isTelemetryEnabledFromEnv(),
       }));
       vi.doMock('../lib/config-store.js', () => ({
         getActiveEnvironment: () => mockGetActiveEnvironment(),
@@ -818,6 +836,9 @@ describe('Analytics', () => {
       }));
       vi.doMock('../lib/device-id.js', () => ({
         getDeviceId: () => TEST_DEVICE_ID,
+      }));
+      vi.doMock('../lib/preferences.js', () => ({
+        isTelemetryEnabled: () => isTelemetryEnabledFromEnv(),
       }));
       vi.doMock('../lib/config-store.js', () => ({
         getActiveEnvironment: () => mockGetActiveEnvironment(),

@@ -16,7 +16,7 @@ function topLevelCommands(): Set<string> {
   return knownTopLevelCommands;
 }
 
-export const SKIP_TELEMETRY_COMMANDS = new Set(['install', 'dashboard', 'root']);
+export const SKIP_TELEMETRY_COMMANDS = new Set(['install', 'dashboard', 'root', 'telemetry']);
 
 export function resolveCanonicalName(parts: string[]): string {
   if (parts.length === 0) return 'root';

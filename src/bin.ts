@@ -48,6 +48,7 @@ import { registerSubcommand } from './utils/register-subcommand.js';
 import { installCrashReporter, sanitizeMessage } from './utils/crash-reporter.js';
 import { installStoreForward, recoverPendingEvents } from './utils/telemetry-store-forward.js';
 import { loadDeviceId } from './lib/device-id.js';
+import { loadPreferences, isTelemetryEnabled } from './lib/preferences.js';
 import {
   resolveCanonicalName,
   resolveCommandNameFromRawArgs,
@@ -56,7 +57,6 @@ import {
 } from './utils/command-telemetry.js';
 import { CliExit } from './utils/cli-exit.js';
 import { telemetryClient } from './utils/telemetry-client.js';
-import { WORKOS_TELEMETRY_ENABLED } from './lib/constants.js';
 import { ExitCode } from './utils/exit-codes.js';
 import { analytics } from './utils/analytics.js';
 
@@ -71,6 +71,12 @@ if (process.env.WORKOS_DEBUG === '1') {
 // Must be before yargs so crashes during startup are captured.
 installCrashReporter();
 installStoreForward();
+// Prewarm the telemetry opt-out preference before init: initForNonInstaller()
+// checks isEnabled() (which reads the preference), and session/command events
+// may fire shortly after. The sync getPreferences() fallback makes correctness
+// ordering-independent, but prewarming keeps the synchronous event path off
+// blocking fs IO (same rationale as the device-id prewarm).
+await loadPreferences();
 analytics.initForNonInstaller();
 // Prewarm the device id off the blocking-fs path so the synchronous telemetry
 // event path reads it from cache. Cheap (a tiny file read); awaited so it is
@@ -336,6 +342,39 @@ async function runCli(): Promise<void> {
         },
       );
       return yargs.demandCommand(1, 'Please specify an auth subcommand').strict();
+    })
+    .command('telemetry', 'Manage telemetry collection (opt-out, opt-in, status)', (yargs) => {
+      registerSubcommand(
+        yargs,
+        'opt-out',
+        'Disable telemetry collection (persists across runs)',
+        (y) => y,
+        async () => {
+          const { runTelemetryOptOut } = await import('./commands/telemetry.js');
+          await runTelemetryOptOut();
+        },
+      );
+      registerSubcommand(
+        yargs,
+        'opt-in',
+        'Re-enable telemetry collection',
+        (y) => y,
+        async () => {
+          const { runTelemetryOptIn } = await import('./commands/telemetry.js');
+          await runTelemetryOptIn();
+        },
+      );
+      registerSubcommand(
+        yargs,
+        'status',
+        'Show whether telemetry is enabled and why',
+        (y) => y,
+        async () => {
+          const { runTelemetryStatus } = await import('./commands/telemetry.js');
+          await runTelemetryStatus();
+        },
+      );
+      return yargs.demandCommand(1, 'Please specify a telemetry subcommand').strict();
     })
     .command('skills', 'Manage WorkOS skills for coding agents (Claude Code, Codex, Cursor, Goose)', (yargs) => {
       registerSubcommand(
@@ -2575,7 +2614,7 @@ async function runCli(): Promise<void> {
     .alias('version', 'v')
     .wrap(process.stdout.isTTY && process.stdout.columns ? process.stdout.columns : 80);
 
-  const shouldSkipTelemetry = () => !WORKOS_TELEMETRY_ENABLED || SKIP_TELEMETRY_COMMANDS.has(commandName.split('.')[0]);
+  const shouldSkipTelemetry = () => !isTelemetryEnabled() || SKIP_TELEMETRY_COMMANDS.has(commandName.split('.')[0]);
   let commandOutcome:
     | {
         success: boolean;

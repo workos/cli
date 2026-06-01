@@ -112,6 +112,15 @@ const commands: CommandSchema[] = [
     options: [insecureStorageOpt],
   },
   {
+    name: 'telemetry',
+    description: 'Manage telemetry collection (opt-out, opt-in, status)',
+    commands: [
+      { name: 'opt-out', description: 'Disable telemetry collection (persists across runs)' },
+      { name: 'opt-in', description: 'Re-enable telemetry collection' },
+      { name: 'status', description: 'Show whether telemetry is enabled and why' },
+    ],
+  },
+  {
     name: 'skills',
     description: 'Manage WorkOS skills for coding agents (Claude Code, Codex, Cursor, Goose)',
     commands: [
