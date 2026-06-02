@@ -175,7 +175,9 @@ export async function readValueFromStdin(): Promise<string> {
   for await (const chunk of process.stdin) {
     chunks.push(chunk);
   }
-  const value = Buffer.concat(chunks).toString('utf-8').replace(/\r?\n$/, '');
+  const value = Buffer.concat(chunks)
+    .toString('utf-8')
+    .replace(/\r?\n$/, '');
   if (value.length === 0) {
     exitWithError({
       code: 'empty_stdin',
