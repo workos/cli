@@ -2003,8 +2003,7 @@ async function runCli(): Promise<void> {
 
           const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runVaultCreate, readValueFromStdin } = await import('./commands/vault.js');
-          const value =
-            argv.value === undefined || argv.value === '-' ? await readValueFromStdin() : argv.value;
+          const value = argv.value === undefined || argv.value === '-' ? await readValueFromStdin() : argv.value;
           await runVaultCreate(
             { name: argv.name, value, org: argv.org },
             resolveApiKey({ apiKey: argv.apiKey }),
@@ -2017,19 +2016,16 @@ async function runCli(): Promise<void> {
         'update <id>',
         'Update a vault object (reads value from stdin when --value is omitted or -)',
         (y) =>
-          y
-            .positional('id', { type: 'string', demandOption: true })
-            .options({
-              value: { type: 'string', describe: 'New value (omit or use - to read from stdin)' },
-              'version-check': { type: 'string' },
-            }),
+          y.positional('id', { type: 'string', demandOption: true }).options({
+            value: { type: 'string', describe: 'New value (omit or use - to read from stdin)' },
+            'version-check': { type: 'string' },
+          }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
 
           const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runVaultUpdate, readValueFromStdin } = await import('./commands/vault.js');
-          const value =
-            argv.value === undefined || argv.value === '-' ? await readValueFromStdin() : argv.value;
+          const value = argv.value === undefined || argv.value === '-' ? await readValueFromStdin() : argv.value;
           await runVaultUpdate(
             { id: argv.id, value, versionCheck: argv.versionCheck },
             resolveApiKey({ apiKey: argv.apiKey }),

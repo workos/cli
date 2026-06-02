@@ -1015,7 +1015,14 @@ const commands: CommandSchema[] = [
         description: 'Get a vault object (metadata only; use --decrypt to include value)',
         positionals: [{ name: 'id', type: 'string', description: 'Object ID', required: true }],
         options: [
-          { name: 'decrypt', type: 'boolean', description: 'Include the decrypted secret value', required: false, default: false, hidden: false },
+          {
+            name: 'decrypt',
+            type: 'boolean',
+            description: 'Include the decrypted secret value',
+            required: false,
+            default: false,
+            hidden: false,
+          },
         ],
       },
       {
@@ -1023,7 +1030,14 @@ const commands: CommandSchema[] = [
         description: 'Get a vault object by name (metadata only; use --decrypt to include value)',
         positionals: [{ name: 'name', type: 'string', description: 'Object name', required: true }],
         options: [
-          { name: 'decrypt', type: 'boolean', description: 'Include the decrypted secret value', required: false, default: false, hidden: false },
+          {
+            name: 'decrypt',
+            type: 'boolean',
+            description: 'Include the decrypted secret value',
+            required: false,
+            default: false,
+            hidden: false,
+          },
         ],
       },
       {
@@ -1031,7 +1045,13 @@ const commands: CommandSchema[] = [
         description: 'Create a vault object (reads value from stdin when --value is omitted or -)',
         options: [
           { name: 'name', type: 'string', description: 'Object name', required: true, hidden: false },
-          { name: 'value', type: 'string', description: 'Secret value (omit or use - to read from stdin)', required: false, hidden: false },
+          {
+            name: 'value',
+            type: 'string',
+            description: 'Secret value (omit or use - to read from stdin)',
+            required: false,
+            hidden: false,
+          },
           { name: 'org', type: 'string', description: 'Organization ID (required)', required: true, hidden: false },
         ],
       },
@@ -1040,7 +1060,13 @@ const commands: CommandSchema[] = [
         description: 'Update a vault object (reads value from stdin when --value is omitted or -)',
         positionals: [{ name: 'id', type: 'string', description: 'Object ID', required: true }],
         options: [
-          { name: 'value', type: 'string', description: 'New value (omit or use - to read from stdin)', required: false, hidden: false },
+          {
+            name: 'value',
+            type: 'string',
+            description: 'New value (omit or use - to read from stdin)',
+            required: false,
+            hidden: false,
+          },
           { name: 'version-check', type: 'string', description: 'Version check ID', required: false, hidden: false },
         ],
       },
