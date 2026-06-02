@@ -1420,7 +1420,11 @@ const commands: CommandSchema[] = [
         hidden: false,
       },
     ],
-    examples: ['workos emulate', 'workos emulate --port 9100 --json', 'workos emulate --seed workos-emulate.config.yaml'],
+    examples: [
+      'workos emulate',
+      'workos emulate --port 9100 --json',
+      'workos emulate --seed workos-emulate.config.yaml',
+    ],
   },
 ];
 
