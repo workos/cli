@@ -55,7 +55,7 @@ function getApiErrorMessage(error: NormalizedApiError, label: string): string {
  */
 export function createApiErrorHandler(resourceName: string) {
   return (error: unknown, context?: string): never => {
-    if (error instanceof TypeError && error.message.includes('is not iterable')) {
+    if (error instanceof TypeError && error.message.includes('errors is not iterable')) {
       exitWithError({
         code: 'unprocessable_entity',
         message: `${resourceName} API rejected the request. Check that all required fields are provided.`,
