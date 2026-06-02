@@ -74,7 +74,10 @@ export async function runEmulate(argv: EmulateArgs): Promise<void> {
 
   const shutdown = () => {
     if (!argv.json) console.log(`\n${chalk.dim('Shutting down...')}`);
-    emulator.close().then(() => process.exit(0), () => process.exit(1));
+    emulator.close().then(
+      () => process.exit(0),
+      () => process.exit(1),
+    );
   };
   process.once('SIGINT', shutdown);
   process.once('SIGTERM', shutdown);
