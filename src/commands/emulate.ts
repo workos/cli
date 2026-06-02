@@ -1,4 +1,4 @@
-import { createEmulator, type EmulatorSeedConfig } from '../emulate/index.js';
+import { createEmulator, type Emulator, type EmulatorSeedConfig } from '@workos/emulate';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
@@ -9,6 +9,7 @@ export interface EmulateArgs {
   port: number;
   seed?: string;
   json?: boolean;
+  interactive?: boolean;
 }
 
 function loadSeedFile(filePath: string): EmulatorSeedConfig {
@@ -37,7 +38,7 @@ function autoDetectSeedFile(): EmulatorSeedConfig | null {
   return null;
 }
 
-function printBanner(emulator: { url: string; port: number; apiKey: string }): void {
+function printBanner(emulator: Pick<Emulator, 'url' | 'apiKey'>): void {
   console.log();
   console.log(chalk.bold('  WorkOS Emulator'));
   console.log();
@@ -55,6 +56,7 @@ export async function runEmulate(argv: EmulateArgs): Promise<void> {
   const emulator = await createEmulator({
     port: argv.port,
     seed: seedConfig ?? undefined,
+    interactiveAuth: argv.interactive,
   });
 
   if (argv.json) {

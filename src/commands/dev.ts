@@ -1,4 +1,4 @@
-import { createEmulator, type EmulatorSeedConfig } from '../emulate/index.js';
+import { createEmulator, type EmulatorSeedConfig } from '@workos/emulate';
 import { resolveDevCommand } from '../lib/dev-command.js';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
@@ -40,18 +40,9 @@ function autoDetectSeedFile(): EmulatorSeedConfig | null {
 }
 
 /**
- * Build the env vars object to inject into the child process.
- *
- * Sets both the base URL style (`WORKOS_API_BASE_URL`) and the decomposed
- * style (`WORKOS_API_HOSTNAME` + `WORKOS_API_PORT` + `WORKOS_API_HTTPS`)
- * so the emulator works with authkit SDKs (which read the decomposed vars)
- * and direct SDK consumers (which may use the base URL).
- */
-/**
  * Default seed data for `workos dev` so the AuthKit login flow works
- * out of the box. Provides a test user, an organization with a verified
- * domain, and a membership linking the two. Skipped when the user
- * provides `--seed` or a `workos-emulate.config.*` file is auto-detected.
+ * out of the box. Skipped when the user provides `--seed` or a
+ * `workos-emulate.config.*` file is auto-detected.
  */
 export const DEFAULT_DEV_SEED: EmulatorSeedConfig = {
   users: [
@@ -71,6 +62,14 @@ export const DEFAULT_DEV_SEED: EmulatorSeedConfig = {
   ],
 };
 
+/**
+ * Build the env vars object to inject into the child process.
+ *
+ * Sets both the base URL style (`WORKOS_API_BASE_URL`) and the decomposed
+ * style (`WORKOS_API_HOSTNAME` + `WORKOS_API_PORT` + `WORKOS_API_HTTPS`)
+ * so the emulator works with authkit SDKs (which read the decomposed vars)
+ * and direct SDK consumers (which may use the base URL).
+ */
 export function buildDevEnv(emulatorUrl: string, apiKey = 'sk_test_default'): Record<string, string> {
   const url = new URL(emulatorUrl);
   return {

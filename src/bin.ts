@@ -2255,19 +2255,6 @@ yargs(rawArgs)
     },
   )
   .command(
-    'emulate',
-    false, // Hidden: unreleased beta feature
-    (yargs) =>
-      yargs.options({
-        port: { type: 'number', default: 4100, describe: 'Port to listen on' },
-        seed: { type: 'string', describe: 'Path to seed config file (YAML or JSON)' },
-      }),
-    async (argv) => {
-      const { runEmulate } = await import('./commands/emulate.js');
-      await runEmulate({ port: argv.port, seed: argv.seed, json: argv.json as boolean });
-    },
-  )
-  .command(
     'dev',
     false, // Hidden: unreleased beta feature
     (yargs) =>
@@ -2281,6 +2268,39 @@ yargs(rawArgs)
         port: argv.port,
         seed: argv.seed,
         '--': argv['--'] as string[] | undefined,
+      });
+    },
+  )
+  .command(
+    'emulate',
+    'Start a local WorkOS API emulator',
+    (yargs) =>
+      yargs.options({
+        port: {
+          alias: 'p',
+          type: 'number',
+          default: 4100,
+          describe: 'Port to listen on',
+        },
+        seed: {
+          alias: 's',
+          type: 'string',
+          describe: 'Path to seed config file (YAML or JSON)',
+        },
+        interactive: {
+          alias: 'i',
+          type: 'boolean',
+          default: false,
+          describe: 'Show login pages for SSO/AuthKit',
+        },
+      }),
+    async (argv) => {
+      const { runEmulate } = await import('./commands/emulate.js');
+      await runEmulate({
+        port: argv.port,
+        seed: argv.seed,
+        json: argv.json as boolean,
+        interactive: argv.interactive,
       });
     },
   )
