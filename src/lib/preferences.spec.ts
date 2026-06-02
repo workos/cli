@@ -21,7 +21,6 @@ vi.mock('node:os', async (importOriginal) => {
 const {
   getPreferences,
   loadPreferences,
-  savePreferences,
   isTelemetryOptedOut,
   setTelemetryOptedOut,
   isNoticeShown,
