@@ -58,12 +58,12 @@ describe('runEmulate', () => {
   });
 
   it('starts the external emulator package on the requested port', async () => {
-    await runEmulate({ port: 0 });
+    await runEmulate({ port: 0, interactive: false });
 
     expect(mocks.createEmulator).toHaveBeenCalledWith({
       port: 0,
       seed: undefined,
-      interactiveAuth: undefined,
+      interactiveAuth: false,
     });
   });
 
