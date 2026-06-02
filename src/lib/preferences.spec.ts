@@ -30,6 +30,7 @@ const {
   isTelemetryEnabled,
   getTelemetrySource,
   getPreferencesPath,
+  clearPreferences,
   __resetPreferencesCache,
 } = await import('./preferences.js');
 
@@ -279,6 +280,33 @@ describe('preferences', () => {
     it('is "default" when nothing is set', () => {
       delete process.env.WORKOS_TELEMETRY;
       expect(getTelemetrySource()).toBe('default');
+    });
+  });
+
+  describe('clearPreferences', () => {
+    it('deletes the file and returns telemetry to its default state', () => {
+      setTelemetryOptedOut(true);
+      markNoticeShown();
+      expect(existsSync(getPreferencesPath())).toBe(true);
+
+      clearPreferences();
+
+      expect(existsSync(getPreferencesPath())).toBe(false);
+      // In-process cache reflects the cleared state immediately.
+      expect(isTelemetryOptedOut()).toBe(false);
+      expect(isNoticeShown()).toBe(false);
+    });
+
+    it('is a no-op when the file does not exist', () => {
+      expect(existsSync(getPreferencesPath())).toBe(false);
+      expect(() => clearPreferences()).not.toThrow();
+    });
+
+    it('reads as empty preferences after a fresh process (cache reset)', () => {
+      setTelemetryOptedOut(true);
+      clearPreferences();
+      __resetPreferencesCache(); // simulate a new process
+      expect(getPreferences()).toEqual({});
     });
   });
 });

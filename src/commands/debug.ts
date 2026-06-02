@@ -17,6 +17,14 @@ import {
   setInsecureConfigStorage,
   diagnoseConfig,
 } from '../lib/config-store.js';
+import {
+  clearPreferences,
+  getPreferencesPath,
+  getTelemetrySource,
+  isNoticeShown,
+  isTelemetryEnabled,
+  isTelemetryOptedOut,
+} from '../lib/preferences.js';
 import { isJsonMode, outputJson, exitWithError } from '../utils/output.js';
 import { isPromptAllowed } from '../utils/interaction-mode.js';
 
@@ -114,12 +122,21 @@ export async function runDebugState({ showSecrets }: { showSecrets: boolean }): 
   const configSource = determineCredentialSource(configDiagnostics);
   configOutput.source = configSource;
 
+  const telemetryOutput = {
+    enabled: isTelemetryEnabled(),
+    optedOut: isTelemetryOptedOut(),
+    source: getTelemetrySource(),
+    noticeShown: isNoticeShown(),
+  };
+
   const result = {
     credentials: credentialsOutput,
     config: configOutput,
+    telemetry: telemetryOutput,
     storage: {
       credentialsPath: getCredentialsPath(),
       configPath: getConfigPath(),
+      preferencesPath: getPreferencesPath(),
       credentialDiagnostics: diagnostics,
       configDiagnostics,
     },
@@ -161,6 +178,13 @@ export async function runDebugState({ showSecrets }: { showSecrets: boolean }): 
   }
 
   console.log();
+  console.log(chalk.bold('Telemetry'));
+  console.log(`  enabled:  ${telemetryOutput.enabled ? chalk.green('true') : chalk.yellow('false')}`);
+  console.log(`  optedOut: ${telemetryOutput.optedOut ? chalk.yellow('true') : 'false'}`);
+  console.log(`  source:   ${telemetryOutput.source}`);
+  console.log(`  notice:   ${telemetryOutput.noticeShown ? 'shown' : chalk.dim('not shown')}`);
+
+  console.log();
   console.log(chalk.bold('Storage — Credentials'));
   console.log(`  path: ${getCredentialsPath()}`);
   for (const line of diagnostics) {
@@ -173,9 +197,20 @@ export async function runDebugState({ showSecrets }: { showSecrets: boolean }): 
   for (const line of configDiagnostics) {
     console.log(`  ${chalk.dim(line)}`);
   }
+
+  console.log();
+  console.log(chalk.bold('Storage — Preferences'));
+  console.log(`  path: ${getPreferencesPath()}`);
 }
 
 // --- debug reset ---
+
+/** Join names with an Oxford comma: ["a","b","c"] => "a, b, and c". */
+function formatList(items: string[]): string {
+  if (items.length <= 1) return items.join('');
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
+}
 
 export async function runDebugReset({
   force,
@@ -189,8 +224,14 @@ export async function runDebugReset({
   // Both flags = clear both (same as neither)
   const clearCreds = !configOnly || credentialsOnly;
   const clearConf = !credentialsOnly || configOnly;
+  // Preferences (~/.workos/preferences.json) are non-secret local CLI state, so
+  // they ride with the config target. Clearing config returns the CLI to a
+  // fresh-install state, which includes resetting the telemetry preference.
+  const clearPrefs = clearConf;
 
-  const targets = [clearCreds && 'credentials', clearConf && 'config'].filter(Boolean).join(' and ');
+  const targets = formatList(
+    [clearCreds && 'credentials', clearConf && 'config', clearPrefs && 'preferences'].filter(Boolean) as string[],
+  );
 
   if (!force) {
     if (!isPromptAllowed()) {
@@ -216,9 +257,10 @@ export async function runDebugReset({
 
   if (clearCreds) clearCredentials();
   if (clearConf) clearConfig();
+  if (clearPrefs) clearPreferences();
 
   if (isJsonMode()) {
-    outputJson({ cleared: true, credentials: clearCreds, config: clearConf });
+    outputJson({ cleared: true, credentials: clearCreds, config: clearConf, preferences: clearPrefs });
   } else {
     clack.log.success(`Cleared ${targets}`);
   }

@@ -192,6 +192,20 @@ export function getTelemetrySource(): TelemetrySource {
   return 'default';
 }
 
+/**
+ * Delete the preferences file, returning telemetry to its fresh-install state
+ * (opted-in, first-run notice unseen). Used by `debug reset` to wipe stored CLI
+ * state alongside credentials and config. No-op if the file does not exist;
+ * throws on a real delete failure (e.g. permission denied) so the caller can
+ * surface it, mirroring clearConfig/clearCredentials. Resets the in-memory
+ * cache so subsequent reads in this process reflect the cleared state.
+ */
+export function clearPreferences(): void {
+  fs.rmSync(getPreferencesPath(), { force: true });
+  cached = {};
+  pending = undefined;
+}
+
 /** Test seam — resets the in-memory cache between test cases. */
 export function __resetPreferencesCache(): void {
   cached = undefined;
