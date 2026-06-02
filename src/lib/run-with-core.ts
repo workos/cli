@@ -21,21 +21,14 @@ import type { Integration } from './constants.js';
 import { parseEnvFile } from '../utils/env-parser.js';
 import { enableDebugLogs, initLogFile, logInfo, logError } from '../utils/debug.js';
 
-import {
-  getAccessToken,
-  getCredentials,
-  saveCredentials,
-  getStagingCredentials,
-  saveStagingCredentials,
-} from './credentials.js';
+import { getAccessToken, saveCredentials, getStagingCredentials, saveStagingCredentials } from './credentials.js';
 import { getConfig, saveConfig, getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
 import { checkForEnvFiles, discoverCredentials } from './credential-discovery.js';
 import { requestDeviceCode, pollForToken } from './device-auth.js';
 import { fetchStagingCredentials as fetchStagingCredentialsApi } from './staging-api.js';
-import { getCliAuthClientId, getAuthkitDomain } from './settings.js';
+import { getCliAuthClientId, getAuthkitDomain, getTelemetryUrl } from './settings.js';
 import { analytics } from '../utils/analytics.js';
 import { getVersion } from './settings.js';
-import { getLlmGatewayUrlFromHost } from '../utils/urls.js';
 import { isInGitRepo, getUncommittedOrUntrackedFiles } from '../utils/clack-utils.js';
 import {
   getCurrentBranch,
@@ -188,8 +181,8 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
     installDir: options.installDir,
   });
 
-  // Configure telemetry endpoint (same URL as LLM gateway)
-  const gatewayUrl = getLlmGatewayUrlFromHost();
+  // Configure telemetry endpoint separately from the LLM gateway proxy.
+  const gatewayUrl = getTelemetryUrl();
   analytics.setGatewayUrl(gatewayUrl);
 
   const existingCreds = readExistingCredentials(options.installDir);
@@ -239,9 +232,9 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   const machineWithActors = installerMachine.provide({
     actors: {
       checkAuthentication: fromPromise(async () => {
-        // Check for active environment with credentials (covers unclaimed environments)
+        // Check for active environment with credentials (covers unclaimed environments).
         const activeEnv = getActiveEnvironment();
-        if (activeEnv?.clientId && activeEnv?.apiKey) {
+        if (activeEnv?.apiKey) {
           return true;
         }
 
@@ -252,12 +245,6 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
           throw new Error(`Not authenticated. Run \`${formatWorkOSCommand('auth login')}\` first.`);
         }
 
-        // Set telemetry from existing credentials
-        const creds = getCredentials();
-        if (creds) {
-          analytics.setAccessToken(creds.accessToken);
-          analytics.setDistinctId(creds.userId);
-        }
         return true;
       }),
 
@@ -533,8 +520,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
 
   await adapter.start();
 
-  // Start telemetry session. Analytics currently accepts cli/tui/headless only,
-  // so agent and CI mode both report through the existing headless bucket.
+  analytics.configureAuthFromAvailableSources();
   const mode = headlessMode ? 'headless' : augmentedOptions.dashboard ? 'tui' : 'cli';
   analytics.sessionStart(mode, getVersion());
 
@@ -578,6 +564,14 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
     throw error;
   } finally {
     process.off('SIGINT', handleSigint);
+    // Record the detected framework so session.end carries it (and the API can
+    // tag install metrics by integration). Known only after detection runs, so
+    // it's read from the final machine snapshot here; absent if the session
+    // aborted before detection.
+    const detectedIntegration = actor?.getSnapshot().context.integration;
+    if (detectedIntegration) {
+      analytics.setTag('installer.integration', detectedIntegration);
+    }
     await analytics.shutdown(installerStatus);
     await adapter.stop();
   }

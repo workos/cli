@@ -4,7 +4,12 @@ const { mockQuery, mockConfig } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
   mockConfig: {
     model: 'test-model',
-    workos: { clientId: 'client_test', authkitDomain: 'test.workos.com', llmGatewayUrl: 'http://localhost:8000' },
+    workos: {
+      clientId: 'client_test',
+      authkitDomain: 'test.workos.com',
+      llmGatewayUrl: 'http://localhost:8000',
+      telemetryUrl: 'http://localhost:8000/cli',
+    },
     telemetry: { enabled: false, eventName: 'test_event' },
     proxy: { refreshThresholdMs: 300000 },
     nodeVersion: '20',

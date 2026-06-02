@@ -12,7 +12,7 @@ import { formatWorkOSCommand } from '../utils/command-invocation.js';
 import { autoInstallSkills } from './install-skill.js';
 import { isJsonMode } from '../utils/output.js';
 import { isAgentMode, isCiMode } from '../utils/interaction-mode.js';
-import { exitWithAuthRequired } from '../utils/exit-codes.js';
+import { ExitCode, exitWithAuthRequired, exitWithCode } from '../utils/exit-codes.js';
 import { requestDeviceCode, pollForToken, DeviceAuthTimeoutError } from '../lib/device-auth.js';
 import { observeHostFailure } from '../lib/host-probe.js';
 
@@ -129,7 +129,7 @@ export async function runLogin(): Promise<void> {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     clack.log.error(`Failed to start authentication: ${msg}`);
-    process.exit(1);
+    exitWithCode(ExitCode.GENERAL_ERROR);
   }
 
   clack.log.info(`\nOpen this URL in your browser:\n`);
@@ -193,6 +193,6 @@ export async function runLogin(): Promise<void> {
       const msg = error instanceof Error ? error.message : String(error);
       clack.log.error(`Authentication error: ${msg}`);
     }
-    process.exit(1);
+    exitWithCode(ExitCode.GENERAL_ERROR);
   }
 }

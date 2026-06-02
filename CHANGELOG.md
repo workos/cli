@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0](https://github.com/workos/cli/compare/v0.15.2...v0.16.0) (2026-06-02)
+
+
+### Features
+
+* add `vault run` for secure secret injection into child processes ([#167](https://github.com/workos/cli/issues/167)) ([c7db4f5](https://github.com/workos/cli/commit/c7db4f5906b372e9fa26032a43ee6b7d21e7b412))
+* CLI telemetry for all commands with centralized lifecycle ([#122](https://github.com/workos/cli/issues/122)) ([25604bd](https://github.com/workos/cli/commit/25604bdb190c86274a4086cf1a08c85de14d89ff))
+* Forward endpoint URL to migrations package ([#165](https://github.com/workos/cli/issues/165)) ([4ef2957](https://github.com/workos/cli/commit/4ef2957b1f3cd574c8852e5025b2631f1c39bb7d))
+* telemetry opt-out command + first-run notice ([#169](https://github.com/workos/cli/issues/169)) ([cb16ebb](https://github.com/workos/cli/commit/cb16ebbacc607592f438b4399cd37cbeb4311926))
+
 ## [0.15.2](https://github.com/workos/cli/compare/v0.15.1...v0.15.2) (2026-05-20)
 
 

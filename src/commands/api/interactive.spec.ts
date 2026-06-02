@@ -112,6 +112,20 @@ vi.mock('../../utils/clack.js', () => ({
 }));
 
 const { apiInteractive } = await import('./interactive.js');
+const { CliExit } = await import('../../utils/cli-exit.js');
+
+async function expectExit(promise: Promise<unknown>, code: number): Promise<void> {
+  try {
+    await promise;
+  } catch (err) {
+    if (err instanceof CliExit) {
+      expect(err.exitCode).toBe(code);
+      return;
+    }
+    throw err;
+  }
+  throw new Error(`Expected promise to reject with CliExit(${code}) but it resolved`);
+}
 
 function buildResponse(overrides: Partial<ApiResponse> = {}): ApiResponse {
   return {
@@ -125,7 +139,6 @@ function buildResponse(overrides: Partial<ApiResponse> = {}): ApiResponse {
 
 describe('apiInteractive', () => {
   let consoleOutput: string[];
-  let exitSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -134,9 +147,6 @@ describe('apiInteractive', () => {
     vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
       consoleOutput.push(args.map(String).join(' '));
     });
-    exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
-      throw new Error(`__exit__:${code ?? 0}`);
-    }) as never);
   });
 
   afterEach(() => {
@@ -232,20 +242,18 @@ describe('apiInteractive', () => {
     expect(mockApiRequest).toHaveBeenCalledWith(expect.objectContaining({ body: undefined }));
   });
 
-  it('exits with code 0 when the user cancels at the category prompt', async () => {
+  it('exits with code 2 when the user cancels at the category prompt', async () => {
     mockSelect.mockResolvedValueOnce(cancelSymbol);
 
-    await expect(apiInteractive()).rejects.toThrow(/__exit__:0/);
-    expect(exitSpy).toHaveBeenCalledWith(0);
+    await expectExit(apiInteractive(), 2);
     expect(mockApiRequest).not.toHaveBeenCalled();
   });
 
-  it('exits with code 0 when the user declines the final confirmation', async () => {
+  it('exits with code 2 when the user declines the final confirmation', async () => {
     mockSelect.mockResolvedValueOnce('Users').mockResolvedValueOnce(mockCatalog.endpoints[0]);
     mockConfirm.mockResolvedValueOnce(false);
 
-    await expect(apiInteractive()).rejects.toThrow(/__exit__:0/);
-    expect(exitSpy).toHaveBeenCalledWith(0);
+    await expectExit(apiInteractive(), 2);
     expect(mockApiRequest).not.toHaveBeenCalled();
   });
 
@@ -308,7 +316,6 @@ describe('apiInteractive', () => {
     mockConfirm.mockResolvedValueOnce(true);
     mockApiRequest.mockResolvedValueOnce(buildResponse({ status: 500, body: { error: 'boom' } }));
 
-    await expect(apiInteractive()).rejects.toThrow(/__exit__:1/);
-    expect(exitSpy).toHaveBeenCalledWith(1);
+    await expectExit(apiInteractive(), 1);
   });
 });

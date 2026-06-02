@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, cp, rename, rm, readdir, readFile, stat, access, writeF
 import chalk from 'chalk';
 import { getSkillsDir as getSkillsPackageDir } from '@workos/skills';
 import { IS_WINDOWS } from '../utils/platform.js';
+import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
 
 export const SKILL_VERSION_MARKER_FILENAME = '.workos-skill-version';
 
@@ -203,7 +204,7 @@ export async function runInstallSkill(options: InstallSkillOptions): Promise<voi
   if (targetSkills.length === 0) {
     console.error(chalk.red('No matching skills found.'));
     console.log('Available skills:', skills.join(', '));
-    process.exit(1);
+    exitWithCode(ExitCode.GENERAL_ERROR);
   }
 
   const targetAgents = detectAgents(agents, options.agent);
@@ -215,7 +216,7 @@ export async function runInstallSkill(options: InstallSkillOptions): Promise<voi
       console.error(chalk.red('No coding agents detected.'));
     }
     console.log('Supported agents:', Object.keys(agents).join(', '));
-    process.exit(1);
+    exitWithCode(ExitCode.GENERAL_ERROR);
   }
 
   console.log(chalk.bold('\nInstalling skills...\n'));
@@ -262,7 +263,7 @@ export async function runInstallSkill(options: InstallSkillOptions): Promise<voi
     for (const r of failed) {
       console.log(`  ${r.skill} → ${r.agent.displayName}: ${chalk.dim(r.error)}`);
     }
-    process.exit(1);
+    exitWithCode(ExitCode.GENERAL_ERROR);
   }
 
   console.log(chalk.green('\nDone!'));

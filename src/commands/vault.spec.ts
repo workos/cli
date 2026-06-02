@@ -88,35 +88,42 @@ describe('vault commands', () => {
   });
 
   describe('runVaultGet', () => {
-    it('reads object by ID', async () => {
+    it('returns metadata only by default', async () => {
+      mockSdk.vault.describeObject.mockResolvedValue({ id: 'obj_123', name: 'my-secret', metadata: {} });
+      await runVaultGet('obj_123', false, 'sk_test');
+      expect(mockSdk.vault.describeObject).toHaveBeenCalledWith({ id: 'obj_123' });
+      expect(mockSdk.vault.readObject).not.toHaveBeenCalled();
+      const output = consoleOutput.join('');
+      expect(output).not.toMatch(/secret-value/);
+    });
+
+    it('includes decrypted value with --decrypt', async () => {
       mockSdk.vault.readObject.mockResolvedValue(mockObject);
-      await runVaultGet('obj_123', 'sk_test');
+      await runVaultGet('obj_123', true, 'sk_test');
       expect(mockSdk.vault.readObject).toHaveBeenCalledWith({ id: 'obj_123' });
-      expect(consoleOutput.some((l) => l.includes('obj_123'))).toBe(true);
+      expect(consoleOutput.some((l) => l.includes('secret-value'))).toBe(true);
     });
   });
 
   describe('runVaultGetByName', () => {
-    it('reads object by name', async () => {
+    it('strips value by default', async () => {
       mockSdk.vault.readObjectByName.mockResolvedValue(mockObject);
-      await runVaultGetByName('my-secret', 'sk_test');
+      await runVaultGetByName('my-secret', false, 'sk_test');
       expect(mockSdk.vault.readObjectByName).toHaveBeenCalledWith('my-secret');
+      const output = consoleOutput.join('');
+      expect(output).toMatch(/obj_123/);
+      expect(output).not.toMatch(/secret-value/);
+    });
+
+    it('includes value with --decrypt', async () => {
+      mockSdk.vault.readObjectByName.mockResolvedValue(mockObject);
+      await runVaultGetByName('my-secret', true, 'sk_test');
+      expect(consoleOutput.some((l) => l.includes('secret-value'))).toBe(true);
     });
   });
 
   describe('runVaultCreate', () => {
-    it('creates object with name and value', async () => {
-      mockSdk.vault.createObject.mockResolvedValue(mockMetadata);
-      await runVaultCreate({ name: 'my-secret', value: 'secret-val' }, 'sk_test');
-      expect(mockSdk.vault.createObject).toHaveBeenCalledWith({
-        name: 'my-secret',
-        value: 'secret-val',
-        context: {},
-      });
-      expect(consoleOutput.some((l) => l.includes('Created vault object'))).toBe(true);
-    });
-
-    it('maps --org to context.organizationId', async () => {
+    it('creates object with org context', async () => {
       mockSdk.vault.createObject.mockResolvedValue(mockMetadata);
       await runVaultCreate({ name: 'my-secret', value: 'secret-val', org: 'org_456' }, 'sk_test');
       expect(mockSdk.vault.createObject).toHaveBeenCalledWith({
@@ -124,6 +131,16 @@ describe('vault commands', () => {
         value: 'secret-val',
         context: { organizationId: 'org_456' },
       });
+      expect(consoleOutput.some((l) => l.includes('Created vault object'))).toBe(true);
+    });
+
+    it('exits with error when --org is not provided', async () => {
+      const errOutput: string[] = [];
+      vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+        errOutput.push(args.map(String).join(' '));
+      });
+      await expect(runVaultCreate({ name: 'my-secret', value: 'secret-val' }, 'sk_test')).rejects.toThrow();
+      expect(errOutput.some((l) => l.includes('--org'))).toBe(true);
     });
   });
 
@@ -186,9 +203,9 @@ describe('vault commands', () => {
       expect(output.listMetadata.after).toBe('cursor_a');
     });
 
-    it('get outputs raw JSON', async () => {
+    it('get --decrypt outputs value in JSON', async () => {
       mockSdk.vault.readObject.mockResolvedValue(mockObject);
-      await runVaultGet('obj_123', 'sk_test');
+      await runVaultGet('obj_123', true, 'sk_test');
       const output = JSON.parse(consoleOutput[0]);
       expect(output.id).toBe('obj_123');
       expect(output.value).toBe('secret-value');
@@ -196,7 +213,7 @@ describe('vault commands', () => {
 
     it('create outputs JSON success', async () => {
       mockSdk.vault.createObject.mockResolvedValue(mockMetadata);
-      await runVaultCreate({ name: 'my-secret', value: 'val' }, 'sk_test');
+      await runVaultCreate({ name: 'my-secret', value: 'val', org: 'org_456' }, 'sk_test');
       const output = JSON.parse(consoleOutput[0]);
       expect(output.status).toBe('ok');
       expect(output.data.id).toBe('obj_123');

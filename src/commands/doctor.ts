@@ -1,6 +1,8 @@
 import type { ArgumentsCamelCase } from 'yargs';
 import { runDoctor, outputReport } from '../doctor/index.js';
 import clack from '../utils/clack.js';
+import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
+import { CliExit } from '../utils/cli-exit.js';
 
 interface DoctorArgs {
   verbose?: boolean;
@@ -29,15 +31,23 @@ export async function handleDoctor(argv: ArgumentsCamelCase<DoctorArgs>): Promis
 
     // Exit with error code if critical issues found
     if (report.summary.errors > 0) {
-      process.exit(1);
+      exitWithCode(ExitCode.GENERAL_ERROR);
     }
-    process.exit(0);
+    exitWithCode(ExitCode.SUCCESS);
   } catch (error) {
+    if (error instanceof CliExit) throw error;
     if (!options.json) {
       clack.log.error(`Doctor failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } else {
-      console.error(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }));
+      console.error(
+        JSON.stringify({
+          error: {
+            code: 'doctor_failed',
+            message: error instanceof Error ? error.message : 'Unknown error',
+          },
+        }),
+      );
     }
-    process.exit(1);
+    exitWithCode(ExitCode.GENERAL_ERROR);
   }
 }

@@ -27,10 +27,7 @@ const { runInstaller } = await import('../run.js');
 const { autoInstallSkills } = await import('./install-skill.js');
 const clack = (await import('../utils/clack.js')).default;
 const { isJsonMode } = await import('../utils/output.js');
-
-vi.spyOn(process, 'exit').mockImplementation((() => {
-  throw new Error('process.exit called');
-}) as any);
+const { CliExit } = await import('../utils/cli-exit.js');
 
 const { handleInstall } = await import('./install.js');
 
@@ -43,7 +40,7 @@ describe('handleInstall', () => {
     vi.mocked(runInstaller).mockResolvedValue(undefined as any);
     vi.mocked(autoInstallSkills).mockResolvedValue(null);
 
-    await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).rejects.toThrow('process.exit called');
+    await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).resolves.toBeUndefined();
 
     expect(runInstaller).toHaveBeenCalledOnce();
     expect(autoInstallSkills).toHaveBeenCalledOnce();
@@ -63,7 +60,7 @@ describe('handleInstall', () => {
     });
     vi.mocked(isJsonMode).mockReturnValue(false);
 
-    await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).rejects.toThrow('process.exit called');
+    await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).resolves.toBeUndefined();
 
     expect(clack.log.info).toHaveBeenCalledWith(expect.stringContaining('Installed 2 WorkOS skills for Claude Code'));
   });
@@ -73,7 +70,7 @@ describe('handleInstall', () => {
     vi.mocked(autoInstallSkills).mockResolvedValue(null);
     vi.mocked(isJsonMode).mockReturnValue(false);
 
-    await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).rejects.toThrow('process.exit called');
+    await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).resolves.toBeUndefined();
 
     expect(clack.log.info).not.toHaveBeenCalled();
   });
@@ -87,7 +84,7 @@ describe('handleInstall', () => {
     });
     vi.mocked(isJsonMode).mockReturnValue(true);
 
-    await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).rejects.toThrow('process.exit called');
+    await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).resolves.toBeUndefined();
 
     expect(clack.log.info).not.toHaveBeenCalled();
   });
@@ -95,7 +92,7 @@ describe('handleInstall', () => {
   it('does not call autoInstallSkills when runInstaller throws', async () => {
     vi.mocked(runInstaller).mockRejectedValue(new Error('install failed'));
 
-    await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).rejects.toThrow('process.exit called');
+    await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).rejects.toThrow(CliExit);
 
     expect(runInstaller).toHaveBeenCalledOnce();
     expect(autoInstallSkills).not.toHaveBeenCalled();
@@ -105,9 +102,9 @@ describe('handleInstall', () => {
     vi.mocked(runInstaller).mockResolvedValue(undefined as any);
     vi.mocked(autoInstallSkills).mockRejectedValue(new Error('skill install exploded'));
 
-    // autoInstallSkills throwing will trigger the outer catch, which calls process.exit(1)
+    // autoInstallSkills throwing will trigger the outer catch, which throws CliExit(1)
     // But autoInstallSkills has its own internal catch in production — this tests defense in depth
-    await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).rejects.toThrow('process.exit called');
+    await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).rejects.toThrow(CliExit);
 
     expect(runInstaller).toHaveBeenCalledOnce();
     expect(autoInstallSkills).toHaveBeenCalledOnce();

@@ -7,6 +7,8 @@
  */
 
 import chalk from 'chalk';
+import { CliExit } from './cli-exit.js';
+import { resolveErrorCode } from './exit-codes.js';
 import { formatTable, type TableColumn } from './table.js';
 import type { RecoveryHints } from './recovery-hints.js';
 import type { InteractionModeInfo } from './interaction-mode.js';
@@ -132,8 +134,17 @@ export function outputTable(columns: TableColumn[], rows: string[][], rawData?: 
   }
 }
 
-/** Exit with a structured error. Writes error then exits with code 1. */
-export function exitWithError(error: StructuredError): never {
+export function exitWithError(
+  error: StructuredError & {
+    apiContext?: { status?: number; code?: string; resource?: string };
+  },
+): never {
   outputError(error);
-  process.exit(1);
+  const { reason: codeReason, exit } = resolveErrorCode(error.code);
+  const reason = error.apiContext && codeReason === 'validation_error' ? 'api_error' : codeReason;
+  throw new CliExit(exit, {
+    reason,
+    errorCode: error.code,
+    apiContext: error.apiContext,
+  });
 }

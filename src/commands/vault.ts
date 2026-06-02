@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import { createWorkOSClient } from '../lib/workos-client.js';
 import { formatTable } from '../utils/table.js';
-import { outputSuccess, outputJson, isJsonMode } from '../utils/output.js';
+import { outputSuccess, outputJson, isJsonMode, exitWithError } from '../utils/output.js';
 import { createApiErrorHandler } from '../lib/api-error-handler.js';
 
 const handleApiError = createApiErrorHandler('Vault');
@@ -51,23 +51,38 @@ export async function runVaultList(options: VaultListOptions, apiKey: string, ba
   }
 }
 
-export async function runVaultGet(id: string, apiKey: string, baseUrl?: string): Promise<void> {
+export async function runVaultGet(id: string, decrypt: boolean, apiKey: string, baseUrl?: string): Promise<void> {
   const client = createWorkOSClient(apiKey, baseUrl);
 
   try {
-    const result = await client.sdk.vault.readObject({ id });
-    outputJson(result);
+    if (decrypt) {
+      const result = await client.sdk.vault.readObject({ id });
+      outputJson(result);
+    } else {
+      const result = await client.sdk.vault.describeObject({ id });
+      outputJson(result);
+    }
   } catch (error) {
     handleApiError(error);
   }
 }
 
-export async function runVaultGetByName(name: string, apiKey: string, baseUrl?: string): Promise<void> {
+export async function runVaultGetByName(
+  name: string,
+  decrypt: boolean,
+  apiKey: string,
+  baseUrl?: string,
+): Promise<void> {
   const client = createWorkOSClient(apiKey, baseUrl);
 
   try {
     const result = await client.sdk.vault.readObjectByName(name);
-    outputJson(result);
+    if (decrypt) {
+      outputJson(result);
+    } else {
+      const { value: _stripped, ...metadata } = result;
+      outputJson(metadata);
+    }
   } catch (error) {
     handleApiError(error);
   }
@@ -80,14 +95,20 @@ export interface VaultCreateOptions {
 }
 
 export async function runVaultCreate(options: VaultCreateOptions, apiKey: string, baseUrl?: string): Promise<void> {
+  if (!options.org) {
+    exitWithError({
+      code: 'missing_org',
+      message: 'The --org flag is required. Vault objects must be scoped to an organization.',
+    });
+  }
+
   const client = createWorkOSClient(apiKey, baseUrl);
 
   try {
-    const context = options.org ? { organizationId: options.org } : {};
     const result = await client.sdk.vault.createObject({
       name: options.name,
       value: options.value,
-      context,
+      context: { organizationId: options.org },
     });
     outputSuccess('Created vault object', result);
   } catch (error) {
@@ -147,4 +168,21 @@ export async function runVaultListVersions(id: string, apiKey: string, baseUrl?:
   } catch (error) {
     handleApiError(error);
   }
+}
+
+export async function readValueFromStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk);
+  }
+  const value = Buffer.concat(chunks)
+    .toString('utf-8')
+    .replace(/\r?\n$/, '');
+  if (value.length === 0) {
+    exitWithError({
+      code: 'empty_stdin',
+      message: 'No value provided on stdin. Pipe a value or pass --value directly.',
+    });
+  }
+  return value;
 }

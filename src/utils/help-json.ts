@@ -7,6 +7,7 @@
  */
 
 import { getVersion } from '../lib/settings.js';
+import { COMMAND_ALIASES } from '../lib/command-aliases.js';
 
 export interface OptionSchema {
   name: string;
@@ -109,6 +110,15 @@ const commands: CommandSchema[] = [
     name: 'auth status',
     description: 'Show current authentication status',
     options: [insecureStorageOpt],
+  },
+  {
+    name: 'telemetry',
+    description: 'Manage telemetry collection (opt-out, opt-in, status)',
+    commands: [
+      { name: 'opt-out', description: 'Disable telemetry collection (persists across runs)' },
+      { name: 'opt-in', description: 'Re-enable telemetry collection' },
+      { name: 'status', description: 'Show whether telemetry is enabled and why' },
+    ],
   },
   {
     name: 'skills',
@@ -1011,29 +1021,61 @@ const commands: CommandSchema[] = [
       { name: 'list', description: 'List vault objects', options: [...paginationOpts] },
       {
         name: 'get',
-        description: 'Get a vault object',
+        description: 'Get a vault object (metadata only; use --decrypt to include value)',
         positionals: [{ name: 'id', type: 'string', description: 'Object ID', required: true }],
+        options: [
+          {
+            name: 'decrypt',
+            type: 'boolean',
+            description: 'Include the decrypted secret value',
+            required: false,
+            default: false,
+            hidden: false,
+          },
+        ],
       },
       {
         name: 'get-by-name',
-        description: 'Get a vault object by name',
+        description: 'Get a vault object by name (metadata only; use --decrypt to include value)',
         positionals: [{ name: 'name', type: 'string', description: 'Object name', required: true }],
+        options: [
+          {
+            name: 'decrypt',
+            type: 'boolean',
+            description: 'Include the decrypted secret value',
+            required: false,
+            default: false,
+            hidden: false,
+          },
+        ],
       },
       {
         name: 'create',
-        description: 'Create a vault object',
+        description: 'Create a vault object (reads value from stdin when --value is omitted or -)',
         options: [
           { name: 'name', type: 'string', description: 'Object name', required: true, hidden: false },
-          { name: 'value', type: 'string', description: 'Secret value', required: true, hidden: false },
-          { name: 'org', type: 'string', description: 'Organization ID', required: false, hidden: false },
+          {
+            name: 'value',
+            type: 'string',
+            description: 'Secret value (omit or use - to read from stdin)',
+            required: false,
+            hidden: false,
+          },
+          { name: 'org', type: 'string', description: 'Organization ID (required)', required: true, hidden: false },
         ],
       },
       {
         name: 'update',
-        description: 'Update a vault object',
+        description: 'Update a vault object (reads value from stdin when --value is omitted or -)',
         positionals: [{ name: 'id', type: 'string', description: 'Object ID', required: true }],
         options: [
-          { name: 'value', type: 'string', description: 'New value', required: true, hidden: false },
+          {
+            name: 'value',
+            type: 'string',
+            description: 'New value (omit or use - to read from stdin)',
+            required: false,
+            hidden: false,
+          },
           { name: 'version-check', type: 'string', description: 'Version check ID', required: false, hidden: false },
         ],
       },
@@ -1051,6 +1093,34 @@ const commands: CommandSchema[] = [
         name: 'list-versions',
         description: 'List vault object versions',
         positionals: [{ name: 'id', type: 'string', description: 'Object ID', required: true }],
+      },
+      {
+        name: 'run',
+        description: 'Run a command with Vault secrets injected as environment variables',
+        options: [
+          {
+            name: 'secret',
+            type: 'array',
+            description: 'Map a vault object to an env var: ENV_VAR=vault-name (repeatable)',
+            required: true,
+            hidden: false,
+          },
+          {
+            name: 'env',
+            type: 'string',
+            description: 'Environment name to read API key from (defaults to active)',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'dry-run',
+            type: 'boolean',
+            description: 'Print which secrets would be injected, no fetch',
+            required: false,
+            default: false,
+            hidden: false,
+          },
+        ],
       },
     ],
   },
@@ -1379,10 +1449,9 @@ const globalOptions: OptionSchema[] = [
 // Public API
 // ---------------------------------------------------------------------------
 
-const commandAliases: Record<string, string> = { org: 'organization' };
 const helpJsonCommandNames = new Set([
   ...commands.map((command) => command.name.split(' ')[0]),
-  ...Object.keys(commandAliases),
+  ...Object.keys(COMMAND_ALIASES),
 ]);
 
 /**
@@ -1402,7 +1471,7 @@ export function extractHelpJsonCommand(argv: string[]): string | undefined {
       continue;
     }
     if (!arg.startsWith('-') && helpJsonCommandNames.has(arg)) {
-      return commandAliases[arg] ?? arg;
+      return COMMAND_ALIASES[arg] ?? arg;
     }
   }
   return undefined;
@@ -1414,6 +1483,15 @@ export function extractHelpJsonCommand(argv: string[]): string | undefined {
  * @param subcommand - Optional command name to return a subtree for (e.g. "env").
  *                     Returns full tree if omitted or if command not found.
  */
+/**
+ * Top-level command names (first token of each registered command). Used by
+ * telemetry to recognise real commands without trusting arbitrary argv tokens
+ * (so option values / secrets are never recorded as a command name).
+ */
+export function getTopLevelCommandNames(): string[] {
+  return commands.map((c) => c.name.split(' ')[0]);
+}
+
 export function buildCommandTree(subcommand?: string): HelpOutput | CommandSchema {
   if (subcommand) {
     const match = commands.find((c) => c.name === subcommand);

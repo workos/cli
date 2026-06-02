@@ -75,6 +75,20 @@ vi.mock('../../utils/clack.js', () => ({
 const { setOutputMode } = await import('../../utils/output.js');
 const { resetInteractionModeForTests, setInteractionMode } = await import('../../utils/interaction-mode.js');
 const { runApiInteractive, runApiLs, runApiRequest } = await import('./index.js');
+const { CliExit } = await import('../../utils/cli-exit.js');
+
+async function expectExit(promise: Promise<unknown>, code: number): Promise<void> {
+  try {
+    await promise;
+  } catch (err) {
+    if (err instanceof CliExit) {
+      expect(err.exitCode).toBe(code);
+      return;
+    }
+    throw err;
+  }
+  throw new Error(`Expected promise to reject with CliExit(${code}) but it resolved`);
+}
 
 function buildResponse(overrides: Partial<ApiResponse> = {}): ApiResponse {
   return {
@@ -89,7 +103,6 @@ function buildResponse(overrides: Partial<ApiResponse> = {}): ApiResponse {
 describe('runApiInteractive', () => {
   let consoleOutput: string[];
   let stderrOutput: string[];
-  let exitSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -102,9 +115,6 @@ describe('runApiInteractive', () => {
     vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
       stderrOutput.push(args.map(String).join(' '));
     });
-    exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
-      throw new Error(`__exit__:${code ?? 0}`);
-    }) as never);
   });
 
   afterEach(() => {
@@ -115,15 +125,14 @@ describe('runApiInteractive', () => {
   it('prints usage instructions when interaction mode is agent', async () => {
     setOutputMode('human');
     setInteractionMode({ mode: 'agent', source: 'env' });
-    await expect(runApiInteractive()).rejects.toThrow(/__exit__:1/);
+    await expectExit(runApiInteractive(), 1);
     expect(stderrOutput.join('\n')).toContain('Interactive API mode requires human mode');
   });
 
   it('emits a structured tty_required error in JSON mode when non-interactive', async () => {
     setOutputMode('json');
     // JSON mode short-circuits before the TTY check, so the underlying environment doesn't matter.
-    await expect(runApiInteractive()).rejects.toThrow(/__exit__:1/);
-    expect(exitSpy).toHaveBeenCalledWith(1);
+    await expectExit(runApiInteractive(), 1);
     expect(consoleOutput).toEqual([]);
     const errorLine = stderrOutput.find((line) => {
       try {
@@ -139,8 +148,7 @@ describe('runApiInteractive', () => {
   it('refuses to enter interactive mode in JSON mode even when a TTY is present', async () => {
     setOutputMode('json');
     // Default interaction mode is human; JSON mode must still short-circuit.
-    await expect(runApiInteractive()).rejects.toThrow(/__exit__:1/);
-    expect(exitSpy).toHaveBeenCalledWith(1);
+    await expectExit(runApiInteractive(), 1);
     expect(consoleOutput).toEqual([]);
     const errorLine = stderrOutput.find((line) => {
       try {
@@ -210,7 +218,6 @@ describe('runApiLs', () => {
 describe('runApiRequest', () => {
   let consoleOutput: string[];
   let stderrOutput: string[];
-  let exitSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -223,9 +230,6 @@ describe('runApiRequest', () => {
     vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
       stderrOutput.push(args.map(String).join(' '));
     });
-    exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
-      throw new Error(`__exit__:${code ?? 0}`);
-    }) as never);
     mockConfirm.mockResolvedValue(true);
     mockIsCancel.mockReturnValue(false);
   });
@@ -270,8 +274,7 @@ describe('runApiRequest', () => {
 
   it('exits with a structured error in JSON dry-run mode when --data is not valid JSON', async () => {
     setOutputMode('json');
-    await expect(runApiRequest('/organizations', { dryRun: true, data: 'not json' })).rejects.toThrow(/__exit__:1/);
-    expect(exitSpy).toHaveBeenCalledWith(1);
+    await expectExit(runApiRequest('/organizations', { dryRun: true, data: 'not json' }), 1);
     const errorLine = stderrOutput.find((line) => {
       try {
         const parsed = JSON.parse(line);
@@ -317,14 +320,13 @@ describe('runApiRequest', () => {
 
   it('aborts when the user declines the confirmation prompt', async () => {
     mockConfirm.mockResolvedValueOnce(false);
-    await expect(runApiRequest('/organizations', { method: 'POST', data: '{}' })).rejects.toThrow(/__exit__:0/);
+    await expectExit(runApiRequest('/organizations', { method: 'POST', data: '{}' }), 2);
     expect(mockApiRequest).not.toHaveBeenCalled();
   });
 
   it('exits with code 1 when the response status is >= 400', async () => {
     mockApiRequest.mockResolvedValue(buildResponse({ status: 404, body: { error: 'not_found' } }));
-    await expect(runApiRequest('/users', { yes: true })).rejects.toThrow(/__exit__:1/);
-    expect(exitSpy).toHaveBeenCalledWith(1);
+    await expectExit(runApiRequest('/users', { yes: true }), 1);
   });
 
   it('passes --include through to printResponse', async () => {
@@ -345,10 +347,10 @@ describe('runApiRequest', () => {
 
   it('exits with a structured error when --file points at a missing path', async () => {
     setOutputMode('json');
-    await expect(
+    await expectExit(
       runApiRequest('/organizations', { file: '/tmp/__nonexistent_workos_api_body__.json', yes: true }),
-    ).rejects.toThrow(/__exit__:1/);
-    expect(exitSpy).toHaveBeenCalledWith(1);
+      1,
+    );
     const errorLine = stderrOutput.find((line) => {
       try {
         const parsed = JSON.parse(line) as { error?: { code?: string; message?: string } };
@@ -370,8 +372,7 @@ describe('runApiRequest', () => {
   it('refuses mutating requests without --yes in agent mode with human output', async () => {
     setOutputMode('human');
     setInteractionMode({ mode: 'agent', source: 'env' });
-    await expect(runApiRequest('/organizations', { method: 'POST', data: '{}' })).rejects.toThrow(/__exit__:1/);
-    expect(exitSpy).toHaveBeenCalledWith(1);
+    await expectExit(runApiRequest('/organizations', { method: 'POST', data: '{}' }), 1);
     expect(mockApiRequest).not.toHaveBeenCalled();
     expect(mockConfirm).not.toHaveBeenCalled();
     expect(stderrOutput.some((l) => l.includes('agent mode require --yes'))).toBe(true);
@@ -379,8 +380,7 @@ describe('runApiRequest', () => {
 
   it('exits with confirmation_required in JSON mode when a mutating request lacks --yes', async () => {
     setOutputMode('json');
-    await expect(runApiRequest('/organizations', { method: 'POST', data: '{}' })).rejects.toThrow(/__exit__:1/);
-    expect(exitSpy).toHaveBeenCalledWith(1);
+    await expectExit(runApiRequest('/organizations', { method: 'POST', data: '{}' }), 1);
     expect(mockApiRequest).not.toHaveBeenCalled();
     expect(mockConfirm).not.toHaveBeenCalled();
     const errorLine = stderrOutput.find((line) => {
@@ -398,7 +398,7 @@ describe('runApiRequest', () => {
 
   it('uses equals-form data flags so leading hyphens are preserved in confirmation recovery commands', async () => {
     setOutputMode('json');
-    await expect(runApiRequest('/organizations', { method: 'POST', data: '-x' })).rejects.toThrow(/__exit__:1/);
+    await expectExit(runApiRequest('/organizations', { method: 'POST', data: '-x' }), 1);
     const errorLine = stderrOutput.find((line) => {
       try {
         const parsed = JSON.parse(line) as { error?: { code?: string } };
@@ -418,7 +418,7 @@ describe('runApiRequest', () => {
     const file = join(dir, 'body.json');
     writeFileSync(file, '{"name":"Acme"}');
     try {
-      await expect(runApiRequest('/organizations', { method: 'PATCH', file })).rejects.toThrow(/__exit__:1/);
+      await expectExit(runApiRequest('/organizations', { method: 'PATCH', file }), 1);
       const errorLine = stderrOutput.find((line) => {
         try {
           const parsed = JSON.parse(line) as { error?: { code?: string } };
@@ -445,7 +445,7 @@ describe('runApiRequest', () => {
     const originalStdin = process.stdin;
     Object.defineProperty(process, 'stdin', { value: stdinBody, configurable: true });
     try {
-      await expect(runApiRequest('/organizations', { method: 'POST', file: '-' })).rejects.toThrow(/__exit__:1/);
+      await expectExit(runApiRequest('/organizations', { method: 'POST', file: '-' }), 1);
     } finally {
       Object.defineProperty(process, 'stdin', { value: originalStdin, configurable: true });
     }
@@ -469,11 +469,10 @@ describe('runApiRequest', () => {
     const originalStdin = process.stdin;
     Object.defineProperty(process, 'stdin', { value: emptyStdin, configurable: true });
     try {
-      await expect(runApiRequest('/orgs', { file: '-', yes: true })).rejects.toThrow(/__exit__:1/);
+      await expectExit(runApiRequest('/orgs', { file: '-', yes: true }), 1);
     } finally {
       Object.defineProperty(process, 'stdin', { value: originalStdin, configurable: true });
     }
-    expect(exitSpy).toHaveBeenCalledWith(1);
     expect(mockApiRequest).not.toHaveBeenCalled();
     const errorLine = stderrOutput.find((line) => {
       try {

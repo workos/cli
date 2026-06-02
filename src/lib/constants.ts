@@ -34,7 +34,6 @@ export const WORKOS_DASHBOARD_URL = settings.documentation.dashboardUrl;
 export const ISSUES_URL = settings.documentation.issuesUrl;
 export const ANALYTICS_ENABLED = settings.telemetry.enabled;
 export const INSTALLER_INTERACTION_EVENT_NAME = settings.telemetry.eventName;
-export const WORKOS_TELEMETRY_ENABLED = process.env.WORKOS_TELEMETRY !== 'false';
 export const OAUTH_PORT = settings.legacy.oauthPort;
 
 /**

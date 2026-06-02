@@ -17,6 +17,14 @@ import {
   setInsecureConfigStorage,
   diagnoseConfig,
 } from '../lib/config-store.js';
+import {
+  clearPreferences,
+  getPreferencesPath,
+  getTelemetrySource,
+  isNoticeShown,
+  isTelemetryEnabled,
+  isTelemetryOptedOut,
+} from '../lib/preferences.js';
 import { isJsonMode, outputJson, exitWithError } from '../utils/output.js';
 import { isPromptAllowed } from '../utils/interaction-mode.js';
 
@@ -114,12 +122,21 @@ export async function runDebugState({ showSecrets }: { showSecrets: boolean }): 
   const configSource = determineCredentialSource(configDiagnostics);
   configOutput.source = configSource;
 
+  const telemetryOutput = {
+    enabled: isTelemetryEnabled(),
+    optedOut: isTelemetryOptedOut(),
+    source: getTelemetrySource(),
+    noticeShown: isNoticeShown(),
+  };
+
   const result = {
     credentials: credentialsOutput,
     config: configOutput,
+    telemetry: telemetryOutput,
     storage: {
       credentialsPath: getCredentialsPath(),
       configPath: getConfigPath(),
+      preferencesPath: getPreferencesPath(),
       credentialDiagnostics: diagnostics,
       configDiagnostics,
     },
@@ -161,6 +178,13 @@ export async function runDebugState({ showSecrets }: { showSecrets: boolean }): 
   }
 
   console.log();
+  console.log(chalk.bold('Telemetry'));
+  console.log(`  enabled:  ${telemetryOutput.enabled ? chalk.green('true') : chalk.yellow('false')}`);
+  console.log(`  optedOut: ${telemetryOutput.optedOut ? chalk.yellow('true') : 'false'}`);
+  console.log(`  source:   ${telemetryOutput.source}`);
+  console.log(`  notice:   ${telemetryOutput.noticeShown ? 'shown' : chalk.dim('not shown')}`);
+
+  console.log();
   console.log(chalk.bold('Storage — Credentials'));
   console.log(`  path: ${getCredentialsPath()}`);
   for (const line of diagnostics) {
@@ -173,9 +197,20 @@ export async function runDebugState({ showSecrets }: { showSecrets: boolean }): 
   for (const line of configDiagnostics) {
     console.log(`  ${chalk.dim(line)}`);
   }
+
+  console.log();
+  console.log(chalk.bold('Storage — Preferences'));
+  console.log(`  path: ${getPreferencesPath()}`);
 }
 
 // --- debug reset ---
+
+/** Join names with an Oxford comma: ["a","b","c"] => "a, b, and c". */
+function formatList(items: string[]): string {
+  if (items.length <= 1) return items.join('');
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
+}
 
 export async function runDebugReset({
   force,
@@ -189,8 +224,14 @@ export async function runDebugReset({
   // Both flags = clear both (same as neither)
   const clearCreds = !configOnly || credentialsOnly;
   const clearConf = !credentialsOnly || configOnly;
+  // Preferences (~/.workos/preferences.json) are non-secret local CLI state, so
+  // they ride with the config target. Clearing config returns the CLI to a
+  // fresh-install state, which includes resetting the telemetry preference.
+  const clearPrefs = clearConf;
 
-  const targets = [clearCreds && 'credentials', clearConf && 'config'].filter(Boolean).join(' and ');
+  const targets = formatList(
+    [clearCreds && 'credentials', clearConf && 'config', clearPrefs && 'preferences'].filter(Boolean) as string[],
+  );
 
   if (!force) {
     if (!isPromptAllowed()) {
@@ -216,9 +257,10 @@ export async function runDebugReset({
 
   if (clearCreds) clearCredentials();
   if (clearConf) clearConfig();
+  if (clearPrefs) clearPreferences();
 
   if (isJsonMode()) {
-    outputJson({ cleared: true, credentials: clearCreds, config: clearConf });
+    outputJson({ cleared: true, credentials: clearCreds, config: clearConf, preferences: clearPrefs });
   } else {
     clack.log.success(`Cleared ${targets}`);
   }
@@ -231,12 +273,21 @@ export async function runDebugSimulate({
   noKeyring,
   unclaimed,
   noAuth,
+  crash = false,
 }: {
   expiredToken: boolean;
   noKeyring: boolean;
   unclaimed: boolean;
   noAuth: boolean;
+  crash?: boolean;
 }): Promise<void> {
+  // Simulate an unexpected crash to exercise the crash-telemetry pipeline
+  // end-to-end. Throws a plain Error (not CliExit) so the bin.ts lifecycle
+  // records a `crash` event with a sanitized stack rather than a handled exit.
+  if (crash) {
+    throw new Error('Simulated crash for telemetry verification');
+  }
+
   // Validate: at least one flag
   if (!expiredToken && !noKeyring && !unclaimed && !noAuth) {
     exitWithError({
@@ -321,6 +372,7 @@ interface EnvVarInfo {
 }
 
 const ENV_VAR_CATALOG: { name: string; effect: string }[] = [
+  { name: 'WORKOS_DEBUG', effect: 'Set to "1" to enable verbose debug logging for all commands' },
   { name: 'WORKOS_API_KEY', effect: 'Bypasses credential resolution — used directly for API calls' },
   { name: 'WORKOS_MODE', effect: 'Controls interaction behavior: human, agent, or CI' },
   { name: 'WORKOS_FORCE_TTY', effect: 'Forces human (non-JSON) output mode, even when piped' },
@@ -330,6 +382,7 @@ const ENV_VAR_CATALOG: { name: string; effect: string }[] = [
   { name: 'WORKOS_DASHBOARD_URL', effect: 'Overrides dashboard URL (default: https://dashboard.workos.com)' },
   { name: 'WORKOS_AUTHKIT_DOMAIN', effect: 'Overrides AuthKit domain from settings' },
   { name: 'WORKOS_LLM_GATEWAY_URL', effect: 'Overrides LLM gateway URL from settings' },
+  { name: 'WORKOS_TELEMETRY_URL', effect: 'Overrides CLI telemetry URL from settings' },
   { name: 'INSTALLER_DEV', effect: 'Enables dev mode — loads .env.local at startup' },
   { name: 'INSTALLER_DISABLE_PROXY', effect: 'Disables the credential proxy for gateway auth' },
 ];

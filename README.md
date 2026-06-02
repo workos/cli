@@ -399,13 +399,14 @@ workos portal generate-link --intent <intent> --org <orgId> [--return-url] [--su
 
 ```bash
 workos vault list [--limit]
-workos vault get <id>
-workos vault get-by-name <name>
-workos vault create --name <name> --value <secret> [--org <orgId>]
-workos vault update <id> --value <secret> [--version-check]
+workos vault get <id> [--decrypt]
+workos vault get-by-name <name> [--decrypt]
+workos vault create --name <name> --org <orgId> [--value <secret>]   # omit --value to read from stdin
+workos vault update <id> [--value <secret>] [--version-check]        # omit --value to read from stdin
 workos vault delete <id>
 workos vault describe <id>
 workos vault list-versions <id>
+workos vault run --secret ENV_VAR=vault-name [...] [--env <name>] [--dry-run] -- <command>
 ```
 
 #### api-key
@@ -599,17 +600,18 @@ OAuth credentials are stored in the system keychain (with `~/.workos/credentials
 
 ## Telemetry
 
-The installer collects anonymous usage telemetry to help improve the product:
+The CLI collects anonymous usage telemetry to help improve the product:
 
-- Session outcome (success/error/cancelled)
-- Framework detected
-- Duration and step timing
-- Token usage (for capacity planning)
+- **Command events** -- command name, duration, success/failure, termination reason, and which flags were used (for telemetry-enabled commands; `install` and `dashboard` use session events instead)
+- **Session events** -- framework detected, step timing, token usage (installer only)
+- **Crash events** -- sanitized error type and stack trace (no secrets, truncated to 4KB)
 
-No code, credentials, or personal data is collected. Disable with:
+Environment fingerprint (OS, Node version, shell, CI detection) is included on all events. No code, credentials, or personal data is collected.
+
+Disable with:
 
 ```bash
-WORKOS_TELEMETRY=false npx workos@latest install
+WORKOS_TELEMETRY=false workos <command>
 ```
 
 ## Logs

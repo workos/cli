@@ -14,6 +14,7 @@ export interface InstallerConfig {
     clientId: string;
     authkitDomain: string;
     llmGatewayUrl: string;
+    telemetryUrl: string;
   };
   telemetry: {
     enabled: boolean;
@@ -77,4 +78,12 @@ export function getAuthkitDomain(): string {
  */
 export function getLlmGatewayUrl(): string {
   return process.env.WORKOS_LLM_GATEWAY_URL || config.workos.llmGatewayUrl;
+}
+
+/**
+ * Get the CLI telemetry URL.
+ * Env var overrides config default.
+ */
+export function getTelemetryUrl(): string {
+  return process.env.WORKOS_TELEMETRY_URL || config.workos.telemetryUrl;
 }
