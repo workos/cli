@@ -22,7 +22,7 @@ importers:
         version: 1.0.1
       '@hono/node-server':
         specifier: ^1
-        version: 1.19.13(hono@4.11.4)
+        version: 1.19.13(hono@4.12.18)
       '@napi-rs/keyring':
         specifier: ^1.2.0
         version: 1.2.0
@@ -49,7 +49,7 @@ importers:
         version: 3.3.3
       hono:
         specifier: ^4
-        version: 4.11.4
+        version: 4.12.18
       ink:
         specifier: ^6.8.0
         version: 6.8.0(@types/react@19.2.14)(react@19.2.4)
@@ -1795,8 +1795,8 @@ packages:
   headers-polyfill@4.0.3:
     resolution: {integrity: sha512-IScLbePpkvO846sIwOtOTDjutRMWdXdJmXdMvk6gCBHxFO8d+QKOQedyZSxFTTFYRSmlgSTDtXqqq4pcenBXLQ==}
 
-  hono@4.11.4:
-    resolution: {integrity: sha512-U7tt8JsyrxSRKspfhtLET79pU8K+tInj5QZXs1jSugO1Vq5dFj3kmZsRldo29mTBfcjDRVRXrEZ6LS63Cog9ZA==}
+  hono@4.12.18:
+    resolution: {integrity: sha512-RWzP96k/yv0PQfyXnWjs6zot20TqfpfsNXhOnev8d1InAxubW93L11/oNUc3tQqn2G0bSdAOBpX+2uDFHV7kdQ==}
     engines: {node: '>=16.9.0'}
 
   html-escaper@2.0.2:
@@ -3018,9 +3018,9 @@ snapshots:
   '@esbuild/win32-x64@0.27.7':
     optional: true
 
-  '@hono/node-server@1.19.13(hono@4.11.4)':
+  '@hono/node-server@1.19.13(hono@4.12.18)':
     dependencies:
-      hono: 4.11.4
+      hono: 4.12.18
 
   '@img/sharp-darwin-arm64@0.34.5':
     optionalDependencies:
@@ -4012,7 +4012,7 @@ snapshots:
   headers-polyfill@4.0.3:
     optional: true
 
-  hono@4.11.4: {}
+  hono@4.12.18: {}
 
   html-escaper@2.0.2: {}
 
