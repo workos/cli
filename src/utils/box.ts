@@ -22,6 +22,16 @@ function terminalWidth(): number {
  *
  * A single token wider than `maxWidth` (rare — only a very narrow terminal vs.
  * a long unbroken word) overflows its own line rather than being split mid-span.
+ * Such an overflow can push the rendered box border past the terminal width;
+ * acceptable at standard widths. Note that a colored command produced by
+ * `formatWorkOSCommand` can be long (e.g. `npx workos@latest telemetry opt-out`)
+ * and stays a single unbreakable token by design.
+ *
+ * Limitation: a colored span is grouped atomically only when it is a single SGR
+ * layer (one open code + one close code, as `chalk.cyan('…')` emits). Stacked
+ * styles such as bold+color (`\x1b[1m\x1b[36m…\x1b[39m\x1b[22m`) or two adjacent
+ * spans with no separating space are not guaranteed to stay on one line and may
+ * leave a reset code mid-line. All current callers use single-color spans only.
  */
 export function wrapAnsiAware(input: string, maxWidth: number): string[] {
   // A token is either: a full SGR-wrapped span (open code, content that may

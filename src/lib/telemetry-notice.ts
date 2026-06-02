@@ -16,6 +16,7 @@
 import chalk from 'chalk';
 import { isJsonMode } from '../utils/output.js';
 import { renderStderrBox } from '../utils/box.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 import { isNoticeShown, markNoticeShown, isTelemetryOptedOut } from './preferences.js';
 
 let shownThisSession = false;
@@ -35,10 +36,14 @@ export function maybeShowTelemetryNotice(): void {
     if (isTelemetryOptedOut()) return; // already opted out — nothing to inform
     if (isNoticeShown()) return; // already shown once, ever
 
-    shownThisSession = true;
-    const inner = ` ${chalk.cyan('ℹ')} WorkOS collects anonymous CLI usage telemetry. Run ${chalk.cyan('workos telemetry opt-out')} to disable it. `;
+    const optOut = chalk.cyan(formatWorkOSCommand('telemetry opt-out'));
+    const inner = ` ${chalk.cyan('ℹ')} WorkOS collects anonymous CLI usage telemetry. Run ${optOut} to disable it. `;
     renderStderrBox(inner, chalk.cyan);
-    markNoticeShown(); // mark ONLY after actually displaying
+    // Set the per-session guard and persist ONLY after a successful render, so a
+    // render failure (caught below) lets a later command in this process retry
+    // rather than silently suppressing the notice for the rest of the session.
+    shownThisSession = true;
+    markNoticeShown();
   } catch {
     // Never block command execution.
   }

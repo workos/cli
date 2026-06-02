@@ -271,10 +271,12 @@ describe('preferences', () => {
       expect(getTelemetrySource()).toBe('preference');
     });
 
-    it('is "preference" when the flag is explicitly false', () => {
+    it('is "default" when the flag is explicitly false (opted back in)', () => {
       delete process.env.WORKOS_TELEMETRY;
       setTelemetryOptedOut(false);
-      expect(getTelemetrySource()).toBe('preference');
+      // opted-in matches the fresh-install outcome, so the source is 'default',
+      // not 'preference' — consistent with isTelemetryEnabled()'s precedence.
+      expect(getTelemetrySource()).toBe('default');
     });
 
     it('is "default" when nothing is set', () => {

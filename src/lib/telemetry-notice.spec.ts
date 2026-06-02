@@ -24,6 +24,7 @@ vi.mock('./preferences.js', () => ({
   markNoticeShown: (...args: unknown[]) => mockMarkNoticeShown(...args),
 }));
 
+const { formatWorkOSCommand } = await import('../utils/command-invocation.js');
 const { maybeShowTelemetryNotice, resetTelemetryNoticeState } = await import('./telemetry-notice.js');
 
 describe('telemetry-notice', () => {
@@ -40,6 +41,13 @@ describe('telemetry-notice', () => {
 
     expect(mockRenderStderrBox).toHaveBeenCalledTimes(1);
     expect(mockMarkNoticeShown).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the opt-out command via formatWorkOSCommand (npx-safe, not hardcoded)', () => {
+    maybeShowTelemetryNotice();
+
+    const inner = mockRenderStderrBox.mock.calls[0]?.[0] as string;
+    expect(inner).toContain(formatWorkOSCommand('telemetry opt-out'));
   });
 
   it('second call in the same session → no second render (per-session guard)', () => {

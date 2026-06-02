@@ -13,7 +13,7 @@
  */
 
 import fs from 'node:fs';
-import { mkdir, readFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 
@@ -185,10 +185,15 @@ export function isTelemetryEnabled(): boolean {
  * Which signal produced the effective telemetry decision. Mirrors the
  * precedence in isTelemetryEnabled() so the `telemetry status` command and the
  * resolver can never drift.
+ *
+ * Note: an explicit opt-in (optedOut === false) reads as 'default', not
+ * 'preference' — its outcome is identical to a fresh install, and the resolver
+ * only treats optedOut === true as a non-default signal, so reporting
+ * 'preference' here would imply a behavioral difference that does not exist.
  */
 export function getTelemetrySource(): TelemetrySource {
   if (envTelemetryOverride() !== undefined) return 'env';
-  if (getPreferences().telemetry?.optedOut !== undefined) return 'preference';
+  if (isTelemetryOptedOut()) return 'preference';
   return 'default';
 }
 
