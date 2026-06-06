@@ -293,6 +293,42 @@ describe('HeadlessAdapter', () => {
     });
   });
 
+  describe('scaffold events', () => {
+    it('streams scaffold:* and flags the completion as scaffolded', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('scaffold:checking', {});
+      emitter.emit('scaffold:start', { packageManager: 'pnpm' });
+      emitter.emit('scaffold:complete', {});
+      emitter.emit('complete', { success: true, summary: 'Installed' });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'scaffold:checking' });
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'scaffold:start', packageManager: 'pnpm' });
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'scaffold:complete' });
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({
+        type: 'complete',
+        success: true,
+        summary: 'Installed',
+        scaffolded: true,
+      });
+      await adapter.stop();
+    });
+
+    it('writes scaffold:failed with the error', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('scaffold:failed', { error: 'create-next-app exited with code 1' });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({
+        type: 'scaffold:failed',
+        error: 'create-next-app exited with code 1',
+      });
+      await adapter.stop();
+    });
+  });
+
   describe('terminal events', () => {
     it('writes complete event', async () => {
       const adapter = createAdapter();
@@ -304,6 +340,7 @@ describe('HeadlessAdapter', () => {
         type: 'complete',
         success: true,
         summary: 'All done',
+        scaffolded: false,
       });
       await adapter.stop();
     });

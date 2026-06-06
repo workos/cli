@@ -16,7 +16,9 @@ import type {
   GitCheckOutput,
   AgentOutput,
   BranchCheckOutput,
+  WorkspaceCheckOutput,
 } from './installer-core.types.js';
+import { isScaffoldableEmptyDir, resolvePackageManager, runCreateNextApp } from './scaffold/index.js';
 import type { Integration } from './constants.js';
 import { parseEnvFile } from '../utils/env-parser.js';
 import { enableDebugLogs, initLogFile, logInfo, logError } from '../utils/debug.js';
@@ -246,6 +248,26 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         }
 
         return true;
+      }),
+
+      checkWorkspace: fromPromise<WorkspaceCheckOutput, { options: InstallerOptions }>(async ({ input }) => {
+        const scaffoldable = await isScaffoldableEmptyDir(input.options.installDir);
+        const packageManager = resolvePackageManager({
+          pm: input.options.pm,
+          userAgent: process.env.npm_config_user_agent,
+        });
+        // headlessMode is computed above; --scaffold opts in during interactive runs.
+        const autoScaffold = scaffoldable && (headlessMode || !!input.options.scaffold);
+        return { scaffoldable, packageManager, autoScaffold };
+      }),
+
+      runScaffold: fromPromise<void, { context: InstallerMachineContext }>(async ({ input }) => {
+        const { options: installerOptions, packageManager, emitter: ctxEmitter } = input.context;
+        await runCreateNextApp({
+          installDir: installerOptions.installDir,
+          packageManager: packageManager ?? 'npm',
+          emitter: ctxEmitter,
+        });
       }),
 
       detectIntegration: fromPromise<DetectionOutput, { options: InstallerOptions }>(async ({ input }) => {
@@ -568,9 +590,15 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
     // tag install metrics by integration). Known only after detection runs, so
     // it's read from the final machine snapshot here; absent if the session
     // aborted before detection.
-    const detectedIntegration = actor?.getSnapshot().context.integration;
+    const finalContext = actor?.getSnapshot().context;
+    const detectedIntegration = finalContext?.integration;
     if (detectedIntegration) {
       analytics.setTag('installer.integration', detectedIntegration);
+    }
+    // Record whether the empty-dir flow scaffolded a new app, so session.end
+    // carries it for adoption + scaffold-failure tracking.
+    if (finalContext?.scaffolded) {
+      analytics.setTag('scaffolded', true);
     }
     await analytics.shutdown(installerStatus);
     await adapter.stop();

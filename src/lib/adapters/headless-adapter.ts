@@ -29,6 +29,7 @@ export class HeadlessAdapter implements InstallerAdapter {
   private debug: boolean;
   private options: HeadlessOptions;
   private isStarted = false;
+  private scaffolded = false;
   private handlers = new Map<string, (...args: unknown[]) => void>();
 
   constructor(config: AdapterConfig & { options: HeadlessOptions }) {
@@ -45,6 +46,13 @@ export class HeadlessAdapter implements InstallerAdapter {
     // Auth events
     this.subscribe('auth:success', this.handleAuthSuccess);
     this.subscribe('auth:failure', this.handleAuthFailure);
+
+    // Scaffold events (empty-directory app scaffolding) — auto-routed, no prompt
+    this.subscribe('scaffold:checking', this.handleScaffoldChecking);
+    this.subscribe('scaffold:start', this.handleScaffoldStart);
+    this.subscribe('scaffold:progress', this.handleScaffoldProgress);
+    this.subscribe('scaffold:complete', this.handleScaffoldComplete);
+    this.subscribe('scaffold:failed', this.handleScaffoldFailed);
 
     // Detection events
     this.subscribe('detection:complete', this.handleDetectionComplete);
@@ -132,6 +140,30 @@ export class HeadlessAdapter implements InstallerAdapter {
   private handleAuthFailure = ({ message }: InstallerEvents['auth:failure']): void => {
     writeNDJSON({ type: 'auth:required', message });
     process.exit(ExitCode.AUTH_REQUIRED);
+  };
+
+  // ===== Scaffold Handlers (auto-routed) =====
+
+  private handleScaffoldChecking = (): void => {
+    writeNDJSON({ type: 'scaffold:checking' });
+  };
+
+  private handleScaffoldStart = ({ packageManager }: InstallerEvents['scaffold:start']): void => {
+    writeNDJSON({ type: 'scaffold:start', packageManager });
+  };
+
+  // create-next-app output is verbose; surface it only under --debug.
+  private handleScaffoldProgress = ({ text }: InstallerEvents['scaffold:progress']): void => {
+    this.debugLog(text);
+  };
+
+  private handleScaffoldComplete = (): void => {
+    this.scaffolded = true;
+    writeNDJSON({ type: 'scaffold:complete' });
+  };
+
+  private handleScaffoldFailed = ({ error }: InstallerEvents['scaffold:failed']): void => {
+    writeNDJSON({ type: 'scaffold:failed', error });
   };
 
   // ===== Detection Handlers =====
@@ -332,7 +364,7 @@ export class HeadlessAdapter implements InstallerAdapter {
   // ===== Terminal Events =====
 
   private handleComplete = ({ success, summary }: InstallerEvents['complete']): void => {
-    writeNDJSON({ type: 'complete', success, summary });
+    writeNDJSON({ type: 'complete', success, summary, scaffolded: this.scaffolded });
   };
 
   private handleError = ({ message, stack }: InstallerEvents['error']): void => {

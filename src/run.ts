@@ -33,6 +33,8 @@ export type InstallerArgs = {
   noGitCheck?: boolean;
   gitCheck?: boolean;
   direct?: boolean;
+  scaffold?: boolean;
+  pm?: string;
 };
 
 /**
@@ -73,6 +75,8 @@ function buildOptions(argv: InstallerArgs): InstallerOptions {
     createPr: merged.createPr ?? false,
     noGitCheck: merged.noGitCheck ?? merged.gitCheck === false,
     direct: merged.direct ?? false,
+    scaffold: merged.scaffold ?? false,
+    pm: merged.pm,
     emitter: createInstallerEventEmitter(), // Will be replaced in runWithCore
   };
 }

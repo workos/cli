@@ -235,6 +235,16 @@ const installerOptions = {
     describe: 'Check for dirty working tree (use --no-git-check to skip)',
     type: 'boolean' as const,
   },
+  scaffold: {
+    default: false,
+    describe: 'Scaffold a new Next.js app when run in an empty directory',
+    type: 'boolean' as const,
+  },
+  pm: {
+    describe: 'Package manager for the scaffolded app',
+    choices: ['npm', 'pnpm', 'yarn', 'bun'] as const,
+    type: 'string' as const,
+  },
 };
 
 // Check for updates (blocks up to 500ms, skip in JSON/non-human modes to keep machine streams clean)

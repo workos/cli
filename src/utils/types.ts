@@ -113,6 +113,18 @@ export type InstallerOptions = {
    * Default: 2. Set to 0 to disable retries entirely.
    */
   maxRetries?: number;
+
+  /**
+   * Scaffold a new Next.js app when run in an empty directory.
+   * Auto-enabled in headless mode; opt-in via --scaffold in interactive mode.
+   */
+  scaffold?: boolean;
+
+  /**
+   * Package manager for the scaffolded app (npm/pnpm/yarn/bun).
+   * Overrides detection from npm_config_user_agent.
+   */
+  pm?: string;
 };
 
 export interface Feature {
