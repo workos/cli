@@ -23,6 +23,7 @@ shell command cache.
 - **AI-Powered:** Uses Claude to intelligently adapt to your project structure
 - **Security-First:** Masks API keys, redacts from logs, saves to .env.local
 - **Smart Detection:** Auto-detects framework, package manager, router type
+- **Greenfield Scaffolding:** Run in an empty directory to scaffold a new Next.js app (via `create-next-app`) before wiring AuthKit
 - **Live Documentation:** Fetches latest SDK docs from WorkOS and GitHub
 - **Full Integration:** Creates routes, middleware, environment vars, and UI
 - **Agent & CI Ready:** Non-TTY auto-detection, JSON output, structured errors, headless installer with NDJSON streaming
@@ -576,6 +577,8 @@ workos install [options]
   --redirect-uri <uri>    Custom redirect URI
   --homepage-url <url>    Custom homepage URL
   --install-dir <path>    Installation directory
+  --scaffold              Scaffold a new Next.js app when run in an empty directory
+  --pm <manager>          Package manager for the scaffolded app: npm, pnpm, yarn, bun
   --no-validate           Skip post-installation validation
   --no-branch             Skip branch creation (use current branch)
   --no-commit             Skip auto-commit after installation
@@ -585,11 +588,16 @@ workos install [options]
   --debug                 Enable verbose logging
 ```
 
+**Empty directories:** Running `workos install` in an empty directory scaffolds a new Next.js app with `create-next-app` (App Router, TypeScript, Tailwind, `src/`) and then wires AuthKit into it. This only happens when the directory is empty or contains nothing but VCS/editor metadata (`.git`, `.gitignore`, `LICENSE`, `.idea`, and similar). Any project file — including a `README.md` or a `package.json` — opts out, and the installer treats the directory as an existing project. Interactive runs confirm first (default yes); non-interactive/headless runs (or `--scaffold`) scaffold automatically and report `"scaffolded": true`. The package manager is resolved from how you invoked the CLI (`npm_config_user_agent`) unless you pass `--pm`.
+
 ## Examples
 
 ```bash
 # Interactive (recommended)
 npx workos@latest install
+
+# Greenfield: scaffold a new Next.js app + AuthKit in an empty directory
+mkdir my-app && cd my-app && npx workos@latest install
 
 # Specify framework
 npx workos@latest install --integration react-router
