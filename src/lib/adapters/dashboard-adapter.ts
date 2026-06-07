@@ -53,6 +53,7 @@ export class DashboardAdapter implements InstallerAdapter {
     // Scaffold (empty-dir): the TUI has no dedicated scaffold prompt yet, so
     // auto-proceed (the user ran the installer in an empty dir) and surface
     // progress through the `status` event the Dashboard already renders.
+    this.emitter.on('scaffold:notice', this.handleScaffoldNotice);
     this.emitter.on('scaffold:prompt', this.handleScaffoldPrompt);
     this.emitter.on('scaffold:start', this.handleScaffoldStart);
     this.emitter.on('scaffold:complete', this.handleScaffoldComplete);
@@ -75,6 +76,7 @@ export class DashboardAdapter implements InstallerAdapter {
     // Unsubscribe from events
     this.emitter.off('confirm:response', this.handleConfirmResponse);
     this.emitter.off('credentials:response', this.handleCredentialsResponse);
+    this.emitter.off('scaffold:notice', this.handleScaffoldNotice);
     this.emitter.off('scaffold:prompt', this.handleScaffoldPrompt);
     this.emitter.off('scaffold:start', this.handleScaffoldStart);
     this.emitter.off('scaffold:complete', this.handleScaffoldComplete);
@@ -120,6 +122,10 @@ export class DashboardAdapter implements InstallerAdapter {
   };
 
   // ===== Scaffold (empty-dir) handlers =====
+
+  private handleScaffoldNotice = ({ message }: InstallerEvents['scaffold:notice']): void => {
+    this.emitter.emit('status', { message });
+  };
 
   private handleScaffoldPrompt = (): void => {
     this.sendEvent({ type: 'SCAFFOLD_CONFIRMED' });

@@ -49,6 +49,7 @@ export class HeadlessAdapter implements InstallerAdapter {
 
     // Scaffold events (empty-directory app scaffolding) — auto-routed, no prompt
     this.subscribe('scaffold:checking', this.handleScaffoldChecking);
+    this.subscribe('scaffold:notice', this.handleScaffoldNotice);
     this.subscribe('scaffold:start', this.handleScaffoldStart);
     this.subscribe('scaffold:progress', this.handleScaffoldProgress);
     this.subscribe('scaffold:complete', this.handleScaffoldComplete);
@@ -146,6 +147,10 @@ export class HeadlessAdapter implements InstallerAdapter {
 
   private handleScaffoldChecking = (): void => {
     writeNDJSON({ type: 'scaffold:checking' });
+  };
+
+  private handleScaffoldNotice = ({ message }: InstallerEvents['scaffold:notice']): void => {
+    writeNDJSON({ type: 'scaffold:notice', message });
   };
 
   private handleScaffoldStart = ({ packageManager }: InstallerEvents['scaffold:start']): void => {
