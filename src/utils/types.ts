@@ -67,11 +67,6 @@ export type InstallerOptions = {
   emitter?: import('../lib/events.js').InstallerEventEmitter;
 
   /**
-   * Pre-selected framework integration (bypasses detection)
-   */
-  integration?: import('../lib/constants.js').Integration;
-
-  /**
    * Enable XState inspector - opens browser to visualize state machine live
    */
   inspect?: boolean;

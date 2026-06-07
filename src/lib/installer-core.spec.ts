@@ -468,7 +468,6 @@ describe('InstallerCore State Machine', () => {
     function createScaffoldActor(opts: {
       workspace: WorkspaceCheckOutput;
       runScaffoldImpl?: () => Promise<void>;
-      integration?: string;
     }) {
       const emitter = createInstallerEventEmitter();
       const options: InstallerOptions = {
@@ -479,7 +478,6 @@ describe('InstallerCore State Machine', () => {
         ci: false,
         skipAuth: true,
         dashboard: false,
-        integration: opts.integration,
         emitter,
       };
 
@@ -588,49 +586,6 @@ describe('InstallerCore State Machine', () => {
       expect(ran).toBe(false);
       expect(skipped).toBe(true);
       expect(actor.getSnapshot().value).toBe('cancelled');
-      actor.stop();
-    });
-
-    it('warns but still scaffolds when --integration is not Next.js', async () => {
-      let ran = false;
-      const { actor, emitter } = createScaffoldActor({
-        workspace: { scaffoldable: true, packageManager: 'npm', autoScaffold: true },
-        integration: 'react',
-        runScaffoldImpl: async () => {
-          ran = true;
-        },
-      });
-      const notices: string[] = [];
-      emitter.on('scaffold:notice', ({ message }) => notices.push(message));
-      emitter.on('error', () => {});
-
-      actor.start();
-      actor.send({ type: 'START' });
-      await new Promise((r) => setTimeout(r, 100));
-
-      expect(notices).toHaveLength(1);
-      expect(notices[0]).toContain('react');
-      expect(ran).toBe(true); // v1 still scaffolds Next.js
-      actor.stop();
-    });
-
-    it('does not warn when --integration is nextjs', async () => {
-      const { actor, emitter } = createScaffoldActor({
-        workspace: { scaffoldable: true, packageManager: 'npm', autoScaffold: true },
-        integration: 'nextjs',
-        runScaffoldImpl: async () => {},
-      });
-      let noticed = false;
-      emitter.on('scaffold:notice', () => {
-        noticed = true;
-      });
-      emitter.on('error', () => {});
-
-      actor.start();
-      actor.send({ type: 'START' });
-      await new Promise((r) => setTimeout(r, 100));
-
-      expect(noticed).toBe(false);
       actor.stop();
     });
 

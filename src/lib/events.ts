@@ -63,7 +63,6 @@ export interface InstallerEvents {
 
   // Scaffold events (empty-directory app scaffolding)
   'scaffold:checking': Record<string, never>;
-  'scaffold:notice': { message: string };
   'scaffold:prompt': { packageManager: string };
   'scaffold:start': { packageManager: string };
   'scaffold:progress': { text: string };

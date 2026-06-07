@@ -200,10 +200,6 @@ const installerOptions = {
     describe: 'Directory to install WorkOS AuthKit in',
     type: 'string' as const,
   },
-  integration: {
-    describe: 'Integration to set up',
-    type: 'string' as const,
-  },
   'force-install': {
     default: false,
     describe: 'Force install packages even if peer dependency checks fail',

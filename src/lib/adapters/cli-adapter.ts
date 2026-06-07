@@ -118,7 +118,6 @@ export class CLIAdapter implements InstallerAdapter {
     this.subscribe('complete', this.handleComplete);
     this.subscribe('error', this.handleError);
     // Scaffold events (empty-directory app scaffolding)
-    this.subscribe('scaffold:notice', this.handleScaffoldNotice);
     this.subscribe('scaffold:prompt', this.handleScaffoldPrompt);
     this.subscribe('scaffold:start', this.handleScaffoldStart);
     this.subscribe('scaffold:progress', this.handleScaffoldProgress);
@@ -458,10 +457,6 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   // ===== Scaffold Event Handlers =====
-
-  private handleScaffoldNotice = ({ message }: InstallerEvents['scaffold:notice']): void => {
-    this.queueableLog(() => clack.log.warn(message));
-  };
 
   private handleScaffoldPrompt = async ({ packageManager }: InstallerEvents['scaffold:prompt']): Promise<void> => {
     this.scaffoldPackageManager = packageManager;

@@ -93,10 +93,8 @@ export function resolvePackageManager(opts: { pm?: string; userAgent?: string })
  * The pinned `create-next-app` flag set. Kept pure so a unit test can assert the
  * exact array — flag drift across a pinned major is the primary failure mode.
  *
- * v1 scaffolds Next.js only. `--integration <other>` cannot be honored here yet;
- * the state machine emits a `scaffold:notice` to say so. Multi-framework
- * scaffolding (e.g. `--integration react` -> a Vite React app via its own
- * `create-*` tool) is a tracked follow-up, not implemented.
+ * v1 scaffolds Next.js only. Multi-framework scaffolding (e.g. a Vite React app
+ * via its own `create-*` tool) is a tracked follow-up, not implemented.
  *
  * App Router + TypeScript + ESLint + Tailwind + `src/` + `@/*` alias, installed
  * with the resolved package manager. `--yes` accepts all remaining defaults

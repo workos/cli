@@ -315,21 +315,6 @@ describe('HeadlessAdapter', () => {
       await adapter.stop();
     });
 
-    it('writes scaffold:notice', async () => {
-      const adapter = createAdapter();
-      await adapter.start();
-
-      emitter.emit('scaffold:notice', {
-        message: 'Scaffolding currently supports Next.js only; ignoring --integration react.',
-      });
-
-      expect(mockWriteNDJSON).toHaveBeenCalledWith({
-        type: 'scaffold:notice',
-        message: 'Scaffolding currently supports Next.js only; ignoring --integration react.',
-      });
-      await adapter.stop();
-    });
-
     it('writes scaffold:failed with the error', async () => {
       const adapter = createAdapter();
       await adapter.start();

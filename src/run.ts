@@ -1,7 +1,6 @@
 import { readEnvironment } from './utils/environment.js';
 import { runWithCore } from './lib/run-with-core.js';
 import type { InstallerOptions } from './utils/types.js';
-import type { Integration } from './lib/constants.js';
 import { createInstallerEventEmitter } from './lib/events.js';
 import path from 'path';
 import { EventEmitter } from 'events';
@@ -9,7 +8,6 @@ import { EventEmitter } from 'events';
 EventEmitter.defaultMaxListeners = 50;
 
 export type InstallerArgs = {
-  integration?: Integration;
   debug?: boolean;
   forceInstall?: boolean;
   installDir?: string;
@@ -67,7 +65,6 @@ function buildOptions(argv: InstallerArgs): InstallerOptions {
     homepageUrl: merged.homepageUrl,
     redirectUri: merged.redirectUri,
     dashboard: merged.dashboard ?? false,
-    integration: merged.integration,
     inspect: merged.inspect ?? false,
     noValidate: merged.noValidate ?? merged.validate === false,
     noCommit: merged.noCommit ?? merged.commit === false,

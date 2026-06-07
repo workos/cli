@@ -571,7 +571,6 @@ workos org-domain delete <id>
 workos install [options]
 
   --direct, -D            Use your own Anthropic API key (bypass llm-gateway)
-  --integration <name>    Framework: nextjs, react, react-router, tanstack-start, vanilla-js, sveltekit, node, python, ruby, go, dotnet, kotlin, elixir, php-laravel, php
   --api-key <key>         WorkOS API key (required in non-interactive mode)
   --client-id <id>        WorkOS client ID (required in non-interactive mode)
   --redirect-uri <uri>    Custom redirect URI
@@ -598,9 +597,6 @@ npx workos@latest install
 
 # Greenfield: scaffold a new Next.js app + AuthKit in an empty directory
 mkdir my-app && cd my-app && npx workos@latest install
-
-# Specify framework
-npx workos@latest install --integration react-router
 
 # With visual dashboard (experimental)
 npx workos@latest dashboard

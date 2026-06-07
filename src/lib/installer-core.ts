@@ -73,17 +73,6 @@ export const installerMachine = setup({
     emitScaffoldChecking: ({ context }) => {
       context.emitter.emit('scaffold:checking', {});
     },
-    // v1 scaffolding is Next.js-only (see scaffold.ts). If the user pre-selected a
-    // different integration, the scaffold can't honor it — say so once, before we
-    // prompt or auto-scaffold, rather than silently handing them a Next.js app.
-    emitScaffoldIntegrationNotice: ({ context }) => {
-      const requested = context.options.integration;
-      if (requested && requested !== 'nextjs' && requested !== 'next') {
-        context.emitter.emit('scaffold:notice', {
-          message: `Scaffolding currently supports Next.js only; ignoring --integration ${requested}.`,
-        });
-      }
-    },
     emitScaffoldPrompt: ({ context }) => {
       context.emitter.emit('scaffold:prompt', { packageManager: context.packageManager ?? 'npm' });
     },
@@ -421,7 +410,8 @@ export const installerMachine = setup({
   context: ({ input }) => ({
     emitter: input.emitter,
     options: input.options,
-    integration: input.options.integration,
+    // Set by the detection actor; no pre-seeding (the --integration flag is gone).
+    integration: undefined,
     credentials:
       input.options.apiKey && input.options.clientId
         ? { apiKey: input.options.apiKey, clientId: input.options.clientId }
@@ -496,12 +486,12 @@ export const installerMachine = setup({
                 // Headless or --scaffold: skip the prompt.
                 target: 'running',
                 guard: 'shouldAutoScaffold',
-                actions: ['assignWorkspaceResult', 'emitScaffoldIntegrationNotice'],
+                actions: ['assignWorkspaceResult'],
               },
               {
                 // Interactive empty dir: ask first.
                 target: 'prompting',
-                actions: ['assignWorkspaceResult', 'emitScaffoldIntegrationNotice'],
+                actions: ['assignWorkspaceResult'],
               },
             ],
             onError: {
