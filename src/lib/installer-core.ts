@@ -695,7 +695,19 @@ export const installerMachine = setup({
         {
           target: 'error',
           actions: [
-            assign({ error: () => new Error('Could not detect framework integration') }),
+            assign({
+              error: ({ context }) => {
+                const dir = context.options.installDir;
+                return new Error(
+                  `No supported framework was detected in ${dir}.\n` +
+                    `Because this directory isn't empty, a new app wasn't scaffolded, and no recognized ` +
+                    `framework (such as a package.json with Next.js) was found to install into.\n\n` +
+                    `Next steps:\n` +
+                    `  - New app: run \`workos install\` in an empty directory to scaffold Next.js + AuthKit.\n` +
+                    `  - Existing project: run from the directory that contains your package.json, or pass --install-dir <path>.`,
+                );
+              },
+            }),
             { type: 'emitStateExit', params: { state: 'preparing' } },
           ],
         },
