@@ -147,7 +147,7 @@ describe('runCreateNextApp', () => {
     (spawn as unknown as Mock).mockReset();
   });
 
-  it('spawns npx with the pinned create-next-app version and cwd, streaming progress', async () => {
+  it('runs create-next-app via the package manager runner, streaming progress', async () => {
     const child = makeFakeChild();
     (spawn as unknown as Mock).mockReturnValue(child);
 
@@ -163,10 +163,38 @@ describe('runCreateNextApp', () => {
     await expect(promise).resolves.toBeUndefined();
     expect(progress.join('')).toContain('Creating a new Next.js app');
     expect(spawn).toHaveBeenCalledWith(
-      'npx',
-      expect.arrayContaining([`create-next-app@${CREATE_NEXT_APP_VERSION}`, '--use-pnpm']),
+      'pnpm',
+      expect.arrayContaining(['dlx', `create-next-app@${CREATE_NEXT_APP_VERSION}`, '--use-pnpm']),
       expect.objectContaining({ cwd: '/tmp/wos-empty' }),
     );
+  });
+
+  it('uses each package manager its own runner (npx / pnpm dlx / yarn dlx / bunx)', async () => {
+    const cases: Array<[PackageManager, string, string[]]> = [
+      ['npm', 'npx', ['--yes', `create-next-app@${CREATE_NEXT_APP_VERSION}`]],
+      ['pnpm', 'pnpm', ['dlx', `create-next-app@${CREATE_NEXT_APP_VERSION}`]],
+      ['yarn', 'yarn', ['dlx', `create-next-app@${CREATE_NEXT_APP_VERSION}`]],
+      ['bun', 'bunx', [`create-next-app@${CREATE_NEXT_APP_VERSION}`]],
+    ];
+
+    for (const [pm, bin, leadingArgs] of cases) {
+      (spawn as unknown as Mock).mockReset();
+      const child = makeFakeChild();
+      (spawn as unknown as Mock).mockReturnValue(child);
+
+      const promise = runCreateNextApp({
+        installDir: '/tmp/x',
+        packageManager: pm,
+        emitter: new InstallerEventEmitter(),
+      });
+      child.emit('close', 0);
+      await expect(promise).resolves.toBeUndefined();
+
+      const [calledBin, calledArgs] = (spawn as unknown as Mock).mock.calls[0] as [string, string[]];
+      expect(calledBin).toBe(bin);
+      expect(calledArgs.slice(0, leadingArgs.length)).toEqual(leadingArgs);
+      expect(calledArgs).toContain(`--use-${pm}`);
+    }
   });
 
   it('rejects when create-next-app exits non-zero, preserving stderr', async () => {
@@ -192,5 +220,21 @@ describe('runCreateNextApp', () => {
     child.emit('error', new Error('spawn npx ENOENT'));
 
     await expect(promise).rejects.toThrow(/ENOENT/);
+  });
+
+  it('caps stderr in the rejection message', async () => {
+    const child = makeFakeChild();
+    (spawn as unknown as Mock).mockReturnValue(child);
+
+    const emitter = new InstallerEventEmitter();
+    const promise = runCreateNextApp({ installDir: '/tmp/wos-empty', packageManager: 'npm', emitter });
+
+    child.stderr.emit('data', Buffer.from('e'.repeat(5000)));
+    child.emit('close', 1);
+
+    const err = (await promise.catch((e: unknown) => e)) as Error;
+    expect(err).toBeInstanceOf(Error);
+    // 2000-char stderr cap + the "create-next-app exited with code 1: " prefix.
+    expect(err.message.length).toBeLessThan(2100);
   });
 });

@@ -105,9 +105,23 @@ export function buildCreateNextAppArgs(pm: PackageManager): string[] {
 }
 
 /**
- * Spawn `npx create-next-app@<pinned> .` in `installDir`, streaming output as
- * `scaffold:progress` events. Resolves on exit 0; rejects on non-zero exit or
- * spawn error so the state machine can route to its error state.
+ * Each package manager's own package runner. Running create-next-app through the
+ * resolved PM's runner (instead of always `npx`) means we don't require npm/npx
+ * to be on PATH — e.g. a bun-only machine has no `npx`. `yarn dlx` assumes
+ * Yarn >= 2 (Berry); a Yarn 1 user would need `--pm npm`.
+ */
+const PM_RUNNER: Record<PackageManager, { bin: string; args: string[] }> = {
+  npm: { bin: 'npx', args: ['--yes'] },
+  pnpm: { bin: 'pnpm', args: ['dlx'] },
+  yarn: { bin: 'yarn', args: ['dlx'] },
+  bun: { bin: 'bunx', args: [] },
+};
+
+/**
+ * Spawn `create-next-app@<pinned> .` in `installDir` via the resolved package
+ * manager's runner, streaming output as `scaffold:progress` events. Resolves on
+ * exit 0; rejects on non-zero exit or spawn error so the state machine can route
+ * to its error state.
  */
 export function runCreateNextApp(opts: {
   installDir: string;
@@ -115,10 +129,11 @@ export function runCreateNextApp(opts: {
   emitter: InstallerEventEmitter;
 }): Promise<void> {
   const { installDir, packageManager, emitter } = opts;
-  const args = [`--yes`, `create-next-app@${CREATE_NEXT_APP_VERSION}`, ...buildCreateNextAppArgs(packageManager)];
+  const runner = PM_RUNNER[packageManager];
+  const args = [...runner.args, `create-next-app@${CREATE_NEXT_APP_VERSION}`, ...buildCreateNextAppArgs(packageManager)];
 
   return new Promise<void>((resolve, reject) => {
-    const child = spawn('npx', args, {
+    const child = spawn(runner.bin, args, {
       cwd: installDir,
       env: process.env,
       ...SPAWN_OPTS,
@@ -140,7 +155,9 @@ export function runCreateNextApp(opts: {
       if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`create-next-app exited with code ${code ?? 1}${stderr ? `: ${stderr.trim()}` : ''}`));
+        // Cap stderr so a long npm/dependency-resolution trace doesn't bloat the error.
+        const detail = stderr ? `: ${stderr.trim().slice(0, 2000)}` : '';
+        reject(new Error(`create-next-app exited with code ${code ?? 1}${detail}`));
       }
     });
 
