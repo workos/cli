@@ -136,7 +136,7 @@ function checkSignoutGetHandler(ctx: CheckContext): AuthPatternFinding[] {
         filePath: relative(ctx.installDir, route),
         remediation:
           'Convert to a POST server action. GET routes with side effects are vulnerable to CSRF and will be triggered by Next.js link prefetching.',
-        docsUrl: 'https://workos.com/docs/authkit/sign-out',
+        docsUrl: 'https://workos.com/docs/authkit/nextjs#ending-the-session',
       });
     }
   }

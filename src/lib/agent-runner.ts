@@ -1,6 +1,12 @@
 import { getReference } from '@workos/skills';
 import { SPINNER_MESSAGE, type FrameworkConfig } from './framework-config.js';
 import { validateInstallation, quickCheckValidateAndFormat } from './validation/index.js';
+import {
+  runInstallSecurityChecks,
+  securityFindingsToIssues,
+  formatSecurityFindingsForAgent,
+  formatBlockingSecurityError,
+} from './validation/security-checks.js';
 import type { InstallerOptions } from '../utils/types.js';
 import {
   ensurePackageIsInstalled,
@@ -114,11 +120,25 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
     options,
   );
 
+  const integration = config.metadata.integration;
+
   const retryConfig: RetryConfig | undefined = options.noValidate
     ? undefined
     : {
         maxRetries: options.maxRetries ?? 2,
-        validateAndFormat: quickCheckValidateAndFormat,
+        // Self-correction combines two layers: build/typecheck (existing) AND the
+        // security subset of doctor's auth-pattern checks. The latter is what was
+        // missing — it's why an insecure GET sign-out could pass the build and
+        // ship as a "successful" install. Only error-severity security findings
+        // force a retry; any accompanying warnings ride along in the prompt.
+        validateAndFormat: async (workingDirectory: string) => {
+          const quickPrompt = await quickCheckValidateAndFormat(workingDirectory);
+          const security = await runInstallSecurityChecks(integration, workingDirectory);
+          if (quickPrompt === null && security.blocking.length === 0) return null;
+          return [quickPrompt, formatSecurityFindingsForAgent(security.findings)]
+            .filter((p): p is string => Boolean(p))
+            .join('\n\n');
+        },
       };
 
   // Run agent with retry support — agent gets correction prompts on validation failure
@@ -157,21 +177,42 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
   // Run full validation after agent (with retries) completes
   // Quick checks already ran inside the retry loop — skip build
   if (!options.noValidate) {
-    options.emitter?.emit('validation:start', { framework: config.metadata.integration });
+    options.emitter?.emit('validation:start', { framework: integration });
 
-    const validationResult = await validateInstallation(config.metadata.integration, options.installDir, {
+    const validationResult = await validateInstallation(integration, options.installDir, {
       runBuild: false,
     });
 
-    if (validationResult.issues.length > 0) {
-      options.emitter?.emit('validation:issues', { issues: validationResult.issues });
+    // Run doctor's security subset as the final gate. Its absence here is the
+    // install-validate ↔ doctor gap: install reported success while `workos
+    // doctor` immediately found a SIGNOUT_GET_HANDLER hole.
+    const security = await runInstallSecurityChecks(integration, options.installDir);
+    const allIssues = [...validationResult.issues, ...securityFindingsToIssues(security.findings)];
+
+    if (allIssues.length > 0) {
+      options.emitter?.emit('validation:issues', { issues: allIssues });
     }
 
     options.emitter?.emit('validation:complete', {
-      passed: validationResult.passed,
-      issueCount: validationResult.issues.length,
+      passed: validationResult.passed && security.blocking.length === 0,
+      issueCount: allIssues.length,
       durationMs: validationResult.durationMs,
     });
+
+    // Block success: an error-severity security finding that survived the
+    // self-correction retries fails the install rather than shipping silently.
+    // Throwing routes through the state machine's error state (success: false,
+    // non-zero exit) and skips the commit/PR steps, leaving the insecure code
+    // uncommitted for the user to inspect.
+    if (security.blocking.length > 0) {
+      analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
+        action: 'security gate blocked install',
+        integration,
+        codes: security.blocking.map((f) => f.code).join(','),
+      });
+      await analytics.shutdown('error');
+      throw new Error(formatBlockingSecurityError(security.blocking));
+    }
   }
 
   // Build environment variables from WorkOS credentials
