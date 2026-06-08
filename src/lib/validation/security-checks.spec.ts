@@ -42,7 +42,11 @@ describe('runInstallSecurityChecks', () => {
   });
 
   it('returns no blocking findings for a clean POST sign-out install', async () => {
-    writeFixtureFile(testDir, 'app/auth/actions.ts', "'use server';\nexport async function signOutAction() { await signOut(); }");
+    writeFixtureFile(
+      testDir,
+      'app/auth/actions.ts',
+      "'use server';\nexport async function signOutAction() { await signOut(); }",
+    );
 
     const { blocking } = await runInstallSecurityChecks('nextjs', testDir);
 
