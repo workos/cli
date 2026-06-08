@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.1](https://github.com/workos/cli/compare/v0.17.0...v0.17.1) (2026-06-08)
+
+
+### Bug Fixes
+
+* gate install success on doctor's auth-pattern security checks ([#175](https://github.com/workos/cli/issues/175)) ([5a50c77](https://github.com/workos/cli/commit/5a50c77d8568333530e6aeca44fa271f3af1f239))
+
 ## [0.17.0](https://github.com/workos/cli/compare/v0.16.0...v0.17.0) (2026-06-08)
 
 
