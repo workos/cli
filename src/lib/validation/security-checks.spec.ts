@@ -54,7 +54,7 @@ describe('runInstallSecurityChecks', () => {
   });
 
   it('treats a hardcoded API key in source as blocking (framework-agnostic)', async () => {
-    writeFixtureFile(testDir, 'app/page.tsx', 'const key = "sk_test_abcdefghij1234567";');
+    writeFixtureFile(testDir, 'app/page.tsx', 'const key = "sk_test_FIXTUREKEYFORTESTING1";');
 
     const { blocking } = await runInstallSecurityChecks('nextjs', testDir);
 
@@ -63,7 +63,7 @@ describe('runInstallSecurityChecks', () => {
 
   it('treats a client-exposed secret API key as blocking', async () => {
     // NEXT_PUBLIC_ prefix ships the secret to the browser bundle.
-    writeFixtureFile(testDir, '.env.local', 'NEXT_PUBLIC_WORKOS_API_KEY=sk_live_abcdefghij1234567\n');
+    writeFixtureFile(testDir, '.env.local', 'NEXT_PUBLIC_WORKOS_API_KEY=sk_live_FIXTUREKEYFORTESTING1\n');
 
     const { blocking } = await runInstallSecurityChecks('nextjs', testDir);
 
@@ -81,7 +81,7 @@ describe('runInstallSecurityChecks', () => {
   });
 
   it('still runs cross-framework checks for an unknown integration', async () => {
-    writeFixtureFile(testDir, 'src/app.ts', 'const key = "sk_live_abcdefghij1234567";');
+    writeFixtureFile(testDir, 'src/app.ts', 'const key = "sk_live_FIXTUREKEYFORTESTING1";');
 
     const { blocking } = await runInstallSecurityChecks('some-backend', testDir);
 

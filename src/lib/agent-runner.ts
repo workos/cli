@@ -166,16 +166,6 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
     throw new Error(message);
   }
 
-  // Track retry metrics
-  if (agentResult.retryCount !== undefined && agentResult.retryCount > 0) {
-    analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
-      action: 'agent retry summary',
-      retry_count: agentResult.retryCount,
-      max_retries: options.maxRetries ?? 2,
-      passed_after_retry: true,
-    });
-  }
-
   // Run full validation after agent (with retries) completes
   // Quick checks already ran inside the retry loop — skip build
   if (!options.noValidate) {
@@ -215,6 +205,19 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
       await analytics.shutdown('error');
       throw new Error(formatBlockingSecurityError(security.blocking));
     }
+  }
+
+  // Track retry metrics AFTER the security gate. `passed_after_retry` must
+  // reflect a genuinely successful install, not just an exhausted retry loop —
+  // emitting it before the gate could pair a "passed after retry" event with a
+  // "security gate blocked install" failure for the same run.
+  if (agentResult.retryCount !== undefined && agentResult.retryCount > 0) {
+    analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
+      action: 'agent retry summary',
+      retry_count: agentResult.retryCount,
+      max_retries: options.maxRetries ?? 2,
+      passed_after_retry: true,
+    });
   }
 
   // Build environment variables from WorkOS credentials
