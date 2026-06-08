@@ -130,7 +130,9 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
         // security subset of doctor's auth-pattern checks. The latter is what was
         // missing — it's why an insecure GET sign-out could pass the build and
         // ship as a "successful" install. Only error-severity security findings
-        // force a retry; any accompanying warnings ride along in the prompt.
+        // force a retry; warning findings ride along in the prompt only when a
+        // retry is already triggered by an error or a build failure (warnings are
+        // still surfaced in the final validation report regardless).
         validateAndFormat: async (workingDirectory: string) => {
           const quickPrompt = await quickCheckValidateAndFormat(workingDirectory);
           const security = await runInstallSecurityChecks(integration, workingDirectory);

@@ -61,6 +61,15 @@ describe('runInstallSecurityChecks', () => {
     expect(blocking.map((f) => f.code)).toContain('API_KEY_IN_SOURCE');
   });
 
+  it('treats a client-exposed secret API key as blocking', async () => {
+    // NEXT_PUBLIC_ prefix ships the secret to the browser bundle.
+    writeFixtureFile(testDir, '.env.local', 'NEXT_PUBLIC_WORKOS_API_KEY=sk_live_abcdefghij1234567\n');
+
+    const { blocking } = await runInstallSecurityChecks('nextjs', testDir);
+
+    expect(blocking.map((f) => f.code)).toContain('API_KEY_LEAKED_TO_CLIENT');
+  });
+
   it('reports warning-severity findings without blocking', async () => {
     // .env.local present but not gitignored -> ENV_FILE_NOT_GITIGNORED (warning)
     writeFixtureFile(testDir, '.env.local', 'WORKOS_CLIENT_ID=client_test\n');
