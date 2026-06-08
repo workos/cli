@@ -465,10 +465,7 @@ describe('InstallerCore State Machine', () => {
   });
 
   describe('scaffold flow', () => {
-    function createScaffoldActor(opts: {
-      workspace: WorkspaceCheckOutput;
-      runScaffoldImpl?: () => Promise<void>;
-    }) {
+    function createScaffoldActor(opts: { workspace: WorkspaceCheckOutput; runScaffoldImpl?: () => Promise<void> }) {
       const emitter = createInstallerEventEmitter();
       const options: InstallerOptions = {
         debug: false,
@@ -485,7 +482,9 @@ describe('InstallerCore State Machine', () => {
         actors: {
           ...baseMockActors,
           checkWorkspace: fromPromise<WorkspaceCheckOutput, { options: InstallerOptions }>(async () => opts.workspace),
-          runScaffold: fromPromise<void, { context: InstallerMachineContext }>(opts.runScaffoldImpl ?? (async () => {})),
+          runScaffold: fromPromise<void, { context: InstallerMachineContext }>(
+            opts.runScaffoldImpl ?? (async () => {}),
+          ),
         },
       });
 
