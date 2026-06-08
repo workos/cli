@@ -130,7 +130,11 @@ export function runCreateNextApp(opts: {
 }): Promise<void> {
   const { installDir, packageManager, emitter } = opts;
   const runner = PM_RUNNER[packageManager];
-  const args = [...runner.args, `create-next-app@${CREATE_NEXT_APP_VERSION}`, ...buildCreateNextAppArgs(packageManager)];
+  const args = [
+    ...runner.args,
+    `create-next-app@${CREATE_NEXT_APP_VERSION}`,
+    ...buildCreateNextAppArgs(packageManager),
+  ];
 
   return new Promise<void>((resolve, reject) => {
     const child = spawn(runner.bin, args, {
