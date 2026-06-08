@@ -237,4 +237,16 @@ describe('runCreateNextApp', () => {
     // 2000-char stderr cap + the "create-next-app exited with code 1: " prefix.
     expect(err.message.length).toBeLessThan(2100);
   });
+
+  it('reports the signal when create-next-app is killed (null exit code)', async () => {
+    const child = makeFakeChild();
+    (spawn as unknown as Mock).mockReturnValue(child);
+
+    const emitter = new InstallerEventEmitter();
+    const promise = runCreateNextApp({ installDir: '/tmp/wos-empty', packageManager: 'npm', emitter });
+
+    child.emit('close', null, 'SIGTERM');
+
+    await expect(promise).rejects.toThrow(/killed by signal SIGTERM/);
+  });
 });

@@ -147,17 +147,23 @@ export function runCreateNextApp(opts: {
 
     child.stdout?.on('data', stream);
     child.stderr?.on('data', (data: Buffer) => {
-      stderr += data.toString();
+      // Bound the buffer at collection time so a pathological failure (e.g. a full
+      // npm resolution trace) can't accumulate hundreds of KB. Progress still streams.
+      if (stderr.length < 2000) {
+        stderr += data.toString();
+      }
       stream(data);
     });
 
-    child.on('close', (code) => {
+    child.on('close', (code, signal) => {
       if (code === 0) {
         resolve();
       } else {
-        // Cap stderr so a long npm/dependency-resolution trace doesn't bloat the error.
         const detail = stderr ? `: ${stderr.trim().slice(0, 2000)}` : '';
-        reject(new Error(`create-next-app exited with code ${code ?? 1}${detail}`));
+        // code is null when the process was killed by a signal (e.g. SIGTERM from a
+        // timeout layer); surface that instead of masking it as "exited with code 1".
+        const exitInfo = code !== null ? `exited with code ${code}` : `was killed by signal ${signal ?? 'unknown'}`;
+        reject(new Error(`create-next-app ${exitInfo}${detail}`));
       }
     });
 
