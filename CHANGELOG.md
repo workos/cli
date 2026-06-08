@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0](https://github.com/workos/cli/compare/v0.16.0...v0.17.0) (2026-06-08)
+
+
+### Features
+
+* scaffold a Next.js app when installing in an empty directory ([#173](https://github.com/workos/cli/issues/173)) ([d96ad16](https://github.com/workos/cli/commit/d96ad161de1af2d91bce9901145616464959f517))
+
 ## [0.16.0](https://github.com/workos/cli/compare/v0.15.2...v0.16.0) (2026-06-02)
 
 
