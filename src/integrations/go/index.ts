@@ -12,7 +12,7 @@ import { getOrAskForWorkOSCredentials } from '../../utils/clack-utils.js';
 import { autoConfigureWorkOSEnvironment } from '../../lib/workos-management.js';
 import { validateInstallation } from '../../lib/validation/index.js';
 import { parseEnvFile } from '../../utils/env-parser.js';
-import { getReference } from '@workos/skills';
+import { getReference } from '../../lib/sdk-runtime/skills.js';
 
 /** Default port for Go HTTP servers */
 const GO_DEFAULT_PORT = 8080;

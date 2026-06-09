@@ -15,6 +15,10 @@ pnpm-debug.log
 dist/
 coverage/
 
+# Compiled standalone binary + Bun --compile scratch files
+dist-bin/
+*.bun-build
+
 # Generated
 src/version.ts
 

@@ -21,7 +21,12 @@ const NODE_VERSION_RANGE = getConfig().nodeVersion;
 
 // Have to run this above the other imports because they are importing clack that
 // has the problematic imports.
-if (!satisfies(process.version, NODE_VERSION_RANGE)) {
+//
+// Skip the gate under Bun (dev `bun run` or a Bun-compiled binary): there,
+// `process.version` reports Bun's emulated Node version, which is not a real Node
+// runtime to validate. The published npm package runs under Node (see shebang),
+// where this check still applies.
+if (!process.versions.bun && !satisfies(process.version, NODE_VERSION_RANGE)) {
   red(
     `WorkOS AuthKit installer requires Node.js ${NODE_VERSION_RANGE}. You are using Node.js ${process.version}. Please upgrade your Node.js version.`,
   );
@@ -246,6 +251,10 @@ async function runCli(): Promise<void> {
   const flags = extractUserFlags(rawArgs);
 
   const parser = yargs(rawArgs)
+    // Pin the program name so help/usage reads `workos` regardless of how the
+    // process was launched (node shim, npx, or a Bun-compiled binary where the
+    // default $0 resolves to `bun`).
+    .scriptName('workos')
     .parserConfiguration({ 'populate--': true })
     .exitProcess(false)
     .fail((msg, err) => {

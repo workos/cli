@@ -1,8 +1,6 @@
-import { readdirSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { FrameworkConfig, Language } from './framework-config.js';
 import type { InstallerOptions } from '../utils/types.js';
+import { integrationLoaders } from '../integrations/_manifest.js';
 
 /**
  * Standard exports from an integration module.
@@ -34,45 +32,17 @@ export interface IntegrationRegistry {
 }
 
 /**
- * Build the integration registry by discovering all integration modules.
- * Scans `src/integrations/` (or `dist/integrations/` at runtime) for directories
- * with an index.js/index.ts file and dynamically imports them.
+ * Build the integration registry from the static manifest in
+ * `src/integrations/_manifest.ts`. Each loader is a literal dynamic import, so
+ * it stays lazy AND survives `bun build --compile` (no runtime filesystem scan,
+ * which has no `dist/integrations/` to read inside a single-file binary).
  */
 export async function buildRegistry(): Promise<IntegrationRegistry> {
   const modules = new Map<string, IntegrationModule>();
 
-  // Resolve the integrations directory relative to this file
-  // In dev: src/lib/registry.ts -> src/integrations/
-  // In dist: dist/lib/registry.js -> dist/integrations/
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = dirname(__filename);
-  const integrationsDir = join(__dirname, '..', 'integrations');
-
-  if (!existsSync(integrationsDir)) {
-    throw new Error(`No integrations directory found at ${integrationsDir}. Is the build corrupt?`);
-  }
-
-  const entries = readdirSync(integrationsDir, { withFileTypes: true });
-  const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name);
-
-  if (dirs.length === 0) {
-    throw new Error('No integrations found. Is the build corrupt?');
-  }
-
-  for (const dir of dirs) {
-    // Skip directories starting with _ (convention for internal files like _manifest.ts)
-    if (dir.startsWith('_')) continue;
-
-    const indexPath = join(integrationsDir, dir, 'index.js');
-    const indexTsPath = join(integrationsDir, dir, 'index.ts');
-
-    if (!existsSync(indexPath) && !existsSync(indexTsPath)) {
-      // Skip directories without an index file (not an integration)
-      continue;
-    }
-
+  for (const [dir, load] of Object.entries(integrationLoaders)) {
     try {
-      const mod = (await import(pathToFileURL(join(integrationsDir, dir, 'index.js')).href)) as IntegrationModule;
+      const mod = await load();
 
       if (!mod.config || !mod.run) {
         console.warn(`Integration ${dir} missing 'config' or 'run' export, skipping`);

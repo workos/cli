@@ -5,6 +5,7 @@
 
 import { dirname } from 'path';
 import { getSkillsDir as getSkillsPackageDir } from '@workos/skills';
+import { resolveEmbeddedClaude, resolveEmbeddedSkillsPlugin } from './sdk-runtime/runtime.js';
 import { debug, logInfo, logWarn, logError, initLogFile, getLogFilePath } from '../utils/debug.js';
 import type { InstallerOptions } from '../utils/types.js';
 import { analytics } from '../utils/analytics.js';
@@ -634,10 +635,20 @@ export async function runAgent(
       await currentTurnDone;
     };
 
-    // Load plugin from @workos/skills package
-
-    const pluginPath = dirname(getSkillsPackageDir());
+    // Load plugin from @workos/skills package. In a compiled binary the skills
+    // are extracted from the embedded asset map; in dev they resolve from
+    // node_modules (resolveEmbeddedSkillsPlugin returns null).
+    const embeddedSkills = await resolveEmbeddedSkillsPlugin();
+    const pluginPath = embeddedSkills ?? dirname(getSkillsPackageDir());
     logInfo('Loading plugin from:', pluginPath);
+
+    // In a compiled binary the SDK cannot resolve the Claude Code native binary
+    // from node_modules, so we extract the embedded one and point the SDK at it.
+    // In dev this is null and the SDK resolves the binary itself.
+    const claudeExecutable = await resolveEmbeddedClaude();
+    if (claudeExecutable) {
+      logInfo('Using extracted Claude Code executable:', claudeExecutable);
+    }
 
     const response = query({
       prompt: createPromptStream(),
@@ -647,6 +658,7 @@ export async function runAgent(
         permissionMode: 'acceptEdits',
         mcpServers: agentConfig.mcpServers,
         env: agentConfig.sdkEnv,
+        ...(claudeExecutable ? { pathToClaudeCodeExecutable: claudeExecutable } : {}),
         canUseTool: (toolName, input) => {
           logInfo('canUseTool called:', { toolName, input });
           const result = installerCanUseTool(toolName, input);
@@ -901,10 +913,13 @@ function handleSDKMessage(
     case 'result': {
       // The SDK may return subtype 'success' with is_error: true when API
       // retries are exhausted (e.g., persistent 500s). Check is_error first.
-      const isResultError = (message as Record<string, unknown>).is_error === true;
+      // `result` only exists on the success variant of SDKResultMessage, so read
+      // it through the same record cast used for is_error rather than the union.
+      const resultRecord = message as Record<string, unknown>;
+      const isResultError = resultRecord.is_error === true;
 
       if (isResultError) {
-        const resultText = typeof message.result === 'string' ? message.result : '';
+        const resultText = typeof resultRecord.result === 'string' ? resultRecord.result : '';
         logError('Agent result marked as error:', resultText);
 
         // Detect rate limiting (429) — check before 5xx so it gets distinct messaging

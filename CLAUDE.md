@@ -19,7 +19,8 @@ WorkOS CLI for installing AuthKit integrations and managing WorkOS resources (or
 
 ## Tech Constraints
 
-- **pnpm** only
+- **bun** only (`bun install`, `bun run <script>`). Run tests with `bun run test`, NOT `bunx vitest` (bunx sets `npm_command=exec`, which flips `getWorkOSCommand()` to emit `npx workos@latest`).
+- `bun build --compile` requires a `bun install` node_modules; pnpm's symlinked store is not resolvable by the compile bundler.
 - Avoid Node-specific sync APIs (crypto, fs sync) unless necessary
 
 ## Commit Conventions
@@ -29,10 +30,11 @@ WorkOS CLI for installing AuthKit integrations and managing WorkOS resources (or
 ## Commands
 
 ```bash
-pnpm build        # Build the project
-pnpm dev          # Dev mode (build + watch + link)
-pnpm test         # Run tests
-pnpm typecheck    # Type check
+bun install       # Install dependencies
+bun run build     # Build the project (tsc)
+bun run dev       # Dev mode (build + watch + link)
+bun run test      # Run tests (vitest)
+bun run typecheck # Type check
 ```
 
 ## Adding a New Framework
@@ -94,14 +96,14 @@ All commands automatically emit a `command` telemetry event with name, duration,
 **Don't:**
 
 - Use Node-specific sync APIs (crypto, fs sync) unless necessary
-- Use npm or yarn -- pnpm only
+- Use npm, yarn, or pnpm -- bun only
 - Skip JSON mode tests in spec files
 - Forget to wire up new frameworks in `src/run.ts` switch statement
 
 ## PR Checklist
 
-- [ ] `pnpm build` passes
-- [ ] `pnpm test` passes
-- [ ] `pnpm typecheck` passes
+- [ ] `bun run build` passes
+- [ ] `bun run test` passes
+- [ ] `bun run typecheck` passes
 - [ ] Conventional Commit message format used (`feat:`, `fix:`, `feat!:` for breaking)
 - [ ] New commands include JSON mode support and tests

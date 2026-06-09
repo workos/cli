@@ -7,7 +7,7 @@ import { enableDebugLogs } from '../../utils/debug.js';
 import { analytics } from '../../utils/analytics.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from '../../lib/constants.js';
 import { parseEnvFile } from '../../utils/env-parser.js';
-import { getReference } from '@workos/skills';
+import { getReference } from '../../lib/sdk-runtime/skills.js';
 
 /**
  * Detect which Python package manager the project uses.
