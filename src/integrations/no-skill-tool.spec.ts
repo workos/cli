@@ -39,6 +39,16 @@ describe('allowedTools does not include Skill', () => {
   });
 });
 
+describe('no MCP docs server', () => {
+  // Skills references (inlined into prompts) replaced the docs MCP server.
+  // Spawning it via `npx -y` also broke the compiled binary's self-containment
+  // (required node/npx on PATH).
+  it('agent-interface.ts should not spawn @workos/mcp-docs-server', () => {
+    const content = readFileSync(join(import.meta.dirname, '..', 'lib', 'agent-interface.ts'), 'utf-8');
+    expect(content).not.toContain('mcp-docs-server');
+  });
+});
+
 describe('no skills plugin loaded into the child agent', () => {
   // Without the Skill tool the child agent cannot invoke plugin skills, so
   // loading one only costs tokens and forces skills extraction to disk.

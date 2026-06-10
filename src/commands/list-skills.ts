@@ -2,7 +2,7 @@ import { homedir } from 'os';
 import chalk from 'chalk';
 import { logError } from '../utils/debug.js';
 import { exitWithError, isJsonMode, outputJson } from '../utils/output.js';
-import { createAgents, detectAgents, discoverSkills, resolveSkillsDir } from './install-skill.js';
+import { createAgents, detectAgents, describeSkillSource, discoverSkills, resolveSkillSource } from './install-skill.js';
 import { findInstalledSkills } from './uninstall-skill.js';
 
 export interface ListSkillsOptions {
@@ -12,16 +12,16 @@ export interface ListSkillsOptions {
 export async function runListSkills(options: ListSkillsOptions): Promise<void> {
   const home = homedir();
   const agents = createAgents(home);
-  const skillsDir = await resolveSkillsDir();
+  const source = resolveSkillSource();
 
   let knownSkills: string[];
   try {
-    knownSkills = await discoverSkills(skillsDir);
+    knownSkills = await discoverSkills(source);
   } catch (error) {
     logError('Failed to read skills directory:', error);
     exitWithError({
       code: 'SKILLS_DIR_READ_FAILED',
-      message: `Could not read skills directory at ${skillsDir}. Your WorkOS CLI installation may be corrupted. Try reinstalling with \`npm install -g @workos-inc/cli\`.`,
+      message: `Could not read bundled skills at ${describeSkillSource(source)}. Your WorkOS CLI installation may be corrupted. Try reinstalling with \`npm install -g @workos-inc/cli\`.`,
     });
   }
 

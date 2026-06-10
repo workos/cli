@@ -5,7 +5,14 @@ import { join } from 'path';
 import chalk from 'chalk';
 import { logError, logInfo, logWarn } from '../utils/debug.js';
 import { exitWithError, isJsonMode, outputJson } from '../utils/output.js';
-import { createAgents, detectAgents, discoverSkills, resolveSkillsDir, type AgentConfig } from './install-skill.js';
+import {
+  createAgents,
+  detectAgents,
+  describeSkillSource,
+  discoverSkills,
+  resolveSkillSource,
+  type AgentConfig,
+} from './install-skill.js';
 import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
 
 export interface UninstallSkillOptions {
@@ -35,16 +42,16 @@ export async function uninstallSkill(
 export async function runUninstallSkill(options: UninstallSkillOptions): Promise<void> {
   const home = homedir();
   const agents = createAgents(home);
-  const skillsDir = await resolveSkillsDir();
+  const source = resolveSkillSource();
 
   let knownSkills: string[];
   try {
-    knownSkills = await discoverSkills(skillsDir);
+    knownSkills = await discoverSkills(source);
   } catch (error) {
     logError('Failed to read skills directory:', error);
     exitWithError({
       code: 'SKILLS_DIR_READ_FAILED',
-      message: `Could not read skills directory at ${skillsDir}. Your WorkOS CLI installation may be corrupted. Try reinstalling with \`npm install -g @workos-inc/cli\`.`,
+      message: `Could not read bundled skills at ${describeSkillSource(source)}. Your WorkOS CLI installation may be corrupted. Try reinstalling with \`npm install -g @workos-inc/cli\`.`,
     });
   }
 

@@ -1,13 +1,12 @@
 import { homedir } from 'os';
-import { dirname, join } from 'path';
+import { dirname, join, relative, sep } from 'path';
 import { existsSync } from 'fs';
 import { mkdir, mkdtemp, cp, rename, rm, readdir, readFile, stat, access, writeFile } from 'fs/promises';
 import chalk from 'chalk';
 import { getSkillsDir as getSkillsPackageDir } from '@workos/skills';
 import { IS_WINDOWS } from '../utils/platform.js';
 import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
-import { resolveEmbeddedSkillsPlugin } from '../lib/sdk-runtime/runtime.js';
-import { EMBEDDED_SKILLS_VERSION } from '../lib/sdk-runtime/embedded-assets.js';
+import { EMBEDDED_SKILLS, EMBEDDED_SKILLS_VERSION } from '../lib/sdk-runtime/embedded-assets.js';
 
 export const SKILL_VERSION_MARKER_FILENAME = '.workos-skill-version';
 
@@ -87,24 +86,27 @@ export interface InstallSkillOptions {
 }
 
 /**
- * Skills source dir given an (optionally) materialized embedded plugin path.
- * `materializeSkills` returns `<version>/plugins/workos`; the skill dirs live
- * under its `skills/` subdirectory. With no embedded plugin (dev), the
- * @workos/skills package layout in node_modules is the source.
+ * Where bundled skill content comes from:
+ * - `dir`: the @workos/skills package tree in node_modules (dev / npm install)
+ * - `map`: the EMBEDDED_SKILLS base64 file map baked into a compiled binary
+ *   (keys relative to the package root, e.g.
+ *   `plugins/workos/skills/workos/SKILL.md`). Installs write decoded files
+ *   straight into the target temp dir — no intermediate extraction.
  */
-export function skillsDirFromPlugin(pluginPath: string | null): string {
-  return pluginPath ? join(pluginPath, 'skills') : getSkillsPackageDir();
+export type SkillSource = { kind: 'dir'; dir: string } | { kind: 'map'; files: Record<string, string> };
+
+const SKILLS_KEY_PREFIX = 'plugins/workos/skills/';
+
+/** Skill-local dirs that are dev tooling, not skill content — never installed. */
+const EXCLUDED_SKILL_DIRS = new Set(['evals']);
+
+export function resolveSkillSource(): SkillSource {
+  return EMBEDDED_SKILLS ? { kind: 'map', files: EMBEDDED_SKILLS } : { kind: 'dir', dir: getSkillsPackageDir() };
 }
 
-/**
- * Resolve the on-disk directory containing the bundled skill dirs
- * (workos/, workos-widgets/). In a compiled binary the @workos/skills tree is
- * not on disk, so the embedded map is materialized first — skill installation
- * copies whole directories (markdown + yaml assets) into the user's agent
- * dirs, so a real source tree is required here.
- */
-export async function resolveSkillsDir(): Promise<string> {
-  return skillsDirFromPlugin(await resolveEmbeddedSkillsPlugin());
+/** Human-readable source location for error messages. */
+export function describeSkillSource(source: SkillSource): string {
+  return source.kind === 'dir' ? source.dir : 'embedded skills (compiled binary)';
 }
 
 /**
@@ -112,17 +114,28 @@ export async function resolveSkillsDir(): Promise<string> {
  * up from the package skills dir to package.json.
  */
 export async function resolveBundledSkillsVersion(
-  skillsDir: string,
+  source: SkillSource,
   embeddedVersion: string | null = EMBEDDED_SKILLS_VERSION,
 ): Promise<string | null> {
-  return embeddedVersion ?? getBundledSkillsVersion(skillsDir);
+  return source.kind === 'map' ? embeddedVersion : getBundledSkillsVersion(source.dir);
 }
 
-export async function discoverSkills(skillsDir: string): Promise<string[]> {
-  const entries = await readdir(skillsDir, { withFileTypes: true });
+export async function discoverSkills(source: SkillSource): Promise<string[]> {
+  if (source.kind === 'map') {
+    const names = new Set<string>();
+    for (const key of Object.keys(source.files)) {
+      if (!key.startsWith(SKILLS_KEY_PREFIX)) continue;
+      const name = key.slice(SKILLS_KEY_PREFIX.length).split('/')[0];
+      if (source.files[`${SKILLS_KEY_PREFIX}${name}/SKILL.md`]) {
+        names.add(name);
+      }
+    }
+    return [...names];
+  }
 
+  const entries = await readdir(source.dir, { withFileTypes: true });
   const dirs = entries.filter((e) => e.isDirectory());
-  const checks = await Promise.all(dirs.map((e) => pathExists(join(skillsDir, e.name, 'SKILL.md'))));
+  const checks = await Promise.all(dirs.map((e) => pathExists(join(source.dir, e.name, 'SKILL.md'))));
   return dirs.filter((_, i) => checks[i]).map((e) => e.name);
 }
 
@@ -149,11 +162,10 @@ export function detectAgents(agents: Record<string, AgentConfig>, filter?: strin
  * runInstallSkill) accumulate failures across the (skill × agent) matrix.
  */
 export async function installSkill(
-  skillsDir: string,
+  source: SkillSource,
   skillName: string,
   agent: AgentConfig,
 ): Promise<{ success: boolean; error?: string }> {
-  const sourceDir = join(skillsDir, skillName);
   const targetDir = join(agent.globalSkillsDir, skillName);
   const parent = dirname(targetDir);
 
@@ -172,7 +184,7 @@ export async function installSkill(
     tempDir = await mkdtemp(join(parent, `.workos.tmp-${skillName}-`));
     const backupDir = tempDir.replace('.workos.tmp-', '.workos.bak-');
 
-    await cp(sourceDir, tempDir, { recursive: true, errorOnExist: false });
+    await writeSkillTree(source, skillName, tempDir);
 
     const targetExisted = await pathExists(targetDir);
     if (targetExisted) {
@@ -204,6 +216,41 @@ export async function installSkill(
 }
 
 /**
+ * Write one skill's content tree into `destDir`, excluding dev-tooling dirs
+ * (EXCLUDED_SKILL_DIRS). Dir source copies; map source decodes base64 entries
+ * directly to disk — files only ever exist at the install destination.
+ */
+async function writeSkillTree(source: SkillSource, skillName: string, destDir: string): Promise<void> {
+  if (source.kind === 'dir') {
+    const sourceDir = join(source.dir, skillName);
+    await cp(sourceDir, destDir, {
+      recursive: true,
+      errorOnExist: false,
+      filter: (src) => {
+        const rel = relative(sourceDir, src);
+        return rel === '' || !EXCLUDED_SKILL_DIRS.has(rel.split(sep)[0]);
+      },
+    });
+    return;
+  }
+
+  const prefix = `${SKILLS_KEY_PREFIX}${skillName}/`;
+  let wrote = false;
+  for (const [key, base64] of Object.entries(source.files)) {
+    if (!key.startsWith(prefix)) continue;
+    const rel = key.slice(prefix.length);
+    if (EXCLUDED_SKILL_DIRS.has(rel.split('/')[0])) continue;
+    const dest = join(destDir, ...rel.split('/'));
+    await mkdir(dirname(dest), { recursive: true });
+    await writeFile(dest, Buffer.from(base64, 'base64'));
+    wrote = true;
+  }
+  if (!wrote) {
+    throw new Error(`Skill "${skillName}" not found in embedded skills`);
+  }
+}
+
+/**
  * Remove `.workos.tmp-{skillName}-*` and `.workos.bak-{skillName}-*` siblings
  * older than ORPHAN_STALE_MS. Fresh siblings (from a concurrent install) are
  * preserved — destroying them would race the other run's final rename.
@@ -226,8 +273,8 @@ async function cleanupStaleOrphans(parent: string, skillName: string): Promise<v
 export async function runInstallSkill(options: InstallSkillOptions): Promise<void> {
   const home = homedir();
   const agents = createAgents(home);
-  const skillsDir = await resolveSkillsDir();
-  const skills = await discoverSkills(skillsDir);
+  const source = resolveSkillSource();
+  const skills = await discoverSkills(source);
 
   const targetSkills = options.skill ? skills.filter((s) => options.skill!.includes(s)) : skills;
 
@@ -260,7 +307,7 @@ export async function runInstallSkill(options: InstallSkillOptions): Promise<voi
 
   for (const skill of targetSkills) {
     for (const agent of targetAgents) {
-      const result = await installSkill(skillsDir, skill, agent);
+      const result = await installSkill(source, skill, agent);
       results.push({ skill, agent, ...result });
     }
   }
@@ -279,7 +326,7 @@ export async function runInstallSkill(options: InstallSkillOptions): Promise<voi
   // successful install, so `workos doctor` doesn't immediately flag the
   // freshly-installed skills as stale or missing. Same primitive as
   // refreshWorkOSSkills — single source of truth for marker semantics.
-  const version = await resolveBundledSkillsVersion(skillsDir);
+  const version = await resolveBundledSkillsVersion(source);
   if (version) {
     const succeededAgents = new Set<AgentConfig>();
     for (const r of successful) succeededAgents.add(r.agent);
@@ -361,15 +408,15 @@ async function writeAgentSkillMarker(agent: AgentConfig, version: string): Promi
  */
 export async function refreshWorkOSSkills(opts: RefreshOptions = {}): Promise<RefreshResult | null> {
   const home = homedir();
-  const skillsDir = await resolveSkillsDir();
+  const source = resolveSkillSource();
   const detected = opts.agents ?? detectAgents(createAgents(home));
-  const allSkills = await discoverSkills(skillsDir).catch(() => []);
+  const allSkills = await discoverSkills(source).catch(() => []);
   const skills = opts.skills ? allSkills.filter((s) => opts.skills!.includes(s)) : allSkills;
   const writeMarker = opts.writeMarker ?? true;
 
   if (skills.length === 0 || detected.length === 0) return null;
 
-  const version = await resolveBundledSkillsVersion(skillsDir);
+  const version = await resolveBundledSkillsVersion(source);
   const perAgentBefore: Record<string, string | null> = {};
   const perAgentAfter: Record<string, string | null> = {};
   const succeededAgents: AgentConfig[] = [];
@@ -383,7 +430,7 @@ export async function refreshWorkOSSkills(opts: RefreshOptions = {}): Promise<Re
 
     let agentSucceeded = false;
     for (const skill of skills) {
-      const result = await installSkill(skillsDir, skill, agent);
+      const result = await installSkill(source, skill, agent);
       if (result.success) {
         agentSucceeded = true;
         installedSkills.add(skill);

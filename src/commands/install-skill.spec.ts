@@ -11,7 +11,6 @@ import {
   installSkill,
   autoInstallSkills,
   refreshWorkOSSkills,
-  skillsDirFromPlugin,
   resolveBundledSkillsVersion,
   type AgentConfig,
 } from './install-skill.js';
@@ -85,7 +84,7 @@ describe('install-skill', () => {
 
   describe('discoverSkills', () => {
     it('returns empty array when no skills exist', async () => {
-      const skills = await discoverSkills(skillsDir);
+      const skills = await discoverSkills({ kind: 'dir', dir: skillsDir });
       expect(skills).toEqual([]);
     });
 
@@ -96,7 +95,7 @@ describe('install-skill', () => {
       mkdirSync(join(skillsDir, 'skill-two'));
       writeFileSync(join(skillsDir, 'skill-two', 'SKILL.md'), '# Skill Two');
 
-      const skills = await discoverSkills(skillsDir);
+      const skills = await discoverSkills({ kind: 'dir', dir: skillsDir });
 
       expect(skills).toContain('skill-one');
       expect(skills).toContain('skill-two');
@@ -110,7 +109,7 @@ describe('install-skill', () => {
       mkdirSync(join(skillsDir, 'no-skill'));
       writeFileSync(join(skillsDir, 'no-skill', 'README.md'), '# Not a skill');
 
-      const skills = await discoverSkills(skillsDir);
+      const skills = await discoverSkills({ kind: 'dir', dir: skillsDir });
 
       expect(skills).toContain('has-skill');
       expect(skills).not.toContain('no-skill');
@@ -123,7 +122,7 @@ describe('install-skill', () => {
       mkdirSync(join(skillsDir, 'real-skill'));
       writeFileSync(join(skillsDir, 'real-skill', 'SKILL.md'), '# Skill');
 
-      const skills = await discoverSkills(skillsDir);
+      const skills = await discoverSkills({ kind: 'dir', dir: skillsDir });
 
       expect(skills).toEqual(['real-skill']);
     });
@@ -194,7 +193,7 @@ describe('install-skill', () => {
     });
 
     it('copies SKILL.md to target directory', async () => {
-      const result = await installSkill(skillsDir, 'test-skill', targetAgent);
+      const result = await installSkill({ kind: 'dir', dir: skillsDir }, 'test-skill', targetAgent);
 
       expect(result.success).toBe(true);
       expect(result.error).toBeUndefined();
@@ -207,7 +206,7 @@ describe('install-skill', () => {
     });
 
     it('copies the entire skill directory tree, including references/', async () => {
-      const result = await installSkill(skillsDir, 'test-skill', targetAgent);
+      const result = await installSkill({ kind: 'dir', dir: skillsDir }, 'test-skill', targetAgent);
 
       expect(result.success).toBe(true);
 
@@ -217,25 +216,25 @@ describe('install-skill', () => {
     });
 
     it('creates nested directories as needed', async () => {
-      const result = await installSkill(skillsDir, 'test-skill', targetAgent);
+      const result = await installSkill({ kind: 'dir', dir: skillsDir }, 'test-skill', targetAgent);
 
       expect(result.success).toBe(true);
       expect(existsSync(join(homeDir, '.test-agent/skills/test-skill'))).toBe(true);
     });
 
     it('returns error when source skill does not exist', async () => {
-      const result = await installSkill(skillsDir, 'nonexistent-skill', targetAgent);
+      const result = await installSkill({ kind: 'dir', dir: skillsDir }, 'nonexistent-skill', targetAgent);
 
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();
     });
 
     it('overwrites existing skill file', async () => {
-      await installSkill(skillsDir, 'test-skill', targetAgent);
+      await installSkill({ kind: 'dir', dir: skillsDir }, 'test-skill', targetAgent);
 
       writeFileSync(join(skillsDir, 'test-skill', 'SKILL.md'), '---\nname: test-skill\n---\n# Updated Skill');
 
-      const result = await installSkill(skillsDir, 'test-skill', targetAgent);
+      const result = await installSkill({ kind: 'dir', dir: skillsDir }, 'test-skill', targetAgent);
 
       expect(result.success).toBe(true);
 
@@ -245,7 +244,7 @@ describe('install-skill', () => {
 
     it('prunes stale files in the target that are not in the source (replace, not overlay)', async () => {
       // First install: target now matches source.
-      await installSkill(skillsDir, 'test-skill', targetAgent);
+      await installSkill({ kind: 'dir', dir: skillsDir }, 'test-skill', targetAgent);
 
       // Plant a stale file the agent had from a prior skill version.
       const staleFile = join(homeDir, '.test-agent/skills/test-skill/references/workos-stale.md');
@@ -253,7 +252,7 @@ describe('install-skill', () => {
       expect(existsSync(staleFile)).toBe(true);
 
       // Re-install — the new tree should fully replace the old one.
-      const result = await installSkill(skillsDir, 'test-skill', targetAgent);
+      const result = await installSkill({ kind: 'dir', dir: skillsDir }, 'test-skill', targetAgent);
 
       expect(result.success).toBe(true);
       expect(existsSync(staleFile)).toBe(false);
@@ -263,7 +262,7 @@ describe('install-skill', () => {
 
     it('rolls back to the original target when the temp→target rename fails mid-install', async () => {
       // Seed an existing target so the backup-rename branch has something to back up.
-      await installSkill(skillsDir, 'test-skill', targetAgent);
+      await installSkill({ kind: 'dir', dir: skillsDir }, 'test-skill', targetAgent);
       const targetFile = join(homeDir, '.test-agent/skills/test-skill/SKILL.md');
       const originalContent = readFileSync(targetFile, 'utf-8');
 
@@ -279,7 +278,7 @@ describe('install-skill', () => {
           throw new Error('simulated rename failure');
         });
 
-      const result = await installSkill(skillsDir, 'test-skill', targetAgent);
+      const result = await installSkill({ kind: 'dir', dir: skillsDir }, 'test-skill', targetAgent);
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('simulated rename failure');
@@ -292,7 +291,7 @@ describe('install-skill', () => {
       const fsPromises = await import('fs/promises');
       vi.mocked(fsPromises.cp).mockRejectedValueOnce(new Error('copy boom'));
 
-      const result = await installSkill(skillsDir, 'test-skill', targetAgent);
+      const result = await installSkill({ kind: 'dir', dir: skillsDir }, 'test-skill', targetAgent);
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('copy boom');
@@ -327,7 +326,7 @@ describe('install-skill', () => {
       const freshBak = join(parent, '.workos.bak-test-skill-cafef00d');
       mkdirSync(freshBak);
 
-      const result = await installSkill(skillsDir, 'test-skill', targetAgent);
+      const result = await installSkill({ kind: 'dir', dir: skillsDir }, 'test-skill', targetAgent);
       expect(result.success).toBe(true);
 
       expect(existsSync(oldTmp)).toBe(false);
@@ -347,7 +346,7 @@ describe('install-skill', () => {
       const oldTime = new Date(Date.now() - 2 * 60 * 60 * 1000);
       await utimes(peerSkill, oldTime, oldTime);
 
-      const result = await installSkill(skillsDir, 'test-skill', targetAgent);
+      const result = await installSkill({ kind: 'dir', dir: skillsDir }, 'test-skill', targetAgent);
       expect(result.success).toBe(true);
       expect(existsSync(join(peerSkill, 'SKILL.md'))).toBe(true);
     });
@@ -574,31 +573,74 @@ describe('install-skill', () => {
     });
   });
 
-  describe('skillsDirFromPlugin', () => {
-    it('uses the materialized plugin tree when running as a compiled binary', () => {
-      // materializeSkills returns <version>/plugins/workos; skill dirs live
-      // under its skills/ subdirectory.
-      expect(skillsDirFromPlugin('/rt/0.6.1/plugins/workos')).toBe(join('/rt/0.6.1/plugins/workos', 'skills'));
+  const makeTestAgent = (): AgentConfig => ({
+    name: 'test-agent',
+    displayName: 'Test Agent',
+    globalSkillsDir: join(homeDir, '.test-agent/skills'),
+    detect: () => true,
+  });
+
+  describe('map source (compiled binary)', () => {
+    // Key layout matches scripts/build-binary.ts buildSkillsMap.
+    const b64 = (s: string) => Buffer.from(s).toString('base64');
+    const files = {
+      'plugins/workos/skills/workos/SKILL.md': b64('# Router'),
+      'plugins/workos/skills/workos/references/workos-sso.md': b64('# SSO'),
+      'plugins/workos/skills/workos/evals/evals.json': b64('{}'),
+      'plugins/workos/skills/workos-widgets/SKILL.md': b64('# Widgets'),
+      'plugins/workos/skills/workos-widgets/references/scripts/query-spec.cjs': b64('// spec'),
+      'plugins/workos/plugin.json': b64('{}'),
+    };
+
+    it('discoverSkills derives skill names from map keys with a SKILL.md', async () => {
+      const skills = await discoverSkills({ kind: 'map', files });
+      expect(skills.sort()).toEqual(['workos', 'workos-widgets']);
     });
 
-    it('falls back to the @workos/skills package dir in dev', async () => {
-      const { getSkillsDir } = await import('@workos/skills');
-      vi.mocked(getSkillsDir).mockReturnValue('/pkg/plugins/workos/skills');
-      expect(skillsDirFromPlugin(null)).toBe('/pkg/plugins/workos/skills');
+    it('installSkill writes decoded files from the map, excluding evals/', async () => {
+      const agent = makeTestAgent();
+      const result = await installSkill({ kind: 'map', files }, 'workos', agent);
+      expect(result.success).toBe(true);
+      const target = join(agent.globalSkillsDir, 'workos');
+      expect(readFileSync(join(target, 'SKILL.md'), 'utf8')).toBe('# Router');
+      expect(readFileSync(join(target, 'references/workos-sso.md'), 'utf8')).toBe('# SSO');
+      expect(existsSync(join(target, 'evals'))).toBe(false);
+    });
+
+    it('installSkill preserves nested non-markdown assets (query-spec.cjs)', async () => {
+      const agent = makeTestAgent();
+      const result = await installSkill({ kind: 'map', files }, 'workos-widgets', agent);
+      expect(result.success).toBe(true);
+      const target = join(agent.globalSkillsDir, 'workos-widgets');
+      expect(readFileSync(join(target, 'references/scripts/query-spec.cjs'), 'utf8')).toBe('// spec');
+    });
+  });
+
+  describe('dir source excludes evals/', () => {
+    it('installSkill does not copy a skill-level evals/ dir', async () => {
+      mkdirSync(join(skillsDir, 'test-skill', 'evals'), { recursive: true });
+      writeFileSync(join(skillsDir, 'test-skill', 'SKILL.md'), '# Test');
+      writeFileSync(join(skillsDir, 'test-skill', 'evals', 'evals.json'), '{}');
+
+      const agent = makeTestAgent();
+      const result = await installSkill({ kind: 'dir', dir: skillsDir }, 'test-skill', agent);
+      expect(result.success).toBe(true);
+      expect(existsSync(join(agent.globalSkillsDir, 'test-skill', 'SKILL.md'))).toBe(true);
+      expect(existsSync(join(agent.globalSkillsDir, 'test-skill', 'evals'))).toBe(false);
     });
   });
 
   describe('resolveBundledSkillsVersion', () => {
-    it('prefers the embedded skills version when present', async () => {
-      await expect(resolveBundledSkillsVersion('/anywhere', '1.2.3')).resolves.toBe('1.2.3');
+    it('map source uses the embedded version', async () => {
+      await expect(resolveBundledSkillsVersion({ kind: 'map', files: {} }, '1.2.3')).resolves.toBe('1.2.3');
     });
 
-    it('falls back to package.json discovery when not embedded', async () => {
+    it('dir source falls back to package.json discovery', async () => {
       const packageRoot = join(testDir, 'pkg-v');
       const deepSkillsDir = join(packageRoot, 'plugins/workos/skills');
       mkdirSync(deepSkillsDir, { recursive: true });
       writeFileSync(join(packageRoot, 'package.json'), JSON.stringify({ version: '7.7.7' }));
-      await expect(resolveBundledSkillsVersion(deepSkillsDir, null)).resolves.toBe('7.7.7');
+      await expect(resolveBundledSkillsVersion({ kind: 'dir', dir: deepSkillsDir }, null)).resolves.toBe('7.7.7');
     });
   });
 });

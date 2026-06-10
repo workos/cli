@@ -67,6 +67,10 @@ async function buildSkillsMap(skillsRoot: string): Promise<Record<string, string
     const parent = (entry as unknown as { parentPath?: string; path?: string }).parentPath ?? entry.path ?? pluginsDir;
     const abs = join(parent, entry.name);
     const rel = relative(skillsRoot, abs); // e.g. plugins/workos/skills/workos/SKILL.md
+    // Skill-local evals/ dirs are dev tooling (eval fixtures), not skill
+    // content -- never embed them. Mirrors EXCLUDED_SKILL_DIRS in
+    // src/commands/install-skill.ts.
+    if (rel.split('/').includes('evals')) continue;
     map[rel] = (await readFile(abs)).toString('base64');
   }
   return map;

@@ -21,7 +21,6 @@ import { getAuthkitDomain, getCliAuthClientId } from './settings.js';
 import type {
   SDKMessage,
   SDKUserMessage,
-  Options as AgentSDKOptions,
   PermissionResult,
   query as queryFn,
 } from '@anthropic-ai/claude-agent-sdk';
@@ -96,7 +95,6 @@ export interface RetryConfig {
  */
 export type AgentRunConfig = {
   workingDirectory: string;
-  mcpServers: AgentSDKOptions['mcpServers'];
   model: string;
   allowedTools: string[];
   sdkEnv: Record<string, string | undefined>;
@@ -488,15 +486,8 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
       analytics.setTag('api_mode', activeProxyHandle ? 'gateway-proxy' : 'gateway');
     }
 
-    // Configure WorkOS MCP docs server for accessing WorkOS documentation
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
-      mcpServers: {
-        workos: {
-          command: 'npx',
-          args: ['-y', '@workos/mcp-docs-server'],
-        },
-      },
       model: getConfig().model,
       allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch'],
       sdkEnv,
@@ -647,7 +638,6 @@ export async function runAgent(
         model: agentConfig.model,
         cwd: agentConfig.workingDirectory,
         permissionMode: 'acceptEdits',
-        mcpServers: agentConfig.mcpServers,
         env: agentConfig.sdkEnv,
         ...(claudeExecutable ? { pathToClaudeCodeExecutable: claudeExecutable } : {}),
         canUseTool: (toolName, input) => {
