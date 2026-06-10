@@ -183,7 +183,7 @@ describe('runUninstallSkill', () => {
       const mod = await importOriginal<typeof import('./install-skill.js')>();
       return {
         ...mod,
-        getSkillsDir: () => skillsDir,
+        resolveSkillsDir: async () => skillsDir,
         createAgents: () => ({ test: makeTestAgent() }),
         detectAgents: () => [makeTestAgent()],
       };
@@ -228,7 +228,7 @@ describe('runUninstallSkill', () => {
         const mod = await importOriginal<typeof import('./install-skill.js')>();
         return {
           ...mod,
-          getSkillsDir: () => skillsDir,
+          resolveSkillsDir: async () => skillsDir,
           createAgents: () => ({ test: makeTestAgent() }),
           detectAgents: () => [makeTestAgent()],
         };

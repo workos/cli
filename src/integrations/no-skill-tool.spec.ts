@@ -38,3 +38,13 @@ describe('allowedTools does not include Skill', () => {
     expect(match![1]).not.toContain("'Skill'");
   });
 });
+
+describe('no skills plugin loaded into the child agent', () => {
+  // Without the Skill tool the child agent cannot invoke plugin skills, so
+  // loading one only costs tokens and forces skills extraction to disk.
+  // Reference content reaches the agent inlined in the prompt instead.
+  it('agent-interface.ts should not pass plugins to query()', () => {
+    const content = readFileSync(join(import.meta.dirname, '..', 'lib', 'agent-interface.ts'), 'utf-8');
+    expect(content).not.toMatch(/plugins:/);
+  });
+});

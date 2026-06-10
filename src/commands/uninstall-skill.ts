@@ -5,7 +5,7 @@ import { join } from 'path';
 import chalk from 'chalk';
 import { logError, logInfo, logWarn } from '../utils/debug.js';
 import { exitWithError, isJsonMode, outputJson } from '../utils/output.js';
-import { createAgents, detectAgents, discoverSkills, getSkillsDir, type AgentConfig } from './install-skill.js';
+import { createAgents, detectAgents, discoverSkills, resolveSkillsDir, type AgentConfig } from './install-skill.js';
 import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
 
 export interface UninstallSkillOptions {
@@ -35,7 +35,7 @@ export async function uninstallSkill(
 export async function runUninstallSkill(options: UninstallSkillOptions): Promise<void> {
   const home = homedir();
   const agents = createAgents(home);
-  const skillsDir = getSkillsDir();
+  const skillsDir = await resolveSkillsDir();
 
   let knownSkills: string[];
   try {

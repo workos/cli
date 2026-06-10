@@ -1,28 +1,19 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, readFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { materializeSkills } from './runtime.js';
-import { embeddedReferencePath } from './skills.js';
+import { describe, it, expect } from 'vitest';
+import { referenceFromEmbedded } from './skills.js';
 
-describe('embeddedReferencePath', () => {
-  let base: string;
-  beforeEach(async () => {
-    base = await mkdtemp(join(tmpdir(), 'wos-skref-'));
+describe('referenceFromEmbedded', () => {
+  // Key layout matches scripts/build-binary.ts buildSkillsMap: paths relative
+  // to the @workos/skills package root, base64-encoded contents.
+  const files = {
+    'plugins/workos/skills/workos/references/workos-authkit-base.md': Buffer.from('REF-CONTENT').toString('base64'),
+    'plugins/workos/skills/workos/SKILL.md': Buffer.from('ROUTER').toString('base64'),
+  };
+
+  it('decodes a reference straight from the embedded map (no filesystem)', () => {
+    expect(referenceFromEmbedded(files, 'workos-authkit-base')).toBe('REF-CONTENT');
   });
-  afterEach(async () => {
-    await rm(base, { recursive: true, force: true });
-  });
 
-  it('points at the reference file materializeSkills actually writes', async () => {
-    // The reference layout the @workos/skills package uses on disk.
-    const files = {
-      'plugins/workos/skills/workos/references/workos-authkit-base.md': Buffer.from('REF-CONTENT').toString('base64'),
-    };
-    const pluginPath = await materializeSkills(files, 'v1', join(base, 'rt'));
-
-    const refPath = embeddedReferencePath(pluginPath, 'workos-authkit-base');
-
-    expect(await readFile(refPath, 'utf-8')).toBe('REF-CONTENT');
+  it('throws a descriptive error for a missing reference', () => {
+    expect(() => referenceFromEmbedded(files, 'workos-nope')).toThrow(/workos-nope/);
   });
 });

@@ -6,6 +6,8 @@ import chalk from 'chalk';
 import { getSkillsDir as getSkillsPackageDir } from '@workos/skills';
 import { IS_WINDOWS } from '../utils/platform.js';
 import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
+import { resolveEmbeddedSkillsPlugin } from '../lib/sdk-runtime/runtime.js';
+import { EMBEDDED_SKILLS_VERSION } from '../lib/sdk-runtime/embedded-assets.js';
 
 export const SKILL_VERSION_MARKER_FILENAME = '.workos-skill-version';
 
@@ -84,8 +86,36 @@ export interface InstallSkillOptions {
   agent?: string[];
 }
 
-export function getSkillsDir(): string {
-  return getSkillsPackageDir();
+/**
+ * Skills source dir given an (optionally) materialized embedded plugin path.
+ * `materializeSkills` returns `<version>/plugins/workos`; the skill dirs live
+ * under its `skills/` subdirectory. With no embedded plugin (dev), the
+ * @workos/skills package layout in node_modules is the source.
+ */
+export function skillsDirFromPlugin(pluginPath: string | null): string {
+  return pluginPath ? join(pluginPath, 'skills') : getSkillsPackageDir();
+}
+
+/**
+ * Resolve the on-disk directory containing the bundled skill dirs
+ * (workos/, workos-widgets/). In a compiled binary the @workos/skills tree is
+ * not on disk, so the embedded map is materialized first — skill installation
+ * copies whole directories (markdown + yaml assets) into the user's agent
+ * dirs, so a real source tree is required here.
+ */
+export async function resolveSkillsDir(): Promise<string> {
+  return skillsDirFromPlugin(await resolveEmbeddedSkillsPlugin());
+}
+
+/**
+ * Bundled skills version: compiled binaries embed it at build time; dev walks
+ * up from the package skills dir to package.json.
+ */
+export async function resolveBundledSkillsVersion(
+  skillsDir: string,
+  embeddedVersion: string | null = EMBEDDED_SKILLS_VERSION,
+): Promise<string | null> {
+  return embeddedVersion ?? getBundledSkillsVersion(skillsDir);
 }
 
 export async function discoverSkills(skillsDir: string): Promise<string[]> {
@@ -196,7 +226,7 @@ async function cleanupStaleOrphans(parent: string, skillName: string): Promise<v
 export async function runInstallSkill(options: InstallSkillOptions): Promise<void> {
   const home = homedir();
   const agents = createAgents(home);
-  const skillsDir = getSkillsDir();
+  const skillsDir = await resolveSkillsDir();
   const skills = await discoverSkills(skillsDir);
 
   const targetSkills = options.skill ? skills.filter((s) => options.skill!.includes(s)) : skills;
@@ -249,7 +279,7 @@ export async function runInstallSkill(options: InstallSkillOptions): Promise<voi
   // successful install, so `workos doctor` doesn't immediately flag the
   // freshly-installed skills as stale or missing. Same primitive as
   // refreshWorkOSSkills — single source of truth for marker semantics.
-  const version = await getBundledSkillsVersion(skillsDir);
+  const version = await resolveBundledSkillsVersion(skillsDir);
   if (version) {
     const succeededAgents = new Set<AgentConfig>();
     for (const r of successful) succeededAgents.add(r.agent);
@@ -331,7 +361,7 @@ async function writeAgentSkillMarker(agent: AgentConfig, version: string): Promi
  */
 export async function refreshWorkOSSkills(opts: RefreshOptions = {}): Promise<RefreshResult | null> {
   const home = homedir();
-  const skillsDir = getSkillsDir();
+  const skillsDir = await resolveSkillsDir();
   const detected = opts.agents ?? detectAgents(createAgents(home));
   const allSkills = await discoverSkills(skillsDir).catch(() => []);
   const skills = opts.skills ? allSkills.filter((s) => opts.skills!.includes(s)) : allSkills;
@@ -339,7 +369,7 @@ export async function refreshWorkOSSkills(opts: RefreshOptions = {}): Promise<Re
 
   if (skills.length === 0 || detected.length === 0) return null;
 
-  const version = await getBundledSkillsVersion(skillsDir);
+  const version = await resolveBundledSkillsVersion(skillsDir);
   const perAgentBefore: Record<string, string | null> = {};
   const perAgentAfter: Record<string, string | null> = {};
   const succeededAgents: AgentConfig[] = [];

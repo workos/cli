@@ -2,7 +2,7 @@ import { homedir } from 'os';
 import chalk from 'chalk';
 import { logError } from '../utils/debug.js';
 import { exitWithError, isJsonMode, outputJson } from '../utils/output.js';
-import { createAgents, detectAgents, discoverSkills, getSkillsDir } from './install-skill.js';
+import { createAgents, detectAgents, discoverSkills, resolveSkillsDir } from './install-skill.js';
 import { findInstalledSkills } from './uninstall-skill.js';
 
 export interface ListSkillsOptions {
@@ -12,7 +12,7 @@ export interface ListSkillsOptions {
 export async function runListSkills(options: ListSkillsOptions): Promise<void> {
   const home = homedir();
   const agents = createAgents(home);
-  const skillsDir = getSkillsDir();
+  const skillsDir = await resolveSkillsDir();
 
   let knownSkills: string[];
   try {

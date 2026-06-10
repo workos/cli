@@ -3,9 +3,7 @@
  * Uses Claude Agent SDK directly with WorkOS MCP server
  */
 
-import { dirname } from 'path';
-import { getSkillsDir as getSkillsPackageDir } from '@workos/skills';
-import { resolveEmbeddedClaude, resolveEmbeddedSkillsPlugin } from './sdk-runtime/runtime.js';
+import { resolveEmbeddedClaude } from './sdk-runtime/runtime.js';
 import { debug, logInfo, logWarn, logError, initLogFile, getLogFilePath } from '../utils/debug.js';
 import type { InstallerOptions } from '../utils/types.js';
 import { analytics } from '../utils/analytics.js';
@@ -635,13 +633,6 @@ export async function runAgent(
       await currentTurnDone;
     };
 
-    // Load plugin from @workos/skills package. In a compiled binary the skills
-    // are extracted from the embedded asset map; in dev they resolve from
-    // node_modules (resolveEmbeddedSkillsPlugin returns null).
-    const embeddedSkills = await resolveEmbeddedSkillsPlugin();
-    const pluginPath = embeddedSkills ?? dirname(getSkillsPackageDir());
-    logInfo('Loading plugin from:', pluginPath);
-
     // In a compiled binary the SDK cannot resolve the Claude Code native binary
     // from node_modules, so we extract the embedded one and point the SDK at it.
     // In dev this is null and the SDK resolves the binary itself.
@@ -667,7 +658,6 @@ export async function runAgent(
         },
         tools: { type: 'preset', preset: 'claude_code' },
         allowedTools: agentConfig.allowedTools,
-        plugins: [{ type: 'local', path: pluginPath }],
         // Capture stderr from CLI subprocess for debugging
         stderr: (data: string) => {
           logInfo('CLI stderr:', data);

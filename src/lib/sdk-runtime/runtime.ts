@@ -57,10 +57,12 @@ export async function resolveEmbeddedClaude(): Promise<string | null> {
 }
 
 /**
- * Resolve the WorkOS skills plugin path for the Agent SDK. Returns the extracted
- * on-disk plugin path when running as a compiled binary, or null in dev (use the
- * node_modules @workos/skills location). The SDK's extract helper only covers a
- * single file, so the skills *directory* is still materialized by hand.
+ * Resolve an on-disk copy of the WorkOS skills tree for consumers that need
+ * real files — `workos skills install` / `doctor --fix` copy whole skill
+ * directories into the user's agent dirs. Returns the extracted plugin path
+ * when running as a compiled binary, or null in dev (use the node_modules
+ * @workos/skills location). The agent install flow does NOT need this: it
+ * reads reference content from the embedded map in-memory (see skills.ts).
  */
 export async function resolveEmbeddedSkillsPlugin(): Promise<string | null> {
   if (!EMBEDDED_SKILLS || !EMBEDDED_SKILLS_VERSION) {

@@ -1,26 +1,35 @@
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { getReference as realGetReference } from '@workos/skills';
-import { resolveEmbeddedSkillsPlugin } from './runtime.js';
+import { getReference as packageGetReference } from '@workos/skills';
+import { EMBEDDED_SKILLS } from './embedded-assets.js';
 
 /**
- * Path to a skills reference markdown file inside an (extracted) skills plugin
- * directory. Mirrors the on-disk layout @workos/skills uses
- * (`<plugin>/skills/workos/references/<name>.md`).
+ * Map key for a workos skill reference inside the embedded skills map.
+ * Mirrors the @workos/skills package layout used by scripts/build-binary.ts
+ * (`plugins/workos/skills/workos/references/<name>.md`).
  */
-export function embeddedReferencePath(pluginPath: string, name: string): string {
-  return join(pluginPath, 'skills', 'workos', 'references', `${name}.md`);
+function embeddedReferenceKey(name: string): string {
+  return `plugins/workos/skills/workos/references/${name}.md`;
 }
 
 /**
- * Read a skills reference by name. In a compiled binary the @workos/skills data
- * files are not on disk, so read from the extracted plugin directory; in dev fall
- * back to the package's own resolver.
+ * Decode a skills reference from an embedded file map (relative path ->
+ * base64 contents). Pure in-memory lookup — no filesystem involved.
+ */
+export function referenceFromEmbedded(files: Record<string, string>, name: string): string {
+  const base64 = files[embeddedReferenceKey(name)];
+  if (base64 === undefined) {
+    throw new Error(`Reference "${name}" not found in embedded skills`);
+  }
+  return Buffer.from(base64, 'base64').toString('utf-8');
+}
+
+/**
+ * Read a skills reference by name. In a compiled binary the content comes
+ * straight from the embedded skills map (zero extraction); in dev it resolves
+ * from the @workos/skills package in node_modules.
  */
 export async function getReference(name: string): Promise<string> {
-  const pluginPath = await resolveEmbeddedSkillsPlugin();
-  if (!pluginPath) {
-    return realGetReference(name);
+  if (EMBEDDED_SKILLS) {
+    return referenceFromEmbedded(EMBEDDED_SKILLS, name);
   }
-  return readFile(embeddedReferencePath(pluginPath, name), 'utf-8');
+  return packageGetReference(name);
 }

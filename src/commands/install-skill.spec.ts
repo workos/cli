@@ -11,6 +11,8 @@ import {
   installSkill,
   autoInstallSkills,
   refreshWorkOSSkills,
+  skillsDirFromPlugin,
+  resolveBundledSkillsVersion,
   type AgentConfig,
 } from './install-skill.js';
 
@@ -569,6 +571,34 @@ describe('install-skill', () => {
     it('returns null when no agents and no skills', async () => {
       // Empty skillsDir, no detected agents.
       await expect(refreshWorkOSSkills()).resolves.toBeNull();
+    });
+  });
+
+  describe('skillsDirFromPlugin', () => {
+    it('uses the materialized plugin tree when running as a compiled binary', () => {
+      // materializeSkills returns <version>/plugins/workos; skill dirs live
+      // under its skills/ subdirectory.
+      expect(skillsDirFromPlugin('/rt/0.6.1/plugins/workos')).toBe(join('/rt/0.6.1/plugins/workos', 'skills'));
+    });
+
+    it('falls back to the @workos/skills package dir in dev', async () => {
+      const { getSkillsDir } = await import('@workos/skills');
+      vi.mocked(getSkillsDir).mockReturnValue('/pkg/plugins/workos/skills');
+      expect(skillsDirFromPlugin(null)).toBe('/pkg/plugins/workos/skills');
+    });
+  });
+
+  describe('resolveBundledSkillsVersion', () => {
+    it('prefers the embedded skills version when present', async () => {
+      await expect(resolveBundledSkillsVersion('/anywhere', '1.2.3')).resolves.toBe('1.2.3');
+    });
+
+    it('falls back to package.json discovery when not embedded', async () => {
+      const packageRoot = join(testDir, 'pkg-v');
+      const deepSkillsDir = join(packageRoot, 'plugins/workos/skills');
+      mkdirSync(deepSkillsDir, { recursive: true });
+      writeFileSync(join(packageRoot, 'package.json'), JSON.stringify({ version: '7.7.7' }));
+      await expect(resolveBundledSkillsVersion(deepSkillsDir, null)).resolves.toBe('7.7.7');
     });
   });
 });
