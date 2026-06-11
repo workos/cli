@@ -278,7 +278,7 @@ describe('connection commands', () => {
 
     it('fails on IdP error callback', async () => {
       const run = runConnectionTest('conn_01ABC', {}, 'sk_test');
-      await dispatchCallback(() => 'error=access_denied&error_description=denied');
+      await dispatchCallback((state) => `error=access_denied&error_description=denied&state=${state}`);
       await expect(run).rejects.toThrow(CliExit);
       expect(mockSdk.sso.getProfileAndToken).not.toHaveBeenCalled();
     });

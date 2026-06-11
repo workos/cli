@@ -182,9 +182,10 @@ function waitForCallback(server: http.Server, expectedState: string, timeoutSeco
         state: url.searchParams.get('state') ?? undefined,
       };
 
-      // Only settle on an IdP error or a callback with the expected state.
-      // Stray requests (prefetches, stale redirects) keep the listener open.
-      if (!result.error && result.state !== expectedState) {
+      // Only settle when the state matches (success or IdP error — per
+      // RFC 6749 §4.1.2.1 error responses echo the original state). Stray
+      // requests keep the listener open.
+      if (result.state !== expectedState) {
         res.writeHead(400, { 'Content-Type': 'text/html' });
         res.end('<html><body><h2>Unexpected request</h2></body></html>');
         return;
