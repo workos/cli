@@ -1392,7 +1392,7 @@ async function runCli(): Promise<void> {
       );
       return yargs.demandCommand(1, 'Please specify a session subcommand').strict();
     })
-    .command('connection', 'Manage SSO connections (read/delete)', (yargs) => {
+    .command('connection', 'Manage SSO connections (read/delete/test)', (yargs) => {
       yargs.options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } });
       registerSubcommand(
         yargs,
@@ -1437,6 +1437,35 @@ async function runCli(): Promise<void> {
           const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runConnectionGet } = await import('./commands/connection.js');
           await runConnectionGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      );
+      registerSubcommand(
+        yargs,
+        'test <id>',
+        'Test a connection by running an SSO login flow',
+        (y) =>
+          y.positional('id', { type: 'string', demandOption: true }).options({
+            'client-id': { type: 'string', describe: 'WorkOS client ID' },
+            port: { type: 'number', describe: 'Localhost port for the callback server', default: 4807 },
+            timeout: { type: 'number', describe: 'Seconds to wait for the SSO callback', default: 300 },
+            open: { type: 'boolean', describe: 'Open the authorization URL in a browser', default: true },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runConnectionTest } = await import('./commands/connection.js');
+          await runConnectionTest(
+            argv.id,
+            {
+              clientId: argv.clientId,
+              port: argv.port,
+              timeoutSeconds: argv.timeout,
+              open: argv.open,
+            },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
         },
       );
       registerSubcommand(

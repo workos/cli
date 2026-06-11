@@ -722,7 +722,7 @@ const commands: CommandSchema[] = [
   },
   {
     name: 'connection',
-    description: 'Manage SSO connections (read/delete)',
+    description: 'Manage SSO connections (read/delete/test)',
     options: [insecureStorageOpt, apiKeyOpt],
     commands: [
       {
@@ -738,6 +738,38 @@ const commands: CommandSchema[] = [
         name: 'get',
         description: 'Get a connection',
         positionals: [{ name: 'id', type: 'string', description: 'Connection ID', required: true }],
+      },
+      {
+        name: 'test',
+        description: 'Test a connection by running an SSO login flow',
+        positionals: [{ name: 'id', type: 'string', description: 'Connection ID', required: true }],
+        options: [
+          { name: 'client-id', type: 'string', description: 'WorkOS client ID', required: false, hidden: false },
+          {
+            name: 'port',
+            type: 'number',
+            description: 'Localhost port for the callback server',
+            required: false,
+            default: 4807,
+            hidden: false,
+          },
+          {
+            name: 'timeout',
+            type: 'number',
+            description: 'Seconds to wait for the SSO callback',
+            required: false,
+            default: 300,
+            hidden: false,
+          },
+          {
+            name: 'open',
+            type: 'boolean',
+            description: 'Open the authorization URL in a browser',
+            required: false,
+            default: true,
+            hidden: false,
+          },
+        ],
       },
       {
         name: 'delete',

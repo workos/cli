@@ -6,11 +6,44 @@ const mockSdk = {
     listConnections: vi.fn(),
     getConnection: vi.fn(),
     deleteConnection: vi.fn(),
+    getAuthorizationUrl: vi.fn(),
+    getProfileAndToken: vi.fn(),
   },
 };
 
+const mockRedirectUriAdd = vi.fn();
+
 vi.mock('../lib/workos-client.js', () => ({
-  createWorkOSClient: () => ({ sdk: mockSdk }),
+  createWorkOSClient: () => ({ sdk: mockSdk, redirectUris: { add: mockRedirectUriAdd } }),
+}));
+
+const mockGetActiveEnvironment = vi.fn();
+
+vi.mock('../lib/config-store.js', () => ({
+  getActiveEnvironment: (...args: unknown[]) => mockGetActiveEnvironment(...args),
+}));
+
+const mockOpen = vi.fn();
+
+vi.mock('open', () => ({
+  default: (...args: unknown[]) => mockOpen(...args),
+}));
+
+type RequestHandler = (req: { url?: string }, res: unknown) => void;
+
+let requestHandler: RequestHandler | undefined;
+
+const mockServer = {
+  once: vi.fn(),
+  on: vi.fn((event: string, handler: RequestHandler) => {
+    if (event === 'request') requestHandler = handler;
+  }),
+  listen: vi.fn((_port: number, cb: () => void) => cb()),
+  close: vi.fn(),
+};
+
+vi.mock('node:http', () => ({
+  default: { createServer: () => mockServer },
 }));
 
 // Mock clack for confirmation prompts
@@ -27,7 +60,7 @@ vi.mock('../utils/clack.js', () => ({
 const { setOutputMode } = await import('../utils/output.js');
 const { resetInteractionModeForTests, setInteractionMode } = await import('../utils/interaction-mode.js');
 
-const { runConnectionList, runConnectionGet, runConnectionDelete } = await import('./connection.js');
+const { runConnectionList, runConnectionGet, runConnectionDelete, runConnectionTest } = await import('./connection.js');
 const { CliExit } = await import('../utils/cli-exit.js');
 
 const mockConnection = {
@@ -58,6 +91,13 @@ describe('connection commands', () => {
     });
     mockConfirm.mockResolvedValue(true);
     mockIsCancel.mockReturnValue(false);
+    requestHandler = undefined;
+    mockServer.on.mockImplementation((event: string, handler: RequestHandler) => {
+      if (event === 'request') requestHandler = handler;
+    });
+    mockServer.listen.mockImplementation((_port: number, cb: () => void) => cb());
+    mockGetActiveEnvironment.mockReturnValue({ clientId: 'client_env' });
+    mockOpen.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -154,6 +194,137 @@ describe('connection commands', () => {
       await expect(runConnectionDelete('conn_01ABC', {}, 'sk_test')).rejects.toThrow(CliExit);
       expect(mockSdk.sso.deleteConnection).not.toHaveBeenCalled();
       expect(mockConfirm).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('runConnectionTest', () => {
+    function makeRes() {
+      const res = {
+        writeHead: vi.fn(() => res),
+        end: vi.fn(),
+      };
+      return res;
+    }
+
+    async function dispatchCallback(query: (state: string) => string): Promise<void> {
+      await vi.waitFor(() => {
+        if (!requestHandler) throw new Error('request handler not registered');
+      });
+      const state = mockSdk.sso.getAuthorizationUrl.mock.calls[0][0].state;
+      requestHandler?.({ url: `/callback?${query(state)}` }, makeRes());
+    }
+
+    beforeEach(() => {
+      mockSdk.sso.getConnection.mockResolvedValue(mockConnection);
+      mockRedirectUriAdd.mockResolvedValue({ success: true, alreadyExists: false });
+      mockSdk.sso.getAuthorizationUrl.mockReturnValue('https://api.workos.com/sso/authorize?mock=1');
+      mockSdk.sso.getProfileAndToken.mockResolvedValue({
+        profile: {
+          id: 'prof_01',
+          email: 'user@example.com',
+          firstName: 'Test',
+          lastName: 'User',
+          connectionId: 'conn_01ABC',
+          connectionType: 'OktaSAML',
+          organizationId: 'org_123',
+          idpId: 'idp_1',
+        },
+      });
+    });
+
+    it('registers redirect URI, opens browser, and exchanges the code', async () => {
+      const run = runConnectionTest('conn_01ABC', {}, 'sk_test');
+      await dispatchCallback((state) => `code=auth_code_123&state=${state}`);
+      await run;
+
+      expect(mockRedirectUriAdd).toHaveBeenCalledWith('http://localhost:4807/callback');
+      expect(mockSdk.sso.getAuthorizationUrl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clientId: 'client_env',
+          redirectUri: 'http://localhost:4807/callback',
+          connection: 'conn_01ABC',
+        }),
+      );
+      expect(mockOpen).toHaveBeenCalledWith('https://api.workos.com/sso/authorize?mock=1');
+      expect(mockSdk.sso.getProfileAndToken).toHaveBeenCalledWith({ code: 'auth_code_123', clientId: 'client_env' });
+      expect(consoleOutput.some((l) => l.includes('user@example.com'))).toBe(true);
+      expect(consoleOutput.some((l) => l.includes('SSO test succeeded'))).toBe(true);
+      expect(mockServer.close).toHaveBeenCalled();
+    });
+
+    it('uses --client-id and --port over defaults', async () => {
+      const run = runConnectionTest('conn_01ABC', { clientId: 'client_flag', port: 9999 }, 'sk_test');
+      await dispatchCallback((state) => `code=abc&state=${state}`);
+      await run;
+
+      expect(mockRedirectUriAdd).toHaveBeenCalledWith('http://localhost:9999/callback');
+      expect(mockSdk.sso.getAuthorizationUrl).toHaveBeenCalledWith(
+        expect.objectContaining({ clientId: 'client_flag', redirectUri: 'http://localhost:9999/callback' }),
+      );
+    });
+
+    it('does not open the browser with open: false', async () => {
+      const run = runConnectionTest('conn_01ABC', { open: false }, 'sk_test');
+      await dispatchCallback((state) => `code=abc&state=${state}`);
+      await run;
+      expect(mockOpen).not.toHaveBeenCalled();
+    });
+
+    it('fails when no client ID is available', async () => {
+      mockGetActiveEnvironment.mockReturnValue(null);
+      await expect(runConnectionTest('conn_01ABC', {}, 'sk_test')).rejects.toThrow(CliExit);
+      expect(mockSdk.sso.getAuthorizationUrl).not.toHaveBeenCalled();
+    });
+
+    it('fails on IdP error callback', async () => {
+      const run = runConnectionTest('conn_01ABC', {}, 'sk_test');
+      await dispatchCallback(() => 'error=access_denied&error_description=denied');
+      await expect(run).rejects.toThrow(CliExit);
+      expect(mockSdk.sso.getProfileAndToken).not.toHaveBeenCalled();
+    });
+
+    it('fails on state mismatch', async () => {
+      const run = runConnectionTest('conn_01ABC', {}, 'sk_test');
+      await dispatchCallback(() => 'code=abc&state=wrong_state');
+      await expect(run).rejects.toThrow(CliExit);
+      expect(mockSdk.sso.getProfileAndToken).not.toHaveBeenCalled();
+    });
+
+    it('errors in agent mode when redirect URI registration fails', async () => {
+      setInteractionMode({ mode: 'agent', source: 'env' });
+      mockRedirectUriAdd.mockRejectedValue(new Error('forbidden'));
+      await expect(runConnectionTest('conn_01ABC', {}, 'sk_test')).rejects.toThrow(CliExit);
+      expect(mockSdk.sso.getAuthorizationUrl).not.toHaveBeenCalled();
+    });
+
+    it('prompts to add redirect URI manually when registration fails', async () => {
+      mockRedirectUriAdd.mockRejectedValue(new Error('forbidden'));
+      mockConfirm.mockResolvedValue(true);
+      const run = runConnectionTest('conn_01ABC', {}, 'sk_test');
+      await dispatchCallback((state) => `code=abc&state=${state}`);
+      await run;
+      expect(mockConfirm).toHaveBeenCalled();
+      expect(mockSdk.sso.getProfileAndToken).toHaveBeenCalled();
+    });
+
+    it('cancels when manual redirect URI prompt is declined', async () => {
+      mockRedirectUriAdd.mockRejectedValue(new Error('forbidden'));
+      mockConfirm.mockResolvedValue(false);
+      await runConnectionTest('conn_01ABC', {}, 'sk_test');
+      expect(mockSdk.sso.getAuthorizationUrl).not.toHaveBeenCalled();
+      expect(consoleOutput.some((l) => l.includes('cancelled'))).toBe(true);
+    });
+
+    it('outputs JSON with profile in JSON mode', async () => {
+      setOutputMode('json');
+      const run = runConnectionTest('conn_01ABC', {}, 'sk_test');
+      await dispatchCallback((state) => `code=abc&state=${state}`);
+      await run;
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.connectionId).toBe('conn_01ABC');
+      expect(output.redirectUri).toBe('http://localhost:4807/callback');
+      expect(output.redirectUriRegistered).toBe(true);
+      expect(output.profile.email).toBe('user@example.com');
     });
   });
 
