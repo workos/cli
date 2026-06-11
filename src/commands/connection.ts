@@ -182,6 +182,14 @@ function waitForCallback(server: http.Server, expectedState: string, timeoutSeco
         state: url.searchParams.get('state') ?? undefined,
       };
 
+      // Only settle on an IdP error or a callback with the expected state.
+      // Stray requests (prefetches, stale redirects) keep the listener open.
+      if (!result.error && result.state !== expectedState) {
+        res.writeHead(400, { 'Content-Type': 'text/html' });
+        res.end('<html><body><h2>Unexpected request</h2></body></html>');
+        return;
+      }
+
       const success = Boolean(result.code) && result.state === expectedState;
       res.writeHead(success ? 200 : 400, { 'Content-Type': 'text/html' });
       res.end(
@@ -254,6 +262,11 @@ export async function runConnectionTest(
     });
 
     const server = http.createServer();
+    const callbackPromise = waitForCallback(server, state, timeoutSeconds);
+    callbackPromise.catch(() => {
+      // Handled when awaited below; prevents an unhandled rejection if
+      // listen fails first.
+    });
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject);
       server.listen(port, () => resolve());
@@ -272,7 +285,7 @@ export async function runConnectionTest(
         });
       }
 
-      const callback = await waitForCallback(server, state, timeoutSeconds);
+      const callback = await callbackPromise;
 
       if (callback.error || !callback.code) {
         exitWithError({

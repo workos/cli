@@ -283,11 +283,13 @@ describe('connection commands', () => {
       expect(mockSdk.sso.getProfileAndToken).not.toHaveBeenCalled();
     });
 
-    it('fails on state mismatch', async () => {
+    it('ignores callbacks with mismatched state and accepts the real one', async () => {
       const run = runConnectionTest('conn_01ABC', {}, 'sk_test');
       await dispatchCallback(() => 'code=abc&state=wrong_state');
-      await expect(run).rejects.toThrow(CliExit);
       expect(mockSdk.sso.getProfileAndToken).not.toHaveBeenCalled();
+      await dispatchCallback((state) => `code=real_code&state=${state}`);
+      await run;
+      expect(mockSdk.sso.getProfileAndToken).toHaveBeenCalledWith({ code: 'real_code', clientId: 'client_env' });
     });
 
     it('errors in agent mode when redirect URI registration fails', async () => {
