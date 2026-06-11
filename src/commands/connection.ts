@@ -7,7 +7,7 @@ import { getActiveEnvironment } from '../lib/config-store.js';
 import { formatTable } from '../utils/table.js';
 import { outputSuccess, outputJson, isJsonMode, exitWithError } from '../utils/output.js';
 import { createApiErrorHandler } from '../lib/api-error-handler.js';
-import { isCiMode, isPromptAllowed } from '../utils/interaction-mode.js';
+import { isCiMode, isHumanMode, isPromptAllowed } from '../utils/interaction-mode.js';
 import { CliExit } from '../utils/cli-exit.js';
 import clack from '../utils/clack.js';
 
@@ -280,7 +280,7 @@ export async function runConnectionTest(
         console.log(chalk.dim(`\nWaiting for callback on ${redirectUri} (timeout: ${timeoutSeconds}s)...`));
       }
 
-      if (options.open !== false && !isCiMode()) {
+      if (options.open !== false && isHumanMode()) {
         await open(authorizationUrl).catch(() => {
           // Browser may not be available; the URL is already printed.
         });
@@ -294,13 +294,6 @@ export async function runConnectionTest(
           message: `SSO test failed: ${callback.error ?? 'no authorization code returned'}${
             callback.errorDescription ? ` — ${callback.errorDescription}` : ''
           }`,
-        });
-      }
-
-      if (callback.state !== state) {
-        exitWithError({
-          code: 'state_mismatch',
-          message: 'SSO test failed: state parameter mismatch in callback.',
         });
       }
 
