@@ -269,7 +269,7 @@ export async function runConnectionTest(
     });
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject);
-      server.listen(port, () => resolve());
+      server.listen(port, '127.0.0.1', () => resolve());
     });
 
     try {

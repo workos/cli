@@ -38,7 +38,7 @@ const mockServer = {
   on: vi.fn((event: string, handler: RequestHandler) => {
     if (event === 'request') requestHandler = handler;
   }),
-  listen: vi.fn((_port: number, cb: () => void) => cb()),
+  listen: vi.fn((_port: number, _host: string, cb: () => void) => cb()),
   close: vi.fn(),
 };
 
@@ -95,7 +95,7 @@ describe('connection commands', () => {
     mockServer.on.mockImplementation((event: string, handler: RequestHandler) => {
       if (event === 'request') requestHandler = handler;
     });
-    mockServer.listen.mockImplementation((_port: number, cb: () => void) => cb());
+    mockServer.listen.mockImplementation((_port: number, _host: string, cb: () => void) => cb());
     mockGetActiveEnvironment.mockReturnValue({ clientId: 'client_env' });
     mockOpen.mockResolvedValue(undefined);
   });
