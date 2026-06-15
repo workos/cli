@@ -58,7 +58,7 @@ export function getConfig(): InstallerConfig {
  * Get the CLI auth client ID (from config; not env-overridable).
  */
 export function getCliAuthClientId(): string {
-  return config.workos.clientId;
+  return process.env.WORKOS_CLIENT_ID || config.workos.clientId;
 }
 
 /**
