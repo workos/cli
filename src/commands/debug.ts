@@ -390,7 +390,10 @@ export const ENV_VAR_CATALOG: { name: string; effect: string }[] = [
   { name: 'WORKOS_DEBUG', effect: 'Set to "1" to enable verbose debug logging for all commands' },
   { name: 'WORKOS_TELEMETRY', effect: 'Set to "false" to disable telemetry' },
   // URLs (WORKOS_API_URL is the single base; gateway + telemetry derive from it)
-  { name: 'WORKOS_API_URL', effect: 'Overrides API base URL; also reroutes the LLM gateway and CLI telemetry endpoints' },
+  {
+    name: 'WORKOS_API_URL',
+    effect: 'Overrides API base URL; also reroutes the LLM gateway and CLI telemetry endpoints',
+  },
   { name: 'WORKOS_DASHBOARD_URL', effect: 'Overrides dashboard URL (default: https://dashboard.workos.com)' },
   { name: 'WORKOS_AUTHKIT_DOMAIN', effect: 'Overrides AuthKit domain from settings' },
   { name: 'WORKOS_BASE_URL', effect: 'AuthKit base URL, read during doctor environment checks' },

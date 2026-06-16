@@ -9,8 +9,7 @@
 export const getWorkOSApiUrl = (): string =>
   (process.env.WORKOS_API_URL || 'https://api.workos.com').replace(/\/$/, '');
 
-export const getWorkOSDashboardUrl = (): string =>
-  process.env.WORKOS_DASHBOARD_URL || 'https://dashboard.workos.com';
+export const getWorkOSDashboardUrl = (): string => process.env.WORKOS_DASHBOARD_URL || 'https://dashboard.workos.com';
 
 /** LLM gateway endpoint, served under the WorkOS API host. */
 export const getLlmGatewayUrl = (): string => `${getWorkOSApiUrl()}/llm-gateway`;
