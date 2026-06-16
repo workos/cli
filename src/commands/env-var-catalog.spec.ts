@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { readdir, readFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { join } from 'node:path';
+import fg from 'fast-glob';
 import { ENV_VAR_CATALOG } from './debug.js';
 
 // Resolve the src/ root from this file's location (src/commands/*.spec.ts).
@@ -11,52 +11,47 @@ const SRC_DIR = fileURLToPath(new URL('..', import.meta.url));
 // `env.WORKOS_X` form (e.g. interaction-mode.ts), while the lookbehind excludes
 // identifiers like `projectEnv.WORKOS_X` / `sdkEnv.WORKOS_X`.
 //
-// Coverage is intentionally limited to dot access — it does NOT catch bracket
-// access (`process.env['WORKOS_X']`) or object destructuring
-// (`const { WORKOS_X } = process.env`). Those forms aren't used today; if one is
-// introduced, add the var to the catalog manually. This guard exists to catch
-// the common case, not to be exhaustive.
+// Coverage is limited to dot access — it does NOT catch bracket access
+// (`process.env['WORKOS_X']`) or destructuring (`const { WORKOS_X } = process.env`).
+// No such reads exist today; if one is introduced, list it in CATALOG_ONLY below
+// so the bidirectional check still passes.
 const ENV_READ_PATTERN = /(?:process\.env|(?<![\w$])env)\.(WORKOS_[A-Z0-9_]+)/g;
 
-async function collectTsFiles(dir: string): Promise<string[]> {
-  const entries = await readdir(dir, { withFileTypes: true });
-  const files = await Promise.all(
-    entries.map(async (entry) => {
-      const fullPath = join(dir, entry.name);
-      if (entry.isDirectory()) return collectTsFiles(fullPath);
-      if (!entry.name.endsWith('.ts')) return [];
-      if (entry.name.endsWith('.spec.ts') || entry.name.endsWith('.d.ts')) return [];
-      return [fullPath];
-    }),
-  );
-  return files.flat();
+// WORKOS_ vars that belong in the catalog but the scan can't see (non-dot-access
+// reads). Empty today — kept as the explicit escape hatch for the limitation above.
+const CATALOG_ONLY = new Set<string>();
+
+async function discoverEnvReads(): Promise<Set<string>> {
+  const files = await fg('**/*.ts', {
+    cwd: SRC_DIR,
+    absolute: true,
+    ignore: ['**/*.spec.ts', '**/*.d.ts'],
+  });
+  const contents = await Promise.all(files.map((file) => readFile(file, 'utf-8')));
+  const reads = new Set<string>();
+  for (const text of contents) {
+    for (const match of text.matchAll(ENV_READ_PATTERN)) reads.add(match[1]);
+  }
+  return reads;
 }
 
 describe('WORKOS_ env var catalog (debug env)', () => {
-  it('documents every WORKOS_-prefixed env var read via dot access', async () => {
-    const files = await collectTsFiles(SRC_DIR);
-    const discovered = new Set<string>();
-
-    for (const file of files) {
-      const contents = await readFile(file, 'utf-8');
-      for (const match of contents.matchAll(ENV_READ_PATTERN)) {
-        discovered.add(match[1]);
-      }
-    }
-
+  it('stays in sync with the WORKOS_ env vars the CLI reads (no missing or stale entries)', async () => {
+    const discovered = await discoverEnvReads();
     const cataloged = new Set(ENV_VAR_CATALOG.map((v) => v.name));
-    const missing = [...discovered].filter((name) => !cataloged.has(name)).sort();
 
+    const missing = [...discovered].filter((name) => !cataloged.has(name)).sort();
+    const stale = [...cataloged].filter((name) => !discovered.has(name) && !CATALOG_ONLY.has(name)).sort();
+
+    expect(missing, `Read in src/ but missing from ENV_VAR_CATALOG (debug.ts): ${missing.join(', ')}`).toEqual([]);
     expect(
-      missing,
-      `These WORKOS_ env vars are read in src/ but missing from ENV_VAR_CATALOG in debug.ts: ${missing.join(', ')}`,
+      stale,
+      `In ENV_VAR_CATALOG (debug.ts) but no longer read in src/ — remove it, or add to CATALOG_ONLY if intentional: ${stale.join(', ')}`,
     ).toEqual([]);
   });
 
-  it('has no duplicate or stale entries', () => {
+  it('has no duplicate entries', () => {
     const names = ENV_VAR_CATALOG.map((v) => v.name);
     expect(new Set(names).size).toBe(names.length);
-    // Every cataloged var must use the WORKOS_ prefix (no INSTALLER_* drift).
-    expect(names.every((n) => n.startsWith('WORKOS_'))).toBe(true);
   });
 });
