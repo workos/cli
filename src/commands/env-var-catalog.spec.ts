@@ -7,15 +7,20 @@ import { ENV_VAR_CATALOG } from './debug.js';
 // Resolve the src/ root from this file's location (src/commands/*.spec.ts).
 const SRC_DIR = fileURLToPath(new URL('..', import.meta.url));
 
-// Matches dot-access env reads: `process.env.WORKOS_X` and the destructured
-// `env.WORKOS_X` form (e.g. interaction-mode.ts), while the lookbehind excludes
-// identifiers like `projectEnv.WORKOS_X` / `sdkEnv.WORKOS_X`.
+// Matches dot-access env READS: `process.env.WORKOS_X` and the destructured
+// `env.WORKOS_X` form (e.g. interaction-mode.ts). Three guards, in order:
+//   - lookbehind `(?<![\w$])` excludes `projectEnv.WORKOS_X` / `sdkEnv.WORKOS_X`
+//   - `(?![A-Z0-9_])` anchors the end of the name so the greedy capture can't
+//     backtrack to a truncated match to satisfy the next lookahead
+//   - `(?!\s*=[^=])` excludes assignment targets (`process.env.WORKOS_X = ...`)
+//     so vars the CLI only *writes* for a downstream SDK aren't counted as reads;
+//     `===`/`!==` comparisons still match (it only rejects a lone `=`)
 //
 // Coverage is limited to dot access — it does NOT catch bracket access
 // (`process.env['WORKOS_X']`) or destructuring (`const { WORKOS_X } = process.env`).
 // No such reads exist today; if one is introduced, list it in CATALOG_ONLY below
 // so the bidirectional check still passes.
-const ENV_READ_PATTERN = /(?:process\.env|(?<![\w$])env)\.(WORKOS_[A-Z0-9_]+)/g;
+const ENV_READ_PATTERN = /(?:process\.env|(?<![\w$])env)\.(WORKOS_[A-Z0-9_]+)(?![A-Z0-9_])(?!\s*=[^=])/g;
 
 // WORKOS_ vars that belong in the catalog but the scan can't see (non-dot-access
 // reads). Empty today — kept as the explicit escape hatch for the limitation above.

@@ -381,7 +381,6 @@ interface EnvVarInfo {
 export const ENV_VAR_CATALOG: { name: string; effect: string }[] = [
   // Credentials
   { name: 'WORKOS_API_KEY', effect: 'Bypasses credential resolution — used directly for API calls' },
-  { name: 'WORKOS_SECRET_KEY', effect: 'API secret key credential, used for authenticated API calls' },
   { name: 'WORKOS_CLIENT_ID', effect: 'WorkOS client ID used during credential resolution' },
   // Interaction & output
   { name: 'WORKOS_MODE', effect: 'Controls interaction behavior: human, agent, or CI' },
