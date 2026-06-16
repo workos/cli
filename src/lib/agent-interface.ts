@@ -10,9 +10,8 @@ import type { InstallerOptions } from '../utils/types.js';
 import { analytics } from '../utils/analytics.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from './constants.js';
 import { LINTING_TOOLS } from './safe-tools.js';
-import { getLlmGatewayUrlFromHost } from '../utils/urls.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
-import { getConfig } from './settings.js';
+import { getConfig, getLlmGatewayUrl } from './settings.js';
 import { getCredentials, hasCredentials } from './credentials.js';
 import { ensureValidToken } from './token-refresh.js';
 import type { InstallerEventEmitter } from './events.js';
@@ -375,7 +374,7 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
       analytics.setTag('api_mode', 'direct');
     } else {
       // Gateway mode (existing behavior)
-      const gatewayUrl = getLlmGatewayUrlFromHost();
+      const gatewayUrl = getLlmGatewayUrl();
 
       // Check for unclaimed environment — use claim token auth
       const activeEnv = getActiveEnvironment();
@@ -405,7 +404,7 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
         }
 
         // Check if we have refresh token capability and proxy is not disabled
-        if (creds.refreshToken && process.env.INSTALLER_DISABLE_PROXY !== '1') {
+        if (creds.refreshToken && process.env.WORKOS_DISABLE_PROXY !== '1') {
           // Start credential proxy with lazy refresh
           logInfo('[agent-interface] Starting credential proxy with lazy refresh...');
           const appConfig = getConfig();
@@ -447,7 +446,7 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
               message: `Note: Run \`${formatWorkOSCommand('auth login')}\` to enable extended sessions`,
             });
           } else {
-            logWarn('[agent-interface] Proxy disabled via INSTALLER_DISABLE_PROXY');
+            logWarn('[agent-interface] Proxy disabled via WORKOS_DISABLE_PROXY');
           }
 
           const refreshResult = await ensureValidToken();

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Load .env.local for local development when --local flag is used
-if (process.argv.includes('--local') || process.env.INSTALLER_DEV) {
+if (process.argv.includes('--local') || process.env.WORKOS_DEV) {
   const { config } = await import('dotenv');
   // bin.ts compiles to dist/bin.js, so go up one level to find .env.local
   const { fileURLToPath } = await import('node:url');

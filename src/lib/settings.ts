@@ -1,4 +1,5 @@
 import { config, version } from '../cli.config.js';
+import { getWorkOSApiUrl } from '../utils/urls.js';
 
 /**
  * Get version from package.json
@@ -13,8 +14,6 @@ export interface InstallerConfig {
   workos: {
     clientId: string;
     authkitDomain: string;
-    llmGatewayUrl: string;
-    telemetryUrl: string;
   };
   telemetry: {
     enabled: boolean;
@@ -74,16 +73,16 @@ export function getAuthkitDomain(): string {
 
 /**
  * Get the LLM gateway URL.
- * Env var overrides config default.
+ * Derived from the WorkOS API host (override via WORKOS_API_URL).
  */
 export function getLlmGatewayUrl(): string {
-  return process.env.WORKOS_LLM_GATEWAY_URL || config.workos.llmGatewayUrl;
+  return `${getWorkOSApiUrl().replace(/\/$/, '')}/llm-gateway`;
 }
 
 /**
  * Get the CLI telemetry URL.
- * Env var overrides config default.
+ * Derived from the WorkOS API host (override via WORKOS_API_URL).
  */
 export function getTelemetryUrl(): string {
-  return process.env.WORKOS_TELEMETRY_URL || config.workos.telemetryUrl;
+  return `${getWorkOSApiUrl().replace(/\/$/, '')}/cli`;
 }

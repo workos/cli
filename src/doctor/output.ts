@@ -267,8 +267,6 @@ export function formatInteractionModeSource(source: InteractionModeSource): stri
       return '--mode';
     case 'env':
       return 'WORKOS_MODE';
-    case 'workos_no_prompt':
-      return 'WORKOS_NO_PROMPT';
     case 'ci_env':
       return 'CI environment';
     case 'agent_env':

@@ -663,10 +663,10 @@ In agent mode the CLI:
 
 In `ci` mode the CLI additionally refuses browser-based auth flows and prefers terse failures over recovery handoff text.
 
-Legacy compatibility:
+Mode resolution notes:
 
-- `WORKOS_NO_PROMPT=1` continues to work and is treated as agent interaction behavior plus JSON output.
-- `WORKOS_FORCE_TTY=1` continues to force human **output** mode but does not change interaction mode.
+- `WORKOS_MODE=agent` sets agent interaction behavior and forces JSON output. (This replaces the removed `WORKOS_NO_PROMPT` alias.)
+- `WORKOS_FORCE_TTY=1` forces human **output** mode but does not change interaction mode.
 - Non-TTY without an explicit mode still defaults output to JSON and interaction to agent.
 
 ### Headless Installer
@@ -697,7 +697,6 @@ workos install --api-key sk_test_xxx --client-id client_xxx --no-commit 2>/dev/n
 | `WORKOS_API_KEY`         | API key for management commands (bypasses stored config)  |
 | `WORKOS_API_BASE_URL`    | Override API base URL (set automatically by `workos dev`) |
 | `WORKOS_MODE`            | Interaction mode: `human`, `agent`, or `ci`               |
-| `WORKOS_NO_PROMPT=1`     | Legacy alias: agent interaction behavior + JSON output    |
 | `WORKOS_FORCE_TTY=1`     | Force human (non-JSON) **output** mode even when piped    |
 | `WORKOS_TELEMETRY=false` | Disable telemetry                                         |
 

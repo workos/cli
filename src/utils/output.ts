@@ -23,14 +23,15 @@ let currentMode: OutputMode = 'human';
  * Priority:
  * 1. Explicit --json flag
  * 2. WORKOS_FORCE_TTY env var → human output compatibility
- * 3. WORKOS_NO_PROMPT legacy compatibility → json
- * 4. Non-TTY auto-detection → json
- * 5. Default → human
+ * 3. Non-TTY auto-detection → json
+ * 4. Default → human
+ *
+ * Note: agent interaction mode (WORKOS_MODE=agent) also forces JSON output,
+ * applied separately via resolveEffectiveOutputMode().
  */
 export function resolveOutputMode(jsonFlag?: boolean): OutputMode {
   if (jsonFlag) return 'json';
   if (process.env.WORKOS_FORCE_TTY === '1' || process.env.WORKOS_FORCE_TTY === 'true') return 'human';
-  if (process.env.WORKOS_NO_PROMPT === '1' || process.env.WORKOS_NO_PROMPT === 'true') return 'json';
   if (!process.stdout.isTTY) return 'json';
   return 'human';
 }
