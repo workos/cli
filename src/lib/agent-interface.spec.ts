@@ -51,6 +51,9 @@ vi.mock('./settings.js', () => ({
   getConfig: vi.fn(() => mockConfig),
   getAuthkitDomain: vi.fn(() => 'test.workos.com'),
   getCliAuthClientId: vi.fn(() => 'client_test'),
+}));
+
+vi.mock('../utils/urls.js', () => ({
   getLlmGatewayUrl: vi.fn(() => 'http://localhost:8000'),
 }));
 

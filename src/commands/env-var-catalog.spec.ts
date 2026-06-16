@@ -7,9 +7,15 @@ import { ENV_VAR_CATALOG } from './debug.js';
 // Resolve the src/ root from this file's location (src/commands/*.spec.ts).
 const SRC_DIR = fileURLToPath(new URL('..', import.meta.url));
 
-// Matches `process.env.WORKOS_X` and the destructured `env.WORKOS_X` reads
-// (e.g. interaction-mode.ts), while the lookbehind excludes identifiers like
-// `projectEnv.WORKOS_X` / `sdkEnv.WORKOS_X` that aren't process env reads.
+// Matches dot-access env reads: `process.env.WORKOS_X` and the destructured
+// `env.WORKOS_X` form (e.g. interaction-mode.ts), while the lookbehind excludes
+// identifiers like `projectEnv.WORKOS_X` / `sdkEnv.WORKOS_X`.
+//
+// Coverage is intentionally limited to dot access — it does NOT catch bracket
+// access (`process.env['WORKOS_X']`) or object destructuring
+// (`const { WORKOS_X } = process.env`). Those forms aren't used today; if one is
+// introduced, add the var to the catalog manually. This guard exists to catch
+// the common case, not to be exhaustive.
 const ENV_READ_PATTERN = /(?:process\.env|(?<![\w$])env)\.(WORKOS_[A-Z0-9_]+)/g;
 
 async function collectTsFiles(dir: string): Promise<string[]> {
@@ -27,7 +33,7 @@ async function collectTsFiles(dir: string): Promise<string[]> {
 }
 
 describe('WORKOS_ env var catalog (debug env)', () => {
-  it('documents every WORKOS_-prefixed env var the CLI reads', async () => {
+  it('documents every WORKOS_-prefixed env var read via dot access', async () => {
     const files = await collectTsFiles(SRC_DIR);
     const discovered = new Set<string>();
 
