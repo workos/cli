@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { startCredentialProxy } from './credential-proxy.js';
-import { getLlmGatewayUrl, getAuthkitDomain, getCliAuthClientId, getConfig } from './settings.js';
+import { getAuthkitDomain, getCliAuthClientId, getConfig } from './settings.js';
+import { getLlmGatewayUrl } from '../utils/urls.js';
 import { getCredentials } from './credentials.js';
 import { logInfo, logError } from '../utils/debug.js';
 

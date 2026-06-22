@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { getLlmGatewayUrl, getAuthkitDomain, getCliAuthClientId, getConfig } from '../../lib/settings.js';
+import { getAuthkitDomain, getCliAuthClientId, getConfig } from '../../lib/settings.js';
+import { getLlmGatewayUrl } from '../../utils/urls.js';
 import { getCredentials, isTokenExpired, updateTokens, diagnoseCredentials } from '../../lib/credentials.js';
 import { refreshAccessToken } from '../../lib/token-refresh-client.js';
 import { buildDoctorPrompt, type AnalysisContext } from '../agent-prompt.js';

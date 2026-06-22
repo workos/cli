@@ -7,8 +7,6 @@ const { mockQuery, mockConfig } = vi.hoisted(() => ({
     workos: {
       clientId: 'client_test',
       authkitDomain: 'test.workos.com',
-      llmGatewayUrl: 'http://localhost:8000',
-      telemetryUrl: 'http://localhost:8000/cli',
     },
     telemetry: { enabled: false, eventName: 'test_event' },
     proxy: { refreshThresholdMs: 300000 },
@@ -55,6 +53,10 @@ vi.mock('./settings.js', () => ({
   getCliAuthClientId: vi.fn(() => 'client_test'),
 }));
 
+vi.mock('../utils/urls.js', () => ({
+  getLlmGatewayUrl: vi.fn(() => 'http://localhost:8000'),
+}));
+
 vi.mock('./credentials.js', () => ({
   hasCredentials: vi.fn(() => false),
   getCredentials: vi.fn(() => null),
@@ -72,10 +74,6 @@ vi.mock('./credential-proxy.js', () => ({
 vi.mock('./config-store.js', () => ({
   getActiveEnvironment: vi.fn(() => null),
   isUnclaimedEnvironment: vi.fn(() => false),
-}));
-
-vi.mock('../utils/urls.js', () => ({
-  getLlmGatewayUrlFromHost: vi.fn(() => 'http://localhost:8000'),
 }));
 
 import { runAgent, AgentErrorType, initializeAgent, type AgentConfig } from './agent-interface.js';

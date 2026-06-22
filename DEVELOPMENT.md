@@ -114,9 +114,9 @@ Guidelines for new code:
 - For destructive operations, require an explicit `--yes`/`--force` flag whenever `!isPromptAllowed()` regardless of output mode.
 - For `auth_required` and other deterministic failures, attach recovery metadata via `src/utils/recovery-hints.ts` so agents can parse `error.recovery.hints[]`.
 
-Legacy compatibility — do not regress these:
+Mode resolution — do not regress these:
 
-- `WORKOS_NO_PROMPT=1` keeps mapping to agent interaction behavior **and** JSON output (legacy alias).
+- `WORKOS_MODE=agent` maps to agent interaction behavior **and** JSON output (via `resolveEffectiveOutputMode`). The old `WORKOS_NO_PROMPT` alias has been removed.
 - `WORKOS_FORCE_TTY=1` only affects output mode (forces human). It must not change interaction mode.
 - Non-TTY stdout still defaults output to JSON and interaction to agent.
 - `isNonInteractiveEnvironment()` from `src/utils/environment.ts` is a thin wrapper over `!isHumanMode()` kept for backward compatibility. Prefer the explicit interaction-mode predicates in new code.

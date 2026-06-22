@@ -28,7 +28,8 @@ import { getConfig, saveConfig, getActiveEnvironment, isUnclaimedEnvironment } f
 import { checkForEnvFiles, discoverCredentials } from './credential-discovery.js';
 import { requestDeviceCode, pollForToken } from './device-auth.js';
 import { fetchStagingCredentials as fetchStagingCredentialsApi } from './staging-api.js';
-import { getCliAuthClientId, getAuthkitDomain, getTelemetryUrl } from './settings.js';
+import { getCliAuthClientId, getAuthkitDomain } from './settings.js';
+import { getTelemetryUrl } from '../utils/urls.js';
 import { analytics } from '../utils/analytics.js';
 import { getVersion } from './settings.js';
 import { isInGitRepo, getUncommittedOrUntrackedFiles } from '../utils/clack-utils.js';

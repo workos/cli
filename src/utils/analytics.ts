@@ -16,7 +16,8 @@ import type {
   EnvFingerprint,
 } from './telemetry-types.js';
 import { isTelemetryEnabled } from '../lib/preferences.js';
-import { getTelemetryUrl, getVersion } from '../lib/settings.js';
+import { getVersion } from '../lib/settings.js';
+import { getTelemetryUrl } from './urls.js';
 import { getCredentials, isTokenExpired } from '../lib/credentials.js';
 import { getActiveEnvironment, isUnclaimedEnvironment } from '../lib/config-store.js';
 import { getDeviceId } from '../lib/device-id.js';

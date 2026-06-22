@@ -39,7 +39,6 @@ describe('doctor output', () => {
   it('formats interaction mode sources for human output', () => {
     expect(formatInteractionModeSource('flag')).toBe('--mode');
     expect(formatInteractionModeSource('env')).toBe('WORKOS_MODE');
-    expect(formatInteractionModeSource('workos_no_prompt')).toBe('WORKOS_NO_PROMPT');
     expect(formatInteractionModeSource('ci_env')).toBe('CI environment');
     expect(formatInteractionModeSource('agent_env')).toBe('agent environment');
     expect(formatInteractionModeSource('non_tty')).toBe('non-TTY');

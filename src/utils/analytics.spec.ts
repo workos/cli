@@ -63,9 +63,12 @@ const mockSettingsConfig = {
   legacy: { oauthPort: 3000 },
 };
 vi.mock('../lib/settings.js', () => ({
-  getTelemetryUrl: () => mockGetTelemetryUrl(),
   getConfig: () => mockSettingsConfig,
   getVersion: () => '0.12.1',
+}));
+
+vi.mock('./urls.js', () => ({
+  getTelemetryUrl: () => mockGetTelemetryUrl(),
 }));
 
 // Mock credentials for initForNonInstaller
@@ -119,9 +122,11 @@ describe('Analytics', () => {
         },
       }));
       vi.doMock('../lib/settings.js', () => ({
-        getTelemetryUrl: () => mockGetTelemetryUrl(),
         getConfig: () => mockSettingsConfig,
         getVersion: () => '0.12.1',
+      }));
+      vi.doMock('./urls.js', () => ({
+        getTelemetryUrl: () => mockGetTelemetryUrl(),
       }));
       vi.doMock('../lib/credentials.js', () => ({
         getCredentials: () => mockGetCredentials(),
@@ -826,9 +831,11 @@ describe('Analytics', () => {
         },
       }));
       vi.doMock('../lib/settings.js', () => ({
-        getTelemetryUrl: () => mockGetTelemetryUrl(),
         getConfig: () => mockSettingsConfig,
         getVersion: () => '0.12.1',
+      }));
+      vi.doMock('./urls.js', () => ({
+        getTelemetryUrl: () => mockGetTelemetryUrl(),
       }));
       vi.doMock('../lib/credentials.js', () => ({
         getCredentials: () => mockGetCredentials(),
