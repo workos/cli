@@ -39,7 +39,7 @@ vi.mock('node:os', async (importOriginal) => {
 });
 
 const { saveConfig, setInsecureConfigStorage, clearConfig } = await import('./config-store.js');
-const { resolveApiKey, resolveOptionalApiKey, resolveApiBaseUrl } = await import('./api-key.js');
+const { resolveApiKey, resolveOptionalApiKey, resolveApiBaseUrl, getApiBaseUrlSource } = await import('./api-key.js');
 
 describe('api-key', () => {
   const originalEnv = process.env;
@@ -49,6 +49,8 @@ describe('api-key', () => {
     setInsecureConfigStorage(true);
     process.env = { ...originalEnv };
     delete process.env.WORKOS_API_KEY;
+    delete process.env.WORKOS_API_URL;
+    delete process.env.WORKOS_API_BASE_URL;
   });
 
   afterEach(() => {
@@ -172,6 +174,88 @@ describe('api-key', () => {
         },
       });
       expect(resolveApiBaseUrl()).toBe('http://localhost:8001');
+    });
+
+    it('returns WORKOS_API_URL over a profile endpoint', () => {
+      process.env.WORKOS_API_URL = 'http://localhost:7777';
+      saveConfig({
+        activeEnvironment: 'local',
+        environments: {
+          local: { name: 'local', type: 'sandbox', apiKey: 'sk_test', endpoint: 'http://localhost:8001' },
+        },
+      });
+      expect(resolveApiBaseUrl()).toBe('http://localhost:7777');
+    });
+
+    it('uses WORKOS_API_BASE_URL as an alias when WORKOS_API_URL is unset', () => {
+      process.env.WORKOS_API_BASE_URL = 'http://localhost:9999';
+      expect(resolveApiBaseUrl()).toBe('http://localhost:9999');
+    });
+
+    it('prefers WORKOS_API_URL over WORKOS_API_BASE_URL when both are set', () => {
+      process.env.WORKOS_API_URL = 'http://localhost:7777';
+      process.env.WORKOS_API_BASE_URL = 'http://localhost:9999';
+      expect(resolveApiBaseUrl()).toBe('http://localhost:7777');
+    });
+
+    it('ignores an empty WORKOS_API_URL and falls through to the default', () => {
+      process.env.WORKOS_API_URL = '';
+      expect(resolveApiBaseUrl()).toBe('https://api.workos.com');
+    });
+
+    it('strips a trailing slash from the env override', () => {
+      process.env.WORKOS_API_URL = 'http://localhost:7777/';
+      expect(resolveApiBaseUrl()).toBe('http://localhost:7777');
+    });
+
+    it('exits with a friendly error when WORKOS_API_URL is malformed', () => {
+      process.env.WORKOS_API_URL = 'not a url';
+      expect(() => resolveApiBaseUrl()).toThrow(ExitError);
+      expect(mockExitWithError).toHaveBeenCalledWith(expect.objectContaining({ code: 'invalid_api_url' }));
+    });
+
+    it('exits when WORKOS_API_URL uses an unsupported scheme', () => {
+      process.env.WORKOS_API_URL = 'ftp://localhost:7777';
+      expect(() => resolveApiBaseUrl()).toThrow(ExitError);
+      expect(mockExitWithError).toHaveBeenCalledWith(expect.objectContaining({ code: 'invalid_api_url' }));
+    });
+  });
+
+  describe('getApiBaseUrlSource', () => {
+    it('reports the default source when nothing is configured', () => {
+      expect(getApiBaseUrlSource()).toEqual({ baseUrl: 'https://api.workos.com', source: 'default' });
+    });
+
+    it('reports the env source and which var was used', () => {
+      process.env.WORKOS_API_URL = 'http://localhost:7777';
+      expect(getApiBaseUrlSource()).toEqual({
+        baseUrl: 'http://localhost:7777',
+        source: 'env',
+        via: 'WORKOS_API_URL',
+      });
+    });
+
+    it('reports the alias var name when only WORKOS_API_BASE_URL is set', () => {
+      process.env.WORKOS_API_BASE_URL = 'http://localhost:9999';
+      expect(getApiBaseUrlSource()).toEqual({
+        baseUrl: 'http://localhost:9999',
+        source: 'env',
+        via: 'WORKOS_API_BASE_URL',
+      });
+    });
+
+    it('reports the profile source and name', () => {
+      saveConfig({
+        activeEnvironment: 'local',
+        environments: {
+          local: { name: 'local', type: 'sandbox', apiKey: 'sk_test', endpoint: 'http://localhost:8001' },
+        },
+      });
+      expect(getApiBaseUrlSource()).toEqual({
+        baseUrl: 'http://localhost:8001',
+        source: 'profile',
+        via: 'local',
+      });
     });
   });
 });

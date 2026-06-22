@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import ui from '../utils/ui.js';
 import { getConfig, saveConfig, isUnclaimedEnvironment, freshEnvKey } from '../lib/config-store.js';
 import type { CliConfig } from '../lib/config-store.js';
+import { getApiBaseUrlSource } from '../lib/api-key.js';
 import { outputSuccess, outputJson, exitWithError, isJsonMode } from '../utils/output.js';
 import { isAgentMode, isCiMode, isPromptAllowed } from '../utils/interaction-mode.js';
 import { missingArgsRecovery } from '../utils/recovery-hints.js';
@@ -296,6 +297,11 @@ export async function runEnvList(): Promise<void> {
   }
 
   const entries = Object.entries(config.environments);
+  const baseUrlSource = getApiBaseUrlSource();
+  // Only an env-var override supersedes the stored profiles below; a profile
+  // endpoint is already shown in the table, so don't double-report it here.
+  const override =
+    baseUrlSource.source === 'env' ? { baseUrl: baseUrlSource.baseUrl, via: baseUrlSource.via } : null;
 
   if (isJsonMode()) {
     const data = entries.map(([key, env]) => ({
@@ -306,7 +312,7 @@ export async function runEnvList(): Promise<void> {
       hasApiKey: !!env.apiKey,
       hasClientId: !!env.clientId,
     }));
-    outputJson({ data });
+    outputJson({ data, override });
     return;
   }
 
@@ -343,5 +349,10 @@ export async function runEnvList(): Promise<void> {
   if (hasUnclaimed) {
     console.log('');
     console.log(chalk.dim(`  Run \`${formatWorkOSCommand('env claim')}\` to keep this environment.`));
+  }
+
+  if (override) {
+    console.log('');
+    console.log(chalk.yellow(`Override: ${override.via}=${override.baseUrl} `) + chalk.dim('(active for all commands)'));
   }
 }

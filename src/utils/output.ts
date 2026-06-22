@@ -12,6 +12,7 @@ import { resolveErrorCode } from './exit-codes.js';
 import { formatTable, type TableColumn } from './table.js';
 import type { RecoveryHints } from './recovery-hints.js';
 import type { InteractionModeInfo } from './interaction-mode.js';
+import type { ResolvedApiBaseUrl } from '../lib/api-key.js';
 
 export type OutputMode = 'human' | 'json';
 
@@ -112,6 +113,26 @@ export function outputError(error: StructuredError): void {
       console.error(chalk.dim(`→ ${firstHint.description}${suffix}`));
     }
   }
+}
+
+/**
+ * Format the "you are not talking to prod" indicator, or null when the base URL
+ * is the default. Pure — the caller decides whether/how to emit it.
+ */
+export function formatApiBaseUrlIndicator(resolved: ResolvedApiBaseUrl): string | null {
+  if (resolved.source === 'default') return null;
+  const tag = resolved.source === 'env' ? resolved.via : `profile "${resolved.via}"`;
+  return `→ ${resolved.baseUrl} (${tag})`;
+}
+
+/**
+ * Emit the base-URL indicator to stderr in human mode only. Suppressed in JSON
+ * mode so piped/agent output stays clean. No-op when the base URL is default.
+ */
+export function outputApiBaseUrlIndicator(resolved: ResolvedApiBaseUrl): void {
+  if (currentMode === 'json') return;
+  const line = formatApiBaseUrlIndicator(resolved);
+  if (line) console.error(chalk.dim(line));
 }
 
 /** Write tabular data — chalk table in human mode, JSON array in json mode. */
