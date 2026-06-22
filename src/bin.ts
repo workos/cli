@@ -41,8 +41,10 @@ import {
   isJsonMode,
   outputJson,
   outputError,
+  outputApiBaseUrlIndicator,
   exitWithError,
 } from './utils/output.js';
+import { getApiBaseUrlSource } from './lib/api-key.js';
 import clack from './utils/clack.js';
 import { registerSubcommand } from './utils/register-subcommand.js';
 import { installCrashReporter, sanitizeMessage } from './utils/crash-reporter.js';
@@ -297,6 +299,16 @@ async function runCli(): Promise<void> {
     .middleware((argv) => {
       const commandParts = (argv._ as string[]) || [];
       commandName = resolveCanonicalName(commandParts);
+    })
+    .middleware((argv) => {
+      // Surface a non-prod API base URL once per command, human mode only.
+      // Gated on !isJsonMode() so automation/JSON paths skip the config read
+      // entirely — API commands still validate the URL at call time via
+      // resolveApiBaseUrl(). Skip the bare root command (`workos` /
+      // `--help` / `--version`); there is no API call to attribute it to.
+      // outputApiBaseUrlIndicator no-ops when the base URL is the prod default.
+      if (isJsonMode() || String(argv._?.[0] ?? '') === '') return;
+      outputApiBaseUrlIndicator(getApiBaseUrlSource());
     })
     .middleware((argv) => {
       // First-run, stderr-only notice that telemetry is being collected.

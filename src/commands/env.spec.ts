@@ -63,6 +63,8 @@ describe('env commands', () => {
     testDir = mkdtempSync(join(tmpdir(), 'env-cmd-test-'));
     setInsecureConfigStorage(true);
     resetInteractionModeForTests();
+    delete process.env.WORKOS_API_URL;
+    delete process.env.WORKOS_API_BASE_URL;
     vi.clearAllMocks();
   });
 
@@ -269,6 +271,29 @@ describe('env commands', () => {
     it('does not throw when environments exist', async () => {
       await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
       await expect(runEnvList()).resolves.not.toThrow();
+    });
+
+    it('prints an env-var override annotation when WORKOS_API_URL is set', async () => {
+      process.env.WORKOS_API_URL = 'http://localhost:7777';
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      await runEnvList();
+      const lines = logSpy.mock.calls.map((c) => c.map(String).join(' '));
+      expect(
+        lines.some(
+          (l) => l.includes('Override:') && l.includes('WORKOS_API_URL') && l.includes('http://localhost:7777'),
+        ),
+      ).toBe(true);
+      logSpy.mockRestore();
+    });
+
+    it('does not print an override annotation when no env var is set', async () => {
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      await runEnvList();
+      const lines = logSpy.mock.calls.map((c) => c.map(String).join(' '));
+      expect(lines.some((l) => l.includes('Override:'))).toBe(false);
+      logSpy.mockRestore();
     });
   });
 
@@ -502,6 +527,23 @@ describe('env commands', () => {
       await runEnvList();
       const output = JSON.parse(consoleOutput[0]);
       expect(output.data).toEqual([]);
+    });
+
+    it('runEnvList includes an override field when WORKOS_API_URL is set', async () => {
+      process.env.WORKOS_API_URL = 'http://localhost:7777';
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      consoleOutput = [];
+      await runEnvList();
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.override).toEqual({ baseUrl: 'http://localhost:7777', via: 'WORKOS_API_URL' });
+    });
+
+    it('runEnvList override field is null when no env var is set', async () => {
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      consoleOutput = [];
+      await runEnvList();
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.override).toBeNull();
     });
   });
 

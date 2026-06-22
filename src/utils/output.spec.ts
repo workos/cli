@@ -10,6 +10,8 @@ const {
   outputError,
   outputSuccess,
   exitWithError,
+  formatApiBaseUrlIndicator,
+  outputApiBaseUrlIndicator,
 } = await import('./output.js');
 const { CliExit } = await import('./cli-exit.js');
 
@@ -173,6 +175,55 @@ describe('output', () => {
       const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
       outputSuccess('Created');
       expect(spy.mock.calls[0][0]).toContain('Created');
+      spy.mockRestore();
+    });
+  });
+
+  describe('formatApiBaseUrlIndicator', () => {
+    it('returns null for the default source (no override)', () => {
+      expect(formatApiBaseUrlIndicator({ baseUrl: 'https://api.workos.com', source: 'default' })).toBeNull();
+    });
+
+    it('names the env var for an env override', () => {
+      expect(
+        formatApiBaseUrlIndicator({ baseUrl: 'http://localhost:7777', source: 'env', via: 'WORKOS_API_URL' }),
+      ).toBe('→ http://localhost:7777 (WORKOS_API_URL)');
+    });
+
+    it('names the profile for a profile override', () => {
+      expect(formatApiBaseUrlIndicator({ baseUrl: 'http://localhost:8001', source: 'profile', via: 'local' })).toBe(
+        '→ http://localhost:8001 (profile "local")',
+      );
+    });
+  });
+
+  describe('outputApiBaseUrlIndicator', () => {
+    it('writes a dim line to stderr in human mode for an override', () => {
+      setOutputMode('human');
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      outputApiBaseUrlIndicator({ baseUrl: 'http://localhost:7777', source: 'env', via: 'WORKOS_API_URL' });
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy.mock.calls[0][0]).toContain('http://localhost:7777');
+      expect(spy.mock.calls[0][0]).toContain('WORKOS_API_URL');
+      spy.mockRestore();
+    });
+
+    it('writes nothing in json mode (keeps stdout/stderr clean for scripting)', () => {
+      setOutputMode('json');
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      outputApiBaseUrlIndicator({ baseUrl: 'http://localhost:7777', source: 'env', via: 'WORKOS_API_URL' });
+      expect(errSpy).not.toHaveBeenCalled();
+      expect(logSpy).not.toHaveBeenCalled();
+      errSpy.mockRestore();
+      logSpy.mockRestore();
+    });
+
+    it('writes nothing when the source is the default', () => {
+      setOutputMode('human');
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      outputApiBaseUrlIndicator({ baseUrl: 'https://api.workos.com', source: 'default' });
+      expect(spy).not.toHaveBeenCalled();
       spy.mockRestore();
     });
   });
