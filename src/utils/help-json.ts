@@ -113,6 +113,11 @@ const commands: CommandSchema[] = [
     options: [insecureStorageOpt],
   },
   {
+    name: 'whoami',
+    description: 'Show the authenticated user, team, and environment (dashboard session)',
+    options: [insecureStorageOpt],
+  },
+  {
     name: 'telemetry',
     description: 'Manage telemetry collection (opt-out, opt-in, status)',
     commands: [

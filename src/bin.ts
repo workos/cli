@@ -328,6 +328,7 @@ async function runCli(): Promise<void> {
       if (
         [
           'auth',
+          'whoami',
           'skills',
           'doctor',
           'env',
@@ -412,6 +413,16 @@ async function runCli(): Promise<void> {
       );
       return yargs.demandCommand(1, 'Please specify an auth subcommand').strict();
     })
+    .command(
+      'whoami',
+      'Show the authenticated user, team, and environment (dashboard session)',
+      (yargs) => yargs.options(insecureStorageOption),
+      async (argv) => {
+        await applyInsecureStorage(argv.insecureStorage as boolean | undefined);
+        const { runWhoami } = await import('./commands/whoami.js');
+        await runWhoami();
+      },
+    )
     .command('telemetry', 'Manage telemetry collection (opt-out, opt-in, status)', (yargs) => {
       registerSubcommand(
         yargs,
