@@ -64,3 +64,46 @@ export async function confirmDestructive(
     exitWithCode(ExitCode.CANCELLED);
   }
 }
+
+export interface RequireConfirmationFlagOptions {
+  /** Human-readable description of what will happen, e.g. "change a member's role". */
+  action: string;
+}
+
+/**
+ * The `require-flag` ci_policy gate for non-destructive but sensitive mutations
+ * (privilege or security-posture changes, or fan-out provisioning).
+ *
+ * Unlike {@link confirmDestructive}, this never prompts: an interactive human is
+ * trusted to mean what they typed. Its only job is to stop a *non-interactive*
+ * caller (agent/CI/non-TTY, or JSON output) from making the change without
+ * explicit consent — the "broken CI loop" guard from the interview. A
+ * non-interactive caller must pass `--yes`.
+ *
+ * Exit-code contract (matches {@link confirmDestructive} for the refusal path):
+ * - Non-interactive + no `--yes` => exit 1, `confirmation_required`
+ * - Non-interactive + `--yes`    => proceed (resolves)
+ * - Interactive                  => proceed (resolves; no prompt)
+ *
+ * This is NOT the expensive-op load-capping engine (a later phase); it is the
+ * cheap-load `require-flag` enforcement the first command category needs.
+ */
+export async function requireConfirmationFlag(
+  argv: { yes?: boolean; json?: boolean },
+  opts: RequireConfirmationFlagOptions,
+): Promise<void> {
+  // Explicit consent always proceeds.
+  if (argv.yes) return;
+
+  // Interactive humans are trusted — no prompt, no flag required.
+  if (isPromptAllowed() && !isJsonMode() && !argv.json) return;
+
+  // Non-interactive (or JSON output): refuse without explicit consent so a
+  // scripted/agent run can't silently make a sensitive change.
+  exitWithError({
+    code: 'confirmation_required',
+    message: isCiMode()
+      ? `This change requires --yes in CI mode. Refusing to ${opts.action}.`
+      : `This change requires --yes in non-interactive mode. Refusing to ${opts.action}.`,
+  });
+}

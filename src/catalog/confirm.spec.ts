@@ -11,7 +11,7 @@ vi.mock('../utils/clack.js', () => ({
 
 const { setOutputMode } = await import('../utils/output.js');
 const { resetInteractionModeForTests, setInteractionMode } = await import('../utils/interaction-mode.js');
-const { confirmDestructive } = await import('./confirm.js');
+const { confirmDestructive, requireConfirmationFlag } = await import('./confirm.js');
 const { CliExit } = await import('../utils/cli-exit.js');
 
 async function expectExit(promise: Promise<unknown>, code: number): Promise<CliExit> {
@@ -136,5 +136,42 @@ describe('confirmDestructive', () => {
     mockConfirm.mockResolvedValue(true);
     await expect(confirmDestructive({}, { action: 'delete user usr_1' })).resolves.toBeUndefined();
     expect(mockConfirm).toHaveBeenCalledOnce();
+  });
+});
+
+describe('requireConfirmationFlag', () => {
+  it('exits 1 with confirmation_required in agent mode without --yes', async () => {
+    setInteractionMode({ mode: 'agent', source: 'agent_env' });
+    setOutputMode('json');
+    const err = await expectExit(requireConfirmationFlag({}, { action: 'change a role' }), 1);
+    expect(err.context?.errorCode).toBe('confirmation_required');
+    expect(mockConfirm).not.toHaveBeenCalled();
+  });
+
+  it('exits 1 with confirmation_required in CI mode without --yes', async () => {
+    setInteractionMode({ mode: 'ci', source: 'ci_env' });
+    setOutputMode('json');
+    const err = await expectExit(requireConfirmationFlag({}, { action: 'change a role' }), 1);
+    expect(err.context?.errorCode).toBe('confirmation_required');
+  });
+
+  it('exits 1 in JSON mode even when interactive (stdout must stay machine-readable)', async () => {
+    setInteractionMode({ mode: 'human', source: 'default' });
+    setOutputMode('json');
+    await expectExit(requireConfirmationFlag({}, { action: 'change a role' }), 1);
+    expect(mockConfirm).not.toHaveBeenCalled();
+  });
+
+  it('proceeds non-interactive when --yes is set', async () => {
+    setInteractionMode({ mode: 'agent', source: 'agent_env' });
+    setOutputMode('json');
+    await expect(requireConfirmationFlag({ yes: true }, { action: 'change a role' })).resolves.toBeUndefined();
+  });
+
+  it('proceeds interactively without --yes and never prompts (human is trusted)', async () => {
+    setInteractionMode({ mode: 'human', source: 'default' });
+    setOutputMode('human');
+    await expect(requireConfirmationFlag({}, { action: 'change a role' })).resolves.toBeUndefined();
+    expect(mockConfirm).not.toHaveBeenCalled();
   });
 });

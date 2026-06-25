@@ -37,9 +37,29 @@ export interface CommandMeta {
  * name.
  */
 export const OVERRIDES: Record<string, CommandMeta> = {
+  // --- Phase 3: account-plane lifecycle ---
+  // Every curated op gets an override so the manifest's clean `command` noun is
+  // the single source of truth (the catalog operation names like
+  // `createEnvironment` are internal and would otherwise leak through as the
+  // command name). Descriptions are rewritten to the user-facing voice and to
+  // avoid GraphQL/internal phrasing.
+  createEnvironment: { command: 'environment create', describe: 'Create a sandbox or production environment' },
+  renameEnvironment: { command: 'environment rename', describe: 'Rename an environment' },
   // Description is wrong upstream ("Return the team for the current dashboard
   // session") — it actually lists a team's projects.
   teamProjectsV2: { command: 'project list', describe: 'List projects in the current team' },
+  createProjectWithNewEnvironments: {
+    command: 'project create',
+    describe: 'Create a project with fresh staging and production environments',
+  },
+  renameProject: { command: 'project rename', describe: 'Rename a project' },
+  teamMemberships: { command: 'team members', describe: 'List members of the current team' },
+  inviteUserToTeam: { command: 'team invite', describe: 'Invite a user to the current team by email' },
+  changeRole: { command: 'team change-role', describe: "Change a team member's role" },
+  removeUserFromTeam: { command: 'team remove', describe: 'Remove a member from the current team' },
+  resendDashboardInvite: { command: 'team resend-invite', describe: 'Resend an expired team invitation' },
+  updateTeamDetails: { command: 'team update', describe: 'Rename the current team' },
+  updateTeamMfaRequirement: { command: 'team set-mfa', describe: 'Set whether MFA is required for the team' },
 
   // `userland*` ops: the prefix is internal dashboard naming. The user-facing
   // noun is just "user".

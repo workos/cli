@@ -118,6 +118,163 @@ const commands: CommandSchema[] = [
     options: [insecureStorageOpt],
   },
   {
+    name: 'environment',
+    description: 'Manage WorkOS environments (create, rename) on the dashboard account plane',
+    options: [insecureStorageOpt],
+    commands: [
+      {
+        name: 'create',
+        description: 'Create a sandbox or production environment',
+        positionals: [{ name: 'name', type: 'string', description: 'Environment name', required: true }],
+        options: [
+          {
+            name: 'sandbox',
+            type: 'boolean',
+            description: 'Create a sandbox environment',
+            required: false,
+            default: false,
+            hidden: false,
+          },
+        ],
+      },
+      {
+        name: 'rename',
+        description: 'Rename an environment',
+        positionals: [
+          { name: 'environmentId', type: 'string', description: 'Environment ID', required: true },
+          { name: 'name', type: 'string', description: 'New environment name', required: true },
+        ],
+      },
+    ],
+  },
+  {
+    name: 'project',
+    description: 'Manage WorkOS projects (create, rename, list) on the dashboard account plane',
+    options: [insecureStorageOpt],
+    commands: [
+      {
+        name: 'create',
+        description: 'Create a project with fresh staging and production environments',
+        positionals: [{ name: 'name', type: 'string', description: 'Project name', required: true }],
+        options: [
+          {
+            name: 'production',
+            type: 'boolean',
+            description: 'Provision a production environment (use --no-production for staging only)',
+            required: false,
+            default: true,
+            hidden: false,
+          },
+          {
+            name: 'yes',
+            type: 'boolean',
+            description: 'Confirm in non-interactive mode',
+            required: false,
+            default: false,
+            alias: 'y',
+            hidden: false,
+          },
+        ],
+      },
+      {
+        name: 'rename',
+        description: 'Rename a project',
+        positionals: [
+          { name: 'projectId', type: 'string', description: 'Project ID', required: true },
+          { name: 'name', type: 'string', description: 'New project name', required: true },
+        ],
+      },
+      {
+        name: 'list',
+        description: 'List projects in the current team',
+      },
+    ],
+  },
+  {
+    name: 'team',
+    description: 'Manage the WorkOS dashboard team (members, invites, settings)',
+    options: [insecureStorageOpt],
+    commands: [
+      {
+        name: 'members',
+        description: 'List members of the current team',
+      },
+      {
+        name: 'invite',
+        description: 'Invite a user to the current team by email',
+        positionals: [{ name: 'email', type: 'string', description: 'Email address to invite', required: true }],
+        options: [
+          { name: 'role', type: 'string', description: 'Role (ADMIN, MEMBER, ...)', required: true, hidden: false },
+          { name: 'first-name', type: 'string', description: 'First name', required: false, hidden: false },
+          { name: 'last-name', type: 'string', description: 'Last name', required: false, hidden: false },
+        ],
+      },
+      {
+        name: 'change-role',
+        description: "Change a team member's role",
+        positionals: [
+          { name: 'membershipId', type: 'string', description: 'Team membership ID', required: true },
+          { name: 'role', type: 'string', description: 'New role (ADMIN, MEMBER, ...)', required: true },
+        ],
+        options: [
+          {
+            name: 'yes',
+            type: 'boolean',
+            description: 'Confirm in non-interactive mode',
+            required: false,
+            default: false,
+            alias: 'y',
+            hidden: false,
+          },
+        ],
+      },
+      {
+        name: 'remove',
+        description: 'Remove a member from the current team',
+        positionals: [{ name: 'membershipId', type: 'string', description: 'Team membership ID', required: true }],
+        options: [
+          {
+            name: 'yes',
+            type: 'boolean',
+            description: 'Skip the confirmation prompt',
+            required: false,
+            default: false,
+            alias: 'y',
+            hidden: false,
+          },
+        ],
+      },
+      {
+        name: 'resend-invite',
+        description: 'Resend an expired team invitation',
+        positionals: [{ name: 'membershipId', type: 'string', description: 'Team membership ID', required: true }],
+      },
+      {
+        name: 'update',
+        description: 'Rename the current team',
+        positionals: [{ name: 'name', type: 'string', description: 'New team name', required: true }],
+      },
+      {
+        name: 'set-mfa',
+        description: 'Set whether MFA is required for the team',
+        positionals: [
+          { name: 'required', type: 'boolean', description: 'true to require MFA, false to relax', required: true },
+        ],
+        options: [
+          {
+            name: 'yes',
+            type: 'boolean',
+            description: 'Confirm in non-interactive mode',
+            required: false,
+            default: false,
+            alias: 'y',
+            hidden: false,
+          },
+        ],
+      },
+    ],
+  },
+  {
     name: 'telemetry',
     description: 'Manage telemetry collection (opt-out, opt-in, status)',
     commands: [
