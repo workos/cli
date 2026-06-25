@@ -1,0 +1,103 @@
+import { loadManagementCatalog } from './loader.js';
+import { DashboardGraphqlError } from '../lib/dashboard-graphql.js';
+import { exitWithError } from '../utils/output.js';
+import type { CatalogOperation, ManagementCatalog } from './catalog-types.js';
+
+/**
+ * Catalog-operation accessors for command handlers.
+ *
+ * Category command handlers (Phase 3+) never import the snapshot or hand-write
+ * GraphQL: they look an operation up by name and ask for its executable document.
+ * The GraphQL `document` text stays internal to this layer — handlers pass the
+ * returned string straight to `dashboardGraphqlRequest()` and otherwise treat it
+ * as opaque (the no-graphql-leak contract is about user-facing strings, not the
+ * wire document).
+ */
+
+/**
+ * Look up a catalog operation by its name (the `mapsTo` value in the manifest).
+ *
+ * Includes feature-flag-gated operations so a handler can still resolve an op
+ * that the live MCP would hide — the CLI guards those at the command layer (via
+ * the manifest + clear errors), not by making them un-loadable here. Throws if
+ * the name is absent, which only happens on a manifest/catalog drift that
+ * `justification:check` would already have failed on.
+ */
+export function getOperation(
+  name: string,
+  catalog: ManagementCatalog = loadManagementCatalog(undefined, { includeFeatureFlagged: true }),
+): CatalogOperation {
+  const op = catalog.operations.find((candidate) => candidate.name === name);
+  if (!op) {
+    throw new Error(`Catalog operation "${name}" not found. The vendored snapshot may be stale; run \`pnpm catalog:vendor\`.`);
+  }
+  return op;
+}
+
+/**
+ * Returns the full executable GraphQL document for an operation: its own
+ * `document` text plus the definitions of every fragment it transitively
+ * depends on.
+ *
+ * The catalog stores operation text WITHOUT its fragments (they are deduped into
+ * `catalog.fragments`), so sending `op.document` alone would fail with "Unknown
+ * fragment" whenever `op.fragmentNames` is non-empty. This stitches them back
+ * together so the document is valid on the wire. The result is internal — never
+ * surface it to users.
+ */
+export function resolveExecutableDocument(
+  op: CatalogOperation,
+  catalog: ManagementCatalog = loadManagementCatalog(undefined, { includeFeatureFlagged: true }),
+): string {
+  if (op.fragmentNames.length === 0) return op.document;
+
+  const fragments = op.fragmentNames.map((fragmentName) => {
+    const fragment = catalog.fragments[fragmentName];
+    if (!fragment) {
+      throw new Error(
+        `Fragment "${fragmentName}" required by operation "${op.name}" is missing from the catalog snapshot.`,
+      );
+    }
+    return fragment;
+  });
+
+  return [op.document, ...fragments].join('\n\n');
+}
+
+/**
+ * Translate a {@link DashboardGraphqlError} into a clean exit, reusing the
+ * `whoami` error taxonomy (forbidden / http_error / graphql_error /
+ * network_error).
+ *
+ * The dashboard OAuth-bearer capability the account-plane commands rely on is
+ * feature-flag-gated server-side (staging today), so a 403 is the *expected*
+ * outcome wherever the flag is off. We surface that distinctly — and without
+ * ever naming GraphQL — so the failure is actionable rather than a generic 403.
+ * Never returns.
+ */
+export function reportDashboardError(error: unknown): never {
+  if (error instanceof DashboardGraphqlError) {
+    // Build a clean, user-facing message per code. We deliberately do NOT echo
+    // `error.message`: the underlying client phrases every failure in terms of
+    // "the dashboard GraphQL API", and GraphQL must never surface to users.
+    exitWithError({ code: error.code, message: dashboardErrorMessage(error) });
+  }
+  throw error;
+}
+
+function dashboardErrorMessage(error: DashboardGraphqlError): string {
+  switch (error.code) {
+    case 'forbidden':
+      return (
+        'This account-plane capability is not enabled for this API host. ' +
+        'It must be turned on (currently staging only), with a token belonging to a WorkOS dashboard account that has a team.'
+      );
+    case 'http_error':
+      return `The WorkOS account plane returned an unexpected response${error.status ? ` (HTTP ${error.status})` : ''}.`;
+    case 'network_error':
+      return 'Could not reach the WorkOS account plane. Check your connection and try again.';
+    case 'graphql_error':
+    default:
+      return 'The WorkOS account plane could not complete this request.';
+  }
+}

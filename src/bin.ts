@@ -401,6 +401,205 @@ async function runCli(): Promise<void> {
         await runWhoami();
       },
     )
+    .command(
+      'environment',
+      'Manage WorkOS environments (create, rename) on the dashboard account plane',
+      (yargs) => {
+        yargs.options(insecureStorageOption);
+        registerSubcommand(
+          yargs,
+          'create <name>',
+          'Create a sandbox or production environment',
+          (y) =>
+            y
+              .positional('name', { type: 'string', demandOption: true, describe: 'Environment name' })
+              .option('sandbox', { type: 'boolean', default: false, describe: 'Create a sandbox environment' }),
+          async (argv) => {
+            await applyInsecureStorage(argv.insecureStorage);
+            const { runEnvironmentCreate } = await import('./commands/environment.js');
+            await runEnvironmentCreate({ name: argv.name, sandbox: Boolean(argv.sandbox) });
+          },
+        );
+        registerSubcommand(
+          yargs,
+          'rename <environmentId> <name>',
+          'Rename an environment',
+          (y) =>
+            y
+              .positional('environmentId', { type: 'string', demandOption: true, describe: 'Environment ID' })
+              .positional('name', { type: 'string', demandOption: true, describe: 'New environment name' }),
+          async (argv) => {
+            await applyInsecureStorage(argv.insecureStorage);
+            const { runEnvironmentRename } = await import('./commands/environment.js');
+            await runEnvironmentRename({ environmentId: argv.environmentId, name: argv.name });
+          },
+        );
+        return yargs.demandCommand(1, 'Please specify an environment subcommand').strict();
+      },
+    )
+    .command('project', 'Manage WorkOS projects (create, rename, list) on the dashboard account plane', (yargs) => {
+      yargs.options(insecureStorageOption);
+      registerSubcommand(
+        yargs,
+        'create <name>',
+        'Create a project with fresh staging and production environments',
+        (y) =>
+          y
+            .positional('name', { type: 'string', demandOption: true, describe: 'Project name' })
+            .option('production', {
+              type: 'boolean',
+              default: true,
+              describe: 'Provision a production environment (use --no-production for staging only)',
+            })
+            .option('yes', { alias: 'y', type: 'boolean', default: false, describe: 'Confirm in non-interactive mode' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { runProjectCreate } = await import('./commands/project.js');
+          await runProjectCreate({
+            name: argv.name,
+            production: argv.production !== false,
+            yes: argv.yes,
+            json: argv.json as boolean | undefined,
+          });
+        },
+      );
+      registerSubcommand(
+        yargs,
+        'rename <projectId> <name>',
+        'Rename a project',
+        (y) =>
+          y
+            .positional('projectId', { type: 'string', demandOption: true, describe: 'Project ID' })
+            .positional('name', { type: 'string', demandOption: true, describe: 'New project name' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { runProjectRename } = await import('./commands/project.js');
+          await runProjectRename({ projectId: argv.projectId, name: argv.name });
+        },
+      );
+      registerSubcommand(
+        yargs,
+        'list',
+        'List projects in the current team',
+        (y) => y,
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { runProjectList } = await import('./commands/project.js');
+          await runProjectList();
+        },
+      );
+      return yargs.demandCommand(1, 'Please specify a project subcommand').strict();
+    })
+    .command('team', 'Manage the WorkOS dashboard team (members, invites, settings)', (yargs) => {
+      yargs.options(insecureStorageOption);
+      registerSubcommand(
+        yargs,
+        'members',
+        'List members of the current team',
+        (y) => y,
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { runTeamMembers } = await import('./commands/team.js');
+          await runTeamMembers();
+        },
+      );
+      registerSubcommand(
+        yargs,
+        'invite <email>',
+        'Invite a user to the current team by email',
+        (y) =>
+          y
+            .positional('email', { type: 'string', demandOption: true, describe: 'Email address to invite' })
+            .option('role', { type: 'string', demandOption: true, describe: 'Role (ADMIN, MEMBER, ...)' })
+            .option('first-name', { type: 'string', describe: 'First name' })
+            .option('last-name', { type: 'string', describe: 'Last name' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { runTeamInvite } = await import('./commands/team.js');
+          await runTeamInvite({
+            email: argv.email,
+            role: argv.role as string,
+            firstName: argv.firstName as string | undefined,
+            lastName: argv.lastName as string | undefined,
+          });
+        },
+      );
+      registerSubcommand(
+        yargs,
+        'change-role <membershipId> <role>',
+        "Change a team member's role",
+        (y) =>
+          y
+            .positional('membershipId', { type: 'string', demandOption: true, describe: 'Team membership ID' })
+            .positional('role', { type: 'string', demandOption: true, describe: 'New role (ADMIN, MEMBER, ...)' })
+            .option('yes', { alias: 'y', type: 'boolean', default: false, describe: 'Confirm in non-interactive mode' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { runTeamChangeRole } = await import('./commands/team.js');
+          await runTeamChangeRole({
+            membershipId: argv.membershipId,
+            role: argv.role,
+            yes: argv.yes,
+            json: argv.json as boolean | undefined,
+          });
+        },
+      );
+      registerSubcommand(
+        yargs,
+        'remove <membershipId>',
+        'Remove a member from the current team',
+        (y) =>
+          y
+            .positional('membershipId', { type: 'string', demandOption: true, describe: 'Team membership ID' })
+            .option('yes', { alias: 'y', type: 'boolean', default: false, describe: 'Skip the confirmation prompt' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { runTeamRemove } = await import('./commands/team.js');
+          await runTeamRemove({ membershipId: argv.membershipId, yes: argv.yes, json: argv.json as boolean | undefined });
+        },
+      );
+      registerSubcommand(
+        yargs,
+        'resend-invite <membershipId>',
+        'Resend an expired team invitation',
+        (y) => y.positional('membershipId', { type: 'string', demandOption: true, describe: 'Team membership ID' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { runTeamResendInvite } = await import('./commands/team.js');
+          await runTeamResendInvite({ membershipId: argv.membershipId });
+        },
+      );
+      registerSubcommand(
+        yargs,
+        'update <name>',
+        'Rename the current team',
+        (y) => y.positional('name', { type: 'string', demandOption: true, describe: 'New team name' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { runTeamUpdate } = await import('./commands/team.js');
+          await runTeamUpdate({ name: argv.name });
+        },
+      );
+      registerSubcommand(
+        yargs,
+        'set-mfa <required>',
+        'Set whether MFA is required for the team',
+        (y) =>
+          y
+            .positional('required', { type: 'boolean', demandOption: true, describe: 'true to require MFA, false to relax' })
+            .option('yes', { alias: 'y', type: 'boolean', default: false, describe: 'Confirm in non-interactive mode' }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { runTeamSetMfa } = await import('./commands/team.js');
+          await runTeamSetMfa({
+            required: Boolean(argv.required),
+            yes: argv.yes,
+            json: argv.json as boolean | undefined,
+          });
+        },
+      );
+      return yargs.demandCommand(1, 'Please specify a team subcommand').strict();
+    })
     .command('telemetry', 'Manage telemetry collection (opt-out, opt-in, status)', (yargs) => {
       registerSubcommand(
         yargs,
