@@ -34,6 +34,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Justification check
+        run: pnpm justification:check
+
       - name: Build
         run: pnpm build
 

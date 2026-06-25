@@ -1,0 +1,84 @@
+import type { CatalogOperation } from './catalog-types.js';
+
+/**
+ * The curation layer: maps a raw catalog operation to a clean, user-facing
+ * WorkOS command noun + description.
+ *
+ * The catalog mirrors the dashboard's internal GraphQL operations, so operation
+ * names and descriptions can leak internal naming — most notably the `userland*`
+ * prefix and the word "graphql" — and some descriptions are simply wrong
+ * (`teamProjectsV2` is described as "Return the team for the current dashboard
+ * session"). This layer hides that, applying the same clean rendering the
+ * existing `whoami` command uses (User / Team / Environment nouns, no GraphQL).
+ *
+ * Contract:
+ * - Any op whose catalog `name` OR `description` matches {@link LEAK_PATTERN}
+ *   MUST have an entry in {@link OVERRIDES}. This is enforced by
+ *   `no-graphql-leak.spec.ts` over the curated manifest.
+ * - The default `describe` falls back to the catalog description only when it is
+ *   clean; a rotten or leaky description requires an override.
+ */
+
+/** Internal naming that must never reach a user-facing command/description. */
+export const LEAK_PATTERN = /graphql|userland/i;
+
+export interface CommandMeta {
+  /** Clean user-facing command noun, e.g. "project list". */
+  command: string;
+  /** Clean user-facing description. */
+  describe: string;
+}
+
+/**
+ * Per-operation overrides for command name + description.
+ *
+ * One entry per curated op whose catalog `name`/`description` leaks internal
+ * naming (`userland`/`graphql`) or is wrong/rotten. Keyed by catalog operation
+ * name.
+ */
+export const OVERRIDES: Record<string, CommandMeta> = {
+  // Description is wrong upstream ("Return the team for the current dashboard
+  // session") — it actually lists a team's projects.
+  teamProjectsV2: { command: 'project list', describe: 'List projects in the current team' },
+
+  // `userland*` ops: the prefix is internal dashboard naming. The user-facing
+  // noun is just "user".
+  userlandUsers: { command: 'user list', describe: 'List AuthKit users in the current environment' },
+  createUserlandUser: { command: 'user create', describe: 'Create a user' },
+  deleteUserlandUser: { command: 'user delete', describe: 'Delete a user' },
+  createUserlandUserInvite: { command: 'user invite', describe: 'Invite a user by email' },
+  resendUserlandUserInvite: { command: 'user invite resend', describe: 'Resend a pending user invitation' },
+  revokeUserlandUserInvite: { command: 'user invite revoke', describe: 'Revoke a pending user invitation' },
+};
+
+/**
+ * Resolves a catalog operation to clean, user-facing command metadata.
+ *
+ * Resolution order:
+ * 1. An explicit {@link OVERRIDES} entry wins.
+ * 2. Otherwise, the catalog name/description are used as-is — but only when both
+ *    are clean. If either leaks internal naming ({@link LEAK_PATTERN}) and there
+ *    is no override, the result still carries the leaked value so the
+ *    no-graphql-leak test fails loudly; this is the signal that an override is
+ *    required. (See {@link findLeaks} for the programmatic check used by the
+ *    spec.)
+ */
+export function resolveCommandMeta(op: CatalogOperation): CommandMeta {
+  const override = OVERRIDES[op.name];
+  if (override) return override;
+  return { command: op.name, describe: op.description };
+}
+
+/**
+ * Returns the field names ('command' and/or 'describe') of resolved metadata
+ * that still match {@link LEAK_PATTERN}. Empty array means clean.
+ *
+ * The no-graphql-leak test runs this over every curated op's resolved metadata
+ * and asserts it is always empty.
+ */
+export function findLeaks(meta: CommandMeta): Array<keyof CommandMeta> {
+  const leaks: Array<keyof CommandMeta> = [];
+  if (LEAK_PATTERN.test(meta.command)) leaks.push('command');
+  if (LEAK_PATTERN.test(meta.describe)) leaks.push('describe');
+  return leaks;
+}

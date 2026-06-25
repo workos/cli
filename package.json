@@ -109,7 +109,8 @@
     "eval:show": "tsx tests/evals/index.ts show",
     "gen:routes": "tsx scripts/gen-routes.ts",
     "catalog:vendor": "tsx scripts/vendor-catalog.ts",
-    "check:coverage": "tsx scripts/check-coverage.ts"
+    "check:coverage": "tsx scripts/check-coverage.ts",
+    "justification:check": "tsx scripts/check-justification.ts"
   },
   "author": "WorkOS",
   "license": "MIT"
