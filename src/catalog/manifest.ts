@@ -151,6 +151,89 @@ const MANIFEST: CommandJustification[] = [
     // non-interactive use.
     ciPolicy: 'require-flag',
   },
+
+  // --- Phase 4: AuthKit app config ---
+  // Per-environment AuthKit setup surface (redirect URIs, CORS, logout URIs,
+  // branding). All cheap + imperative; setters replace the full list but expose
+  // a native `--dry-run` as the safety affordance, so none are `destructive` and
+  // none are routed through confirmDestructive. `ci_policy: allow` because
+  // setting these IS the setup automation we want humans/agents/CI to run.
+  //
+  // Selection note: we deliberately map to the environment-level ops
+  // (`setRedirectUris`/`setLogoutUris`), NOT the application-level
+  // `setAuthkitApplication*` ops, whose input types are named
+  // `SetUserlandApplication*Input` (the `userland` leak the leak test cannot see,
+  // since it only inspects op names/descriptions, not input-type names).
+  {
+    command: 'authkit redirect-uris list',
+    mapsTo: 'redirectUris',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'Inspect configured redirect URIs (verify setup, audits, scripting)',
+    load: 'cheap',
+    mutation: false,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'authkit redirect-uris set',
+    mapsTo: 'setRedirectUris',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'Set allowed redirect URIs when wiring AuthKit (setup scripts/CI); --dry-run validates first',
+    load: 'cheap',
+    mutation: true,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'authkit cors get',
+    mapsTo: 'corsConfig',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'Inspect allowed web origins (CORS)',
+    load: 'cheap',
+    mutation: false,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'authkit cors set',
+    mapsTo: 'updateCorsConfig',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'Set allowed web origins for the web/SPA app during setup; --dry-run validates first',
+    load: 'cheap',
+    mutation: true,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'authkit logout-uris list',
+    mapsTo: 'logoutUris',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'Inspect configured logout URIs',
+    load: 'cheap',
+    mutation: false,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'authkit logout-uris set',
+    mapsTo: 'setLogoutUris',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'Set allowed logout URIs during setup; --dry-run validates first',
+    load: 'cheap',
+    mutation: true,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'authkit branding get',
+    mapsTo: 'environmentAppBranding',
+    audiences: ['human', 'agent'],
+    useCase: 'Inspect AuthKit branding (logos, theme) for an environment',
+    load: 'cheap',
+    mutation: false,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
 ];
 
 /** Returns the curated command allowlist. */
