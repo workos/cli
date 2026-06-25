@@ -106,7 +106,10 @@
     "eval:diff": "tsx tests/evals/index.ts diff",
     "eval:prune": "tsx tests/evals/index.ts prune",
     "eval:logs": "tsx tests/evals/index.ts logs",
-    "eval:show": "tsx tests/evals/index.ts show"
+    "eval:show": "tsx tests/evals/index.ts show",
+    "gen:routes": "tsx scripts/gen-routes.ts",
+    "catalog:vendor": "tsx scripts/vendor-catalog.ts",
+    "check:coverage": "tsx scripts/check-coverage.ts"
   },
   "author": "WorkOS",
   "license": "MIT"
