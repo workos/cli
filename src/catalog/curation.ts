@@ -69,6 +69,20 @@ export const OVERRIDES: Record<string, CommandMeta> = {
   createUserlandUserInvite: { command: 'user invite', describe: 'Invite a user by email' },
   resendUserlandUserInvite: { command: 'user invite resend', describe: 'Resend a pending user invitation' },
   revokeUserlandUserInvite: { command: 'user invite revoke', describe: 'Revoke a pending user invitation' },
+
+  // --- Phase 4: AuthKit app config ---
+  // These op names/descriptions are already clean (no leak), but each still needs
+  // an override so resolveCommandMeta returns the manifest's clean noun (the leak
+  // spec asserts meta.command === manifest entry.command). Branding maps to
+  // `environmentAppBranding`, NOT `appBranding` (whose upstream description is the
+  // rot "Return the team for the current dashboard session").
+  redirectUris: { command: 'authkit redirect-uris list', describe: 'List configured redirect URIs for an environment' },
+  setRedirectUris: { command: 'authkit redirect-uris set', describe: 'Set the allowed redirect URIs for an environment' },
+  corsConfig: { command: 'authkit cors get', describe: 'Show the allowed web origins (CORS) for an environment' },
+  updateCorsConfig: { command: 'authkit cors set', describe: 'Set the allowed web origins (CORS) for an environment' },
+  logoutUris: { command: 'authkit logout-uris list', describe: 'List configured logout URIs for an environment' },
+  setLogoutUris: { command: 'authkit logout-uris set', describe: 'Set the allowed logout URIs for an environment' },
+  environmentAppBranding: { command: 'authkit branding get', describe: 'Show AuthKit branding (logos, theme) for an environment' },
 };
 
 /**

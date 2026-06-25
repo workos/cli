@@ -490,6 +490,148 @@ async function runCli(): Promise<void> {
       );
       return yargs.demandCommand(1, 'Please specify a project subcommand').strict();
     })
+    .command(
+      'authkit',
+      'Manage AuthKit app config (redirect URIs, CORS, logout URIs, branding) on the dashboard account plane',
+      (yargs) => {
+        yargs.options(insecureStorageOption);
+
+        yargs.command('redirect-uris', 'Manage AuthKit redirect URIs', (yargs) => {
+          registerSubcommand(
+            yargs,
+            'list',
+            'List configured redirect URIs for an environment',
+            (y) =>
+              y
+                .option('environment-id', { type: 'string', demandOption: true, describe: 'Environment ID' })
+                .option('limit', { type: 'number', describe: 'Maximum number of URIs to return' }),
+            async (argv) => {
+              await applyInsecureStorage(argv.insecureStorage);
+              const { runAuthkitRedirectUrisList } = await import('./commands/authkit.js');
+              await runAuthkitRedirectUrisList({
+                environmentId: argv.environmentId as string,
+                limit: argv.limit as number | undefined,
+              });
+            },
+          );
+          registerSubcommand(
+            yargs,
+            'set',
+            'Set the allowed redirect URIs for an environment (replaces the full list)',
+            (y) =>
+              y
+                .option('environment-id', { type: 'string', demandOption: true, describe: 'Environment ID' })
+                .option('uri', { type: 'string', array: true, demandOption: true, describe: 'Redirect URI (repeatable)' })
+                .option('default', { type: 'string', describe: 'Which URI to mark as the default' })
+                .option('dry-run', { type: 'boolean', default: false, describe: 'Validate without saving' }),
+            async (argv) => {
+              await applyInsecureStorage(argv.insecureStorage);
+              const { runAuthkitRedirectUrisSet } = await import('./commands/authkit.js');
+              await runAuthkitRedirectUrisSet({
+                environmentId: argv.environmentId as string,
+                uris: argv.uri as string[],
+                default: argv.default as string | undefined,
+                dryRun: Boolean(argv.dryRun),
+              });
+            },
+          );
+          return yargs.demandCommand(1, 'Please specify a redirect-uris subcommand').strict();
+        });
+
+        yargs.command('cors', 'Manage AuthKit CORS web origins', (yargs) => {
+          registerSubcommand(
+            yargs,
+            'get',
+            'Show the allowed web origins (CORS) for an environment',
+            (y) => y.option('environment-id', { type: 'string', demandOption: true, describe: 'Environment ID' }),
+            async (argv) => {
+              await applyInsecureStorage(argv.insecureStorage);
+              const { runAuthkitCorsGet } = await import('./commands/authkit.js');
+              await runAuthkitCorsGet({ environmentId: argv.environmentId as string });
+            },
+          );
+          registerSubcommand(
+            yargs,
+            'set',
+            'Set the allowed web origins (CORS) for an environment (replaces the full list)',
+            (y) =>
+              y
+                .option('environment-id', { type: 'string', demandOption: true, describe: 'Environment ID' })
+                .option('origin', { type: 'string', array: true, demandOption: true, describe: 'Web origin (repeatable)' })
+                .option('dry-run', { type: 'boolean', default: false, describe: 'Validate without saving' }),
+            async (argv) => {
+              await applyInsecureStorage(argv.insecureStorage);
+              const { runAuthkitCorsSet } = await import('./commands/authkit.js');
+              await runAuthkitCorsSet({
+                environmentId: argv.environmentId as string,
+                origins: argv.origin as string[],
+                dryRun: Boolean(argv.dryRun),
+              });
+            },
+          );
+          return yargs.demandCommand(1, 'Please specify a cors subcommand').strict();
+        });
+
+        yargs.command('logout-uris', 'Manage AuthKit logout URIs', (yargs) => {
+          registerSubcommand(
+            yargs,
+            'list',
+            'List configured logout URIs for an environment',
+            (y) =>
+              y
+                .option('environment-id', { type: 'string', demandOption: true, describe: 'Environment ID' })
+                .option('limit', { type: 'number', describe: 'Maximum number of URIs to return' }),
+            async (argv) => {
+              await applyInsecureStorage(argv.insecureStorage);
+              const { runAuthkitLogoutUrisList } = await import('./commands/authkit.js');
+              await runAuthkitLogoutUrisList({
+                environmentId: argv.environmentId as string,
+                limit: argv.limit as number | undefined,
+              });
+            },
+          );
+          registerSubcommand(
+            yargs,
+            'set',
+            'Set the allowed logout URIs for an environment (replaces the full list)',
+            (y) =>
+              y
+                .option('environment-id', { type: 'string', demandOption: true, describe: 'Environment ID' })
+                .option('uri', { type: 'string', array: true, demandOption: true, describe: 'Logout URI (repeatable)' })
+                .option('default', { type: 'string', describe: 'Which URI to mark as the default' })
+                .option('dry-run', { type: 'boolean', default: false, describe: 'Validate without saving' }),
+            async (argv) => {
+              await applyInsecureStorage(argv.insecureStorage);
+              const { runAuthkitLogoutUrisSet } = await import('./commands/authkit.js');
+              await runAuthkitLogoutUrisSet({
+                environmentId: argv.environmentId as string,
+                uris: argv.uri as string[],
+                default: argv.default as string | undefined,
+                dryRun: Boolean(argv.dryRun),
+              });
+            },
+          );
+          return yargs.demandCommand(1, 'Please specify a logout-uris subcommand').strict();
+        });
+
+        yargs.command('branding', 'Manage AuthKit branding', (yargs) => {
+          registerSubcommand(
+            yargs,
+            'get',
+            'Show AuthKit branding (logos, theme) for an environment',
+            (y) => y.option('environment-id', { type: 'string', demandOption: true, describe: 'Environment ID' }),
+            async (argv) => {
+              await applyInsecureStorage(argv.insecureStorage);
+              const { runAuthkitBrandingGet } = await import('./commands/authkit.js');
+              await runAuthkitBrandingGet({ environmentId: argv.environmentId as string });
+            },
+          );
+          return yargs.demandCommand(1, 'Please specify a branding subcommand').strict();
+        });
+
+        return yargs.demandCommand(1, 'Please specify an authkit subcommand').strict();
+      },
+    )
     .command('team', 'Manage the WorkOS dashboard team (members, invites, settings)', (yargs) => {
       yargs.options(insecureStorageOption);
       registerSubcommand(

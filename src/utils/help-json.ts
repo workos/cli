@@ -191,6 +191,92 @@ const commands: CommandSchema[] = [
     ],
   },
   {
+    name: 'authkit',
+    description: 'Manage AuthKit app config (redirect URIs, CORS, logout URIs, branding) on the dashboard account plane',
+    options: [insecureStorageOpt],
+    commands: [
+      {
+        name: 'redirect-uris',
+        description: 'Manage AuthKit redirect URIs',
+        commands: [
+          {
+            name: 'list',
+            description: 'List configured redirect URIs for an environment',
+            options: [
+              { name: 'environment-id', type: 'string', description: 'Environment ID', required: true, hidden: false },
+              { name: 'limit', type: 'number', description: 'Maximum number of URIs to return', required: false, hidden: false },
+            ],
+          },
+          {
+            name: 'set',
+            description: 'Set the allowed redirect URIs for an environment (replaces the full list)',
+            options: [
+              { name: 'environment-id', type: 'string', description: 'Environment ID', required: true, hidden: false },
+              { name: 'uri', type: 'string', description: 'Redirect URI (repeatable)', required: true, hidden: false },
+              { name: 'default', type: 'string', description: 'Which URI to mark as the default', required: false, hidden: false },
+              { name: 'dry-run', type: 'boolean', description: 'Validate without saving', required: false, default: false, hidden: false },
+            ],
+          },
+        ],
+      },
+      {
+        name: 'cors',
+        description: 'Manage AuthKit CORS web origins',
+        commands: [
+          {
+            name: 'get',
+            description: 'Show the allowed web origins (CORS) for an environment',
+            options: [{ name: 'environment-id', type: 'string', description: 'Environment ID', required: true, hidden: false }],
+          },
+          {
+            name: 'set',
+            description: 'Set the allowed web origins (CORS) for an environment (replaces the full list)',
+            options: [
+              { name: 'environment-id', type: 'string', description: 'Environment ID', required: true, hidden: false },
+              { name: 'origin', type: 'string', description: 'Web origin (repeatable)', required: true, hidden: false },
+              { name: 'dry-run', type: 'boolean', description: 'Validate without saving', required: false, default: false, hidden: false },
+            ],
+          },
+        ],
+      },
+      {
+        name: 'logout-uris',
+        description: 'Manage AuthKit logout URIs',
+        commands: [
+          {
+            name: 'list',
+            description: 'List configured logout URIs for an environment',
+            options: [
+              { name: 'environment-id', type: 'string', description: 'Environment ID', required: true, hidden: false },
+              { name: 'limit', type: 'number', description: 'Maximum number of URIs to return', required: false, hidden: false },
+            ],
+          },
+          {
+            name: 'set',
+            description: 'Set the allowed logout URIs for an environment (replaces the full list)',
+            options: [
+              { name: 'environment-id', type: 'string', description: 'Environment ID', required: true, hidden: false },
+              { name: 'uri', type: 'string', description: 'Logout URI (repeatable)', required: true, hidden: false },
+              { name: 'default', type: 'string', description: 'Which URI to mark as the default', required: false, hidden: false },
+              { name: 'dry-run', type: 'boolean', description: 'Validate without saving', required: false, default: false, hidden: false },
+            ],
+          },
+        ],
+      },
+      {
+        name: 'branding',
+        description: 'Manage AuthKit branding',
+        commands: [
+          {
+            name: 'get',
+            description: 'Show AuthKit branding (logos, theme) for an environment',
+            options: [{ name: 'environment-id', type: 'string', description: 'Environment ID', required: true, hidden: false }],
+          },
+        ],
+      },
+    ],
+  },
+  {
     name: 'team',
     description: 'Manage the WorkOS dashboard team (members, invites, settings)',
     options: [insecureStorageOpt],
