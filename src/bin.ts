@@ -323,6 +323,36 @@ async function runCli(): Promise<void> {
       await applyInsecureStorage(argv.insecureStorage as boolean | undefined);
       await maybeWarnUnclaimed();
     })
+    .middleware(async (argv) => {
+      // One-time MCP banner (lowest-priority startup notice — runs after the
+      // telemetry notice + unclaimed warning so they win the one-per-run slot).
+      // Skip commands that manage MCP/agents directly or where the nudge is
+      // noise, mirroring + extending maybeWarnUnclaimed's list. Self-guarded and
+      // never throws.
+      const command = String(argv._?.[0] ?? '');
+      if (
+        [
+          'mcp',
+          'install',
+          'doctor',
+          'skills',
+          'auth',
+          'env',
+          'claim',
+          'debug',
+          'dashboard',
+          'emulate',
+          'dev',
+          'migrations',
+          'telemetry',
+          'completion',
+          '',
+        ].includes(command)
+      )
+        return;
+      const { maybeShowMcpNotice } = await import('./lib/mcp-notice.js');
+      await maybeShowMcpNotice();
+    })
     .command('auth', 'Manage authentication (login, logout, status)', (yargs) => {
       yargs.options(insecureStorageOption);
       registerSubcommand(

@@ -298,6 +298,29 @@ export function createMcpClients(): McpClientTarget[] {
 }
 
 /**
+ * The URL the WorkOS server is configured with in Cursor's `~/.cursor/mcp.json`,
+ * or null when the file/entry is absent, unreadable, or unparseable.
+ *
+ * Cursor is the only client whose config we read directly (the CLI clients don't
+ * expose per-entry URLs), so this powers doctor's URL-drift ("misconfigured")
+ * check without a second jsonc reader duplicating the config schema. Read-only
+ * and never throws — a problem reading just yields null.
+ */
+export async function getCursorConfiguredUrl(): Promise<string | null> {
+  try {
+    const path = join(homedir(), '.cursor', 'mcp.json');
+    if (!(await pathExists(path))) return null;
+    const content = await readFile(path, 'utf8');
+    const parsed = jsonc.parse(content, [], JSONC_PARSE_OPTIONS) as Record<string, unknown> | undefined;
+    const servers = parsed?.mcpServers as Record<string, unknown> | undefined;
+    const entry = servers?.[MCP_SERVER_NAME] as { url?: unknown } | undefined;
+    return typeof entry?.url === 'string' ? entry.url : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Return only the clients available on this machine, optionally narrowed to
  * `agentFilter` keys. Availability is probed in parallel. An unknown filter key
  * simply matches nothing here — callers validate keys and surface the error.

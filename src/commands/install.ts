@@ -5,6 +5,7 @@ import { exitWithError, isJsonMode } from '../utils/output.js';
 import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
 import type { ArgumentsCamelCase } from 'yargs';
 import { autoInstallSkills } from './install-skill.js';
+import { maybeOfferMcpInstall } from '../lib/mcp-notice.js';
 
 /**
  * Handle install command execution.
@@ -37,6 +38,10 @@ export async function handleInstall(argv: ArgumentsCamelCase<InstallerArgs>): Pr
         `Installed ${skillResult.skills.length} WorkOS ${skillWord} for ${skillResult.agents.join(', ')}. Your coding agent now has up-to-date WorkOS guidance.`,
       );
     }
+
+    // Offer to connect the user's coding agent to WorkOS via MCP. Self-gating
+    // (human/TTY-only, decline-respecting) and best-effort — never fails install.
+    await maybeOfferMcpInstall({ entryPoint: 'install-flow' });
   } catch (err) {
     const { getLogFilePath } = await import('../utils/debug.js');
     const logPath = getLogFilePath();
