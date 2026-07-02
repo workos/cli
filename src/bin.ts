@@ -466,6 +466,51 @@ async function runCli(): Promise<void> {
       );
       return yargs.demandCommand(1, 'Please specify a skills subcommand').strict();
     })
+    .command('mcp', 'Manage the WorkOS MCP server in coding agents (Claude Code, Codex, Cursor)', (yargs) => {
+      registerSubcommand(
+        yargs,
+        'install',
+        'Add the WorkOS MCP server to detected coding agents',
+        (y) =>
+          y.option('agent', {
+            alias: 'a',
+            type: 'array',
+            string: true,
+            description: 'Target specific agent(s): claude-code, codex, cursor',
+          }),
+        async (argv) => {
+          const { runMcpInstall } = await import('./commands/mcp.js');
+          await runMcpInstall({ agent: argv.agent as string[] | undefined });
+        },
+      );
+      registerSubcommand(
+        yargs,
+        'remove',
+        'Remove the WorkOS MCP server from coding agents',
+        (y) =>
+          y.option('agent', {
+            alias: 'a',
+            type: 'array',
+            string: true,
+            description: 'Target specific agent(s): claude-code, codex, cursor',
+          }),
+        async (argv) => {
+          const { runMcpRemove } = await import('./commands/mcp.js');
+          await runMcpRemove({ agent: argv.agent as string[] | undefined });
+        },
+      );
+      registerSubcommand(
+        yargs,
+        'status',
+        'Show which coding agents have the WorkOS MCP server configured',
+        (y) => y,
+        async () => {
+          const { runMcpStatus } = await import('./commands/mcp.js');
+          await runMcpStatus();
+        },
+      );
+      return yargs.demandCommand(1, 'Please specify an mcp subcommand').strict();
+    })
     .command(
       'doctor',
       'Diagnose WorkOS AuthKit integration issues in the current project',
