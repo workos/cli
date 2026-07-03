@@ -135,6 +135,12 @@ export async function maybeShowMcpNotice(): Promise<void> {
     markStartupNoticeShown();
     await recordMcpBannerShown();
 
+    // Impression event. Queued (not capture()d) so it rides the CLI's final
+    // flush; capture() only folds session tags and no session exists here.
+    analytics.emitCommandEvent('mcp offer', 0, true, {
+      extraAttributes: { 'mcp.entry_point': 'banner', 'mcp.shown': true },
+    });
+
     const cmd = chalk.cyan(formatWorkOSCommand('mcp install'));
     const inner = ` ${chalk.cyan('ℹ')} New: connect your coding agent to WorkOS. Run ${cmd} to add the WorkOS MCP server (Claude Code, Codex, Cursor). `;
     renderStderrBox(inner, chalk.cyan);
@@ -158,9 +164,9 @@ function printInstallMatrix(results: McpClientResult[]): void {
 /**
  * The real install-flow offer. Self-gating: renders nothing unless prompting is
  * allowed, the user hasn't declined, and there is at least one agent to install
- * to. On yes: install + print the matrix + capture. On explicit no: record the
- * decline + capture (a decline is an adoption signal). On cancel (ctrl-C): skip
- * silently without recording — a cancel is not a decline.
+ * to. On yes: install + print the matrix + emit the adoption event. On explicit
+ * no: record the decline + emit (a decline is an adoption signal). On cancel
+ * (ctrl-C): skip silently without recording — a cancel is not a decline.
  */
 async function offerMcpInstall(): Promise<void> {
   if (!isPromptAllowed()) return; // the entire mode gate (CI / agent / non-TTY)
@@ -171,6 +177,7 @@ async function offerMcpInstall(): Promise<void> {
   if (targets.length === 0) return; // nothing to offer
 
   const names = targets.map((t) => t.displayName).join(', ');
+  const offerStartedAt = Date.now();
   const answer = await clack.confirm({
     message: `Add the WorkOS MCP server to ${names}? Your coding agent gets tools to manage WorkOS resources (you'll authorize via OAuth on first use).`,
   });
@@ -178,14 +185,22 @@ async function offerMcpInstall(): Promise<void> {
   // Cancel (ctrl-C) is not a decline — skip silently, ask again next time.
   if (clack.isCancel(answer)) return;
 
+  // Adoption events are queued command events, NOT capture(): the installer
+  // session has already shut down by the time this offer runs (run-with-core
+  // fires session.end in its finally), so folded tags would never ship. A
+  // queued event rides the CLI's unconditional final flush (bin.ts) and the
+  // store-forward exit handler covers anything the flush misses.
   if (!answer) {
     // Record the decline BEFORE anything else so a later crash can't re-ask.
     await recordMcpDeclined();
-    analytics.capture('mcp install', {
-      entry_point: 'install-flow',
-      accepted: false,
-      agents_installed: '',
-      agents_failed: '',
+    // A decline is a completed interaction, not an error: success stays true.
+    analytics.emitCommandEvent('mcp offer', Date.now() - offerStartedAt, true, {
+      extraAttributes: {
+        'mcp.entry_point': 'install-flow',
+        'mcp.accepted': false,
+        'mcp.agents_installed': '',
+        'mcp.agents_failed': '',
+      },
     });
     return;
   }
@@ -200,11 +215,15 @@ async function offerMcpInstall(): Promise<void> {
     .filter((r) => r.outcome === 'installed' || r.outcome === 'already-installed')
     .map((r) => r.agent);
   const failed = results.filter((r) => r.outcome === 'failed').map((r) => r.agent);
-  analytics.capture('mcp install', {
-    entry_point: 'install-flow',
-    accepted: true,
-    agents_installed: installed.join(','),
-    agents_failed: failed.join(','),
+  // success=false when any agent failed, so the offer surfaces as an error
+  // span while mcp.agents_failed carries which ones.
+  analytics.emitCommandEvent('mcp offer', Date.now() - offerStartedAt, failed.length === 0, {
+    extraAttributes: {
+      'mcp.entry_point': 'install-flow',
+      'mcp.accepted': true,
+      'mcp.agents_installed': installed.join(','),
+      'mcp.agents_failed': failed.join(','),
+    },
   });
 }
 

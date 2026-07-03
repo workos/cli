@@ -295,6 +295,7 @@ export class Analytics {
       reason?: TerminationReason;
       errorCode?: string;
       apiContext?: { status?: number; code?: string; resource?: string };
+      extraAttributes?: Record<string, string | number | boolean>;
     },
   ) {
     if (!this.isEnabled()) return;
@@ -306,6 +307,9 @@ export class Analytics {
       sessionId: this.sessionId,
       timestamp: new Date().toISOString(),
       attributes: {
+        // Extras first: standard fields below win on key collision, so callers
+        // can never override command.name, error fields, or the fingerprint.
+        ...(options?.extraAttributes ?? {}),
         'command.name': name,
         'command.duration_ms': durationMs,
         'command.success': success,

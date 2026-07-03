@@ -44,7 +44,13 @@ vi.mock('../utils/clack.js', () => ({
 }));
 
 const captureMock = vi.fn();
-vi.mock('../utils/analytics.js', () => ({ analytics: { capture: (...a: unknown[]) => captureMock(...(a as [])) } }));
+const emitCommandEventMock = vi.fn();
+vi.mock('../utils/analytics.js', () => ({
+  analytics: {
+    capture: (...a: unknown[]) => captureMock(...(a as [])),
+    emitCommandEvent: (...a: unknown[]) => emitCommandEventMock(...(a as [])),
+  },
+}));
 
 const {
   getMcpAskState,
@@ -165,11 +171,21 @@ describe('maybeShowMcpNotice (banner)', () => {
     expect(savePreferencesMock).toHaveBeenCalledWith({ mcp: { bannerShownAt: expect.any(String) } });
   });
 
-  it('does not render a second time in the same session', async () => {
+  it('emits a banner impression event when shown', async () => {
+    detectResult = [fakeClient('cursor', 'Cursor', { installed: false })];
+    await maybeShowMcpNotice();
+    expect(emitCommandEventMock).toHaveBeenCalledTimes(1);
+    expect(emitCommandEventMock).toHaveBeenCalledWith('mcp offer', 0, true, {
+      extraAttributes: { 'mcp.entry_point': 'banner', 'mcp.shown': true },
+    });
+  });
+
+  it('does not render or emit a second time in the same session', async () => {
     detectResult = [fakeClient('cursor', 'Cursor', { installed: false })];
     await maybeShowMcpNotice();
     await maybeShowMcpNotice();
     expect(mockRenderStderrBox).toHaveBeenCalledTimes(1);
+    expect(emitCommandEventMock).toHaveBeenCalledTimes(1);
   });
 
   it('suppressed outside human mode', async () => {
@@ -220,7 +236,7 @@ describe('maybeOfferMcpInstall (install-flow prompt)', () => {
     detectResult = [fakeClient('cursor', 'Cursor', { installed: false })];
     await maybeOfferMcpInstall({ entryPoint: 'install-flow' });
     expect(confirmMock).not.toHaveBeenCalled();
-    expect(captureMock).not.toHaveBeenCalled();
+    expect(emitCommandEventMock).not.toHaveBeenCalled();
     expect(savePreferencesMock).not.toHaveBeenCalled();
   });
 
@@ -229,7 +245,7 @@ describe('maybeOfferMcpInstall (install-flow prompt)', () => {
     detectResult = [fakeClient('cursor', 'Cursor', { installed: false })];
     await maybeOfferMcpInstall({ entryPoint: 'install-flow' });
     expect(confirmMock).not.toHaveBeenCalled();
-    expect(captureMock).not.toHaveBeenCalled();
+    expect(emitCommandEventMock).not.toHaveBeenCalled();
   });
 
   it('installs to detected-and-missing agents on accept and captures the outcome', async () => {
@@ -247,11 +263,13 @@ describe('maybeOfferMcpInstall (install-flow prompt)', () => {
 
     expect(claude.add).toHaveBeenCalledTimes(1);
     expect(cursor.add).not.toHaveBeenCalled();
-    expect(captureMock).toHaveBeenCalledWith('mcp install', {
-      entry_point: 'install-flow',
-      accepted: true,
-      agents_installed: 'claude-code',
-      agents_failed: '',
+    expect(emitCommandEventMock).toHaveBeenCalledWith('mcp offer', expect.any(Number), true, {
+      extraAttributes: {
+        'mcp.entry_point': 'install-flow',
+        'mcp.accepted': true,
+        'mcp.agents_installed': 'claude-code',
+        'mcp.agents_failed': '',
+      },
     });
   });
 
@@ -264,11 +282,14 @@ describe('maybeOfferMcpInstall (install-flow prompt)', () => {
 
     expect(savePreferencesMock).toHaveBeenCalledWith({ mcp: { promptDeclined: true } });
     expect(cursor.add).not.toHaveBeenCalled();
-    expect(captureMock).toHaveBeenCalledWith('mcp install', {
-      entry_point: 'install-flow',
-      accepted: false,
-      agents_installed: '',
-      agents_failed: '',
+    // A decline is a completed interaction, not an error: success stays true.
+    expect(emitCommandEventMock).toHaveBeenCalledWith('mcp offer', expect.any(Number), true, {
+      extraAttributes: {
+        'mcp.entry_point': 'install-flow',
+        'mcp.accepted': false,
+        'mcp.agents_installed': '',
+        'mcp.agents_failed': '',
+      },
     });
   });
 
@@ -281,7 +302,7 @@ describe('maybeOfferMcpInstall (install-flow prompt)', () => {
     await maybeOfferMcpInstall({ entryPoint: 'install-flow' });
 
     expect(savePreferencesMock).not.toHaveBeenCalled();
-    expect(captureMock).not.toHaveBeenCalled();
+    expect(emitCommandEventMock).not.toHaveBeenCalled();
     expect(cursor.add).not.toHaveBeenCalled();
   });
 
@@ -318,11 +339,30 @@ describe('maybeOfferMcpInstall (install-flow prompt)', () => {
 
     await maybeOfferMcpInstall({ entryPoint: 'install-flow' });
 
-    expect(captureMock).toHaveBeenCalledWith('mcp install', {
-      entry_point: 'install-flow',
-      accepted: true,
-      agents_installed: 'claude-code',
-      agents_failed: 'cursor',
+    // An accepted offer with a failed agent install is an error span:
+    // success flips to false while the per-agent lists carry the detail.
+    expect(emitCommandEventMock).toHaveBeenCalledWith('mcp offer', expect.any(Number), false, {
+      extraAttributes: {
+        'mcp.entry_point': 'install-flow',
+        'mcp.accepted': true,
+        'mcp.agents_installed': 'claude-code',
+        'mcp.agents_failed': 'cursor',
+      },
+    });
+  });
+
+  it('counts already-installed agents as installed in the emission', async () => {
+    const already = fakeClient('codex', 'Codex', {
+      installed: false,
+      add: { agent: 'codex', displayName: 'Codex', outcome: 'already-installed' },
+    });
+    detectResult = [already];
+    confirmMock.mockResolvedValue(true);
+
+    await maybeOfferMcpInstall({ entryPoint: 'install-flow' });
+
+    expect(emitCommandEventMock).toHaveBeenCalledWith('mcp offer', expect.any(Number), true, {
+      extraAttributes: expect.objectContaining({ 'mcp.agents_installed': 'codex', 'mcp.agents_failed': '' }),
     });
   });
 });
