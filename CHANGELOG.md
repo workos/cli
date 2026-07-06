@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0](https://github.com/workos/cli/compare/v0.17.1...v0.18.0) (2026-07-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* WORKOS_LLM_GATEWAY_URL and WORKOS_TELEMETRY_URL are removed (derived from WORKOS_API_URL); WORKOS_NO_PROMPT is removed (use WORKOS_MODE=agent); INSTALLER_DEV is renamed to WORKOS_DEV and INSTALLER_DISABLE_PROXY to WORKOS_DISABLE_PROXY.
+
+### Features
+
+* add MCP server install for coding agents (workos mcp) ([#184](https://github.com/workos/cli/issues/184)) ([f040f72](https://github.com/workos/cli/commit/f040f726f5b9ae2077b391596014939482f7dae1))
+* consolidate and rename CLI environment variables ([#180](https://github.com/workos/cli/issues/180)) ([2e0e3ca](https://github.com/workos/cli/commit/2e0e3ca70a7842b4744f6618679e192a62d6f801))
+
+
+### Bug Fixes
+
+* **deps:** update minor and patch updates ([#178](https://github.com/workos/cli/issues/178)) ([496b473](https://github.com/workos/cli/commit/496b473d5bc24e12bc55efe8d9269e122d4b658b))
+
 ## [0.17.1](https://github.com/workos/cli/compare/v0.17.0...v0.17.1) (2026-06-08)
 
 
