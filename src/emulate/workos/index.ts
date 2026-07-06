@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { ServicePlugin, Store, RouteContext } from '../core/index.js';
 import { generateId } from '../core/index.js';
-import { getWorkOSStore, type WorkOSStore } from './store.js';
+import { getWorkOSStore } from './store.js';
 import { organizationRoutes } from './routes/organizations.js';
 import { organizationDomainRoutes } from './routes/organization-domains.js';
 import { membershipRoutes } from './routes/memberships.js';

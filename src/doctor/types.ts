@@ -150,6 +150,23 @@ export interface SkillsRefreshResult {
   skillsInstalled: string[];
 }
 
+export interface McpAgentMcpStatus {
+  /** Display name of the agent (e.g. "Cursor"), mirroring SkillAgentStatus. */
+  agent: string;
+  /** Agent is usable on this machine. */
+  available: boolean;
+  /** The WorkOS MCP server is present in this agent's config. */
+  installed: boolean;
+  /** Cursor only: the entry exists but points at an unexpected URL. */
+  misconfigured?: boolean;
+}
+
+export interface McpInfo {
+  /** The URL the WorkOS MCP server should be configured with. */
+  serverUrl: string;
+  agents: McpAgentMcpStatus[];
+}
+
 export interface DoctorReport {
   version: string;
   timestamp: string;
@@ -174,6 +191,8 @@ export interface DoctorReport {
   skills?: SkillsInfo;
   /** Present only when `--fix` actually performed a refresh. */
   skillsRefresh?: SkillsRefreshResult;
+  /** MCP server status per detected coding agent. Null (absent) when none detected. */
+  mcp?: McpInfo;
   issues: Issue[];
   summary: {
     errors: number;

@@ -24,6 +24,20 @@ export interface CliPreferences {
     /** ISO timestamp the first-run notice was shown — written in Phase 2 only. */
     noticeShownAt?: string;
   };
+  /**
+   * MCP-install onboarding state. Owned semantically by lib/mcp-notice.ts; the
+   * shape lives here so it rides the same plain-JSON prefs store as telemetry.
+   */
+  mcp?: {
+    /**
+     * true => the user explicitly declined an automatic MCP install offer. The
+     * decline is absolute: no automatic surface (prompt or banner) asks again;
+     * `workos mcp install` stays available manually.
+     */
+    promptDeclined?: boolean;
+    /** ISO timestamp the one-time MCP banner was shown. */
+    bannerShownAt?: string;
+  };
 }
 
 /** Effective source of the resolved telemetry-enabled decision. */
@@ -117,6 +131,9 @@ export function savePreferences(next: CliPreferences): void {
     ...current,
     ...next,
     ...(current.telemetry || next.telemetry ? { telemetry: { ...current.telemetry, ...next.telemetry } } : {}),
+    // Deep-merge mcp too so writing one marker (e.g. bannerShownAt) never
+    // clobbers the other (promptDeclined), which are written at different times.
+    ...(current.mcp || next.mcp ? { mcp: { ...current.mcp, ...next.mcp } } : {}),
   };
 
   fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });

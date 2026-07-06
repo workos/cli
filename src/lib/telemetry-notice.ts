@@ -18,6 +18,7 @@ import { isJsonMode } from '../utils/output.js';
 import { renderStderrBox } from '../utils/box.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
 import { isNoticeShown, markNoticeShown, isTelemetryOptedOut } from './preferences.js';
+import { markStartupNoticeShown } from './startup-notice-gate.js';
 
 let shownThisSession = false;
 
@@ -44,6 +45,8 @@ export function maybeShowTelemetryNotice(): void {
     // rather than silently suppressing the notice for the rest of the session.
     shownThisSession = true;
     markNoticeShown();
+    // Claim the one-notice-per-run slot so the lower-priority MCP banner defers.
+    markStartupNoticeShown();
   } catch {
     // Never block command execution.
   }

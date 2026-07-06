@@ -61,4 +61,45 @@ describe('detectIssues', () => {
       }),
     );
   });
+
+  describe('MCP', () => {
+    it('adds no issue when MCP is absent or merely not installed', () => {
+      const report = baseReport();
+      // No mcp field at all.
+      expect(detectIssues(report).some((i) => i.code === 'MCP_MISCONFIGURED')).toBe(false);
+
+      // Detected agents, none misconfigured (some simply lack the server).
+      report.mcp = {
+        serverUrl: 'https://mcp.workos.com/mcp',
+        agents: [
+          { agent: 'Claude Code', available: true, installed: false },
+          { agent: 'Cursor', available: true, installed: true, misconfigured: false },
+        ],
+      };
+      expect(detectIssues(report).some((i) => i.code === 'MCP_MISCONFIGURED')).toBe(false);
+    });
+
+    it('adds exactly one warning listing the misconfigured agents', () => {
+      const report = baseReport();
+      report.mcp = {
+        serverUrl: 'https://mcp.workos.com/mcp',
+        agents: [
+          { agent: 'Claude Code', available: true, installed: true },
+          { agent: 'Cursor', available: true, installed: true, misconfigured: true },
+        ],
+      };
+
+      const mcpIssues = detectIssues(report).filter((i) => i.code === 'MCP_MISCONFIGURED');
+
+      expect(mcpIssues).toHaveLength(1);
+      expect(mcpIssues[0]).toEqual(
+        expect.objectContaining({
+          code: 'MCP_MISCONFIGURED',
+          severity: 'warning',
+          message: expect.stringContaining('Cursor'),
+          remediation: 'Run: workos mcp install',
+        }),
+      );
+    });
+  });
 });

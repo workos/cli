@@ -596,6 +596,28 @@ describe('Analytics', () => {
         expect(event.attributes['termination.reason']).toBeUndefined();
         expect(event.attributes['api.status']).toBeUndefined();
       });
+
+      it('merges extraAttributes into the event attributes', () => {
+        analytics.emitCommandEvent('mcp offer', 0, true, {
+          extraAttributes: { 'mcp.entry_point': 'banner', 'mcp.shown': true },
+        });
+
+        const event = mockQueueEvent.mock.calls.find((c: any) => c[0].type === 'command')[0];
+        expect(event.attributes['mcp.entry_point']).toBe('banner');
+        expect(event.attributes['mcp.shown']).toBe(true);
+        expect(event.attributes['command.name']).toBe('mcp offer');
+      });
+
+      it('extraAttributes cannot override standard command fields', () => {
+        analytics.emitCommandEvent('mcp offer', 5, true, {
+          extraAttributes: { 'command.name': 'evil', 'command.success': false, 'device.id': 'spoofed' },
+        });
+
+        const event = mockQueueEvent.mock.calls.find((c: any) => c[0].type === 'command')[0];
+        expect(event.attributes['command.name']).toBe('mcp offer');
+        expect(event.attributes['command.success']).toBe(true);
+        expect(event.attributes['device.id']).toBe(TEST_DEVICE_ID);
+      });
     });
 
     describe('captureUnhandledCrash', () => {
