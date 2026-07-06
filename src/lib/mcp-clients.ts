@@ -38,13 +38,7 @@ const JSONC_MODIFY_OPTIONS: jsonc.ModificationOptions = {
 
 export type McpAgentKey = 'claude-code' | 'codex' | 'cursor';
 
-export type McpOutcome =
-  | 'installed'
-  | 'already-installed'
-  | 'removed'
-  | 'not-installed'
-  | 'skipped'
-  | 'failed';
+export type McpOutcome = 'installed' | 'already-installed' | 'removed' | 'not-installed' | 'skipped' | 'failed';
 
 export interface McpClientResult {
   agent: McpAgentKey;

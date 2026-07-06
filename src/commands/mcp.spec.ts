@@ -169,7 +169,10 @@ describe('Claude Code client', () => {
   });
 
   it('isInstalled matches the workos: list line', async () => {
-    mockExec(() => ({ status: 0, stdout: 'raindrop: https://x (HTTP)\nworkos: https://mcp.workos.com/mcp (HTTP) - Connected' }));
+    mockExec(() => ({
+      status: 0,
+      stdout: 'raindrop: https://x (HTTP)\nworkos: https://mcp.workos.com/mcp (HTTP) - Connected',
+    }));
     expect(await claude().isInstalled()).toBe(true);
   });
 
@@ -397,7 +400,9 @@ describe('JSON output mode', () => {
   it('runMcpInstall still emits the full matrix before exiting 1 on failure', async () => {
     makeDir('.claude');
     makeDir('.cursor');
-    mockExec((_c, args) => (args.includes('add') && args.includes('--transport') ? { status: 1, stderr: 'bad' } : { status: 0 }));
+    mockExec((_c, args) =>
+      args.includes('add') && args.includes('--transport') ? { status: 1, stderr: 'bad' } : { status: 0 },
+    );
     const exit = await captureExit(() => runMcpInstall());
     expect(exit?.exitCode).toBe(1);
     const output = JSON.parse(consoleOutput[0]);
