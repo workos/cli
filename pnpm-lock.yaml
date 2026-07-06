@@ -2226,7 +2226,7 @@ packages:
         optional: true
 
   tree-sitter-kotlin@https://codeload.github.com/fwcd/tree-sitter-kotlin/tar.gz/f66d2908542e93c0204c6c241f794afe4e9cd5d1:
-    resolution: {gitHosted: true, integrity: sha512-7pk1Tg/gXh+6hM4E0F2rPKeLyA/bNlYyqVu6T1Md/AV/vloakbvEZG0R4CYwUfVtgFAMZRbOtA8JBzX1SFatBA==, tarball: https://codeload.github.com/fwcd/tree-sitter-kotlin/tar.gz/f66d2908542e93c0204c6c241f794afe4e9cd5d1}
+    resolution: {gitHosted: true, tarball: https://codeload.github.com/fwcd/tree-sitter-kotlin/tar.gz/f66d2908542e93c0204c6c241f794afe4e9cd5d1}
     version: 0.4.0
     peerDependencies:
       tree-sitter: ^0.21.1
