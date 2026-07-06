@@ -309,7 +309,7 @@ export class Analytics {
       attributes: {
         // Extras first: standard fields below win on key collision, so callers
         // can never override command.name, error fields, or the fingerprint.
-        ...(options?.extraAttributes ?? {}),
+        ...options?.extraAttributes,
         'command.name': name,
         'command.duration_ms': durationMs,
         'command.success': success,
