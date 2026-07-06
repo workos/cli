@@ -60,6 +60,7 @@ const {
   maybeShowMcpNotice,
   maybeOfferMcpInstall,
   resetMcpNoticeState,
+  MCP_OFFER_TIMEOUT_MS,
 } = await import('./mcp-notice.js');
 const { markStartupNoticeShown, resetStartupNoticeGate } = await import('./startup-notice-gate.js');
 
@@ -349,6 +350,65 @@ describe('maybeOfferMcpInstall (install-flow prompt)', () => {
         'mcp.agents_failed': 'cursor',
       },
     });
+  });
+
+  it('aborts a hung prompt at the deadline: stdin released, nothing recorded', async () => {
+    const CANCEL = Symbol('clack:cancel');
+    const cursor = fakeClient('cursor', 'Cursor', { installed: false });
+    detectResult = [cursor];
+    // A prompt that never gets an answer: it only resolves (as a cancel, the
+    // way clack does) when the deadline signal aborts it.
+    confirmMock.mockImplementation(
+      (opts: { signal?: AbortSignal }) =>
+        new Promise((resolve) => {
+          opts.signal?.addEventListener('abort', () => resolve(CANCEL), { once: true });
+        }),
+    );
+    isCancelMock.mockImplementation((v: unknown) => v === CANCEL);
+
+    vi.useFakeTimers();
+    try {
+      const offer = maybeOfferMcpInstall({ entryPoint: 'install-flow' });
+      await vi.advanceTimersByTimeAsync(MCP_OFFER_TIMEOUT_MS);
+      await expect(offer).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+
+    // The prompt must receive the deadline signal — without it, the race
+    // resolves but the pending confirm keeps stdin (and the process) alive.
+    expect(confirmMock.mock.calls[0][0].signal).toBeInstanceOf(AbortSignal);
+    // A timeout is a cancel, not a decline: nothing persisted, nothing emitted.
+    expect(savePreferencesMock).not.toHaveBeenCalled();
+    expect(emitCommandEventMock).not.toHaveBeenCalled();
+    expect(cursor.add).not.toHaveBeenCalled();
+  });
+
+  it('does not start installs when the answer lands at the deadline', async () => {
+    const cursor = fakeClient('cursor', 'Cursor', { installed: false });
+    detectResult = [cursor];
+    // Simulate a "yes" submitted in the same tick the deadline fires (submit
+    // beats cancel inside clack): the signal is already aborted by the time
+    // the flow sees the answer.
+    confirmMock.mockImplementation(
+      (opts: { signal?: AbortSignal }) =>
+        new Promise((resolve) => {
+          opts.signal?.addEventListener('abort', () => resolve(true), { once: true });
+        }),
+    );
+
+    vi.useFakeTimers();
+    try {
+      const offer = maybeOfferMcpInstall({ entryPoint: 'install-flow' });
+      await vi.advanceTimersByTimeAsync(MCP_OFFER_TIMEOUT_MS);
+      await expect(offer).resolves.toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+
+    // The outer flow already moved on — no detached install work, no emission.
+    expect(cursor.add).not.toHaveBeenCalled();
+    expect(emitCommandEventMock).not.toHaveBeenCalled();
   });
 
   it('counts already-installed agents as installed in the emission', async () => {

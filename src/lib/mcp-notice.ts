@@ -27,8 +27,12 @@ import { hasStartupNoticeShown, markStartupNoticeShown } from './startup-notice-
 export type McpAskState = { declined: boolean; bannerShown: boolean };
 
 /**
- * Best-effort ceiling on the whole install-flow offer so a wedged prompt can
- * never hold up `workos install`. Mirrors login.ts's SKILL_INSTALL_TIMEOUT_MS.
+ * Ceiling on the whole install-flow offer so a wedged prompt can never hold up
+ * `workos install`. The deadline actively aborts the pending clack prompt (via
+ * AbortSignal) — clack's cancel path releases stdin and restores raw mode, so
+ * the process can actually exit; a race alone would leave the prompt's stdin
+ * handle keeping the event loop alive. Mirrors login.ts's
+ * SKILL_INSTALL_TIMEOUT_MS.
  */
 export const MCP_OFFER_TIMEOUT_MS = 30 * 1000;
 
@@ -168,7 +172,7 @@ function printInstallMatrix(results: McpClientResult[]): void {
  * no: record the decline + emit (a decline is an adoption signal). On cancel
  * (ctrl-C): skip silently without recording — a cancel is not a decline.
  */
-async function offerMcpInstall(): Promise<void> {
+async function offerMcpInstall(signal: AbortSignal): Promise<void> {
   if (!isPromptAllowed()) return; // the entire mode gate (CI / agent / non-TTY)
   if (isJsonMode()) return; // never prompt on the machine-readable path (e.g. `install --json` on a TTY)
   const { declined } = await getMcpAskState();
@@ -178,11 +182,15 @@ async function offerMcpInstall(): Promise<void> {
 
   const names = targets.map((t) => t.displayName).join(', ');
   const offerStartedAt = Date.now();
+  // The deadline signal aborts a hung/unanswered prompt: clack resolves it as
+  // a cancel and releases stdin so the process can exit.
   const answer = await clack.confirm({
     message: `Add the WorkOS MCP server to ${names}? Your coding agent gets tools to manage WorkOS resources (you'll authorize via OAuth on first use).`,
+    signal,
   });
 
-  // Cancel (ctrl-C) is not a decline — skip silently, ask again next time.
+  // Cancel (ctrl-C or deadline abort) is not a decline — skip silently, ask
+  // again next time.
   if (clack.isCancel(answer)) return;
 
   // Adoption events are queued command events, NOT capture(): the installer
@@ -204,6 +212,10 @@ async function offerMcpInstall(): Promise<void> {
     });
     return;
   }
+
+  // The user submitted right as the deadline fired: the outer flow has already
+  // moved on, so don't start install work it will never report on.
+  if (signal.aborted) return;
 
   const results: McpClientResult[] = [];
   for (const target of targets) {
@@ -230,20 +242,27 @@ async function offerMcpInstall(): Promise<void> {
 /**
  * Offer to install the WorkOS MCP server at the end of `workos install`.
  *
- * Wraps offerMcpInstall best-effort: a try/catch AND a 30s unref'd-timeout race
- * (login.ts pattern) so the offer can never throw into, wedge, or fail the
- * install flow. `workos install` has already succeeded by the time this runs.
+ * Wraps offerMcpInstall best-effort: a try/catch AND a 30s deadline so the
+ * offer can never throw into, wedge, or fail the install flow. The deadline
+ * aborts the pending prompt (AbortSignal → clack cancel, which releases stdin);
+ * the race is a backstop in case the flow is wedged somewhere that can't be
+ * aborted (client shell-outs are separately bounded by their exec timeouts).
+ * `workos install` has already succeeded by the time this runs.
  */
 export async function maybeOfferMcpInstall(_opts: { entryPoint: 'install-flow' }): Promise<void> {
   let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new AbortController();
   try {
     const timeout = new Promise<void>((resolve) => {
-      timeoutHandle = setTimeout(() => resolve(), MCP_OFFER_TIMEOUT_MS);
+      timeoutHandle = setTimeout(() => {
+        deadline.abort();
+        resolve();
+      }, MCP_OFFER_TIMEOUT_MS);
       // Don't keep the event loop alive on this timer — the process should exit
       // as soon as everything else settles.
       timeoutHandle.unref?.();
     });
-    await Promise.race([offerMcpInstall(), timeout]);
+    await Promise.race([offerMcpInstall(deadline.signal), timeout]);
   } catch {
     // The MCP offer must never fail or block `workos install`.
   } finally {
