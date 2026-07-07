@@ -57,6 +57,7 @@ describe('help-json', () => {
           'auth status',
           'skills',
           'doctor',
+          'verify-login',
           'env',
           'organization',
           'user',

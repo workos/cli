@@ -285,6 +285,31 @@ const commands: CommandSchema[] = [
     ],
   },
   {
+    name: 'verify-login',
+    description:
+      'Verify the AuthKit login loop end-to-end against the active environment (creates and deletes a throwaway user)',
+    options: [
+      insecureStorageOpt,
+      apiKeyOpt,
+      {
+        name: 'client-id',
+        type: 'string',
+        description: 'WorkOS client ID (overrides the active environment)',
+        required: false,
+        hidden: false,
+      },
+      {
+        name: 'method',
+        type: 'string',
+        description: 'Authentication method to verify',
+        required: false,
+        default: 'password',
+        choices: ['password'],
+        hidden: false,
+      },
+    ],
+  },
+  {
     name: 'env',
     description: 'Manage environment configurations (API keys, endpoints, active environment)',
     options: [insecureStorageOpt],

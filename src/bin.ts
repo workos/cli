@@ -62,6 +62,9 @@ import { ExitCode } from './utils/exit-codes.js';
 import { analytics } from './utils/analytics.js';
 import { formatWorkOSCommand, getWorkOSCommand } from './utils/command-invocation.js';
 import { MIGRATIONS_DESCRIPTION } from './lib/constants.js';
+// Type-only import (erased at build, does not pull the handler into the startup
+// path) so the `argv.method as VerifyLoginMethod` cast type-checks below.
+import type { VerifyLoginMethod } from './commands/verify-login.js';
 
 // Enable debug logging for all commands via env var.
 // Subsumes the installer's --debug flag for non-installer commands.
@@ -592,6 +595,47 @@ async function runCli(): Promise<void> {
       async (argv) => {
         const { handleDoctor } = await import('./commands/doctor.js');
         await handleDoctor(argv);
+      },
+    )
+    .command(
+      'verify-login',
+      'Verify the AuthKit login loop end-to-end against the active environment (creates and deletes a throwaway user)',
+      (yargs) =>
+        yargs.options({
+          ...insecureStorageOption,
+          'api-key': {
+            type: 'string' as const,
+            describe:
+              'WorkOS API key (overrides environment config). Format: sk_test_* (production keys are refused)',
+          },
+          'client-id': {
+            type: 'string' as const,
+            describe: 'WorkOS client ID (overrides the active environment)',
+          },
+          method: {
+            type: 'string' as const,
+            choices: ['password'] as const,
+            default: 'password',
+            describe: 'Authentication method to verify',
+          },
+        }),
+      async (argv) => {
+        await applyInsecureStorage(argv.insecureStorage as boolean | undefined);
+        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+        const { getActiveEnvironment } = await import('./lib/config-store.js');
+        const { runVerifyLogin } = await import('./commands/verify-login.js');
+
+        const apiKey = resolveApiKey({ apiKey: argv.apiKey as string | undefined }); // exits 4 if none
+        const activeEnv = getActiveEnvironment();
+
+        await runVerifyLogin({
+          apiKey,
+          clientId: (argv.clientId as string | undefined) ?? activeEnv?.clientId,
+          baseUrl: resolveApiBaseUrl(),
+          envType: activeEnv?.type ?? null,
+          envName: activeEnv?.name,
+          method: argv.method as VerifyLoginMethod,
+        });
       },
     )
     // NOTE: When adding commands here, also update src/utils/help-json.ts
