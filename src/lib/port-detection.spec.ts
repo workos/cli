@@ -155,3 +155,76 @@ describe('port-detection — ruby/rails puma', () => {
     expect(detectPort('ruby', dir)).toBe(4000);
   });
 });
+
+describe('port-detection — tanstack-start config', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'port-tanstack-'));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('parses port from vite.config.ts (modern @tanstack/react-start)', async () => {
+    await writeFile(
+      join(dir, 'vite.config.ts'),
+      "import { defineConfig } from 'vite'\nexport default defineConfig({ server: { host: '::', port: 8080 }, plugins: [] })\n",
+    );
+    expect(detectPort('tanstack-start', dir)).toBe(8080);
+  });
+
+  it('falls back to legacy app.config.ts (Vinxi) when no vite config', async () => {
+    await writeFile(join(dir, 'app.config.ts'), 'export default { server: { port: 4200 } }\n');
+    expect(detectPort('tanstack-start', dir)).toBe(4200);
+  });
+
+  it('prefers vite.config.ts over app.config.ts when both present', async () => {
+    await writeFile(
+      join(dir, 'vite.config.ts'),
+      "import { defineConfig } from 'vite'\nexport default defineConfig({ server: { port: 8080 } })\n",
+    );
+    await writeFile(join(dir, 'app.config.ts'), 'export default { server: { port: 4200 } }\n');
+    expect(detectPort('tanstack-start', dir)).toBe(8080);
+  });
+
+  it.each(['vite.config.js', 'vite.config.mjs'])('parses port from %s', async (fileName) => {
+    await writeFile(join(dir, fileName), 'export default { server: { port: 5555 } }\n');
+    expect(detectPort('tanstack-start', dir)).toBe(5555);
+  });
+
+  it('falls back to default 3000 when no config file present', () => {
+    expect(detectPort('tanstack-start', dir)).toBe(3000);
+  });
+});
+
+describe('port-detection — vite frameworks', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'port-vite-'));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it.each(['react', 'react-router', 'vanilla-js'] as const)(
+    '%s parses port from vite.config.ts',
+    async (framework) => {
+      await writeFile(
+        join(dir, 'vite.config.ts'),
+        "import { defineConfig } from 'vite'\nexport default defineConfig({ server: { port: 4200 } })\n",
+      );
+      expect(detectPort(framework, dir)).toBe(4200);
+    },
+  );
+
+  it.each(['react', 'react-router', 'vanilla-js'] as const)(
+    '%s falls back to default 5173 when no vite config present',
+    (framework) => {
+      expect(detectPort(framework, dir)).toBe(5173);
+    },
+  );
+});

@@ -53,6 +53,20 @@ function parseViteConfigPort(configPath: string): number | null {
 }
 
 /**
+ * Try vite.config.{ts,js,mjs} in installDir for a server.port value.
+ * NOTE: parseViteConfigPort uses a greedy first-match /port\s*:\s*.../ regex,
+ * so an unrelated `port:` (e.g. hmr.port) appearing before server.port wins.
+ * Pre-existing behavior for all Vite frameworks — not a regression here.
+ */
+function parseViteConfigPortFromDir(installDir: string): number | null {
+  for (const p of ['vite.config.ts', 'vite.config.js', 'vite.config.mjs']) {
+    const port = parseViteConfigPort(join(installDir, p));
+    if (port) return port;
+  }
+  return null;
+}
+
+/**
  * Parse port from Next.js package.json scripts.
  * Next.js uses: "dev": "next dev -p 4000" or --port 4000
  */
@@ -206,24 +220,17 @@ export function detectPort(integration: Integration, installDir: string): number
       break;
 
     case 'tanstack-start':
-      detectedPort = parseTanStackPort(installDir);
+      // Modern @tanstack/react-start is Vite-based (port in vite.config.ts);
+      // legacy Vinxi projects use app.config.ts. Try Vite first.
+      detectedPort = parseViteConfigPortFromDir(installDir) ?? parseTanStackPort(installDir);
       break;
 
     case 'react':
     case 'react-router':
-    case 'vanilla-js': {
+    case 'vanilla-js':
       // Vite-based frameworks
-      const viteConfigs = [
-        join(installDir, 'vite.config.ts'),
-        join(installDir, 'vite.config.js'),
-        join(installDir, 'vite.config.mjs'),
-      ];
-      for (const configPath of viteConfigs) {
-        detectedPort = parseViteConfigPort(configPath);
-        if (detectedPort) break;
-      }
+      detectedPort = parseViteConfigPortFromDir(installDir);
       break;
-    }
 
     case 'dotnet':
       detectedPort = parseDotnetPort(installDir);
