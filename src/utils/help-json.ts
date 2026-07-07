@@ -340,6 +340,20 @@ const commands: CommandSchema[] = [
           },
         ],
       },
+      {
+        name: 'provision',
+        description: 'Provision a new unclaimed WorkOS environment (credentials only, no code changes)',
+        options: [
+          {
+            name: 'json',
+            type: 'boolean',
+            description: 'Output provisioned credentials (apiKey, clientId, claimToken) as JSON',
+            required: false,
+            default: false,
+            hidden: false,
+          },
+        ],
+      },
     ],
   },
   {

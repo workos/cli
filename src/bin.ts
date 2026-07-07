@@ -668,6 +668,17 @@ async function runCli(): Promise<void> {
           await runClaim();
         },
       );
+      registerSubcommand(
+        yargs,
+        'provision',
+        'Provision a new unclaimed WorkOS environment (credentials only, no code changes)',
+        (y) => y,
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { runEnvProvision } = await import('./commands/env.js');
+          await runEnvProvision();
+        },
+      );
       return yargs.demandCommand(1, 'Please specify an env subcommand').strict();
     })
     .command(

@@ -7,6 +7,11 @@ import { isAgentMode, isCiMode, isPromptAllowed } from '../utils/interaction-mod
 import { missingArgsRecovery } from '../utils/recovery-hints.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
 import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
+import {
+  provisionUnclaimedEnvironment,
+  UnclaimedEnvApiError,
+  type UnclaimedEnvProvisionResult,
+} from '../lib/unclaimed-env-api.js';
 
 const ENV_NAME_REGEX = /^[a-z0-9\-_]+$/;
 
@@ -117,6 +122,67 @@ export async function runEnvAdd(options: {
 
   saveConfig(config);
   outputSuccess('Environment added', { name: name!, type, active: isFirst });
+}
+
+/**
+ * `workos env provision` — provision a fresh unclaimed environment (credentials only).
+ *
+ * Calls the low-level `provisionUnclaimedEnvironment()` directly (no auth, no
+ * code-gen). Credentials are delivered on stdout (JSON is the agent credential
+ * channel) and persisted locally as an unclaimed env so a follow-up
+ * `env claim` works. NEVER writes to the project directory or any `.env` file,
+ * and NEVER falls back to an interactive login on failure.
+ */
+export async function runEnvProvision(): Promise<void> {
+  let result: UnclaimedEnvProvisionResult;
+  try {
+    result = await provisionUnclaimedEnvironment();
+  } catch (error) {
+    if (error instanceof UnclaimedEnvApiError) {
+      exitWithError({
+        code: error.statusCode === 429 ? 'rate_limited' : 'provision_failed',
+        message: error.message,
+        ...(error.statusCode && { apiContext: { status: error.statusCode } }),
+      });
+    }
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    exitWithError({ code: 'provision_failed', message: `Failed to provision environment: ${message}` });
+  }
+
+  // Persist as an unclaimed env (parity with install) — NEVER writes to the project dir.
+  const config = getOrCreateConfig();
+  config.environments['unclaimed'] = {
+    name: 'unclaimed',
+    type: 'unclaimed',
+    apiKey: result.apiKey,
+    clientId: result.clientId,
+    claimToken: result.claimToken,
+  };
+  config.activeEnvironment = 'unclaimed';
+  saveConfig(config);
+
+  if (isJsonMode()) {
+    outputSuccess('Environment provisioned', {
+      name: 'unclaimed',
+      type: 'unclaimed',
+      active: true,
+      apiKey: result.apiKey,
+      clientId: result.clientId,
+      claimToken: result.claimToken,
+      authkitDomain: result.authkitDomain,
+    });
+    return;
+  }
+
+  clack.log.success('Provisioned a new WorkOS environment');
+  console.log('');
+  console.log(`  ${chalk.dim('API key')}     ${result.apiKey}`);
+  console.log(`  ${chalk.dim('Client ID')}   ${result.clientId}`);
+  console.log(`  ${chalk.dim('AuthKit')}     ${result.authkitDomain}`);
+  console.log('');
+  clack.log.info(
+    `Set as active environment. Run \`${formatWorkOSCommand('env claim')}\` to link it to your account (permanent).`,
+  );
 }
 
 export async function runEnvRemove(name: string): Promise<void> {

@@ -101,7 +101,7 @@ describe('help-json', () => {
       const tree = buildCommandTree('env');
       expect(tree.name).toBe('env');
       const subNames = tree.commands!.map((c) => c.name);
-      expect(subNames).toEqual(expect.arrayContaining(['add', 'remove', 'switch', 'list']));
+      expect(subNames).toEqual(expect.arrayContaining(['add', 'remove', 'switch', 'list', 'claim', 'provision']));
     });
 
     it('returns organization subtree with CRUD subcommands', () => {

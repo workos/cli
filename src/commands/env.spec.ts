@@ -25,6 +25,16 @@ vi.mock('../utils/clack.js', () => ({
   },
 }));
 
+// Partial-mock the unclaimed-env API so we control provisioning outcomes but
+// keep the real UnclaimedEnvApiError class for instanceof checks.
+vi.mock('../lib/unclaimed-env-api.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/unclaimed-env-api.js')>();
+  return { ...actual, provisionUnclaimedEnvironment: vi.fn() };
+});
+
+// Guard: runEnvProvision must NEVER write project .env files.
+vi.mock('../lib/env-writer.js', () => ({ writeCredentialsEnv: vi.fn() }));
+
 let testDir: string;
 
 vi.mock('node:os', async (importOriginal) => {
@@ -40,7 +50,9 @@ vi.mock('node:os', async (importOriginal) => {
 });
 
 const { getConfig, saveConfig, setInsecureConfigStorage, clearConfig } = await import('../lib/config-store.js');
-const { runEnvAdd, runEnvRemove, runEnvSwitch, runEnvList } = await import('./env.js');
+const { runEnvAdd, runEnvRemove, runEnvSwitch, runEnvList, runEnvProvision } = await import('./env.js');
+const { provisionUnclaimedEnvironment, UnclaimedEnvApiError } = await import('../lib/unclaimed-env-api.js');
+const { writeCredentialsEnv } = await import('../lib/env-writer.js');
 const { setOutputMode } = await import('../utils/output.js');
 const { resetInteractionModeForTests, setInteractionMode } = await import('../utils/interaction-mode.js');
 const { CliExit } = await import('../utils/cli-exit.js');
@@ -251,6 +263,111 @@ describe('env commands', () => {
     it('does not throw when environments exist', async () => {
       await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
       await expect(runEnvList()).resolves.not.toThrow();
+    });
+  });
+
+  describe('runEnvProvision', () => {
+    const CREDS = {
+      clientId: 'client_x',
+      apiKey: 'sk_test_x',
+      claimToken: 'ct_x',
+      authkitDomain: 'foo.authkit.app',
+    };
+
+    let consoleOutput: string[];
+    let logSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      vi.mocked(provisionUnclaimedEnvironment).mockReset();
+      vi.mocked(writeCredentialsEnv).mockReset();
+      consoleOutput = [];
+      logSpy = vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+        consoleOutput.push(args.map(String).join(' '));
+      });
+    });
+
+    afterEach(() => {
+      logSpy.mockRestore();
+      setOutputMode('human');
+    });
+
+    it('emits the provisioned credentials as JSON (agent credential delivery)', async () => {
+      setOutputMode('json');
+      vi.mocked(provisionUnclaimedEnvironment).mockResolvedValue(CREDS);
+
+      await runEnvProvision();
+
+      const out = JSON.parse(consoleOutput[0]);
+      expect(out.status).toBe('ok');
+      expect(out.data.apiKey).toBe('sk_test_x');
+      expect(out.data.clientId).toBe('client_x');
+      expect(out.data.claimToken).toBe('ct_x');
+      expect(out.data.authkitDomain).toBe('foo.authkit.app');
+    });
+
+    it('persists the provisioned env locally as the active unclaimed env', async () => {
+      setOutputMode('json');
+      vi.mocked(provisionUnclaimedEnvironment).mockResolvedValue(CREDS);
+
+      await runEnvProvision();
+
+      const config = getConfig();
+      const env = config?.environments.unclaimed;
+      expect(env?.type).toBe('unclaimed');
+      expect(env?.clientId).toBe('client_x');
+      expect((env as { claimToken?: string } | undefined)?.claimToken).toBe('ct_x');
+      expect(config?.activeEnvironment).toBe('unclaimed');
+    });
+
+    it('never writes a project .env file', async () => {
+      setOutputMode('json');
+      vi.mocked(provisionUnclaimedEnvironment).mockResolvedValue(CREDS);
+
+      await runEnvProvision();
+
+      expect(writeCredentialsEnv).not.toHaveBeenCalled();
+    });
+
+    it('surfaces a 429 as a structured rate_limited error — no config write, no login fallback', async () => {
+      setOutputMode('json');
+      setInteractionMode({ mode: 'agent', source: 'env' });
+      vi.mocked(provisionUnclaimedEnvironment).mockRejectedValue(
+        new UnclaimedEnvApiError('Rate limited. Please wait a moment and try again.', 429),
+      );
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        await expect(runEnvProvision()).rejects.toThrow(CliExit);
+        const parsed = JSON.parse(String(errorSpy.mock.calls[0][0]));
+        expect(parsed.error.code).toBe('rate_limited');
+        expect(getConfig()).toBeNull();
+        expect(writeCredentialsEnv).not.toHaveBeenCalled();
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
+    it('maps an unexpected non-API error to provision_failed', async () => {
+      setOutputMode('json');
+      setInteractionMode({ mode: 'agent', source: 'env' });
+      vi.mocked(provisionUnclaimedEnvironment).mockRejectedValue(new Error('boom'));
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        await expect(runEnvProvision()).rejects.toThrow(CliExit);
+        const parsed = JSON.parse(String(errorSpy.mock.calls[0][0]));
+        expect(parsed.error.code).toBe('provision_failed');
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
+    it('prints the credentials and the env-claim hint in human mode', async () => {
+      setOutputMode('human');
+      vi.mocked(provisionUnclaimedEnvironment).mockResolvedValue(CREDS);
+
+      await runEnvProvision();
+
+      expect(consoleOutput.join('\n')).toContain('sk_test_x');
+      expect(clack.log.info).toHaveBeenCalledWith(expect.stringContaining('env claim'));
     });
   });
 
