@@ -2,10 +2,29 @@ import chalk from 'chalk';
 import { isUnicodeSupported } from './vendor/is-unicorn-supported.js';
 import { type LockExpression, getLockArt, LOCK_WIDTH } from './lock-art.js';
 import { symbols } from './cli-symbols.js';
+import type { CompletionData } from '../lib/events.js';
+
+/** Max number of changed files listed in the success box before collapsing. */
+const MAX_SUMMARY_FILES = 5;
 
 /** Pre-built completion summaries shared by CLI and Dashboard adapters. */
-export function renderCompletionSummary(success: boolean, summary?: string): string {
+export function renderCompletionSummary(success: boolean, summary?: string, completion?: CompletionData): string {
   if (success) {
+    if (completion) {
+      const files = completion.files;
+      const shown: SummaryBoxItem[] = files.slice(0, MAX_SUMMARY_FILES).map((f) => ({ type: 'done', text: f }));
+      if (files.length > MAX_SUMMARY_FILES) {
+        shown.push({ type: 'done', text: `…and ${files.length - MAX_SUMMARY_FILES} more` });
+      }
+      const steps: SummaryBoxItem[] = completion.nextSteps.map((s) => ({ type: 'pending', text: s }));
+      return renderSummaryBox({
+        expression: 'success',
+        title: 'WorkOS AuthKit Installed',
+        items: [...shown, ...steps],
+        footer: completion.docsUrl,
+      });
+    }
+    // Fallback: preserve the original static box when no structured data is present.
     return renderSummaryBox({
       expression: 'success',
       title: 'WorkOS AuthKit Installed',

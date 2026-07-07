@@ -1,5 +1,6 @@
 import type { InstallerAdapter, AdapterConfig } from './types.js';
 import type { InstallerEventEmitter, InstallerEvents } from '../events.js';
+import { relative } from 'node:path';
 import clack from '../../utils/clack.js';
 import chalk from 'chalk';
 import { getConfig } from '../settings.js';
@@ -35,8 +36,13 @@ export class CLIAdapter implements InstallerAdapter {
   // SIGINT handler for cleanup
   private sigIntHandler: (() => void) | null = null;
 
-  // Long-running agent update interval
+  // Long-running agent update interval (kept as a no-op field; never started)
   private agentUpdateInterval: NodeJS.Timeout | null = null;
+
+  // Last phase message shown on the agent spinner, restored after logging above it.
+  private lastAgentMessage = 'Running AI agent...';
+  // Last file path rendered as a step line, to dedupe consecutive same-path ops.
+  private lastFileOp: string | null = null;
 
   constructor(config: AdapterConfig) {
     this.emitter = config.emitter;
@@ -112,6 +118,10 @@ export class CLIAdapter implements InstallerAdapter {
     this.subscribe('config:complete', this.handleConfigComplete);
     this.subscribe('agent:start', this.handleAgentStart);
     this.subscribe('agent:progress', this.handleAgentProgress);
+    // Persistent, append-only log of file operations + tool calls above the spinner.
+    this.subscribe('file:write', this.handleFileWrite);
+    this.subscribe('file:edit', this.handleFileEdit);
+    this.subscribe('agent:tool', this.handleAgentTool);
     this.subscribe('validation:start', this.handleValidationStart);
     this.subscribe('validation:issues', this.handleValidationIssues);
     this.subscribe('validation:complete', this.handleValidationComplete);
@@ -359,20 +369,50 @@ export class CLIAdapter implements InstallerAdapter {
 
   private handleAgentStart = (): void => {
     this.spinner = clack.spinner();
-    this.spinner.start('Running AI agent...');
-
-    // Periodic status updates for long-running operations
-    let dots = 0;
-    this.agentUpdateInterval = setInterval(() => {
-      dots = (dots + 1) % 4;
-      const dotStr = '.'.repeat(dots + 1);
-      this.spinner?.message(`Running AI agent${dotStr}`);
-    }, 2000);
+    this.spinner.start(this.lastAgentMessage);
+    // No setInterval: clack animates its own frames, and the old 2s reset
+    // clobbered the current phase text set by handleAgentProgress.
   };
 
   private handleAgentProgress = ({ step, detail }: InstallerEvents['agent:progress']): void => {
     const message = detail ? `${step}: ${detail}` : step;
+    this.lastAgentMessage = message;
     this.spinner?.message(message);
+  };
+
+  /**
+   * Render a persistent line above the running spinner: stop the spinner to
+   * finalize its line, emit the log, then restart it on the last phase message.
+   * Mirrors the existing stop→log and stop→start-new-spinner precedents.
+   */
+  private logAboveSpinner(render: () => void): void {
+    const wasRunning = this.spinner !== null;
+    this.spinner?.stop();
+    this.spinner = null;
+    render();
+    if (wasRunning) {
+      this.spinner = clack.spinner();
+      this.spinner.start(this.lastAgentMessage);
+    }
+  }
+
+  private handleFileWrite = ({ path }: InstallerEvents['file:write']): void => {
+    if (path === this.lastFileOp) return; // dedupe consecutive same-path ops
+    this.lastFileOp = path;
+    const rel = relative(process.cwd(), path);
+    this.logAboveSpinner(() => clack.log.step(`Creating ${chalk.dim(rel)}`));
+  };
+
+  private handleFileEdit = ({ path }: InstallerEvents['file:edit']): void => {
+    if (path === this.lastFileOp) return;
+    this.lastFileOp = path;
+    const rel = relative(process.cwd(), path);
+    this.logAboveSpinner(() => clack.log.step(`Editing ${chalk.dim(rel)}`));
+  };
+
+  private handleAgentTool = ({ detail }: InstallerEvents['agent:tool']): void => {
+    const cmd = detail.length > 80 ? `${detail.slice(0, 77)}…` : detail;
+    this.logAboveSpinner(() => clack.log.step(`Running ${chalk.dim(cmd)}`));
   };
 
   private handleValidationStart = (): void => {
@@ -401,12 +441,12 @@ export class CLIAdapter implements InstallerAdapter {
     }
   };
 
-  private handleComplete = ({ success, summary }: InstallerEvents['complete']): void => {
+  private handleComplete = ({ success, summary, completion }: InstallerEvents['complete']): void => {
     this.stopAgentUpdates();
     this.stopSpinner(success ? 'Done' : 'Failed');
 
     console.log('');
-    console.log(renderCompletionSummary(success, summary));
+    console.log(renderCompletionSummary(success, summary, completion));
     console.log('');
 
     // When we scaffolded a fresh app, the install ran in the current dir, so

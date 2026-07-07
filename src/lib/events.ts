@@ -1,5 +1,32 @@
 import { EventEmitter } from 'events';
 
+/**
+ * Structured data describing a successful installation, used to render the
+ * completion summary and enrich the headless `complete` NDJSON event.
+ *
+ * Defined here (not in installer-core.types.ts) to avoid an import cycle:
+ * installer-core.types.ts already imports from this module, so this module
+ * must not import back.
+ */
+export interface CompletionData {
+  /** Integration identifier (e.g. 'nextjs') */
+  integration: string;
+  /** Lockfile-aware dev command, e.g. "pnpm run dev" */
+  devCommand: string;
+  /** App URL with the detected port, e.g. "http://localhost:3000" */
+  url: string;
+  /** Changed files (git-relative), full list — display cap lives in the renderer */
+  files: string[];
+  /** Composed concrete + framework next-step lines */
+  nextSteps: string[];
+  /** Per-framework docs URL */
+  docsUrl: string;
+  /** WorkOS dashboard URL */
+  dashboardUrl: string;
+  /** Optional per-framework "add a sign-in link" snippet */
+  signInSnippet?: string;
+}
+
 export interface InstallerEvents {
   status: { message: string };
   output: { text: string; isError?: boolean };
@@ -11,7 +38,7 @@ export interface InstallerEvents {
   'confirm:response': { id: string; confirmed: boolean };
   'credentials:request': { requiresApiKey: boolean };
   'credentials:response': { apiKey: string; clientId: string };
-  complete: { success: boolean; summary?: string };
+  complete: { success: boolean; summary?: string; completion?: CompletionData };
   error: { message: string; stack?: string };
 
   'state:enter': { state: string };
@@ -53,6 +80,8 @@ export interface InstallerEvents {
   'agent:success': { summary?: string };
   'agent:failure': { message: string; stack?: string };
   'agent:retry': { attempt: number; maxRetries: number };
+  // Surfaced agent tool activity (e.g. Bash commands run during install)
+  'agent:tool': { kind: 'command'; detail: string };
 
   'validation:retry:start': { attempt: number };
   'validation:retry:complete': { attempt: number; passed: boolean };

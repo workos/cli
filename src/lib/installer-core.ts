@@ -13,6 +13,7 @@ import type {
   WorkspaceCheckOutput,
 } from './installer-core.types.js';
 import type { InstallerOptions } from '../utils/types.js';
+import type { CompletionData } from './events.js';
 import type { DeviceAuthResult, DeviceAuthResponse } from './device-auth.js';
 import type { StagingCredentials } from './staging-api.js';
 import { getManualPrInstructions } from './post-install.js';
@@ -312,8 +313,11 @@ export const installerMachine = setup({
     },
     emitComplete: ({ context }) => {
       const summary = context.agentSummary ?? 'WorkOS AuthKit installed successfully!';
-      context.emitter.emit('complete', { success: true, summary });
+      context.emitter.emit('complete', { success: true, summary, completion: context.completion });
     },
+    assignCompletion: assign({
+      completion: ({ event }) => (event as unknown as { output?: CompletionData }).output,
+    }),
   },
 
   guards: {
@@ -353,6 +357,9 @@ export const installerMachine = setup({
     }),
     runAgent: fromPromise<AgentOutput, { context: InstallerMachineContext }>(async () => {
       throw new Error('runAgent not implemented - provide via machine.provide()');
+    }),
+    buildCompletion: fromPromise<CompletionData | undefined, { context: InstallerMachineContext }>(async () => {
+      throw new Error('buildCompletion not implemented - provide via machine.provide()');
     }),
     // Credential discovery actors
     detectEnvFiles: fromPromise<EnvFileInfo, { installDir: string }>(async () => {
@@ -1000,7 +1007,7 @@ export const installerMachine = setup({
         checking: {
           always: [
             {
-              target: '#installer.complete',
+              target: '#installer.buildingCompletion',
               guard: 'shouldSkipPostInstall',
             },
             { target: 'detectingChanges' },
@@ -1156,7 +1163,20 @@ export const installerMachine = setup({
         },
       },
       onDone: {
-        target: 'complete',
+        target: 'buildingCompletion',
+      },
+    },
+
+    // Compute the structured completion payload before entering `complete`.
+    // `emitComplete` is a synchronous entry action, but the builder is async
+    // (lockfile-aware dev command, port detection), so it must run in an actor
+    // first. Errors never block completion — they fall through to the static box.
+    buildingCompletion: {
+      invoke: {
+        src: 'buildCompletion',
+        input: ({ context }) => ({ context }),
+        onDone: { target: 'complete', actions: ['assignCompletion'] },
+        onError: { target: 'complete' },
       },
     },
 

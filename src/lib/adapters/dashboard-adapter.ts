@@ -1,5 +1,5 @@
 import type { InstallerAdapter, AdapterConfig } from './types.js';
-import type { InstallerEventEmitter, InstallerEvents } from '../events.js';
+import type { InstallerEventEmitter, InstallerEvents, CompletionData } from '../events.js';
 import { renderCompletionSummary } from '../../utils/summary-box.js';
 
 /**
@@ -13,7 +13,7 @@ export class DashboardAdapter implements InstallerAdapter {
   private sendEvent: AdapterConfig['sendEvent'];
   private cleanup: (() => void) | null = null;
   private isStarted = false;
-  private completionData: { success: boolean; summary?: string } | null = null;
+  private completionData: { success: boolean; summary?: string; completion?: CompletionData } | null = null;
 
   constructor(config: AdapterConfig) {
     this.emitter = config.emitter;
@@ -65,8 +65,8 @@ export class DashboardAdapter implements InstallerAdapter {
   /**
    * Capture completion data for display after exit.
    */
-  private handleComplete = ({ success, summary }: InstallerEvents['complete']): void => {
-    this.completionData = { success, summary };
+  private handleComplete = ({ success, summary, completion }: InstallerEvents['complete']): void => {
+    this.completionData = { success, summary, completion };
   };
 
   async stop(): Promise<void> {
@@ -87,7 +87,13 @@ export class DashboardAdapter implements InstallerAdapter {
 
     if (this.completionData) {
       console.log();
-      console.log(renderCompletionSummary(this.completionData.success, this.completionData.summary));
+      console.log(
+        renderCompletionSummary(
+          this.completionData.success,
+          this.completionData.summary,
+          this.completionData.completion,
+        ),
+      );
       console.log();
     }
 

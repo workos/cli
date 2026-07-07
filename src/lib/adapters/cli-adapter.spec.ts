@@ -222,15 +222,103 @@ describe('CLIAdapter', () => {
       expect(sendEvent).toHaveBeenCalledWith({ type: 'CANCEL' });
     });
 
-    it('shows success summary box on complete', async () => {
+    it('shows structured success summary box on complete', async () => {
       await adapter.start();
       const consoleSpy = vi.spyOn(console, 'log');
 
-      emitter.emit('complete', { success: true, summary: 'All done!' });
+      emitter.emit('complete', {
+        success: true,
+        summary: 'All done!',
+        completion: {
+          integration: 'nextjs',
+          devCommand: 'pnpm run dev',
+          url: 'http://localhost:3000',
+          files: ['app/auth/route.ts'],
+          nextSteps: [
+            'Run `pnpm run dev` to start your dev server',
+            'Open http://localhost:3000 to test authentication',
+          ],
+          docsUrl: 'https://workos.com/docs/user-management/authkit/nextjs',
+          dashboardUrl: 'https://dashboard.workos.com',
+        },
+      });
 
       const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
       expect(output).toContain('WorkOS AuthKit Installed');
+      expect(output).toContain('pnpm run dev');
+      expect(output).toContain('app/auth/route.ts');
       consoleSpy.mockRestore();
+    });
+
+    it('renders persistent step lines for file operations', async () => {
+      await adapter.start();
+      const clack = await import('../../utils/clack.js');
+
+      emitter.emit('agent:start', {});
+      emitter.emit('file:write', { path: '/proj/src/auth.ts', content: 'secret' });
+      emitter.emit('file:edit', { path: '/proj/src/app.ts', oldContent: 'a', newContent: 'b' });
+
+      const stepCalls = vi.mocked(clack.default.log.step).mock.calls.map((c) => String(c[0]));
+      expect(stepCalls.some((s) => s.includes('src/auth.ts'))).toBe(true);
+      expect(stepCalls.some((s) => s.includes('src/app.ts'))).toBe(true);
+    });
+
+    it('dedupes consecutive same-path file operations', async () => {
+      await adapter.start();
+      const clack = await import('../../utils/clack.js');
+
+      emitter.emit('agent:start', {});
+      emitter.emit('file:edit', { path: '/proj/src/app.ts', oldContent: 'a', newContent: 'b' });
+      emitter.emit('file:edit', { path: '/proj/src/app.ts', oldContent: 'b', newContent: 'c' });
+
+      const appCalls = vi.mocked(clack.default.log.step).mock.calls.filter((c) => String(c[0]).includes('src/app.ts'));
+      expect(appCalls).toHaveLength(1);
+    });
+
+    it('does not clobber the phase message back to a generic string', async () => {
+      vi.useFakeTimers();
+      try {
+        await adapter.start();
+        const clack = await import('../../utils/clack.js');
+        const spinnerMock = { start: vi.fn(), stop: vi.fn(), message: vi.fn() };
+        vi.mocked(clack.default.spinner).mockReturnValue(spinnerMock);
+
+        emitter.emit('agent:start', {});
+        emitter.emit('agent:progress', { step: 'Configuring middleware' });
+        vi.advanceTimersByTime(5000);
+
+        const clobbered = spinnerMock.message.mock.calls
+          .map((c) => String(c[0]))
+          .filter((m) => /Running AI agent/.test(m));
+        expect(clobbered).toHaveLength(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('restarts the spinner on the last phase message after logging a file op', async () => {
+      await adapter.start();
+      const clack = await import('../../utils/clack.js');
+      const spinnerMock = { start: vi.fn(), stop: vi.fn(), message: vi.fn() };
+      vi.mocked(clack.default.spinner).mockReturnValue(spinnerMock);
+
+      emitter.emit('agent:start', {});
+      emitter.emit('agent:progress', { step: 'Configuring middleware' });
+      emitter.emit('file:write', { path: '/proj/src/auth.ts', content: 'x' });
+
+      expect(spinnerMock.stop).toHaveBeenCalled();
+      expect(spinnerMock.start).toHaveBeenCalledWith('Configuring middleware');
+    });
+
+    it('renders Bash tool calls as step lines (agent:tool)', async () => {
+      await adapter.start();
+      const clack = await import('../../utils/clack.js');
+
+      emitter.emit('agent:start', {});
+      emitter.emit('agent:tool', { kind: 'command', detail: 'pnpm add @workos-inc/authkit-nextjs' });
+
+      const stepCalls = vi.mocked(clack.default.log.step).mock.calls.map((c) => String(c[0]));
+      expect(stepCalls.some((s) => s.includes('pnpm add @workos-inc/authkit-nextjs'))).toBe(true);
     });
 
     it('shows error summary box on failure complete', async () => {

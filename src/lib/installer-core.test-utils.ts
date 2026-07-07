@@ -47,6 +47,7 @@ export function createEventCapture() {
     'agent:progress',
     'agent:success',
     'agent:failure',
+    'agent:tool',
     'file:write',
     'file:edit',
     'prompt:request',

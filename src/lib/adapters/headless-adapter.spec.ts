@@ -329,6 +329,56 @@ describe('HeadlessAdapter', () => {
     });
   });
 
+  describe('file operations', () => {
+    it('writes path-only NDJSON for file:write (never content)', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('file:write', { path: 'src/auth.ts', content: 'secret' });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'file:write', path: 'src/auth.ts' });
+      const leakedContent = mockWriteNDJSON.mock.calls.some((c) => c[0] && 'content' in (c[0] as object));
+      expect(leakedContent).toBe(false);
+      await adapter.stop();
+    });
+
+    it('writes path-only NDJSON for file:edit (never content)', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('file:edit', { path: 'src/app.ts', oldContent: 'a', newContent: 'b' });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'file:edit', path: 'src/app.ts' });
+      const leaked = mockWriteNDJSON.mock.calls.some(
+        (c) => c[0] && ('oldContent' in (c[0] as object) || 'newContent' in (c[0] as object)),
+      );
+      expect(leaked).toBe(false);
+      await adapter.stop();
+    });
+
+    it('dedupes consecutive same-path file operations', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('file:edit', { path: 'src/app.ts', oldContent: 'a', newContent: 'b' });
+      emitter.emit('file:edit', { path: 'src/app.ts', oldContent: 'b', newContent: 'c' });
+
+      const editCalls = mockWriteNDJSON.mock.calls.filter((c) => (c[0] as { type?: string })?.type === 'file:edit');
+      expect(editCalls).toHaveLength(1);
+      await adapter.stop();
+    });
+
+    it('writes agent:tool NDJSON for surfaced commands', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('agent:tool', { kind: 'command', detail: 'ls' });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'agent:tool', kind: 'command', detail: 'ls' });
+      await adapter.stop();
+    });
+  });
+
   describe('terminal events', () => {
     it('writes complete event', async () => {
       const adapter = createAdapter();
@@ -342,6 +392,38 @@ describe('HeadlessAdapter', () => {
         summary: 'All done',
         scaffolded: false,
       });
+      await adapter.stop();
+    });
+
+    it('spreads structured completion fields into the complete event when present', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('complete', {
+        success: true,
+        summary: 'ok',
+        completion: {
+          integration: 'nextjs',
+          devCommand: 'pnpm run dev',
+          url: 'http://localhost:3000',
+          files: ['a.ts'],
+          nextSteps: ['x'],
+          docsUrl: 'https://d',
+          dashboardUrl: 'https://dash',
+        },
+      });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'complete',
+          success: true,
+          integration: 'nextjs',
+          devCommand: 'pnpm run dev',
+          url: 'http://localhost:3000',
+          files: ['a.ts'],
+          nextSteps: ['x'],
+        }),
+      );
       await adapter.stop();
     });
 

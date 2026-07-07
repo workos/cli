@@ -841,6 +841,15 @@ function handleSDKMessage(
               }
             }
 
+            // Surface Bash commands (post-permission: this branch only fires for
+            // tool calls that were actually allowed, unlike the canUseTool closure).
+            if (toolName === 'Bash' && input) {
+              const command = input.command as string;
+              if (command) {
+                emitter?.emit('agent:tool', { kind: 'command', detail: command });
+              }
+            }
+
             // Track Read operations for caching file content later
             if (toolName === 'Read' && input && block.id) {
               const filePath = input.file_path as string;
