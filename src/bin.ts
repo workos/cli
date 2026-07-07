@@ -241,6 +241,11 @@ const installerOptions = {
     choices: ['npm', 'pnpm', 'yarn', 'bun'] as const,
     type: 'string' as const,
   },
+  router: {
+    choices: ['app', 'pages'] as const,
+    describe: 'Next.js router to target when detection is ambiguous (app or pages)',
+    type: 'string' as const,
+  },
 };
 
 // Check for updates (blocks up to 500ms, skip in JSON/non-human modes to keep machine streams clean)
@@ -2677,9 +2682,15 @@ async function runCli(): Promise<void> {
       'WorkOS AuthKit CLI',
       (yargs) => yargs.options(insecureStorageOption),
       async (argv) => {
-        // Non-human modes: show help instead of prompting
+        // Non-human modes: emit machine-readable command tree (JSON) or the
+        // fully-configured parser help (human non-TTY edge) instead of prompting.
         if (!isPromptAllowed()) {
-          yargs(rawArgs).showHelp();
+          if (isJsonMode()) {
+            const { buildCommandTree } = await import('./utils/help-json.js');
+            outputJson(buildCommandTree());
+          } else {
+            parser.showHelp();
+          }
           return;
         }
 

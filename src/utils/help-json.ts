@@ -1406,6 +1406,13 @@ const commands: CommandSchema[] = [
         default: true,
         hidden: false,
       },
+      {
+        name: 'router',
+        type: 'string',
+        description: 'Next.js router to target when detection is ambiguous (app or pages)',
+        required: false,
+        hidden: false,
+      },
     ],
   },
   {

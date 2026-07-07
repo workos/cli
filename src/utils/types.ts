@@ -120,6 +120,9 @@ export type InstallerOptions = {
    * Overrides detection from npm_config_user_agent.
    */
   pm?: string;
+
+  /** Next.js router to target when detection is ambiguous (from --router). */
+  router?: 'app' | 'pages';
 };
 
 export interface Feature {

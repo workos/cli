@@ -17,6 +17,8 @@ import { analytics } from './analytics.js';
 import clack from './clack.js';
 import { INTEGRATION_CONFIG } from '../lib/config.js';
 import { SPAWN_OPTS } from './platform.js';
+import { isPromptAllowed } from './interaction-mode.js';
+import { exitWithError } from './output.js';
 
 /**
  * Redact sensitive info (API keys, client secrets) from a string.
@@ -59,6 +61,28 @@ export async function abortIfCancelled<T>(
   input: T | Promise<T>,
   integration?: Integration,
 ): Promise<Exclude<T, symbol>> {
+  if (!isPromptAllowed()) {
+    // Never await `input` in non-interactive mode — awaiting a never-resolving
+    // prompt is exactly the hang this guard fixes. Fail fast with a structured
+    // error instead. Placed before analytics.shutdown('cancelled') so a
+    // non-interactive block is not mislabeled as a user cancel.
+    exitWithError({
+      code: 'non_interactive_prompt',
+      message:
+        `This step requires interactive input${integration ? ` for ${integration}` : ''}, but the CLI is running ` +
+        `in a non-interactive mode (agent/CI/non-TTY). Pass the required flags (e.g. --router app|pages for Next.js) ` +
+        `or run in an interactive terminal.`,
+      recovery: {
+        hints: [
+          {
+            description:
+              'Re-run in an interactive terminal, or pass the flags that answer this prompt (e.g. --router).',
+          },
+        ],
+      },
+    });
+  }
+
   await analytics.shutdown('cancelled');
   const resolvedInput = await input;
 
