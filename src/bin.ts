@@ -60,6 +60,8 @@ import { CliExit } from './utils/cli-exit.js';
 import { telemetryClient } from './utils/telemetry-client.js';
 import { ExitCode } from './utils/exit-codes.js';
 import { analytics } from './utils/analytics.js';
+import { formatWorkOSCommand, getWorkOSCommand } from './utils/command-invocation.js';
+import { MIGRATIONS_DESCRIPTION } from './lib/constants.js';
 
 // Enable debug logging for all commands via env var.
 // Subsumes the installer's --debug flag for non-installer commands.
@@ -619,7 +621,7 @@ async function runCli(): Promise<void> {
       registerSubcommand(
         yargs,
         'remove <name>',
-        'Remove an environment configuration',
+        'Remove an environment from local CLI config (does not delete or unclaim the environment in WorkOS)',
         (y) => y.positional('name', { type: 'string', demandOption: true, describe: 'Environment name' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -636,7 +638,7 @@ async function runCli(): Promise<void> {
           if (!argv.name && !isPromptAllowed()) {
             exitWithError({
               code: 'missing_args',
-              message: 'Environment name required. Usage: workos env switch <name>',
+              message: `Environment name required. Usage: ${formatWorkOSCommand('env switch <name>')}`,
             });
           }
           await applyInsecureStorage(argv.insecureStorage);
@@ -658,7 +660,7 @@ async function runCli(): Promise<void> {
       registerSubcommand(
         yargs,
         'claim',
-        'Claim an unclaimed environment (link it to your account)',
+        'Claim an unclaimed environment — link it to your account (permanent — cannot be undone)',
         (y) => y,
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -2476,7 +2478,7 @@ async function runCli(): Promise<void> {
     // Alias — canonical command is `workos env claim`
     .command(
       'claim',
-      'Claim an unclaimed WorkOS environment (link it to your account)',
+      'Claim an unclaimed WorkOS environment — link it to your account (permanent — cannot be undone)',
       (yargs) =>
         yargs.options({
           ...insecureStorageOption,
@@ -2641,11 +2643,11 @@ async function runCli(): Promise<void> {
           await runDebugToken();
         },
       );
-      return yargs.demandCommand(1, 'Run "workos debug <command>" for debug tools.').strict();
+      return yargs.demandCommand(1, `Run "${getWorkOSCommand()} debug <command>" for debug tools.`).strict();
     })
     .command(
       'migrations',
-      'Migrate users from identity providers (Auth0, Cognito, Clerk, Firebase) to WorkOS',
+      MIGRATIONS_DESCRIPTION,
       (yargs) =>
         yargs
           .strictCommands(false)

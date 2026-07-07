@@ -32,7 +32,7 @@ const clack = (await import('./clack.js')).default;
 const { setInteractionMode, resetInteractionModeForTests } = await import('./interaction-mode.js');
 const { CliExit } = await import('./cli-exit.js');
 const { setOutputMode } = await import('./output.js');
-const { abortIfCancelled } = await import('./clack-utils.js');
+const { abortIfCancelled, getOrAskForWorkOSCredentials } = await import('./clack-utils.js');
 
 describe('abortIfCancelled — non-interactive guard', () => {
   beforeEach(() => {
@@ -76,5 +76,47 @@ describe('abortIfCancelled — non-interactive guard', () => {
     setInteractionMode({ mode: 'human', source: 'default' });
     vi.mocked(clack.isCancel).mockReturnValue(false);
     await expect(abortIfCancelled('value')).resolves.toBe('value');
+  });
+});
+
+describe('getOrAskForWorkOSCredentials — credential-source-aware copy', () => {
+  const base = { apiKey: 'sk_test', clientId: 'client_x', installDir: '/tmp' } as const;
+
+  beforeEach(() => {
+    setOutputMode('human');
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    setOutputMode('human');
+  });
+
+  it('announces "you provided" for cli/manual/undefined sources', async () => {
+    for (const credentialSource of ['cli', 'manual', undefined] as const) {
+      vi.clearAllMocks();
+      const result = await getOrAskForWorkOSCredentials({ ...base, credentialSource });
+      expect(result).toEqual({ apiKey: 'sk_test', clientId: 'client_x' });
+      expect(clack.log.info).toHaveBeenCalledTimes(1);
+      expect(clack.log.info).toHaveBeenCalledWith('Using the WorkOS credentials you provided');
+    }
+  });
+
+  it('stays silent for device/stored/env sources (machine already announced)', async () => {
+    for (const credentialSource of ['device', 'stored', 'env'] as const) {
+      vi.clearAllMocks();
+      await getOrAskForWorkOSCredentials({ ...base, credentialSource });
+      expect(clack.log.info).not.toHaveBeenCalled();
+    }
+  });
+
+  it('stays silent in dashboard mode', async () => {
+    await getOrAskForWorkOSCredentials({ ...base, dashboard: true, credentialSource: 'cli' });
+    expect(clack.log.info).not.toHaveBeenCalled();
+  });
+
+  it('stays silent in JSON output mode (no human copy into JSON)', async () => {
+    setOutputMode('json');
+    await getOrAskForWorkOSCredentials({ ...base, credentialSource: 'cli' });
+    expect(clack.log.info).not.toHaveBeenCalled();
   });
 });

@@ -124,7 +124,7 @@ export async function runEnvRemove(name: string): Promise<void> {
   if (!config || Object.keys(config.environments).length === 0) {
     exitWithError({
       code: 'no_environments',
-      message: 'No environments configured. Run `workos env add` to get started.',
+      message: `No environments configured. Run \`${formatWorkOSCommand('env add')}\` to get started.`,
     });
   }
 
@@ -133,7 +133,19 @@ export async function runEnvRemove(name: string): Promise<void> {
     exitWithError({ code: 'not_found', message: `Environment "${name}" not found. Available: ${available}` });
   }
 
+  // Capture the claim risk BEFORE deleting — an unclaimed env's claim token lives
+  // only in this local config, so removing it permanently loses the ability to claim.
+  const wasUnclaimed = isUnclaimedEnvironment(config.environments[name]);
+
   delete config.environments[name];
+
+  if (!isJsonMode()) {
+    clack.log.warn(
+      wasUnclaimed
+        ? `Removed only the local CLI config for "${name}". This environment was unclaimed — its claim token lived only here, so it can no longer be claimed.`
+        : `Removed only the local CLI config for "${name}". The environment still exists in WorkOS.`,
+    );
+  }
 
   if (config.activeEnvironment === name) {
     const remaining = Object.keys(config.environments);
@@ -144,7 +156,12 @@ export async function runEnvRemove(name: string): Promise<void> {
   }
 
   saveConfig(config);
-  outputSuccess('Environment removed', { name, newActive: config.activeEnvironment ?? null });
+  outputSuccess('Environment removed', {
+    name,
+    newActive: config.activeEnvironment ?? null,
+    localOnly: true,
+    wasUnclaimed,
+  });
 }
 
 export async function runEnvSwitch(name?: string): Promise<void> {
@@ -152,7 +169,7 @@ export async function runEnvSwitch(name?: string): Promise<void> {
   if (!config || Object.keys(config.environments).length === 0) {
     exitWithError({
       code: 'no_environments',
-      message: 'No environments configured. Run `workos env add` to get started.',
+      message: `No environments configured. Run \`${formatWorkOSCommand('env add')}\` to get started.`,
     });
   }
 
@@ -201,7 +218,7 @@ export async function runEnvList(): Promise<void> {
     if (isJsonMode()) {
       outputJson({ data: [] });
     } else {
-      clack.log.info('No environments configured. Run `workos env add` to get started.');
+      clack.log.info(`No environments configured. Run \`${formatWorkOSCommand('env add')}\` to get started.`);
     }
     return;
   }
@@ -253,6 +270,6 @@ export async function runEnvList(): Promise<void> {
 
   if (hasUnclaimed) {
     console.log('');
-    console.log(chalk.dim('  Run `workos env claim` to keep this environment.'));
+    console.log(chalk.dim(`  Run \`${formatWorkOSCommand('env claim')}\` to keep this environment.`));
   }
 }

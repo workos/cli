@@ -278,9 +278,17 @@ export class CLIAdapter implements InstallerAdapter {
     this.spinner.start('Fetching your WorkOS credentials...');
   };
 
-  private handleStagingSuccess = (): void => {
-    this.stopSpinner('Credentials fetched');
-    clack.log.success('WorkOS credentials retrieved automatically');
+  private handleStagingSuccess = ({ source }: InstallerEvents['staging:success']): void => {
+    if (source === 'device') {
+      this.stopSpinner('Environment ready');
+      clack.log.success('Set up a WorkOS environment for this install');
+    } else if (source === 'stored') {
+      this.stopSpinner('Using active environment');
+      clack.log.success('Using your active WorkOS environment');
+    } else {
+      this.stopSpinner('Environment ready');
+      clack.log.success('Using your WorkOS environment');
+    }
   };
 
   private handleEnvCredentialsFound = ({ sourcePath }: InstallerEvents['credentials:env:found']): void => {

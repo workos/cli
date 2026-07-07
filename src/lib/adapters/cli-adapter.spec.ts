@@ -355,4 +355,30 @@ describe('CLIAdapter', () => {
       }
     });
   });
+
+  describe('staging success copy', () => {
+    it('device path announces a fresh environment without "retrieved"', async () => {
+      await adapter.start();
+      const clack = await import('../../utils/clack.js');
+
+      emitter.emit('staging:fetching', {});
+      emitter.emit('staging:success', { source: 'device' });
+
+      const calls = vi.mocked(clack.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls).toContain('Set up a WorkOS environment for this install');
+      expect(calls.join('\n')).not.toMatch(/retrieved/i);
+    });
+
+    it('stored path announces reuse of the active environment', async () => {
+      await adapter.start();
+      const clack = await import('../../utils/clack.js');
+
+      emitter.emit('staging:fetching', {});
+      emitter.emit('staging:success', { source: 'stored' });
+
+      const calls = vi.mocked(clack.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls).toContain('Using your active WorkOS environment');
+      expect(calls.join('\n')).not.toMatch(/retrieved/i);
+    });
+  });
 });

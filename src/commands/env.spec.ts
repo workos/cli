@@ -39,7 +39,7 @@ vi.mock('node:os', async (importOriginal) => {
   };
 });
 
-const { getConfig, setInsecureConfigStorage, clearConfig } = await import('../lib/config-store.js');
+const { getConfig, saveConfig, setInsecureConfigStorage, clearConfig } = await import('../lib/config-store.js');
 const { runEnvAdd, runEnvRemove, runEnvSwitch, runEnvList } = await import('./env.js');
 const { setOutputMode } = await import('../utils/output.js');
 const { resetInteractionModeForTests, setInteractionMode } = await import('../utils/interaction-mode.js');
@@ -157,6 +157,34 @@ describe('env commands', () => {
     it('errors when no environments configured', async () => {
       await expect(runEnvRemove('anything')).rejects.toThrow(CliExit);
     });
+
+    it('warns that removal is local-only for an ordinary environment', async () => {
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      await runEnvRemove('prod');
+      const warnMsg = vi.mocked(clack.log.warn).mock.calls.map((c) => String(c[0])).join('\n');
+      expect(warnMsg).toMatch(/local/i);
+      // Ordinary env: must NOT claim the claim token was lost.
+      expect(warnMsg).not.toMatch(/claim token/i);
+    });
+
+    it('warns that an unclaimed environment loses its claim token when removed', async () => {
+      saveConfig({
+        activeEnvironment: 'unclaimed',
+        environments: {
+          unclaimed: {
+            name: 'unclaimed',
+            type: 'unclaimed',
+            apiKey: 'sk_test_abc',
+            clientId: 'client_abc',
+            claimToken: 'tok_abc',
+          },
+        },
+      });
+      await runEnvRemove('unclaimed');
+      const warnMsg = vi.mocked(clack.log.warn).mock.calls.map((c) => String(c[0])).join('\n');
+      expect(warnMsg).toMatch(/local/i);
+      expect(warnMsg).toMatch(/claim/i);
+    });
   });
 
   describe('runEnvSwitch', () => {
@@ -259,6 +287,28 @@ describe('env commands', () => {
       expect(output.status).toBe('ok');
       expect(output.message).toBe('Environment removed');
       expect(output.data.name).toBe('prod');
+      expect(output.data.localOnly).toBe(true);
+      expect(output.data.wasUnclaimed).toBe(false);
+    });
+
+    it('runEnvRemove reports wasUnclaimed for an unclaimed env in JSON', async () => {
+      saveConfig({
+        activeEnvironment: 'unclaimed',
+        environments: {
+          unclaimed: {
+            name: 'unclaimed',
+            type: 'unclaimed',
+            apiKey: 'sk_test_abc',
+            clientId: 'client_abc',
+            claimToken: 'tok_abc',
+          },
+        },
+      });
+      consoleOutput = [];
+      await runEnvRemove('unclaimed');
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.data.localOnly).toBe(true);
+      expect(output.data.wasUnclaimed).toBe(true);
     });
 
     it('runEnvSwitch outputs JSON success', async () => {
@@ -307,6 +357,76 @@ describe('env commands', () => {
       await runEnvList();
       const output = JSON.parse(consoleOutput[0]);
       expect(output.data).toEqual([]);
+    });
+  });
+
+  describe('command hints route through formatWorkOSCommand (npx vs bare)', () => {
+    // getWorkOSCommand reads all three of these; clear/set them deterministically.
+    const NPM_KEYS = ['npm_command', 'npm_execpath', 'npm_config_user_agent'] as const;
+    let saved: Record<string, string | undefined>;
+
+    beforeEach(() => {
+      saved = {};
+      for (const k of NPM_KEYS) {
+        saved[k] = process.env[k];
+        delete process.env[k];
+      }
+    });
+
+    afterEach(() => {
+      for (const k of NPM_KEYS) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+    });
+
+    it('runEnvList empty hint uses the bare command when not launched via npx', async () => {
+      await runEnvList();
+      expect(clack.log.info).toHaveBeenCalledWith(expect.stringContaining('workos env add'));
+      expect(clack.log.info).not.toHaveBeenCalledWith(expect.stringContaining('npx workos@latest'));
+    });
+
+    it('runEnvList empty hint uses npx form when launched via npm exec', async () => {
+      process.env.npm_command = 'exec';
+      await runEnvList();
+      expect(clack.log.info).toHaveBeenCalledWith(expect.stringContaining('npx workos@latest env add'));
+    });
+
+    it('unclaimed-table footer uses npx form when launched via npm exec', async () => {
+      process.env.npm_command = 'exec';
+      saveConfig({
+        activeEnvironment: 'unclaimed',
+        environments: {
+          unclaimed: {
+            name: 'unclaimed',
+            type: 'unclaimed',
+            apiKey: 'sk_test_abc',
+            clientId: 'client_abc',
+            claimToken: 'tok_abc',
+          },
+        },
+      });
+      const out: string[] = [];
+      vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+        out.push(args.map(String).join(' '));
+      });
+      await runEnvList();
+      expect(out.join('\n')).toContain('npx workos@latest env claim');
+    });
+
+    it('runEnvSwitch no-envs JSON error carries npx form', async () => {
+      process.env.npm_command = 'exec';
+      setOutputMode('json');
+      setInteractionMode({ mode: 'agent', source: 'env' });
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        await expect(runEnvSwitch('anything')).rejects.toThrow(CliExit);
+        const parsed = JSON.parse(String(errorSpy.mock.calls[0][0]));
+        expect(parsed.error.message).toContain('npx workos@latest env add');
+      } finally {
+        errorSpy.mockRestore();
+        setOutputMode('human');
+      }
     });
   });
 });

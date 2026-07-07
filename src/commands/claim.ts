@@ -59,7 +59,13 @@ export async function runClaim(): Promise<void> {
     const claimUrl = `https://dashboard.workos.com/claim?nonce=${result.nonce}`;
 
     if (isJsonMode()) {
-      outputJson({ status: 'claim_url', claimUrl, nonce: result.nonce });
+      outputJson({
+        status: 'claim_url',
+        claimUrl,
+        nonce: result.nonce,
+        permanent: true,
+        note: 'Claiming permanently links this environment to your account and cannot be undone.',
+      });
       return;
     }
 
@@ -71,6 +77,7 @@ export async function runClaim(): Promise<void> {
       });
     }
 
+    clack.log.warn('Claiming permanently links this environment to your account and cannot be undone.');
     clack.log.info(`Open this URL to claim your environment:\n\n  ${claimUrl}`);
 
     try {
@@ -135,7 +142,7 @@ export async function runClaim(): Promise<void> {
     }
 
     spinner.stop('Claim timed out');
-    clack.log.info('Complete the claim in your browser, then run `workos env list` to verify.');
+    clack.log.info(`Complete the claim in your browser, then run \`${formatWorkOSCommand('env list')}\` to verify.`);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     logError('[claim] Error:', message);

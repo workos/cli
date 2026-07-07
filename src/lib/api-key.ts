@@ -9,6 +9,7 @@
 
 import { getActiveEnvironment } from './config-store.js';
 import { exitWithError } from '../utils/output.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 const DEFAULT_BASE_URL = 'https://api.workos.com';
 
@@ -22,7 +23,7 @@ export function resolveApiKey(options?: ApiKeyOptions): string {
 
   exitWithError({
     code: 'no_api_key',
-    message: 'No API key configured. Run `workos env add` to configure an environment, or set WORKOS_API_KEY.',
+    message: `No API key configured. Run \`${formatWorkOSCommand('env add')}\` to configure an environment, or set WORKOS_API_KEY.`,
   });
 }
 

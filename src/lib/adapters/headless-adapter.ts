@@ -264,8 +264,8 @@ export class HeadlessAdapter implements InstallerAdapter {
     writeNDJSON({ type: 'staging:fetching' });
   };
 
-  private handleStagingSuccess = (): void => {
-    writeNDJSON({ type: 'staging:success' });
+  private handleStagingSuccess = ({ source }: InstallerEvents['staging:success']): void => {
+    writeNDJSON({ type: 'staging:success', source });
   };
 
   // ===== Config =====

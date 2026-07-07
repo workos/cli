@@ -14,6 +14,7 @@ import { logError, logInfo } from '../utils/debug.js';
 import { isJsonMode } from '../utils/output.js';
 import { renderStderrBox } from '../utils/box.js';
 import { markStartupNoticeShown } from './startup-notice-gate.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 let warningShownThisSession = false;
 let claimCheckDoneThisSession = false;
@@ -60,7 +61,7 @@ export async function warnIfUnclaimed(): Promise<void> {
     warningShownThisSession = true;
 
     if (!isJsonMode()) {
-      const inner = ` ${chalk.yellow('⚠ Unclaimed environment')} — Run ${chalk.cyan('workos env claim')} to keep your data. `;
+      const inner = ` ${chalk.yellow('⚠ Unclaimed environment')} — Run ${chalk.cyan(formatWorkOSCommand('env claim'))} to keep your data. `;
       renderStderrBox(inner, chalk.yellow);
       // Claim the one-notice-per-run slot so the lower-priority MCP banner defers.
       markStartupNoticeShown();

@@ -8,6 +8,7 @@
 
 import { getVersion } from '../lib/settings.js';
 import { COMMAND_ALIASES } from '../lib/command-aliases.js';
+import { MIGRATIONS_DESCRIPTION } from '../lib/constants.js';
 
 export interface OptionSchema {
   name: string;
@@ -313,7 +314,7 @@ const commands: CommandSchema[] = [
       },
       {
         name: 'remove',
-        description: 'Remove an environment configuration',
+        description: 'Remove an environment from local CLI config (does not delete or unclaim the environment in WorkOS)',
         positionals: [{ name: 'name', type: 'string', description: 'Environment name to remove', required: true }],
       },
       {
@@ -327,7 +328,7 @@ const commands: CommandSchema[] = [
       },
       {
         name: 'claim',
-        description: 'Claim an unclaimed WorkOS environment (link it to your account)',
+        description: 'Claim an unclaimed WorkOS environment — link it to your account (permanent — cannot be undone)',
         options: [
           {
             name: 'json',
@@ -1417,12 +1418,19 @@ const commands: CommandSchema[] = [
   },
   {
     name: 'migrations',
-    description: 'Migrate users from identity providers (Auth0, Cognito, Clerk, Firebase) to WorkOS',
+    description: MIGRATIONS_DESCRIPTION,
     options: [insecureStorageOpt, apiKeyOpt],
     commands: [
+      {
+        name: 'export',
+        description: 'Export identity data from a source provider (or any provider via CSV, e.g. Supabase) into a WorkOS migration package',
+      },
+      { name: 'export-template', description: 'Export a blank CSV template with headers and example rows' },
       { name: 'import', description: 'Import users from CSV into WorkOS' },
       { name: 'import-package', description: 'Import a migration package directory' },
+      { name: 'generate-package-template', description: 'Generate an empty migration package skeleton for manual or scripted population' },
       { name: 'validate', description: 'Validate a WorkOS migration CSV file' },
+      { name: 'validate-package', description: 'Validate a migration package directory against the schema contract' },
       { name: 'export-auth0', description: 'Export users from Auth0' },
       { name: 'export-cognito', description: 'Export users from AWS Cognito' },
       { name: 'merge-passwords', description: 'Merge Auth0 password exports into CSV' },
@@ -1430,7 +1438,7 @@ const commands: CommandSchema[] = [
       { name: 'transform-firebase', description: 'Transform Firebase JSON to WorkOS format' },
       { name: 'analyze', description: 'Analyze import errors and generate retry plan' },
       { name: 'enroll-totp', description: 'Enroll TOTP MFA factors' },
-      { name: 'process-role-definitions', description: 'Create roles and assign in WorkOS' },
+      { name: 'process-roles', description: 'Create roles and assign permissions in WorkOS' },
       { name: 'wizard', description: 'Guided interactive migration wizard' },
     ],
   },

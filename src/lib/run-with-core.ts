@@ -339,6 +339,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
             ...installerOptions,
             apiKey: credentials?.apiKey,
             clientId: credentials?.clientId,
+            credentialSource: context.credentialSource,
             emitter: context.emitter,
           };
           const summary = await runIntegrationInstallerFn(integration, agentOptions);

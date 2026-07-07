@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const mockParseAsync = vi.fn();
 const mockName = vi.fn();
@@ -41,6 +41,37 @@ describe('runMigrations', () => {
     const args = ['export-auth0', '--domain', 'example.auth0.com', '--client-id', 'abc', '--client-secret', 'xyz'];
     await runMigrations(args, 'sk_test_789');
     expect(mockParseAsync).toHaveBeenCalledWith(args, { from: 'user' });
+  });
+
+  describe('program name routes through getWorkOSCommand', () => {
+    const NPM_KEYS = ['npm_command', 'npm_execpath', 'npm_config_user_agent'] as const;
+    let saved: Record<string, string | undefined>;
+
+    beforeEach(() => {
+      saved = {};
+      for (const k of NPM_KEYS) {
+        saved[k] = process.env[k];
+        delete process.env[k];
+      }
+    });
+
+    afterEach(() => {
+      for (const k of NPM_KEYS) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+    });
+
+    it('uses the bare command name when not launched via npx', async () => {
+      await runMigrations(['wizard']);
+      expect(mockName).toHaveBeenCalledWith('workos migrations');
+    });
+
+    it('uses the npx command name when launched via npm exec', async () => {
+      process.env.npm_command = 'exec';
+      await runMigrations(['wizard']);
+      expect(mockName).toHaveBeenCalledWith('npx workos@latest migrations');
+    });
   });
 
   it('sets WORKOS_API_URL when apiBaseUrl is provided', async () => {

@@ -47,6 +47,16 @@ export const MCP_SERVER_NAME = 'workos';
 export const MCP_SERVER_URL = 'https://mcp.workos.com/mcp';
 
 /**
+ * Shared description for the `migrations` command, referenced by both the yargs
+ * registration (`bin.ts`) and the JSON help registry (`help-json.ts`) so the two
+ * surfaces cannot drift. Advertises the generic-CSV path (e.g. Supabase) without
+ * implying a dedicated exporter exists for it. Hand-maintained — not derived from
+ * `@workos/migrations`.
+ */
+export const MIGRATIONS_DESCRIPTION =
+  'Migrate users to WorkOS from Auth0, Cognito, Clerk, Firebase, or any provider via CSV (e.g. Supabase)';
+
+/**
  * Common glob patterns to ignore when searching for files.
  * Used by multiple integrations.
  */

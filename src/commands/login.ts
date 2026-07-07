@@ -180,7 +180,7 @@ export async function runLogin(): Promise<void> {
     if (provisioned) {
       clack.log.success('Staging environment configured automatically');
     } else {
-      clack.log.info(chalk.dim('Run `workos env add` to configure an environment manually'));
+      clack.log.info(chalk.dim(`Run \`${formatWorkOSCommand('env add')}\` to configure an environment manually`));
     }
 
     await installSkillsAfterLogin();

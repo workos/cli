@@ -8,6 +8,7 @@ import chalk from 'chalk';
 import { IS_WINDOWS, SPAWN_OPTS } from '../utils/platform.js';
 import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
 import { exitWithError } from '../utils/output.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 export interface DevArgs {
   port: number;
@@ -128,7 +129,7 @@ export async function runDev(argv: DevArgs): Promise<void> {
     });
   } catch {
     console.error(chalk.red(`Failed to start: ${devCmd.command} ${devCmd.args.join(' ')}`));
-    console.error(chalk.dim('Try specifying the command explicitly: workos dev -- <your-command>'));
+    console.error(chalk.dim(`Try specifying the command explicitly: ${formatWorkOSCommand('dev -- <your-command>')}`));
     await emulator.close();
     exitWithCode(ExitCode.GENERAL_ERROR);
   }
@@ -137,7 +138,7 @@ export async function runDev(argv: DevArgs): Promise<void> {
     console.error(chalk.red(`Failed to start: ${devCmd.command}`));
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
       console.error(chalk.dim(`Command not found: ${devCmd.command}`));
-      console.error(chalk.dim('Try specifying the command explicitly: workos dev -- <your-command>'));
+      console.error(chalk.dim(`Try specifying the command explicitly: ${formatWorkOSCommand('dev -- <your-command>')}`));
     } else {
       console.error(chalk.dim(err.message));
     }

@@ -18,7 +18,7 @@ import clack from './clack.js';
 import { INTEGRATION_CONFIG } from '../lib/config.js';
 import { SPAWN_OPTS } from './platform.js';
 import { isPromptAllowed } from './interaction-mode.js';
-import { exitWithError } from './output.js';
+import { exitWithError, isJsonMode } from './output.js';
 
 /**
  * Redact sensitive info (API keys, client secrets) from a string.
@@ -546,7 +546,7 @@ export function isUsingTypeScript({ installDir }: Pick<InstallerOptions, 'instal
  * @param requireApiKey - Whether API key is needed (false for client-only SDKs like React, Vanilla JS)
  */
 export async function getOrAskForWorkOSCredentials(
-  _options: Pick<InstallerOptions, 'ci' | 'apiKey' | 'clientId' | 'installDir' | 'dashboard'>,
+  _options: Pick<InstallerOptions, 'ci' | 'apiKey' | 'clientId' | 'installDir' | 'dashboard' | 'credentialSource'>,
   requireApiKey: boolean = true,
 ): Promise<{
   apiKey: string;
@@ -557,9 +557,15 @@ export async function getOrAskForWorkOSCredentials(
 
   // If credentials provided via CLI (e.g., CI mode or dashboard mode), use them
   if ((!requireApiKey || apiKey) && clientId) {
-    // Only log in non-dashboard mode
-    if (!_options.dashboard) {
-      clack.log.info('Using provided WorkOS credentials');
+    // Say "you provided" only when the user actually supplied credentials
+    // (cli/manual, or an unknown source). For device/stored/env the state
+    // machine already announced the source accurately before this runs, so
+    // stay silent rather than double-announce. Gate on human output mode so
+    // this never pollutes JSON/NDJSON.
+    const source = _options.credentialSource;
+    const userProvided = source === 'cli' || source === 'manual' || source === undefined;
+    if (!_options.dashboard && !isJsonMode() && userProvided) {
+      clack.log.info('Using the WorkOS credentials you provided');
     }
     return { apiKey: apiKey || '', clientId };
   }

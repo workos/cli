@@ -18,6 +18,7 @@ import type { DeviceAuthResult, DeviceAuthResponse } from './device-auth.js';
 import type { StagingCredentials } from './staging-api.js';
 import { getManualPrInstructions } from './post-install.js';
 import { hasGhCli } from '../utils/git-utils.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 export const installerMachine = setup({
   types: {
@@ -165,7 +166,7 @@ export const installerMachine = setup({
       context.emitter.emit('staging:fetching', {});
     },
     emitStagingSuccess: ({ context }) => {
-      context.emitter.emit('staging:success', {});
+      context.emitter.emit('staging:success', { source: context.deviceAuth ? 'device' : 'stored' });
     },
     emitStagingError: ({ context }) => {
       const message = context.error?.message ?? 'Failed to fetch staging credentials';
@@ -711,7 +712,7 @@ export const installerMachine = setup({
                     `Because this directory isn't empty, a new app wasn't scaffolded, and no recognized ` +
                     `framework (such as a package.json with Next.js) was found to install into.\n\n` +
                     `Next steps:\n` +
-                    `  - New app: run \`workos install\` in an empty directory to scaffold Next.js + AuthKit.\n` +
+                    `  - New app: run \`${formatWorkOSCommand('install')}\` in an empty directory to scaffold Next.js + AuthKit.\n` +
                     `  - Existing project: run from the directory that contains your package.json, or pass --install-dir <path>.`,
                 );
               },

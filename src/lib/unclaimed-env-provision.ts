@@ -14,6 +14,7 @@ import { writeCredentialsEnv } from './env-writer.js';
 import { logInfo, logError } from '../utils/debug.js';
 import { renderStderrBox } from '../utils/box.js';
 import clack from '../utils/clack.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 export interface UnclaimedEnvProvisionOptions {
   installDir: string;
@@ -73,7 +74,7 @@ export async function tryProvisionUnclaimedEnv(options: UnclaimedEnvProvisionOpt
     }
 
     logInfo('[unclaimed-env-provision] Unclaimed environment provisioned and saved');
-    const inner = ` ✓ ${chalk.green('Environment provisioned')} — Run ${chalk.cyan('workos env claim')} to keep it. `;
+    const inner = ` ✓ ${chalk.green('Environment provisioned')} — Run ${chalk.cyan(formatWorkOSCommand('env claim'))} to keep it. `;
     renderStderrBox(inner, chalk.green);
 
     return true;

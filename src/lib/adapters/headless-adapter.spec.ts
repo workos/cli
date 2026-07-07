@@ -441,4 +441,16 @@ describe('HeadlessAdapter', () => {
       await adapter.stop();
     });
   });
+
+  describe('staging events', () => {
+    it('forwards the staging:success source onto the NDJSON stream', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('staging:success', { source: 'stored' });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'staging:success', source: 'stored' });
+      await adapter.stop();
+    });
+  });
 });
