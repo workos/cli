@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import clack from '../utils/clack.js';
-import { getConfig, saveConfig, isUnclaimedEnvironment } from '../lib/config-store.js';
+import { getConfig, saveConfig, isUnclaimedEnvironment, freshEnvKey } from '../lib/config-store.js';
 import type { CliConfig } from '../lib/config-store.js';
 import { outputSuccess, outputJson, exitWithError, isJsonMode } from '../utils/output.js';
 import { isAgentMode, isCiMode, isPromptAllowed } from '../utils/interaction-mode.js';
@@ -150,20 +150,23 @@ export async function runEnvProvision(): Promise<void> {
   }
 
   // Persist as an unclaimed env (parity with install) — NEVER writes to the project dir.
+  // A fresh key ('unclaimed', 'unclaimed-2', …) so a repeated provision never clobbers an
+  // earlier env's claim token, which lives only in this config and is unrecoverable.
   const config = getOrCreateConfig();
-  config.environments['unclaimed'] = {
-    name: 'unclaimed',
+  const key = freshEnvKey(config, 'unclaimed');
+  config.environments[key] = {
+    name: key,
     type: 'unclaimed',
     apiKey: result.apiKey,
     clientId: result.clientId,
     claimToken: result.claimToken,
   };
-  config.activeEnvironment = 'unclaimed';
+  config.activeEnvironment = key;
   saveConfig(config);
 
   if (isJsonMode()) {
     outputSuccess('Environment provisioned', {
-      name: 'unclaimed',
+      name: key,
       type: 'unclaimed',
       active: true,
       apiKey: result.apiKey,
@@ -181,8 +184,11 @@ export async function runEnvProvision(): Promise<void> {
   console.log(`  ${chalk.dim('AuthKit')}     ${result.authkitDomain}`);
   console.log('');
   clack.log.info(
-    `Set as active environment. Run \`${formatWorkOSCommand('env claim')}\` to link it to your account (permanent).`,
+    `Set as active environment (${key}). Run \`${formatWorkOSCommand('env claim')}\` to link it to your account (permanent).`,
   );
+  if (key !== 'unclaimed') {
+    clack.log.info(`Your earlier unclaimed environment(s) are kept. See \`${formatWorkOSCommand('env list')}\`.`);
+  }
 }
 
 export async function runEnvRemove(name: string): Promise<void> {

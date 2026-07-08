@@ -252,6 +252,14 @@ export function setActiveEnvironment(name: string): void {
   saveConfig(config);
 }
 
+/** Pick a non-colliding environments key: `base`, else `base-2`, `base-3`, … */
+export function freshEnvKey(config: CliConfig, base: string): string {
+  if (!config.environments[base]) return base;
+  let i = 2;
+  while (config.environments[`${base}-${i}`]) i++;
+  return `${base}-${i}`;
+}
+
 export function getConfigPath(): string {
   return getConfigFilePath();
 }

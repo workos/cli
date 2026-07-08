@@ -334,6 +334,28 @@ describe('env commands', () => {
       expect(writeCredentialsEnv).not.toHaveBeenCalled();
     });
 
+    it('preserves an existing unclaimed env (and its claim token) by using a fresh key', async () => {
+      setOutputMode('json');
+      vi.mocked(provisionUnclaimedEnvironment).mockResolvedValueOnce({
+        clientId: 'client_old',
+        apiKey: 'sk_test_old',
+        claimToken: 'ct_old',
+        authkitDomain: 'old.authkit.app',
+      });
+      await runEnvProvision();
+
+      vi.mocked(provisionUnclaimedEnvironment).mockResolvedValueOnce(CREDS);
+      await runEnvProvision();
+
+      const config = getConfig();
+      // The first env's claim token lives only in this config — it must never be clobbered.
+      expect((config?.environments.unclaimed as { claimToken?: string } | undefined)?.claimToken).toBe('ct_old');
+      const second = config?.environments['unclaimed-2'] as { claimToken?: string } | undefined;
+      expect(second?.claimToken).toBe('ct_x');
+      expect(config?.activeEnvironment).toBe('unclaimed-2');
+      expect(JSON.parse(consoleOutput[1]).data.name).toBe('unclaimed-2');
+    });
+
     it('surfaces a 429 as a structured rate_limited error — no config write, no login fallback', async () => {
       setOutputMode('json');
       setInteractionMode({ mode: 'agent', source: 'env' });

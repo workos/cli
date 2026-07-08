@@ -144,6 +144,21 @@ describe('HeadlessAdapter', () => {
       expect(mockExit).not.toHaveBeenCalled();
       await adapter.stop();
     });
+
+    it('continues in CI mode without --no-git-check (WORKOS_MODE=ci bridges --ci)', async () => {
+      const adapter = createAdapter({ ci: true });
+      await adapter.start();
+
+      emitter.emit('git:dirty', { files: ['package.json'] });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({
+        type: 'git:decision',
+        action: 'continue',
+      });
+      expect(sendEvent).toHaveBeenCalledWith({ type: 'GIT_CONFIRMED' });
+      expect(mockExit).not.toHaveBeenCalled();
+      await adapter.stop();
+    });
   });
 
   describe('credentials auto-resolution', () => {

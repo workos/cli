@@ -6,7 +6,7 @@ import { getCliAuthClientId, getAuthkitDomain } from '../lib/settings.js';
 import { refreshAccessToken } from '../lib/token-refresh-client.js';
 import { logInfo, logError } from '../utils/debug.js';
 import { fetchStagingCredentials } from '../lib/staging-api.js';
-import { getConfig, saveConfig, getActiveEnvironment, setActiveEnvironment } from '../lib/config-store.js';
+import { getConfig, saveConfig, getActiveEnvironment, setActiveEnvironment, freshEnvKey } from '../lib/config-store.js';
 import type { CliConfig, EnvironmentConfig } from '../lib/config-store.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
 import { autoInstallSkills } from './install-skill.js';
@@ -89,13 +89,6 @@ function isMismatch(
   return false;
 }
 
-/** Pick a non-colliding key for a new Staging env: 'staging', else 'staging-2', 'staging-3', … */
-function freshStagingKey(config: CliConfig): string {
-  if (!config.environments['staging']) return 'staging';
-  let i = 2;
-  while (config.environments[`staging-${i}`]) i++;
-  return `staging-${i}`;
-}
 
 /**
  * Auto-provision a staging environment after login.
@@ -122,7 +115,7 @@ export async function provisionStagingEnvironment(
     // Never overwrite a DIFFERENT account's 'staging' slot in place.
     const stagingSlot = config.environments['staging'];
     const slotMismatch = isMismatch(stagingSlot, account, staging);
-    const key = slotMismatch ? freshStagingKey(config) : 'staging';
+    const key = slotMismatch ? freshEnvKey(config, 'staging') : 'staging';
 
     config.environments[key] = {
       name: key,

@@ -14,6 +14,8 @@ export interface HeadlessOptions {
   noCommit?: boolean;
   createPr?: boolean;
   noGitCheck?: boolean;
+  /** CI mode (WORKOS_MODE=ci, or --ci when headless): pipelines never stop for a dirty tree. */
+  ci?: boolean;
 }
 
 /**
@@ -187,7 +189,7 @@ export class HeadlessAdapter implements InstallerAdapter {
   private handleGitDirty = ({ files }: InstallerEvents['git:dirty']): void => {
     writeNDJSON({ type: 'git:status', dirty: true, files });
 
-    if (this.options.noGitCheck) {
+    if (this.options.noGitCheck || this.options.ci) {
       writeNDJSON({ type: 'git:decision', action: 'continue' });
       this.sendEvent({ type: 'GIT_CONFIRMED' });
       return;

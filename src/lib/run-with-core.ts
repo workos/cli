@@ -228,6 +228,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         noCommit: augmentedOptions.noCommit,
         createPr: augmentedOptions.createPr,
         noGitCheck: augmentedOptions.noGitCheck,
+        ci: augmentedOptions.ci,
       },
     });
   } else if (options.dashboard) {

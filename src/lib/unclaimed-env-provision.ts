@@ -8,7 +8,7 @@
 
 import chalk from 'chalk';
 import { provisionUnclaimedEnvironment, UnclaimedEnvApiError } from './unclaimed-env-api.js';
-import { getConfig, saveConfig, getActiveEnvironment } from './config-store.js';
+import { getConfig, saveConfig, getActiveEnvironment, freshEnvKey } from './config-store.js';
 import type { CliConfig } from './config-store.js';
 import { writeCredentialsEnv } from './env-writer.js';
 import { logInfo, logError } from '../utils/debug.js';
@@ -53,16 +53,19 @@ export async function tryProvisionUnclaimedEnv(options: UnclaimedEnvProvisionOpt
 
     writeCredentialsEnv(options.installDir, envVars);
 
-    // Save to config store (after .env.local succeeds)
+    // Save to config store (after .env.local succeeds). A fresh key so a repeated
+    // provision never clobbers an earlier env's claim token (unrecoverable — it
+    // lives only in this config).
     const config: CliConfig = getConfig() ?? { environments: {} };
-    config.environments['unclaimed'] = {
-      name: 'unclaimed',
+    const key = freshEnvKey(config, 'unclaimed');
+    config.environments[key] = {
+      name: key,
       type: 'unclaimed',
       apiKey: result.apiKey,
       clientId: result.clientId,
       claimToken: result.claimToken,
     };
-    config.activeEnvironment = 'unclaimed';
+    config.activeEnvironment = key;
     saveConfig(config);
 
     // Verify config persisted — critical for `workos env claim` in a later process
