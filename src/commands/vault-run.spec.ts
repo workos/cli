@@ -379,9 +379,9 @@ describe('vault-run', () => {
       });
 
       it('unknown-env error carries the npx env-list hint', async () => {
-        await expect(
-          runVaultRun({ secrets: ['DB_URL=db'], command: ['echo'], env: 'no-such-env' }),
-        ).rejects.toThrow(/__EXIT__/);
+        await expect(runVaultRun({ secrets: ['DB_URL=db'], command: ['echo'], env: 'no-such-env' })).rejects.toThrow(
+          /__EXIT__/,
+        );
         expect(exitErrors[0].message).toContain('npx workos@latest env list');
       });
     });

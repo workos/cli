@@ -605,8 +605,7 @@ async function runCli(): Promise<void> {
           ...insecureStorageOption,
           'api-key': {
             type: 'string' as const,
-            describe:
-              'WorkOS API key (overrides environment config). Format: sk_test_* (production keys are refused)',
+            describe: 'WorkOS API key (overrides environment config). Format: sk_test_* (production keys are refused)',
           },
           'client-id': {
             type: 'string' as const,

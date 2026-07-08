@@ -256,12 +256,7 @@ export async function validateFrameworkSpecific(framework: string, projectDir: s
  * for local dev hosts only, and records an error-severity issue on mismatch.
  * Skips production URIs and placeholder hosts like http://test.
  */
-function validateRedirectUriPort(
-  url: URL,
-  framework: string,
-  projectDir: string,
-  issues: ValidationIssue[],
-): void {
+function validateRedirectUriPort(url: URL, framework: string, projectDir: string, issues: ValidationIssue[]): void {
   // Only enforce for local dev hosts; skip production URIs and placeholder
   // hosts like http://test. Node parses IPv6 hostnames with brackets: [::1].
   const localHosts = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);

@@ -173,7 +173,10 @@ describe('env commands', () => {
     it('warns that removal is local-only for an ordinary environment', async () => {
       await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
       await runEnvRemove('prod');
-      const warnMsg = vi.mocked(clack.log.warn).mock.calls.map((c) => String(c[0])).join('\n');
+      const warnMsg = vi
+        .mocked(clack.log.warn)
+        .mock.calls.map((c) => String(c[0]))
+        .join('\n');
       expect(warnMsg).toMatch(/local/i);
       // Ordinary env: must NOT claim the claim token was lost.
       expect(warnMsg).not.toMatch(/claim token/i);
@@ -193,7 +196,10 @@ describe('env commands', () => {
         },
       });
       await runEnvRemove('unclaimed');
-      const warnMsg = vi.mocked(clack.log.warn).mock.calls.map((c) => String(c[0])).join('\n');
+      const warnMsg = vi
+        .mocked(clack.log.warn)
+        .mock.calls.map((c) => String(c[0]))
+        .join('\n');
       expect(warnMsg).toMatch(/local/i);
       expect(warnMsg).toMatch(/claim/i);
     });

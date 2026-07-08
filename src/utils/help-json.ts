@@ -339,7 +339,8 @@ const commands: CommandSchema[] = [
       },
       {
         name: 'remove',
-        description: 'Remove an environment from local CLI config (does not delete or unclaim the environment in WorkOS)',
+        description:
+          'Remove an environment from local CLI config (does not delete or unclaim the environment in WorkOS)',
         positionals: [{ name: 'name', type: 'string', description: 'Environment name to remove', required: true }],
       },
       {
@@ -1462,12 +1463,16 @@ const commands: CommandSchema[] = [
     commands: [
       {
         name: 'export',
-        description: 'Export identity data from a source provider (or any provider via CSV, e.g. Supabase) into a WorkOS migration package',
+        description:
+          'Export identity data from a source provider (or any provider via CSV, e.g. Supabase) into a WorkOS migration package',
       },
       { name: 'export-template', description: 'Export a blank CSV template with headers and example rows' },
       { name: 'import', description: 'Import users from CSV into WorkOS' },
       { name: 'import-package', description: 'Import a migration package directory' },
-      { name: 'generate-package-template', description: 'Generate an empty migration package skeleton for manual or scripted population' },
+      {
+        name: 'generate-package-template',
+        description: 'Generate an empty migration package skeleton for manual or scripted population',
+      },
       { name: 'validate', description: 'Validate a WorkOS migration CSV file' },
       { name: 'validate-package', description: 'Validate a migration package directory against the schema contract' },
       { name: 'export-auth0', description: 'Export users from Auth0' },

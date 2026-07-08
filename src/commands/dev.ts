@@ -138,7 +138,9 @@ export async function runDev(argv: DevArgs): Promise<void> {
     console.error(chalk.red(`Failed to start: ${devCmd.command}`));
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
       console.error(chalk.dim(`Command not found: ${devCmd.command}`));
-      console.error(chalk.dim(`Try specifying the command explicitly: ${formatWorkOSCommand('dev -- <your-command>')}`));
+      console.error(
+        chalk.dim(`Try specifying the command explicitly: ${formatWorkOSCommand('dev -- <your-command>')}`),
+      );
     } else {
       console.error(chalk.dim(err.message));
     }

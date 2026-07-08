@@ -100,9 +100,7 @@ function printHuman(result: VerifyLoginResult): void {
       console.log(`${chalk.green('✓')} Cleaned up test user`);
     } else {
       console.log(
-        chalk.yellow(
-          `⚠ Could not delete test user ${result.orphanedUserId} — delete it manually in the dashboard.`,
-        ),
+        chalk.yellow(`⚠ Could not delete test user ${result.orphanedUserId} — delete it manually in the dashboard.`),
       );
     }
   }

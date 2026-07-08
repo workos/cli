@@ -210,16 +210,13 @@ describe('port-detection — vite frameworks', () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it.each(['react', 'react-router', 'vanilla-js'] as const)(
-    '%s parses port from vite.config.ts',
-    async (framework) => {
-      await writeFile(
-        join(dir, 'vite.config.ts'),
-        "import { defineConfig } from 'vite'\nexport default defineConfig({ server: { port: 4200 } })\n",
-      );
-      expect(detectPort(framework, dir)).toBe(4200);
-    },
-  );
+  it.each(['react', 'react-router', 'vanilla-js'] as const)('%s parses port from vite.config.ts', async (framework) => {
+    await writeFile(
+      join(dir, 'vite.config.ts'),
+      "import { defineConfig } from 'vite'\nexport default defineConfig({ server: { port: 4200 } })\n",
+    );
+    expect(detectPort(framework, dir)).toBe(4200);
+  });
 
   it.each(['react', 'react-router', 'vanilla-js'] as const)(
     '%s falls back to default 5173 when no vite config present',
