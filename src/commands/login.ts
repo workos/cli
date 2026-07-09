@@ -89,7 +89,6 @@ function isMismatch(
   return false;
 }
 
-
 /**
  * Auto-provision a staging environment after login.
  *
