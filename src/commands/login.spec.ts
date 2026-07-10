@@ -279,7 +279,6 @@ describe('login', () => {
       const result = await provisionStagingEnvironment('token', { email: 'g@x.com', userId: 'u1' });
 
       expect(result.mismatch).toBe(true);
-      expect(result.switched).toBe(false);
       const config = getConfig();
       expect(config?.activeEnvironment).toBe('sandbox'); // preserved
       expect(config?.environments['staging']?.clientId).toBe('client_gmail');
@@ -344,7 +343,6 @@ describe('login', () => {
       expect(config?.activeEnvironment).toBe('staging');
       expect(config?.environments['staging']?.ownerEmail).toBe('g@x.com');
       expect(result.mismatch).toBe(false);
-      expect(result.switched).toBe(true);
     });
   });
 

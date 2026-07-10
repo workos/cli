@@ -36,9 +36,6 @@ export class CLIAdapter implements InstallerAdapter {
   // SIGINT handler for cleanup
   private sigIntHandler: (() => void) | null = null;
 
-  // Long-running agent update interval (kept as a no-op field; never started)
-  private agentUpdateInterval: NodeJS.Timeout | null = null;
-
   // Last phase message shown on the agent spinner, restored after logging above it.
   private lastAgentMessage = 'Running AI agent...';
   // Last file path rendered as a step line, to dedupe consecutive same-path ops.
@@ -89,7 +86,6 @@ export class CLIAdapter implements InstallerAdapter {
         this.spinner.stop('Cancelled');
         this.spinner = null;
       }
-      this.stopAgentUpdates();
       clack.log.warn('Installer cancelled');
       clack.outro('Your project was not modified');
       process.exit(0);
@@ -162,9 +158,6 @@ export class CLIAdapter implements InstallerAdapter {
       this.sigIntHandler = null;
     }
 
-    // Stop agent updates
-    this.stopAgentUpdates();
-
     // Unsubscribe from all events
     for (const [event, handler] of this.handlers) {
       this.emitter.off(event as keyof InstallerEvents, handler as never);
@@ -177,13 +170,6 @@ export class CLIAdapter implements InstallerAdapter {
 
     this.isStarted = false;
   }
-
-  private stopAgentUpdates = (): void => {
-    if (this.agentUpdateInterval) {
-      clearInterval(this.agentUpdateInterval);
-      this.agentUpdateInterval = null;
-    }
-  };
 
   private stopSpinner(message: string): void {
     if (this.spinner) {
@@ -404,18 +390,19 @@ export class CLIAdapter implements InstallerAdapter {
     }
   }
 
-  private handleFileWrite = ({ path }: InstallerEvents['file:write']): void => {
+  private logFileOp(verb: 'Creating' | 'Editing', path: string): void {
     if (path === this.lastFileOp) return; // dedupe consecutive same-path ops
     this.lastFileOp = path;
     const rel = relative(process.cwd(), path);
-    this.logAboveSpinner(() => clack.log.step(`Creating ${chalk.dim(rel)}`));
+    this.logAboveSpinner(() => clack.log.step(`${verb} ${chalk.dim(rel)}`));
+  }
+
+  private handleFileWrite = ({ path }: InstallerEvents['file:write']): void => {
+    this.logFileOp('Creating', path);
   };
 
   private handleFileEdit = ({ path }: InstallerEvents['file:edit']): void => {
-    if (path === this.lastFileOp) return;
-    this.lastFileOp = path;
-    const rel = relative(process.cwd(), path);
-    this.logAboveSpinner(() => clack.log.step(`Editing ${chalk.dim(rel)}`));
+    this.logFileOp('Editing', path);
   };
 
   private handleAgentTool = ({ detail }: InstallerEvents['agent:tool']): void => {
@@ -424,7 +411,6 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handleValidationStart = (): void => {
-    this.stopAgentUpdates();
     this.stopSpinner('Agent completed');
   };
 
@@ -450,7 +436,6 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handleComplete = ({ success, summary, completion }: InstallerEvents['complete']): void => {
-    this.stopAgentUpdates();
     this.stopSpinner(success ? 'Done' : 'Failed');
 
     console.log('');
@@ -466,7 +451,6 @@ export class CLIAdapter implements InstallerAdapter {
 
   private handleError = ({ message, stack }: InstallerEvents['error']): void => {
     this.stopSpinner('Error');
-    this.stopAgentUpdates();
 
     // Rewrite raw API/SDK errors into user-friendly messages
     const isServiceError =

@@ -14,7 +14,8 @@ import { outputJson, isJsonMode, exitWithError } from '../utils/output.js';
 import { exitWithCode, ExitCode } from '../utils/exit-codes.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
-export type VerifyLoginMethod = 'password' | 'magic-auth';
+// Widen this union (e.g. 'magic-auth') only alongside the code path that verifies it.
+export type VerifyLoginMethod = 'password';
 
 export interface VerifyLoginOptions {
   /** Already resolved by bin.ts via resolveApiKey (exits 4 if none). */

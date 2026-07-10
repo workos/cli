@@ -289,16 +289,18 @@ export class HeadlessAdapter implements InstallerAdapter {
 
   // ===== File Operations (path-only, no content) =====
 
-  private handleFileWrite = ({ path }: InstallerEvents['file:write']): void => {
-    if (path === this.lastFileOp) return;
+  private writeFileOp(type: 'file:write' | 'file:edit', path: string): void {
+    if (path === this.lastFileOp) return; // dedupe consecutive same-path ops
     this.lastFileOp = path;
-    writeNDJSON({ type: 'file:write', path });
+    writeNDJSON({ type, path });
+  }
+
+  private handleFileWrite = ({ path }: InstallerEvents['file:write']): void => {
+    this.writeFileOp('file:write', path);
   };
 
   private handleFileEdit = ({ path }: InstallerEvents['file:edit']): void => {
-    if (path === this.lastFileOp) return;
-    this.lastFileOp = path;
-    writeNDJSON({ type: 'file:edit', path });
+    this.writeFileOp('file:edit', path);
   };
 
   private handleAgentTool = ({ kind, detail }: InstallerEvents['agent:tool']): void => {

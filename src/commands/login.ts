@@ -57,15 +57,11 @@ export async function installSkillsAfterLogin(): Promise<void> {
  */
 export interface StagingProvisionResult {
   provisioned: boolean;
-  account: { email?: string; userId: string };
   /** Active env name AFTER provisioning (unchanged unless there was no prior active env). */
   activeEnvironment?: string;
   /** Key the new Staging env was written under ('staging' or a fresh 'staging-N'). */
   envName?: string;
-  envType?: EnvironmentConfig['type'];
   mismatch: boolean;
-  /** True only when provisioning repointed the active env (the no-prior-active case). */
-  switched: boolean;
   priorEnvName?: string;
   priorAccount?: { email?: string; clientId?: string };
 }
@@ -126,10 +122,8 @@ export async function provisionStagingEnvironment(
     };
 
     // Only auto-assign active when there is NO valid prior active env.
-    let switched = false;
     if (!prior) {
       config.activeEnvironment = key;
-      switched = true;
     }
 
     saveConfig(config);
@@ -137,18 +131,15 @@ export async function provisionStagingEnvironment(
 
     return {
       provisioned: true,
-      account,
       activeEnvironment: config.activeEnvironment,
       envName: key,
-      envType: 'sandbox',
       mismatch,
-      switched,
       priorEnvName: priorName,
       priorAccount: prior ? { email: prior.ownerEmail, clientId: prior.clientId } : undefined,
     };
   } catch (error) {
     logError('[login] Failed to provision staging environment:', error instanceof Error ? error.message : error);
-    return { provisioned: false, account, mismatch: false, switched: false };
+    return { provisioned: false, mismatch: false };
   }
 }
 
