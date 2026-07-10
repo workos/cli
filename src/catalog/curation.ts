@@ -61,8 +61,21 @@ export const OVERRIDES: Record<string, CommandMeta> = {
   updateTeamDetails: { command: 'team update', describe: 'Rename the current team' },
   updateTeamMfaRequirement: { command: 'team set-mfa', describe: 'Set whether MFA is required for the team' },
 
-  // `userland*` ops: the prefix is internal dashboard naming. The user-facing
+  // `userland*` ops: the prefix is internal dashboard naming; the user-facing
   // noun is just "user".
+  //
+  // DEFERRED/DROPPED (Phase 5, decided 2026-06-26). These were pre-staged for a
+  // catalog-driven AuthKit-user category that is NOT being built: the nouns below
+  // (`user list`, `user create`, `user delete`, ...) would collide head-on with
+  // the existing REST `user` command (src/commands/user.ts), which already lists,
+  // creates, updates, and deletes AuthKit users on the public API plane. Routing
+  // those through the internal dashboard plane would duplicate working commands
+  // and risk a naming leak. Do NOT add these to manifest.ts without first
+  // resolving that collision (see the contract's Out of Scope).
+  //
+  // `userlandUsers` is intentionally retained: no-graphql-leak.spec.ts uses it as
+  // the worked example proving the curation layer cleans a `userland`-leaking op
+  // name to a clean noun. Removing it would weaken that machinery test.
   userlandUsers: { command: 'user list', describe: 'List AuthKit users in the current environment' },
   createUserlandUser: { command: 'user create', describe: 'Create a user' },
   deleteUserlandUser: { command: 'user delete', describe: 'Delete a user' },
