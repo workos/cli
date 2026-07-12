@@ -8,6 +8,10 @@ vi.mock('./install-skill.js', () => ({
   autoInstallSkills: vi.fn(),
 }));
 
+vi.mock('../lib/mcp-notice.js', () => ({
+  maybeOfferMcpInstall: vi.fn(),
+}));
+
 vi.mock('../utils/clack.js', () => ({
   default: {
     log: { info: vi.fn(), error: vi.fn() },
@@ -25,6 +29,7 @@ vi.mock('../utils/debug.js', () => ({
 
 const { runInstaller } = await import('../run.js');
 const { autoInstallSkills } = await import('./install-skill.js');
+const { maybeOfferMcpInstall } = await import('../lib/mcp-notice.js');
 const clack = (await import('../utils/clack.js')).default;
 const { isJsonMode } = await import('../utils/output.js');
 const { CliExit } = await import('../utils/cli-exit.js');
@@ -49,6 +54,18 @@ describe('handleInstall', () => {
     const runInstallerOrder = vi.mocked(runInstaller).mock.invocationCallOrder[0];
     const autoInstallOrder = vi.mocked(autoInstallSkills).mock.invocationCallOrder[0];
     expect(autoInstallOrder).toBeGreaterThan(runInstallerOrder);
+  });
+
+  it('offers the MCP install after skills, on the install-flow entry point', async () => {
+    vi.mocked(runInstaller).mockResolvedValue(undefined as any);
+    vi.mocked(autoInstallSkills).mockResolvedValue(null);
+
+    await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).resolves.toBeUndefined();
+
+    expect(maybeOfferMcpInstall).toHaveBeenCalledWith({ entryPoint: 'install-flow' });
+    const autoInstallOrder = vi.mocked(autoInstallSkills).mock.invocationCallOrder[0];
+    const mcpOfferOrder = vi.mocked(maybeOfferMcpInstall).mock.invocationCallOrder[0];
+    expect(mcpOfferOrder).toBeGreaterThan(autoInstallOrder);
   });
 
   it('prints an info line when skills were installed in a TTY session', async () => {

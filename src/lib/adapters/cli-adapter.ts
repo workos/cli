@@ -21,6 +21,10 @@ export class CLIAdapter implements InstallerAdapter {
   private isStarted = false;
   private progress = new ProgressTracker();
 
+  // Scaffold (empty-dir) state, used to print a "next steps" hint on completion.
+  private scaffolded = false;
+  private scaffoldPackageManager = 'npm';
+
   // Store bound handlers for cleanup
   private handlers = new Map<string, (...args: unknown[]) => void>();
 
@@ -113,6 +117,13 @@ export class CLIAdapter implements InstallerAdapter {
     this.subscribe('validation:complete', this.handleValidationComplete);
     this.subscribe('complete', this.handleComplete);
     this.subscribe('error', this.handleError);
+    // Scaffold events (empty-directory app scaffolding)
+    this.subscribe('scaffold:prompt', this.handleScaffoldPrompt);
+    this.subscribe('scaffold:start', this.handleScaffoldStart);
+    this.subscribe('scaffold:progress', this.handleScaffoldProgress);
+    this.subscribe('scaffold:complete', this.handleScaffoldComplete);
+    this.subscribe('scaffold:failed', this.handleScaffoldFailed);
+
     // Branch check events
     this.subscribe('branch:prompt', this.handleBranchPrompt);
     this.subscribe('branch:created', this.handleBranchCreated);
@@ -397,6 +408,12 @@ export class CLIAdapter implements InstallerAdapter {
     console.log('');
     console.log(renderCompletionSummary(success, summary));
     console.log('');
+
+    // When we scaffolded a fresh app, the install ran in the current dir, so
+    // point the user straight at the dev server.
+    if (success && this.scaffolded) {
+      clack.log.info(`Start your app:  ${chalk.cyan(`${this.scaffoldPackageManager} run dev`)}`);
+    }
   };
 
   private handleError = ({ message, stack }: InstallerEvents['error']): void => {
@@ -437,6 +454,48 @@ export class CLIAdapter implements InstallerAdapter {
     if (stack && this.debug) {
       this.debugLog(stack);
     }
+  };
+
+  // ===== Scaffold Event Handlers =====
+
+  private handleScaffoldPrompt = async ({ packageManager }: InstallerEvents['scaffold:prompt']): Promise<void> => {
+    this.scaffoldPackageManager = packageManager;
+    this.isPromptActive = true;
+    const confirmed = await clack.confirm({
+      message: 'This directory is empty. Scaffold a new Next.js app with AuthKit here?',
+      initialValue: true,
+    });
+    this.isPromptActive = false;
+    this.flushPendingLogs();
+
+    this.sendEvent({
+      type: clack.isCancel(confirmed) || !confirmed ? 'SCAFFOLD_CANCELLED' : 'SCAFFOLD_CONFIRMED',
+    });
+  };
+
+  private handleScaffoldStart = ({ packageManager }: InstallerEvents['scaffold:start']): void => {
+    this.scaffoldPackageManager = packageManager;
+    this.spinner = clack.spinner();
+    this.spinner.start(`Scaffolding a new Next.js app with ${packageManager} (this can take a minute)...`);
+  };
+
+  // create-next-app output is verbose; surface it only under --debug and keep
+  // the spinner message stable so the CLI stays readable.
+  private handleScaffoldProgress = ({ text }: InstallerEvents['scaffold:progress']): void => {
+    const line = text.trim();
+    if (line) {
+      this.debugLog(line);
+    }
+  };
+
+  private handleScaffoldComplete = (): void => {
+    this.scaffolded = true;
+    this.stopSpinner('Next.js app created');
+  };
+
+  private handleScaffoldFailed = ({ error }: InstallerEvents['scaffold:failed']): void => {
+    this.stopSpinner('Scaffold failed');
+    clack.log.error(`Could not scaffold the app: ${error}`);
   };
 
   private handleBranchPrompt = async ({ branch }: InstallerEvents['branch:prompt']): Promise<void> => {

@@ -10,6 +10,7 @@ import type {
   DiscoveryResult,
   CredentialSource,
   BranchCheckOutput,
+  WorkspaceCheckOutput,
 } from './installer-core.types.js';
 import type { InstallerOptions } from '../utils/types.js';
 import type { DeviceAuthResult, DeviceAuthResponse } from './device-auth.js';
@@ -69,6 +70,34 @@ export const installerMachine = setup({
     emitGitCancelled: ({ context }) => {
       context.emitter.emit('git:dirty:cancelled', {});
     },
+    emitScaffoldChecking: ({ context }) => {
+      context.emitter.emit('scaffold:checking', {});
+    },
+    emitScaffoldPrompt: ({ context }) => {
+      context.emitter.emit('scaffold:prompt', { packageManager: context.packageManager ?? 'npm' });
+    },
+    emitScaffoldStart: ({ context }) => {
+      context.emitter.emit('scaffold:start', { packageManager: context.packageManager ?? 'npm' });
+    },
+    emitScaffoldComplete: ({ context }) => {
+      context.emitter.emit('scaffold:complete', {});
+    },
+    emitScaffoldFailed: ({ context }) => {
+      const message = context.error?.message ?? 'Scaffold failed';
+      context.emitter.emit('scaffold:failed', { error: message });
+    },
+    emitScaffoldSkipped: ({ context }) => {
+      context.emitter.emit('scaffold:skipped', {});
+    },
+    assignWorkspaceResult: assign({
+      scaffoldable: ({ event }) => (event as unknown as { output: WorkspaceCheckOutput }).output?.scaffoldable ?? false,
+      packageManager: ({ event }) =>
+        (event as unknown as { output: WorkspaceCheckOutput }).output?.packageManager ?? 'npm',
+      autoScaffold: ({ event }) => (event as unknown as { output: WorkspaceCheckOutput }).output?.autoScaffold ?? false,
+    }),
+    assignScaffolded: assign({
+      scaffolded: () => true,
+    }),
     emitBranchChecking: ({ context }) => {
       context.emitter.emit('branch:checking', {});
     },
@@ -294,11 +323,24 @@ export const installerMachine = setup({
     hasIntegration: ({ context }) => context.integration !== undefined,
     shouldSkipPostInstall: ({ context }) => context.options.noCommit === true,
     hasGhCli: () => hasGhCli(),
+    // Read from the actor's done event (output), not context: the
+    // assignWorkspaceResult action has not run yet when guards are evaluated.
+    notScaffoldable: ({ event }) => !(event as unknown as { output: WorkspaceCheckOutput }).output?.scaffoldable,
+    shouldAutoScaffold: ({ event }) => {
+      const output = (event as unknown as { output: WorkspaceCheckOutput }).output;
+      return !!output?.scaffoldable && !!output?.autoScaffold;
+    },
   },
 
   actors: {
     checkAuthentication: fromPromise<boolean, { options: InstallerOptions }>(async () => {
       throw new Error('checkAuthentication not implemented - provide via machine.provide()');
+    }),
+    checkWorkspace: fromPromise<WorkspaceCheckOutput, { options: InstallerOptions }>(async () => {
+      throw new Error('checkWorkspace not implemented - provide via machine.provide()');
+    }),
+    runScaffold: fromPromise<void, { context: InstallerMachineContext }>(async () => {
+      throw new Error('runScaffold not implemented - provide via machine.provide()');
     }),
     detectIntegration: fromPromise<DetectionOutput, { options: InstallerOptions }>(async () => {
       throw new Error('detectIntegration not implemented - provide via machine.provide()');
@@ -368,7 +410,8 @@ export const installerMachine = setup({
   context: ({ input }) => ({
     emitter: input.emitter,
     options: input.options,
-    integration: input.options.integration,
+    // Set by the detection actor; no pre-seeding (the --integration flag is gone).
+    integration: undefined,
     credentials:
       input.options.apiKey && input.options.clientId
         ? { apiKey: input.options.apiKey, clientId: input.options.clientId }
@@ -390,9 +433,9 @@ export const installerMachine = setup({
       on: {
         START: [
           {
-            target: 'preparing',
+            target: 'scaffold',
             guard: 'shouldSkipAuth',
-            actions: { type: 'emitStateEnter', params: { state: 'preparing' } },
+            actions: { type: 'emitStateEnter', params: { state: 'scaffold' } },
           },
           {
             target: 'authenticating',
@@ -409,17 +452,93 @@ export const installerMachine = setup({
         src: 'checkAuthentication',
         input: ({ context }) => ({ options: context.options }),
         onDone: {
-          target: 'preparing',
+          target: 'scaffold',
           actions: [
             'emitAuthSuccess',
             { type: 'emitStateExit', params: { state: 'authenticating' } },
-            { type: 'emitStateEnter', params: { state: 'preparing' } },
+            { type: 'emitStateEnter', params: { state: 'scaffold' } },
           ],
         },
         onError: {
           target: 'error',
           actions: ['assignError', 'emitAuthFailure', { type: 'emitStateExit', params: { state: 'authenticating' } }],
         },
+      },
+    },
+
+    scaffold: {
+      initial: 'checking',
+      states: {
+        checking: {
+          entry: ['emitScaffoldChecking'],
+          invoke: {
+            id: 'checkWorkspace',
+            src: 'checkWorkspace',
+            input: ({ context }) => ({ options: context.options }),
+            onDone: [
+              {
+                // Not an empty dir: fall through to today's behavior.
+                target: 'done',
+                guard: 'notScaffoldable',
+                actions: ['assignWorkspaceResult'],
+              },
+              {
+                // Headless or --scaffold: skip the prompt.
+                target: 'running',
+                guard: 'shouldAutoScaffold',
+                actions: ['assignWorkspaceResult'],
+              },
+              {
+                // Interactive empty dir: ask first.
+                target: 'prompting',
+                actions: ['assignWorkspaceResult'],
+              },
+            ],
+            onError: {
+              // Workspace check failure is non-fatal: proceed to preparing,
+              // which errors on no-integration exactly as before this feature.
+              target: 'done',
+            },
+          },
+        },
+        prompting: {
+          entry: ['emitScaffoldPrompt'],
+          on: {
+            SCAFFOLD_CONFIRMED: {
+              target: 'running',
+            },
+            SCAFFOLD_CANCELLED: {
+              target: '#installer.cancelled',
+              actions: ['emitScaffoldSkipped', { type: 'emitStateExit', params: { state: 'scaffold' } }],
+            },
+          },
+        },
+        running: {
+          entry: ['emitScaffoldStart'],
+          invoke: {
+            id: 'runScaffold',
+            src: 'runScaffold',
+            input: ({ context }) => ({ context }),
+            onDone: {
+              target: 'done',
+              actions: ['assignScaffolded', 'emitScaffoldComplete'],
+            },
+            onError: {
+              target: '#installer.error',
+              actions: ['assignError', 'emitScaffoldFailed', { type: 'emitStateExit', params: { state: 'scaffold' } }],
+            },
+          },
+        },
+        done: {
+          type: 'final',
+        },
+      },
+      onDone: {
+        target: 'preparing',
+        actions: [
+          { type: 'emitStateExit', params: { state: 'scaffold' } },
+          { type: 'emitStateEnter', params: { state: 'preparing' } },
+        ],
       },
     },
 
@@ -577,7 +696,19 @@ export const installerMachine = setup({
         {
           target: 'error',
           actions: [
-            assign({ error: () => new Error('Could not detect framework integration') }),
+            assign({
+              error: ({ context }) => {
+                const dir = context.options.installDir;
+                return new Error(
+                  `No supported framework was detected in ${dir}.\n` +
+                    `Because this directory isn't empty, a new app wasn't scaffolded, and no recognized ` +
+                    `framework (such as a package.json with Next.js) was found to install into.\n\n` +
+                    `Next steps:\n` +
+                    `  - New app: run \`workos install\` in an empty directory to scaffold Next.js + AuthKit.\n` +
+                    `  - Existing project: run from the directory that contains your package.json, or pass --install-dir <path>.`,
+                );
+              },
+            }),
             { type: 'emitStateExit', params: { state: 'preparing' } },
           ],
         },

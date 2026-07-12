@@ -1,6 +1,7 @@
 import type { InstallerEventEmitter } from './events.js';
 import type { InstallerOptions } from '../utils/types.js';
 import type { Integration } from './constants.js';
+import type { PackageManager } from './scaffold/scaffold.js';
 import type { DeviceAuthResponse } from './device-auth.js';
 import type { EnvFileInfo, DiscoveryResult } from './credential-discovery.js';
 
@@ -59,6 +60,14 @@ export interface InstallerMachineContext {
   prUrl?: string;
   /** Summary message from agent execution */
   agentSummary?: string;
+  /** Whether the install directory is empty and can be scaffolded into */
+  scaffoldable?: boolean;
+  /** Package manager resolved for the scaffolded app */
+  packageManager?: PackageManager;
+  /** Whether to scaffold without prompting (headless mode or --scaffold) */
+  autoScaffold?: boolean;
+  /** Whether create-next-app actually ran and succeeded (for telemetry) */
+  scaffolded?: boolean;
 }
 
 /**
@@ -78,6 +87,9 @@ export type InstallerMachineEvent =
   | { type: 'SKIP_AUTH' }
   | { type: 'GIT_CONFIRMED' }
   | { type: 'GIT_CANCELLED' }
+  // Scaffold events
+  | { type: 'SCAFFOLD_CONFIRMED' }
+  | { type: 'SCAFFOLD_CANCELLED' }
   | { type: 'CREDENTIALS_SUBMITTED'; apiKey: string; clientId: string }
   | { type: 'CANCEL' }
   // Credential discovery events
@@ -124,4 +136,16 @@ export interface AgentOutput {
 export interface BranchCheckOutput {
   branch: string | null;
   isProtected: boolean;
+}
+
+/**
+ * Output from the workspace check actor (scaffold gate).
+ */
+export interface WorkspaceCheckOutput {
+  /** Whether the install directory is empty enough to scaffold into */
+  scaffoldable: boolean;
+  /** Package manager resolved for the scaffolded app */
+  packageManager: PackageManager;
+  /** Whether to scaffold without prompting (headless or --scaffold) */
+  autoScaffold: boolean;
 }

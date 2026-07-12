@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // Load .env.local for local development when --local flag is used
-if (process.argv.includes('--local') || process.env.INSTALLER_DEV) {
+if (process.argv.includes('--local') || process.env.WORKOS_DEV) {
   const { config } = await import('dotenv');
   // bin.ts compiles to dist/bin.js, so go up one level to find .env.local
   const { fileURLToPath } = await import('node:url');
@@ -200,10 +200,6 @@ const installerOptions = {
     describe: 'Directory to install WorkOS AuthKit in',
     type: 'string' as const,
   },
-  integration: {
-    describe: 'Integration to set up',
-    type: 'string' as const,
-  },
   'force-install': {
     default: false,
     describe: 'Force install packages even if peer dependency checks fail',
@@ -234,6 +230,16 @@ const installerOptions = {
     default: true,
     describe: 'Check for dirty working tree (use --no-git-check to skip)',
     type: 'boolean' as const,
+  },
+  scaffold: {
+    default: false,
+    describe: 'Scaffold a new Next.js app when run in an empty directory',
+    type: 'boolean' as const,
+  },
+  pm: {
+    describe: 'Package manager for the scaffolded app',
+    choices: ['npm', 'pnpm', 'yarn', 'bun'] as const,
+    type: 'string' as const,
   },
 };
 
@@ -316,6 +322,36 @@ async function runCli(): Promise<void> {
         return;
       await applyInsecureStorage(argv.insecureStorage as boolean | undefined);
       await maybeWarnUnclaimed();
+    })
+    .middleware(async (argv) => {
+      // One-time MCP banner (lowest-priority startup notice — runs after the
+      // telemetry notice + unclaimed warning so they win the one-per-run slot).
+      // Skip commands that manage MCP/agents directly or where the nudge is
+      // noise, mirroring + extending maybeWarnUnclaimed's list. Self-guarded and
+      // never throws.
+      const command = String(argv._?.[0] ?? '');
+      if (
+        [
+          'mcp',
+          'install',
+          'doctor',
+          'skills',
+          'auth',
+          'env',
+          'claim',
+          'debug',
+          'dashboard',
+          'emulate',
+          'dev',
+          'migrations',
+          'telemetry',
+          'completion',
+          '',
+        ].includes(command)
+      )
+        return;
+      const { maybeShowMcpNotice } = await import('./lib/mcp-notice.js');
+      await maybeShowMcpNotice();
     })
     .command('auth', 'Manage authentication (login, logout, status)', (yargs) => {
       yargs.options(insecureStorageOption);
@@ -459,6 +495,51 @@ async function runCli(): Promise<void> {
         },
       );
       return yargs.demandCommand(1, 'Please specify a skills subcommand').strict();
+    })
+    .command('mcp', 'Manage the WorkOS MCP server in coding agents (Claude Code, Codex, Cursor)', (yargs) => {
+      registerSubcommand(
+        yargs,
+        'install',
+        'Add the WorkOS MCP server to detected coding agents',
+        (y) =>
+          y.option('agent', {
+            alias: 'a',
+            type: 'array',
+            string: true,
+            description: 'Target specific agent(s): claude-code, codex, cursor',
+          }),
+        async (argv) => {
+          const { runMcpInstall } = await import('./commands/mcp.js');
+          await runMcpInstall({ agent: argv.agent as string[] | undefined });
+        },
+      );
+      registerSubcommand(
+        yargs,
+        'remove',
+        'Remove the WorkOS MCP server from coding agents',
+        (y) =>
+          y.option('agent', {
+            alias: 'a',
+            type: 'array',
+            string: true,
+            description: 'Target specific agent(s): claude-code, codex, cursor',
+          }),
+        async (argv) => {
+          const { runMcpRemove } = await import('./commands/mcp.js');
+          await runMcpRemove({ agent: argv.agent as string[] | undefined });
+        },
+      );
+      registerSubcommand(
+        yargs,
+        'status',
+        'Show which coding agents have the WorkOS MCP server configured',
+        (y) => y,
+        async () => {
+          const { runMcpStatus } = await import('./commands/mcp.js');
+          await runMcpStatus();
+        },
+      );
+      return yargs.demandCommand(1, 'Please specify an mcp subcommand').strict();
     })
     .command(
       'doctor',

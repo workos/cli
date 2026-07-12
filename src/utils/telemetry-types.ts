@@ -91,7 +91,10 @@ export interface CommandEvent extends BaseTelemetryEvent {
     'api.resource'?: string;
     'cli.version': string;
     'workos.user_id'?: string;
-  } & EnvFingerprint;
+    // Open for caller-supplied dimensions (e.g. mcp.*) — the gateway schema is
+    // passthrough and flattens unknown attributes onto the command span.
+  } & EnvFingerprint &
+    Record<string, string | number | boolean | undefined>;
 }
 
 export interface CrashEvent extends BaseTelemetryEvent {

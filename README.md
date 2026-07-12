@@ -23,6 +23,7 @@ shell command cache.
 - **AI-Powered:** Uses Claude to intelligently adapt to your project structure
 - **Security-First:** Masks API keys, redacts from logs, saves to .env.local
 - **Smart Detection:** Auto-detects framework, package manager, router type
+- **Greenfield Scaffolding:** Run in an empty directory to scaffold a new Next.js app (via `create-next-app`) before wiring AuthKit
 - **Live Documentation:** Fetches latest SDK docs from WorkOS and GitHub
 - **Full Integration:** Creates routes, middleware, environment vars, and UI
 - **Agent & CI Ready:** Non-TTY auto-detection, JSON output, structured errors, headless installer with NDJSON streaming
@@ -433,12 +434,13 @@ workos org-domain delete <id>
 workos install [options]
 
   --direct, -D            Use your own Anthropic API key (bypass llm-gateway)
-  --integration <name>    Framework: nextjs, react, react-router, tanstack-start, vanilla-js, sveltekit, node, python, ruby, go, dotnet, kotlin, elixir, php-laravel, php
   --api-key <key>         WorkOS API key (required in non-interactive mode)
   --client-id <id>        WorkOS client ID (required in non-interactive mode)
   --redirect-uri <uri>    Custom redirect URI
   --homepage-url <url>    Custom homepage URL
   --install-dir <path>    Installation directory
+  --scaffold              Scaffold a new Next.js app when run in an empty directory
+  --pm <manager>          Package manager for the scaffolded app: npm, pnpm, yarn, bun
   --no-validate           Skip post-installation validation
   --no-branch             Skip branch creation (use current branch)
   --no-commit             Skip auto-commit after installation
@@ -448,14 +450,16 @@ workos install [options]
   --debug                 Enable verbose logging
 ```
 
+**Empty directories:** Running `workos install` in an empty directory scaffolds a new Next.js app with `create-next-app` (App Router, TypeScript, Tailwind, `src/`) and then wires AuthKit into it. This only happens when the directory is empty or contains nothing but VCS/editor metadata (`.git`, `.gitignore`, `LICENSE`, `.idea`, and similar). Any project file — including a `README.md` or a `package.json` — opts out, and the installer treats the directory as an existing project. Interactive runs confirm first (default yes); non-interactive/headless runs (or `--scaffold`) scaffold automatically and report `"scaffolded": true`. The package manager is resolved from how you invoked the CLI (`npm_config_user_agent`) unless you pass `--pm`.
+
 ## Examples
 
 ```bash
 # Interactive (recommended)
 npx workos@latest install
 
-# Specify framework
-npx workos@latest install --integration react-router
+# Greenfield: scaffold a new Next.js app + AuthKit in an empty directory
+mkdir my-app && cd my-app && npx workos@latest install
 
 # With visual dashboard (experimental)
 npx workos@latest dashboard
@@ -522,10 +526,10 @@ In agent mode the CLI:
 
 In `ci` mode the CLI additionally refuses browser-based auth flows and prefers terse failures over recovery handoff text.
 
-Legacy compatibility:
+Mode resolution notes:
 
-- `WORKOS_NO_PROMPT=1` continues to work and is treated as agent interaction behavior plus JSON output.
-- `WORKOS_FORCE_TTY=1` continues to force human **output** mode but does not change interaction mode.
+- `WORKOS_MODE=agent` sets agent interaction behavior and forces JSON output. (This replaces the removed `WORKOS_NO_PROMPT` alias.)
+- `WORKOS_FORCE_TTY=1` forces human **output** mode but does not change interaction mode.
 - Non-TTY without an explicit mode still defaults output to JSON and interaction to agent.
 
 ### Headless Installer
@@ -556,7 +560,6 @@ workos install --api-key sk_test_xxx --client-id client_xxx --no-commit 2>/dev/n
 | `WORKOS_API_KEY`         | API key for management commands (bypasses stored config)  |
 | `WORKOS_API_BASE_URL`    | Override API base URL (set automatically by `workos dev`) |
 | `WORKOS_MODE`            | Interaction mode: `human`, `agent`, or `ci`               |
-| `WORKOS_NO_PROMPT=1`     | Legacy alias: agent interaction behavior + JSON output    |
 | `WORKOS_FORCE_TTY=1`     | Force human (non-JSON) **output** mode even when piped    |
 | `WORKOS_TELEMETRY=false` | Disable telemetry                                         |
 

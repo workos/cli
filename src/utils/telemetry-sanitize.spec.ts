@@ -35,7 +35,6 @@ vi.mock('uuid', () => ({
 }));
 
 vi.mock('../lib/settings.js', () => ({
-  getTelemetryUrl: () => 'https://api.workos.com/cli',
   getConfig: () => ({
     nodeVersion: '>=18',
     logging: { debugMode: false },
@@ -48,6 +47,10 @@ vi.mock('../lib/settings.js', () => ({
     legacy: { oauthPort: 3000 },
   }),
   getVersion: () => '0.0.0-test',
+}));
+
+vi.mock('./urls.js', () => ({
+  getTelemetryUrl: () => 'https://api.workos.com/cli',
 }));
 
 vi.mock('../lib/credentials.js', () => ({
@@ -161,7 +164,6 @@ describe('Analytics: no PII or secrets in queued events', () => {
       },
     }));
     vi.doMock('../lib/settings.js', () => ({
-      getTelemetryUrl: () => 'https://api.workos.com/cli',
       getConfig: () => ({
         nodeVersion: '>=18',
         logging: { debugMode: false },
@@ -174,6 +176,9 @@ describe('Analytics: no PII or secrets in queued events', () => {
         legacy: { oauthPort: 3000 },
       }),
       getVersion: () => '0.0.0-test',
+    }));
+    vi.doMock('./urls.js', () => ({
+      getTelemetryUrl: () => 'https://api.workos.com/cli',
     }));
     vi.doMock('../lib/credentials.js', () => ({
       getCredentials: vi.fn(),

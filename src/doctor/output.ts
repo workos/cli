@@ -195,6 +195,21 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
     }
   }
 
+  // MCP Server (per detected coding agent)
+  if (report.mcp) {
+    console.log('');
+    console.log('MCP Server');
+    for (const agent of report.mcp.agents) {
+      if (agent.misconfigured) {
+        console.log(`   ${Chalk.yellow('!')} ${agent.agent}: configured with an unexpected URL`);
+      } else if (agent.installed) {
+        console.log(`   ${Chalk.green('✓')} ${agent.agent}: installed`);
+      } else {
+        console.log(`   ${agent.agent}: ${Chalk.dim('not installed')}`);
+      }
+    }
+  }
+
   // Verbose mode additions
   if (options?.verbose) {
     console.log('');
@@ -267,8 +282,6 @@ export function formatInteractionModeSource(source: InteractionModeSource): stri
       return '--mode';
     case 'env':
       return 'WORKOS_MODE';
-    case 'workos_no_prompt':
-      return 'WORKOS_NO_PROMPT';
     case 'ci_env':
       return 'CI environment';
     case 'agent_env':

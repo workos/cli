@@ -20,7 +20,6 @@ describe('output', () => {
   beforeEach(() => {
     process.env = { ...originalEnv };
     delete process.env.WORKOS_FORCE_TTY;
-    delete process.env.WORKOS_NO_PROMPT;
     setOutputMode('human');
   });
 
@@ -42,12 +41,6 @@ describe('output', () => {
 
     it('returns json when stdout is not a TTY', () => {
       Object.defineProperty(process.stdout, 'isTTY', { value: undefined, writable: true });
-      expect(resolveOutputMode()).toBe('json');
-    });
-
-    it('returns json when WORKOS_NO_PROMPT is set for legacy output compatibility', () => {
-      Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true });
-      process.env.WORKOS_NO_PROMPT = '1';
       expect(resolveOutputMode()).toBe('json');
     });
 

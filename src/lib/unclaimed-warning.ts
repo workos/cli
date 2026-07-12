@@ -13,6 +13,7 @@ import { createClaimNonce, UnclaimedEnvApiError } from './unclaimed-env-api.js';
 import { logError, logInfo } from '../utils/debug.js';
 import { isJsonMode } from '../utils/output.js';
 import { renderStderrBox } from '../utils/box.js';
+import { markStartupNoticeShown } from './startup-notice-gate.js';
 
 let warningShownThisSession = false;
 let claimCheckDoneThisSession = false;
@@ -61,6 +62,8 @@ export async function warnIfUnclaimed(): Promise<void> {
     if (!isJsonMode()) {
       const inner = ` ${chalk.yellow('⚠ Unclaimed environment')} — Run ${chalk.cyan('workos env claim')} to keep your data. `;
       renderStderrBox(inner, chalk.yellow);
+      // Claim the one-notice-per-run slot so the lower-priority MCP banner defers.
+      markStartupNoticeShown();
     }
   } catch (error) {
     // Never block command execution, but log for diagnostics

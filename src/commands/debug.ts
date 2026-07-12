@@ -371,20 +371,36 @@ interface EnvVarInfo {
   effect: string;
 }
 
-const ENV_VAR_CATALOG: { name: string; effect: string }[] = [
-  { name: 'WORKOS_DEBUG', effect: 'Set to "1" to enable verbose debug logging for all commands' },
+/**
+ * Catalog of WORKOS_-prefixed environment variables the CLI reads.
+ *
+ * This is the single source of truth for `workos debug env`. A unit test
+ * (env-var-catalog.spec.ts) scans the source for `process.env.WORKOS_*` reads
+ * and fails if any are missing here, so this list can't silently drift.
+ */
+export const ENV_VAR_CATALOG: { name: string; effect: string }[] = [
+  // Credentials
   { name: 'WORKOS_API_KEY', effect: 'Bypasses credential resolution — used directly for API calls' },
+  { name: 'WORKOS_CLIENT_ID', effect: 'WorkOS client ID used during credential resolution' },
+  // Interaction & output
   { name: 'WORKOS_MODE', effect: 'Controls interaction behavior: human, agent, or CI' },
+  { name: 'WORKOS_AGENT', effect: 'Set to "1" to force agent interaction mode' },
   { name: 'WORKOS_FORCE_TTY', effect: 'Forces human (non-JSON) output mode, even when piped' },
-  { name: 'WORKOS_NO_PROMPT', effect: 'Legacy compatibility alias for agent interaction behavior and JSON output' },
+  { name: 'WORKOS_DEBUG', effect: 'Set to "1" to enable verbose debug logging for all commands' },
   { name: 'WORKOS_TELEMETRY', effect: 'Set to "false" to disable telemetry' },
-  { name: 'WORKOS_API_URL', effect: 'Overrides API base URL (default: https://api.workos.com)' },
+  // URLs (WORKOS_API_URL is the single base; gateway + telemetry derive from it)
+  {
+    name: 'WORKOS_API_URL',
+    effect: 'Overrides API base URL; also reroutes the LLM gateway and CLI telemetry endpoints',
+  },
   { name: 'WORKOS_DASHBOARD_URL', effect: 'Overrides dashboard URL (default: https://dashboard.workos.com)' },
   { name: 'WORKOS_AUTHKIT_DOMAIN', effect: 'Overrides AuthKit domain from settings' },
-  { name: 'WORKOS_LLM_GATEWAY_URL', effect: 'Overrides LLM gateway URL from settings' },
-  { name: 'WORKOS_TELEMETRY_URL', effect: 'Overrides CLI telemetry URL from settings' },
-  { name: 'INSTALLER_DEV', effect: 'Enables dev mode — loads .env.local at startup' },
-  { name: 'INSTALLER_DISABLE_PROXY', effect: 'Disables the credential proxy for gateway auth' },
+  { name: 'WORKOS_BASE_URL', effect: 'AuthKit base URL, read during doctor environment checks' },
+  { name: 'WORKOS_REDIRECT_URI', effect: 'OAuth redirect URI, read during doctor environment checks' },
+  { name: 'WORKOS_COOKIE_DOMAIN', effect: 'Session cookie domain, read during doctor environment checks' },
+  // Development
+  { name: 'WORKOS_DEV', effect: 'Enables dev mode — loads .env.local at startup' },
+  { name: 'WORKOS_DISABLE_PROXY', effect: 'Disables the credential proxy for gateway auth' },
 ];
 
 export async function runDebugEnv(): Promise<void> {

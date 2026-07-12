@@ -61,6 +61,15 @@ export interface InstallerEvents {
   'validation:issues': { issues: import('./validation/types.js').ValidationIssue[] };
   'validation:complete': { passed: boolean; issueCount: number; durationMs: number };
 
+  // Scaffold events (empty-directory app scaffolding)
+  'scaffold:checking': Record<string, never>;
+  'scaffold:prompt': { packageManager: string };
+  'scaffold:start': { packageManager: string };
+  'scaffold:progress': { text: string };
+  'scaffold:complete': Record<string, never>;
+  'scaffold:failed': { error: string };
+  'scaffold:skipped': Record<string, never>;
+
   // Branch check events
   'branch:checking': Record<string, never>;
   'branch:protected': { branch: string };

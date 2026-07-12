@@ -185,6 +185,44 @@ const commands: CommandSchema[] = [
     ],
   },
   {
+    name: 'mcp',
+    description: 'Manage the WorkOS MCP server in coding agents (Claude Code, Codex, Cursor)',
+    commands: [
+      {
+        name: 'install',
+        description: 'Add the WorkOS MCP server to detected coding agents',
+        options: [
+          {
+            name: 'agent',
+            type: 'array',
+            description: 'Target specific agent(s): claude-code, codex, cursor',
+            required: false,
+            alias: 'a',
+            hidden: false,
+          },
+        ],
+      },
+      {
+        name: 'remove',
+        description: 'Remove the WorkOS MCP server from coding agents',
+        options: [
+          {
+            name: 'agent',
+            type: 'array',
+            description: 'Target specific agent(s): claude-code, codex, cursor',
+            required: false,
+            alias: 'a',
+            hidden: false,
+          },
+        ],
+      },
+      {
+        name: 'status',
+        description: 'Show which coding agents have the WorkOS MCP server configured',
+      },
+    ],
+  },
+  {
     name: 'doctor',
     description: 'Diagnose WorkOS AuthKit integration issues in the current project',
     options: [

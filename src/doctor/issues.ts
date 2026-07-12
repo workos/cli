@@ -178,6 +178,23 @@ export function detectIssues(report: Omit<DoctorReport, 'issues' | 'summary'>): 
     }
   }
 
+  // MCP server URL drift — warn ONLY when a configured entry points at an
+  // unexpected URL. Absent MCP is never an issue: the user may have declined
+  // the offer, and doctor reports state without judging.
+  if (report.mcp) {
+    const misconfigured = report.mcp.agents.filter((a) => a.misconfigured);
+    if (misconfigured.length > 0) {
+      const agentList = misconfigured.map((a) => a.agent).join(', ');
+      issues.push({
+        code: 'MCP_MISCONFIGURED',
+        severity: 'warning',
+        message: `WorkOS MCP server configured with an unexpected URL for ${agentList} — expected ${report.mcp.serverUrl}`,
+        remediation: 'Run: workos mcp install',
+        details: { agents: misconfigured.map((a) => a.agent), expectedUrl: report.mcp.serverUrl },
+      });
+    }
+  }
+
   return issues;
 }
 

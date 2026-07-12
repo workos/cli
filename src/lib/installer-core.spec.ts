@@ -9,6 +9,7 @@ import type {
   AgentOutput,
   InstallerMachineContext,
   BranchCheckOutput,
+  WorkspaceCheckOutput,
 } from './installer-core.types.js';
 import type { EnvFileInfo } from './credential-discovery.js';
 import type { StagingCredentials } from './staging-api.js';
@@ -16,6 +17,13 @@ import type { StagingCredentials } from './staging-api.js';
 // Shared mock actors for reuse across tests
 const baseMockActors = {
   checkAuthentication: fromPromise<boolean, { options: InstallerOptions }>(async () => true),
+  // Default: not an empty dir, so the scaffold state falls straight through to preparing.
+  checkWorkspace: fromPromise<WorkspaceCheckOutput, { options: InstallerOptions }>(async () => ({
+    scaffoldable: false,
+    packageManager: 'npm',
+    autoScaffold: false,
+  })),
+  runScaffold: fromPromise<void, { context: InstallerMachineContext }>(async () => {}),
   detectIntegration: fromPromise<DetectionOutput, { options: InstallerOptions }>(async () => ({
     integration: 'nextjs',
   })),
@@ -37,7 +45,27 @@ const baseMockActors = {
   })),
 };
 
-function createTestActor(overrides?: Partial<InstallerOptions>) {
+const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+// Parallel-state actors that resolve slowly, so the `preparing` parallel snapshot
+// (detection/gitCheck/branchCheck all "running") is observable after a short wait.
+// Needed because the async scaffold gate now precedes `preparing`.
+const slowPreparingActors = {
+  detectIntegration: fromPromise<DetectionOutput, { options: InstallerOptions }>(async () => {
+    await delay(200);
+    return { integration: 'nextjs' };
+  }),
+  checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => {
+    await delay(200);
+    return { isClean: true, files: [] };
+  }),
+  checkBranch: fromPromise<BranchCheckOutput, void>(async () => {
+    await delay(200);
+    return { branch: 'main', isProtected: false };
+  }),
+};
+
+function createTestActor(overrides?: Partial<InstallerOptions>, actorOverrides?: Partial<typeof baseMockActors>) {
   const emitter = createInstallerEventEmitter();
   const options: InstallerOptions = {
     debug: false,
@@ -54,7 +82,7 @@ function createTestActor(overrides?: Partial<InstallerOptions>) {
 
   // Provide mock implementations for actors
   const machine = installerMachine.provide({
-    actors: baseMockActors,
+    actors: { ...baseMockActors, ...actorOverrides },
   });
 
   const actor = createActor(machine, {
@@ -83,11 +111,13 @@ describe('InstallerCore State Machine', () => {
       actor.stop();
     });
 
-    it('skips auth when skipAuth option is true', () => {
-      const { actor } = createTestActor({ skipAuth: true });
+    it('skips auth when skipAuth option is true', async () => {
+      const { actor } = createTestActor({ skipAuth: true }, slowPreparingActors);
       actor.start();
       actor.send({ type: 'START' });
-      // Should go directly to preparing (parallel state with detection, gitCheck, and branchCheck)
+      // The scaffold workspace-check runs first (async, instant); once it resolves
+      // not-scaffoldable, the machine lands in preparing (no authenticating state).
+      await delay(40);
       expect(actor.getSnapshot().value).toEqual({
         preparing: { detection: 'running', gitCheck: 'running', branchCheck: 'running' },
       });
@@ -97,9 +127,10 @@ describe('InstallerCore State Machine', () => {
 
   describe('parallel states', () => {
     it('runs detection, git check, and branch check in parallel', async () => {
-      const { actor } = createTestActor({ skipAuth: true });
+      const { actor } = createTestActor({ skipAuth: true }, slowPreparingActors);
       actor.start();
       actor.send({ type: 'START' });
+      await delay(40);
 
       // All three should be running in parallel
       const snapshot = actor.getSnapshot();
@@ -123,14 +154,16 @@ describe('InstallerCore State Machine', () => {
       actor.stop();
     });
 
-    it('emits state:enter for each state transition', () => {
+    it('emits state:enter for each state transition', async () => {
       const { actor, emitter } = createTestActor({ skipAuth: true });
       const states: string[] = [];
       emitter.on('state:enter', ({ state }) => states.push(state));
 
       actor.start();
       actor.send({ type: 'START' });
+      await new Promise((r) => setTimeout(r, 50));
 
+      expect(states).toContain('scaffold');
       expect(states).toContain('preparing');
       actor.stop();
     });
@@ -427,6 +460,153 @@ describe('InstallerCore State Machine', () => {
 
       expect(deviceAuthStarted).toBe(false);
       expect(actor.getSnapshot().value).toBe('complete');
+      actor.stop();
+    });
+  });
+
+  describe('scaffold flow', () => {
+    function createScaffoldActor(opts: { workspace: WorkspaceCheckOutput; runScaffoldImpl?: () => Promise<void> }) {
+      const emitter = createInstallerEventEmitter();
+      const options: InstallerOptions = {
+        debug: false,
+        forceInstall: false,
+        installDir: '/test/project',
+        local: true,
+        ci: false,
+        skipAuth: true,
+        dashboard: false,
+        emitter,
+      };
+
+      const machine = installerMachine.provide({
+        actors: {
+          ...baseMockActors,
+          checkWorkspace: fromPromise<WorkspaceCheckOutput, { options: InstallerOptions }>(async () => opts.workspace),
+          runScaffold: fromPromise<void, { context: InstallerMachineContext }>(
+            opts.runScaffoldImpl ?? (async () => {}),
+          ),
+        },
+      });
+
+      const actor = createActor(machine, { input: { emitter, options } });
+      return { actor, emitter, options };
+    }
+
+    it('skips scaffolding when the directory is not empty', async () => {
+      const { actor, emitter } = createScaffoldActor({
+        workspace: { scaffoldable: false, packageManager: 'npm', autoScaffold: false },
+      });
+      const events: string[] = [];
+      emitter.on('scaffold:checking', () => events.push('scaffold:checking'));
+      emitter.on('scaffold:start', () => events.push('scaffold:start'));
+
+      actor.start();
+      actor.send({ type: 'START' });
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Checked the workspace, but never started a scaffold; fell through to the
+      // normal install path (left the scaffold state entirely).
+      expect(events).toEqual(['scaffold:checking']);
+      expect(actor.getSnapshot().context.scaffolded).toBeFalsy();
+      expect(actor.getSnapshot().matches('scaffold')).toBe(false);
+      actor.stop();
+    });
+
+    it('auto-scaffolds without prompting (headless / --scaffold)', async () => {
+      let ran = false;
+      const { actor, emitter } = createScaffoldActor({
+        workspace: { scaffoldable: true, packageManager: 'pnpm', autoScaffold: true },
+        runScaffoldImpl: async () => {
+          ran = true;
+        },
+      });
+      const started: string[] = [];
+      emitter.on('scaffold:start', ({ packageManager }) => started.push(packageManager));
+      emitter.on('error', () => {});
+
+      actor.start();
+      actor.send({ type: 'START' });
+      await new Promise((r) => setTimeout(r, 100));
+
+      expect(ran).toBe(true);
+      expect(started).toEqual(['pnpm']);
+      expect(actor.getSnapshot().context.scaffolded).toBe(true);
+      actor.stop();
+    });
+
+    it('prompts then scaffolds on confirm', async () => {
+      let ran = false;
+      const { actor, emitter } = createScaffoldActor({
+        workspace: { scaffoldable: true, packageManager: 'npm', autoScaffold: false },
+        runScaffoldImpl: async () => {
+          ran = true;
+        },
+      });
+      let prompted = false;
+      emitter.on('scaffold:prompt', () => {
+        prompted = true;
+      });
+
+      actor.start();
+      actor.send({ type: 'START' });
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(prompted).toBe(true);
+      expect(actor.getSnapshot().value).toMatchObject({ scaffold: 'prompting' });
+      expect(ran).toBe(false);
+
+      actor.send({ type: 'SCAFFOLD_CONFIRMED' });
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(ran).toBe(true);
+      actor.stop();
+    });
+
+    it('cancels without scaffolding when the prompt is declined', async () => {
+      let ran = false;
+      const { actor, emitter } = createScaffoldActor({
+        workspace: { scaffoldable: true, packageManager: 'npm', autoScaffold: false },
+        runScaffoldImpl: async () => {
+          ran = true;
+        },
+      });
+      let skipped = false;
+      emitter.on('scaffold:skipped', () => {
+        skipped = true;
+      });
+
+      actor.start();
+      actor.send({ type: 'START' });
+      await new Promise((r) => setTimeout(r, 50));
+
+      actor.send({ type: 'SCAFFOLD_CANCELLED' });
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(ran).toBe(false);
+      expect(skipped).toBe(true);
+      expect(actor.getSnapshot().value).toBe('cancelled');
+      actor.stop();
+    });
+
+    it('errors when create-next-app fails, preserving the message', async () => {
+      const { actor, emitter } = createScaffoldActor({
+        workspace: { scaffoldable: true, packageManager: 'npm', autoScaffold: true },
+        runScaffoldImpl: async () => {
+          throw new Error('create-next-app exited with code 1');
+        },
+      });
+      let failure: string | undefined;
+      emitter.on('scaffold:failed', ({ error }) => {
+        failure = error;
+      });
+      emitter.on('error', () => {});
+
+      actor.start();
+      actor.send({ type: 'START' });
+      await new Promise((r) => setTimeout(r, 100));
+
+      expect(actor.getSnapshot().value).toBe('error');
+      expect(failure).toContain('create-next-app exited with code 1');
       actor.stop();
     });
   });
