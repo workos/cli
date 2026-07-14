@@ -85,6 +85,9 @@ Resource Management:
 Migrations:
   migrations             Migrate users and SSO connections into WorkOS
 
+Local Development:
+  emulate                Start a local WorkOS API emulator
+
 Workflows:
   seed                   Declarative resource provisioning from YAML
   setup-org              One-shot organization onboarding
@@ -221,38 +224,9 @@ workos migrations import --csv users.csv
 
 Run `workos migrations --help` for all available subcommands.
 
-<!-- UNRELEASED: Local Development (emulator) — hidden until beta testing is complete.
-     To restore, uncomment this section and re-enable the `emulate` and `dev` commands
-     in src/bin.ts and src/utils/help-json.ts.
+### Local Emulation
 
-### Local Development
-
-Test your WorkOS integration locally without hitting the live API. The emulator provides a full in-memory WorkOS API replacement with all major endpoints.
-
-#### `workos dev` — One command to start everything
-
-The fastest way to develop locally. Starts the emulator and your app together, auto-detecting your framework and injecting the right environment variables.
-
-```bash
-# Auto-detects framework (Next.js, Vite, Remix, SvelteKit, etc.) and dev command
-workos dev
-
-# Override the dev command
-workos dev -- npx vite --port 5173
-
-# Custom emulator port and seed data
-workos dev --port 8080 --seed workos-emulate.config.yaml
-```
-
-Your app receives these environment variables automatically:
-
-- `WORKOS_API_BASE_URL` — points to the local emulator (e.g. `http://localhost:4100`)
-- `WORKOS_API_KEY` — `sk_test_default`
-- `WORKOS_CLIENT_ID` — `client_emulate`
-
-#### `workos emulate` — Standalone emulator
-
-Run the emulator on its own for CI, test suites, or when you want manual control.
+Start a local WorkOS API emulator. The command is backed by [`@workos/emulate`](https://github.com/workos/emulate); the standalone package binary is `workos-emulate`.
 
 ```bash
 # Start with defaults (port 4100)
@@ -260,124 +234,13 @@ workos emulate
 
 # CI-friendly: JSON output, custom port
 workos emulate --port 9100 --json
-# → {"url":"http://localhost:9100","port":9100,"apiKey":"sk_test_default","health":"http://localhost:9100/health"}
 
 # Pre-load seed data
 workos emulate --seed workos-emulate.config.yaml
+
+# Show login pages for SSO/AuthKit browser testing
+workos emulate --interactive
 ```
-
-The emulator supports `GET /health` for readiness polling and shuts down cleanly on Ctrl+C.
-
-#### Seed configuration
-
-Create a `workos-emulate.config.yaml` (auto-detected) or pass `--seed <path>`:
-
-```yaml
-users:
-  - email: alice@acme.com
-    first_name: Alice
-    password: test123
-    email_verified: true
-
-organizations:
-  - name: Acme Corp
-    domains:
-      - domain: acme.com
-        state: verified
-    memberships:
-      - user_id: <user_id>
-        role: admin
-
-connections:
-  - name: Acme SSO
-    organization: Acme Corp
-    connection_type: GenericSAML
-    domains: [acme.com]
-
-roles:
-  - slug: admin
-    name: Admin
-    permissions: [posts:read, posts:write]
-
-permissions:
-  - slug: posts:read
-    name: Read Posts
-  - slug: posts:write
-    name: Write Posts
-
-webhookEndpoints:
-  - url: http://localhost:3000/webhooks
-    events: [user.created, organization.updated]
-```
-
-#### Programmatic API
-
-Use the emulator directly in test suites without the CLI:
-
-```typescript
-import { createEmulator } from 'workos/emulate';
-
-const emulator = await createEmulator({
-  port: 0, // random available port
-  seed: {
-    users: [{ email: 'test@example.com', password: 'secret' }],
-  },
-});
-
-// Use emulator.url as your WORKOS_API_BASE_URL
-const res = await fetch(`${emulator.url}/user_management/users`, {
-  headers: { Authorization: 'Bearer sk_test_default' },
-});
-
-// Reset between tests (clears data, re-applies seed)
-emulator.reset();
-
-// Clean up
-await emulator.close();
-```
-
-#### Emulated endpoints
-
-The emulator covers the full WorkOS API surface (~84% of OpenAPI spec endpoints). Run `pnpm check:coverage <openapi-spec>` to see exact coverage.
-
-| Endpoint Group           | Routes                                                                                                                                                                 |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Organizations            | CRUD, external_id lookup, domain management                                                                                                                            |
-| Users                    | CRUD, email uniqueness, password management                                                                                                                            |
-| Organization memberships | CRUD, role assignment, deactivate/reactivate                                                                                                                           |
-| Organization domains     | CRUD, verification                                                                                                                                                     |
-| SSO connections          | CRUD, domain-based lookup                                                                                                                                              |
-| SSO flow                 | Authorize, token exchange, profile, JWKS, SSO logout                                                                                                                   |
-| AuthKit                  | OAuth authorize (login_hint, multi-user), authenticate (7 grant types incl. refresh_token, MFA TOTP, org selection, device code), PKCE, sealed sessions, impersonation |
-| Sessions                 | List, revoke, logout redirect, JWKS per client                                                                                                                         |
-| Email verification       | Send code, confirm                                                                                                                                                     |
-| Password reset           | Create token, confirm                                                                                                                                                  |
-| Magic auth               | Create code                                                                                                                                                            |
-| Auth factors             | TOTP enrollment, delete                                                                                                                                                |
-| MFA challenges           | Create challenge, verify code                                                                                                                                          |
-| Invitations              | CRUD, accept, revoke, resend, get by token                                                                                                                             |
-| Config                   | Redirect URIs, CORS origins, JWT template                                                                                                                              |
-| User features            | Authorized apps, connected accounts, data providers                                                                                                                    |
-| Widgets                  | Token generation                                                                                                                                                       |
-| Authorization (RBAC)     | Environment roles, org roles (priority ordering), permissions, role-permission management                                                                              |
-| Authorization (FGA)      | Resources CRUD, permission checks, role assignments                                                                                                                    |
-| Directory Sync           | List/get/delete directories, users, groups                                                                                                                             |
-| Audit Logs               | Actions, schemas, events, exports, org config/retention                                                                                                                |
-| Feature Flags            | List/get, enable/disable, targets, org/user evaluations                                                                                                                |
-| Connect                  | Applications CRUD, client secrets                                                                                                                                      |
-| Data Integrations        | OAuth authorize + token exchange                                                                                                                                       |
-| Radar                    | Attempts list/get, allow/deny lists                                                                                                                                    |
-| API Keys                 | Validate, delete, list by org                                                                                                                                          |
-| Portal                   | Generate admin portal links                                                                                                                                            |
-| Legacy MFA               | Enroll/get/delete factors, challenge/verify                                                                                                                            |
-| Webhook Endpoints        | CRUD with auto-generated secrets, secret masking                                                                                                                       |
-| Events                   | Paginated event stream with type filtering                                                                                                                             |
-| Event Bus                | Auto-emits events on entity CRUD via collection hooks, fire-and-forget webhook delivery with HMAC signatures                                                           |
-| Pipes                    | Connection CRUD, mock `getAccessToken()`                                                                                                                               |
-
-JWT tokens include `role` and `permissions` claims for org-scoped sessions. All list endpoints support cursor pagination (`before`, `after`, `limit`, `order`). Error responses match the WorkOS format (`{ message, code, errors }`).
-
-END UNRELEASED -->
 
 ### Environment Management
 

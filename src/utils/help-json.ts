@@ -1427,6 +1427,43 @@ const commands: CommandSchema[] = [
       { name: 'wizard', description: 'Guided interactive migration wizard' },
     ],
   },
+  {
+    name: 'emulate',
+    description: 'Start a local WorkOS API emulator',
+    options: [
+      {
+        name: 'port',
+        type: 'number',
+        description: 'Port to listen on',
+        required: false,
+        default: 4100,
+        alias: 'p',
+        hidden: false,
+      },
+      {
+        name: 'seed',
+        type: 'string',
+        description: 'Path to seed config file (YAML or JSON)',
+        required: false,
+        alias: 's',
+        hidden: false,
+      },
+      {
+        name: 'interactive',
+        type: 'boolean',
+        description: 'Show login pages for SSO/AuthKit',
+        required: false,
+        default: false,
+        alias: 'i',
+        hidden: false,
+      },
+    ],
+    examples: [
+      'workos emulate',
+      'workos emulate --port 9100 --json',
+      'workos emulate --seed workos-emulate.config.yaml',
+    ],
+  },
 ];
 
 const globalOptions: OptionSchema[] = [

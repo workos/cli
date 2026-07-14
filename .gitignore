@@ -15,6 +15,10 @@ pnpm-debug.log
 dist/
 coverage/
 
+# .NET build output
+bin/
+obj/
+
 # Generated
 src/version.ts
 

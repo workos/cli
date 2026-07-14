@@ -38,10 +38,6 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
-    },
-    "./emulate": {
-      "import": "./dist/emulate/index.js",
-      "types": "./dist/emulate/index.d.ts"
     }
   },
   "dependencies": {
@@ -49,16 +45,15 @@
     "@anthropic-ai/sdk": "^0.106.0",
     "@clack/core": "^1.0.1",
     "@clack/prompts": "1.6.0",
-    "@hono/node-server": "^1",
     "@napi-rs/keyring": "^1.2.0",
     "@workos-inc/node": "^8.7.0",
+    "@workos/emulate": "^0.1.0",
     "@workos/migrations": "^2.4.0",
     "@workos/openapi-spec": "^0.14.0",
     "@workos/skills": "0.6.1",
     "chalk": "^5.6.2",
     "diff": "^8.0.3",
     "fast-glob": "^3.3.3",
-    "hono": "^4",
     "ink": "^6.8.0",
     "jsonc-parser": "^3.3.1",
     "open": "^11.0.0",
@@ -111,9 +106,7 @@
     "eval:diff": "tsx tests/evals/index.ts diff",
     "eval:prune": "tsx tests/evals/index.ts prune",
     "eval:logs": "tsx tests/evals/index.ts logs",
-    "eval:show": "tsx tests/evals/index.ts show",
-    "gen:routes": "tsx scripts/gen-routes.ts",
-    "check:coverage": "tsx scripts/check-coverage.ts"
+    "eval:show": "tsx tests/evals/index.ts show"
   },
   "author": "WorkOS",
   "license": "MIT"
