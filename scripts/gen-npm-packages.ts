@@ -35,14 +35,27 @@ if (!/^\d+\.\d+\.\d+(-.+)?$/.test(version)) {
 const REPOSITORY = { type: 'git', url: 'git+https://github.com/workos/cli.git' };
 const LICENSE = 'MIT';
 
-// Platform keys use process.platform/process.arch values so the launcher can
-// build the package name from the running process; assets use release names.
-const PLATFORMS = [
+// Platform keys use process.platform/process.arch values (plus a -musl
+// suffix) so the launcher can build the package name from the running
+// process; assets use release names. The `libc` field keeps package managers
+// that honor it (pnpm, yarn, npm ≥10.4) from installing the wrong linux
+// flavor; the launcher's own musl detection covers the rest.
+const PLATFORMS: Array<{ key: string; os: string; cpu: string; asset: string; bin: string; libc?: string[] }> = [
   { key: 'darwin-arm64', os: 'darwin', cpu: 'arm64', asset: 'workos-darwin-arm64', bin: 'workos' },
   { key: 'darwin-x64', os: 'darwin', cpu: 'x64', asset: 'workos-darwin-x64', bin: 'workos' },
-  { key: 'linux-x64', os: 'linux', cpu: 'x64', asset: 'workos-linux-x64', bin: 'workos' },
-  { key: 'linux-arm64', os: 'linux', cpu: 'arm64', asset: 'workos-linux-arm64', bin: 'workos' },
+  { key: 'linux-x64', os: 'linux', cpu: 'x64', asset: 'workos-linux-x64', bin: 'workos', libc: ['glibc'] },
+  { key: 'linux-arm64', os: 'linux', cpu: 'arm64', asset: 'workos-linux-arm64', bin: 'workos', libc: ['glibc'] },
+  { key: 'linux-x64-musl', os: 'linux', cpu: 'x64', asset: 'workos-linux-x64-musl', bin: 'workos', libc: ['musl'] },
+  {
+    key: 'linux-arm64-musl',
+    os: 'linux',
+    cpu: 'arm64',
+    asset: 'workos-linux-arm64-musl',
+    bin: 'workos',
+    libc: ['musl'],
+  },
   { key: 'win32-x64', os: 'win32', cpu: 'x64', asset: 'workos-windows-x64.exe', bin: 'workos.exe' },
+  { key: 'win32-arm64', os: 'win32', cpu: 'arm64', asset: 'workos-windows-arm64.exe', bin: 'workos.exe' },
 ];
 
 const present = PLATFORMS.filter((platform) => existsSync(join(distDir, platform.asset)));
@@ -62,7 +75,21 @@ const LAUNCHER = `#!/usr/bin/env node
 // the matching @workos/cli-<platform>-<arch> optionalDependency and runs it.
 const { spawnSync } = require('node:child_process');
 
-const key = \`\${process.platform}-\${process.arch}\`;
+// Same musl detection the napi-rs loaders use: Alpine's ldd is a musl script,
+// and glibc processes report a glibcVersionRuntime header.
+function isMusl() {
+  if (process.platform !== 'linux') return false;
+  try {
+    if (require('node:fs').readFileSync('/usr/bin/ldd', 'utf8').includes('musl')) return true;
+  } catch {}
+  try {
+    const report = process.report?.getReport();
+    if (report?.header) return !report.header.glibcVersionRuntime;
+  } catch {}
+  return false;
+}
+
+const key = \`\${process.platform}-\${process.arch}\${isMusl() ? '-musl' : ''}\`;
 const executable = process.platform === 'win32' ? 'workos.exe' : 'workos';
 
 let binary;
@@ -102,6 +129,7 @@ for (const platform of present) {
         license: LICENSE,
         os: [platform.os],
         cpu: [platform.cpu],
+        ...(platform.libc ? { libc: platform.libc } : {}),
         files: ['bin'],
       },
       null,

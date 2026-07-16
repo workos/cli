@@ -42,15 +42,17 @@ export async function runVerifyAssets(): Promise<void> {
 
   // The keyring native binding is load-bearing: config-store.ts imports it
   // statically, so a binary compiled without the target's .node binding
-  // crashes at startup instead of falling back to file storage. Constructing
-  // an Entry proves the binding embedded and loaded; a storage-layer error
-  // (e.g. headless CI with no secret service) still proves the binding works.
+  // crashes at startup instead of falling back to file storage. The import is
+  // where the binding dlopens — success proves it embedded and loaded. Entry
+  // construction/reads exercise the OS storage layer, which is environmental
+  // (Docker seccomp blocks kernel keyutils; headless CI has no secret
+  // service) — a failure there still proves the binding and must not fail
+  // verification.
   let keyring: 'native' | 'native-storage-unavailable';
   try {
     const { Entry } = await import('@napi-rs/keyring');
-    const entry = new Entry('workos-cli', 'verify-assets-probe');
     try {
-      entry.getPassword();
+      new Entry('workos-cli', 'verify-assets-probe').getPassword();
       keyring = 'native';
     } catch {
       keyring = 'native-storage-unavailable';

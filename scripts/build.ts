@@ -21,7 +21,10 @@ const KEYRING_BINDINGS: Record<string, string> = {
   'darwin-x64': '@napi-rs/keyring-darwin-x64',
   'linux-x64': '@napi-rs/keyring-linux-x64-gnu',
   'linux-arm64': '@napi-rs/keyring-linux-arm64-gnu',
+  'linux-x64-musl': '@napi-rs/keyring-linux-x64-musl',
+  'linux-arm64-musl': '@napi-rs/keyring-linux-arm64-musl',
   'windows-x64': '@napi-rs/keyring-win32-x64-msvc',
+  'windows-arm64': '@napi-rs/keyring-win32-arm64-msvc',
 };
 
 const normalizedTarget = (

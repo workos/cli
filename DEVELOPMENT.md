@@ -224,7 +224,8 @@ npm publish; users download platform binaries):
 1. Merging to `main` updates the release-please PR; merging that PR creates a
    **draft** GitHub release and pushes its tag immediately
    (`force-tag-creation`).
-2. `release.yml` cross-compiles all five platform binaries, smoke tests each
+2. `release.yml` cross-compiles all eight platform binaries (macOS arm64/x64,
+   Linux glibc + musl on x64/arm64, Windows x64/arm64), smoke tests each
    one **on native hardware** for its platform (including
    `workos internal verify-assets`, which checks the keyring native binding
    loaded, downloads the pinned Agent SDK executable, verifies its checksum,

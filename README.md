@@ -19,15 +19,19 @@ case "$(uname -s)" in
   Linux) os=linux ;;
   *) echo "Unsupported operating system: $(uname -s)"; exit 1 ;;
 esac
-curl -fL "https://github.com/workos/cli/releases/latest/download/workos-${os}-${arch}" -o workos
+libc=""
+if [ "$os" = "linux" ] && ldd --version 2>&1 | grep -qi musl; then libc="-musl"; fi
+curl -fL "https://github.com/workos/cli/releases/latest/download/workos-${os}-${arch}${libc}" -o workos
+# Alpine only: the musl build needs the C++ runtime: apk add libstdc++ libgcc
 chmod +x workos
 sudo mv workos /usr/local/bin/workos
 ```
 
-Windows (x64 PowerShell):
+Windows (PowerShell):
 
 ```powershell
-Invoke-WebRequest https://github.com/workos/cli/releases/latest/download/workos-windows-x64.exe -OutFile workos.exe
+$arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
+Invoke-WebRequest "https://github.com/workos/cli/releases/latest/download/workos-windows-$arch.exe" -OutFile workos.exe
 ```
 
 Move `workos.exe` to a directory on your `PATH`, then run `workos install`.

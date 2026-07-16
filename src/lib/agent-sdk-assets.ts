@@ -33,8 +33,25 @@ export type DownloadProgress = {
 
 let cachedExecutablePath: string | undefined;
 
+/** Detect a musl libc runtime (Alpine etc.) the same way napi-rs loaders do. */
+function isMuslRuntime(): boolean {
+  if (process.platform !== 'linux') return false;
+  try {
+    if (readFileSync('/usr/bin/ldd', 'utf8').includes('musl')) return true;
+  } catch {
+    // No readable /usr/bin/ldd — fall through to the process report.
+  }
+  try {
+    const report = process.report?.getReport() as { header?: { glibcVersionRuntime?: string } } | undefined;
+    if (report?.header) return !report.header.glibcVersionRuntime;
+  } catch {
+    // Report unavailable — assume glibc.
+  }
+  return false;
+}
+
 function runtimeTarget(): string {
-  return `${process.platform}-${process.arch}`;
+  return `${process.platform}-${process.arch}${isMuslRuntime() ? '-musl' : ''}`;
 }
 
 /** Running from a compiled binary: the module graph lives in Bun's virtual filesystem. */

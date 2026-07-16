@@ -45,8 +45,14 @@ jobs:
             asset: workos-linux-x64
           - target: bun-linux-arm64
             asset: workos-linux-arm64
+          - target: bun-linux-x64-musl-baseline
+            asset: workos-linux-x64-musl
+          - target: bun-linux-arm64-musl
+            asset: workos-linux-arm64-musl
           - target: bun-windows-x64-baseline
             asset: workos-windows-x64.exe
+          - target: bun-windows-arm64
+            asset: workos-windows-arm64.exe
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # 7.0.0
         with:
@@ -89,8 +95,18 @@ jobs:
             runner: ubuntu-24.04
           - asset: workos-linux-arm64
             runner: ubuntu-24.04-arm
+          # musl binaries smoke inside Alpine containers on matching-arch
+          # runners — real musl libc, native CPU, no glibc on the path.
+          - asset: workos-linux-x64-musl
+            runner: ubuntu-24.04
+            musl: true
+          - asset: workos-linux-arm64-musl
+            runner: ubuntu-24.04-arm
+            musl: true
           - asset: workos-windows-x64.exe
             runner: windows-latest
+          - asset: workos-windows-arm64.exe
+            runner: windows-11-arm
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
@@ -104,11 +120,13 @@ jobs:
         if: startsWith(matrix.runner, 'macos')
         run: codesign -dvvv "./${{ matrix.asset }}" || true
 
-      # `internal verify-assets` extracts the embedded skills from the binary
-      # and performs the first-run download of the pinned Agent SDK executable
-      # (checksum-verified) and spawns it — proof this exact artifact works on
-      # real hardware for its platform.
+      # `internal verify-assets` extracts the embedded skills from the binary,
+      # checks the keyring native binding loaded, and performs the first-run
+      # download of the pinned Agent SDK executable (checksum-verified) and
+      # spawns it — proof this exact artifact works on real hardware for its
+      # platform.
       - name: Run the binary
+        if: matrix.musl != true
         shell: bash
         run: |
           case "${{ matrix.asset }}" in
@@ -118,6 +136,20 @@ jobs:
           "./${{ matrix.asset }}" --version
           "./${{ matrix.asset }}" --help >/dev/null
           "./${{ matrix.asset }}" internal verify-assets --json
+
+      # Bun musl builds dynamically link libstdc++/libgcc (same as Node's musl
+      # builds) — install them like real Alpine users must.
+      - name: Run the binary (Alpine container)
+        if: matrix.musl == true
+        run: |
+          chmod +x "./${{ matrix.asset }}"
+          docker run --rm \
+            --volume "${PWD}/${{ matrix.asset }}:/workos:ro" \
+            --env HOME=/tmp/home \
+            alpine:3.22 \
+            sh -eu -c 'apk add --no-cache libstdc++ libgcc >/dev/null;
+            /workos --version; /workos --help >/dev/null;
+            /workos internal verify-assets --json'
 
   publish:
     name: Publish release
