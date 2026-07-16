@@ -4,18 +4,41 @@ WorkOS CLI for installing AuthKit integrations and managing WorkOS resources.
 
 ## Installation
 
-```bash
-# Run the installer directly with npx (recommended)
-npx workos@latest install
+The CLI is distributed as a standalone executable from GitHub Releases. It does not require Node.js, Bun, or an npm installation. The first agent-driven command (e.g. `workos install`) performs a one-time, checksum-verified download of the Claude agent runtime (~230 MB, cached under `~/.workos`).
 
-# Or install globally
-npm install -g workos
-workos install
+macOS and Linux:
+
+```bash
+case "$(uname -m)" in
+  arm64|aarch64) arch=arm64 ;;
+  x86_64) arch=x64 ;;
+  *) echo "Unsupported architecture: $(uname -m)"; exit 1 ;;
+esac
+case "$(uname -s)" in
+  Darwin) os=darwin ;;
+  Linux) os=linux ;;
+  *) echo "Unsupported operating system: $(uname -s)"; exit 1 ;;
+esac
+curl -fL "https://github.com/workos/cli/releases/latest/download/workos-${os}-${arch}" -o workos
+chmod +x workos
+sudo mv workos /usr/local/bin/workos
 ```
 
-`npx workos@latest install` is recommended because it bypasses stale global shims and older shell-resolved binaries.
-If a global install reports `unknown command "install"`, run the npx command above or reinstall globally and clear your
-shell command cache.
+Windows (x64 PowerShell):
+
+```powershell
+Invoke-WebRequest https://github.com/workos/cli/releases/latest/download/workos-windows-x64.exe -OutFile workos.exe
+```
+
+Move `workos.exe` to a directory on your `PATH`, then run `workos install`.
+
+npm (thin launcher that installs the same prebuilt binary for your platform):
+
+```bash
+npm install -g workos
+# or run without installing:
+npx workos@latest install
+```
 
 ## Features
 
@@ -104,7 +127,7 @@ When you run `workos install` without credentials, the CLI automatically provisi
 
 ```bash
 # Install with zero setup — environment provisioned automatically
-npx workos@latest install
+workos install
 
 # Check your environment
 workos env list
@@ -456,13 +479,13 @@ workos install [options]
 
 ```bash
 # Interactive (recommended)
-npx workos@latest install
+workos install
 
 # Greenfield: scaffold a new Next.js app + AuthKit in an empty directory
-mkdir my-app && cd my-app && npx workos@latest install
+mkdir my-app && cd my-app && workos install
 
 # With visual dashboard (experimental)
-npx workos@latest dashboard
+workos dashboard
 
 # JSON output (explicit)
 workos org list --json --api-key sk_test_xxx
@@ -579,13 +602,13 @@ The CLI uses WorkOS Connect OAuth device flow for authentication:
 
 ```bash
 # Login (opens browser for authentication)
-npx workos@latest auth login
+workos auth login
 
 # Check current auth status
-npx workos@latest auth status
+workos auth status
 
 # Logout (clears stored credentials)
-npx workos@latest auth logout
+workos auth logout
 ```
 
 OAuth credentials are stored in the system keychain (with `~/.workos/credentials.json` fallback). Access tokens are not persisted long-term for security - users re-authenticate when tokens expire.
@@ -634,14 +657,14 @@ See [DEVELOPMENT.md](./DEVELOPMENT.md) for development setup.
 Build:
 
 ```bash
-pnpm build
+bun run build
 ```
 
 Run locally:
 
 ```bash
-pnpm dev  # Watch mode
-./dist/bin.js --help
+bun run dev  # Watch mode
+./dist/workos --help
 ```
 
 ## License

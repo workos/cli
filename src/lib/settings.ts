@@ -21,7 +21,6 @@ export interface InstallerConfig {
   proxy: {
     refreshThresholdMs: number;
   };
-  nodeVersion: string;
   logging: {
     debugMode: boolean;
   };

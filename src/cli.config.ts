@@ -25,8 +25,6 @@ export const config = {
     refreshThresholdMs: 60_000,
   },
 
-  nodeVersion: '>=20.20',
-
   logging: {
     debugMode: false,
   },

@@ -18,6 +18,14 @@ vi.mock('./settings.js', () => ({
 const { checkForUpdates, _resetWarningState } = await import('./version-check.js');
 const { yellow, dim } = await import('../utils/logging.js');
 
+// github.com/…/releases/latest answers with a redirect to the tag page.
+function redirectTo(tag: string) {
+  return {
+    status: 302,
+    headers: new Headers({ location: `https://github.com/workos/cli/releases/tag/${tag}` }),
+  };
+}
+
 describe('version-check', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -25,33 +33,24 @@ describe('version-check', () => {
   });
 
   it('shows warning when outdated', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ version: '0.4.0' }),
-    });
+    mockFetch.mockResolvedValueOnce(redirectTo('v0.4.0'));
 
     await checkForUpdates();
 
     expect(yellow).toHaveBeenCalledWith(expect.stringContaining('0.3.0 → 0.4.0'));
-    expect(dim).toHaveBeenCalledWith('Run: npx workos@latest');
+    expect(dim).toHaveBeenCalledWith('Download: https://github.com/workos/cli/releases/latest');
   });
 
   it('no warning when up to date', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ version: '0.3.0' }),
-    });
+    mockFetch.mockResolvedValueOnce(redirectTo('v0.3.0'));
 
     await checkForUpdates();
 
     expect(yellow).not.toHaveBeenCalled();
   });
 
-  it('no warning when ahead of npm', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ version: '0.2.0' }),
-    });
+  it('no warning when ahead of the latest release', async () => {
+    mockFetch.mockResolvedValueOnce(redirectTo('v0.2.0'));
 
     await checkForUpdates();
 
@@ -72,19 +71,17 @@ describe('version-check', () => {
     expect(yellow).not.toHaveBeenCalled();
   });
 
-  it('silently handles non-ok response', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false });
+  it('silently handles a non-redirect response', async () => {
+    mockFetch.mockResolvedValueOnce({ status: 200, headers: new Headers() });
 
     await expect(checkForUpdates()).resolves.toBeUndefined();
     expect(yellow).not.toHaveBeenCalled();
   });
 
-  it('silently handles invalid JSON', async () => {
+  it('silently handles a redirect to an unexpected location', async () => {
     mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => {
-        throw new Error('Invalid JSON');
-      },
+      status: 302,
+      headers: new Headers({ location: 'https://github.com/workos/cli/releases' }),
     });
 
     await expect(checkForUpdates()).resolves.toBeUndefined();
@@ -92,20 +89,14 @@ describe('version-check', () => {
   });
 
   it('silently handles invalid semver', async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ version: 'not-valid-semver' }),
-    });
+    mockFetch.mockResolvedValueOnce(redirectTo('not-valid-semver'));
 
     await expect(checkForUpdates()).resolves.toBeUndefined();
     expect(yellow).not.toHaveBeenCalled();
   });
 
   it('only warns once', async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ version: '0.4.0' }),
-    });
+    mockFetch.mockResolvedValue(redirectTo('v0.4.0'));
 
     await checkForUpdates();
     await checkForUpdates();

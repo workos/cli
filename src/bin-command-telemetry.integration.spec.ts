@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url';
  * That captures the real event payload, independent of debug-log formatting.
  */
 const binPath = fileURLToPath(new URL('./bin.ts', import.meta.url));
-const forceInsecureStorageImport = new URL('./test/force-insecure-storage.ts', import.meta.url).href;
+const forceInsecureStorageImport = fileURLToPath(new URL('./test/force-insecure-storage.ts', import.meta.url));
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 
 let sandboxTmp: string;
@@ -68,15 +68,11 @@ function runCli(args: string[], envOverrides: NodeJS.ProcessEnv = {}) {
     ...envOverrides,
   };
 
-  const result = spawnSync(
-    process.execPath,
-    ['--import', 'tsx', '--import', forceInsecureStorageImport, binPath, ...args],
-    {
-      cwd: repoRoot,
-      encoding: 'utf-8',
-      env,
-    },
-  );
+  const result = spawnSync('bun', ['--preload', forceInsecureStorageImport, binPath, ...args], {
+    cwd: repoRoot,
+    encoding: 'utf-8',
+    env,
+  });
 
   const events: Array<{ type: string; attributes?: Record<string, unknown> }> = [];
   const pendingDir = join(sandboxTmp, 'workos-cli-telemetry');

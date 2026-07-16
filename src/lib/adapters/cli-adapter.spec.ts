@@ -245,7 +245,7 @@ describe('CLIAdapter', () => {
       consoleSpy.mockRestore();
     });
 
-    it('keeps npx in auth recovery hints when launched through npm exec', async () => {
+    it('uses the standalone binary in auth recovery hints', async () => {
       const originalNpmCommand = process.env.npm_command;
       process.env.npm_command = 'exec';
 
@@ -255,9 +255,7 @@ describe('CLIAdapter', () => {
 
         emitter.emit('error', { message: 'authentication failed', stack: undefined });
 
-        expect(clack.default.log.info).toHaveBeenCalledWith(
-          'Try running: npx workos@latest auth logout && npx workos@latest install',
-        );
+        expect(clack.default.log.info).toHaveBeenCalledWith('Try running: workos auth logout && workos install');
       } finally {
         if (originalNpmCommand === undefined) {
           delete process.env.npm_command;

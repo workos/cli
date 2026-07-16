@@ -2,17 +2,17 @@ import { lt, valid } from 'semver';
 import { yellow, dim } from '../utils/logging.js';
 import { getVersion } from './settings.js';
 
-const NPM_REGISTRY_URL = 'https://registry.npmjs.org/workos/latest';
+// The web endpoint redirects to …/releases/tag/v{version} and, unlike
+// api.github.com, is not subject to the anonymous 60-requests/hour/IP rate
+// limit — users behind shared corporate NATs would otherwise silently stop
+// seeing update notices.
+const LATEST_RELEASE_URL = 'https://github.com/workos/cli/releases/latest';
 const TIMEOUT_MS = 500;
 
 let hasWarned = false;
 
-interface NpmPackageInfo {
-  version: string;
-}
-
 /**
- * Check npm registry for latest version and warn if outdated.
+ * Check GitHub Releases for the latest binary version and warn if outdated.
  * Runs asynchronously, fails silently on any error.
  * Safe to call without awaiting (fire-and-forget).
  */
@@ -20,14 +20,19 @@ export async function checkForUpdates(): Promise<void> {
   if (hasWarned) return;
 
   try {
-    const response = await fetch(NPM_REGISTRY_URL, {
+    const response = await fetch(LATEST_RELEASE_URL, {
+      method: 'HEAD',
+      redirect: 'manual',
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
 
-    if (!response.ok) return;
+    // Expect a redirect to …/releases/tag/v{version}; anything else means no
+    // published release (or GitHub changed shape) — stay quiet.
+    const location = response.headers.get('location') ?? '';
+    const match = /\/releases\/tag\/v?([^/?#]+)/.exec(location);
+    if (!match) return;
 
-    const data = (await response.json()) as NpmPackageInfo;
-    const latestVersion = data.version;
+    const latestVersion = decodeURIComponent(match[1]);
     const currentVersion = getVersion();
 
     // Validate both versions are valid semver
@@ -37,7 +42,7 @@ export async function checkForUpdates(): Promise<void> {
     if (lt(currentVersion, latestVersion)) {
       hasWarned = true;
       yellow(`Update available: ${currentVersion} → ${latestVersion}`);
-      dim('Run: npx workos@latest');
+      dim('Download: https://github.com/workos/cli/releases/latest');
       console.log();
     }
   } catch {

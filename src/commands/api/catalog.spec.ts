@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseSpec, endpointsByTag, type EndpointInfo } from './catalog.js';
+import { parseSpec, loadCatalog, endpointsByTag, type EndpointInfo } from './catalog.js';
 
 const SAMPLE_SPEC = `
 openapi: 3.0.0
@@ -49,6 +49,12 @@ paths:
 `;
 
 describe('parseSpec', () => {
+  it('loads the bundled WorkOS specification', async () => {
+    const catalog = await loadCatalog();
+    expect(catalog.endpoints.length).toBeGreaterThan(0);
+    expect(catalog.tags.length).toBeGreaterThan(0);
+  });
+
   it('returns endpoints for each method on a path', () => {
     const catalog = parseSpec(SAMPLE_SPEC);
     const ops = catalog.endpoints.filter((e) => e.path === '/organizations').map((e) => e.method);

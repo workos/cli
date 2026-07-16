@@ -133,10 +133,10 @@ function createMockSDKResponse(turns: Array<{ text?: string; error?: boolean; is
 function makeAgentConfig() {
   return {
     workingDirectory: '/tmp/test',
-    mcpServers: {},
     model: 'test-model',
     allowedTools: [],
     sdkEnv: {},
+    claudeExecutablePath: '/tmp/test/claude',
   };
 }
 

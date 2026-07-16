@@ -47,17 +47,17 @@ src/
 
 ```bash
 # Install dependencies
-pnpm install
+bun install
 
 # Build
-pnpm build
+bun run build
 ```
 
 ## Development Workflow
 
 ```bash
-# Build, link globally, and watch for changes
-pnpm dev
+# Run the TypeScript source in watch mode
+bun run dev
 
 # Test installer in another project
 cd /path/to/test/nextjs-app
@@ -73,20 +73,20 @@ workos user list
 
 ```bash
 # Build
-pnpm build
+bun run build
 
 # Clean and rebuild
-pnpm clean && pnpm build
+bun run clean && bun run build
 
 # Format code
-pnpm format
+bun run format
 
 # Check types
-pnpm typecheck
+bun run typecheck
 
 # Run tests
-pnpm test
-pnpm test:watch
+bun run test
+bun run test:watch
 ```
 
 ## TypeScript Configuration
@@ -127,14 +127,26 @@ The full backwards-compat matrix lives in `src/utils/mode-compatibility.spec.ts`
 
 ### Adding a New Framework
 
-1. Create `src/your-framework/your-framework-installer-agent.ts`
-2. Define `FrameworkConfig` with metadata, detection, environment, UI
-3. Export `runYourFrameworkInstallerAgent(options)` function
-4. Add to `Integration` enum in `lib/constants.ts`
-5. Add detection logic to `lib/config.ts`
-6. Wire up in `run.ts`
+1. Create `src/integrations/your-framework/index.ts`
+2. Export a `FrameworkConfig` as `config` and an installer function as `run`
+3. Run `bun run generate` to refresh the static integration manifest
+4. Add detection and validation coverage
 
-See `nextjs/nextjs-installer-agent.ts` as reference.
+See `src/integrations/nextjs/index.ts` as a reference.
+
+### Generated Manifests
+
+`bun run generate` produces **three** manifests (it runs automatically before
+`build`, `test`, and `typecheck`, and after `bun install`):
+
+- `src/integrations/_manifest.ts` — static imports for every integration (committed; CI fails if it drifts from the directory listing)
+- `src/generated/skills-manifest.ts` — embeds every file of the `@workos/skills` plugin tree into the binary (gitignored: contains absolute paths)
+- `src/generated/agent-sdk-manifest.ts` — pins the target platform's native Claude Agent SDK `claude` executable: version, npm tarball URL, and sha256 (gitignored: target-specific). The executable is **not** embedded; a compiled binary downloads it on first agent use, verifies the checksum, and caches it under `~/.workos/cache/agent-sdk/`
+
+Set `WORKOS_BUILD_TARGET` (e.g. `bun-linux-x64-baseline`) to generate/build
+for a non-host platform; the same value must be used for both `generate` and
+the compile, which `bun run build` (via `scripts/build.ts` + the `prebuild`
+hook) guarantees.
 
 ### Updating Integration Instructions
 
@@ -181,11 +193,11 @@ export function redactCredentials(obj: any): any {
 Automated eval framework for testing installer skills across frameworks and project states.
 
 ```bash
-pnpm eval                    # Run all scenarios
-pnpm eval --framework=nextjs # Single framework
-pnpm eval --quality          # Include LLM quality grading
-pnpm eval:history            # List recent runs
-pnpm eval:diff <id1> <id2>   # Compare runs
+bun run eval                    # Run all scenarios
+bun run eval --framework=nextjs # Single framework
+bun run eval --quality          # Include LLM quality grading
+bun run eval:history            # List recent runs
+bun run eval:diff <id1> <id2>   # Compare runs
 ```
 
 See [tests/evals/README.md](./tests/evals/README.md) for full documentation.
@@ -203,6 +215,41 @@ workos --debug
 ```bash
 tail -f ~/.workos/logs/workos-{timestamp}.log
 ```
+
+## Releasing
+
+Releases are fully automated via release-please + GitHub Releases (there is no
+npm publish; users download platform binaries):
+
+1. Merging to `main` updates the release-please PR; merging that PR creates a
+   **draft** GitHub release and pushes its tag immediately
+   (`force-tag-creation`).
+2. `release.yml` cross-compiles all five platform binaries, smoke tests each
+   one **on native hardware** for its platform (including
+   `workos internal verify-assets`, which checks the keyring native binding
+   loaded, downloads the pinned Agent SDK executable, verifies its checksum,
+   and spawns it), attaches them to the draft, and only then publishes it.
+   `releases/latest` never points at a partial or untested release.
+3. After the GitHub release publishes, `publish-npm` regenerates the npm
+   distribution (`scripts/gen-npm-packages.ts`): a thin `workos` launcher
+   package plus one `@workos/cli-<platform>-<arch>` package per binary,
+   published via npm trusted publishing (OIDC). npm is a secondary channel —
+   it never leads GitHub Releases, and a failed npm publish is re-runnable in
+   isolation.
+
+Operational notes:
+
+- **A leg failed:** the release stays an invisible draft and the previous
+  release remains `latest`. Fix the problem, then either "Re-run failed jobs"
+  on the same run or trigger `release.yml` manually via `workflow_dispatch`
+  with the tag name.
+- **Abandoning a draft:** delete BOTH the draft release and its tag, or
+  release-please will treat that version as shipped.
+- **Bumping the pinned Bun version** (`ci.yml`, `release.yml`,
+  `packageManager`) is a smoke-gated event: Bun has shipped releases that
+  broke cross-compiled macOS code signatures (oven-sh/bun#29120 — binaries
+  SIGKILL on Apple Silicon). The native macOS smoke leg is the regression
+  gate; never bypass it.
 
 ## Questions?
 

@@ -24,7 +24,7 @@ function terminalWidth(): number {
  * a long unbroken word) overflows its own line rather than being split mid-span.
  * Such an overflow can push the rendered box border past the terminal width;
  * acceptable at standard widths. Note that a colored command produced by
- * `formatWorkOSCommand` can be long (e.g. `npx workos@latest telemetry opt-out`)
+ * `formatWorkOSCommand` can be long (e.g. `workos telemetry opt-out`)
  * and stays a single unbreakable token by design.
  *
  * Limitation: a colored span is grouped atomically only when it is a single SGR

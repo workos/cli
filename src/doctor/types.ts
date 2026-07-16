@@ -36,7 +36,8 @@ export interface FrameworkInfo {
 }
 
 export interface RuntimeInfo {
-  nodeVersion: string;
+  /** Host Node.js version (`node --version`), or null when not installed. */
+  nodeVersion: string | null;
   packageManager: string | null;
   packageManagerVersion: string | null;
 }

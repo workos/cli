@@ -322,7 +322,7 @@ describe('Analytics', () => {
         const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'session.start')[0];
         expect(event.attributes).toHaveProperty('env.os');
         expect(event.attributes).toHaveProperty('env.os_version');
-        expect(event.attributes).toHaveProperty('env.node_version');
+        expect(event.attributes).toHaveProperty('env.runtime_version');
         expect(event.attributes).toHaveProperty('env.shell');
         expect(typeof event.attributes['env.ci']).toBe('boolean');
       });
@@ -390,7 +390,7 @@ describe('Analytics', () => {
         const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'session.end')[0];
         expect(event.attributes).toHaveProperty('env.os');
         expect(event.attributes).toHaveProperty('env.os_version');
-        expect(event.attributes).toHaveProperty('env.node_version');
+        expect(event.attributes).toHaveProperty('env.runtime_version');
         expect(event.attributes).toHaveProperty('env.shell');
         expect(typeof event.attributes['env.ci']).toBe('boolean');
         expect(event.attributes['installer.mode']).toBe('tui');
@@ -636,7 +636,7 @@ describe('Analytics', () => {
               'crash.command': 'install',
               'cli.version': '1.0.0',
               'env.os': expect.any(String),
-              'env.node_version': expect.any(String),
+              'env.runtime_version': expect.any(String),
             }),
           }),
         );

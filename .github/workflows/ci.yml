@@ -7,35 +7,73 @@ on:
 
 jobs:
   ci:
-    name: Node ${{ matrix.node }}
+    name: Bun
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node: [20, 22, 24]
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # 7.0.0
 
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # 6.0.9
-
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # 2.0.2
         with:
-          node-version: ${{ matrix.node }}
-          cache: pnpm
+          bun-version: 1.3.14
 
       - name: Install
-        run: pnpm install
+        run: bun install --frozen-lockfile
 
       - name: Lint
-        run: pnpm lint
+        run: bun run lint
 
       - name: Format
-        run: pnpm format:check
+        run: bun run format:check
 
       - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Build
-        run: pnpm build
+        run: bun run typecheck
 
       - name: Test
-        run: pnpm test
+        run: bun run test
+
+      - name: Check committed integration manifest is fresh
+        run: git diff --exit-code src/integrations/_manifest.ts
+
+      # Compile the same baseline variant that release.yml ships for linux-x64,
+      # not the host-default "modern" build — they embed different Bun runtimes.
+      - name: Build standalone binary
+        env:
+          WORKOS_BUILD_TARGET: bun-linux-x64-baseline
+        run: bun run build
+
+      # Core commands must work standalone: no Bun, no Node.js, no
+      # node_modules, and no network.
+      - name: Smoke test without Bun, Node.js, node_modules, or network
+        run: >-
+          docker run --rm --network none
+          --volume "${PWD}/dist/workos:/workos:ro"
+          --env HOME=/tmp/home
+          debian:bookworm-slim
+          sh -eu -c
+          '/workos --help >/dev/null;
+          /workos auth status --json;
+          /workos api ls users --json >/dev/null;
+          /workos skills list --json >/dev/null'
+
+      # `internal verify-assets` performs the first-run download of the pinned
+      # Agent SDK executable (checksum-verified) and spawns it, so a broken
+      # download path fails every PR here instead of on a user's first
+      # `workos install`. Needs network; still no Bun/Node/node_modules.
+      - name: Smoke test agent runtime first-run download
+        run: >-
+          docker run --rm
+          --volume "${PWD}/dist/workos:/workos:ro"
+          --env HOME=/tmp/home
+          debian:bookworm-slim
+          sh -eu -c
+          '/workos internal verify-assets --json'
+
+      # Prove the npm thin-shim launcher resolves and spawns the platform
+      # binary — the same wiring `npx workos` uses after publish.
+      - name: Smoke test npm launcher packages
+        env:
+          WORKOS_NPM_ALLOW_MISSING: '1'
+        run: |
+          cp dist/workos dist/workos-linux-x64
+          bun run ./scripts/gen-npm-packages.ts
+          NODE_PATH=dist/npm node dist/npm/workos/bin/workos.js --version

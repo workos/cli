@@ -10,7 +10,7 @@ export async function listHistory(limit: number = 10): Promise<void> {
   try {
     files = await readdir(RESULTS_DIR);
   } catch {
-    console.log(chalk.yellow('No eval results found. Run `pnpm eval` first.'));
+    console.log(chalk.yellow('No eval results found. Run `bun run eval` first.'));
     return;
   }
 
@@ -21,7 +21,7 @@ export async function listHistory(limit: number = 10): Promise<void> {
     .slice(0, limit);
 
   if (runFiles.length === 0) {
-    console.log(chalk.yellow('No eval results found. Run `pnpm eval` first.'));
+    console.log(chalk.yellow('No eval results found. Run `bun run eval` first.'));
     return;
   }
 

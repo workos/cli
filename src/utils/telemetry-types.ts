@@ -24,7 +24,12 @@ export interface EnvFingerprint {
   'auth.mode': AuthMode;
   'env.os': string;
   'env.os_version': string;
-  'env.node_version': string;
+  /**
+   * The runtime the CLI itself executes on (`bun-x.y.z` in the compiled
+   * binary). Replaces `env.node_version`, which reported Bun's baked-in
+   * Node-compat constant — not anything about the user's machine.
+   */
+  'env.runtime_version': string;
   'env.shell': string;
   'env.ci': boolean;
   'env.ci_provider'?: string;
