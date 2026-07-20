@@ -6,6 +6,7 @@ import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
 import { isCiMode } from '../utils/interaction-mode.js';
 import type { ArgumentsCamelCase } from 'yargs';
 import { autoInstallSkills } from './install-skill.js';
+import { InstallDeclinedError } from '../lib/installer-errors.js';
 import { maybeOfferMcpInstall } from '../lib/mcp-notice.js';
 
 /**
@@ -44,6 +45,15 @@ export async function handleInstall(argv: ArgumentsCamelCase<InstallerArgs>): Pr
     // (human/TTY-only, decline-respecting) and best-effort — never fails install.
     await maybeOfferMcpInstall({ entryPoint: 'install-flow' });
   } catch (err) {
+    if (err instanceof InstallDeclinedError) {
+      // The integration already printed actionable guidance; exit non-zero
+      // so scripts don't proceed as if AuthKit were installed.
+      if (isJsonMode()) {
+        exitWithError({ code: err.code, message: err.message });
+      }
+      exitWithCode(ExitCode.GENERAL_ERROR);
+    }
+
     const { getLogFilePath } = await import('../utils/debug.js');
     const logPath = getLogFilePath();
 

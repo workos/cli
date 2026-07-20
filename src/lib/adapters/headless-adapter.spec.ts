@@ -455,6 +455,25 @@ describe('HeadlessAdapter', () => {
       });
       await adapter.stop();
     });
+
+    it('passes a structured decline code through without rewriting the message', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      // "internal_error"-style pattern words in the message must not trigger
+      // the AI-service rewrites when the emitter supplied a code.
+      emitter.emit('error', {
+        message: 'Sorry: the installer cannot help with this framework version.',
+        code: 'unsupported_framework_version',
+      });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({
+        type: 'error',
+        code: 'unsupported_framework_version',
+        message: 'Sorry: the installer cannot help with this framework version.',
+      });
+      await adapter.stop();
+    });
   });
 
   describe('staging events', () => {

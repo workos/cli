@@ -132,6 +132,32 @@ describe('handleInstall', () => {
     expect(autoInstallSkills).toHaveBeenCalledOnce();
   });
 
+  describe('declined installs (e.g. unsupported framework version)', () => {
+    it('carries the structured decline code in JSON mode and exits non-zero', async () => {
+      const { InstallDeclinedError } = await import('../lib/installer-errors.js');
+      vi.mocked(runInstaller).mockRejectedValue(new InstallDeclinedError('Next.js 14 is unsupported'));
+      vi.mocked(isJsonMode).mockReturnValue(true);
+
+      await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).rejects.toThrow(CliExit);
+
+      expect(exitWithError).toHaveBeenCalledWith({
+        code: 'unsupported_framework_version',
+        message: 'Next.js 14 is unsupported',
+      });
+    });
+
+    it('exits non-zero without extra output in human mode (guidance already printed)', async () => {
+      const { InstallDeclinedError } = await import('../lib/installer-errors.js');
+      vi.mocked(runInstaller).mockRejectedValue(new InstallDeclinedError('Next.js 14 is unsupported'));
+      vi.mocked(isJsonMode).mockReturnValue(false);
+
+      await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).rejects.toThrow(CliExit);
+
+      expect(exitWithError).not.toHaveBeenCalled();
+      expect(clack.log.info).not.toHaveBeenCalled();
+    });
+  });
+
   describe('CI-mode required-arg validation', () => {
     it('WORKOS_MODE=ci requires --api-key (validation triggered without the --ci flag)', async () => {
       vi.mocked(runInstaller).mockResolvedValue(undefined as any);
