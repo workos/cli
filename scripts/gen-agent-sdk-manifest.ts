@@ -1,11 +1,33 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Same musl detection the runtime's isMuslRuntime() and the napi-rs loaders use:
+// Alpine's ldd is a musl script, and glibc processes report a glibcVersionRuntime
+// header. Without this, a `bun install` on Alpine (postinstall runs generate)
+// would pin the glibc SDK package while the runtime demands the musl one.
+function isMuslHost(): boolean {
+  if (process.platform !== 'linux') return false;
+  try {
+    if (readFileSync('/usr/bin/ldd', 'utf8').includes('musl')) return true;
+  } catch {
+    // No readable /usr/bin/ldd — fall through to the process report.
+  }
+  try {
+    const report = process.report?.getReport() as { header?: { glibcVersionRuntime?: string } } | undefined;
+    if (report?.header) return !report.header.glibcVersionRuntime;
+  } catch {
+    // Report unavailable — assume glibc.
+  }
+  return false;
+}
+
 const projectRoot = join(import.meta.dirname, '..');
 const manifestPath = join(projectRoot, 'src', 'generated', 'agent-sdk-manifest.ts');
-const requestedTarget = process.env.WORKOS_BUILD_TARGET ?? `bun-${process.platform}-${process.arch}`;
+const hostTarget = `bun-${process.platform}-${process.arch}${isMuslHost() ? '-musl' : ''}`;
+const requestedTarget = process.env.WORKOS_BUILD_TARGET ?? hostTarget;
 const normalizedTarget = requestedTarget
   .replace(/^bun-/, '')
   .replace(/-baseline$/, '')
