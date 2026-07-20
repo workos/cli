@@ -60,6 +60,11 @@ import { CliExit } from './utils/cli-exit.js';
 import { telemetryClient } from './utils/telemetry-client.js';
 import { ExitCode } from './utils/exit-codes.js';
 import { analytics } from './utils/analytics.js';
+import { formatWorkOSCommand, getWorkOSCommand } from './utils/command-invocation.js';
+import { MIGRATIONS_DESCRIPTION } from './lib/constants.js';
+// Type-only import (erased at build, does not pull the handler into the startup
+// path) so the `argv.method as VerifyLoginMethod` cast type-checks below.
+import type { VerifyLoginMethod } from './commands/verify-login.js';
 
 // Enable debug logging for all commands via env var.
 // Subsumes the installer's --debug flag for non-installer commands.
@@ -239,6 +244,11 @@ const installerOptions = {
   pm: {
     describe: 'Package manager for the scaffolded app',
     choices: ['npm', 'pnpm', 'yarn', 'bun'] as const,
+    type: 'string' as const,
+  },
+  router: {
+    choices: ['app', 'pages'] as const,
+    describe: 'Next.js router to target when detection is ambiguous (app or pages)',
     type: 'string' as const,
   },
 };
@@ -587,6 +597,46 @@ async function runCli(): Promise<void> {
         await handleDoctor(argv);
       },
     )
+    .command(
+      'verify-login',
+      'Verify the AuthKit login loop end-to-end against the active environment (creates and deletes a throwaway user)',
+      (yargs) =>
+        yargs.options({
+          ...insecureStorageOption,
+          'api-key': {
+            type: 'string' as const,
+            describe: 'WorkOS API key (overrides environment config). Format: sk_test_* (production keys are refused)',
+          },
+          'client-id': {
+            type: 'string' as const,
+            describe: 'WorkOS client ID (overrides the active environment)',
+          },
+          method: {
+            type: 'string' as const,
+            choices: ['password'] as const,
+            default: 'password',
+            describe: 'Authentication method to verify',
+          },
+        }),
+      async (argv) => {
+        await applyInsecureStorage(argv.insecureStorage as boolean | undefined);
+        const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+        const { getActiveEnvironment } = await import('./lib/config-store.js');
+        const { runVerifyLogin } = await import('./commands/verify-login.js');
+
+        const apiKey = resolveApiKey({ apiKey: argv.apiKey as string | undefined }); // exits 4 if none
+        const activeEnv = getActiveEnvironment();
+
+        await runVerifyLogin({
+          apiKey,
+          clientId: (argv.clientId as string | undefined) ?? activeEnv?.clientId,
+          baseUrl: resolveApiBaseUrl(),
+          envType: activeEnv?.type ?? null,
+          envName: activeEnv?.name,
+          method: argv.method as VerifyLoginMethod,
+        });
+      },
+    )
     // NOTE: When adding commands here, also update src/utils/help-json.ts
     .command('env', 'Manage environment configurations (API keys, endpoints, active environment)', (yargs) => {
       yargs.options(insecureStorageOption);
@@ -614,7 +664,7 @@ async function runCli(): Promise<void> {
       registerSubcommand(
         yargs,
         'remove <name>',
-        'Remove an environment configuration',
+        'Remove an environment from local CLI config (does not delete or unclaim the environment in WorkOS)',
         (y) => y.positional('name', { type: 'string', demandOption: true, describe: 'Environment name' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -631,7 +681,7 @@ async function runCli(): Promise<void> {
           if (!argv.name && !isPromptAllowed()) {
             exitWithError({
               code: 'missing_args',
-              message: 'Environment name required. Usage: workos env switch <name>',
+              message: `Environment name required. Usage: ${formatWorkOSCommand('env switch <name>')}`,
             });
           }
           await applyInsecureStorage(argv.insecureStorage);
@@ -653,12 +703,23 @@ async function runCli(): Promise<void> {
       registerSubcommand(
         yargs,
         'claim',
-        'Claim an unclaimed environment (link it to your account)',
+        'Claim an unclaimed environment — link it to your account (permanent — cannot be undone)',
         (y) => y,
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runClaim } = await import('./commands/claim.js');
           await runClaim();
+        },
+      );
+      registerSubcommand(
+        yargs,
+        'provision',
+        'Provision a new unclaimed WorkOS environment (credentials only, no code changes)',
+        (y) => y,
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { runEnvProvision } = await import('./commands/env.js');
+          await runEnvProvision();
         },
       );
       return yargs.demandCommand(1, 'Please specify an env subcommand').strict();
@@ -2471,7 +2532,7 @@ async function runCli(): Promise<void> {
     // Alias — canonical command is `workos env claim`
     .command(
       'claim',
-      'Claim an unclaimed WorkOS environment (link it to your account)',
+      'Claim an unclaimed WorkOS environment — link it to your account (permanent — cannot be undone)',
       (yargs) =>
         yargs.options({
           ...insecureStorageOption,
@@ -2656,11 +2717,11 @@ async function runCli(): Promise<void> {
           await runDebugToken();
         },
       );
-      return yargs.demandCommand(1, 'Run "workos debug <command>" for debug tools.').strict();
+      return yargs.demandCommand(1, `Run "${getWorkOSCommand()} debug <command>" for debug tools.`).strict();
     })
     .command(
       'migrations',
-      'Migrate users from identity providers (Auth0, Cognito, Clerk, Firebase) to WorkOS',
+      MIGRATIONS_DESCRIPTION,
       (yargs) =>
         yargs
           .strictCommands(false)
@@ -2697,9 +2758,15 @@ async function runCli(): Promise<void> {
       'WorkOS AuthKit CLI',
       (yargs) => yargs.options(insecureStorageOption),
       async (argv) => {
-        // Non-human modes: show help instead of prompting
+        // Non-human modes: emit machine-readable command tree (JSON) or the
+        // fully-configured parser help (human non-TTY edge) instead of prompting.
         if (!isPromptAllowed()) {
-          yargs(rawArgs).showHelp();
+          if (isJsonMode()) {
+            const { buildCommandTree } = await import('./utils/help-json.js');
+            outputJson(buildCommandTree());
+          } else {
+            parser.showHelp();
+          }
           return;
         }
 

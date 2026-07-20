@@ -13,10 +13,12 @@ import type {
   WorkspaceCheckOutput,
 } from './installer-core.types.js';
 import type { InstallerOptions } from '../utils/types.js';
+import type { CompletionData } from './events.js';
 import type { DeviceAuthResult, DeviceAuthResponse } from './device-auth.js';
 import type { StagingCredentials } from './staging-api.js';
 import { getManualPrInstructions } from './post-install.js';
 import { hasGhCli } from '../utils/git-utils.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 export const installerMachine = setup({
   types: {
@@ -164,7 +166,7 @@ export const installerMachine = setup({
       context.emitter.emit('staging:fetching', {});
     },
     emitStagingSuccess: ({ context }) => {
-      context.emitter.emit('staging:success', {});
+      context.emitter.emit('staging:success', { source: context.deviceAuth ? 'device' : 'stored' });
     },
     emitStagingError: ({ context }) => {
       const message = context.error?.message ?? 'Failed to fetch staging credentials';
@@ -312,8 +314,11 @@ export const installerMachine = setup({
     },
     emitComplete: ({ context }) => {
       const summary = context.agentSummary ?? 'WorkOS AuthKit installed successfully!';
-      context.emitter.emit('complete', { success: true, summary });
+      context.emitter.emit('complete', { success: true, summary, completion: context.completion });
     },
+    assignCompletion: assign({
+      completion: ({ event }) => (event as unknown as { output?: CompletionData }).output,
+    }),
   },
 
   guards: {
@@ -353,6 +358,9 @@ export const installerMachine = setup({
     }),
     runAgent: fromPromise<AgentOutput, { context: InstallerMachineContext }>(async () => {
       throw new Error('runAgent not implemented - provide via machine.provide()');
+    }),
+    buildCompletion: fromPromise<CompletionData | undefined, { context: InstallerMachineContext }>(async () => {
+      throw new Error('buildCompletion not implemented - provide via machine.provide()');
     }),
     // Credential discovery actors
     detectEnvFiles: fromPromise<EnvFileInfo, { installDir: string }>(async () => {
@@ -704,7 +712,7 @@ export const installerMachine = setup({
                     `Because this directory isn't empty, a new app wasn't scaffolded, and no recognized ` +
                     `framework (such as a package.json with Next.js) was found to install into.\n\n` +
                     `Next steps:\n` +
-                    `  - New app: run \`workos install\` in an empty directory to scaffold Next.js + AuthKit.\n` +
+                    `  - New app: run \`${formatWorkOSCommand('install')}\` in an empty directory to scaffold Next.js + AuthKit.\n` +
                     `  - Existing project: run from the directory that contains your package.json, or pass --install-dir <path>.`,
                 );
               },
@@ -1000,7 +1008,7 @@ export const installerMachine = setup({
         checking: {
           always: [
             {
-              target: '#installer.complete',
+              target: '#installer.buildingCompletion',
               guard: 'shouldSkipPostInstall',
             },
             { target: 'detectingChanges' },
@@ -1156,7 +1164,20 @@ export const installerMachine = setup({
         },
       },
       onDone: {
-        target: 'complete',
+        target: 'buildingCompletion',
+      },
+    },
+
+    // Compute the structured completion payload before entering `complete`.
+    // `emitComplete` is a synchronous entry action, but the builder is async
+    // (lockfile-aware dev command, port detection), so it must run in an actor
+    // first. Errors never block completion — they fall through to the static box.
+    buildingCompletion: {
+      invoke: {
+        src: 'buildCompletion',
+        input: ({ context }) => ({ context }),
+        onDone: { target: 'complete', actions: ['assignCompletion'] },
+        onError: { target: 'complete' },
       },
     },
 

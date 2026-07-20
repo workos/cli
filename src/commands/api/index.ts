@@ -7,7 +7,7 @@ import { exitWithError, isJsonMode, outputJson } from '../../utils/output.js';
 import { ExitCode, exitWithCode } from '../../utils/exit-codes.js';
 import { isCiMode, isPromptAllowed } from '../../utils/interaction-mode.js';
 import { confirmationRecovery } from '../../utils/recovery-hints.js';
-import { formatWorkOSCommandArgs } from '../../utils/command-invocation.js';
+import { formatWorkOSCommand, formatWorkOSCommandArgs } from '../../utils/command-invocation.js';
 import { colorMethod, printResponse } from './format.js';
 
 export { colorMethod } from './format.js';
@@ -31,9 +31,9 @@ export async function runApiInteractive(options?: { apiKey?: string }): Promise<
   if (isJsonMode()) {
     exitWithError({
       code: 'tty_required',
-      message: 'Interactive mode is not available with --json. Provide an endpoint or use `workos api ls`.',
+      message: `Interactive mode is not available with --json. Provide an endpoint or use \`${formatWorkOSCommand('api ls')}\`.`,
       details: {
-        usage: ['workos api <endpoint>', 'workos api ls [filter]'],
+        usage: [formatWorkOSCommand('api <endpoint>'), formatWorkOSCommand('api ls [filter]')],
       },
     });
   }
@@ -41,8 +41,7 @@ export async function runApiInteractive(options?: { apiKey?: string }): Promise<
   if (!isPromptAllowed()) {
     exitWithError({
       code: 'tty_required',
-      message:
-        'Interactive API mode requires human mode. Usage: workos api <endpoint> or workos api ls [filter]. Example: workos api /user_management/users',
+      message: `Interactive API mode requires human mode. Usage: ${formatWorkOSCommand('api <endpoint>')} or ${formatWorkOSCommand('api ls [filter]')}. Example: ${formatWorkOSCommand('api /user_management/users')}`,
     });
   }
 

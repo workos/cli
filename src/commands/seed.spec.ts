@@ -285,6 +285,64 @@ config:
     });
   });
 
+  describe('command hints route through formatWorkOSCommand', () => {
+    const NPM_KEYS = ['npm_command', 'npm_execpath', 'npm_config_user_agent'] as const;
+    let saved: Record<string, string | undefined>;
+
+    beforeEach(() => {
+      saved = {};
+      for (const k of NPM_KEYS) {
+        saved[k] = process.env[k];
+        delete process.env[k];
+      }
+      process.env.npm_command = 'exec';
+      setOutputMode('json');
+    });
+
+    afterEach(() => {
+      setOutputMode('human');
+      for (const k of NPM_KEYS) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+    });
+
+    function lastErrorMessage(): string {
+      const line = [...consoleErrors].reverse().find((l) => {
+        try {
+          return typeof (JSON.parse(l) as { error?: { message?: string } }).error?.message === 'string';
+        } catch {
+          return false;
+        }
+      });
+      expect(line).toBeDefined();
+      return (JSON.parse(line!) as { error: { message: string } }).error.message;
+    }
+
+    it('missing --file error carries the npx seed hints', async () => {
+      await expect(runSeed({}, 'sk_test')).rejects.toThrow(CliExit);
+      const message = lastErrorMessage();
+      expect(message).toContain('npx workos@latest seed --file=workos-seed.yml');
+      expect(message).toContain('npx workos@latest seed --init');
+    });
+
+    it('file-not-found error carries the npx seed hint', async () => {
+      mockExistsSync.mockReturnValue(false);
+      await expect(runSeed({ file: 'missing.yml' }, 'sk_test')).rejects.toThrow(CliExit);
+      expect(lastErrorMessage()).toContain('npx workos@latest seed');
+    });
+
+    it('seed-failed error carries the npx seed --clean hint', async () => {
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(FULL_SEED_YAML);
+      mockSdk.authorization.createPermission.mockResolvedValue({ slug: 'read-users' });
+      mockSdk.authorization.createEnvironmentRole.mockRejectedValue(new Error('Server exploded'));
+
+      await expect(runSeed({ file: 'workos-seed.yml' }, 'sk_test')).rejects.toThrow(CliExit);
+      expect(lastErrorMessage()).toContain('npx workos@latest seed --clean');
+    });
+  });
+
   describe('runSeed --clean', () => {
     it('deletes resources in reverse order: orgs → permissions', async () => {
       mockExistsSync.mockReturnValue(true);

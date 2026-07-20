@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 vi.mock('../run.js', () => ({
   runInstaller: vi.fn(),
@@ -31,14 +31,19 @@ const { runInstaller } = await import('../run.js');
 const { autoInstallSkills } = await import('./install-skill.js');
 const { maybeOfferMcpInstall } = await import('../lib/mcp-notice.js');
 const clack = (await import('../utils/clack.js')).default;
-const { isJsonMode } = await import('../utils/output.js');
+const { isJsonMode, exitWithError } = await import('../utils/output.js');
 const { CliExit } = await import('../utils/cli-exit.js');
+const { setInteractionMode, resetInteractionModeForTests } = await import('../utils/interaction-mode.js');
 
 const { handleInstall } = await import('./install.js');
 
 describe('handleInstall', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    resetInteractionModeForTests();
   });
 
   it('calls autoInstallSkills after successful install', async () => {
@@ -125,5 +130,44 @@ describe('handleInstall', () => {
 
     expect(runInstaller).toHaveBeenCalledOnce();
     expect(autoInstallSkills).toHaveBeenCalledOnce();
+  });
+
+  describe('CI-mode required-arg validation', () => {
+    it('WORKOS_MODE=ci requires --api-key (validation triggered without the --ci flag)', async () => {
+      vi.mocked(runInstaller).mockResolvedValue(undefined as any);
+      vi.mocked(autoInstallSkills).mockResolvedValue(null);
+      setInteractionMode({ mode: 'ci', source: 'env' });
+
+      await handleInstall({ _: ['install'], $0: 'workos' } as any);
+
+      expect(exitWithError).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'missing_args', message: expect.stringContaining('--api-key') }),
+      );
+    });
+
+    it('WORKOS_MODE=ci with all required args does not error', async () => {
+      vi.mocked(runInstaller).mockResolvedValue(undefined as any);
+      vi.mocked(autoInstallSkills).mockResolvedValue(null);
+      setInteractionMode({ mode: 'ci', source: 'env' });
+
+      await handleInstall({
+        _: ['install'],
+        $0: 'workos',
+        apiKey: 'sk_test',
+        clientId: 'client_x',
+        installDir: '/tmp/x',
+      } as any);
+
+      expect(exitWithError).not.toHaveBeenCalled();
+    });
+
+    it('default (human) mode does not trigger CI validation', async () => {
+      vi.mocked(runInstaller).mockResolvedValue(undefined as any);
+      vi.mocked(autoInstallSkills).mockResolvedValue(null);
+
+      await handleInstall({ _: ['install'], $0: 'workos' } as any);
+
+      expect(exitWithError).not.toHaveBeenCalled();
+    });
   });
 });

@@ -5,6 +5,7 @@ import type { InteractionModeSource } from '../utils/interaction-mode.js';
 import type { DoctorReport, Issue } from './types.js';
 import { renderSummaryBox, type SummaryBoxItem } from '../utils/summary-box.js';
 import type { LockExpression } from '../utils/lock-art.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 export interface FormatOptions {
   verbose?: boolean;
@@ -270,7 +271,7 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
       expression,
       title,
       items,
-      footer: 'workos doctor --copy | https://workos.com/docs',
+      footer: `${formatWorkOSCommand('doctor --copy')} | https://workos.com/docs`,
     }),
   );
   console.log('');

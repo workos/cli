@@ -1,5 +1,6 @@
 import type { Issue, DoctorReport } from './types.js';
 import { getInstallHint, languageToSdkLanguage } from './checks/language.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 export const ISSUE_DEFINITIONS = {
   MISSING_API_KEY: {
@@ -172,7 +173,7 @@ export function detectIssues(report: Omit<DoctorReport, 'issues' | 'summary'>): 
         code: 'SKILLS_OUTDATED',
         severity: 'warning',
         message: `WorkOS skills outdated for ${agentList} — bundled: ${report.skills.bundledVersion}`,
-        remediation: 'Run: workos skills install',
+        remediation: `Run: ${formatWorkOSCommand('skills install')}`,
         details: { bundledVersion: report.skills.bundledVersion, stale: stale.map((a) => a.agent) },
       });
     }
@@ -189,7 +190,7 @@ export function detectIssues(report: Omit<DoctorReport, 'issues' | 'summary'>): 
         code: 'MCP_MISCONFIGURED',
         severity: 'warning',
         message: `WorkOS MCP server configured with an unexpected URL for ${agentList} — expected ${report.mcp.serverUrl}`,
-        remediation: 'Run: workos mcp install',
+        remediation: `Run: ${formatWorkOSCommand('mcp install')}`,
         details: { agents: misconfigured.map((a) => a.agent), expectedUrl: report.mcp.serverUrl },
       });
     }

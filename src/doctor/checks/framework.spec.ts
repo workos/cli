@@ -89,6 +89,14 @@ describe('checkFramework - new frameworks', () => {
     expect(result.name).toBe('SvelteKit');
   });
 
+  it('reports the vite.config port for a modern TanStack Start app (detectPort fan-out)', async () => {
+    await writeFile(join(dir, 'package.json'), makePackageJson({ '@tanstack/react-start': '^1.0.0' }));
+    await writeFile(join(dir, 'vite.config.ts'), 'export default { server: { host: "::", port: 8080 } }\n');
+    const result = await checkFramework({ installDir: dir });
+    expect(result.name).toBe('TanStack Start');
+    expect(result.detectedPort).toBe(8080);
+  });
+
   it('returns null for no frameworks', async () => {
     await writeFile(join(dir, 'package.json'), makePackageJson({}));
     const result = await checkFramework({ installDir: dir });

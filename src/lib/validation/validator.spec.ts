@@ -373,7 +373,7 @@ describe('validateInstallation', () => {
       // Redirect URI says /auth/callback but route is at /callback
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost:5173/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       // Route exists at DIFFERENT path (dot notation)
       mkdirSync(join(testDir, 'app', 'routes'), { recursive: true });
@@ -390,7 +390,7 @@ describe('validateInstallation', () => {
       writeFileSync(join(testDir, 'package.json'), JSON.stringify({ dependencies: { 'react-router': '^7.0.0' } }));
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost:5173/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       // Route at correct path using dot notation: auth.callback.tsx
       mkdirSync(join(testDir, 'app', 'routes'), { recursive: true });
@@ -817,6 +817,176 @@ describe('validateInstallation', () => {
       const envIssue = result.issues.find((i) => i.type === 'env' && i.message.includes('WORKOS_CLIENT_ID'));
       expect(envIssue?.hint).toContain('REACT_APP_WORKOS_CLIENT_ID');
       expect(envIssue?.hint).toContain('VITE_WORKOS_CLIENT_ID');
+    });
+  });
+
+  describe('redirect URI port validation', () => {
+    const portError = (result: { issues: { severity: string; message: string }[] }) =>
+      result.issues.find((i) => i.severity === 'error' && /port/i.test(i.message));
+
+    it('flags TanStack redirect URI port that mismatches the vite.config port (friction scenario)', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@tanstack/react-start': '^1.0.0' } }),
+      );
+      // dev server runs on 8080 (Vite), but the redirect URI points at :3000
+      writeFileSync(join(testDir, 'vite.config.ts'), 'export default { server: { host: "::", port: 8080 } }\n');
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_1234567890123456789012345\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      mkdirSync(join(testDir, 'app', 'routes', 'auth', 'callback'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'app', 'routes', 'auth', 'callback', 'index.tsx'),
+        'export default function Callback() {}',
+      );
+
+      const result = await validateInstallation('tanstack-start', testDir, { runBuild: false });
+
+      expect(result.passed).toBe(false);
+      expect(portError(result)).toBeDefined();
+    });
+
+    it('does not flag a port issue when TanStack redirect URI port matches the vite.config port', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@tanstack/react-start': '^1.0.0' } }),
+      );
+      writeFileSync(join(testDir, 'vite.config.ts'), 'export default { server: { host: "::", port: 8080 } }\n');
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_1234567890123456789012345\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost:8080/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      mkdirSync(join(testDir, 'app', 'routes', 'auth', 'callback'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'app', 'routes', 'auth', 'callback', 'index.tsx'),
+        'export default function Callback() {}',
+      );
+
+      const result = await validateInstallation('tanstack-start', testDir, { runBuild: false });
+
+      expect(portError(result)).toBeUndefined();
+      const mismatchIssue = result.issues.find((i) => i.message.includes('no matching route file'));
+      expect(mismatchIssue).toBeUndefined();
+    });
+
+    it('flags React Router redirect URI port against the default 5173 (helper in isolation)', async () => {
+      writeFileSync(join(testDir, 'package.json'), JSON.stringify({ dependencies: { 'react-router': '^7.0.0' } }));
+      // No vite.config → detected port is the RR default 5173; env points at :3000
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_1234567890123456789012345\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      mkdirSync(join(testDir, 'app', 'routes'), { recursive: true });
+      writeFileSync(join(testDir, 'app', 'routes', 'callback.tsx'), 'export default function Callback() {}');
+
+      const result = await validateInstallation('react-router', testDir, { runBuild: false });
+
+      expect(result.passed).toBe(false);
+      expect(portError(result)).toBeDefined();
+    });
+
+    it('flags Next.js redirect URI port against a -p dev-script port', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({
+          dependencies: { '@workos-inc/authkit-nextjs': '^1.0.0' },
+          scripts: { dev: 'next dev -p 4000' },
+        }),
+      );
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_1234567890123456789012345\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/api/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      mkdirSync(join(testDir, 'app', 'api', 'auth', 'callback'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'app', 'api', 'auth', 'callback', 'route.ts'),
+        "import { handleAuth } from '@workos-inc/authkit-nextjs';",
+      );
+      writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
+      writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
+
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+
+      expect(portError(result)).toBeDefined();
+    });
+
+    it('skips the port check for non-local (production) hosts', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@tanstack/react-start': '^1.0.0' } }),
+      );
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_1234567890123456789012345\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=https://app.example.com/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      mkdirSync(join(testDir, 'app', 'routes', 'auth', 'callback'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'app', 'routes', 'auth', 'callback', 'index.tsx'),
+        'export default function Callback() {}',
+      );
+
+      const result = await validateInstallation('tanstack-start', testDir, { runBuild: false });
+
+      expect(portError(result)).toBeUndefined();
+    });
+
+    it('normalizes a missing port to the protocol default (80) before comparing', async () => {
+      writeFileSync(join(testDir, 'package.json'), JSON.stringify({ dependencies: { 'react-router': '^7.0.0' } }));
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_1234567890123456789012345\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      mkdirSync(join(testDir, 'app', 'routes'), { recursive: true });
+      writeFileSync(join(testDir, 'app', 'routes', 'callback.tsx'), 'export default function Callback() {}');
+
+      const result = await validateInstallation('react-router', testDir, { runBuild: false });
+
+      expect(portError(result)).toBeDefined();
+    });
+
+    it('recognizes the IPv6 localhost form [::1]', async () => {
+      writeFileSync(join(testDir, 'package.json'), JSON.stringify({ dependencies: { 'react-router': '^7.0.0' } }));
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_1234567890123456789012345\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://[::1]:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      mkdirSync(join(testDir, 'app', 'routes'), { recursive: true });
+      writeFileSync(join(testDir, 'app', 'routes', 'callback.tsx'), 'export default function Callback() {}');
+
+      const result = await validateInstallation('react-router', testDir, { runBuild: false });
+
+      expect(portError(result)).toBeDefined();
+    });
+
+    it('route-mismatch hint uses the redirect URI real origin, not a hardcoded localhost:3000', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({
+          dependencies: { '@workos-inc/authkit-nextjs': '^1.0.0' },
+          scripts: { dev: 'next dev -p 8080' },
+        }),
+      );
+      // detected port (8080) matches the env port so no port-mismatch noise
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_1234567890123456789012345\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:8080/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      // route lives at a DIFFERENT path → triggers the mismatch hint
+      mkdirSync(join(testDir, 'app', 'api', 'auth', 'callback'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'app', 'api', 'auth', 'callback', 'route.ts'),
+        "import { handleAuth } from '@workos-inc/authkit-nextjs';",
+      );
+      writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
+      writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
+
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+
+      const mismatchIssue = result.issues.find((i) => i.message.includes('no matching route file'));
+      expect(mismatchIssue).toBeDefined();
+      expect(mismatchIssue?.hint).toContain('http://localhost:8080');
+      expect(mismatchIssue?.hint).not.toContain('localhost:3000');
     });
   });
 });

@@ -1,3 +1,5 @@
+import { getWorkOSCommand } from '../utils/command-invocation.js';
+
 const workosOnlyMigrationsFlags = new Map([
   ['--api-key', true],
   ['--insecure-storage', false],
@@ -58,6 +60,6 @@ export async function runMigrations(args: string[], apiKey?: string, apiBaseUrl?
     };
   };
 
-  program.name('workos migrations');
+  program.name(`${getWorkOSCommand()} migrations`);
   await program.parseAsync(args, { from: 'user' });
 }

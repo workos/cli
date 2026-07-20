@@ -143,6 +143,13 @@ export interface UIConfig {
 
   /** Generate "Next steps" bullets from context */
   getOutroNextSteps: (context: any) => string[];
+
+  /**
+   * Optional per-framework "add a sign-in link" snippet, surfaced as a next
+   * step in the completion summary. Only defined for frameworks that scaffold
+   * interactive auth UI. Copy must stay accurate to what the agent scaffolds.
+   */
+  getSignInSnippet?: (context: any) => string;
 }
 
 /**

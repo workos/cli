@@ -352,6 +352,39 @@ describe('vault-run', () => {
       expect(exitErrors[0].message).toMatch(/no-such-env/);
       expect(mockSpawn).not.toHaveBeenCalled();
     });
+
+    describe('command hints route through formatWorkOSCommand', () => {
+      const NPM_KEYS = ['npm_command', 'npm_execpath', 'npm_config_user_agent'] as const;
+      let saved: Record<string, string | undefined>;
+
+      beforeEach(() => {
+        saved = {};
+        for (const k of NPM_KEYS) {
+          saved[k] = process.env[k];
+          delete process.env[k];
+        }
+        process.env.npm_command = 'exec';
+      });
+
+      afterEach(() => {
+        for (const k of NPM_KEYS) {
+          if (saved[k] === undefined) delete process.env[k];
+          else process.env[k] = saved[k];
+        }
+      });
+
+      it('missing-command usage error carries the npx form', async () => {
+        await expect(runVaultRun({ secrets: ['DB_URL=db'], command: [] })).rejects.toThrow(/__EXIT__/);
+        expect(exitErrors[0].message).toContain('npx workos@latest vault run --secret ENV=name -- command');
+      });
+
+      it('unknown-env error carries the npx env-list hint', async () => {
+        await expect(runVaultRun({ secrets: ['DB_URL=db'], command: ['echo'], env: 'no-such-env' })).rejects.toThrow(
+          /__EXIT__/,
+        );
+        expect(exitErrors[0].message).toContain('npx workos@latest env list');
+      });
+    });
   });
 
   describe('JSON mode metadata on execution', () => {

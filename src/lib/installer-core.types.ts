@@ -1,4 +1,4 @@
-import type { InstallerEventEmitter } from './events.js';
+import type { InstallerEventEmitter, CompletionData } from './events.js';
 import type { InstallerOptions } from '../utils/types.js';
 import type { Integration } from './constants.js';
 import type { PackageManager } from './scaffold/scaffold.js';
@@ -68,6 +68,8 @@ export interface InstallerMachineContext {
   autoScaffold?: boolean;
   /** Whether create-next-app actually ran and succeeded (for telemetry) */
   scaffolded?: boolean;
+  /** Structured completion data for the success summary (built pre-complete) */
+  completion?: CompletionData;
 }
 
 /**
