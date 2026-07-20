@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AGENT_SDK_TARGET, AGENT_SDK_VERSION } from '../generated/agent-sdk-manifest.js';
-import { ensureClaudeCodeExecutable, extractTarEntry } from './agent-sdk-assets.js';
+import { downloadTarball, ensureClaudeCodeExecutable, extractTarEntry } from './agent-sdk-assets.js';
 
 function tarHeader(name: string, size: number): Buffer {
   const header = Buffer.alloc(512);
@@ -59,5 +59,65 @@ describe('extractTarEntry', () => {
   it('throws when the entry is missing', () => {
     const tarball = makeTarball([['package/package.json', Buffer.from('{}')]]);
     expect(() => extractTarEntry(tarball, 'package/claude')).toThrow(/not found/);
+  });
+});
+
+describe('downloadTarball', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function streamedResponse(body: Buffer): Response {
+    let sent = false;
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: (name: string) => (name === 'content-length' ? String(body.length) : null) },
+      body: {
+        getReader() {
+          return {
+            read: async () =>
+              sent ? { done: true, value: undefined } : ((sent = true), { done: false, value: new Uint8Array(body) }),
+          };
+        },
+      },
+    } as unknown as Response;
+  }
+
+  it('retries once when the first attempt fails, then succeeds', async () => {
+    const tarball = makeTarball([['package/claude', Buffer.from('binary')]]);
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('connection reset'))
+      .mockResolvedValueOnce(streamedResponse(tarball));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await downloadTarball();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.equals(tarball)).toBe(true);
+  });
+
+  it('aborts a stalled download and reports it after retrying', async () => {
+    const fetchMock = vi.fn((_url: string, init?: { signal?: AbortSignal }) =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        body: {
+          getReader() {
+            return {
+              read: () =>
+                new Promise((_resolve, reject) => {
+                  init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+                }),
+            };
+          },
+        },
+      } as unknown as Response),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(downloadTarball(undefined, 20)).rejects.toThrow(/stalled/);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

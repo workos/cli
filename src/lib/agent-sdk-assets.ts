@@ -113,26 +113,76 @@ export function extractTarEntry(tarGz: Buffer, entryName: string): Buffer {
   throw new Error(`Entry ${entryName} not found in tarball`);
 }
 
-async function downloadTarball(onProgress?: (progress: DownloadProgress) => void): Promise<Buffer> {
-  const response = await fetch(AGENT_SDK_TARBALL_URL);
-  if (!response.ok || !response.body) {
-    throw new Error(`Download failed: HTTP ${response.status} from ${AGENT_SDK_TARBALL_URL}`);
-  }
-  const contentLength = Number(response.headers.get('content-length'));
-  const totalBytes = Number.isFinite(contentLength) && contentLength > 0 ? contentLength : null;
+/** Abort a download that goes this long without a data chunk, so a stalled connection can't hang forever. */
+const DOWNLOAD_STALL_TIMEOUT_MS = 30_000;
 
-  const chunks: Uint8Array[] = [];
-  let receivedBytes = 0;
-  const reader = response.body.getReader();
-  onProgress?.({ receivedBytes, totalBytes });
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    receivedBytes += value.byteLength;
+async function downloadTarballOnce(
+  url: string,
+  onProgress: ((progress: DownloadProgress) => void) | undefined,
+  stallTimeoutMs: number,
+): Promise<Buffer> {
+  const controller = new AbortController();
+  let stalled = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const armStallTimer = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      stalled = true;
+      controller.abort();
+    }, stallTimeoutMs);
+  };
+
+  armStallTimer();
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok || !response.body) {
+      throw new Error(`Download failed: HTTP ${response.status} from ${url}`);
+    }
+    const contentLength = Number(response.headers.get('content-length'));
+    const totalBytes = Number.isFinite(contentLength) && contentLength > 0 ? contentLength : null;
+
+    const chunks: Uint8Array[] = [];
+    let receivedBytes = 0;
+    const reader = response.body.getReader();
     onProgress?.({ receivedBytes, totalBytes });
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      armStallTimer();
+      chunks.push(value);
+      receivedBytes += value.byteLength;
+      onProgress?.({ receivedBytes, totalBytes });
+    }
+    return Buffer.concat(chunks);
+  } catch (error) {
+    if (stalled) {
+      throw new Error(`Download stalled: no data from ${url} for ${stallTimeoutMs / 1000}s`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
   }
-  return Buffer.concat(chunks);
+}
+
+/**
+ * Download the pinned tarball, retrying once on any network, stall, or HTTP
+ * failure. Checksum verification stays in the caller and is never retried.
+ * Exported for tests.
+ */
+export async function downloadTarball(
+  onProgress?: (progress: DownloadProgress) => void,
+  stallTimeoutMs: number = DOWNLOAD_STALL_TIMEOUT_MS,
+): Promise<Buffer> {
+  const url = AGENT_SDK_TARBALL_URL;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await downloadTarballOnce(url, onProgress, stallTimeoutMs);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
 }
 
 /**
