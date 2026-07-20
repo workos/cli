@@ -5,6 +5,7 @@ import { createApiErrorHandler } from '../lib/api-error-handler.js';
 import { isJsonMode, outputJson, exitWithError } from '../utils/output.js';
 import { formatTable } from '../utils/table.js';
 import { SPAWN_OPTS, IS_WINDOWS } from '../utils/platform.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 const handleApiError = createApiErrorHandler('Vault');
 
@@ -97,7 +98,7 @@ async function resolveRunApiKey(envName: string | undefined, flagApiKey?: string
   if (!env || !env.apiKey) {
     exitWithError({
       code: 'env_not_found',
-      message: `Environment '${envName}' not found or has no API key. Run 'workos env list' to see available environments.`,
+      message: `Environment '${envName}' not found or has no API key. Run '${formatWorkOSCommand('env list')}' to see available environments.`,
     });
   }
   return env.apiKey;
@@ -205,7 +206,7 @@ export async function runVaultRun(options: VaultRunOptions, flagApiKey?: string)
   if (!options.command || options.command.length === 0) {
     exitWithError({
       code: 'missing_command',
-      message: 'No command specified. Usage: workos vault run --secret ENV=name -- command',
+      message: `No command specified. Usage: ${formatWorkOSCommand('vault run --secret ENV=name -- command')}`,
     });
   }
 

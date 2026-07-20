@@ -160,6 +160,56 @@ describe('runApiInteractive', () => {
     });
     expect(errorLine).toBeDefined();
   });
+
+  describe('command hints route through formatWorkOSCommand', () => {
+    const NPM_KEYS = ['npm_command', 'npm_execpath', 'npm_config_user_agent'] as const;
+    let saved: Record<string, string | undefined>;
+
+    beforeEach(() => {
+      saved = {};
+      for (const k of NPM_KEYS) {
+        saved[k] = process.env[k];
+        delete process.env[k];
+      }
+    });
+
+    afterEach(() => {
+      for (const k of NPM_KEYS) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+    });
+
+    function parseTtyError(): { message?: string; details?: { usage?: string[] } } {
+      const errorLine = stderrOutput.find((line) => {
+        try {
+          return (JSON.parse(line) as { error?: { code?: string } }).error?.code === 'tty_required';
+        } catch {
+          return false;
+        }
+      });
+      expect(errorLine).toBeDefined();
+      return (JSON.parse(errorLine!) as { error: { message?: string; details?: { usage?: string[] } } }).error;
+    }
+
+    it('JSON refusal carries the bare form when not launched via npx', async () => {
+      setOutputMode('json');
+      await expectExit(runApiInteractive(), 1);
+      const error = parseTtyError();
+      expect(error.message).toContain('workos api ls');
+      expect(error.details?.usage).toContain('workos api <endpoint>');
+      expect(error.details?.usage?.some((u) => u.includes('npx'))).toBe(false);
+    });
+
+    it('JSON refusal keeps the standalone binary form when npm variables are present', async () => {
+      process.env.npm_command = 'exec';
+      setOutputMode('json');
+      await expectExit(runApiInteractive(), 1);
+      const error = parseTtyError();
+      expect(error.message).toContain('workos api ls');
+      expect(error.details?.usage).toContain('workos api <endpoint>');
+    });
+  });
 });
 
 describe('runApiLs', () => {

@@ -20,6 +20,10 @@ interface BaseEnvironmentConfig {
   name: string;
   apiKey: string;
   endpoint?: string;
+  /** Email of the account that owns this environment. Stamped when `auth login` provisions Staging for a known account; undefined for unclaimed/manually-added envs. */
+  ownerEmail?: string;
+  /** User ID of the account that owns this environment. Stamped alongside ownerEmail. */
+  ownerUserId?: string;
 }
 
 export interface ClaimedEnvironmentConfig extends BaseEnvironmentConfig {
@@ -235,6 +239,27 @@ export function getActiveEnvironment(): EnvironmentConfig | null {
   return config.environments[config.activeEnvironment] ?? null;
 }
 
+/**
+ * Set the active environment by name.
+ *
+ * No-op when there is no config or the named environment does not exist —
+ * callers should not be able to point `activeEnvironment` at a missing key.
+ */
+export function setActiveEnvironment(name: string): void {
+  const config = getConfig();
+  if (!config || !config.environments[name]) return;
+  config.activeEnvironment = name;
+  saveConfig(config);
+}
+
+/** Pick a non-colliding environments key: `base`, else `base-2`, `base-3`, … */
+export function freshEnvKey(config: CliConfig, base: string): string {
+  if (!config.environments[base]) return base;
+  let i = 2;
+  while (config.environments[`${base}-${i}`]) i++;
+  return `${base}-${i}`;
+}
+
 export function getConfigPath(): string {
   return getConfigFilePath();
 }
@@ -301,6 +326,8 @@ export function markEnvironmentClaimed(): void {
       apiKey: env.apiKey,
       clientId: env.clientId,
       ...(env.endpoint && { endpoint: env.endpoint }),
+      ...(env.ownerEmail && { ownerEmail: env.ownerEmail }),
+      ...(env.ownerUserId && { ownerUserId: env.ownerUserId }),
     };
 
     if (oldKey !== newKey) {

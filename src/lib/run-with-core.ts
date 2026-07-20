@@ -4,6 +4,10 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { installerMachine } from './installer-core.js';
 import { createInstallerEventEmitter } from './events.js';
+import type { CompletionData } from './events.js';
+import { buildCompletionData } from './completion-data.js';
+import { resolveDevCommand } from './dev-command.js';
+import { getConfig as getInstallerSettings } from './settings.js';
 import { CLIAdapter } from './adapters/cli-adapter.js';
 import { DashboardAdapter } from './adapters/dashboard-adapter.js';
 import type { InstallerAdapter } from './adapters/types.js';
@@ -224,6 +228,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         noCommit: augmentedOptions.noCommit,
         createPr: augmentedOptions.createPr,
         noGitCheck: augmentedOptions.noGitCheck,
+        ci: augmentedOptions.ci,
       },
     });
   } else if (options.dashboard) {
@@ -335,6 +340,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
             ...installerOptions,
             apiKey: credentials?.apiKey,
             clientId: credentials?.clientId,
+            credentialSource: context.credentialSource,
             emitter: context.emitter,
           };
           const summary = await runIntegrationInstallerFn(integration, agentOptions);
@@ -349,6 +355,33 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
           };
         }
       }),
+
+      buildCompletion: fromPromise<CompletionData | undefined, { context: InstallerMachineContext }>(
+        async ({ input }) => {
+          const { integration, changedFiles, options: installerOptions } = input.context;
+          if (!integration) return undefined;
+          try {
+            const registry = await getRegistry();
+            const mod = registry.get(integration);
+            const cfg = mod?.config;
+            const settings = getInstallerSettings();
+            return await buildCompletionData(
+              { integration, changedFiles, installDir: installerOptions.installDir },
+              {
+                resolveDevCommand,
+                detectPort,
+                docsUrl: cfg?.metadata.docsUrl ?? settings.documentation.workosDocsUrl,
+                dashboardUrl: settings.documentation.dashboardUrl,
+                frameworkNextSteps: cfg?.ui.getOutroNextSteps?.({}) ?? [],
+                signInSnippet: cfg?.ui.getSignInSnippet?.({}),
+              },
+            );
+          } catch {
+            // Degrade to the static fallback box rather than blocking completion.
+            return undefined;
+          }
+        },
+      ),
 
       // Credential discovery actors
       detectEnvFiles: fromPromise(async ({ input }) => {

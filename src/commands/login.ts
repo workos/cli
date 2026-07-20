@@ -6,12 +6,12 @@ import { getCliAuthClientId, getAuthkitDomain } from '../lib/settings.js';
 import { refreshAccessToken } from '../lib/token-refresh-client.js';
 import { logInfo, logError } from '../utils/debug.js';
 import { fetchStagingCredentials } from '../lib/staging-api.js';
-import { getConfig, saveConfig } from '../lib/config-store.js';
-import type { CliConfig } from '../lib/config-store.js';
+import { getConfig, saveConfig, getActiveEnvironment, setActiveEnvironment, freshEnvKey } from '../lib/config-store.js';
+import type { CliConfig, EnvironmentConfig } from '../lib/config-store.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
 import { autoInstallSkills } from './install-skill.js';
-import { isJsonMode } from '../utils/output.js';
-import { isAgentMode, isCiMode } from '../utils/interaction-mode.js';
+import { isJsonMode, outputJson } from '../utils/output.js';
+import { isAgentMode, isCiMode, isPromptAllowed } from '../utils/interaction-mode.js';
 import { ExitCode, exitWithAuthRequired, exitWithCode } from '../utils/exit-codes.js';
 import { requestDeviceCode, pollForToken, DeviceAuthTimeoutError } from '../lib/device-auth.js';
 import { observeHostFailure } from '../lib/host-probe.js';
@@ -51,36 +51,95 @@ export async function installSkillsAfterLogin(): Promise<void> {
 }
 
 /**
+ * Result of a post-login staging provision. Carries enough context for
+ * `runLogin` to detect a cross-account switch and decide how to surface it
+ * without ever silently repointing the active environment.
+ */
+export interface StagingProvisionResult {
+  provisioned: boolean;
+  /** Active env name AFTER provisioning (unchanged unless there was no prior active env). */
+  activeEnvironment?: string;
+  /** Key the new Staging env was written under ('staging' or a fresh 'staging-N'). */
+  envName?: string;
+  mismatch: boolean;
+  priorEnvName?: string;
+  priorAccount?: { email?: string; clientId?: string };
+}
+
+/**
+ * Does the just-authenticated account differ from the account that owns `prior`?
+ *
+ * Email comparison wins when both sides have it (human-readable, survives a
+ * clientId reissue); otherwise fall back to clientId. When neither is available
+ * we cannot tell — return false and let the always-on "Now using" line protect
+ * the user.
+ */
+function isMismatch(
+  prior: EnvironmentConfig | undefined,
+  account: { email?: string },
+  staging: { clientId: string },
+): boolean {
+  if (!prior) return false;
+  if (prior.ownerEmail && account.email) return prior.ownerEmail !== account.email;
+  if (prior.clientId) return prior.clientId !== staging.clientId;
+  return false;
+}
+
+/**
  * Auto-provision a staging environment after login.
  *
- * Fetches staging credentials using the access token, then saves them
- * as a "staging" environment in the config store. Non-fatal — logs a
- * hint on failure instead of throwing.
+ * Fetches staging credentials for the just-authenticated account and stores
+ * them. On a detected cross-account mismatch, the new account's Staging is
+ * written under a DISTINCT key rather than clobbering the active slot, and the
+ * active pointer is left alone — only a login onto an empty config auto-assigns
+ * the active env. Non-fatal — logs a hint on failure instead of throwing.
  */
-export async function provisionStagingEnvironment(accessToken: string): Promise<boolean> {
+export async function provisionStagingEnvironment(
+  accessToken: string,
+  account: { email?: string; userId: string },
+): Promise<StagingProvisionResult> {
   try {
     const staging = await fetchStagingCredentials(accessToken);
 
     const config: CliConfig = getConfig() ?? { environments: {} };
-    const isFirst = Object.keys(config.environments).length === 0;
 
-    config.environments['staging'] = {
-      name: 'staging',
+    const priorName = config.activeEnvironment;
+    const prior = priorName ? config.environments[priorName] : undefined; // capture BEFORE write
+    const mismatch = isMismatch(prior, account, staging);
+
+    // Never overwrite a DIFFERENT account's 'staging' slot in place.
+    const stagingSlot = config.environments['staging'];
+    const slotMismatch = isMismatch(stagingSlot, account, staging);
+    const key = slotMismatch ? freshEnvKey(config, 'staging') : 'staging';
+
+    config.environments[key] = {
+      name: key,
       type: 'sandbox',
       apiKey: staging.apiKey,
       clientId: staging.clientId,
+      ...(account.email && { ownerEmail: account.email }),
+      ownerUserId: account.userId,
     };
 
-    if (isFirst || !config.activeEnvironment) {
-      config.activeEnvironment = 'staging';
+    // Only auto-assign active when there is NO valid prior active env.
+    if (!prior) {
+      config.activeEnvironment = key;
     }
 
     saveConfig(config);
-    logInfo('[login] Staging environment auto-provisioned');
-    return true;
+    logInfo('[login] Staging environment provisioned');
+
+    return {
+      provisioned: true,
+      activeEnvironment: config.activeEnvironment,
+      envName: key,
+      mismatch,
+      priorEnvName: priorName,
+      priorAccount: prior ? { email: prior.ownerEmail, clientId: prior.clientId } : undefined,
+    };
   } catch (error) {
-    logError('[login] Failed to auto-provision staging environment:', error instanceof Error ? error.message : error);
-    return false;
+    logError('[login] Failed to provision staging environment:', error instanceof Error ? error.message : error);
+    return { provisioned: false, mismatch: false };
   }
 }
 
@@ -176,11 +235,41 @@ export async function runLogin(): Promise<void> {
     clack.log.success(`Logged in as ${result.email || result.userId}`);
     clack.log.info(`Token expires in ${expiresInSec} seconds`);
 
-    const provisioned = await provisionStagingEnvironment(result.accessToken);
-    if (provisioned) {
-      clack.log.success('Staging environment configured automatically');
+    const account = { email: result.email, userId: result.userId };
+    const provision = await provisionStagingEnvironment(result.accessToken, account);
+
+    if (isJsonMode()) {
+      outputJson({
+        status: 'ok',
+        account: { email: account.email ?? null, userId: account.userId },
+        activeEnvironment: provision.activeEnvironment ?? null,
+        mismatch: provision.mismatch,
+      });
+    } else if (provision.provisioned) {
+      if (provision.mismatch) {
+        const priorLabel = provision.priorAccount?.email ?? provision.priorAccount?.clientId ?? provision.priorEnvName;
+        if (isPromptAllowed()) {
+          const answer = await clack.confirm({
+            message: `You were using ${provision.priorEnvName} (${priorLabel}, a different account). Switch active environment to ${account.email ?? account.userId}'s Staging?`,
+            initialValue: false, // default: keep current
+          });
+          if (!clack.isCancel(answer) && answer && provision.envName) {
+            setActiveEnvironment(provision.envName);
+          }
+        } else {
+          clack.log.warn(
+            `Logged in as ${account.email ?? account.userId}, but the active environment "${provision.priorEnvName}" belongs to a different account (${priorLabel}). Keeping it active. Run \`${formatWorkOSCommand('env switch')}\` to change environments.`,
+          );
+        }
+      }
+      const active = getActiveEnvironment();
+      if (active) {
+        clack.log.success(`Now using: ${active.name} (${active.type}) — ${account.email ?? account.userId}`);
+      } else {
+        clack.log.info(chalk.dim(`Run \`${formatWorkOSCommand('env add')}\` to configure an environment manually`));
+      }
     } else {
-      clack.log.info(chalk.dim('Run `workos env add` to configure an environment manually'));
+      clack.log.info(chalk.dim(`Run \`${formatWorkOSCommand('env add')}\` to configure an environment manually`));
     }
 
     await installSkillsAfterLogin();

@@ -75,6 +75,10 @@ export const config: FrameworkConfig = {
       'Start your development server to test authentication',
       'Visit the WorkOS Dashboard to manage users and settings',
     ],
+    // Client-side sign-in per the AuthKit Next.js guidance: trigger sign-in from
+    // a click handler with refreshAuth (getSignInUrl must not run during render).
+    getSignInSnippet: () =>
+      'Add a sign-in button in a client component: call refreshAuth({ ensureSignedIn: true }) on click',
   },
 };
 

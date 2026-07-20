@@ -192,14 +192,44 @@ describe('claim command', () => {
 
       await runClaim();
 
-      expect(mockOutputJson).toHaveBeenCalledWith({
-        status: 'claim_url',
-        claimUrl: 'https://dashboard.workos.com/claim?nonce=nonce_abc123',
-        nonce: 'nonce_abc123',
-      });
+      expect(mockOutputJson).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'claim_url',
+          claimUrl: 'https://dashboard.workos.com/claim?nonce=nonce_abc123',
+          nonce: 'nonce_abc123',
+          permanent: true,
+        }),
+      );
       // Should NOT open browser or start polling in JSON mode
       expect(mockOpen).not.toHaveBeenCalled();
       expect(mockSpinner.start).not.toHaveBeenCalled();
+    });
+
+    it('warns that claiming is permanent before opening the browser (human mode)', async () => {
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'unclaimed',
+        type: 'unclaimed',
+        apiKey: 'sk_test_xxx',
+        clientId: 'client_01ABC',
+        claimToken: 'ct_token',
+      });
+      mockIsUnclaimedEnvironment.mockReturnValue(true);
+      mockCreateClaimNonce.mockResolvedValueOnce({ nonce: 'nonce_abc123', alreadyClaimed: false });
+      // Poll returns claimed immediately so the flow completes.
+      mockCreateClaimNonce.mockResolvedValueOnce({ alreadyClaimed: true });
+
+      const claimPromise = runClaim();
+      await vi.advanceTimersByTimeAsync(6_000);
+      await claimPromise;
+
+      const warnCall = vi
+        .mocked(mockClack.log.warn)
+        .mock.calls.find((c) => /permanent|cannot be undone/i.test(String(c[0])));
+      expect(warnCall).toBeDefined();
+      // The permanence warning must fire before the browser is opened.
+      const warnOrder = vi.mocked(mockClack.log.warn).mock.invocationCallOrder[0];
+      const openOrder = vi.mocked(mockOpen).mock.invocationCallOrder[0];
+      expect(warnOrder).toBeLessThan(openOrder);
     });
 
     it('refuses claim browser flow in CI mode', async () => {
@@ -435,6 +465,39 @@ describe('claim command', () => {
       await claimPromise;
 
       expect(mockClack.log.info).toHaveBeenCalledWith(expect.stringContaining('Could not open browser'));
+    });
+
+    it('timeout hint keeps the standalone binary form when npm variables are present', async () => {
+      const NPM_KEYS = ['npm_command', 'npm_execpath', 'npm_config_user_agent'] as const;
+      const saved: Record<string, string | undefined> = {};
+      for (const k of NPM_KEYS) {
+        saved[k] = process.env[k];
+        delete process.env[k];
+      }
+      process.env.npm_command = 'exec';
+      try {
+        mockGetActiveEnvironment.mockReturnValue({
+          name: 'unclaimed',
+          type: 'unclaimed',
+          apiKey: 'sk_test_xxx',
+          clientId: 'client_01ABC',
+          claimToken: 'ct_token',
+        });
+        mockIsUnclaimedEnvironment.mockReturnValue(true);
+        mockCreateClaimNonce.mockResolvedValueOnce({ nonce: 'nonce_abc123', alreadyClaimed: false });
+        mockCreateClaimNonce.mockResolvedValue({ nonce: 'nonce_abc123', alreadyClaimed: false });
+
+        const claimPromise = runClaim();
+        await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 5_000);
+        await claimPromise;
+
+        expect(mockClack.log.info).toHaveBeenCalledWith(expect.stringContaining('workos env list'));
+      } finally {
+        for (const k of NPM_KEYS) {
+          if (saved[k] === undefined) delete process.env[k];
+          else process.env[k] = saved[k];
+        }
+      }
     });
   });
 });

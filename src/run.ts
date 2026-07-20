@@ -2,6 +2,7 @@ import { readEnvironment } from './utils/environment.js';
 import { runWithCore } from './lib/run-with-core.js';
 import type { InstallerOptions } from './utils/types.js';
 import { createInstallerEventEmitter } from './lib/events.js';
+import { isCiMode } from './utils/interaction-mode.js';
 import path from 'path';
 import { EventEmitter } from 'events';
 
@@ -33,6 +34,7 @@ export type InstallerArgs = {
   direct?: boolean;
   scaffold?: boolean;
   pm?: string;
+  router?: 'app' | 'pages';
 };
 
 /**
@@ -58,7 +60,9 @@ function buildOptions(argv: InstallerArgs): InstallerOptions {
     forceInstall: merged.forceInstall ?? false,
     installDir,
     local: merged.local ?? false,
-    ci: merged.ci ?? false,
+    // Bridge WORKOS_MODE=ci to the downstream `options.ci` paths (git checks,
+    // package-manager select) so it fully behaves like the hidden --ci flag.
+    ci: (merged.ci ?? false) || isCiMode(),
     skipAuth: merged.skipAuth ?? false,
     apiKey: merged.apiKey,
     clientId: merged.clientId,
@@ -74,6 +78,7 @@ function buildOptions(argv: InstallerArgs): InstallerOptions {
     direct: merged.direct ?? false,
     scaffold: merged.scaffold ?? false,
     pm: merged.pm,
+    router: merged.router,
     emitter: createInstallerEventEmitter(), // Will be replaced in runWithCore
   };
 }

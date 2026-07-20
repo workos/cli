@@ -17,6 +17,8 @@ import { analytics } from './analytics.js';
 import clack from './clack.js';
 import { INTEGRATION_CONFIG } from '../lib/config.js';
 import { SPAWN_OPTS } from './platform.js';
+import { isPromptAllowed } from './interaction-mode.js';
+import { exitWithError, isJsonMode } from './output.js';
 
 /**
  * Redact sensitive info (API keys, client secrets) from a string.
@@ -59,6 +61,28 @@ export async function abortIfCancelled<T>(
   input: T | Promise<T>,
   integration?: Integration,
 ): Promise<Exclude<T, symbol>> {
+  if (!isPromptAllowed()) {
+    // Never await `input` in non-interactive mode — awaiting a never-resolving
+    // prompt is exactly the hang this guard fixes. Fail fast with a structured
+    // error instead. Placed before analytics.shutdown('cancelled') so a
+    // non-interactive block is not mislabeled as a user cancel.
+    exitWithError({
+      code: 'non_interactive_prompt',
+      message:
+        `This step requires interactive input${integration ? ` for ${integration}` : ''}, but the CLI is running ` +
+        `in a non-interactive mode (agent/CI/non-TTY). Pass the required flags (e.g. --router app|pages for Next.js) ` +
+        `or run in an interactive terminal.`,
+      recovery: {
+        hints: [
+          {
+            description:
+              'Re-run in an interactive terminal, or pass the flags that answer this prompt (e.g. --router).',
+          },
+        ],
+      },
+    });
+  }
+
   await analytics.shutdown('cancelled');
   const resolvedInput = await input;
 
@@ -522,7 +546,7 @@ export function isUsingTypeScript({ installDir }: Pick<InstallerOptions, 'instal
  * @param requireApiKey - Whether API key is needed (false for client-only SDKs like React, Vanilla JS)
  */
 export async function getOrAskForWorkOSCredentials(
-  _options: Pick<InstallerOptions, 'ci' | 'apiKey' | 'clientId' | 'installDir' | 'dashboard'>,
+  _options: Pick<InstallerOptions, 'ci' | 'apiKey' | 'clientId' | 'installDir' | 'dashboard' | 'credentialSource'>,
   requireApiKey: boolean = true,
 ): Promise<{
   apiKey: string;
@@ -533,9 +557,15 @@ export async function getOrAskForWorkOSCredentials(
 
   // If credentials provided via CLI (e.g., CI mode or dashboard mode), use them
   if ((!requireApiKey || apiKey) && clientId) {
-    // Only log in non-dashboard mode
-    if (!_options.dashboard) {
-      clack.log.info('Using provided WorkOS credentials');
+    // Say "you provided" only when the user actually supplied credentials
+    // (cli/manual, or an unknown source). For device/stored/env the state
+    // machine already announced the source accurately before this runs, so
+    // stay silent rather than double-announce. Gate on human output mode so
+    // this never pollutes JSON/NDJSON.
+    const source = _options.credentialSource;
+    const userProvided = source === 'cli' || source === 'manual' || source === undefined;
+    if (!_options.dashboard && !isJsonMode() && userProvided) {
+      clack.log.info('Using the WorkOS credentials you provided');
     }
     return { apiKey: apiKey || '', clientId };
   }

@@ -25,7 +25,9 @@ vi.mock('../utils/clack.js', () => ({ default: mockClack }));
 const mockGetConfig = vi.fn();
 const mockSaveConfig = vi.fn();
 const mockGetActiveEnvironment = vi.fn(() => null);
-vi.mock('./config-store.js', () => ({
+vi.mock('./config-store.js', async (importOriginal) => ({
+  // freshEnvKey is pure — use the real one so key-collision behavior stays honest.
+  freshEnvKey: (await importOriginal<typeof import('./config-store.js')>()).freshEnvKey,
   getConfig: (...args: unknown[]) => mockGetConfig(...args),
   saveConfig: (...args: unknown[]) => mockSaveConfig(...args),
   getActiveEnvironment: (...args: unknown[]) => mockGetActiveEnvironment(...args),
@@ -131,6 +133,35 @@ describe('unclaimed-env-provision', () => {
             unclaimed: expect.objectContaining({ type: 'unclaimed' }),
           }),
           activeEnvironment: 'unclaimed',
+        }),
+      );
+    });
+
+    it('never clobbers an existing unclaimed env — saves under a fresh key', async () => {
+      mockGetConfig.mockReturnValue({
+        activeEnvironment: 'unclaimed',
+        environments: {
+          unclaimed: {
+            name: 'unclaimed',
+            type: 'unclaimed',
+            apiKey: 'sk_test_prior',
+            clientId: 'client_prior',
+            claimToken: 'ct_prior',
+          },
+        },
+      });
+      mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
+
+      await tryProvisionUnclaimedEnv({ installDir: testDir });
+
+      expect(mockSaveConfig).toHaveBeenCalledWith(
+        expect.objectContaining({
+          environments: expect.objectContaining({
+            // The prior claim token lives only in this config — it must survive.
+            unclaimed: expect.objectContaining({ claimToken: 'ct_prior' }),
+            'unclaimed-2': expect.objectContaining({ claimToken: 'ct_token123' }),
+          }),
+          activeEnvironment: 'unclaimed-2',
         }),
       );
     });

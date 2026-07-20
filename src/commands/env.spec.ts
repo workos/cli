@@ -25,6 +25,16 @@ vi.mock('../utils/clack.js', () => ({
   },
 }));
 
+// Partial-mock the unclaimed-env API so we control provisioning outcomes but
+// keep the real UnclaimedEnvApiError class for instanceof checks.
+vi.mock('../lib/unclaimed-env-api.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/unclaimed-env-api.js')>();
+  return { ...actual, provisionUnclaimedEnvironment: vi.fn() };
+});
+
+// Guard: runEnvProvision must NEVER write project .env files.
+vi.mock('../lib/env-writer.js', () => ({ writeCredentialsEnv: vi.fn() }));
+
 let testDir: string;
 
 vi.mock('node:os', async (importOriginal) => {
@@ -39,8 +49,10 @@ vi.mock('node:os', async (importOriginal) => {
   };
 });
 
-const { getConfig, setInsecureConfigStorage, clearConfig } = await import('../lib/config-store.js');
-const { runEnvAdd, runEnvRemove, runEnvSwitch, runEnvList } = await import('./env.js');
+const { getConfig, saveConfig, setInsecureConfigStorage, clearConfig } = await import('../lib/config-store.js');
+const { runEnvAdd, runEnvRemove, runEnvSwitch, runEnvList, runEnvProvision } = await import('./env.js');
+const { provisionUnclaimedEnvironment, UnclaimedEnvApiError } = await import('../lib/unclaimed-env-api.js');
+const { writeCredentialsEnv } = await import('../lib/env-writer.js');
 const { setOutputMode } = await import('../utils/output.js');
 const { resetInteractionModeForTests, setInteractionMode } = await import('../utils/interaction-mode.js');
 const { CliExit } = await import('../utils/cli-exit.js');
@@ -157,6 +169,40 @@ describe('env commands', () => {
     it('errors when no environments configured', async () => {
       await expect(runEnvRemove('anything')).rejects.toThrow(CliExit);
     });
+
+    it('warns that removal is local-only for an ordinary environment', async () => {
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      await runEnvRemove('prod');
+      const warnMsg = vi
+        .mocked(clack.log.warn)
+        .mock.calls.map((c) => String(c[0]))
+        .join('\n');
+      expect(warnMsg).toMatch(/local/i);
+      // Ordinary env: must NOT claim the claim token was lost.
+      expect(warnMsg).not.toMatch(/claim token/i);
+    });
+
+    it('warns that an unclaimed environment loses its claim token when removed', async () => {
+      saveConfig({
+        activeEnvironment: 'unclaimed',
+        environments: {
+          unclaimed: {
+            name: 'unclaimed',
+            type: 'unclaimed',
+            apiKey: 'sk_test_abc',
+            clientId: 'client_abc',
+            claimToken: 'tok_abc',
+          },
+        },
+      });
+      await runEnvRemove('unclaimed');
+      const warnMsg = vi
+        .mocked(clack.log.warn)
+        .mock.calls.map((c) => String(c[0]))
+        .join('\n');
+      expect(warnMsg).toMatch(/local/i);
+      expect(warnMsg).toMatch(/claim/i);
+    });
   });
 
   describe('runEnvSwitch', () => {
@@ -226,6 +272,133 @@ describe('env commands', () => {
     });
   });
 
+  describe('runEnvProvision', () => {
+    const CREDS = {
+      clientId: 'client_x',
+      apiKey: 'sk_test_x',
+      claimToken: 'ct_x',
+      authkitDomain: 'foo.authkit.app',
+    };
+
+    let consoleOutput: string[];
+    let logSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      vi.mocked(provisionUnclaimedEnvironment).mockReset();
+      vi.mocked(writeCredentialsEnv).mockReset();
+      consoleOutput = [];
+      logSpy = vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+        consoleOutput.push(args.map(String).join(' '));
+      });
+    });
+
+    afterEach(() => {
+      logSpy.mockRestore();
+      setOutputMode('human');
+    });
+
+    it('emits the provisioned credentials as JSON (agent credential delivery)', async () => {
+      setOutputMode('json');
+      vi.mocked(provisionUnclaimedEnvironment).mockResolvedValue(CREDS);
+
+      await runEnvProvision();
+
+      const out = JSON.parse(consoleOutput[0]);
+      expect(out.status).toBe('ok');
+      expect(out.data.apiKey).toBe('sk_test_x');
+      expect(out.data.clientId).toBe('client_x');
+      expect(out.data.claimToken).toBe('ct_x');
+      expect(out.data.authkitDomain).toBe('foo.authkit.app');
+    });
+
+    it('persists the provisioned env locally as the active unclaimed env', async () => {
+      setOutputMode('json');
+      vi.mocked(provisionUnclaimedEnvironment).mockResolvedValue(CREDS);
+
+      await runEnvProvision();
+
+      const config = getConfig();
+      const env = config?.environments.unclaimed;
+      expect(env?.type).toBe('unclaimed');
+      expect(env?.clientId).toBe('client_x');
+      expect((env as { claimToken?: string } | undefined)?.claimToken).toBe('ct_x');
+      expect(config?.activeEnvironment).toBe('unclaimed');
+    });
+
+    it('never writes a project .env file', async () => {
+      setOutputMode('json');
+      vi.mocked(provisionUnclaimedEnvironment).mockResolvedValue(CREDS);
+
+      await runEnvProvision();
+
+      expect(writeCredentialsEnv).not.toHaveBeenCalled();
+    });
+
+    it('preserves an existing unclaimed env (and its claim token) by using a fresh key', async () => {
+      setOutputMode('json');
+      vi.mocked(provisionUnclaimedEnvironment).mockResolvedValueOnce({
+        clientId: 'client_old',
+        apiKey: 'sk_test_old',
+        claimToken: 'ct_old',
+        authkitDomain: 'old.authkit.app',
+      });
+      await runEnvProvision();
+
+      vi.mocked(provisionUnclaimedEnvironment).mockResolvedValueOnce(CREDS);
+      await runEnvProvision();
+
+      const config = getConfig();
+      // The first env's claim token lives only in this config — it must never be clobbered.
+      expect((config?.environments.unclaimed as { claimToken?: string } | undefined)?.claimToken).toBe('ct_old');
+      const second = config?.environments['unclaimed-2'] as { claimToken?: string } | undefined;
+      expect(second?.claimToken).toBe('ct_x');
+      expect(config?.activeEnvironment).toBe('unclaimed-2');
+      expect(JSON.parse(consoleOutput[1]).data.name).toBe('unclaimed-2');
+    });
+
+    it('surfaces a 429 as a structured rate_limited error — no config write, no login fallback', async () => {
+      setOutputMode('json');
+      setInteractionMode({ mode: 'agent', source: 'env' });
+      vi.mocked(provisionUnclaimedEnvironment).mockRejectedValue(
+        new UnclaimedEnvApiError('Rate limited. Please wait a moment and try again.', 429),
+      );
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        await expect(runEnvProvision()).rejects.toThrow(CliExit);
+        const parsed = JSON.parse(String(errorSpy.mock.calls[0][0]));
+        expect(parsed.error.code).toBe('rate_limited');
+        expect(getConfig()).toBeNull();
+        expect(writeCredentialsEnv).not.toHaveBeenCalled();
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
+    it('maps an unexpected non-API error to provision_failed', async () => {
+      setOutputMode('json');
+      setInteractionMode({ mode: 'agent', source: 'env' });
+      vi.mocked(provisionUnclaimedEnvironment).mockRejectedValue(new Error('boom'));
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        await expect(runEnvProvision()).rejects.toThrow(CliExit);
+        const parsed = JSON.parse(String(errorSpy.mock.calls[0][0]));
+        expect(parsed.error.code).toBe('provision_failed');
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
+
+    it('prints the credentials and the env-claim hint in human mode', async () => {
+      setOutputMode('human');
+      vi.mocked(provisionUnclaimedEnvironment).mockResolvedValue(CREDS);
+
+      await runEnvProvision();
+
+      expect(consoleOutput.join('\n')).toContain('sk_test_x');
+      expect(clack.log.info).toHaveBeenCalledWith(expect.stringContaining('env claim'));
+    });
+  });
+
   describe('JSON output mode', () => {
     let consoleOutput: string[];
 
@@ -259,6 +432,28 @@ describe('env commands', () => {
       expect(output.status).toBe('ok');
       expect(output.message).toBe('Environment removed');
       expect(output.data.name).toBe('prod');
+      expect(output.data.localOnly).toBe(true);
+      expect(output.data.wasUnclaimed).toBe(false);
+    });
+
+    it('runEnvRemove reports wasUnclaimed for an unclaimed env in JSON', async () => {
+      saveConfig({
+        activeEnvironment: 'unclaimed',
+        environments: {
+          unclaimed: {
+            name: 'unclaimed',
+            type: 'unclaimed',
+            apiKey: 'sk_test_abc',
+            clientId: 'client_abc',
+            claimToken: 'tok_abc',
+          },
+        },
+      });
+      consoleOutput = [];
+      await runEnvRemove('unclaimed');
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.data.localOnly).toBe(true);
+      expect(output.data.wasUnclaimed).toBe(true);
     });
 
     it('runEnvSwitch outputs JSON success', async () => {
@@ -307,6 +502,76 @@ describe('env commands', () => {
       await runEnvList();
       const output = JSON.parse(consoleOutput[0]);
       expect(output.data).toEqual([]);
+    });
+  });
+
+  describe('command hints route through formatWorkOSCommand', () => {
+    // getWorkOSCommand reads all three of these; clear/set them deterministically.
+    const NPM_KEYS = ['npm_command', 'npm_execpath', 'npm_config_user_agent'] as const;
+    let saved: Record<string, string | undefined>;
+
+    beforeEach(() => {
+      saved = {};
+      for (const k of NPM_KEYS) {
+        saved[k] = process.env[k];
+        delete process.env[k];
+      }
+    });
+
+    afterEach(() => {
+      for (const k of NPM_KEYS) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+    });
+
+    it('runEnvList empty hint uses the bare command when not launched via npx', async () => {
+      await runEnvList();
+      expect(clack.log.info).toHaveBeenCalledWith(expect.stringContaining('workos env add'));
+      expect(clack.log.info).not.toHaveBeenCalledWith(expect.stringContaining('npx workos@latest'));
+    });
+
+    it('runEnvList empty hint keeps the standalone binary form when npm variables are present', async () => {
+      process.env.npm_command = 'exec';
+      await runEnvList();
+      expect(clack.log.info).toHaveBeenCalledWith(expect.stringContaining('workos env add'));
+    });
+
+    it('unclaimed-table footer keeps the standalone binary form when npm variables are present', async () => {
+      process.env.npm_command = 'exec';
+      saveConfig({
+        activeEnvironment: 'unclaimed',
+        environments: {
+          unclaimed: {
+            name: 'unclaimed',
+            type: 'unclaimed',
+            apiKey: 'sk_test_abc',
+            clientId: 'client_abc',
+            claimToken: 'tok_abc',
+          },
+        },
+      });
+      const out: string[] = [];
+      vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+        out.push(args.map(String).join(' '));
+      });
+      await runEnvList();
+      expect(out.join('\n')).toContain('workos env claim');
+    });
+
+    it('runEnvSwitch no-envs JSON error keeps the standalone binary form with npm variables present', async () => {
+      process.env.npm_command = 'exec';
+      setOutputMode('json');
+      setInteractionMode({ mode: 'agent', source: 'env' });
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        await expect(runEnvSwitch('anything')).rejects.toThrow(CliExit);
+        const parsed = JSON.parse(String(errorSpy.mock.calls[0][0]));
+        expect(parsed.error.message).toContain('workos env add');
+      } finally {
+        errorSpy.mockRestore();
+        setOutputMode('human');
+      }
     });
   });
 });

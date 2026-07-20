@@ -3,6 +3,7 @@ import type { InstallerArgs } from '../run.js';
 import clack from '../utils/clack.js';
 import { exitWithError, isJsonMode } from '../utils/output.js';
 import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
+import { isCiMode } from '../utils/interaction-mode.js';
 import type { ArgumentsCamelCase } from 'yargs';
 import { autoInstallSkills } from './install-skill.js';
 import { maybeOfferMcpInstall } from '../lib/mcp-notice.js';
@@ -13,8 +14,8 @@ import { maybeOfferMcpInstall } from '../lib/mcp-notice.js';
 export async function handleInstall(argv: ArgumentsCamelCase<InstallerArgs>): Promise<void> {
   const options = { ...argv };
 
-  // CI mode validation
-  if (options.ci) {
+  // CI mode validation — trigger for the hidden --ci flag or WORKOS_MODE=ci.
+  if (options.ci || isCiMode()) {
     if (!options.apiKey) {
       exitWithError({ code: 'missing_args', message: 'CI mode requires --api-key (WorkOS API key sk_xxx)' });
     }

@@ -4,6 +4,7 @@ import { join } from 'path';
 import fg from 'fast-glob';
 import type { ValidationResult, ValidationRules, ValidationIssue } from './types.js';
 import { runBuildValidation } from './build-validator.js';
+import { detectPort } from '../port-detection.js';
 import nextjsRules from './rules/nextjs.json' with { type: 'json' };
 import reactRouterRules from './rules/react-router.json' with { type: 'json' };
 import reactRules from './rules/react.json' with { type: 'json' };
@@ -259,6 +260,32 @@ export async function validateFrameworkSpecific(framework: string, projectDir: s
 }
 
 /**
+ * Compares the redirect URI's effective port to the detected dev server port,
+ * for local dev hosts only, and records an error-severity issue on mismatch.
+ * Skips production URIs and placeholder hosts like http://test.
+ */
+function validateRedirectUriPort(url: URL, framework: string, projectDir: string, issues: ValidationIssue[]): void {
+  // Only enforce for local dev hosts; skip production URIs and placeholder
+  // hosts like http://test. Node parses IPv6 hostnames with brackets: [::1].
+  const localHosts = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+  if (!localHosts.has(url.hostname)) return;
+
+  const effectivePort = url.port || (url.protocol === 'https:' ? '443' : '80');
+  const detected = detectPort(framework, projectDir);
+
+  if (Number(effectivePort) !== detected) {
+    issues.push({
+      type: 'env',
+      severity: 'error',
+      message: `Redirect URI port :${effectivePort} does not match the detected dev server port :${detected}`,
+      hint:
+        `Update the redirect URI to use port :${detected} in .env.local and the WorkOS dashboard ` +
+        `(redirect URI, CORS origin, homepage URL), or change your dev server to run on port ${effectivePort}.`,
+    });
+  }
+}
+
+/**
  * Validates that the Next.js redirect URI matches an existing callback route.
  *
  * Common failure: .env.local has /auth/callback but route is at /api/auth/callback
@@ -285,6 +312,7 @@ async function validateNextjsRedirectUri(projectDir: string, issues: ValidationI
   try {
     const url = new URL(redirectUri);
     callbackPath = url.pathname;
+    validateRedirectUriPort(url, 'nextjs', projectDir, issues);
   } catch {
     issues.push({
       type: 'env',
@@ -327,7 +355,7 @@ async function validateNextjsRedirectUri(projectDir: string, issues: ValidationI
       const actualPath = '/' + existingRoutes[0].replace(/^(src\/)?app\//, '').replace(/\/route\.(ts|tsx|js|jsx)$/, '');
       hint =
         `Found callback route at ${existingRoutes[0]} but redirect URI points to ${callbackPath}. Either:\n` +
-        `  1. Change NEXT_PUBLIC_WORKOS_REDIRECT_URI to http://localhost:3000${actualPath}\n` +
+        `  1. Change NEXT_PUBLIC_WORKOS_REDIRECT_URI to ${new URL(redirectUri).origin}${actualPath}\n` +
         `  2. Move the route to app/${routePath}/route.ts`;
     }
 
@@ -368,6 +396,7 @@ async function validateReactRouterRedirectUri(projectDir: string, issues: Valida
   try {
     const url = new URL(redirectUri);
     callbackPath = url.pathname;
+    validateRedirectUriPort(url, 'react-router', projectDir, issues);
   } catch {
     issues.push({
       type: 'env',
@@ -426,7 +455,7 @@ async function validateReactRouterRedirectUri(projectDir: string, issues: Valida
           .replace(/\./g, '/');
       hint =
         `Found callback route at ${actualFile} but redirect URI points to ${callbackPath}. Either:\n` +
-        `  1. Change WORKOS_REDIRECT_URI to http://localhost:3000${actualPath}\n` +
+        `  1. Change WORKOS_REDIRECT_URI to ${new URL(redirectUri).origin}${actualPath}\n` +
         `  2. Move the route to app/routes/${dotPath}.tsx`;
     }
 
@@ -466,6 +495,7 @@ async function validateTanstackStartRedirectUri(projectDir: string, issues: Vali
   try {
     const url = new URL(redirectUri);
     callbackPath = url.pathname;
+    validateRedirectUriPort(url, 'tanstack-start', projectDir, issues);
   } catch {
     issues.push({
       type: 'env',
@@ -508,7 +538,7 @@ async function validateTanstackStartRedirectUri(projectDir: string, issues: Vali
           .replace(/\/index$/, '');
       hint =
         `Found callback route at ${actualFile} but redirect URI points to ${callbackPath}. Either:\n` +
-        `  1. Change WORKOS_REDIRECT_URI to http://localhost:3000${actualPath}\n` +
+        `  1. Change WORKOS_REDIRECT_URI to ${new URL(redirectUri).origin}${actualPath}\n` +
         `  2. Move the route to app/routes/${routePath}.tsx`;
     }
 

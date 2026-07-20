@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 
-vi.mock('../lib/settings.js', () => ({
-  getVersion: vi.fn(() => '0.7.3'),
-}));
+vi.mock('../lib/settings.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/settings.js')>();
+  return { ...actual, getVersion: vi.fn(() => '0.7.3') };
+});
 
 const { buildCommandTree, extractHelpJsonCommand } = await import('./help-json.js');
 
@@ -56,6 +57,7 @@ describe('help-json', () => {
           'auth status',
           'skills',
           'doctor',
+          'verify-login',
           'env',
           'organization',
           'user',
@@ -100,7 +102,7 @@ describe('help-json', () => {
       const tree = buildCommandTree('env');
       expect(tree.name).toBe('env');
       const subNames = tree.commands!.map((c) => c.name);
-      expect(subNames).toEqual(expect.arrayContaining(['add', 'remove', 'switch', 'list']));
+      expect(subNames).toEqual(expect.arrayContaining(['add', 'remove', 'switch', 'list', 'claim', 'provision']));
     });
 
     it('returns organization subtree with CRUD subcommands', () => {
@@ -121,6 +123,36 @@ describe('help-json', () => {
       const tree = buildCommandTree('nonexistent');
       expect(tree).toHaveProperty('name', 'workos');
       expect(tree).toHaveProperty('version');
+    });
+  });
+
+  describe('accurate command copy', () => {
+    it('migrations description advertises the generic-CSV / Supabase path', () => {
+      const tree = buildCommandTree('migrations');
+      expect(tree.name).toBe('migrations');
+      expect(tree.description).toMatch(/CSV/i);
+      expect(tree.description).toMatch(/Supabase/i);
+    });
+
+    it('migrations subcommands include the discoverable export entry point', () => {
+      const tree = buildCommandTree('migrations');
+      const subNames = tree.commands!.map((c) => c.name);
+      expect(subNames).toContain('export');
+      // process-roles is the name the package actually registers (not process-role-definitions)
+      expect(subNames).toContain('process-roles');
+      expect(subNames).not.toContain('process-role-definitions');
+    });
+
+    it('env remove description states it is local-only', () => {
+      const env = buildCommandTree('env');
+      const remove = env.commands!.find((c) => c.name === 'remove');
+      expect(remove!.description).toMatch(/local/i);
+    });
+
+    it('env claim description states the action is permanent', () => {
+      const env = buildCommandTree('env');
+      const claim = env.commands!.find((c) => c.name === 'claim');
+      expect(claim!.description).toMatch(/permanent/i);
     });
   });
 

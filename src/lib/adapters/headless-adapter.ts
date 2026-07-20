@@ -14,6 +14,8 @@ export interface HeadlessOptions {
   noCommit?: boolean;
   createPr?: boolean;
   noGitCheck?: boolean;
+  /** CI mode (WORKOS_MODE=ci, or --ci when headless): pipelines never stop for a dirty tree. */
+  ci?: boolean;
 }
 
 /**
@@ -30,6 +32,7 @@ export class HeadlessAdapter implements InstallerAdapter {
   private options: HeadlessOptions;
   private isStarted = false;
   private scaffolded = false;
+  private lastFileOp: string | null = null;
   private handlers = new Map<string, (...args: unknown[]) => void>();
 
   constructor(config: AdapterConfig & { options: HeadlessOptions }) {
@@ -80,6 +83,11 @@ export class HeadlessAdapter implements InstallerAdapter {
     // Agent progress
     this.subscribe('agent:start', this.handleAgentStart);
     this.subscribe('agent:progress', this.handleAgentProgress);
+
+    // File operations + tool calls — path/detail only, never content
+    this.subscribe('file:write', this.handleFileWrite);
+    this.subscribe('file:edit', this.handleFileEdit);
+    this.subscribe('agent:tool', this.handleAgentTool);
 
     // Validation
     this.subscribe('validation:start', this.handleValidationStart);
@@ -181,7 +189,7 @@ export class HeadlessAdapter implements InstallerAdapter {
   private handleGitDirty = ({ files }: InstallerEvents['git:dirty']): void => {
     writeNDJSON({ type: 'git:status', dirty: true, files });
 
-    if (this.options.noGitCheck) {
+    if (this.options.noGitCheck || this.options.ci) {
       writeNDJSON({ type: 'git:decision', action: 'continue' });
       this.sendEvent({ type: 'GIT_CONFIRMED' });
       return;
@@ -258,8 +266,8 @@ export class HeadlessAdapter implements InstallerAdapter {
     writeNDJSON({ type: 'staging:fetching' });
   };
 
-  private handleStagingSuccess = (): void => {
-    writeNDJSON({ type: 'staging:success' });
+  private handleStagingSuccess = ({ source }: InstallerEvents['staging:success']): void => {
+    writeNDJSON({ type: 'staging:success', source });
   };
 
   // ===== Config =====
@@ -277,6 +285,26 @@ export class HeadlessAdapter implements InstallerAdapter {
   private handleAgentProgress = ({ step, detail }: InstallerEvents['agent:progress']): void => {
     const message = detail ? `${step}: ${detail}` : step;
     writeNDJSON({ type: 'agent:progress', message });
+  };
+
+  // ===== File Operations (path-only, no content) =====
+
+  private writeFileOp(type: 'file:write' | 'file:edit', path: string): void {
+    if (path === this.lastFileOp) return; // dedupe consecutive same-path ops
+    this.lastFileOp = path;
+    writeNDJSON({ type, path });
+  }
+
+  private handleFileWrite = ({ path }: InstallerEvents['file:write']): void => {
+    this.writeFileOp('file:write', path);
+  };
+
+  private handleFileEdit = ({ path }: InstallerEvents['file:edit']): void => {
+    this.writeFileOp('file:edit', path);
+  };
+
+  private handleAgentTool = ({ kind, detail }: InstallerEvents['agent:tool']): void => {
+    writeNDJSON({ type: 'agent:tool', kind, detail });
   };
 
   // ===== Validation =====
@@ -363,8 +391,24 @@ export class HeadlessAdapter implements InstallerAdapter {
 
   // ===== Terminal Events =====
 
-  private handleComplete = ({ success, summary }: InstallerEvents['complete']): void => {
-    writeNDJSON({ type: 'complete', success, summary, scaffolded: this.scaffolded });
+  private handleComplete = ({ success, summary, completion }: InstallerEvents['complete']): void => {
+    writeNDJSON({
+      type: 'complete',
+      success,
+      summary,
+      scaffolded: this.scaffolded,
+      // Spread structured fields only when present, so existing consumers that
+      // emit `complete` without `completion` keep their exact payload shape.
+      ...(completion
+        ? {
+            integration: completion.integration,
+            devCommand: completion.devCommand,
+            url: completion.url,
+            files: completion.files,
+            nextSteps: completion.nextSteps,
+          }
+        : {}),
+    });
   };
 
   private handleError = ({ message, stack }: InstallerEvents['error']): void => {

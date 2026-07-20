@@ -1,3 +1,5 @@
+import type { CredentialSource } from '../lib/installer-core.types.js';
+
 export type InstallerOptions = {
   /**
    * Whether to enable debug mode.
@@ -43,6 +45,14 @@ export type InstallerOptions = {
    * WorkOS Client ID (client_xxx)
    */
   clientId?: string;
+
+  /**
+   * How the WorkOS credentials were resolved by the state machine
+   * (`cli`|`env`|`stored`|`device`|`manual`). Threaded downstream so
+   * user-facing copy can be source-accurate (e.g. avoid claiming the user
+   * "provided" credentials on the auto-provisioned path).
+   */
+  credentialSource?: CredentialSource;
 
   /**
    * App homepage URL for WorkOS dashboard config.
@@ -120,6 +130,9 @@ export type InstallerOptions = {
    * Overrides detection from npm_config_user_agent.
    */
   pm?: string;
+
+  /** Next.js router to target when detection is ambiguous (from --router). */
+  router?: 'app' | 'pages';
 };
 
 export interface Feature {

@@ -1,6 +1,24 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { detectIssues } from './issues.js';
 import type { DoctorReport } from './types.js';
+
+// getWorkOSCommand reads these; clear them so remediation copy is deterministic
+// regardless of how the test runner itself was launched.
+const NPM_KEYS = ['npm_command', 'npm_execpath', 'npm_config_user_agent'] as const;
+let savedNpmEnv: Record<string, string | undefined>;
+function clearNpmEnv(): void {
+  savedNpmEnv = {};
+  for (const k of NPM_KEYS) {
+    savedNpmEnv[k] = process.env[k];
+    delete process.env[k];
+  }
+}
+function restoreNpmEnv(): void {
+  for (const k of NPM_KEYS) {
+    if (savedNpmEnv[k] === undefined) delete process.env[k];
+    else process.env[k] = savedNpmEnv[k];
+  }
+}
 
 function baseReport(): Omit<DoctorReport, 'issues' | 'summary'> {
   return {
@@ -62,7 +80,51 @@ describe('detectIssues', () => {
     );
   });
 
+  describe('command hints in remediation route through formatWorkOSCommand', () => {
+    beforeEach(clearNpmEnv);
+    afterEach(restoreNpmEnv);
+
+    function reportWithStaleSkills(): DoctorReport {
+      const report = baseReport() as DoctorReport;
+      report.skills = {
+        bundledVersion: '2.0.0',
+        agents: [{ agent: 'Claude Code', installedVersion: '1.0.0', stale: true }],
+      };
+      return report;
+    }
+
+    function reportWithMisconfiguredMcp(): DoctorReport {
+      const report = baseReport() as DoctorReport;
+      report.mcp = {
+        serverUrl: 'https://mcp.workos.com/mcp',
+        agents: [{ agent: 'Cursor', available: true, installed: true, misconfigured: true }],
+      };
+      return report;
+    }
+
+    it('uses bare commands when not launched via npx', () => {
+      const skills = detectIssues(reportWithStaleSkills()).find((i) => i.code === 'SKILLS_OUTDATED');
+      expect(skills?.remediation).toBe('Run: workos skills install');
+
+      const mcp = detectIssues(reportWithMisconfiguredMcp()).find((i) => i.code === 'MCP_MISCONFIGURED');
+      expect(mcp?.remediation).toBe('Run: workos mcp install');
+    });
+
+    it('keeps the standalone binary form when npm variables are present', () => {
+      process.env.npm_command = 'exec';
+
+      const skills = detectIssues(reportWithStaleSkills()).find((i) => i.code === 'SKILLS_OUTDATED');
+      expect(skills?.remediation).toBe('Run: workos skills install');
+
+      const mcp = detectIssues(reportWithMisconfiguredMcp()).find((i) => i.code === 'MCP_MISCONFIGURED');
+      expect(mcp?.remediation).toBe('Run: workos mcp install');
+    });
+  });
+
   describe('MCP', () => {
+    beforeEach(clearNpmEnv);
+    afterEach(restoreNpmEnv);
+
     it('adds no issue when MCP is absent or merely not installed', () => {
       const report = baseReport();
       // No mcp field at all.
