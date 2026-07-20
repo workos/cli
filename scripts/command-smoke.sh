@@ -110,16 +110,19 @@ if [ "$code" -eq 1 ] && [ "$json_ok" -eq 1 ]; then pass "unknown command exits 1
 
 # ---- Authenticated commands (opt-in via WORKOS_API_KEY) ----
 if [ -n "$SMOKE_API_KEY" ]; then
-  out=$(WORKOS_API_KEY="$SMOKE_API_KEY" "$BIN" organization list --json --insecure-storage 2>/dev/null)
+  # On failure, surface the CLI's structured stderr error — it never
+  # contains key material (keys are masked in all output).
+  err_file="$SANDBOX/stderr"
+  out=$(WORKOS_API_KEY="$SMOKE_API_KEY" "$BIN" organization list --json --insecure-storage 2>"$err_file")
   code=$?
   case "$out" in
     *'"data"'*) json_ok=1 ;;
     *) json_ok=0 ;;
   esac
-  if [ "$code" -eq 0 ] && [ "$json_ok" -eq 1 ]; then pass "authenticated organization list exits 0 with data"; else fail "authenticated organization list (exit $code)"; fi
+  if [ "$code" -eq 0 ] && [ "$json_ok" -eq 1 ]; then pass "authenticated organization list exits 0 with data"; else fail "authenticated organization list (exit $code): $(cat "$err_file")"; fi
 
   ORG_NAME="cli-smoke-$$-$(date +%s)"
-  out=$(WORKOS_API_KEY="$SMOKE_API_KEY" "$BIN" organization create "$ORG_NAME" --json --insecure-storage 2>/dev/null)
+  out=$(WORKOS_API_KEY="$SMOKE_API_KEY" "$BIN" organization create "$ORG_NAME" --json --insecure-storage 2>"$err_file")
   code=$?
   # Org ids are org_<alphanumeric>; the closing-quote anchor keeps nested
   # org_domain_* ids from matching.
@@ -128,11 +131,11 @@ if [ -n "$SMOKE_API_KEY" ]; then
     org_deleted=0
     pass "organization create returns an id ($ORG_ID)"
   else
-    fail "organization create (exit $code): $out"
+    fail "organization create (exit $code): $out $(cat "$err_file")"
   fi
 
   if [ -n "$ORG_ID" ]; then
-    out=$(WORKOS_API_KEY="$SMOKE_API_KEY" "$BIN" organization get "$ORG_ID" --json --insecure-storage 2>/dev/null)
+    out=$(WORKOS_API_KEY="$SMOKE_API_KEY" "$BIN" organization get "$ORG_ID" --json --insecure-storage 2>"$err_file")
     code=$?
     case "$out" in
       *"$ORG_NAME"*) json_ok=1 ;;
