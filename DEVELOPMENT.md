@@ -148,6 +148,22 @@ for a non-host platform; the same value must be used for both `generate` and
 the compile, which `bun run build` (via `scripts/build.ts` + the `prebuild`
 hook) guarantees.
 
+### Why `react-devtools-core` is a devDependency
+
+Nothing in `src/` imports `react-devtools-core`, but it is required to
+**build**, not to run. The dashboard TUI (`src/dashboard/`) uses `ink`, whose
+reconciler does a runtime-gated `await import('./devtools.js')` that only fires
+when `DEV=true`; `devtools.js` then _statically_ imports `react-devtools-core`.
+`bun build --compile` follows that static import at bundle time and cannot prove
+the `DEV` branch is dead, so removing the devDependency fails the compile with
+`error: Could not resolve: "react-devtools-core"` (do not "clean it up"). As a
+result it is also bundled into every shipped binary, costing ~742 KiB
+(measured: 72,512,032 → 71,752,480 bytes when excluded). Do **not** try to trim
+it with `--external react-devtools-core`: that compiles, but bun resolves the
+external eagerly and the standalone binary then crashes on _every_ command
+(even `--version`) with `Cannot find package 'react-devtools-core'`. The ~742 KiB
+is the price of keeping the compile green and the dev-mode fallback graceful.
+
 ### Updating Integration Instructions
 
 The installer prompt in `agent-runner.ts` tells Claude to:
