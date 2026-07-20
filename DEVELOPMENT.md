@@ -219,6 +219,19 @@ bun run build
 bun run ./scripts/npm-dist-smoke.ts   # generates a host-only dist/npm if absent
 ```
 
+**Smoke testing the command contract:**
+
+`scripts/command-smoke.sh` executes real commands against a compiled binary
+and asserts the non-TTY contract: exit codes (0 success, 1 error, 4 auth
+required), structured JSON errors on stderr, and JSON output. It is
+offline-safe — CI runs it in a `--network none` container, and the release
+pipeline runs it against every platform binary on native hardware. Locally:
+
+```bash
+bun run build
+sh scripts/command-smoke.sh ./dist/workos
+```
+
 ## Evaluations
 
 Automated eval framework for testing installer skills across frameworks and project states.

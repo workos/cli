@@ -109,6 +109,12 @@ jobs:
             runner: windows-11-arm
     runs-on: ${{ matrix.runner }}
     steps:
+      # Checked out so the command-contract smoke script matches the tag
+      # whose binaries are under test.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # 7.0.0
+        with:
+          ref: ${{ inputs.tag_name }}
+
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
         with:
           name: ${{ matrix.asset }}
@@ -136,6 +142,7 @@ jobs:
           "./${{ matrix.asset }}" --version
           "./${{ matrix.asset }}" --help >/dev/null
           "./${{ matrix.asset }}" internal verify-assets --json
+          sh ./scripts/command-smoke.sh "./${{ matrix.asset }}"
 
       # Bun musl builds dynamically link libstdc++/libgcc (same as Node's musl
       # builds) — install them like real Alpine users must.
@@ -145,11 +152,13 @@ jobs:
           chmod +x "./${{ matrix.asset }}"
           docker run --rm \
             --volume "${PWD}/${{ matrix.asset }}:/workos:ro" \
+            --volume "${PWD}/scripts/command-smoke.sh:/command-smoke.sh:ro" \
             --env HOME=/tmp/home \
             alpine:3.22 \
             sh -eu -c 'apk add --no-cache libstdc++ libgcc >/dev/null;
             /workos --version; /workos --help >/dev/null;
-            /workos internal verify-assets --json'
+            /workos internal verify-assets --json;
+            sh /command-smoke.sh /workos'
 
   publish:
     name: Publish release

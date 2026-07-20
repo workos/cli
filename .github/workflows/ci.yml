@@ -41,19 +41,17 @@ jobs:
           WORKOS_BUILD_TARGET: bun-linux-x64-baseline
         run: bun run build
 
-      # Core commands must work standalone: no Bun, no Node.js, no
-      # node_modules, and no network.
-      - name: Smoke test without Bun, Node.js, node_modules, or network
+      # The full command contract (exit codes, structured JSON errors, JSON
+      # output — see scripts/command-smoke.sh) must hold standalone: no Bun,
+      # no Node.js, no node_modules, and no network.
+      - name: Smoke test command contract without Bun, Node.js, or network
         run: >-
           docker run --rm --network none
           --volume "${PWD}/dist/workos:/workos:ro"
+          --volume "${PWD}/scripts/command-smoke.sh:/command-smoke.sh:ro"
           --env HOME=/tmp/home
           debian:bookworm-slim
-          sh -eu -c
-          '/workos --help >/dev/null;
-          /workos auth status --json;
-          /workos api ls users --json >/dev/null;
-          /workos skills list --json >/dev/null'
+          sh /command-smoke.sh /workos
 
       # `internal verify-assets` performs the first-run download of the pinned
       # Agent SDK executable (checksum-verified) and spawns it, so a broken
