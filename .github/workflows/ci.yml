@@ -68,12 +68,15 @@ jobs:
           sh -eu -c
           '/workos internal verify-assets --json'
 
-      # Prove the npm thin-shim launcher resolves and spawns the platform
-      # binary — the same wiring `npx workos` uses after publish.
-      - name: Smoke test npm launcher packages
+      # Publish the generated packages to a throwaway local registry and run
+      # the real user flows — `npx workos`, `npm install -g workos`, platform
+      # selection, and the launcher's no-binary error path — from a hermetic
+      # environment. This exercises the npm machinery the in-repo launcher
+      # check can't (registry fetch, optionalDependencies, npx cache/bin).
+      - name: Smoke test npm distribution against a local registry
         env:
           WORKOS_NPM_ALLOW_MISSING: '1'
         run: |
           cp dist/workos dist/workos-linux-x64
           bun run ./scripts/gen-npm-packages.ts
-          NODE_PATH=dist/npm node dist/npm/workos/bin/workos.js --version
+          bun run ./scripts/npm-dist-smoke.ts

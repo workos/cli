@@ -213,6 +213,13 @@ jobs:
           TAG_NAME: ${{ inputs.tag_name }}
         run: WORKOS_NPM_VERSION="${TAG_NAME#v}" bun run ./scripts/gen-npm-packages.ts
 
+      # Pre-publish gate: publish all generated packages to a throwaway local
+      # registry and drive the real `npx workos` / `npm install -g workos`
+      # flows (linux-x64 binary executes on this runner). A packaging
+      # regression fails here instead of after touching npmjs.org.
+      - name: Smoke test npm distribution against a local registry
+        run: bun run ./scripts/npm-dist-smoke.ts
+
       - name: Determine npm tag
         id: npm-tag
         env:

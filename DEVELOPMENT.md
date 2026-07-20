@@ -204,6 +204,21 @@ export function redactCredentials(obj: any): any {
 - Environment variables
 - UI components
 
+**Smoke testing the npm distribution:**
+
+`scripts/npm-dist-smoke.ts` publishes the generated npm packages to a
+throwaway local registry (Verdaccio) and drives the real user flows —
+`npx workos`, `npm install -g workos`, platform selection, and the
+launcher's no-binary error path — from a hermetic environment (fresh
+HOME/cache/prefix, sanitized PATH, no uplinks so nothing can leak to the
+real registry). CI runs it on every PR and the release pipeline runs it as a
+pre-publish gate. Locally:
+
+```bash
+bun run build
+bun run ./scripts/npm-dist-smoke.ts   # generates a host-only dist/npm if absent
+```
+
 ## Evaluations
 
 Automated eval framework for testing installer skills across frameworks and project states.
