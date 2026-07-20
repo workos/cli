@@ -232,6 +232,11 @@ bun run build
 sh scripts/command-smoke.sh ./dist/workos
 ```
 
+With `WORKOS_API_KEY` set to a staging-environment key, it also runs an
+authenticated section (organization list + create → get → delete round-trip).
+CI provides this via the `WORKOS_SMOKE_API_KEY` repository secret; fork PRs
+receive no secrets and skip it.
+
 ## Evaluations
 
 Automated eval framework for testing installer skills across frameworks and project states.

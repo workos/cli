@@ -66,6 +66,20 @@ jobs:
           sh -eu -c
           '/workos internal verify-assets --json'
 
+      # Authenticated command execution against a real WorkOS staging
+      # environment: list plus a create → get → delete round-trip. The secret
+      # is a dedicated staging-environment API key; fork PRs receive no
+      # secrets, so this skips there instead of failing.
+      - name: Smoke test authenticated commands
+        env:
+          WORKOS_API_KEY: ${{ secrets.WORKOS_SMOKE_API_KEY }}
+        run: |
+          if [ -z "$WORKOS_API_KEY" ]; then
+            echo "Skipped: WORKOS_SMOKE_API_KEY secret not available (fork PR or not yet configured)"
+            exit 0
+          fi
+          sh scripts/command-smoke.sh ./dist/workos
+
       # Publish the generated packages to a throwaway local registry and run
       # the real user flows — `npx workos`, `npm install -g workos`, platform
       # selection, and the launcher's no-binary error path — from a hermetic
