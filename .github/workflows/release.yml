@@ -226,12 +226,22 @@ jobs:
           fi
 
       # Platform packages publish before the launcher so the launcher's
-      # optionalDependencies are always resolvable once it is visible.
+      # optionalDependencies are always resolvable once it is visible — the
+      # single glob list keeps that order (cli-* dirs before the workos dir).
+      # Each publish is skipped when that exact version is already on npm, so a
+      # partially-published release converges cleanly on a re-run of this job.
       - name: Publish
+        env:
+          TAG_NAME: ${{ inputs.tag_name }}
         run: |
           sed -i '/_authToken/d' "$NPM_CONFIG_USERCONFIG"
           unset NODE_AUTH_TOKEN
-          for dir in dist/npm/@workos/cli-*; do
+          VERSION="${TAG_NAME#v}"
+          for dir in dist/npm/@workos/cli-* dist/npm/workos; do
+            pkg=$(node -p "require('./$dir/package.json').name")
+            if npm view "$pkg@$VERSION" version >/dev/null 2>&1; then
+              echo "$pkg@$VERSION already published, skipping"
+              continue
+            fi
             (cd "$dir" && npm publish --access public --provenance --tag ${{ steps.npm-tag.outputs.tag }})
           done
-          cd dist/npm/workos && npm publish --access public --provenance --tag ${{ steps.npm-tag.outputs.tag }}
