@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { AGENT_SDK_EXECUTABLE_SHA256 } from '../generated/agent-sdk-manifest.js';
 import { runVerifyAssets } from './internal-verify-assets.js';
 
 describe('runVerifyAssets', () => {
@@ -22,6 +23,7 @@ describe('runVerifyAssets', () => {
       expect(report.keyring).toMatch(/^native/);
       expect(report.claudeVersion).toBeTruthy();
       expect(report.claudePath).not.toContain('$bunfs');
+      expect(report.claudeSha256).toBe(AGENT_SDK_EXECUTABLE_SHA256);
     } finally {
       setOutputMode('human');
       logSpy.mockRestore();

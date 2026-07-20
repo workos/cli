@@ -1,7 +1,9 @@
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import chalk from 'chalk';
+import { AGENT_SDK_EXECUTABLE_SHA256 } from '../generated/agent-sdk-manifest.js';
 import { AGENT_SDK_TARGET, AGENT_SDK_VERSION, ensureClaudeCodeExecutable } from '../lib/agent-sdk-assets.js';
 import { BUNDLED_SKILLS_VERSION, getSkillsDir } from '../lib/skills-assets.js';
 import { logError } from '../utils/debug.js';
@@ -17,9 +19,12 @@ const CLAUDE_SPAWN_TIMEOUT_MS = 120_000;
  * machine — skills embedded in the compiled binary materialize and are
  * readable, and the pinned Agent SDK `claude` executable resolves (first-run
  * download + checksum verification from a compiled binary; node_modules in
- * dev) and actually runs. Exits non-zero on the first failure so release
- * pipelines can gate on it. Requires network access from a compiled binary
- * unless the download is already cached.
+ * dev), matches the pinned manifest sha256, and actually runs. The cached
+ * executable is otherwise only revalidated by file size on subsequent runs, so
+ * this command re-hashes it to catch silent, size-preserving corruption (disk
+ * fault, antivirus quarantine/restore). Exits non-zero on the first failure so
+ * release pipelines can gate on it. Requires network access from a compiled
+ * binary unless the download is already cached.
  */
 export async function runVerifyAssets(): Promise<void> {
   let skillsDir: string;
@@ -66,9 +71,31 @@ export async function runVerifyAssets(): Promise<void> {
   }
 
   let claudePath: string;
-  let claudeVersion: string;
   try {
     claudePath = await ensureClaudeCodeExecutable();
+  } catch (error) {
+    logError('Agent SDK verification failed:', error);
+    exitWithError({
+      code: 'VERIFY_ASSETS_AGENT_SDK_FAILED',
+      message: `Agent SDK executable failed to resolve or run: ${error instanceof Error ? error.message : String(error)}`,
+    });
+  }
+
+  // Re-verify the cached executable's sha256 against the pinned manifest
+  // digest. After the first install the cache is only revalidated by file size,
+  // so silent corruption that preserves size (disk fault, antivirus
+  // quarantine/restore) would otherwise pass unnoticed until runtime.
+  const claudeSha256 = createHash('sha256').update(readFileSync(claudePath)).digest('hex');
+  if (claudeSha256 !== AGENT_SDK_EXECUTABLE_SHA256) {
+    logError('Agent SDK checksum verification failed:', `expected ${AGENT_SDK_EXECUTABLE_SHA256}, got ${claudeSha256}`);
+    exitWithError({
+      code: 'VERIFY_ASSETS_AGENT_SDK_CHECKSUM_FAILED',
+      message: `Agent SDK executable at ${claudePath} failed checksum verification: expected sha256 ${AGENT_SDK_EXECUTABLE_SHA256}, got ${claudeSha256}. Delete ~/.workos/cache/agent-sdk to force a re-download.`,
+    });
+  }
+
+  let claudeVersion: string;
+  try {
     const result = spawnSync(claudePath, ['--version'], { encoding: 'utf8', timeout: CLAUDE_SPAWN_TIMEOUT_MS });
     if (result.error) throw result.error;
     if (result.status !== 0 || !result.stdout.trim()) {
@@ -90,6 +117,7 @@ export async function runVerifyAssets(): Promise<void> {
     bundledSkillsVersion: BUNDLED_SKILLS_VERSION,
     keyring,
     claudePath,
+    claudeSha256,
     claudeVersion,
     agentSdkTarget: AGENT_SDK_TARGET,
     agentSdkVersion: AGENT_SDK_VERSION,
@@ -103,5 +131,6 @@ export async function runVerifyAssets(): Promise<void> {
   console.log(chalk.green('✓'), `Skills materialized: ${skills.length} skills at ${skillsDir}`);
   console.log(chalk.green('✓'), `Keyring binding loaded (${keyring})`);
   console.log(chalk.green('✓'), `Agent SDK ${AGENT_SDK_VERSION} (${AGENT_SDK_TARGET}) at ${claudePath}`);
+  console.log(chalk.green('✓'), `Agent SDK checksum verified (sha256 ${claudeSha256})`);
   console.log(chalk.green('✓'), `claude --version → ${claudeVersion} (pinned SDK ${AGENT_SDK_VERSION})`);
 }
