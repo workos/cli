@@ -203,10 +203,14 @@ function showFallbackWarning(): void {
 }
 
 export function hasCredentials(): boolean {
+  // Validate rather than just probing for a file/entry: a malformed blob must
+  // read as logged-out here too, so this never disagrees with getCredentials().
+  // (readFrom* both run isValidCredentials; avoids getCredentials()'s keyring
+  // migration side effect.)
   if (forceInsecureStorage) {
-    return fileExists();
+    return readFromFile() !== null;
   }
-  return readFromKeyring() !== null || fileExists();
+  return readFromKeyring() !== null || readFromFile() !== null;
 }
 
 export function getCredentials(): Credentials | null {

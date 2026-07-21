@@ -186,7 +186,18 @@ describe('credential-store', () => {
       mkdirSync(installerDir, { recursive: true });
       writeFileSync(credentialsFile, JSON.stringify({ userId: 'user_abc' }));
       expect(getCredentials()).toBeNull();
+      // hasCredentials must agree with getCredentials — a present-but-malformed
+      // file is logged-out, not "has credentials".
+      expect(hasCredentials()).toBe(false);
       expect(mockKeyring.has('workos-cli:credentials')).toBe(false);
+    });
+
+    it('malformed file blob reads as logged out under --insecure-storage too', () => {
+      setInsecureStorage(true);
+      mkdirSync(installerDir, { recursive: true });
+      writeFileSync(credentialsFile, JSON.stringify({ userId: 'user_abc' }));
+      expect(getCredentials()).toBeNull();
+      expect(hasCredentials()).toBe(false);
     });
   });
 
