@@ -97,6 +97,28 @@ describe('downloadTarball', () => {
     expect(result.equals(tarball)).toBe(true);
   });
 
+  it('fires onRetry once before the second attempt', async () => {
+    const tarball = makeTarball([['package/claude', Buffer.from('binary')]]);
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('connection reset'))
+      .mockResolvedValueOnce(streamedResponse(tarball));
+    vi.stubGlobal('fetch', fetchMock);
+    const onRetry = vi.fn();
+
+    await downloadTarball(undefined, undefined, onRetry);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not fire onRetry when the first attempt succeeds', async () => {
+    const tarball = makeTarball([['package/claude', Buffer.from('binary')]]);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(streamedResponse(tarball)));
+    const onRetry = vi.fn();
+
+    await downloadTarball(undefined, undefined, onRetry);
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+
   it('aborts a stalled download and reports it after retrying', async () => {
     const fetchMock = vi.fn((_url: string, init?: { signal?: AbortSignal }) =>
       Promise.resolve({

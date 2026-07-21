@@ -81,6 +81,12 @@ function resolveFromNodeModules(): string {
   return path;
 }
 
+// The uncompressed tarball is the pinned executable plus a handful of small
+// metadata files. Cap gunzip output generously above that so a compromised or
+// corrupted response can't expand a gzip bomb in memory before the sha256 gate
+// (which runs only after decompression) gets a chance to reject it.
+const MAX_TARBALL_UNCOMPRESSED_BYTES = AGENT_SDK_EXECUTABLE_SIZE + 64 * 1024 * 1024;
+
 /**
  * Extract a single entry from a gzipped npm tarball. Exported for tests.
  *
@@ -89,7 +95,7 @@ function resolveFromNodeModules(): string {
  * want — unknown entry types are skipped by the generic size-based walk.
  */
 export function extractTarEntry(tarGz: Buffer, entryName: string): Buffer {
-  const raw = gunzipSync(tarGz);
+  const raw = gunzipSync(tarGz, { maxOutputLength: MAX_TARBALL_UNCOMPRESSED_BYTES });
   let offset = 0;
   while (offset + 512 <= raw.length) {
     const header = raw.subarray(offset, offset + 512);
@@ -167,11 +173,14 @@ async function downloadTarballOnce(
 /**
  * Download the pinned tarball, retrying once on any network, stall, or HTTP
  * failure. Checksum verification stays in the caller and is never retried.
+ * `onRetry` fires before the second attempt (the retry restarts the byte
+ * count, so callers driving a progress bar use it to reset their throttle).
  * Exported for tests.
  */
 export async function downloadTarball(
   onProgress?: (progress: DownloadProgress) => void,
   stallTimeoutMs: number = DOWNLOAD_STALL_TIMEOUT_MS,
+  onRetry?: () => void,
 ): Promise<Buffer> {
   const url = AGENT_SDK_TARBALL_URL;
   let lastError: unknown;
@@ -180,30 +189,43 @@ export async function downloadTarball(
       return await downloadTarballOnce(url, onProgress, stallTimeoutMs);
     } catch (error) {
       lastError = error;
+      if (attempt === 0) onRetry?.();
     }
   }
   throw lastError;
 }
 
+// Only reap cache dirs untouched for this long. A newer sibling may belong to
+// a concurrently running other-version CLI (mid-download, or spawned from that
+// dir mid-agent-run), so leaving fresh dirs alone avoids yanking an executable
+// out from under it — mirrors the skills reaper's staleness guard.
+const STALE_CACHE_MS = 24 * 60 * 60 * 1000;
+
 /**
  * Best-effort reap of cache dirs for other CLI/SDK versions — each version
  * keys its own `<version>-<target>` dir (~230MB), which would otherwise
  * accumulate forever. Runs only after a successful download of the current
- * version, so at most one stale sibling window per upgrade.
+ * version, and skips any sibling touched within STALE_CACHE_MS so a concurrent
+ * run's dir is never removed.
  */
 function cleanupStaleCacheDirs(): void {
+  const root = agentSdkCacheRoot();
   let entries: string[];
   try {
-    entries = readdirSync(agentSdkCacheRoot());
+    entries = readdirSync(root);
   } catch {
     return;
   }
+  const cutoff = Date.now() - STALE_CACHE_MS;
   for (const entry of entries) {
     if (entry === cacheKey()) continue;
+    const path = join(root, entry);
     try {
-      rmSync(join(agentSdkCacheRoot(), entry), { recursive: true, force: true });
+      // Fresh dir — may be in use by a concurrent run; leave it for a later reap.
+      if (statSync(path).mtimeMs >= cutoff) continue;
+      rmSync(path, { recursive: true, force: true });
     } catch {
-      // In use or already gone — skip it.
+      // In use, already gone, or unreadable — skip it.
     }
   }
 }
@@ -218,7 +240,10 @@ function cleanupStaleCacheDirs(): void {
  * it atomically (write-to-temp + rename; a concurrent winner is accepted only
  * if its bytes verify).
  */
-export async function ensureClaudeCodeExecutable(onProgress?: (progress: DownloadProgress) => void): Promise<string> {
+export async function ensureClaudeCodeExecutable(
+  onProgress?: (progress: DownloadProgress) => void,
+  onRetry?: () => void,
+): Promise<string> {
   if (cachedExecutablePath) return cachedExecutablePath;
 
   const target = runtimeTarget();
@@ -237,7 +262,7 @@ export async function ensureClaudeCodeExecutable(onProgress?: (progress: Downloa
     return finalPath;
   }
 
-  const tarball = await downloadTarball(onProgress);
+  const tarball = await downloadTarball(onProgress, undefined, onRetry);
   const executable = extractTarEntry(tarball, `package/${AGENT_SDK_EXECUTABLE_NAME}`);
   const digest = sha256Hex(executable);
   if (digest !== AGENT_SDK_EXECUTABLE_SHA256) {

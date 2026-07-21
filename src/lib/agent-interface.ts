@@ -487,16 +487,24 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
     // First run from a compiled binary downloads the pinned agent runtime
     // (~230MB, one-time, cached under ~/.workos); dev resolves node_modules.
     let lastReportedPct = -1;
-    const claudeExecutablePath = await ensureClaudeCodeExecutable(({ receivedBytes, totalBytes }) => {
-      if (!totalBytes) return;
-      const pct = Math.floor((receivedBytes / totalBytes) * 100);
-      if (pct >= lastReportedPct + 25 || (lastReportedPct === -1 && pct === 0)) {
-        lastReportedPct = pct;
-        options.emitter?.emit('status', {
-          message: `Downloading Claude agent runtime (one-time, ${Math.round(totalBytes / 1024 / 1024)}MB): ${pct}%`,
-        });
-      }
-    });
+    const claudeExecutablePath = await ensureClaudeCodeExecutable(
+      ({ receivedBytes, totalBytes }) => {
+        if (!totalBytes) return;
+        const pct = Math.floor((receivedBytes / totalBytes) * 100);
+        if (pct >= lastReportedPct + 25 || (lastReportedPct === -1 && pct === 0)) {
+          lastReportedPct = pct;
+          options.emitter?.emit('status', {
+            message: `Downloading Claude agent runtime (one-time, ${Math.round(totalBytes / 1024 / 1024)}MB): ${pct}%`,
+          });
+        }
+      },
+      () => {
+        // The retry restarts the byte count at 0; reset the throttle so the
+        // fresh attempt's progress isn't suppressed until it re-passes the peak.
+        lastReportedPct = -1;
+        options.emitter?.emit('status', { message: 'Download interrupted; retrying…' });
+      },
+    );
 
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
