@@ -100,6 +100,14 @@ describe('team command', () => {
       const out = JSON.parse(consoleOutput[0]);
       expect(out.members[0].id).toBe('uo_1');
     });
+
+    it('sends NO environment header (team-scoped operation)', async () => {
+      mockGraphqlRequest.mockResolvedValue({ currentTeam: { memberships: [] } });
+      await runTeamMembers();
+      // Team-level ops must never carry an environment target — a spurious
+      // header would be validated (and could be rejected) by the guard.
+      expect(mockGraphqlRequest.mock.calls[0][1]).not.toHaveProperty('environmentId');
+    });
   });
 
   describe('invite', () => {

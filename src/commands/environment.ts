@@ -16,6 +16,7 @@
 import chalk from 'chalk';
 import { requireCommandToken } from '../lib/command-auth.js';
 import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
+import { resolveEnvironmentTarget } from '../lib/environment-target.js';
 import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
 import { isJsonMode, outputJson, outputSuccess } from '../utils/output.js';
 
@@ -28,17 +29,28 @@ interface EnvironmentNode {
 export interface EnvironmentCreateOptions {
   name: string;
   sandbox: boolean;
+  /** `--environment-id` override for this invocation. */
+  environmentId?: string;
 }
 
 export async function runEnvironmentCreate(options: EnvironmentCreateOptions): Promise<void> {
   const token = await requireCommandToken();
   const op = getOperation('createEnvironment');
 
+  // Environment-scoped mutation: the new environment's project placement
+  // derives from the request's environment context (CreateEnvironmentInput has
+  // no project field), so the target is resolved and pre-validated.
+  const target = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: op.kind === 'mutation',
+  });
+
   let data: { createEnvironment: { environment: EnvironmentNode } };
   try {
     data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
       token,
       variables: { input: { name: options.name, isSandbox: options.sandbox } },
+      environmentId: target.environmentId,
     });
   } catch (error) {
     reportDashboardError(error);
@@ -62,11 +74,20 @@ export async function runEnvironmentRename(options: EnvironmentRenameOptions): P
   const token = await requireCommandToken();
   const op = getOperation('renameEnvironment');
 
+  // Environment-scoped mutation: the explicit positional is the target — it is
+  // pre-validated against the team so a mistyped ID errors instead of hitting
+  // the server's silent production fallback.
+  const target = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: op.kind === 'mutation',
+  });
+
   let data: { renameEnvironment: { environment: EnvironmentNode } };
   try {
     data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
       token,
-      variables: { input: { environmentId: options.environmentId, name: options.name } },
+      variables: { input: { environmentId: target.environmentId, name: options.name } },
+      environmentId: target.environmentId,
     });
   } catch (error) {
     reportDashboardError(error);

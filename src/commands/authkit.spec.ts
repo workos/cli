@@ -19,6 +19,18 @@ vi.mock('../lib/dashboard-graphql.js', async (importActual) => {
   };
 });
 
+// Resolver matrix is covered in environment-target.spec.ts; these tests only
+// assert the commands thread its output (flag override or profile default)
+// into the request as both operation variable and environment header.
+const mockResolveEnvironmentTarget = vi.fn();
+vi.mock('../lib/environment-target.js', async (importActual) => {
+  const actual = await importActual<typeof import('../lib/environment-target.js')>();
+  return {
+    ...actual,
+    resolveEnvironmentTarget: (...args: unknown[]) => mockResolveEnvironmentTarget(...args),
+  };
+});
+
 const { setOutputMode } = await import('../utils/output.js');
 const { DashboardGraphqlError } = await import('../lib/dashboard-graphql.js');
 const { CliExit } = await import('../utils/cli-exit.js');
@@ -38,6 +50,10 @@ describe('authkit command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireCommandToken.mockResolvedValue('tok_123');
+    mockResolveEnvironmentTarget.mockImplementation(async (_token: string, opts: { flagValue?: string }) => ({
+      environmentId: opts.flagValue?.trim() || 'env_profile',
+      source: opts.flagValue?.trim() ? 'flag' : 'profile',
+    }));
     consoleOutput = [];
     vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
       consoleOutput.push(args.map(String).join(' '));
@@ -51,7 +67,7 @@ describe('authkit command', () => {
   });
 
   describe('redirect-uris list', () => {
-    it('passes environmentId and renders the URIs', async () => {
+    it('passes environmentId (variable + header) and renders the URIs', async () => {
       mockGraphqlRequest.mockResolvedValue({
         redirectUris: { data: [{ id: 'ru_1', uri: 'https://app.com/callback', isDefault: true }] },
       });
@@ -59,12 +75,30 @@ describe('authkit command', () => {
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('redirectUris'), {
         token: 'tok_123',
         variables: { environmentId: 'env_1' },
+        environmentId: 'env_1',
       });
       expect(consoleOutput.join('\n')).toContain('https://app.com/callback');
     });
 
-    it('rejects a missing --environment-id before calling the API', async () => {
-      await expect(runAuthkitRedirectUrisList({ environmentId: '' })).rejects.toBeInstanceOf(CliExit);
+    it('defaults environmentId from the active profile when the flag is omitted', async () => {
+      mockGraphqlRequest.mockResolvedValue({ redirectUris: { data: [] } });
+      await runAuthkitRedirectUrisList({});
+      expect(mockResolveEnvironmentTarget).toHaveBeenCalledWith('tok_123', {
+        flagValue: undefined,
+        forMutation: false,
+      });
+      expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('redirectUris'), {
+        token: 'tok_123',
+        variables: { environmentId: 'env_profile' },
+        environmentId: 'env_profile',
+      });
+    });
+
+    it('never calls the API when the environment target cannot be resolved', async () => {
+      mockResolveEnvironmentTarget.mockRejectedValue(
+        new CliExit(1, { reason: 'validation_error', errorCode: 'environment_unresolved' }),
+      );
+      await expect(runAuthkitRedirectUrisList({})).rejects.toBeInstanceOf(CliExit);
       expect(mockGraphqlRequest).not.toHaveBeenCalled();
     });
 
@@ -86,6 +120,12 @@ describe('authkit command', () => {
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('setRedirectUris'), {
         token: 'tok_123',
         variables: { input: { environmentId: 'env_1', redirectUris: [{ uri: 'https://a.com/cb' }], dryRun: false } },
+        environmentId: 'env_1',
+      });
+      // Set operations are mutations: the resolver must pre-validate the target.
+      expect(mockResolveEnvironmentTarget).toHaveBeenCalledWith('tok_123', {
+        flagValue: 'env_1',
+        forMutation: true,
       });
       // Selection-correctness: the leak test cannot catch a wrong op here (the
       // application-level op only leaks `userland` in its input *type* name), so
@@ -171,6 +211,7 @@ describe('authkit command', () => {
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('corsConfig'), {
         token: 'tok_123',
         variables: { environmentId: 'env_1' },
+        environmentId: 'env_1',
       });
       expect(consoleOutput.join('\n')).toContain('https://app.com');
     });
@@ -181,6 +222,7 @@ describe('authkit command', () => {
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('updateCorsConfig'), {
         token: 'tok_123',
         variables: { environmentId: 'env_1', origins: ['https://app.com'], dryRun: false },
+        environmentId: 'env_1',
       });
     });
 
@@ -203,6 +245,7 @@ describe('authkit command', () => {
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('logoutUris'), {
         token: 'tok_123',
         variables: { environmentId: 'env_1' },
+        environmentId: 'env_1',
       });
       expect(consoleOutput.join('\n')).toContain('https://app.com/out');
     });
@@ -215,6 +258,7 @@ describe('authkit command', () => {
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('setLogoutUris'), {
         token: 'tok_123',
         variables: { input: { environmentId: 'env_1', logoutUris: [{ uri: 'https://app.com/out' }], dryRun: false } },
+        environmentId: 'env_1',
       });
     });
   });
@@ -230,6 +274,7 @@ describe('authkit command', () => {
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('environmentAppBranding'), {
         token: 'tok_123',
         variables: { environmentId: 'env_1' },
+        environmentId: 'env_1',
       });
       expect(consoleOutput.join('\n')).toContain('Acme');
     });
@@ -248,25 +293,43 @@ describe('authkit command', () => {
   });
 
   describe('required-flag validation (shared guards)', () => {
-    it('cors get requires --environment-id', async () => {
-      await expect(runAuthkitCorsGet({ environmentId: '' })).rejects.toBeInstanceOf(CliExit);
-      expect(mockGraphqlRequest).not.toHaveBeenCalled();
-    });
     it('cors set requires at least one --origin', async () => {
       await expect(runAuthkitCorsSet({ environmentId: 'env_1', origins: [] })).rejects.toBeInstanceOf(CliExit);
-      expect(mockGraphqlRequest).not.toHaveBeenCalled();
-    });
-    it('logout-uris list requires --environment-id', async () => {
-      await expect(runAuthkitLogoutUrisList({ environmentId: '' })).rejects.toBeInstanceOf(CliExit);
       expect(mockGraphqlRequest).not.toHaveBeenCalled();
     });
     it('logout-uris set requires at least one --uri', async () => {
       await expect(runAuthkitLogoutUrisSet({ environmentId: 'env_1', uris: [] })).rejects.toBeInstanceOf(CliExit);
       expect(mockGraphqlRequest).not.toHaveBeenCalled();
     });
-    it('branding get requires --environment-id', async () => {
-      await expect(runAuthkitBrandingGet({ environmentId: '' })).rejects.toBeInstanceOf(CliExit);
-      expect(mockGraphqlRequest).not.toHaveBeenCalled();
+  });
+
+  describe('environment defaulting (previously required --environment-id)', () => {
+    it('cors get resolves the environment from the active profile', async () => {
+      mockGraphqlRequest.mockResolvedValue({ webOrigins: { webOrigins: { origins: [] } } });
+      await runAuthkitCorsGet({});
+      expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('corsConfig'), {
+        token: 'tok_123',
+        variables: { environmentId: 'env_profile' },
+        environmentId: 'env_profile',
+      });
+    });
+    it('logout-uris list resolves the environment from the active profile', async () => {
+      mockGraphqlRequest.mockResolvedValue({ logoutUris: { data: [] } });
+      await runAuthkitLogoutUrisList({});
+      expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('logoutUris'), {
+        token: 'tok_123',
+        variables: { environmentId: 'env_profile' },
+        environmentId: 'env_profile',
+      });
+    });
+    it('branding get resolves the environment from the active profile', async () => {
+      mockGraphqlRequest.mockResolvedValue({ environment: { appBranding: null } });
+      await runAuthkitBrandingGet({});
+      expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('environmentAppBranding'), {
+        token: 'tok_123',
+        variables: { environmentId: 'env_profile' },
+        environmentId: 'env_profile',
+      });
     });
   });
 });

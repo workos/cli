@@ -115,7 +115,16 @@ const commands: CommandSchema[] = [
   {
     name: 'whoami',
     description: 'Show the authenticated user, team, and environment (dashboard session)',
-    options: [insecureStorageOpt],
+    options: [
+      insecureStorageOpt,
+      {
+        name: 'environment-id',
+        type: 'string',
+        description: 'Environment ID to target (defaults to the active environment)',
+        required: false,
+        hidden: false,
+      },
+    ],
   },
   {
     name: 'environment',
@@ -133,6 +142,13 @@ const commands: CommandSchema[] = [
             description: 'Create a sandbox environment',
             required: false,
             default: false,
+            hidden: false,
+          },
+          {
+            name: 'environment-id',
+            type: 'string',
+            description: 'Environment ID whose project receives the new environment (defaults to the active environment)',
+            required: false,
             hidden: false,
           },
         ],
@@ -203,7 +219,7 @@ const commands: CommandSchema[] = [
             name: 'list',
             description: 'List configured redirect URIs for an environment',
             options: [
-              { name: 'environment-id', type: 'string', description: 'Environment ID', required: true, hidden: false },
+              { name: 'environment-id', type: 'string', description: 'Environment ID (defaults to the active environment)', required: false, hidden: false },
               { name: 'limit', type: 'number', description: 'Maximum number of URIs to return', required: false, hidden: false },
             ],
           },
@@ -211,7 +227,7 @@ const commands: CommandSchema[] = [
             name: 'set',
             description: 'Set the allowed redirect URIs for an environment (replaces the full list)',
             options: [
-              { name: 'environment-id', type: 'string', description: 'Environment ID', required: true, hidden: false },
+              { name: 'environment-id', type: 'string', description: 'Environment ID (defaults to the active environment)', required: false, hidden: false },
               { name: 'uri', type: 'string', description: 'Redirect URI (repeatable)', required: true, hidden: false },
               { name: 'default', type: 'string', description: 'Which URI to mark as the default', required: false, hidden: false },
               { name: 'dry-run', type: 'boolean', description: 'Validate without saving', required: false, default: false, hidden: false },
@@ -226,13 +242,13 @@ const commands: CommandSchema[] = [
           {
             name: 'get',
             description: 'Show the allowed web origins (CORS) for an environment',
-            options: [{ name: 'environment-id', type: 'string', description: 'Environment ID', required: true, hidden: false }],
+            options: [{ name: 'environment-id', type: 'string', description: 'Environment ID (defaults to the active environment)', required: false, hidden: false }],
           },
           {
             name: 'set',
             description: 'Set the allowed web origins (CORS) for an environment (replaces the full list)',
             options: [
-              { name: 'environment-id', type: 'string', description: 'Environment ID', required: true, hidden: false },
+              { name: 'environment-id', type: 'string', description: 'Environment ID (defaults to the active environment)', required: false, hidden: false },
               { name: 'origin', type: 'string', description: 'Web origin (repeatable)', required: true, hidden: false },
               { name: 'dry-run', type: 'boolean', description: 'Validate without saving', required: false, default: false, hidden: false },
             ],
@@ -247,7 +263,7 @@ const commands: CommandSchema[] = [
             name: 'list',
             description: 'List configured logout URIs for an environment',
             options: [
-              { name: 'environment-id', type: 'string', description: 'Environment ID', required: true, hidden: false },
+              { name: 'environment-id', type: 'string', description: 'Environment ID (defaults to the active environment)', required: false, hidden: false },
               { name: 'limit', type: 'number', description: 'Maximum number of URIs to return', required: false, hidden: false },
             ],
           },
@@ -255,7 +271,7 @@ const commands: CommandSchema[] = [
             name: 'set',
             description: 'Set the allowed logout URIs for an environment (replaces the full list)',
             options: [
-              { name: 'environment-id', type: 'string', description: 'Environment ID', required: true, hidden: false },
+              { name: 'environment-id', type: 'string', description: 'Environment ID (defaults to the active environment)', required: false, hidden: false },
               { name: 'uri', type: 'string', description: 'Logout URI (repeatable)', required: true, hidden: false },
               { name: 'default', type: 'string', description: 'Which URI to mark as the default', required: false, hidden: false },
               { name: 'dry-run', type: 'boolean', description: 'Validate without saving', required: false, default: false, hidden: false },
@@ -270,7 +286,7 @@ const commands: CommandSchema[] = [
           {
             name: 'get',
             description: 'Show AuthKit branding (logos, theme) for an environment',
-            options: [{ name: 'environment-id', type: 'string', description: 'Environment ID', required: true, hidden: false }],
+            options: [{ name: 'environment-id', type: 'string', description: 'Environment ID (defaults to the active environment)', required: false, hidden: false }],
           },
         ],
       },

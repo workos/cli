@@ -10,6 +10,7 @@
 import chalk from 'chalk';
 import { requireCommandToken } from '../lib/command-auth.js';
 import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
+import { resolveEnvironmentTarget } from '../lib/environment-target.js';
 import { reportDashboardError } from '../catalog/operation.js';
 import { isJsonMode, outputJson } from '../utils/output.js';
 
@@ -61,14 +62,30 @@ interface WhoamiData {
   } | null;
 }
 
-export async function runWhoami(): Promise<void> {
+export interface WhoamiOptions {
+  /** `--environment-id` override for this invocation. */
+  environmentId?: string;
+}
+
+export async function runWhoami(options: WhoamiOptions = {}): Promise<void> {
   // Resolve a usable bearer, silently refreshing an expired access token when
   // a valid refresh token exists; exits 4 when no usable session remains.
   const token = await requireCommandToken();
 
+  // Environment-scoped (read): send the resolved target so the displayed
+  // environment reflects the active profile, not the server's production
+  // fallback.
+  const target = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: false,
+  });
+
   let data: WhoamiData;
   try {
-    data = await dashboardGraphqlRequest<WhoamiData>(WHOAMI_QUERY, { token });
+    data = await dashboardGraphqlRequest<WhoamiData>(WHOAMI_QUERY, {
+      token,
+      environmentId: target.environmentId,
+    });
   } catch (error) {
     reportDashboardError(error);
   }

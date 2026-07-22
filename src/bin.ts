@@ -394,11 +394,15 @@ async function runCli(): Promise<void> {
     .command(
       'whoami',
       'Show the authenticated user, team, and environment (dashboard session)',
-      (yargs) => yargs.options(insecureStorageOption),
+      (yargs) =>
+        yargs.options(insecureStorageOption).option('environment-id', {
+          type: 'string',
+          describe: 'Environment ID to target (defaults to the active environment)',
+        }),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage as boolean | undefined);
         const { runWhoami } = await import('./commands/whoami.js');
-        await runWhoami();
+        await runWhoami({ environmentId: argv.environmentId as string | undefined });
       },
     )
     .command(
@@ -413,11 +417,19 @@ async function runCli(): Promise<void> {
           (y) =>
             y
               .positional('name', { type: 'string', demandOption: true, describe: 'Environment name' })
-              .option('sandbox', { type: 'boolean', default: false, describe: 'Create a sandbox environment' }),
+              .option('sandbox', { type: 'boolean', default: false, describe: 'Create a sandbox environment' })
+              .option('environment-id', {
+                type: 'string',
+                describe: 'Environment ID whose project receives the new environment (defaults to the active environment)',
+              }),
           async (argv) => {
             await applyInsecureStorage(argv.insecureStorage);
             const { runEnvironmentCreate } = await import('./commands/environment.js');
-            await runEnvironmentCreate({ name: argv.name, sandbox: Boolean(argv.sandbox) });
+            await runEnvironmentCreate({
+              name: argv.name,
+              sandbox: Boolean(argv.sandbox),
+              environmentId: argv.environmentId as string | undefined,
+            });
           },
         );
         registerSubcommand(
@@ -503,13 +515,13 @@ async function runCli(): Promise<void> {
             'List configured redirect URIs for an environment',
             (y) =>
               y
-                .option('environment-id', { type: 'string', demandOption: true, describe: 'Environment ID' })
+                .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' })
                 .option('limit', { type: 'number', describe: 'Maximum number of URIs to return' }),
             async (argv) => {
               await applyInsecureStorage(argv.insecureStorage);
               const { runAuthkitRedirectUrisList } = await import('./commands/authkit.js');
               await runAuthkitRedirectUrisList({
-                environmentId: argv.environmentId as string,
+                environmentId: argv.environmentId as string | undefined,
                 limit: argv.limit as number | undefined,
               });
             },
@@ -520,7 +532,7 @@ async function runCli(): Promise<void> {
             'Set the allowed redirect URIs for an environment (replaces the full list)',
             (y) =>
               y
-                .option('environment-id', { type: 'string', demandOption: true, describe: 'Environment ID' })
+                .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' })
                 .option('uri', { type: 'string', array: true, demandOption: true, describe: 'Redirect URI (repeatable)' })
                 .option('default', { type: 'string', describe: 'Which URI to mark as the default' })
                 .option('dry-run', { type: 'boolean', default: false, describe: 'Validate without saving' }),
@@ -528,7 +540,7 @@ async function runCli(): Promise<void> {
               await applyInsecureStorage(argv.insecureStorage);
               const { runAuthkitRedirectUrisSet } = await import('./commands/authkit.js');
               await runAuthkitRedirectUrisSet({
-                environmentId: argv.environmentId as string,
+                environmentId: argv.environmentId as string | undefined,
                 uris: argv.uri as string[],
                 default: argv.default as string | undefined,
                 dryRun: Boolean(argv.dryRun),
@@ -543,11 +555,11 @@ async function runCli(): Promise<void> {
             yargs,
             'get',
             'Show the allowed web origins (CORS) for an environment',
-            (y) => y.option('environment-id', { type: 'string', demandOption: true, describe: 'Environment ID' }),
+            (y) => y.option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
             async (argv) => {
               await applyInsecureStorage(argv.insecureStorage);
               const { runAuthkitCorsGet } = await import('./commands/authkit.js');
-              await runAuthkitCorsGet({ environmentId: argv.environmentId as string });
+              await runAuthkitCorsGet({ environmentId: argv.environmentId as string | undefined });
             },
           );
           registerSubcommand(
@@ -556,14 +568,14 @@ async function runCli(): Promise<void> {
             'Set the allowed web origins (CORS) for an environment (replaces the full list)',
             (y) =>
               y
-                .option('environment-id', { type: 'string', demandOption: true, describe: 'Environment ID' })
+                .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' })
                 .option('origin', { type: 'string', array: true, demandOption: true, describe: 'Web origin (repeatable)' })
                 .option('dry-run', { type: 'boolean', default: false, describe: 'Validate without saving' }),
             async (argv) => {
               await applyInsecureStorage(argv.insecureStorage);
               const { runAuthkitCorsSet } = await import('./commands/authkit.js');
               await runAuthkitCorsSet({
-                environmentId: argv.environmentId as string,
+                environmentId: argv.environmentId as string | undefined,
                 origins: argv.origin as string[],
                 dryRun: Boolean(argv.dryRun),
               });
@@ -579,13 +591,13 @@ async function runCli(): Promise<void> {
             'List configured logout URIs for an environment',
             (y) =>
               y
-                .option('environment-id', { type: 'string', demandOption: true, describe: 'Environment ID' })
+                .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' })
                 .option('limit', { type: 'number', describe: 'Maximum number of URIs to return' }),
             async (argv) => {
               await applyInsecureStorage(argv.insecureStorage);
               const { runAuthkitLogoutUrisList } = await import('./commands/authkit.js');
               await runAuthkitLogoutUrisList({
-                environmentId: argv.environmentId as string,
+                environmentId: argv.environmentId as string | undefined,
                 limit: argv.limit as number | undefined,
               });
             },
@@ -596,7 +608,7 @@ async function runCli(): Promise<void> {
             'Set the allowed logout URIs for an environment (replaces the full list)',
             (y) =>
               y
-                .option('environment-id', { type: 'string', demandOption: true, describe: 'Environment ID' })
+                .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' })
                 .option('uri', { type: 'string', array: true, demandOption: true, describe: 'Logout URI (repeatable)' })
                 .option('default', { type: 'string', describe: 'Which URI to mark as the default' })
                 .option('dry-run', { type: 'boolean', default: false, describe: 'Validate without saving' }),
@@ -604,7 +616,7 @@ async function runCli(): Promise<void> {
               await applyInsecureStorage(argv.insecureStorage);
               const { runAuthkitLogoutUrisSet } = await import('./commands/authkit.js');
               await runAuthkitLogoutUrisSet({
-                environmentId: argv.environmentId as string,
+                environmentId: argv.environmentId as string | undefined,
                 uris: argv.uri as string[],
                 default: argv.default as string | undefined,
                 dryRun: Boolean(argv.dryRun),
@@ -619,11 +631,11 @@ async function runCli(): Promise<void> {
             yargs,
             'get',
             'Show AuthKit branding (logos, theme) for an environment',
-            (y) => y.option('environment-id', { type: 'string', demandOption: true, describe: 'Environment ID' }),
+            (y) => y.option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
             async (argv) => {
               await applyInsecureStorage(argv.insecureStorage);
               const { runAuthkitBrandingGet } = await import('./commands/authkit.js');
-              await runAuthkitBrandingGet({ environmentId: argv.environmentId as string });
+              await runAuthkitBrandingGet({ environmentId: argv.environmentId as string | undefined });
             },
           );
           return yargs.demandCommand(1, 'Please specify a branding subcommand').strict();

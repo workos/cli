@@ -21,6 +21,17 @@ vi.mock('../lib/dashboard-graphql.js', async (importActual) => {
   };
 });
 
+// The resolver has its own full matrix in environment-target.spec.ts — here we
+// only assert the command threads its output into the request.
+const mockResolveEnvironmentTarget = vi.fn();
+vi.mock('../lib/environment-target.js', async (importActual) => {
+  const actual = await importActual<typeof import('../lib/environment-target.js')>();
+  return {
+    ...actual,
+    resolveEnvironmentTarget: (...args: unknown[]) => mockResolveEnvironmentTarget(...args),
+  };
+});
+
 const { setOutputMode } = await import('../utils/output.js');
 const { DashboardGraphqlError } = await import('../lib/dashboard-graphql.js');
 const { CliExit } = await import('../utils/cli-exit.js');
@@ -40,6 +51,10 @@ describe('whoami command', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockResolveEnvironmentTarget.mockImplementation(async (_token: string, opts: { flagValue?: string }) => ({
+      environmentId: opts.flagValue ?? 'env_profile',
+      source: opts.flagValue ? 'flag' : 'profile',
+    }));
     consoleOutput = [];
     consoleErrors = [];
     vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
@@ -64,11 +79,39 @@ describe('whoami command', () => {
     expect(mockGraphqlRequest).not.toHaveBeenCalled();
   });
 
-  it('calls the dashboard GraphQL API with the bearer token', async () => {
+  it('calls the dashboard GraphQL API with the bearer token and the resolved environment', async () => {
     mockRequireCommandToken.mockResolvedValue('tok_123');
     mockGraphqlRequest.mockResolvedValue(sampleData());
     await runWhoami();
-    expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('workosCliWhoami'), { token: 'tok_123' });
+    // Environment-scoped read: the header must reflect the active profile —
+    // never absent (the server would silently fall back to production).
+    expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('workosCliWhoami'), {
+      token: 'tok_123',
+      environmentId: 'env_profile',
+    });
+    expect(mockResolveEnvironmentTarget).toHaveBeenCalledWith('tok_123', {
+      flagValue: undefined,
+      forMutation: false,
+    });
+  });
+
+  it('threads a --environment-id override into the request for one invocation', async () => {
+    mockRequireCommandToken.mockResolvedValue('tok_123');
+    mockGraphqlRequest.mockResolvedValue(sampleData());
+    await runWhoami({ environmentId: 'env_override' });
+    expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.any(String), {
+      token: 'tok_123',
+      environmentId: 'env_override',
+    });
+  });
+
+  it('never issues the request when the target cannot be resolved', async () => {
+    mockRequireCommandToken.mockResolvedValue('tok_123');
+    mockResolveEnvironmentTarget.mockRejectedValue(
+      new CliExit(1, { reason: 'validation_error', errorCode: 'environment_unresolved' }),
+    );
+    await expect(runWhoami()).rejects.toMatchObject({ name: 'CliExit' });
+    expect(mockGraphqlRequest).not.toHaveBeenCalled();
   });
 
   it('renders user, team, and environment in human mode', async () => {

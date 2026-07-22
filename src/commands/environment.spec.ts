@@ -19,6 +19,17 @@ vi.mock('../lib/dashboard-graphql.js', async (importActual) => {
   };
 });
 
+// The resolver's own matrix lives in environment-target.spec.ts; commands only
+// need to prove they thread its output into the request (variable + header).
+const mockResolveEnvironmentTarget = vi.fn();
+vi.mock('../lib/environment-target.js', async (importActual) => {
+  const actual = await importActual<typeof import('../lib/environment-target.js')>();
+  return {
+    ...actual,
+    resolveEnvironmentTarget: (...args: unknown[]) => mockResolveEnvironmentTarget(...args),
+  };
+});
+
 const { setOutputMode } = await import('../utils/output.js');
 const { DashboardGraphqlError } = await import('../lib/dashboard-graphql.js');
 const { CliExit } = await import('../utils/cli-exit.js');
@@ -30,6 +41,10 @@ describe('environment command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockRequireCommandToken.mockResolvedValue('tok_123');
+    mockResolveEnvironmentTarget.mockImplementation(async (_token: string, opts: { flagValue?: string }) => ({
+      environmentId: opts.flagValue ?? 'env_profile',
+      source: opts.flagValue ? 'flag' : 'profile',
+    }));
     consoleOutput = [];
     vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
       consoleOutput.push(args.map(String).join(' '));
@@ -43,14 +58,31 @@ describe('environment command', () => {
   });
 
   describe('create', () => {
-    it('maps name + sandbox to the createEnvironment input', async () => {
+    it('maps name + sandbox to the createEnvironment input and sends the resolved environment header', async () => {
       mockGraphqlRequest.mockResolvedValue({ createEnvironment: { environment: { id: 'env_1', name: 'Staging', sandbox: true } } });
       await runEnvironmentCreate({ name: 'Staging', sandbox: true });
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('createEnvironment'), {
         token: 'tok_123',
         variables: { input: { name: 'Staging', isSandbox: true } },
+        environmentId: 'env_profile',
+      });
+      // Mutation: the resolver must have been asked to pre-validate.
+      expect(mockResolveEnvironmentTarget).toHaveBeenCalledWith('tok_123', {
+        flagValue: undefined,
+        forMutation: true,
       });
       expect(consoleOutput.join('\n')).toContain('Staging');
+    });
+
+    it('never issues the mutation when the target is stale/unresolved', async () => {
+      mockResolveEnvironmentTarget.mockRejectedValue(
+        new CliExit(1, { reason: 'validation_error', errorCode: 'environment_stale' }),
+      );
+      await expect(runEnvironmentCreate({ name: 'Staging', sandbox: true })).rejects.toMatchObject({
+        name: 'CliExit',
+        context: { errorCode: 'environment_stale' },
+      });
+      expect(mockGraphqlRequest).not.toHaveBeenCalled();
     });
 
     it('exits auth-required (code 4) when not logged in', async () => {
@@ -92,12 +124,18 @@ describe('environment command', () => {
   });
 
   describe('rename', () => {
-    it('maps environmentId + name to the renameEnvironment input', async () => {
+    it('maps environmentId + name to the renameEnvironment input and sends the header', async () => {
       mockGraphqlRequest.mockResolvedValue({ renameEnvironment: { environment: { id: 'env_1', name: 'Renamed' } } });
       await runEnvironmentRename({ environmentId: 'env_1', name: 'Renamed' });
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('renameEnvironment'), {
         token: 'tok_123',
         variables: { input: { environmentId: 'env_1', name: 'Renamed' } },
+        environmentId: 'env_1',
+      });
+      // The explicit positional target is pre-validated like a flag value.
+      expect(mockResolveEnvironmentTarget).toHaveBeenCalledWith('tok_123', {
+        flagValue: 'env_1',
+        forMutation: true,
       });
       expect(consoleOutput.join('\n')).toContain('Renamed');
     });

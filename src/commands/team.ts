@@ -8,6 +8,9 @@
  * - `team remove` is destructive → `confirmDestructive` (prompt, or --yes).
  * - `team change-role` / `team set-mfa` are `require-flag` → non-interactive
  *   callers must pass --yes (privilege / security-posture changes).
+ *
+ * Every operation here is team-scoped: none consults the environment context,
+ * so no environment header is sent (see `src/lib/environment-target.ts`).
  */
 
 import chalk from 'chalk';
@@ -46,6 +49,7 @@ export async function runTeamMembers(): Promise<void> {
   const op = getOperation('teamMemberships');
 
   let data: { currentTeam: { memberships: MembershipNode[] } | null };
+  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
   try {
     data = await dashboardGraphqlRequest(resolveExecutableDocument(op), { token });
   } catch (error) {
@@ -97,6 +101,7 @@ export async function runTeamInvite(options: TeamInviteOptions): Promise<void> {
       | { __typename: 'UserAlreadyBelongsToAnotherTeam'; email: string }
       | { __typename: string };
   };
+  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
   try {
     data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
       token,
@@ -151,6 +156,7 @@ export async function runTeamChangeRole(options: TeamChangeRoleOptions): Promise
   const op = getOperation('changeRole');
 
   let data: { changeRole: { id: string; role: string | null } };
+  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
   try {
     data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
       token,
@@ -180,6 +186,7 @@ export async function runTeamRemove(options: TeamRemoveOptions): Promise<void> {
   const token = await requireCommandToken();
   const op = getOperation('removeUserFromTeam');
 
+  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
   try {
     await dashboardGraphqlRequest(resolveExecutableDocument(op), {
       token,
@@ -205,6 +212,7 @@ export async function runTeamResendInvite(options: TeamResendInviteOptions): Pro
   const op = getOperation('resendDashboardInvite');
 
   let data: { resendDashboardInvite: { __typename: string } };
+  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
   try {
     data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
       token,
@@ -246,6 +254,7 @@ export async function runTeamUpdate(options: TeamUpdateOptions): Promise<void> {
       | { __typename: 'InvalidTeamName'; team: { id: string } }
       | { __typename: string };
   };
+  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
   try {
     data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
       token,
@@ -289,6 +298,7 @@ export async function runTeamSetMfa(options: TeamSetMfaOptions): Promise<void> {
   let data: {
     updateTeamMfaRequirement: { __typename: string; team?: { id: string; isMfaRequired?: boolean | null } };
   };
+  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
   try {
     data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
       token,

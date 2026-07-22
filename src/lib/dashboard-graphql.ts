@@ -47,6 +47,15 @@ export interface DashboardGraphqlOptions {
    * Optional environment to operate in. The guard validates it against the
    * caller's own team and falls back to the team's production environment when
    * unset or unrecognized (sent as the `x-url-environment-id` header).
+   *
+   * CLI-side invariant: environment-scoped commands must always pass an ID
+   * resolved through `resolveEnvironmentTarget()` (environment-target.ts) —
+   * never omit it and never pass an unvalidated stored ID into a mutation. The
+   * server's silent production fallback means a missing/stale header misroutes
+   * the request rather than failing; the resolver is what turns that into a
+   * structured `environment_stale` / `environment_unresolved` error instead.
+   * Team-scoped operations (memberships, project lifecycle) deliberately send
+   * no environment header.
    */
   environmentId?: string;
 }

@@ -19,17 +19,10 @@
 import chalk from 'chalk';
 import { requireCommandToken } from '../lib/command-auth.js';
 import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
+import { resolveEnvironmentTarget } from '../lib/environment-target.js';
 import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
 import { formatTable } from '../utils/table.js';
-
-/** Guard a required string flag at the handler level (also unit-testable). */
-function requireFlag(value: string | undefined, flag: string): string {
-  if (!value || value.trim() === '') {
-    exitWithError({ code: 'missing_argument', message: `${flag} is required.` });
-  }
-  return value;
-}
 
 /** Guard a flag that must have at least one value. */
 function requireAtLeastOne(values: string[] | undefined, flag: string): string[] {
@@ -86,20 +79,28 @@ function renderUriSetResult(items: UriNode[], noun: string, dryRun: boolean): vo
 // --- redirect URIs ---
 
 export interface RedirectUrisListOptions {
-  environmentId: string;
+  /** `--environment-id` override; defaults from the active profile. */
+  environmentId?: string;
   limit?: number;
 }
 
 export async function runAuthkitRedirectUrisList(options: RedirectUrisListOptions): Promise<void> {
-  const environmentId = requireFlag(options.environmentId, '--environment-id');
   const token = await requireCommandToken();
   const op = getOperation('redirectUris');
+
+  // Environment-scoped: the resolved target rides as both the operation
+  // variable and the environment header.
+  const { environmentId } = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: op.kind === 'mutation',
+  });
 
   let data: { redirectUris: { data: UriNode[] } | null };
   try {
     data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
       token,
       variables: { environmentId, ...(options.limit !== undefined ? { limit: options.limit } : {}) },
+      environmentId,
     });
   } catch (error) {
     reportDashboardError(error);
@@ -114,18 +115,25 @@ export async function runAuthkitRedirectUrisList(options: RedirectUrisListOption
 }
 
 export interface RedirectUrisSetOptions {
-  environmentId: string;
+  /** `--environment-id` override; defaults from the active profile. */
+  environmentId?: string;
   uris: string[];
   default?: string;
   dryRun?: boolean;
 }
 
 export async function runAuthkitRedirectUrisSet(options: RedirectUrisSetOptions): Promise<void> {
-  const environmentId = requireFlag(options.environmentId, '--environment-id');
   const uris = requireAtLeastOne(options.uris, '--uri');
   const dryRun = !!options.dryRun;
   const token = await requireCommandToken();
   const op = getOperation('setRedirectUris');
+
+  // Environment-scoped mutation: pre-validated resolved target, sent as both
+  // input field and environment header.
+  const { environmentId } = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: op.kind === 'mutation',
+  });
 
   let data: {
     setRedirectUris:
@@ -138,6 +146,7 @@ export async function runAuthkitRedirectUrisSet(options: RedirectUrisSetOptions)
     data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
       token,
       variables: { input: { environmentId, redirectUris: toUriInputs(uris, options.default), dryRun } },
+      environmentId,
     });
   } catch (error) {
     reportDashboardError(error);
@@ -160,19 +169,26 @@ export async function runAuthkitRedirectUrisSet(options: RedirectUrisSetOptions)
 // --- CORS ---
 
 export interface CorsGetOptions {
-  environmentId: string;
+  /** `--environment-id` override; defaults from the active profile. */
+  environmentId?: string;
 }
 
 export async function runAuthkitCorsGet(options: CorsGetOptions): Promise<void> {
-  const environmentId = requireFlag(options.environmentId, '--environment-id');
   const token = await requireCommandToken();
   const op = getOperation('corsConfig');
+
+  // Environment-scoped: resolved target as variable + header.
+  const { environmentId } = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: op.kind === 'mutation',
+  });
 
   let data: { webOrigins: { webOrigins: { origins: string[] } | null } | null };
   try {
     data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
       token,
       variables: { environmentId },
+      environmentId,
     });
   } catch (error) {
     reportDashboardError(error);
@@ -191,17 +207,23 @@ export async function runAuthkitCorsGet(options: CorsGetOptions): Promise<void> 
 }
 
 export interface CorsSetOptions {
-  environmentId: string;
+  /** `--environment-id` override; defaults from the active profile. */
+  environmentId?: string;
   origins: string[];
   dryRun?: boolean;
 }
 
 export async function runAuthkitCorsSet(options: CorsSetOptions): Promise<void> {
-  const environmentId = requireFlag(options.environmentId, '--environment-id');
   const origins = requireAtLeastOne(options.origins, '--origin');
   const dryRun = !!options.dryRun;
   const token = await requireCommandToken();
   const op = getOperation('updateCorsConfig');
+
+  // Environment-scoped mutation: pre-validated resolved target.
+  const { environmentId } = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: op.kind === 'mutation',
+  });
 
   let data: {
     setWebOrigins:
@@ -212,6 +234,7 @@ export async function runAuthkitCorsSet(options: CorsSetOptions): Promise<void> 
     data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
       token,
       variables: { environmentId, origins, dryRun },
+      environmentId,
     });
   } catch (error) {
     reportDashboardError(error);
@@ -240,20 +263,27 @@ export async function runAuthkitCorsSet(options: CorsSetOptions): Promise<void> 
 // --- logout URIs ---
 
 export interface LogoutUrisListOptions {
-  environmentId: string;
+  /** `--environment-id` override; defaults from the active profile. */
+  environmentId?: string;
   limit?: number;
 }
 
 export async function runAuthkitLogoutUrisList(options: LogoutUrisListOptions): Promise<void> {
-  const environmentId = requireFlag(options.environmentId, '--environment-id');
   const token = await requireCommandToken();
   const op = getOperation('logoutUris');
+
+  // Environment-scoped: resolved target as variable + header.
+  const { environmentId } = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: op.kind === 'mutation',
+  });
 
   let data: { logoutUris: { data: UriNode[] } | null };
   try {
     data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
       token,
       variables: { environmentId, ...(options.limit !== undefined ? { limit: options.limit } : {}) },
+      environmentId,
     });
   } catch (error) {
     reportDashboardError(error);
@@ -268,18 +298,24 @@ export async function runAuthkitLogoutUrisList(options: LogoutUrisListOptions): 
 }
 
 export interface LogoutUrisSetOptions {
-  environmentId: string;
+  /** `--environment-id` override; defaults from the active profile. */
+  environmentId?: string;
   uris: string[];
   default?: string;
   dryRun?: boolean;
 }
 
 export async function runAuthkitLogoutUrisSet(options: LogoutUrisSetOptions): Promise<void> {
-  const environmentId = requireFlag(options.environmentId, '--environment-id');
   const uris = requireAtLeastOne(options.uris, '--uri');
   const dryRun = !!options.dryRun;
   const token = await requireCommandToken();
   const op = getOperation('setLogoutUris');
+
+  // Environment-scoped mutation: pre-validated resolved target.
+  const { environmentId } = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: op.kind === 'mutation',
+  });
 
   let data: {
     setLogoutUris:
@@ -290,6 +326,7 @@ export async function runAuthkitLogoutUrisSet(options: LogoutUrisSetOptions): Pr
     data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
       token,
       variables: { input: { environmentId, logoutUris: toUriInputs(uris, options.default), dryRun } },
+      environmentId,
     });
   } catch (error) {
     reportDashboardError(error);
@@ -325,19 +362,26 @@ interface AppBranding {
 }
 
 export interface BrandingGetOptions {
-  environmentId: string;
+  /** `--environment-id` override; defaults from the active profile. */
+  environmentId?: string;
 }
 
 export async function runAuthkitBrandingGet(options: BrandingGetOptions): Promise<void> {
-  const environmentId = requireFlag(options.environmentId, '--environment-id');
   const token = await requireCommandToken();
   const op = getOperation('environmentAppBranding');
+
+  // Environment-scoped: resolved target as variable + header.
+  const { environmentId } = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: op.kind === 'mutation',
+  });
 
   let data: { environment: { appBranding: AppBranding | null } | null };
   try {
     data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
       token,
       variables: { environmentId },
+      environmentId,
     });
   } catch (error) {
     reportDashboardError(error);

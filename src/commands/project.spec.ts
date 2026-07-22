@@ -150,6 +150,14 @@ describe('project command', () => {
       expect(consoleOutput.join('\n')).toContain('No projects found.');
     });
 
+    it('sends NO environment header (team-scoped operation)', async () => {
+      mockGraphqlRequest.mockResolvedValue({ currentTeam: { id: 'team_1', projectsV2: [] } });
+      await runProjectList();
+      // Project lifecycle is team-level — an environment target must never ride
+      // along, or the guard would validate (and could reject) a spurious header.
+      expect(mockGraphqlRequest.mock.calls[0][1]).not.toHaveProperty('environmentId');
+    });
+
     it('uses the curated (non-rotten) description, not the catalog rot string', () => {
       // teamProjectsV2's catalog description is wrong upstream ("Return the team
       // for the current dashboard session"). The curation override must win.

@@ -6,6 +6,10 @@
  * uses). `project create` provisions a project plus fresh environments, so it is
  * a `require-flag` operation: a non-interactive caller must pass `--yes` (the
  * "don't let a CI loop spawn many projects" guard).
+ *
+ * Every operation here is team-scoped (projects hang off the team, not an
+ * environment), so no environment header is sent (see
+ * `src/lib/environment-target.ts`).
  */
 
 import chalk from 'chalk';
@@ -42,6 +46,7 @@ export async function runProjectCreate(options: ProjectCreateOptions): Promise<v
       | { __typename: 'ProjectNameAlreadyUsed'; name: string }
       | { __typename: string };
   };
+  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
   try {
     data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
       token,
@@ -84,6 +89,7 @@ export async function runProjectRename(options: ProjectRenameOptions): Promise<v
       | { __typename: 'ProjectNotFound'; projectId: string }
       | { __typename: string };
   };
+  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
   try {
     data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
       token,
@@ -124,6 +130,7 @@ export async function runProjectList(): Promise<void> {
   const op = getOperation('teamProjectsV2');
 
   let data: { currentTeam: { id: string; projectsV2: ProjectListNode[] } | null };
+  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
   try {
     data = await dashboardGraphqlRequest(resolveExecutableDocument(op), { token });
   } catch (error) {

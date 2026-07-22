@@ -35,6 +35,17 @@ vi.mock('../lib/unclaimed-env-api.js', async (importOriginal) => {
 // Guard: runEnvProvision must NEVER write project .env files.
 vi.mock('../lib/env-writer.js', () => ({ writeCredentialsEnv: vi.fn() }));
 
+// Best-effort dashboard environment resolution — full behavior is covered in
+// environment-target.spec.ts; here we only assert the add/switch wiring.
+const mockTryResolveProfileEnvironmentId = vi.fn();
+vi.mock('../lib/environment-target.js', async (importActual) => {
+  const actual = await importActual<typeof import('../lib/environment-target.js')>();
+  return {
+    ...actual,
+    tryResolveProfileEnvironmentId: (...args: unknown[]) => mockTryResolveProfileEnvironmentId(...args),
+  };
+});
+
 let testDir: string;
 
 vi.mock('node:os', async (importOriginal) => {
@@ -66,6 +77,8 @@ describe('env commands', () => {
     delete process.env.WORKOS_API_URL;
     delete process.env.WORKOS_API_BASE_URL;
     vi.clearAllMocks();
+    // Default: logged out — resolution defers to first dashboard-command use.
+    mockTryResolveProfileEnvironmentId.mockResolvedValue(false);
   });
 
   afterEach(() => {
@@ -128,6 +141,18 @@ describe('env commands', () => {
       setInteractionMode({ mode: 'ci', source: 'env' });
       await expect(runEnvAdd({ name: 'prod' })).rejects.toThrow(CliExit);
       expect(ui.text).not.toHaveBeenCalled();
+    });
+
+    it('attempts best-effort dashboard environment resolution for the new profile', async () => {
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      expect(mockTryResolveProfileEnvironmentId).toHaveBeenCalledWith('prod', { allowPicker: true });
+    });
+
+    it('never blocks profile creation when resolution defers (logged out)', async () => {
+      mockTryResolveProfileEnvironmentId.mockResolvedValue(false);
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      // The profile write must land regardless of the resolution outcome.
+      expect(getConfig()?.environments.prod).toBeDefined();
     });
 
     it('does not include placeholder commands in missing-args recovery metadata', async () => {
@@ -223,6 +248,31 @@ describe('env commands', () => {
 
     it('errors when no environments configured', async () => {
       await expect(runEnvSwitch('anything')).rejects.toThrow(CliExit);
+    });
+
+    it('attempts resolution when switching to a profile lacking an environmentId', async () => {
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      await runEnvAdd({ name: 'sandbox', apiKey: 'sk_test_abc' });
+      mockTryResolveProfileEnvironmentId.mockClear();
+      await runEnvSwitch('sandbox');
+      expect(mockTryResolveProfileEnvironmentId).toHaveBeenCalledWith('sandbox', { allowPicker: true });
+    });
+
+    it('skips resolution when the target profile already stores an environmentId', async () => {
+      saveConfig({
+        activeEnvironment: 'prod',
+        environments: {
+          prod: { name: 'prod', type: 'production', apiKey: 'sk_live_abc' },
+          sandbox: {
+            name: 'sandbox',
+            type: 'sandbox',
+            apiKey: 'sk_test_abc',
+            environmentId: 'env_already',
+          },
+        },
+      });
+      await runEnvSwitch('sandbox');
+      expect(mockTryResolveProfileEnvironmentId).not.toHaveBeenCalled();
     });
 
     it('warns when WORKOS_API_KEY env var is set', async () => {
