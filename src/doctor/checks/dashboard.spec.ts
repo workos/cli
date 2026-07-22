@@ -21,6 +21,11 @@ describe('isCredentialSafeBaseUrl', () => {
     expect(isCredentialSafeBaseUrl('https://workos.com')).toBe(true);
   });
 
+  it('allows a trusted host with a trailing root-label dot', () => {
+    expect(isCredentialSafeBaseUrl('https://api.workos.com.')).toBe(true);
+    expect(isCredentialSafeBaseUrl('https://api.workos.com.attacker.example.')).toBe(false);
+  });
+
   it('allows localhost for internal development over any scheme', () => {
     expect(isCredentialSafeBaseUrl('http://localhost:8001')).toBe(true);
     expect(isCredentialSafeBaseUrl('http://127.0.0.1:3000')).toBe(true);

@@ -34,9 +34,11 @@ export function isCredentialSafeBaseUrl(baseUrl: string): boolean {
     return true;
   }
 
-  // Everything else must be an HTTPS WorkOS host.
+  // Everything else must be an HTTPS WorkOS host. Strip a trailing root-label
+  // dot so a valid FQDN like `api.workos.com.` is still recognized.
   if (url.protocol !== 'https:') return false;
-  return host === 'workos.com' || host.endsWith('.workos.com');
+  const normalizedHost = host.endsWith('.') ? host.slice(0, -1) : host;
+  return normalizedHost === 'workos.com' || normalizedHost.endsWith('.workos.com');
 }
 
 export async function checkDashboardSettings(
