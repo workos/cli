@@ -103,11 +103,14 @@ export async function runSetup(opts: RunSetupOptions): Promise<void> {
     // never after a decline or a prior completion.
     if (isJsonMode() || !isPromptAllowed()) return;
     if (isSetupDeclined() || isSetupCompleted()) return;
-  } else if (!isPromptAllowed() && !opts.assumeYes) {
-    // Explicit `workos setup` in a non-interactive context needs --yes.
+  } else if ((!isPromptAllowed() || isJsonMode()) && !opts.assumeYes) {
+    // Explicit `workos setup` can't prompt in a non-interactive context, nor
+    // under --json — output mode is JSON while interaction mode stays human, so
+    // isPromptAllowed() is still true and a confirm would pollute the
+    // machine-readable stdout stream. Require --yes in both cases.
     exitWithError({
       code: 'confirmation_required',
-      message: `Interactive setup needs a TTY. Re-run \`${formatWorkOSCommand('setup --yes')}\` to install non-interactively.`,
+      message: `Setup can't prompt here (non-interactive or --json). Re-run \`${formatWorkOSCommand('setup --yes')}\` to install without a prompt.`,
     });
   }
 
@@ -176,8 +179,6 @@ async function installAndReport(
   ]);
   const skillAgentNames = skillResult?.agents.map((a) => a.displayName) ?? [];
 
-  recordSetupCompleted();
-
   const mcpInstalled = mcpResults
     .filter((r) => r.outcome === 'installed' || r.outcome === 'already-installed')
     .map((r) => r.agent);
@@ -187,6 +188,16 @@ async function installAndReport(
   // just the count) is observable in telemetry. Already user-safe — the same
   // text is shown via ui.log.error.
   const mcpFailedReasons = failedResults.map((r) => `${r.agent}:${(r.error ?? '').slice(0, 120)}`).join('; ');
+
+  // Only mark setup complete when something actually landed. A run where every
+  // attempted install failed (e.g. transient `claude mcp add` timeouts, with no
+  // skills to fall back on) must NOT be treated as done: isSetupCompleted()
+  // suppresses every future automatic offer, so persisting completion here would
+  // strand the user after a transient failure. Leave the pref unset so the next
+  // login/install re-offers.
+  if (skillAgentNames.length > 0 || mcpInstalled.length > 0) {
+    recordSetupCompleted();
+  }
 
   emitSetupEvent(opts.trigger, startedAt, 'accepted', {
     skills: skillResult?.agents.map((a) => a.name) ?? [],

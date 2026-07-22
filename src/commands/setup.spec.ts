@@ -182,6 +182,27 @@ describe('runSetup — automatic triggers (login/install)', () => {
     );
   });
 
+  it('does NOT record completion when every install fails (transient failure gets re-offered)', async () => {
+    // No skill agents to fall back on, and the only MCP target fails to add.
+    vi.mocked(detectAgents).mockReturnValue([]);
+    const target = mcpTarget({
+      add: vi.fn(async () => ({
+        agent: 'claude-code',
+        displayName: 'Claude Code',
+        outcome: 'failed',
+        error: 'timeout',
+      })),
+    });
+    vi.mocked(detectMcpClients).mockResolvedValue([target as any]);
+    vi.mocked(ui.confirm).mockResolvedValue(true);
+
+    // reportResults still exits non-zero on a failed MCP add.
+    await expect(runSetup({ trigger: 'login' })).rejects.toThrow('exitCode:1');
+
+    // Completion must stay unset so the next login/install re-offers.
+    expect(prefs.recordSetupCompleted).not.toHaveBeenCalled();
+  });
+
   it('records an absolute decline and installs nothing on "no"', async () => {
     detectSome();
     vi.mocked(ui.confirm).mockResolvedValue(false);
@@ -253,6 +274,18 @@ describe('runSetup — command trigger', () => {
     vi.mocked(isPromptAllowed).mockReturnValue(false);
 
     await expect(runSetup({ trigger: 'command' })).rejects.toThrow('exit:confirmation_required');
+  });
+
+  it('errors (never prompts) for --json on a TTY without --yes', async () => {
+    detectSome();
+    // JSON output mode, but interaction mode stays human — the exact combo the
+    // old guard missed. A prompt here would corrupt machine-readable stdout.
+    vi.mocked(isJsonMode).mockReturnValue(true);
+    vi.mocked(isPromptAllowed).mockReturnValue(true);
+
+    await expect(runSetup({ trigger: 'command' })).rejects.toThrow('exit:confirmation_required');
+    expect(ui.confirm).not.toHaveBeenCalled();
+    expect(ui.heading).not.toHaveBeenCalled();
   });
 
   it('installs without prompting when --yes is passed', async () => {
