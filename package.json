@@ -69,7 +69,7 @@
   "packageManager": "bun@1.3.14",
   "scripts": {
     "clean": "bun -e \"await import('node:fs/promises').then((fs) => fs.rm('./dist', { recursive: true, force: true }))\"",
-    "generate": "bun run ./scripts/gen-integration-manifest.ts && bun run ./scripts/gen-skills-manifest.ts && bun run ./scripts/gen-agent-sdk-manifest.ts",
+    "generate": "bun run ./scripts/gen-integration-manifest.ts && bun run ./scripts/gen-skills-manifest.ts && bun run ./scripts/gen-agent-sdk-manifest.ts && bun run ./scripts/gen-runtime-deps-manifest.ts",
     "postinstall": "bun run generate",
     "prebuild": "bun run clean && bun run generate",
     "build": "bun run ./scripts/build.ts",

@@ -401,6 +401,11 @@ export const ENV_VAR_CATALOG: { name: string; effect: string }[] = [
   // Development
   { name: 'WORKOS_DEV', effect: 'Enables dev mode — loads .env.local at startup' },
   { name: 'WORKOS_DISABLE_PROXY', effect: 'Disables the credential proxy for gateway auth' },
+  {
+    name: 'WORKOS_RUNTIME_DEPS',
+    effect:
+      'Set to "0" to disable runtime-downloaded dependency bundles (compiled-in modules only); "1" forces them on when running from source',
+  },
 ];
 
 export async function runDebugEnv(): Promise<void> {

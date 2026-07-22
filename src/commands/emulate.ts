@@ -1,8 +1,11 @@
-import { createEmulator, type Emulator, type EmulatorSeedConfig } from '@workos/emulate';
+// Type-only: the compiled-in package stays the compile-time contract even when
+// a runtime-downloaded bundle provides the implementation (emulate-loader.ts).
+import type { Emulator, EmulatorSeedConfig } from '@workos/emulate';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import chalk from 'chalk';
+import { resolveCreateEmulator } from '../lib/emulate-loader.js';
 import { IS_WINDOWS } from '../utils/platform.js';
 import { exitWithError } from '../utils/output.js';
 
@@ -53,6 +56,7 @@ function printBanner(emulator: Pick<Emulator, 'url' | 'apiKey'>): void {
 export async function runEmulate(argv: EmulateArgs): Promise<void> {
   const seedConfig = argv.seed ? loadSeedFile(argv.seed) : autoDetectSeedFile();
 
+  const createEmulator = await resolveCreateEmulator();
   const emulator = await createEmulator({
     port: argv.port,
     seed: seedConfig ?? undefined,

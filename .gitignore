@@ -24,6 +24,7 @@ obj/
 src/version.ts
 src/generated/skills-manifest.ts
 src/generated/agent-sdk-manifest.ts
+src/generated/runtime-deps-manifest.ts
 
 .eslintcache
 .vscode/launch.json
