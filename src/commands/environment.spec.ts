@@ -1,11 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-const mockGetAccessToken = vi.fn();
+const mockRequireCommandToken = vi.fn();
 const mockGraphqlRequest = vi.fn();
 
-vi.mock('../lib/credentials.js', () => ({
-  getAccessToken: () => mockGetAccessToken(),
-}));
+vi.mock('../lib/command-auth.js', async (importActual) => {
+  const actual = await importActual<typeof import('../lib/command-auth.js')>();
+  return {
+    ...actual,
+    requireCommandToken: () => mockRequireCommandToken(),
+  };
+});
 
 vi.mock('../lib/dashboard-graphql.js', async (importActual) => {
   const actual = await importActual<typeof import('../lib/dashboard-graphql.js')>();
@@ -25,7 +29,7 @@ describe('environment command', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetAccessToken.mockReturnValue('tok_123');
+    mockRequireCommandToken.mockResolvedValue('tok_123');
     consoleOutput = [];
     vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
       consoleOutput.push(args.map(String).join(' '));
@@ -50,7 +54,11 @@ describe('environment command', () => {
     });
 
     it('exits auth-required (code 4) when not logged in', async () => {
-      mockGetAccessToken.mockReturnValue(null);
+      // requireCommandToken never returns without a usable session: it throws
+      // a structured exit-4 (see command-auth.spec.ts for the full matrix).
+      mockRequireCommandToken.mockImplementation(() => {
+        throw new CliExit(4, { reason: 'auth_required', errorCode: 'auth_required' });
+      });
       await expect(runEnvironmentCreate({ name: 'Staging', sandbox: false })).rejects.toMatchObject({
         name: 'CliExit',
         exitCode: 4,

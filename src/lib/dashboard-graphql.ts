@@ -7,9 +7,10 @@
  * that REST commands use via the WorkOS SDK. The dashboard `/graphql` endpoint
  * accepts the bearer through `DashboardOAuthBearerGuard`.
  *
- * The capability is gated server-side by a feature flag (enabled in staging),
- * so a 403 here is the expected outcome wherever the flag is off — callers
- * should surface that distinctly rather than as a generic failure.
+ * The capability is enabled in production but gated server-side by a per-team
+ * feature flag (fail-closed), so a 403 here remains an expected outcome
+ * wherever the flag is off for the caller's team — callers should surface that
+ * distinctly rather than as a generic failure.
  */
 
 import { getWorkOSApiUrl } from '../utils/urls.js';

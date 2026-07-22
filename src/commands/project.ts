@@ -9,26 +9,16 @@
  */
 
 import chalk from 'chalk';
-import { getAccessToken } from '../lib/credentials.js';
+import { requireCommandToken } from '../lib/command-auth.js';
 import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
 import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
 import { requireConfirmationFlag } from '../catalog/confirm.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
-import { exitWithAuthRequired } from '../utils/exit-codes.js';
 import { formatTable } from '../utils/table.js';
-import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 interface ProjectNode {
   id: string;
   name: string | null;
-}
-
-function requireToken(): string {
-  const token = getAccessToken();
-  if (!token) {
-    exitWithAuthRequired(`Not logged in. Run \`${formatWorkOSCommand('auth login')}\` to authenticate.`);
-  }
-  return token;
 }
 
 export interface ProjectCreateOptions {
@@ -43,7 +33,7 @@ export async function runProjectCreate(options: ProjectCreateOptions): Promise<v
   // require-flag: non-interactive callers must pass --yes before provisioning.
   await requireConfirmationFlag(options, { action: `create project "${options.name}"` });
 
-  const token = requireToken();
+  const token = await requireCommandToken();
   const op = getOperation('createProjectWithNewEnvironments');
 
   let data: {
@@ -84,7 +74,7 @@ export interface ProjectRenameOptions {
 }
 
 export async function runProjectRename(options: ProjectRenameOptions): Promise<void> {
-  const token = requireToken();
+  const token = await requireCommandToken();
   const op = getOperation('renameProject');
 
   let data: {
@@ -130,7 +120,7 @@ interface ProjectListNode {
 }
 
 export async function runProjectList(): Promise<void> {
-  const token = requireToken();
+  const token = await requireCommandToken();
   const op = getOperation('teamProjectsV2');
 
   let data: { currentTeam: { id: string; projectsV2: ProjectListNode[] } | null };

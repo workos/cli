@@ -1,5 +1,6 @@
 import { loadManagementCatalog } from './loader.js';
 import { DashboardGraphqlError } from '../lib/dashboard-graphql.js';
+import { DASHBOARD_ERROR_MESSAGES } from '../lib/command-auth.js';
 import { exitWithError } from '../utils/output.js';
 import type { CatalogOperation, ManagementCatalog } from './catalog-types.js';
 
@@ -65,14 +66,15 @@ export function resolveExecutableDocument(
 }
 
 /**
- * Translate a {@link DashboardGraphqlError} into a clean exit, reusing the
- * `whoami` error taxonomy (forbidden / http_error / graphql_error /
- * network_error).
+ * Translate a {@link DashboardGraphqlError} into a clean exit, using the
+ * shared dashboard-plane error taxonomy (forbidden / http_error /
+ * graphql_error / network_error).
  *
  * The dashboard OAuth-bearer capability the account-plane commands rely on is
- * feature-flag-gated server-side (staging today), so a 403 is the *expected*
- * outcome wherever the flag is off. We surface that distinctly — and without
- * ever naming GraphQL — so the failure is actionable rather than a generic 403.
+ * enabled in production but gated by a per-team feature flag (fail-closed), so
+ * a 403 remains an expected outcome: the flag is off for the caller's team, or
+ * the account isn't team-backed. We surface that distinctly — and without ever
+ * naming GraphQL — so the failure is actionable rather than a generic 403.
  * Never returns.
  */
 export function reportDashboardError(error: unknown): never {
@@ -85,13 +87,16 @@ export function reportDashboardError(error: unknown): never {
   throw error;
 }
 
-function dashboardErrorMessage(error: DashboardGraphqlError): string {
+/**
+ * Per-code user-facing copy. Exported so `no-graphql-leak.spec.ts` can run the
+ * leak gate over every branch. `forbidden` (exit 1, not auth-recoverable) is
+ * shared copy from {@link DASHBOARD_ERROR_MESSAGES}, distinct from the
+ * `auth_required` (exit 4) messages that `requireCommandToken()` owns.
+ */
+export function dashboardErrorMessage(error: DashboardGraphqlError): string {
   switch (error.code) {
     case 'forbidden':
-      return (
-        'This account-plane capability is not enabled for this API host. ' +
-        'It must be turned on (currently staging only), with a token belonging to a WorkOS dashboard account that has a team.'
-      );
+      return DASHBOARD_ERROR_MESSAGES.forbidden;
     case 'http_error':
       return `The WorkOS account plane returned an unexpected response${error.status ? ` (HTTP ${error.status})` : ''}.`;
     case 'network_error':

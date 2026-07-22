@@ -8,11 +8,10 @@
  */
 
 import chalk from 'chalk';
-import { getAccessToken } from '../lib/credentials.js';
-import { dashboardGraphqlRequest, DashboardGraphqlError } from '../lib/dashboard-graphql.js';
-import { isJsonMode, outputJson, exitWithError } from '../utils/output.js';
-import { exitWithAuthRequired } from '../utils/exit-codes.js';
-import { formatWorkOSCommand } from '../utils/command-invocation.js';
+import { requireCommandToken } from '../lib/command-auth.js';
+import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
+import { reportDashboardError } from '../catalog/operation.js';
+import { isJsonMode, outputJson } from '../utils/output.js';
 
 // Every field below is read straight from the bearer guard's request context
 // (`context.user` / `context.team` / `context.environment`), so all three root
@@ -63,21 +62,15 @@ interface WhoamiData {
 }
 
 export async function runWhoami(): Promise<void> {
-  const token = getAccessToken();
-  if (!token) {
-    // Read-only by design: a missing/expired token is reported, not silently
-    // refreshed. Exit 4 follows the CLI's auth-required convention.
-    exitWithAuthRequired(`Not logged in. Run \`${formatWorkOSCommand('auth login')}\` to authenticate.`);
-  }
+  // Resolve a usable bearer, silently refreshing an expired access token when
+  // a valid refresh token exists; exits 4 when no usable session remains.
+  const token = await requireCommandToken();
 
   let data: WhoamiData;
   try {
     data = await dashboardGraphqlRequest<WhoamiData>(WHOAMI_QUERY, { token });
   } catch (error) {
-    if (error instanceof DashboardGraphqlError) {
-      reportGraphqlError(error);
-    }
-    throw error;
+    reportDashboardError(error);
   }
 
   if (isJsonMode()) {
@@ -90,15 +83,6 @@ export async function runWhoami(): Promise<void> {
   }
 
   renderHuman(data);
-}
-
-function reportGraphqlError(error: DashboardGraphqlError): never {
-  const message =
-    error.code === 'forbidden'
-      ? `${error.message} This requires the dashboard OAuth bearer capability to be enabled for this API host ` +
-        '(currently staging only) and a token belonging to a WorkOS dashboard account with a team.'
-      : error.message;
-  exitWithError({ code: error.code, message });
 }
 
 function renderHuman(data: WhoamiData): void {

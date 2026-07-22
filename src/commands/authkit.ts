@@ -17,21 +17,11 @@
  */
 
 import chalk from 'chalk';
-import { getAccessToken } from '../lib/credentials.js';
+import { requireCommandToken } from '../lib/command-auth.js';
 import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
 import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
-import { exitWithAuthRequired } from '../utils/exit-codes.js';
 import { formatTable } from '../utils/table.js';
-import { formatWorkOSCommand } from '../utils/command-invocation.js';
-
-function requireToken(): string {
-  const token = getAccessToken();
-  if (!token) {
-    exitWithAuthRequired(`Not logged in. Run \`${formatWorkOSCommand('auth login')}\` to authenticate.`);
-  }
-  return token;
-}
 
 /** Guard a required string flag at the handler level (also unit-testable). */
 function requireFlag(value: string | undefined, flag: string): string {
@@ -102,7 +92,7 @@ export interface RedirectUrisListOptions {
 
 export async function runAuthkitRedirectUrisList(options: RedirectUrisListOptions): Promise<void> {
   const environmentId = requireFlag(options.environmentId, '--environment-id');
-  const token = requireToken();
+  const token = await requireCommandToken();
   const op = getOperation('redirectUris');
 
   let data: { redirectUris: { data: UriNode[] } | null };
@@ -134,7 +124,7 @@ export async function runAuthkitRedirectUrisSet(options: RedirectUrisSetOptions)
   const environmentId = requireFlag(options.environmentId, '--environment-id');
   const uris = requireAtLeastOne(options.uris, '--uri');
   const dryRun = !!options.dryRun;
-  const token = requireToken();
+  const token = await requireCommandToken();
   const op = getOperation('setRedirectUris');
 
   let data: {
@@ -175,7 +165,7 @@ export interface CorsGetOptions {
 
 export async function runAuthkitCorsGet(options: CorsGetOptions): Promise<void> {
   const environmentId = requireFlag(options.environmentId, '--environment-id');
-  const token = requireToken();
+  const token = await requireCommandToken();
   const op = getOperation('corsConfig');
 
   let data: { webOrigins: { webOrigins: { origins: string[] } | null } | null };
@@ -210,7 +200,7 @@ export async function runAuthkitCorsSet(options: CorsSetOptions): Promise<void> 
   const environmentId = requireFlag(options.environmentId, '--environment-id');
   const origins = requireAtLeastOne(options.origins, '--origin');
   const dryRun = !!options.dryRun;
-  const token = requireToken();
+  const token = await requireCommandToken();
   const op = getOperation('updateCorsConfig');
 
   let data: {
@@ -256,7 +246,7 @@ export interface LogoutUrisListOptions {
 
 export async function runAuthkitLogoutUrisList(options: LogoutUrisListOptions): Promise<void> {
   const environmentId = requireFlag(options.environmentId, '--environment-id');
-  const token = requireToken();
+  const token = await requireCommandToken();
   const op = getOperation('logoutUris');
 
   let data: { logoutUris: { data: UriNode[] } | null };
@@ -288,7 +278,7 @@ export async function runAuthkitLogoutUrisSet(options: LogoutUrisSetOptions): Pr
   const environmentId = requireFlag(options.environmentId, '--environment-id');
   const uris = requireAtLeastOne(options.uris, '--uri');
   const dryRun = !!options.dryRun;
-  const token = requireToken();
+  const token = await requireCommandToken();
   const op = getOperation('setLogoutUris');
 
   let data: {
@@ -340,7 +330,7 @@ export interface BrandingGetOptions {
 
 export async function runAuthkitBrandingGet(options: BrandingGetOptions): Promise<void> {
   const environmentId = requireFlag(options.environmentId, '--environment-id');
-  const token = requireToken();
+  const token = await requireCommandToken();
   const op = getOperation('environmentAppBranding');
 
   let data: { environment: { appBranding: AppBranding | null } | null };

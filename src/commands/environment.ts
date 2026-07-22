@@ -8,30 +8,21 @@
  * naming decision in the spec.
  *
  * The underlying capability is the same OAuth-bearer dashboard access `whoami`
- * uses, which is feature-flag-gated server-side (staging today); a flag-off or
- * non-team token fails cleanly via the shared error taxonomy.
+ * uses — enabled in production but gated by a per-team feature flag
+ * (fail-closed); a flag-off or non-team token fails cleanly via the shared
+ * error taxonomy.
  */
 
 import chalk from 'chalk';
-import { getAccessToken } from '../lib/credentials.js';
+import { requireCommandToken } from '../lib/command-auth.js';
 import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
 import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
 import { isJsonMode, outputJson, outputSuccess } from '../utils/output.js';
-import { exitWithAuthRequired } from '../utils/exit-codes.js';
-import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 interface EnvironmentNode {
   id: string;
   name: string | null;
   sandbox?: boolean | null;
-}
-
-function requireToken(): string {
-  const token = getAccessToken();
-  if (!token) {
-    exitWithAuthRequired(`Not logged in. Run \`${formatWorkOSCommand('auth login')}\` to authenticate.`);
-  }
-  return token;
 }
 
 export interface EnvironmentCreateOptions {
@@ -40,7 +31,7 @@ export interface EnvironmentCreateOptions {
 }
 
 export async function runEnvironmentCreate(options: EnvironmentCreateOptions): Promise<void> {
-  const token = requireToken();
+  const token = await requireCommandToken();
   const op = getOperation('createEnvironment');
 
   let data: { createEnvironment: { environment: EnvironmentNode } };
@@ -68,7 +59,7 @@ export interface EnvironmentRenameOptions {
 }
 
 export async function runEnvironmentRename(options: EnvironmentRenameOptions): Promise<void> {
-  const token = requireToken();
+  const token = await requireCommandToken();
   const op = getOperation('renameEnvironment');
 
   let data: { renameEnvironment: { environment: EnvironmentNode } };

@@ -1,11 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-const mockGetAccessToken = vi.fn();
+const mockRequireCommandToken = vi.fn();
 const mockGraphqlRequest = vi.fn();
 
-vi.mock('../lib/credentials.js', () => ({
-  getAccessToken: () => mockGetAccessToken(),
-}));
+vi.mock('../lib/command-auth.js', async (importActual) => {
+  const actual = await importActual<typeof import('../lib/command-auth.js')>();
+  return {
+    ...actual,
+    requireCommandToken: () => mockRequireCommandToken(),
+  };
+});
 
 vi.mock('../lib/dashboard-graphql.js', async (importActual) => {
   const actual = await importActual<typeof import('../lib/dashboard-graphql.js')>();
@@ -42,7 +46,7 @@ describe('project command', () => {
     vi.clearAllMocks();
     resetInteractionModeForTests();
     setOutputMode('human');
-    mockGetAccessToken.mockReturnValue('tok_123');
+    mockRequireCommandToken.mockResolvedValue('tok_123');
     consoleOutput = [];
     vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
       consoleOutput.push(args.map(String).join(' '));

@@ -1,11 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-const mockGetAccessToken = vi.fn();
+const mockRequireCommandToken = vi.fn();
 const mockGraphqlRequest = vi.fn();
 
-vi.mock('../lib/credentials.js', () => ({
-  getAccessToken: () => mockGetAccessToken(),
-}));
+vi.mock('../lib/command-auth.js', async (importActual) => {
+  const actual = await importActual<typeof import('../lib/command-auth.js')>();
+  return {
+    ...actual,
+    requireCommandToken: () => mockRequireCommandToken(),
+  };
+});
 
 // Replace only the request function; keep the real DashboardGraphqlError so the
 // command's `instanceof` check matches what the tests throw.
@@ -51,20 +55,24 @@ describe('whoami command', () => {
   });
 
   it('exits auth-required (code 4) when not logged in', async () => {
-    mockGetAccessToken.mockReturnValue(null);
+    // requireCommandToken never returns without a usable session: it throws
+    // a structured exit-4 (see command-auth.spec.ts for the full matrix).
+    mockRequireCommandToken.mockImplementation(() => {
+      throw new CliExit(4, { reason: 'auth_required', errorCode: 'auth_required' });
+    });
     await expect(runWhoami()).rejects.toMatchObject({ name: 'CliExit', exitCode: 4 });
     expect(mockGraphqlRequest).not.toHaveBeenCalled();
   });
 
   it('calls the dashboard GraphQL API with the bearer token', async () => {
-    mockGetAccessToken.mockReturnValue('tok_123');
+    mockRequireCommandToken.mockResolvedValue('tok_123');
     mockGraphqlRequest.mockResolvedValue(sampleData());
     await runWhoami();
     expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('workosCliWhoami'), { token: 'tok_123' });
   });
 
   it('renders user, team, and environment in human mode', async () => {
-    mockGetAccessToken.mockReturnValue('tok');
+    mockRequireCommandToken.mockResolvedValue('tok');
     mockGraphqlRequest.mockResolvedValue(sampleData());
     await runWhoami();
     const out = consoleOutput.join('\n');
@@ -76,7 +84,7 @@ describe('whoami command', () => {
   });
 
   it('omits the team and environment blocks when absent', async () => {
-    mockGetAccessToken.mockReturnValue('tok');
+    mockRequireCommandToken.mockResolvedValue('tok');
     mockGraphqlRequest.mockResolvedValue({ ...sampleData(), currentTeam: null, currentEnvironment: null });
     await runWhoami();
     const out = consoleOutput.join('\n');
@@ -85,14 +93,18 @@ describe('whoami command', () => {
     expect(out).not.toContain('Environment');
   });
 
-  it('explains the gated-capability case on a 403', async () => {
-    mockGetAccessToken.mockReturnValue('tok');
+  it('explains the gated-capability case on a 403 without naming GraphQL', async () => {
+    mockRequireCommandToken.mockResolvedValue('tok');
     mockGraphqlRequest.mockRejectedValue(
       new DashboardGraphqlError('The dashboard GraphQL API rejected this session (HTTP 403).', 'forbidden', 403),
     );
     await expect(runWhoami()).rejects.toBeInstanceOf(CliExit);
     const err = consoleErrors.join('\n');
-    expect(err).toContain('staging only');
+    // Shared taxonomy copy: capability off for the team / account not
+    // team-backed — with no stale staging claim and no GraphQL leak.
+    expect(err).toMatch(/account-plane capability/i);
+    expect(err).not.toMatch(/staging/i);
+    expect(err).not.toMatch(/graphql/i);
   });
 
   describe('JSON output mode', () => {
@@ -105,7 +117,7 @@ describe('whoami command', () => {
     });
 
     it('outputs user/team/environment as JSON', async () => {
-      mockGetAccessToken.mockReturnValue('tok');
+      mockRequireCommandToken.mockResolvedValue('tok');
       mockGraphqlRequest.mockResolvedValue(sampleData());
       await runWhoami();
       const output = JSON.parse(consoleOutput[0]);
@@ -116,7 +128,7 @@ describe('whoami command', () => {
     });
 
     it('preserves null team/environment in JSON', async () => {
-      mockGetAccessToken.mockReturnValue('tok');
+      mockRequireCommandToken.mockResolvedValue('tok');
       mockGraphqlRequest.mockResolvedValue({ ...sampleData(), currentTeam: null, currentEnvironment: null });
       await runWhoami();
       const output = JSON.parse(consoleOutput[0]);

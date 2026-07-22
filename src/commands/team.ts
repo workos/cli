@@ -11,26 +11,16 @@
  */
 
 import chalk from 'chalk';
-import { getAccessToken } from '../lib/credentials.js';
+import { requireCommandToken } from '../lib/command-auth.js';
 import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
 import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
 import { confirmDestructive, requireConfirmationFlag } from '../catalog/confirm.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
-import { exitWithAuthRequired } from '../utils/exit-codes.js';
 import { formatTable } from '../utils/table.js';
-import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 /** Dashboard team roles, mirroring the catalog `UsersOrganizationsRole` enum. */
 export const TEAM_ROLES = ['ADMIN', 'MEMBER', 'MEMBER_SANDBOX', 'SUPPORT', 'SUPPORT_VIEWER'] as const;
 export type TeamRole = (typeof TEAM_ROLES)[number];
-
-function requireToken(): string {
-  const token = getAccessToken();
-  if (!token) {
-    exitWithAuthRequired(`Not logged in. Run \`${formatWorkOSCommand('auth login')}\` to authenticate.`);
-  }
-  return token;
-}
 
 function normalizeRole(role: string): TeamRole {
   const upper = role.toUpperCase();
@@ -52,7 +42,7 @@ interface MembershipNode {
 }
 
 export async function runTeamMembers(): Promise<void> {
-  const token = requireToken();
+  const token = await requireCommandToken();
   const op = getOperation('teamMemberships');
 
   let data: { currentTeam: { memberships: MembershipNode[] } | null };
@@ -97,7 +87,7 @@ export interface TeamInviteOptions {
 
 export async function runTeamInvite(options: TeamInviteOptions): Promise<void> {
   const role = normalizeRole(options.role);
-  const token = requireToken();
+  const token = await requireCommandToken();
   const op = getOperation('inviteUserToTeam');
 
   let data: {
@@ -157,7 +147,7 @@ export async function runTeamChangeRole(options: TeamChangeRoleOptions): Promise
   // require-flag: a privilege change; non-interactive callers must pass --yes.
   await requireConfirmationFlag(options, { action: `change the role of ${options.membershipId} to ${role}` });
 
-  const token = requireToken();
+  const token = await requireCommandToken();
   const op = getOperation('changeRole');
 
   let data: { changeRole: { id: string; role: string | null } };
@@ -187,7 +177,7 @@ export async function runTeamRemove(options: TeamRemoveOptions): Promise<void> {
   // Destructive: revokes the member's access. Prompt (or require --yes).
   await confirmDestructive(options, { action: `remove member ${options.membershipId} from the team` });
 
-  const token = requireToken();
+  const token = await requireCommandToken();
   const op = getOperation('removeUserFromTeam');
 
   try {
@@ -211,7 +201,7 @@ export interface TeamResendInviteOptions {
 }
 
 export async function runTeamResendInvite(options: TeamResendInviteOptions): Promise<void> {
-  const token = requireToken();
+  const token = await requireCommandToken();
   const op = getOperation('resendDashboardInvite');
 
   let data: { resendDashboardInvite: { __typename: string } };
@@ -247,7 +237,7 @@ export interface TeamUpdateOptions {
 }
 
 export async function runTeamUpdate(options: TeamUpdateOptions): Promise<void> {
-  const token = requireToken();
+  const token = await requireCommandToken();
   const op = getOperation('updateTeamDetails');
 
   let data: {
@@ -293,7 +283,7 @@ export async function runTeamSetMfa(options: TeamSetMfaOptions): Promise<void> {
     action: `set MFA requirement to ${options.required ? 'required' : 'not required'}`,
   });
 
-  const token = requireToken();
+  const token = await requireCommandToken();
   const op = getOperation('updateTeamMfaRequirement');
 
   let data: {
