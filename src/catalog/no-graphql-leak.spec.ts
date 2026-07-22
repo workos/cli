@@ -5,6 +5,7 @@ import { OVERRIDES, resolveCommandMeta, findLeaks, LEAK_PATTERN } from './curati
 import { dashboardErrorMessage } from './operation.js';
 import { DASHBOARD_ERROR_MESSAGES } from '../lib/command-auth.js';
 import { DashboardGraphqlError, type DashboardGraphqlErrorCode } from '../lib/dashboard-graphql.js';
+import { buildCommandTree, type CommandSchema, type HelpOutput } from '../utils/help-json.js';
 import type { CatalogOperation } from './catalog-types.js';
 
 const catalog = loadManagementCatalog(undefined, { includeFeatureFlagged: true });
@@ -64,6 +65,37 @@ describe('no GraphQL/userland leak in curated command metadata', () => {
     expect(findLeaks({ command: 'userland list', describe: 'clean' })).toEqual(['command']);
     expect(findLeaks({ command: 'clean', describe: 'a graphql thing' })).toEqual(['describe']);
     expect(findLeaks({ command: 'userland', describe: 'graphql' })).toEqual(['command', 'describe']);
+  });
+});
+
+describe('no GraphQL/userland leak in the help-json registry for migrated commands', () => {
+  // Data-driven off the manifest: every top-level noun that has at least one
+  // catalog-backed command gets its full help-json subtree scanned, so later
+  // migration phases inherit this coverage automatically by adding manifest
+  // entries — no per-phase test edits.
+  const migratedNouns = [...new Set(getManifest().map((entry) => entry.command.split(' ')[0]))];
+  const tree = buildCommandTree() as HelpOutput;
+
+  /** Every user-visible string in a registry subtree (names, descriptions, examples). */
+  function collectStrings(schema: CommandSchema): string[] {
+    const strings = [schema.name, schema.description];
+    for (const option of schema.options ?? []) strings.push(option.name, option.description);
+    for (const positional of schema.positionals ?? []) strings.push(positional.name, positional.description);
+    for (const example of schema.examples ?? []) strings.push(example);
+    for (const child of schema.commands ?? []) strings.push(...collectStrings(child));
+    return strings;
+  }
+
+  it('covers at least the Phase-3 migrated nouns', () => {
+    expect(migratedNouns).toEqual(expect.arrayContaining(['organization', 'user']));
+  });
+
+  it.each(migratedNouns)('help-json subtree for "%s" is leak-free', (noun) => {
+    const entry = tree.commands.find((command) => command.name === noun);
+    expect(entry, `help-json registry entry for "${noun}" is missing`).toBeDefined();
+    for (const value of collectStrings(entry!)) {
+      expect(LEAK_PATTERN.test(value), `${noun}: "${value}"`).toBe(false);
+    }
   });
 });
 

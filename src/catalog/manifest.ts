@@ -234,6 +234,108 @@ const MANIFEST: CommandJustification[] = [
     destructive: false,
     ciPolicy: 'allow',
   },
+
+  // --- Resource migration: organization + user ---
+  // First resource commands moved off the API-key REST plane onto the dashboard
+  // account plane (graphql-resource-migration Phase 3). The command surface is
+  // unchanged (same subcommands); the backend and output shapes are new. Lists
+  // are single-page bounded reads with explicit pagination variables — `cheap`,
+  // not `bulk` (nothing fans out). Deletes carry the catalog `confirmation`
+  // phrase and are `destructive` (confirmDestructive: prompt or --yes; ciPolicy
+  // stays `allow` because the destructive gate already covers non-interactive).
+  {
+    command: 'organization list',
+    mapsTo: 'organizations',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'List organizations in the active environment (scripting, discovery, audits)',
+    load: 'cheap',
+    mutation: false,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'organization get',
+    mapsTo: 'organization',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'Inspect a single organization by ID',
+    load: 'cheap',
+    mutation: false,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'organization create',
+    mapsTo: 'createOrganization',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'Provision an organization (with optional domains) from setup scripts or CI',
+    load: 'cheap',
+    mutation: true,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'organization update',
+    mapsTo: 'updateOrganization',
+    audiences: ['human', 'agent'],
+    useCase: "Update an organization's name or domains",
+    load: 'cheap',
+    mutation: true,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'organization delete',
+    mapsTo: 'deleteOrganization',
+    audiences: ['human', 'agent'],
+    useCase: 'Delete an organization (offboarding, test-tenant cleanup)',
+    load: 'cheap',
+    mutation: true,
+    // destructive: the catalog confirmation phrase warns the delete cascades to
+    // the organization's connections, directories, and users.
+    destructive: true,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'user list',
+    mapsTo: 'userlandUsers',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'List AuthKit users in the active environment (scripting, audits)',
+    load: 'cheap',
+    mutation: false,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'user get',
+    mapsTo: 'userlandUser',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'Inspect a single AuthKit user by ID',
+    load: 'cheap',
+    mutation: false,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'user update',
+    mapsTo: 'updateUserlandUser',
+    audiences: ['human', 'agent'],
+    useCase: "Update an AuthKit user's profile (name, email, locale, external ID)",
+    load: 'cheap',
+    mutation: true,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'user delete',
+    mapsTo: 'deleteUserlandUser',
+    audiences: ['human', 'agent'],
+    useCase: 'Delete an AuthKit user (offboarding, test cleanup)',
+    load: 'cheap',
+    mutation: true,
+    // destructive: permanently deletes the end user (catalog confirmation).
+    destructive: true,
+    ciPolicy: 'allow',
+  },
 ];
 
 /** Returns the curated command allowlist. */

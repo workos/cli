@@ -213,11 +213,14 @@ describe('help-json', () => {
       expect(optNames).toEqual(expect.arrayContaining(['limit', 'before', 'after', 'order']));
     });
 
-    it('user list has email and organization filters', () => {
+    it('user list has email filter and environment override', () => {
       const user = buildCommandTree('user');
       const list = user.commands!.find((c) => c.name === 'list');
       const optNames = list!.options!.map((o) => o.name);
-      expect(optNames).toEqual(expect.arrayContaining(['email', 'organization']));
+      // --organization was dropped in the dashboard-plane migration (no backing
+      // variable on the list operation); --environment-id targets the env.
+      expect(optNames).toEqual(expect.arrayContaining(['email', 'environment-id']));
+      expect(optNames).not.toContain('organization');
     });
   });
 });

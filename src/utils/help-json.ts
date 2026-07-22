@@ -66,6 +66,24 @@ const apiKeyOpt: OptionSchema = {
   hidden: false,
 };
 
+const environmentIdOpt: OptionSchema = {
+  name: 'environment-id',
+  type: 'string',
+  description: 'Environment ID (defaults to the active environment)',
+  required: false,
+  hidden: false,
+};
+
+const confirmYesOpt: OptionSchema = {
+  name: 'yes',
+  type: 'boolean',
+  description: 'Skip the confirmation prompt',
+  required: false,
+  default: false,
+  alias: 'y',
+  hidden: false,
+};
+
 const paginationOpts: OptionSchema[] = [
   { name: 'limit', type: 'number', description: 'Maximum number of results to return', required: false, hidden: false },
   {
@@ -714,8 +732,8 @@ const commands: CommandSchema[] = [
   },
   {
     name: 'organization',
-    description: 'Manage WorkOS organizations (create, update, get, list, delete)',
-    options: [insecureStorageOpt, apiKeyOpt],
+    description: 'Manage WorkOS organizations (create, update, get, list, delete) in the active environment',
+    options: [insecureStorageOpt],
     commands: [
       {
         name: 'create',
@@ -729,6 +747,7 @@ const commands: CommandSchema[] = [
             required: false,
           },
         ],
+        options: [environmentIdOpt],
       },
       {
         name: 'update',
@@ -739,11 +758,13 @@ const commands: CommandSchema[] = [
           { name: 'domain', type: 'string', description: 'Domain to add or update', required: false },
           { name: 'state', type: 'string', description: 'Domain state (verified or pending)', required: false },
         ],
+        options: [environmentIdOpt],
       },
       {
         name: 'get',
         description: 'Get an organization by its ID',
         positionals: [{ name: 'orgId', type: 'string', description: 'Organization ID (org_*)', required: true }],
+        options: [environmentIdOpt],
       },
       {
         name: 'list',
@@ -752,29 +773,32 @@ const commands: CommandSchema[] = [
           {
             name: 'domain',
             type: 'string',
-            description: 'Filter organizations by domain',
+            description: 'Filter organizations by domain (name/domain search)',
             required: false,
             hidden: false,
           },
           ...paginationOpts,
+          environmentIdOpt,
         ],
       },
       {
         name: 'delete',
         description: 'Delete an organization by its ID',
         positionals: [{ name: 'orgId', type: 'string', description: 'Organization ID (org_*)', required: true }],
+        options: [confirmYesOpt, environmentIdOpt],
       },
     ],
   },
   {
     name: 'user',
-    description: 'Manage WorkOS user management users (get, list, update, delete)',
-    options: [insecureStorageOpt, apiKeyOpt],
+    description: 'Manage AuthKit users (get, list, update, delete) in the active environment',
+    options: [insecureStorageOpt],
     commands: [
       {
         name: 'get',
         description: 'Get a user by their ID',
         positionals: [{ name: 'userId', type: 'string', description: 'User ID (user_*)', required: true }],
+        options: [environmentIdOpt],
       },
       {
         name: 'list',
@@ -783,35 +807,23 @@ const commands: CommandSchema[] = [
           {
             name: 'email',
             type: 'string',
-            description: 'Filter users by email address',
-            required: false,
-            hidden: false,
-          },
-          {
-            name: 'organization',
-            type: 'string',
-            description: 'Filter users by organization ID',
+            description: 'Filter users by email address (search)',
             required: false,
             hidden: false,
           },
           ...paginationOpts,
+          environmentIdOpt,
         ],
       },
       {
         name: 'update',
-        description: 'Update user properties (name, email verification, password, external ID)',
+        description: 'Update user properties (name, email, locale, external ID)',
         positionals: [{ name: 'userId', type: 'string', description: 'User ID (user_*)', required: true }],
         options: [
           { name: 'first-name', type: 'string', description: 'First name', required: false, hidden: false },
           { name: 'last-name', type: 'string', description: 'Last name', required: false, hidden: false },
-          {
-            name: 'email-verified',
-            type: 'boolean',
-            description: 'Email verification status',
-            required: false,
-            hidden: false,
-          },
-          { name: 'password', type: 'string', description: 'New password', required: false, hidden: false },
+          { name: 'email', type: 'string', description: 'New email address', required: false, hidden: false },
+          { name: 'locale', type: 'string', description: 'Locale (e.g. en-US)', required: false, hidden: false },
           {
             name: 'external-id',
             type: 'string',
@@ -819,12 +831,14 @@ const commands: CommandSchema[] = [
             required: false,
             hidden: false,
           },
+          environmentIdOpt,
         ],
       },
       {
         name: 'delete',
         description: 'Delete a user by their ID',
         positionals: [{ name: 'userId', type: 'string', description: 'User ID (user_*)', required: true }],
+        options: [confirmYesOpt, environmentIdOpt],
       },
     ],
   },

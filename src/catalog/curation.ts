@@ -64,24 +64,40 @@ export const OVERRIDES: Record<string, CommandMeta> = {
   // `userland*` ops: the prefix is internal dashboard naming; the user-facing
   // noun is just "user".
   //
-  // DEFERRED/DROPPED (Phase 5, decided 2026-06-26). These were pre-staged for a
-  // catalog-driven AuthKit-user category that is NOT being built: the nouns below
-  // (`user list`, `user create`, `user delete`, ...) would collide head-on with
-  // the existing REST `user` command (src/commands/user.ts), which already lists,
-  // creates, updates, and deletes AuthKit users on the public API plane. Routing
-  // those through the internal dashboard plane would duplicate working commands
-  // and risk a naming leak. Do NOT add these to manifest.ts without first
-  // resolving that collision (see the contract's Out of Scope).
+  // LIVE since the resource migration (Phase 3, graphql-resource-migration):
+  // the REST `user` command (src/commands/user.ts) was replaced by these
+  // dashboard-plane ops, which resolved the old noun collision by replacement —
+  // the manifest now activates `userlandUsers` (user list), `userlandUser`
+  // (user get), `updateUserlandUser` (user update), and `deleteUserlandUser`
+  // (user delete).
   //
-  // `userlandUsers` is intentionally retained: no-graphql-leak.spec.ts uses it as
-  // the worked example proving the curation layer cleans a `userland`-leaking op
-  // name to a clean noun. Removing it would weaken that machinery test.
+  // Still INERT (present here, absent from manifest.ts):
+  // - `createUserlandUser`: the CLI's `user` command has never had a `create`
+  //   subcommand and the migration deliberately does not add one.
+  // - the `*UserlandUserInvite` ops: invitations are the `invitation` command's
+  //   turf (migrating in Phase 4) — do not activate these under the `user` noun.
+  //
+  // `userlandUsers` also remains the leak-spec worked example proving the
+  // curation layer cleans a `userland`-leaking op name to a clean noun — it is
+  // now load-bearing AND exemplary; never remove it.
   userlandUsers: { command: 'user list', describe: 'List AuthKit users in the current environment' },
+  userlandUser: { command: 'user get', describe: 'Get an AuthKit user by ID' },
+  updateUserlandUser: { command: 'user update', describe: "Update an AuthKit user's profile" },
   createUserlandUser: { command: 'user create', describe: 'Create a user' },
-  deleteUserlandUser: { command: 'user delete', describe: 'Delete a user' },
+  deleteUserlandUser: { command: 'user delete', describe: 'Delete an AuthKit user' },
   createUserlandUserInvite: { command: 'user invite', describe: 'Invite a user by email' },
   resendUserlandUserInvite: { command: 'user invite resend', describe: 'Resend a pending user invitation' },
   revokeUserlandUserInvite: { command: 'user invite revoke', describe: 'Revoke a pending user invitation' },
+
+  // --- organization (resource migration Phase 3) ---
+  // Op names/descriptions are clean upstream, but every curated op still needs
+  // an override so the manifest's clean `command` noun is the single source of
+  // truth (the leak spec asserts meta.command === manifest entry.command).
+  organizations: { command: 'organization list', describe: 'List organizations in the current environment' },
+  organization: { command: 'organization get', describe: 'Get an organization by ID' },
+  createOrganization: { command: 'organization create', describe: 'Create an organization with optional domains' },
+  updateOrganization: { command: 'organization update', describe: "Update an organization's name or domains" },
+  deleteOrganization: { command: 'organization delete', describe: 'Delete an organization' },
 
   // --- Phase 4: AuthKit app config ---
   // These op names/descriptions are already clean (no leak), but each still needs
