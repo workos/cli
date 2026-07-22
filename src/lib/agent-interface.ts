@@ -198,9 +198,12 @@ const SAFE_SCRIPTS = [
 
 /**
  * Dangerous shell operators that could allow command injection.
+ * Newlines and carriage returns are included because the shell treats them as
+ * command separators equivalent to `;`, so a payload like `npm install\n<cmd>`
+ * would otherwise smuggle a second command past the allowlist.
  * Note: We handle `2>&1` and `| tail/head` separately as safe patterns.
  */
-const DANGEROUS_OPERATORS = /[;`$()]/;
+const DANGEROUS_OPERATORS = /[;`$()\n\r]/;
 
 /**
  * Check if command is an allowed package manager command.
@@ -254,7 +257,7 @@ export function installerCanUseTool(toolName: string, input: Record<string, unkn
     });
     return {
       behavior: 'deny',
-      message: `Bash command not allowed. Shell operators like ; \` $ ( ) are not permitted.`,
+      message: `Bash command not allowed. Shell operators like ; \` $ ( ) and newlines are not permitted. Run one command per Bash call.`,
     };
   }
 
