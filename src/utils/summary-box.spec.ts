@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderSummaryBox, renderCompletionSummary, type SummaryBoxItem } from './summary-box.js';
+import { renderSummaryBox, renderCompletionSummary, renderBrandMark, type SummaryBoxItem } from './summary-box.js';
 import type { CompletionData } from '../lib/events.js';
 
 // Simple ANSI code stripper (avoids needing strip-ansi as a dependency)
@@ -173,11 +173,41 @@ describe('summary-box', () => {
       expect(result).toContain('Start dev server to test authentication');
     });
 
-    it('renders the failure box unchanged', () => {
+    it('renders the failure summary', () => {
       const result = strip(renderCompletionSummary(false, 'Something went wrong'));
 
       expect(result).toContain('Installation Failed');
       expect(result).toContain('Something went wrong');
+    });
+
+    it('renders de-boxed (variable-width lines, not a fixed-width box)', () => {
+      const result = strip(renderCompletionSummary(true, undefined, makeCompletion()));
+      // A bordered box forces every line to the same width; the flat summary does not.
+      const widths = new Set(
+        result
+          .split('\n')
+          .filter((l) => l.trim())
+          .map((l) => l.length),
+      );
+      expect(widths.size).toBeGreaterThan(1);
+    });
+  });
+
+  describe('renderBrandMark', () => {
+    it('places the wordmark beside the lock and stays 6 lines tall', () => {
+      const result = strip(renderBrandMark('AuthKit installer'));
+
+      expect(result).toContain('WorkOS');
+      expect(result).toContain('AuthKit installer');
+      // The compact brand mark is exactly the lock art height — no block banner.
+      expect(result.split('\n')).toHaveLength(6);
+    });
+
+    it('renders without a subtitle', () => {
+      const result = strip(renderBrandMark());
+
+      expect(result).toContain('WorkOS');
+      expect(result).not.toContain('AuthKit installer');
     });
   });
 });

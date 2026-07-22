@@ -17,9 +17,19 @@ function namedError(name: string): Error {
   return e;
 }
 
+let stdinTtyDesc: PropertyDescriptor | undefined;
 beforeEach(() => {
   vi.clearAllMocks();
   setDashboardMode(false);
+  // Prompts route through withPrompt, which refuses to open on a non-TTY stdin.
+  // Simulate an interactive terminal so the adapter/cancellation tests exercise
+  // the real prompt path (individual tests override this to test the guard).
+  stdinTtyDesc = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+  Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+});
+afterEach(() => {
+  if (stdinTtyDesc) Object.defineProperty(process.stdin, 'isTTY', stdinTtyDesc);
+  else delete (process.stdin as { isTTY?: boolean }).isTTY;
 });
 
 describe('isCancel / CANCEL', () => {
@@ -129,6 +139,60 @@ describe('cancellation (inquirer throws → CANCEL sentinel)', () => {
   it('rethrows non-cancel errors', async () => {
     vi.mocked(inquirer.input).mockRejectedValue(new Error('disk full'));
     await expect(ui.text({ message: 'q' })).rejects.toThrow('disk full');
+  });
+});
+
+describe('prompt coordination (withPrompt)', () => {
+  it('refuses to prompt in --json mode (would corrupt machine output)', async () => {
+    const { setOutputMode } = await import('./output.js');
+    setOutputMode('json');
+    try {
+      await expect(ui.confirm({ message: 'q' })).rejects.toMatchObject({
+        name: 'PromptUnavailableError',
+        reason: 'json',
+      });
+      expect(inquirer.confirm).not.toHaveBeenCalled();
+    } finally {
+      setOutputMode('human');
+    }
+  });
+
+  it('refuses to prompt on a non-TTY stdin (would hang forever)', async () => {
+    Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true });
+    await expect(ui.confirm({ message: 'q' })).rejects.toMatchObject({
+      name: 'PromptUnavailableError',
+      reason: 'no-tty',
+    });
+    expect(inquirer.confirm).not.toHaveBeenCalled();
+  });
+
+  it('serializes concurrent prompts so two never share stdin at once', async () => {
+    const order: string[] = [];
+    let resolveFirst!: (v: boolean) => void;
+    vi.mocked(inquirer.confirm)
+      .mockImplementationOnce(
+        () =>
+          new Promise<boolean>((resolve) => {
+            order.push('open1');
+            resolveFirst = resolve;
+          }),
+      )
+      .mockImplementationOnce(async () => {
+        order.push('open2');
+        return true;
+      });
+
+    // Fire two prompts "at once", as the parallel installer state does.
+    const p1 = ui.confirm({ message: 'first' });
+    const p2 = ui.confirm({ message: 'second' });
+    await new Promise((r) => setTimeout(r, 0));
+
+    // Only the first prompt has opened; the second is queued behind it.
+    expect(order).toEqual(['open1']);
+
+    resolveFirst(true);
+    await Promise.all([p1, p2]);
+    expect(order).toEqual(['open1', 'open2']);
   });
 });
 

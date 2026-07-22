@@ -22,6 +22,7 @@ import {
   input as inquirerInput,
   password as inquirerPassword,
 } from '@inquirer/prompts';
+import { isJsonMode } from './output.js';
 
 // ── Dashboard mode ──────────────────────────────────────────────────────────
 // When true, suppress all human output (the Dashboard adapter drives its own UI).
@@ -144,7 +145,20 @@ export interface Spinner {
   start: (message?: string) => void;
   message: (message: string) => void;
   stop: (message?: string, code?: number) => void;
+  /** Halt and erase the spinner line WITHOUT printing a final status line. */
+  clear: () => void;
 }
+
+/**
+ * The currently-running spinner, if any. A prompt pauses it before opening so
+ * the 80ms redraw interval can't overwrite the question (see withPrompt).
+ * Internal — not part of the public Spinner surface.
+ */
+interface PausableSpinner {
+  pause: () => void;
+  resume: () => void;
+}
+let activeSpinner: PausableSpinner | null = null;
 
 /** spinner: start(msg) / message(msg) / stop(msg, code). */
 function spinner(): Spinner {
@@ -155,13 +169,22 @@ function spinner(): Spinner {
   const render = () => {
     process.stdout.write(`\r${INDENT}${dim(SPINNER_FRAMES[(frame = (frame + 1) % SPINNER_FRAMES.length)])} ${text}`);
   };
-  return {
+  const clearLine = () => {
+    if (isTty) process.stdout.write('\r\x1b[2K');
+  };
+  const tick = () => {
+    if (isTty && !timer) {
+      render();
+      timer = setInterval(render, 80);
+    }
+  };
+  const handle: Spinner & PausableSpinner = {
     start(message = '') {
       text = message;
       if (dashboardMode) return;
       if (isTty) {
-        render();
-        timer = setInterval(render, 80);
+        tick();
+        activeSpinner = handle;
       } else {
         line(`${dim('…')} ${text}`);
       }
@@ -170,13 +193,45 @@ function spinner(): Spinner {
       text = message;
     },
     stop(message?: string, code = 0) {
-      if (timer) clearInterval(timer);
+      if (timer) {
+        clearInterval(timer);
+        timer = undefined;
+      }
+      if (activeSpinner === handle) activeSpinner = null;
       if (dashboardMode) return;
-      if (isTty) process.stdout.write('\r\x1b[2K');
+      clearLine();
       const glyph = code === 0 ? green('✓') : red('✗');
       line(`${glyph} ${message ?? text}`);
     },
+    // Halt + erase without printing a final line (e.g. an orphaned spinner from
+    // a failed step being cleared before a prompt), and deregister so a prompt
+    // doesn't resume it.
+    clear() {
+      if (timer) {
+        clearInterval(timer);
+        timer = undefined;
+      }
+      if (activeSpinner === handle) activeSpinner = null;
+      if (dashboardMode) return;
+      clearLine();
+    },
+    // Pause/resume let a prompt borrow the terminal: pause clears the spinner
+    // line and halts the redraw interval; resume restarts it. stop() is NOT
+    // called, so activeSpinner stays registered across the prompt.
+    pause() {
+      if (timer) {
+        clearInterval(timer);
+        timer = undefined;
+      }
+      clearLine();
+    },
+    resume() {
+      // Only resume if this handle is still the active spinner — never resurrect
+      // a spinner that was stopped or cleared while the prompt was open.
+      if (activeSpinner === handle && !dashboardMode) tick();
+    },
   };
+  return handle;
 }
 
 // ── Cancellation ──────────────────────────────────────────────────────────────
@@ -204,6 +259,66 @@ function isCancelError(error: unknown): boolean {
   return error instanceof Error && CANCEL_ERROR_NAMES.has(error.name);
 }
 
+// ── Prompt coordination ───────────────────────────────────────────────────────
+
+/**
+ * Thrown when a prompt is attempted where the user cannot answer: machine
+ * (`--json`) output, or a non-interactive stdin (piped / no TTY). Previously
+ * these either corrupted machine output or hung forever waiting on a stdin that
+ * never delivers a keystroke. Callers that reach this generally have an upstream
+ * gap (they should have gated on isPromptAllowed()/isJsonMode() and offered a
+ * flag) — surfacing it fails fast with a clear next step instead of hanging.
+ */
+export class PromptUnavailableError extends Error {
+  constructor(
+    public readonly reason: 'json' | 'no-tty',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'PromptUnavailableError';
+  }
+}
+
+/**
+ * Serializes every prompt through a single-flight chain so two @inquirer prompts
+ * can never share stdin at once. The installer's XState `preparing` state runs
+ * git-dirty and protected-branch checks in PARALLEL regions, each of which can
+ * open a prompt from a fire-and-forget event handler — without this, both prompts
+ * render on the same stdin and steal each other's keystrokes ("it asked a
+ * question but wasn't there to answer it"). It also pauses any live spinner so
+ * the 80ms redraw interval can't overwrite the question.
+ */
+let promptChain: Promise<unknown> = Promise.resolve();
+
+async function withPrompt<T>(run: () => Promise<T>): Promise<T> {
+  if (isJsonMode()) {
+    throw new PromptUnavailableError(
+      'json',
+      'Cannot prompt for input in --json mode. Re-run without --json, or pass the flag that answers it (e.g. --yes / --force).',
+    );
+  }
+  if (!process.stdin.isTTY) {
+    throw new PromptUnavailableError(
+      'no-tty',
+      'This step needs an interactive terminal. Re-run in a terminal, or pass the required flags to run non-interactively.',
+    );
+  }
+  const prior = promptChain.catch(() => undefined);
+  let release!: () => void;
+  promptChain = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await prior;
+  const spinner = activeSpinner;
+  spinner?.pause();
+  try {
+    return await run();
+  } finally {
+    spinner?.resume();
+    release();
+  }
+}
+
 /**
  * Adapt the validate contract (return error string / Error when invalid,
  * undefined when valid) to @inquirer's (return true when valid, string when not).
@@ -226,15 +341,17 @@ interface ConfirmOptions {
   signal?: AbortSignal;
 }
 async function confirm(options: ConfirmOptions): Promise<boolean | symbol> {
-  try {
-    return await inquirerConfirm(
-      { message: options.message, default: options.initialValue },
-      { signal: options.signal },
-    );
-  } catch (error) {
-    if (isCancelError(error)) return CANCEL;
-    throw error;
-  }
+  return withPrompt(async () => {
+    try {
+      return await inquirerConfirm(
+        { message: options.message, default: options.initialValue },
+        { signal: options.signal },
+      );
+    } catch (error) {
+      if (isCancelError(error)) return CANCEL;
+      throw error;
+    }
+  });
 }
 
 interface SelectOption<T> {
@@ -250,24 +367,26 @@ interface SelectOptions<T> {
   signal?: AbortSignal;
 }
 async function select<T>(options: SelectOptions<T>): Promise<T | symbol> {
-  try {
-    return await inquirerSelect<T>(
-      {
-        message: options.message,
-        choices: options.options.map((o) => ({
-          value: o.value,
-          name: o.label ?? String(o.value),
-          description: o.hint,
-        })),
-        default: options.initialValue,
-        pageSize: options.maxItems,
-      },
-      { signal: options.signal },
-    );
-  } catch (error) {
-    if (isCancelError(error)) return CANCEL;
-    throw error;
-  }
+  return withPrompt(async () => {
+    try {
+      return await inquirerSelect<T>(
+        {
+          message: options.message,
+          choices: options.options.map((o) => ({
+            value: o.value,
+            name: o.label ?? String(o.value),
+            description: o.hint,
+          })),
+          default: options.initialValue,
+          pageSize: options.maxItems,
+        },
+        { signal: options.signal },
+      );
+    } catch (error) {
+      if (isCancelError(error)) return CANCEL;
+      throw error;
+    }
+  });
 }
 
 interface TextOptions {
@@ -279,23 +398,25 @@ interface TextOptions {
   signal?: AbortSignal;
 }
 async function text(options: TextOptions): Promise<string | symbol> {
-  try {
+  return withPrompt(async () => {
     // @inquirer/input has no placeholder concept, and mapping it to `default`
     // would auto-submit the hint as the real value on an empty enter. Fold it
     // into the message so the hint survives (rendered as ghost text previously).
     const message = options.placeholder ? `${options.message} (${options.placeholder})` : options.message;
-    return await inquirerInput(
-      {
-        message,
-        default: options.defaultValue ?? options.initialValue,
-        validate: adaptValidate(options.validate),
-      },
-      { signal: options.signal },
-    );
-  } catch (error) {
-    if (isCancelError(error)) return CANCEL;
-    throw error;
-  }
+    try {
+      return await inquirerInput(
+        {
+          message,
+          default: options.defaultValue ?? options.initialValue,
+          validate: adaptValidate(options.validate),
+        },
+        { signal: options.signal },
+      );
+    } catch (error) {
+      if (isCancelError(error)) return CANCEL;
+      throw error;
+    }
+  });
 }
 
 interface PasswordOptions {
@@ -304,15 +425,17 @@ interface PasswordOptions {
   signal?: AbortSignal;
 }
 async function password(options: PasswordOptions): Promise<string | symbol> {
-  try {
-    return await inquirerPassword(
-      { message: options.message, mask: true, validate: adaptValidate(options.validate) },
-      { signal: options.signal },
-    );
-  } catch (error) {
-    if (isCancelError(error)) return CANCEL;
-    throw error;
-  }
+  return withPrompt(async () => {
+    try {
+      return await inquirerPassword(
+        { message: options.message, mask: true, validate: adaptValidate(options.validate) },
+        { signal: options.signal },
+      );
+    } catch (error) {
+      if (isCancelError(error)) return CANCEL;
+      throw error;
+    }
+  });
 }
 
 // ── Default export (the `ui` facade) ────────────────────────────────────────

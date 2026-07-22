@@ -1,11 +1,11 @@
 import type { InstallerAdapter, AdapterConfig } from './types.js';
 import type { InstallerEventEmitter, InstallerEvents } from '../events.js';
 import { relative } from 'node:path';
-import ui from '../../utils/ui.js';
+import ui, { PromptUnavailableError } from '../../utils/ui.js';
 import chalk from 'chalk';
 import { getConfig } from '../settings.js';
 import { ProgressTracker } from '../progress-tracker.js';
-import { renderCompletionSummary } from '../../utils/summary-box.js';
+import { renderCompletionSummary, renderBrandMark } from '../../utils/summary-box.js';
 import { formatWorkOSCommand } from '../../utils/command-invocation.js';
 
 /**
@@ -35,6 +35,12 @@ export class CLIAdapter implements InstallerAdapter {
 
   // SIGINT handler for cleanup
   private sigIntHandler: (() => void) | null = null;
+
+  // Aborts in-flight/queued prompts when the run ends (cancellation, ctrl-c).
+  // The installer's `preparing` state can queue a second prompt behind a live
+  // one (git-dirty + protected-branch); if the first is cancelled, this signal
+  // stops the queued sibling from opening a now-moot question.
+  private promptAbort: AbortController | null = null;
 
   // Last phase message shown on the agent spinner, restored after logging above it.
   private lastAgentMessage = 'Running AI agent...';
@@ -69,19 +75,22 @@ export class CLIAdapter implements InstallerAdapter {
   async start(): Promise<void> {
     if (this.isStarted) return;
     this.isStarted = true;
+    this.promptAbort = new AbortController();
 
     // Show intro
     const config = getConfig();
     if (config.branding.showAsciiArt) {
-      const art = config.branding.useCompact ? config.branding.compactAsciiArt : config.branding.asciiArt;
-      console.log(chalk.cyan(art));
-      console.log();
+      // Compact brand mark (the lock + wordmark) instead of the full block banner.
+      console.log('');
+      console.log(renderBrandMark('AuthKit installer'));
+      console.log('');
     } else {
       ui.intro('WorkOS', 'AuthKit installer');
     }
 
     // Handle Ctrl+C gracefully
     const handleSigInt = () => {
+      this.promptAbort?.abort();
       if (this.spinner) {
         this.spinner.stop('Cancelled');
         this.spinner = null;
@@ -108,8 +117,11 @@ export class CLIAdapter implements InstallerAdapter {
     this.subscribe('credentials:env:prompt', this.handleEnvScanPrompt);
     this.subscribe('device:started', this.handleDeviceStarted);
     this.subscribe('device:success', this.handleDeviceSuccess);
+    this.subscribe('device:error', this.handleDeviceError);
+    this.subscribe('device:timeout', this.handleDeviceTimeout);
     this.subscribe('staging:fetching', this.handleStagingFetching);
     this.subscribe('staging:success', this.handleStagingSuccess);
+    this.subscribe('staging:error', this.handleStagingError);
     this.subscribe('credentials:env:found', this.handleEnvCredentialsFound);
     this.subscribe('config:complete', this.handleConfigComplete);
     this.subscribe('agent:start', this.handleAgentStart);
@@ -152,6 +164,11 @@ export class CLIAdapter implements InstallerAdapter {
   async stop(): Promise<void> {
     if (!this.isStarted) return;
 
+    // Abort any in-flight/queued prompt so a cancelled run can't leave a
+    // now-moot sibling question open (e.g. the branch prompt after git-cancel).
+    this.promptAbort?.abort();
+    this.promptAbort = null;
+
     // Remove SIGINT handler
     if (this.sigIntHandler) {
       process.off('SIGINT', this.sigIntHandler);
@@ -171,9 +188,9 @@ export class CLIAdapter implements InstallerAdapter {
     this.isStarted = false;
   }
 
-  private stopSpinner(message: string): void {
+  private stopSpinner(message: string, code = 0): void {
     if (this.spinner) {
-      this.spinner.stop(message);
+      this.spinner.stop(message, code);
       this.spinner = null;
     }
   }
@@ -193,9 +210,42 @@ export class CLIAdapter implements InstallerAdapter {
     handler: (payload: InstallerEvents[K]) => void | Promise<void>,
   ): void {
     const boundHandler = handler.bind(this);
-    this.handlers.set(event, boundHandler as (...args: unknown[]) => void);
-    this.emitter.on(event, boundHandler);
+    // Handlers are invoked fire-and-forget by a plain EventEmitter, so an async
+    // rejection would become an unhandledRejection (silent crash). Route a
+    // PromptUnavailableError (prompt attempted where the user can't answer) to a
+    // clean fail-fast; re-surface anything else unchanged so real bugs still crash.
+    const safeHandler = (payload: InstallerEvents[K]): void => {
+      try {
+        const result = boundHandler(payload);
+        if (result instanceof Promise) result.catch((err) => this.onHandlerError(err));
+      } catch (err) {
+        this.onHandlerError(err);
+      }
+    };
+    this.handlers.set(event, safeHandler as (...args: unknown[]) => void);
+    this.emitter.on(event, safeHandler as typeof boundHandler);
   }
+
+  /**
+   * Terminal handler failure. A PromptUnavailableError means we reached a prompt
+   * in a context that can't answer it (non-TTY stdin) — the CLIAdapter only runs
+   * in human, non-JSON output, so this is always a real human at a broken input,
+   * never a JSON stream. Surface a clear message and exit before anything is
+   * written, rather than hanging or crashing. Re-throw anything else.
+   */
+  private onHandlerError = (error: unknown): void => {
+    if (error instanceof PromptUnavailableError) {
+      this.spinner?.clear();
+      this.spinner = null;
+      ui.log.error(error.message);
+      ui.log.hint('Re-run in an interactive terminal, or pass the flags that answer these prompts.');
+      // Exit 1 (general error), matching the direct-command classification of
+      // this same error in bin.ts. NOT 4 — that's "auth required" (gh
+      // convention), which would send scripts into an auth-retry loop.
+      process.exit(1);
+    }
+    throw error;
+  };
 
   // ===== Event Handlers =====
 
@@ -281,6 +331,23 @@ export class CLIAdapter implements InstallerAdapter {
     ui.log.success(`Found existing WorkOS credentials in ${sourcePath}`);
   };
 
+  // Automatic auth / credential fetch can fail and fall back to manual entry.
+  // These finalize the spinner with a failure glyph so it isn't left spinning
+  // (orphaned) over the manual-credentials prompt that follows.
+  private handleDeviceError = ({ message }: InstallerEvents['device:error']): void => {
+    this.stopSpinner('Automatic sign-in failed', 1);
+    if (this.debug) this.debugLog(`[device:error] ${message}`);
+  };
+
+  private handleDeviceTimeout = (): void => {
+    this.stopSpinner('Sign-in timed out', 1);
+  };
+
+  private handleStagingError = ({ message }: InstallerEvents['staging:error']): void => {
+    this.stopSpinner('Could not fetch WorkOS credentials', 1);
+    if (this.debug) this.debugLog(`[staging:error] ${message}`);
+  };
+
   private handleGitDirty = async ({ files }: InstallerEvents['git:dirty']): Promise<void> => {
     ui.log.warn('You have uncommitted or untracked files:');
     files.slice(0, 5).forEach((f) => ui.log.info(chalk.dim(`  ${f}`)));
@@ -292,6 +359,7 @@ export class CLIAdapter implements InstallerAdapter {
     const confirmed = await ui.confirm({
       message: 'Continue anyway?',
       initialValue: false,
+      signal: this.promptAbort?.signal,
     });
     this.isPromptActive = false;
     this.flushPendingLogs();
@@ -304,6 +372,12 @@ export class CLIAdapter implements InstallerAdapter {
   private handleCredentialsRequest = async ({
     requiresApiKey,
   }: InstallerEvents['credentials:request']): Promise<void> => {
+    // Guaranteed chokepoint: promptingManual is the fallback for any auth path,
+    // so clear any still-running spinner before the prompt opens (defense in
+    // depth on top of the device/staging error handlers and withPrompt's pause).
+    this.spinner?.clear();
+    this.spinner = null;
+
     ui.log.step(`Get your credentials from ${chalk.cyan('https://dashboard.workos.com')}`);
 
     const clientId = await ui.text({
@@ -436,6 +510,13 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handleComplete = ({ success, summary, completion }: InstallerEvents['complete']): void => {
+    // Fires synchronously during the cancelled-state transition (emitCancelled),
+    // BEFORE a queued sibling prompt's microtask runs — so aborting here makes a
+    // cancelled run's still-queued prompt (e.g. the branch select after a
+    // git-dirty "No") open with an already-aborted signal and resolve to CANCEL
+    // without ever rendering a now-moot question.
+    this.promptAbort?.abort();
+
     this.stopSpinner(success ? 'Done' : 'Failed');
 
     console.log('');
@@ -450,14 +531,18 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handleError = ({ message, stack }: InstallerEvents['error']): void => {
-    this.stopSpinner('Error');
+    this.stopSpinner('Failed', 1);
 
-    // Rewrite raw API/SDK errors into user-friendly messages
+    // Rewrite raw API/SDK errors into user-friendly messages with a next step.
+    // Matching is word-boundary / code-based so 'author' doesn't read as 'auth'
+    // and 'Module not found' doesn't read as a missing-directory error.
     const isServiceError =
       /\b50[0-9]\b/.test(message) || /server_error|internal_error|overloaded|service.*unavailable/i.test(message);
-    const isRateLimit = /\b429\b/.test(message) || /rate.limit/i.test(message);
+    const isRateLimit = /\b429\b/.test(message) || /\brate.?limit/i.test(message);
     const isNetworkError = /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|fetch failed/i.test(message);
     const isProcessExit = /process exited with code/i.test(message);
+    const isAuthError = /\b(401|403|unauthorized|forbidden|authentication|authorization)\b/i.test(message);
+    const isMissingPath = /\bENOENT\b/.test(message);
 
     if (isServiceError) {
       ui.log.error('The AI service is temporarily unavailable.');
@@ -471,16 +556,18 @@ export class CLIAdapter implements InstallerAdapter {
     } else if (isProcessExit) {
       ui.log.error('The AI agent process exited unexpectedly.');
       ui.log.info('Try running again. If this persists, run with --debug for details.');
-    } else {
-      ui.log.error(message);
-    }
-
-    // Add actionable hints for common errors
-    if (message.includes('authentication') || message.includes('auth')) {
+    } else if (isAuthError) {
+      ui.log.error('Authentication failed.');
       ui.log.info(`Try running: ${formatWorkOSCommand('auth logout')} && ${formatWorkOSCommand('install')}`);
-    }
-    if (message.includes('ENOENT') || message.includes('not found')) {
-      ui.log.info('Ensure you are in a project directory');
+    } else if (isMissingPath) {
+      ui.log.error(message);
+      ui.log.info('Make sure you are running this in your project directory.');
+    } else {
+      // Unknown error: still give the user somewhere to go next.
+      ui.log.error(message);
+      ui.log.info(
+        `Re-run with ${chalk.cyan('--debug')} for details, or report it at ${chalk.cyan('https://github.com/workos/cli/issues')}`,
+      );
     }
 
     if (stack && this.debug) {
@@ -539,6 +626,7 @@ export class CLIAdapter implements InstallerAdapter {
         { value: 'continue', label: 'Continue on current branch' },
         { value: 'cancel', label: 'Cancel' },
       ],
+      signal: this.promptAbort?.signal,
     });
     this.isPromptActive = false;
     this.flushPendingLogs();

@@ -64,7 +64,7 @@ vi.mock('../lib/mcp-clients.js', () => ({
 }));
 
 vi.mock('../utils/analytics.js', () => ({
-  analytics: { emitCommandEvent: vi.fn() },
+  analytics: { emitCommandEvent: vi.fn(), captureException: vi.fn() },
 }));
 
 vi.mock('../utils/command-invocation.js', () => ({
@@ -79,7 +79,7 @@ const { detectAgents, refreshWorkOSSkills } = await import('./install-skill.js')
 const { detectMcpClients } = await import('../lib/mcp-clients.js');
 const { analytics } = await import('../utils/analytics.js');
 
-const { runSetup, maybeRunSetupAfter, SETUP_OFFER_TIMEOUT_MS } = await import('./setup.js');
+const { runSetup, maybeRunSetupAfter } = await import('./setup.js');
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 const claudeAgent = { name: 'claude-code', displayName: 'Claude Code', globalSkillsDir: '/x', detect: () => true };
@@ -193,7 +193,7 @@ describe('runSetup — automatic triggers (login/install)', () => {
     expect(prefs.recordSetupCompleted).not.toHaveBeenCalled();
   });
 
-  it('treats cancel (ctrl-c) as skip — no decline recorded', async () => {
+  it('treats cancel (ctrl-c) as skip — no decline recorded, but emits a cancelled event', async () => {
     detectSome();
     vi.mocked(ui.confirm).mockResolvedValue(CANCEL);
 
@@ -202,6 +202,13 @@ describe('runSetup — automatic triggers (login/install)', () => {
     expect(prefs.recordSetupDeclined).not.toHaveBeenCalled();
     expect(prefs.recordSetupCompleted).not.toHaveBeenCalled();
     expect(refreshWorkOSSkills).not.toHaveBeenCalled();
+    // The cut-off must be observable in telemetry (previously it was silent).
+    expect(analytics.emitCommandEvent).toHaveBeenCalledWith(
+      'setup offer',
+      expect.any(Number),
+      expect.any(Boolean),
+      expect.objectContaining({ extraAttributes: expect.objectContaining({ 'setup.outcome': 'cancelled' }) }),
+    );
   });
 
   it('stays silent when no supported agents are detected', async () => {
@@ -307,35 +314,24 @@ describe('runSetup — command trigger', () => {
 });
 
 describe('maybeRunSetupAfter', () => {
-  it('never throws even if the offer rejects', async () => {
+  it('never throws even if the offer rejects, and reports the failure to telemetry', async () => {
     detectSome();
-    vi.mocked(ui.confirm).mockRejectedValue(new Error('boom'));
+    const boom = new Error('boom');
+    vi.mocked(ui.confirm).mockRejectedValue(boom);
 
     await expect(maybeRunSetupAfter('login')).resolves.toBeUndefined();
+
+    // The swallowed failure must still reach telemetry (previously dropped).
+    expect(analytics.captureException).toHaveBeenCalledWith(boom, { 'setup.trigger': 'login' });
   });
 
-  it('aborts a hung prompt after the deadline and resolves (never wedges login/install)', async () => {
-    vi.useFakeTimers();
-    try {
-      detectSome();
-      let captured: AbortSignal | undefined;
-      // A hung prompt settles to CANCEL only when its signal aborts — exactly
-      // what the real facade does when @inquirer throws on abort. (There is no
-      // Promise.race fallback anymore, so the mock must honor the signal.)
-      vi.mocked(ui.confirm).mockImplementation((opts: any) => {
-        captured = opts.signal;
-        return new Promise((resolve) => {
-          opts.signal?.addEventListener('abort', () => resolve(CANCEL));
-        });
-      });
+  it('does not pass an abort signal to the confirm (the prompt is not time-bounded)', async () => {
+    detectSome();
+    vi.mocked(ui.confirm).mockResolvedValue(true);
 
-      const pending = maybeRunSetupAfter('login');
-      await vi.advanceTimersByTimeAsync(SETUP_OFFER_TIMEOUT_MS + 10);
+    await maybeRunSetupAfter('login');
 
-      await expect(pending).resolves.toBeUndefined();
-      expect(captured?.aborted).toBe(true);
-    } finally {
-      vi.useRealTimers();
-    }
+    const confirmArgs = vi.mocked(ui.confirm).mock.calls[0][0] as { signal?: AbortSignal };
+    expect(confirmArgs.signal).toBeUndefined();
   });
 });

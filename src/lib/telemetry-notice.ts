@@ -1,13 +1,13 @@
 /**
  * First-run telemetry notice.
  *
- * Prints a one-time, stderr-only box telling the user that anonymous CLI usage
- * telemetry is being collected and how to turn it off. Shown at most once ever
- * (backed by the persisted `noticeShownAt` timestamp in preferences.json), only
- * in interactive human mode, and never on the machine-readable path.
+ * Prints a one-time, stderr-only notice telling the user that anonymous CLI
+ * usage telemetry is being collected and how to turn it off. Shown at most once
+ * ever (backed by the persisted `noticeShownAt` timestamp in preferences.json),
+ * only in interactive human mode, and never on the machine-readable path.
  *
  * Mirrors the structural pattern of unclaimed-warning.ts: a per-session guard,
- * a `!isJsonMode()` gate, the shared renderStderrBox helper, and a never-throws
+ * a `!isJsonMode()` gate, the shared renderStderrNotice helper, and a never-throws
  * contract so it can never block command execution. The one structural
  * difference is persistence — this notice writes `noticeShownAt` the first time
  * it actually displays so it never re-shows across runs.

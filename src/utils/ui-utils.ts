@@ -83,10 +83,14 @@ export async function abortIfCancelled<T>(
     });
   }
 
-  await analytics.shutdown('cancelled');
   const resolvedInput = await input;
 
   if (ui.isCancel(resolvedInput)) {
+    // Flush a 'cancelled' session end ONLY on an actual cancel. Running this on
+    // every prompt (the previous behavior) emitted a bogus session end and added
+    // up to 3s of flush dead-time to each prompt on the happy path.
+    await analytics.shutdown('cancelled');
+
     const docsUrl = integration ? INTEGRATION_CONFIG[integration].docsUrl : 'https://workos.com/docs/user-management';
 
     ui.cancel(

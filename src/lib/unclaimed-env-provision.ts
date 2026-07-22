@@ -12,7 +12,7 @@ import { getConfig, saveConfig, getActiveEnvironment, freshEnvKey } from './conf
 import type { CliConfig } from './config-store.js';
 import { writeCredentialsEnv } from './env-writer.js';
 import { logInfo, logError } from '../utils/debug.js';
-import { renderStderrBox } from '../utils/box.js';
+import { renderStderrNotice } from '../utils/box.js';
 import ui from '../utils/ui.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
@@ -77,8 +77,10 @@ export async function tryProvisionUnclaimedEnv(options: UnclaimedEnvProvisionOpt
     }
 
     logInfo('[unclaimed-env-provision] Unclaimed environment provisioned and saved');
-    const inner = ` ✓ ${chalk.green('Environment provisioned')} — Run ${chalk.cyan(formatWorkOSCommand('env claim'))} to keep it. `;
-    renderStderrBox(inner, chalk.green);
+    renderStderrNotice(
+      `${chalk.green('✓')} ${chalk.bold('Environment provisioned')} ${chalk.dim('— credentials saved to your project')}`,
+      `${chalk.dim('Run')} ${chalk.bold.cyan(formatWorkOSCommand('env claim'))} ${chalk.dim('to link it to your account.')}`,
+    );
 
     return true;
   } catch (error) {

@@ -17,15 +17,15 @@ export function renderCompletionSummary(success: boolean, summary?: string, comp
         shown.push({ type: 'done', text: `…and ${files.length - MAX_SUMMARY_FILES} more` });
       }
       const steps: SummaryBoxItem[] = completion.nextSteps.map((s) => ({ type: 'pending', text: s }));
-      return renderSummaryBox({
+      return renderFlatSummary({
         expression: 'success',
         title: 'WorkOS AuthKit Installed',
         items: [...shown, ...steps],
         footer: completion.docsUrl,
       });
     }
-    // Fallback: preserve the original static box when no structured data is present.
-    return renderSummaryBox({
+    // Fallback: preserve the original static next-steps when no structured data is present.
+    return renderFlatSummary({
       expression: 'success',
       title: 'WorkOS AuthKit Installed',
       items: [
@@ -35,7 +35,7 @@ export function renderCompletionSummary(success: boolean, summary?: string, comp
       footer: 'https://workos.com/docs/authkit',
     });
   }
-  return renderSummaryBox({
+  return renderFlatSummary({
     expression: 'error',
     title: 'Installation Failed',
     items: summary ? [{ type: 'error', text: summary }] : [],
@@ -66,6 +66,55 @@ const ITEM_ICONS: Record<SummaryBoxItem['type'], string> = {
   pending: chalk.cyan(symbols.arrow),
   error: chalk.red(symbols.error),
 };
+
+// ── Flat (de-boxed) rendering — the install opener + closer ───────────────────
+
+const accent = chalk.hex('#6363f1'); // WorkOS indigo
+const flatCyan = chalk.hex('#7dd3fc'); // values, paths, URLs
+
+/** Flat glyphs matching the ui facade (green ✓ / accent › / red ✗). */
+const FLAT_ICONS: Record<SummaryBoxItem['type'], string> = {
+  done: chalk.green('✓'),
+  pending: accent('›'),
+  error: chalk.red('✗'),
+};
+
+/**
+ * The install opener: the WorkOS lock (in brand indigo) beside the wordmark.
+ * A compact, de-boxed replacement for the full block-letter banner — the same
+ * lock that closes the install, so the two ends bookend each other.
+ */
+export function renderBrandMark(subtitle?: string): string {
+  const lock = getLockArt('success', false); // raw lines; recolor to brand indigo
+  const titleLine = 2; // "WorkOS" sits beside the top of the lock body
+  const subtitleLine = 3;
+  return lock
+    .map((l, i) => {
+      const left = `  ${accent(l)}`;
+      if (i === titleLine) return `${left}   ${accent.bold('WorkOS')}`;
+      if (i === subtitleLine && subtitle) return `${left}   ${chalk.dim(subtitle)}`;
+      return left;
+    })
+    .join('\n');
+}
+
+/**
+ * The install closer: the WorkOS lock (colored by outcome) above a flat title,
+ * checklist, and footer — no border. Shared by the CLI and Dashboard adapters.
+ * The lock is the same mark that opens the install (see renderBrandMark).
+ */
+function renderFlatSummary(options: SummaryBoxOptions): string {
+  const { expression, title, items = [], footer } = options;
+  const out: string[] = getLockArt(expression, true).map((l) => `  ${l}`);
+  out.push('', `  ${chalk.bold(title)}`);
+  for (const item of items) {
+    // File paths (done) read better in cyan; next-step prose stays default weight.
+    const text = item.type === 'done' ? flatCyan(item.text) : item.text;
+    out.push(`  ${FLAT_ICONS[item.type]} ${text}`);
+  }
+  if (footer) out.push('', `  ${chalk.dim(footer)}`);
+  return out.join('\n');
+}
 
 const MIN_WIDTH = 42;
 // Item prefix "  X " = 4 visible chars before text

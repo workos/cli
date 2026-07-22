@@ -50,7 +50,7 @@ vi.mock('./unclaimed-env-api.js', () => ({
 
 // Mock box utility
 vi.mock('../utils/box.js', () => ({
-  renderStderrBox: vi.fn(),
+  renderStderrNotice: vi.fn(),
 }));
 
 const { tryProvisionUnclaimedEnv } = await import('./unclaimed-env-provision.js');
@@ -198,11 +198,11 @@ describe('unclaimed-env-provision', () => {
 
     it('shows provisioning message to user', async () => {
       mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
-      const { renderStderrBox } = await import('../utils/box.js');
+      const { renderStderrNotice } = await import('../utils/box.js');
 
       await tryProvisionUnclaimedEnv({ installDir: testDir });
 
-      expect(renderStderrBox).toHaveBeenCalled();
+      expect(renderStderrNotice).toHaveBeenCalled();
     });
 
     it('returns false when config read-back fails after save', async () => {

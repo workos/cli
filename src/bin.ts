@@ -43,7 +43,7 @@ import {
   outputError,
   exitWithError,
 } from './utils/output.js';
-import ui from './utils/ui.js';
+import ui, { PromptUnavailableError } from './utils/ui.js';
 import { registerSubcommand } from './utils/register-subcommand.js';
 import { installCrashReporter, sanitizeMessage } from './utils/crash-reporter.js';
 import { installStoreForward, recoverPendingEvents } from './utils/telemetry-store-forward.js';
@@ -2826,6 +2826,16 @@ async function runCli(): Promise<void> {
           apiContext: error.context?.apiContext,
         },
       };
+    } else if (error instanceof PromptUnavailableError) {
+      // A prompt was attempted where the user can't answer (--json, or non-TTY
+      // stdin) on a direct command. Not a crash — surface a clear, structured
+      // error with its own code so scripts and telemetry can distinguish it.
+      process.exitCode = 1;
+      commandOutcome = {
+        success: false,
+        options: { flags, reason: 'validation_error', errorCode: 'prompt_unavailable' },
+      };
+      outputError({ code: 'prompt_unavailable', message: error.message });
     } else {
       // Unexpected error (crash)
       process.exitCode = 1;

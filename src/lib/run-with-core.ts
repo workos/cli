@@ -212,7 +212,16 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   if (nonHumanMode && !isJsonMode()) {
     setOutputMode(resolveEffectiveOutputMode(getOutputMode(), getInteractionMode()));
   }
-  const headlessMode = nonHumanMode && isJsonMode();
+  // Headless (no prompts, structured output) is for MACHINE output only: JSON.
+  // A prompt cannot render into a JSON stream, so any JSON run must be headless.
+  // We deliberately do NOT route a human session with non-TTY stdin here:
+  // headless auto-approves branch/commit/scaffold, and applying those unattended
+  // to a session the user never opted into would violate the "nothing is written
+  // until you confirm" contract. Those sessions keep the CLIAdapter, which now
+  // fails fast with a clear `prompt_unavailable` error on the first prompt
+  // (see CLIAdapter's handler-error catch) instead of hanging or auto-writing.
+  // --dashboard keeps its own adapter even under --json.
+  const headlessMode = isJsonMode() && !options.dashboard;
 
   let adapter: InstallerAdapter;
   if (headlessMode) {

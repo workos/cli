@@ -21,6 +21,7 @@ vi.mock('../../utils/ui.js', () => ({
       start: vi.fn(),
       stop: vi.fn(),
       message: vi.fn(),
+      clear: vi.fn(),
     })),
     confirm: vi.fn(),
     text: vi.fn(),
@@ -158,6 +159,7 @@ describe('CLIAdapter', () => {
         start: vi.fn(),
         stop: vi.fn(),
         message: vi.fn(),
+        clear: vi.fn(),
       };
       vi.mocked(ui.default.spinner).mockReturnValue(spinnerMock);
 
@@ -280,7 +282,7 @@ describe('CLIAdapter', () => {
       try {
         await adapter.start();
         const ui = await import('../../utils/ui.js');
-        const spinnerMock = { start: vi.fn(), stop: vi.fn(), message: vi.fn() };
+        const spinnerMock = { start: vi.fn(), stop: vi.fn(), message: vi.fn(), clear: vi.fn() };
         vi.mocked(ui.default.spinner).mockReturnValue(spinnerMock);
 
         emitter.emit('agent:start', {});
@@ -299,7 +301,7 @@ describe('CLIAdapter', () => {
     it('restarts the spinner on the last phase message after logging a file op', async () => {
       await adapter.start();
       const ui = await import('../../utils/ui.js');
-      const spinnerMock = { start: vi.fn(), stop: vi.fn(), message: vi.fn() };
+      const spinnerMock = { start: vi.fn(), stop: vi.fn(), message: vi.fn(), clear: vi.fn() };
       vi.mocked(ui.default.spinner).mockReturnValue(spinnerMock);
 
       emitter.emit('agent:start', {});

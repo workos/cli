@@ -21,6 +21,7 @@ import { homedir } from 'node:os';
 import ui, { isCancel } from '../utils/ui.js';
 import { outputSuccess, exitWithError, isJsonMode } from '../utils/output.js';
 import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
+import { CliExit } from '../utils/cli-exit.js';
 import { isPromptAllowed } from '../utils/interaction-mode.js';
 import {
   isSetupDeclined,
@@ -52,16 +53,7 @@ export interface RunSetupOptions {
   assumeYes?: boolean;
   /** Clear a prior decline so automatic offers resume, then return. */
   reset?: boolean;
-  /** Deadline signal — aborts a hung prompt (used by maybeRunSetupAfter). */
-  signal?: AbortSignal;
 }
-
-/**
- * Deadline that bounds the interactive prompt (via AbortSignal) so an
- * unanswered prompt can never wedge login/install. Once the user consents, the
- * install itself runs to completion — it is not raced.
- */
-export const SETUP_OFFER_TIMEOUT_MS = 30 * 1000;
 
 /** Validate an --agents filter against the known keys; exit with a structured error on unknown. */
 function validateAgentFilter(agents: string[] | undefined, known: string[]): string[] | undefined {
@@ -149,12 +141,16 @@ export async function runSetup(opts: RunSetupOptions): Promise<void> {
         `scaffold auth and manage WorkOS resources. Nothing is written until you confirm.`,
     );
 
-    const answer = await ui.confirm({ message: 'Set up now?', initialValue: true, signal: opts.signal });
-    // Cancel (ctrl-c / deadline) is not a decline — skip silently, ask again next time.
-    if (isCancel(answer)) return;
+    const answer = await ui.confirm({ message: 'Set up now?', initialValue: true });
+    // Cancel (ctrl-c) is not a decline — skip silently and ask again next time,
+    // but record it so the cut-off is observable in telemetry.
+    if (isCancel(answer)) {
+      emitSetupEvent(opts.trigger, startedAt, 'cancelled', { skills: [], mcpInstalled: [], mcpFailed: [] });
+      return;
+    }
     if (!answer) {
       if (!isCommand) recordSetupDeclined();
-      emitSetupEvent(opts.trigger, startedAt, false, { skills: [], mcpInstalled: [], mcpFailed: [] });
+      emitSetupEvent(opts.trigger, startedAt, 'declined', { skills: [], mcpInstalled: [], mcpFailed: [] });
       ui.log.hint(`No problem. Run \`${formatWorkOSCommand('setup')}\` anytime.`);
       return;
     }
@@ -185,12 +181,18 @@ async function installAndReport(
   const mcpInstalled = mcpResults
     .filter((r) => r.outcome === 'installed' || r.outcome === 'already-installed')
     .map((r) => r.agent);
-  const mcpFailed = mcpResults.filter((r) => r.outcome === 'failed').map((r) => r.agent);
+  const failedResults = mcpResults.filter((r) => r.outcome === 'failed');
+  const mcpFailed = failedResults.map((r) => r.agent);
+  // Carry a bounded, agent-tagged reason so the MCP-install failure CAUSE (not
+  // just the count) is observable in telemetry. Already user-safe — the same
+  // text is shown via ui.log.error.
+  const mcpFailedReasons = failedResults.map((r) => `${r.agent}:${(r.error ?? '').slice(0, 120)}`).join('; ');
 
-  emitSetupEvent(opts.trigger, startedAt, true, {
+  emitSetupEvent(opts.trigger, startedAt, 'accepted', {
     skills: skillResult?.agents.map((a) => a.name) ?? [],
     mcpInstalled,
     mcpFailed,
+    mcpFailedReasons,
   });
 
   reportResults(skillResult ? { agents: skillAgentNames, count: skillResult.skills.length } : null, mcpResults);
@@ -234,19 +236,25 @@ function reportResults(skills: SkillSummary | null, mcp: McpClientResult[]): voi
  * command event rides the CLI's final flush (the same pattern the old
  * standalone MCP offer used).
  */
+type SetupOutcome = 'accepted' | 'declined' | 'cancelled';
+
 function emitSetupEvent(
   trigger: SetupTrigger,
   startedAt: number,
-  accepted: boolean,
-  agents: { skills: string[]; mcpInstalled: string[]; mcpFailed: string[] },
+  outcome: SetupOutcome,
+  agents: { skills: string[]; mcpInstalled: string[]; mcpFailed: string[]; mcpFailedReasons?: string },
 ): void {
   analytics.emitCommandEvent('setup offer', Date.now() - startedAt, agents.mcpFailed.length === 0, {
     extraAttributes: {
       'setup.trigger': trigger,
-      'setup.accepted': accepted,
+      // `accepted` kept for back-compat dashboards; `outcome` distinguishes a
+      // deliberate "no" (declined) from a walk-away/ctrl-c (cancelled).
+      'setup.accepted': outcome === 'accepted',
+      'setup.outcome': outcome,
       'setup.skills_agents': agents.skills.join(','),
       'setup.mcp_installed': agents.mcpInstalled.join(','),
       'setup.mcp_failed': agents.mcpFailed.join(','),
+      ...(agents.mcpFailedReasons ? { 'setup.mcp_failed_reasons': agents.mcpFailedReasons } : {}),
     },
   });
 }
@@ -254,22 +262,26 @@ function emitSetupEvent(
 /**
  * Best-effort setup offer after a successful `login` / `install`.
  *
- * Never throws into, wedges, or fails the parent flow: a try/catch swallows any
- * error, and the deadline aborts the interactive prompt (AbortSignal → CANCEL,
- * which releases stdin). The prompt is the only unbounded wait — detection and
- * install are internally time-bounded — so aborting it is sufficient; the offer
- * is NOT raced, so a consented install always runs to completion. The parent
- * flow has already succeeded by the time this runs.
+ * Never throws into, wedges, or fails the parent flow — a try/catch swallows any
+ * error. The offer is only ever shown to a present human in an interactive TTY
+ * (runSetup early-returns in every machine/non-interactive context), so the
+ * confirm is NOT time-bounded: a question that auto-dismisses while the user is
+ * reading it is exactly the "it asked but moved on" bug. @inquirer already
+ * handles ctrl-c, and detection/install are internally time-bounded, so there is
+ * nothing left to race. The parent flow has already succeeded by the time this
+ * runs. Any failure is reported to telemetry before being swallowed.
  */
 export async function maybeRunSetupAfter(trigger: 'login' | 'install'): Promise<void> {
-  const deadline = new AbortController();
-  const timer = setTimeout(() => deadline.abort(), SETUP_OFFER_TIMEOUT_MS);
-  timer.unref?.();
   try {
-    await runSetup({ trigger, signal: deadline.signal });
-  } catch {
-    // Setup must never fail or block login / install.
-  } finally {
-    clearTimeout(timer);
+    await runSetup({ trigger });
+  } catch (error) {
+    // reportResults exits non-zero via CliExit on a failed MCP add — that's an
+    // intentional exit for the standalone command, not an exception to report
+    // (and it stays swallowed here so it never fails the parent login/install).
+    if (error instanceof CliExit) return;
+    // Setup must never fail or block login / install — but don't drop the signal.
+    analytics.captureException(error instanceof Error ? error : new Error(String(error)), {
+      'setup.trigger': trigger,
+    });
   }
 }

@@ -32,6 +32,7 @@ const ui = (await import('./ui.js')).default;
 const { setInteractionMode, resetInteractionModeForTests } = await import('./interaction-mode.js');
 const { CliExit } = await import('./cli-exit.js');
 const { setOutputMode } = await import('./output.js');
+const { analytics } = await import('./analytics.js');
 const { abortIfCancelled, getOrAskForWorkOSCredentials } = await import('./ui-utils.js');
 
 describe('abortIfCancelled — non-interactive guard', () => {
@@ -76,6 +77,17 @@ describe('abortIfCancelled — non-interactive guard', () => {
     setInteractionMode({ mode: 'human', source: 'default' });
     vi.mocked(ui.isCancel).mockReturnValue(false);
     await expect(abortIfCancelled('value')).resolves.toBe('value');
+  });
+
+  it('does not flush a cancelled session on the happy path (no per-prompt dead-time)', async () => {
+    setInteractionMode({ mode: 'human', source: 'default' });
+    vi.mocked(ui.isCancel).mockReturnValue(false);
+
+    await abortIfCancelled('value');
+
+    // shutdown('cancelled') must fire ONLY on an actual cancel — never on a
+    // resolved prompt (regression guard for the 3s-per-prompt flush bug).
+    expect(analytics.shutdown).not.toHaveBeenCalled();
   });
 });
 

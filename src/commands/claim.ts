@@ -16,6 +16,7 @@ import { isJsonMode, outputJson, exitWithError } from '../utils/output.js';
 import { isAgentMode, isCiMode } from '../utils/interaction-mode.js';
 import { sleep } from '../lib/helper-functions.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
+import { networkRetryRecovery } from '../utils/recovery-hints.js';
 
 const POLL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const POLL_INTERVAL_MS = 5_000; // 5 seconds
@@ -146,6 +147,10 @@ export async function runClaim(): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     logError('[claim] Error:', message);
-    exitWithError({ code: 'claim_failed', message: `Claim failed: ${message}` });
+    exitWithError({
+      code: 'claim_failed',
+      message: `Could not claim this environment: ${message}`,
+      recovery: networkRetryRecovery({ command: formatWorkOSCommand('env claim') }),
+    });
   }
 }

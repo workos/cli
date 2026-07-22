@@ -5,7 +5,8 @@ import { saveCredentials, getCredentials, getAccessToken, isTokenExpired, update
 import { getCliAuthClientId, getAuthkitDomain } from '../lib/settings.js';
 import { refreshAccessToken } from '../lib/token-refresh-client.js';
 import { logInfo, logError } from '../utils/debug.js';
-import { fetchStagingCredentials } from '../lib/staging-api.js';
+import { fetchStagingCredentials, StagingApiError } from '../lib/staging-api.js';
+import { analytics } from '../utils/analytics.js';
 import { getConfig, saveConfig, getActiveEnvironment, setActiveEnvironment, freshEnvKey } from '../lib/config-store.js';
 import type { CliConfig, EnvironmentConfig } from '../lib/config-store.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
@@ -105,6 +106,14 @@ export async function provisionStagingEnvironment(
     };
   } catch (error) {
     logError('[login] Failed to provision staging environment:', error instanceof Error ? error.message : error);
+    // Best-effort, but the failure rate of this onboarding step must be visible:
+    // a silent failure here leaves the user with no active environment for every
+    // later command, indistinguishable in telemetry from a healthy setup.
+    analytics.captureException(error instanceof Error ? error : new Error(String(error)), {
+      command: 'auth.login',
+      phase: 'provision-staging',
+      statusCode: error instanceof StagingApiError ? error.statusCode : undefined,
+    });
     return { provisioned: false, mismatch: false };
   }
 }
@@ -133,8 +142,13 @@ export async function runLogin(): Promise<void> {
         console.log(chalk.dim(`Run \`${formatWorkOSCommand('auth logout')}\` to log out`));
         return;
       }
-    } catch {
-      // Refresh failed, proceed with fresh login
+      // Refresh returned no token — record why before falling through to fresh
+      // login. A spike here surfaces token revocation / refresh-endpoint outages
+      // that self-heal into a browser login and would otherwise be invisible.
+      analytics.capture('token_refresh_failed', { errorType: result.errorType ?? 'unknown' });
+    } catch (error) {
+      analytics.capture('token_refresh_failed', { errorType: error instanceof Error ? error.name : 'unknown' });
+      // Refresh failed, proceed with fresh login.
     }
   }
 
@@ -154,6 +168,10 @@ export async function runLogin(): Promise<void> {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     ui.log.error(`Failed to start authentication: ${msg}`);
+    analytics.captureException(error instanceof Error ? error : new Error(msg), {
+      command: 'auth.login',
+      phase: 'device-code',
+    });
     exitWithCode(ExitCode.GENERAL_ERROR);
   }
 
@@ -240,14 +258,21 @@ export async function runLogin(): Promise<void> {
 
     await maybeRunSetupAfter('login');
   } catch (error) {
-    if (error instanceof DeviceAuthTimeoutError) {
-      spinner.stop('Authentication timed out');
+    const isTimeout = error instanceof DeviceAuthTimeoutError;
+    if (isTimeout) {
+      spinner.stop('Authentication timed out', 1);
       ui.log.error('Authentication timed out. Please try again.');
     } else {
-      spinner.stop('Authentication failed');
+      spinner.stop('Authentication failed', 1);
       const msg = error instanceof Error ? error.message : String(error);
       ui.log.error(`Authentication error: ${msg}`);
     }
+    // Deliver the real cause to telemetry (the command event alone can't
+    // distinguish a timeout from a network/server auth failure).
+    analytics.captureException(error instanceof Error ? error : new Error(String(error)), {
+      command: 'auth.login',
+      phase: isTimeout ? 'timeout' : 'poll',
+    });
     exitWithCode(ExitCode.GENERAL_ERROR);
   }
 }

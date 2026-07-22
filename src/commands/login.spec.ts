@@ -52,12 +52,25 @@ vi.mock('../utils/ui.js', () => ({
 const mockFetchStagingCredentials = vi.fn();
 vi.mock('../lib/staging-api.js', () => ({
   fetchStagingCredentials: (...args: unknown[]) => mockFetchStagingCredentials(...args),
+  StagingApiError: class StagingApiError extends Error {
+    constructor(
+      message: string,
+      public readonly statusCode?: number,
+    ) {
+      super(message);
+      this.name = 'StagingApiError';
+    }
+  },
 }));
 
 // The consolidated setup offer (skills + MCP) runs behind one consented hook
 // after a successful login. runLogin just invokes it; gating lives in setup.ts.
 vi.mock('./setup.js', () => ({
   maybeRunSetupAfter: vi.fn(),
+}));
+
+vi.mock('../utils/analytics.js', () => ({
+  analytics: { capture: vi.fn(), captureException: vi.fn() },
 }));
 
 vi.mock('../utils/output.js', () => ({
