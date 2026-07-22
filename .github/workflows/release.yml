@@ -270,9 +270,10 @@ jobs:
   # resolve. Re-run just this job if it fails; the push is a no-op when the
   # formula is already current.
   #
-  # Needs a cross-repo token — GITHUB_TOKEN cannot push to another repo. Create
-  # a fine-grained PAT (or GitHub App installation token) with contents:write
-  # on workos/homebrew-tap and store it as the HOMEBREW_TAP_TOKEN secret.
+  # GITHUB_TOKEN cannot push to another repo, so the cross-repo write uses the
+  # SDK Automation Bot (a GitHub App installed on workos/homebrew-tap) — the
+  # same credentials the SDK repos publish with. Requires vars.SDK_BOT_APP_ID
+  # and secrets.SDK_BOT_PRIVATE_KEY to be available to this repo.
   publish-homebrew:
     name: Publish Homebrew formula
     needs: [smoke, publish]
@@ -301,11 +302,23 @@ jobs:
           TAG_NAME: ${{ inputs.tag_name }}
         run: WORKOS_HOMEBREW_VERSION="${TAG_NAME#v}" bun run ./scripts/gen-homebrew-formula.ts
 
-      # Separate checkout of the tap repo with a token that can push cross-repo.
+      # Mints an installation token scoped to the tap repo; owner/repositories
+      # target homebrew-tap rather than this repo, and contents:write is all a
+      # formula push needs.
+      - name: Generate a tap-scoped token
+        id: tap-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # 3.2.0
+        with:
+          app-id: ${{ vars.SDK_BOT_APP_ID }}
+          private-key: ${{ secrets.SDK_BOT_PRIVATE_KEY }}
+          owner: workos
+          repositories: homebrew-tap
+          permission-contents: write
+
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # 7.0.0
         with:
           repository: workos/homebrew-tap
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          token: ${{ steps.tap-token.outputs.token }}
           path: tap
 
       - name: Commit and push the formula
