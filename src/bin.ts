@@ -19,7 +19,7 @@ import { checkForUpdates } from './lib/version-check.js';
 
 const NODE_VERSION_RANGE = getConfig().nodeVersion;
 
-// Have to run this above the other imports because they are importing clack that
+// Have to run this above the other imports because they are importing the UI facade that
 // has the problematic imports.
 if (!satisfies(process.version, NODE_VERSION_RANGE)) {
   red(
@@ -43,7 +43,7 @@ import {
   outputError,
   exitWithError,
 } from './utils/output.js';
-import clack from './utils/clack.js';
+import ui from './utils/ui.js';
 import { registerSubcommand } from './utils/register-subcommand.js';
 import { installCrashReporter, sanitizeMessage } from './utils/crash-reporter.js';
 import { installStoreForward, recoverPendingEvents } from './utils/telemetry-store-forward.js';
@@ -310,8 +310,9 @@ async function runCli(): Promise<void> {
     })
     .middleware(async (argv) => {
       // Warn about unclaimed environments before management commands.
-      // Excluded: auth/claim/install/dashboard handle their own credential flows;
-      // skills/doctor/env/debug are utility commands where the warning is unnecessary.
+      // Excluded: auth/claim/install/setup/dashboard handle their own credential
+      // or onboarding flows; skills/doctor/env/debug are utility commands where
+      // the warning is unnecessary.
       const command = String(argv._?.[0] ?? '');
       if (
         [
@@ -321,6 +322,7 @@ async function runCli(): Promise<void> {
           'env',
           'claim',
           'install',
+          'setup',
           'debug',
           'dashboard',
           'emulate',
@@ -332,36 +334,6 @@ async function runCli(): Promise<void> {
         return;
       await applyInsecureStorage(argv.insecureStorage as boolean | undefined);
       await maybeWarnUnclaimed();
-    })
-    .middleware(async (argv) => {
-      // One-time MCP banner (lowest-priority startup notice — runs after the
-      // telemetry notice + unclaimed warning so they win the one-per-run slot).
-      // Skip commands that manage MCP/agents directly or where the nudge is
-      // noise, mirroring + extending maybeWarnUnclaimed's list. Self-guarded and
-      // never throws.
-      const command = String(argv._?.[0] ?? '');
-      if (
-        [
-          'mcp',
-          'install',
-          'doctor',
-          'skills',
-          'auth',
-          'env',
-          'claim',
-          'debug',
-          'dashboard',
-          'emulate',
-          'dev',
-          'migrations',
-          'telemetry',
-          'completion',
-          '',
-        ].includes(command)
-      )
-        return;
-      const { maybeShowMcpNotice } = await import('./lib/mcp-notice.js');
-      await maybeShowMcpNotice();
     })
     .command('auth', 'Manage authentication (login, logout, status)', (yargs) => {
       yargs.options(insecureStorageOption);
@@ -2457,6 +2429,36 @@ async function runCli(): Promise<void> {
       },
     )
     .command(
+      'setup',
+      'Set up your coding agent (install WorkOS skills + MCP server)',
+      (yargs) =>
+        yargs.options({
+          ...insecureStorageOption,
+          agents: { type: 'string', describe: 'Comma-separated agent keys (claude-code, codex, cursor, goose)' },
+          'skills-only': { type: 'boolean', describe: 'Install skills only (skip the MCP server)' },
+          'mcp-only': { type: 'boolean', describe: 'Install the MCP server only (skip skills)' },
+          yes: { type: 'boolean', alias: 'y', describe: 'Install without prompting' },
+          reset: { type: 'boolean', describe: 'Re-enable automatic setup offers after a decline' },
+        }),
+      async (argv) => {
+        await applyInsecureStorage(argv.insecureStorage as boolean | undefined);
+        const { runSetup } = await import('./commands/setup.js');
+        await runSetup({
+          trigger: 'command',
+          agents: argv.agents
+            ? String(argv.agents)
+                .split(',')
+                .map((a) => a.trim())
+                .filter(Boolean)
+            : undefined,
+          skillsOnly: argv.skillsOnly as boolean | undefined,
+          mcpOnly: argv.mcpOnly as boolean | undefined,
+          assumeYes: argv.yes as boolean | undefined,
+          reset: argv.reset as boolean | undefined,
+        });
+      },
+    )
+    .command(
       'setup-org <name>',
       'One-shot organization onboarding (create org, domain, roles, portal link)',
       (yargs) =>
@@ -2771,11 +2773,11 @@ async function runCli(): Promise<void> {
         }
 
         // TTY: ask if user wants to run installer
-        const shouldInstall = await clack.confirm({
+        const shouldInstall = await ui.confirm({
           message: 'Run the AuthKit installer?',
         });
 
-        if (clack.isCancel(shouldInstall) || !shouldInstall) {
+        if (ui.isCancel(shouldInstall) || !shouldInstall) {
           return;
         }
 

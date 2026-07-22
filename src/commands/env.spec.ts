@@ -8,8 +8,8 @@ vi.mock('../utils/debug.js', () => ({
   logWarn: vi.fn(),
 }));
 
-// Mock clack prompts
-vi.mock('../utils/clack.js', () => ({
+// Mock the UI facade
+vi.mock('../utils/ui.js', () => ({
   default: {
     log: {
       success: vi.fn(),
@@ -56,7 +56,7 @@ const { writeCredentialsEnv } = await import('../lib/env-writer.js');
 const { setOutputMode } = await import('../utils/output.js');
 const { resetInteractionModeForTests, setInteractionMode } = await import('../utils/interaction-mode.js');
 const { CliExit } = await import('../utils/cli-exit.js');
-const clack = (await import('../utils/clack.js')).default;
+const ui = (await import('../utils/ui.js')).default;
 
 describe('env commands', () => {
   beforeEach(() => {
@@ -119,13 +119,13 @@ describe('env commands', () => {
     it('requires name and API key in agent mode without prompting', async () => {
       setInteractionMode({ mode: 'agent', source: 'env' });
       await expect(runEnvAdd({ name: 'prod' })).rejects.toThrow(CliExit);
-      expect(clack.text).not.toHaveBeenCalled();
+      expect(ui.text).not.toHaveBeenCalled();
     });
 
     it('requires name and API key in CI mode without prompting', async () => {
       setInteractionMode({ mode: 'ci', source: 'env' });
       await expect(runEnvAdd({ name: 'prod' })).rejects.toThrow(CliExit);
-      expect(clack.text).not.toHaveBeenCalled();
+      expect(ui.text).not.toHaveBeenCalled();
     });
 
     it('does not include placeholder commands in missing-args recovery metadata', async () => {
@@ -174,7 +174,7 @@ describe('env commands', () => {
       await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
       await runEnvRemove('prod');
       const warnMsg = vi
-        .mocked(clack.log.warn)
+        .mocked(ui.log.warn)
         .mock.calls.map((c) => String(c[0]))
         .join('\n');
       expect(warnMsg).toMatch(/local/i);
@@ -197,7 +197,7 @@ describe('env commands', () => {
       });
       await runEnvRemove('unclaimed');
       const warnMsg = vi
-        .mocked(clack.log.warn)
+        .mocked(ui.log.warn)
         .mock.calls.map((c) => String(c[0]))
         .join('\n');
       expect(warnMsg).toMatch(/local/i);
@@ -263,7 +263,7 @@ describe('env commands', () => {
   describe('runEnvList', () => {
     it('shows info message when no environments', async () => {
       await runEnvList();
-      expect(clack.log.info).toHaveBeenCalledWith(expect.stringContaining('No environments configured'));
+      expect(ui.log.info).toHaveBeenCalledWith(expect.stringContaining('No environments configured'));
     });
 
     it('does not throw when environments exist', async () => {
@@ -395,7 +395,7 @@ describe('env commands', () => {
       await runEnvProvision();
 
       expect(consoleOutput.join('\n')).toContain('sk_test_x');
-      expect(clack.log.info).toHaveBeenCalledWith(expect.stringContaining('env claim'));
+      expect(ui.log.info).toHaveBeenCalledWith(expect.stringContaining('env claim'));
     });
   });
 
@@ -527,14 +527,14 @@ describe('env commands', () => {
 
     it('runEnvList empty hint uses the bare command when not launched via npx', async () => {
       await runEnvList();
-      expect(clack.log.info).toHaveBeenCalledWith(expect.stringContaining('workos env add'));
-      expect(clack.log.info).not.toHaveBeenCalledWith(expect.stringContaining('npx workos@latest'));
+      expect(ui.log.info).toHaveBeenCalledWith(expect.stringContaining('workos env add'));
+      expect(ui.log.info).not.toHaveBeenCalledWith(expect.stringContaining('npx workos@latest'));
     });
 
     it('runEnvList empty hint uses npx form when launched via npm exec', async () => {
       process.env.npm_command = 'exec';
       await runEnvList();
-      expect(clack.log.info).toHaveBeenCalledWith(expect.stringContaining('npx workos@latest env add'));
+      expect(ui.log.info).toHaveBeenCalledWith(expect.stringContaining('npx workos@latest env add'));
     });
 
     it('unclaimed-table footer uses npx form when launched via npm exec', async () => {

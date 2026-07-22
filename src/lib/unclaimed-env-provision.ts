@@ -13,7 +13,7 @@ import type { CliConfig } from './config-store.js';
 import { writeCredentialsEnv } from './env-writer.js';
 import { logInfo, logError } from '../utils/debug.js';
 import { renderStderrBox } from '../utils/box.js';
-import clack from '../utils/clack.js';
+import ui from '../utils/ui.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 export interface UnclaimedEnvProvisionOptions {
@@ -72,7 +72,7 @@ export async function tryProvisionUnclaimedEnv(options: UnclaimedEnvProvisionOpt
     const readBack = getActiveEnvironment();
     if (!readBack || readBack.type !== 'unclaimed') {
       logError('[unclaimed-env-provision] Config read-back failed after save — claim token may not persist');
-      clack.log.warn('Environment provisioned but config storage may be unreliable. Falling back to login...');
+      ui.log.warn('Environment provisioned but config storage may be unreliable. Falling back to login...');
       return false;
     }
 
@@ -87,11 +87,11 @@ export async function tryProvisionUnclaimedEnv(options: UnclaimedEnvProvisionOpt
 
     if (error instanceof UnclaimedEnvApiError) {
       if (error.statusCode === 429) {
-        clack.log.warn('WorkOS is busy, falling back to login...');
+        ui.log.warn('WorkOS is busy, falling back to login...');
       }
     } else {
       // Non-API errors (filesystem, keyring) are unexpected — surface to user
-      clack.log.warn(`Could not set up environment: ${message}. Falling back to login...`);
+      ui.log.warn(`Could not set up environment: ${message}. Falling back to login...`);
     }
 
     return false;

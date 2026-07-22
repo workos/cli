@@ -28,7 +28,7 @@ export type IntegrationConfig = {
 
 /**
  * Legacy detection configs for existing JS integrations.
- * Used by clack-utils.ts for abort/cancel messages.
+ * Used by ui-utils.ts for abort/cancel messages.
  * New integrations do NOT need to be added here.
  */
 export const INTEGRATION_CONFIG: Record<string, { docsUrl: string; name: string }> = {

@@ -1,7 +1,7 @@
 import type { InstallerAdapter, AdapterConfig } from './types.js';
 import type { InstallerEventEmitter, InstallerEvents } from '../events.js';
 import { relative } from 'node:path';
-import clack from '../../utils/clack.js';
+import ui from '../../utils/ui.js';
 import chalk from 'chalk';
 import { getConfig } from '../settings.js';
 import { ProgressTracker } from '../progress-tracker.js';
@@ -9,16 +9,16 @@ import { renderCompletionSummary } from '../../utils/summary-box.js';
 import { formatWorkOSCommand } from '../../utils/command-invocation.js';
 
 /**
- * CLI adapter that renders wizard events via clack.
+ * CLI adapter that renders wizard events via ui.
  *
  * Subscribes to InstallerEventEmitter and translates events into
- * clack UI operations (logs, spinners, prompts).
+ * UI facade operations (logs, spinners, prompts).
  */
 export class CLIAdapter implements InstallerAdapter {
   readonly emitter: InstallerEventEmitter;
   private sendEvent: AdapterConfig['sendEvent'];
   private debug: boolean;
-  private spinner: ReturnType<typeof clack.spinner> | null = null;
+  private spinner: ReturnType<typeof ui.spinner> | null = null;
   private isStarted = false;
   private progress = new ProgressTracker();
 
@@ -77,7 +77,7 @@ export class CLIAdapter implements InstallerAdapter {
       console.log(chalk.cyan(art));
       console.log();
     } else {
-      clack.intro('Welcome to the WorkOS AuthKit installer');
+      ui.intro('WorkOS', 'AuthKit installer');
     }
 
     // Handle Ctrl+C gracefully
@@ -86,8 +86,8 @@ export class CLIAdapter implements InstallerAdapter {
         this.spinner.stop('Cancelled');
         this.spinner = null;
       }
-      clack.log.warn('Installer cancelled');
-      clack.outro('Your project was not modified');
+      ui.log.warn('Installer cancelled');
+      ui.outro('Your project was not modified');
       process.exit(0);
     };
     process.on('SIGINT', handleSigInt);
@@ -208,30 +208,30 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handleAuthSuccess = (): void => {
-    clack.log.success('Authenticated');
+    ui.log.success('Authenticated');
   };
 
   private handleAuthFailure = ({ message }: InstallerEvents['auth:failure']): void => {
-    clack.log.error(`Auth failed: ${message}`);
-    clack.log.info('Visit https://dashboard.workos.com to verify your account');
+    ui.log.error(`Auth failed: ${message}`);
+    ui.log.info('Visit https://dashboard.workos.com to verify your account');
   };
 
   private handleDetectionComplete = ({ integration }: InstallerEvents['detection:complete']): void => {
-    this.queueableLog(() => clack.log.success(`Detected ${chalk.bold(integration)}`));
+    this.queueableLog(() => ui.log.success(`Detected ${chalk.bold(integration)}`));
   };
 
   private handleDetectionNone = (): void => {
-    this.queueableLog(() => clack.log.warn('Could not detect framework automatically'));
+    this.queueableLog(() => ui.log.warn('Could not detect framework automatically'));
   };
 
   private handleCredentialsFound = (): void => {
-    clack.log.success('Found existing WorkOS credentials in .env.local');
+    ui.log.success('Found existing WorkOS credentials in .env.local');
   };
 
   private handleEnvScanPrompt = async ({ files }: InstallerEvents['credentials:env:prompt']): Promise<void> => {
     this.isPromptActive = true;
     const fileList = files.length === 1 ? files[0] : files.slice(0, 2).join(', ');
-    const confirmed = await clack.confirm({
+    const confirmed = await ui.confirm({
       message: `Found ${fileList}. Check for existing WorkOS credentials?`,
       initialValue: true,
     });
@@ -239,16 +239,16 @@ export class CLIAdapter implements InstallerAdapter {
     this.flushPendingLogs();
 
     this.sendEvent({
-      type: clack.isCancel(confirmed) || !confirmed ? 'ENV_SCAN_DECLINED' : 'ENV_SCAN_APPROVED',
+      type: ui.isCancel(confirmed) || !confirmed ? 'ENV_SCAN_DECLINED' : 'ENV_SCAN_APPROVED',
     });
   };
 
   private handleDeviceStarted = ({ verificationUri, userCode }: InstallerEvents['device:started']): void => {
-    clack.log.info(`\nOpen this URL in your browser:\n`);
+    ui.log.info(`\nOpen this URL in your browser:\n`);
     console.log(`  ${chalk.cyan(verificationUri)}`);
     console.log(`\nEnter code: ${chalk.bold(userCode)}\n`);
 
-    this.spinner = clack.spinner();
+    this.spinner = ui.spinner();
     this.spinner.start('Waiting for authentication...');
   };
 
@@ -260,36 +260,36 @@ export class CLIAdapter implements InstallerAdapter {
     if (this.spinner) {
       this.spinner.stop('Authenticated');
     }
-    this.spinner = clack.spinner();
+    this.spinner = ui.spinner();
     this.spinner.start('Fetching your WorkOS credentials...');
   };
 
   private handleStagingSuccess = ({ source }: InstallerEvents['staging:success']): void => {
     if (source === 'device') {
       this.stopSpinner('Environment ready');
-      clack.log.success('Set up a WorkOS environment for this install');
+      ui.log.success('Set up a WorkOS environment for this install');
     } else if (source === 'stored') {
       this.stopSpinner('Using active environment');
-      clack.log.success('Using your active WorkOS environment');
+      ui.log.success('Using your active WorkOS environment');
     } else {
       this.stopSpinner('Environment ready');
-      clack.log.success('Using your WorkOS environment');
+      ui.log.success('Using your WorkOS environment');
     }
   };
 
   private handleEnvCredentialsFound = ({ sourcePath }: InstallerEvents['credentials:env:found']): void => {
-    clack.log.success(`Found existing WorkOS credentials in ${sourcePath}`);
+    ui.log.success(`Found existing WorkOS credentials in ${sourcePath}`);
   };
 
   private handleGitDirty = async ({ files }: InstallerEvents['git:dirty']): Promise<void> => {
-    clack.log.warn('You have uncommitted or untracked files:');
-    files.slice(0, 5).forEach((f) => clack.log.info(chalk.dim(`  ${f}`)));
+    ui.log.warn('You have uncommitted or untracked files:');
+    files.slice(0, 5).forEach((f) => ui.log.info(chalk.dim(`  ${f}`)));
     if (files.length > 5) {
-      clack.log.info(chalk.dim(`  ... and ${files.length - 5} more`));
+      ui.log.info(chalk.dim(`  ... and ${files.length - 5} more`));
     }
 
     this.isPromptActive = true;
-    const confirmed = await clack.confirm({
+    const confirmed = await ui.confirm({
       message: 'Continue anyway?',
       initialValue: false,
     });
@@ -297,16 +297,16 @@ export class CLIAdapter implements InstallerAdapter {
     this.flushPendingLogs();
 
     this.sendEvent({
-      type: clack.isCancel(confirmed) || !confirmed ? 'GIT_CANCELLED' : 'GIT_CONFIRMED',
+      type: ui.isCancel(confirmed) || !confirmed ? 'GIT_CANCELLED' : 'GIT_CONFIRMED',
     });
   };
 
   private handleCredentialsRequest = async ({
     requiresApiKey,
   }: InstallerEvents['credentials:request']): Promise<void> => {
-    clack.log.step(`Get your credentials from ${chalk.cyan('https://dashboard.workos.com')}`);
+    ui.log.step(`Get your credentials from ${chalk.cyan('https://dashboard.workos.com')}`);
 
-    const clientId = await clack.text({
+    const clientId = await ui.text({
       message: 'Enter your WorkOS Client ID:',
       placeholder: 'client_...',
       validate: (value) => {
@@ -320,15 +320,15 @@ export class CLIAdapter implements InstallerAdapter {
       },
     });
 
-    if (clack.isCancel(clientId)) {
+    if (ui.isCancel(clientId)) {
       this.sendEvent({ type: 'CANCEL' });
       return;
     }
 
     let apiKey = '';
     if (requiresApiKey) {
-      clack.log.info(chalk.dim('ℹ️ Your API key will be hidden for security and saved to .env.local'));
-      const apiKeyResult = await clack.password({
+      ui.log.info(chalk.dim('ℹ️ Your API key will be hidden for security and saved to .env.local'));
+      const apiKeyResult = await ui.password({
         message: 'Enter your WorkOS API Key:',
         validate: (value) => {
           if (!value || value.trim().length === 0) {
@@ -341,13 +341,13 @@ export class CLIAdapter implements InstallerAdapter {
         },
       });
 
-      if (clack.isCancel(apiKeyResult)) {
+      if (ui.isCancel(apiKeyResult)) {
         this.sendEvent({ type: 'CANCEL' });
         return;
       }
       apiKey = apiKeyResult as string;
     } else {
-      clack.log.info(chalk.dim('ℹ️ Client-only SDK - API key not required'));
+      ui.log.info(chalk.dim('ℹ️ Client-only SDK - API key not required'));
     }
 
     this.sendEvent({
@@ -358,13 +358,13 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handleConfigComplete = (): void => {
-    clack.log.success('Environment configured');
+    ui.log.success('Environment configured');
   };
 
   private handleAgentStart = (): void => {
-    this.spinner = clack.spinner();
+    this.spinner = ui.spinner();
     this.spinner.start(this.lastAgentMessage);
-    // No setInterval: clack animates its own frames, and the old 2s reset
+    // No setInterval: ui animates its own frames, and the old 2s reset
     // clobbered the current phase text set by handleAgentProgress.
   };
 
@@ -385,7 +385,7 @@ export class CLIAdapter implements InstallerAdapter {
     this.spinner = null;
     render();
     if (wasRunning) {
-      this.spinner = clack.spinner();
+      this.spinner = ui.spinner();
       this.spinner.start(this.lastAgentMessage);
     }
   }
@@ -394,7 +394,7 @@ export class CLIAdapter implements InstallerAdapter {
     if (path === this.lastFileOp) return; // dedupe consecutive same-path ops
     this.lastFileOp = path;
     const rel = relative(process.cwd(), path);
-    this.logAboveSpinner(() => clack.log.step(`${verb} ${chalk.dim(rel)}`));
+    this.logAboveSpinner(() => ui.log.step(`${verb} ${chalk.dim(rel)}`));
   }
 
   private handleFileWrite = ({ path }: InstallerEvents['file:write']): void => {
@@ -407,7 +407,7 @@ export class CLIAdapter implements InstallerAdapter {
 
   private handleAgentTool = ({ detail }: InstallerEvents['agent:tool']): void => {
     const cmd = detail.length > 80 ? `${detail.slice(0, 77)}…` : detail;
-    this.logAboveSpinner(() => clack.log.step(`Running ${chalk.dim(cmd)}`));
+    this.logAboveSpinner(() => ui.log.step(`Running ${chalk.dim(cmd)}`));
   };
 
   private handleValidationStart = (): void => {
@@ -417,21 +417,21 @@ export class CLIAdapter implements InstallerAdapter {
   private handleValidationIssues = ({ issues }: InstallerEvents['validation:issues']): void => {
     for (const issue of issues) {
       if (issue.severity === 'error') {
-        clack.log.error(issue.message);
+        ui.log.error(issue.message);
       } else {
-        clack.log.warn(issue.message);
+        ui.log.warn(issue.message);
       }
       if (issue.hint) {
-        clack.log.info(`Hint: ${issue.hint}`);
+        ui.log.info(`Hint: ${issue.hint}`);
       }
     }
   };
 
   private handleValidationComplete = ({ passed, issueCount }: InstallerEvents['validation:complete']): void => {
     if (passed) {
-      clack.log.success('Validation passed');
+      ui.log.success('Validation passed');
     } else {
-      clack.log.warn(`Validation found ${issueCount} issue(s)`);
+      ui.log.warn(`Validation found ${issueCount} issue(s)`);
     }
   };
 
@@ -445,7 +445,7 @@ export class CLIAdapter implements InstallerAdapter {
     // When we scaffolded a fresh app, the install ran in the current dir, so
     // point the user straight at the dev server.
     if (success && this.scaffolded) {
-      clack.log.info(`Start your app:  ${chalk.cyan(`${this.scaffoldPackageManager} run dev`)}`);
+      ui.log.info(`Start your app:  ${chalk.cyan(`${this.scaffoldPackageManager} run dev`)}`);
     }
   };
 
@@ -460,27 +460,27 @@ export class CLIAdapter implements InstallerAdapter {
     const isProcessExit = /process exited with code/i.test(message);
 
     if (isServiceError) {
-      clack.log.error('The AI service is temporarily unavailable.');
-      clack.log.info('This is usually resolved within a few minutes. Please try again shortly.');
+      ui.log.error('The AI service is temporarily unavailable.');
+      ui.log.info('This is usually resolved within a few minutes. Please try again shortly.');
     } else if (isRateLimit) {
-      clack.log.error('The AI service is currently rate-limited.');
-      clack.log.info('Please wait a minute and try again.');
+      ui.log.error('The AI service is currently rate-limited.');
+      ui.log.info('Please wait a minute and try again.');
     } else if (isNetworkError) {
-      clack.log.error('Could not connect to the AI service.');
-      clack.log.info('Check your internet connection and try again.');
+      ui.log.error('Could not connect to the AI service.');
+      ui.log.info('Check your internet connection and try again.');
     } else if (isProcessExit) {
-      clack.log.error('The AI agent process exited unexpectedly.');
-      clack.log.info('Try running again. If this persists, run with --debug for details.');
+      ui.log.error('The AI agent process exited unexpectedly.');
+      ui.log.info('Try running again. If this persists, run with --debug for details.');
     } else {
-      clack.log.error(message);
+      ui.log.error(message);
     }
 
     // Add actionable hints for common errors
     if (message.includes('authentication') || message.includes('auth')) {
-      clack.log.info(`Try running: ${formatWorkOSCommand('auth logout')} && ${formatWorkOSCommand('install')}`);
+      ui.log.info(`Try running: ${formatWorkOSCommand('auth logout')} && ${formatWorkOSCommand('install')}`);
     }
     if (message.includes('ENOENT') || message.includes('not found')) {
-      clack.log.info('Ensure you are in a project directory');
+      ui.log.info('Ensure you are in a project directory');
     }
 
     if (stack && this.debug) {
@@ -493,7 +493,7 @@ export class CLIAdapter implements InstallerAdapter {
   private handleScaffoldPrompt = async ({ packageManager }: InstallerEvents['scaffold:prompt']): Promise<void> => {
     this.scaffoldPackageManager = packageManager;
     this.isPromptActive = true;
-    const confirmed = await clack.confirm({
+    const confirmed = await ui.confirm({
       message: 'This directory is empty. Scaffold a new Next.js app with AuthKit here?',
       initialValue: true,
     });
@@ -501,13 +501,13 @@ export class CLIAdapter implements InstallerAdapter {
     this.flushPendingLogs();
 
     this.sendEvent({
-      type: clack.isCancel(confirmed) || !confirmed ? 'SCAFFOLD_CANCELLED' : 'SCAFFOLD_CONFIRMED',
+      type: ui.isCancel(confirmed) || !confirmed ? 'SCAFFOLD_CANCELLED' : 'SCAFFOLD_CONFIRMED',
     });
   };
 
   private handleScaffoldStart = ({ packageManager }: InstallerEvents['scaffold:start']): void => {
     this.scaffoldPackageManager = packageManager;
-    this.spinner = clack.spinner();
+    this.spinner = ui.spinner();
     this.spinner.start(`Scaffolding a new Next.js app with ${packageManager} (this can take a minute)...`);
   };
 
@@ -527,12 +527,12 @@ export class CLIAdapter implements InstallerAdapter {
 
   private handleScaffoldFailed = ({ error }: InstallerEvents['scaffold:failed']): void => {
     this.stopSpinner('Scaffold failed');
-    clack.log.error(`Could not scaffold the app: ${error}`);
+    ui.log.error(`Could not scaffold the app: ${error}`);
   };
 
   private handleBranchPrompt = async ({ branch }: InstallerEvents['branch:prompt']): Promise<void> => {
     this.isPromptActive = true;
-    const choice = await clack.select({
+    const choice = await ui.select({
       message: `You are on ${chalk.bold(branch)}. Create a feature branch?`,
       options: [
         { value: 'create', label: 'Create feat/add-workos-authkit' },
@@ -543,7 +543,7 @@ export class CLIAdapter implements InstallerAdapter {
     this.isPromptActive = false;
     this.flushPendingLogs();
 
-    if (clack.isCancel(choice) || choice === 'cancel') {
+    if (ui.isCancel(choice) || choice === 'cancel') {
       this.sendEvent({ type: 'BRANCH_CANCEL' });
     } else if (choice === 'create') {
       this.sendEvent({ type: 'BRANCH_CREATE' });
@@ -553,7 +553,7 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handleBranchCreated = ({ branch }: InstallerEvents['branch:created']): void => {
-    this.queueableLog(() => clack.log.success(`Created branch ${chalk.bold(branch)}`));
+    this.queueableLog(() => ui.log.success(`Created branch ${chalk.bold(branch)}`));
   };
 
   // ===== Post-install Event Handlers =====
@@ -564,7 +564,7 @@ export class CLIAdapter implements InstallerAdapter {
 
   private handleCommitPrompt = async (): Promise<void> => {
     this.isPromptActive = true;
-    const confirmed = await clack.confirm({
+    const confirmed = await ui.confirm({
       message: 'Commit the changes?',
       initialValue: true,
     });
@@ -572,28 +572,28 @@ export class CLIAdapter implements InstallerAdapter {
     this.flushPendingLogs();
 
     this.sendEvent({
-      type: clack.isCancel(confirmed) || !confirmed ? 'COMMIT_DECLINED' : 'COMMIT_APPROVED',
+      type: ui.isCancel(confirmed) || !confirmed ? 'COMMIT_DECLINED' : 'COMMIT_APPROVED',
     });
   };
 
   private handleCommitGenerating = (): void => {
-    this.spinner = clack.spinner();
+    this.spinner = ui.spinner();
     this.spinner.start('Generating commit message...');
   };
 
   private handleCommitSuccess = ({ message }: InstallerEvents['postinstall:commit:success']): void => {
     this.stopSpinner('Committed');
-    clack.log.success(`Committed: ${chalk.dim(message)}`);
+    ui.log.success(`Committed: ${chalk.dim(message)}`);
   };
 
   private handleCommitFailed = ({ error }: InstallerEvents['postinstall:commit:failed']): void => {
     this.stopSpinner('Commit failed');
-    clack.log.error(`Commit failed: ${error}`);
+    ui.log.error(`Commit failed: ${error}`);
   };
 
   private handlePrPrompt = async (): Promise<void> => {
     this.isPromptActive = true;
-    const confirmed = await clack.confirm({
+    const confirmed = await ui.confirm({
       message: 'Create a pull request?',
       initialValue: true,
     });
@@ -601,12 +601,12 @@ export class CLIAdapter implements InstallerAdapter {
     this.flushPendingLogs();
 
     this.sendEvent({
-      type: clack.isCancel(confirmed) || !confirmed ? 'PR_DECLINED' : 'PR_APPROVED',
+      type: ui.isCancel(confirmed) || !confirmed ? 'PR_DECLINED' : 'PR_APPROVED',
     });
   };
 
   private handlePrGenerating = (): void => {
-    this.spinner = clack.spinner();
+    this.spinner = ui.spinner();
     this.spinner.start('Generating PR description...');
   };
 
@@ -614,28 +614,28 @@ export class CLIAdapter implements InstallerAdapter {
     if (this.spinner) {
       this.spinner.message('Pushing to remote...');
     } else {
-      this.spinner = clack.spinner();
+      this.spinner = ui.spinner();
       this.spinner.start('Pushing to remote...');
     }
   };
 
   private handlePrSuccess = ({ url }: InstallerEvents['postinstall:pr:success']): void => {
     this.stopSpinner('PR created');
-    clack.log.success(`Pull request created: ${chalk.cyan(url)}`);
+    ui.log.success(`Pull request created: ${chalk.cyan(url)}`);
   };
 
   private handlePrFailed = ({ error }: InstallerEvents['postinstall:pr:failed']): void => {
     this.stopSpinner('PR creation failed');
-    clack.log.error(`PR creation failed: ${error}`);
+    ui.log.error(`PR creation failed: ${error}`);
   };
 
   private handlePushFailed = ({ error }: InstallerEvents['postinstall:push:failed']): void => {
     this.stopSpinner('Push failed');
-    clack.log.error(`Push failed: ${error}`);
+    ui.log.error(`Push failed: ${error}`);
   };
 
   private handleManualInstructions = ({ instructions }: InstallerEvents['postinstall:manual']): void => {
-    clack.log.info('GitHub CLI not found. Manual steps:');
+    ui.log.info('GitHub CLI not found. Manual steps:');
     console.log(chalk.dim(instructions));
   };
 }

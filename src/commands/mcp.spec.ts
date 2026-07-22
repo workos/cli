@@ -8,12 +8,12 @@ vi.mock('../utils/exec-file.js', () => ({
   execFileNoThrow: vi.fn(),
 }));
 
-// clack.log writes to the raw stdout/stderr streams (not console.*), so capture
+// ui.log writes to the raw stdout/stderr streams (not console.*), so capture
 // its human-mode output through a module mock instead of a console spy.
-const { clackLogs } = vi.hoisted(() => ({ clackLogs: [] as string[] }));
-vi.mock('../utils/clack.js', () => {
+const { uiLogs } = vi.hoisted(() => ({ uiLogs: [] as string[] }));
+vi.mock('../utils/ui.js', () => {
   const record = (msg: unknown) => {
-    clackLogs.push(String(msg));
+    uiLogs.push(String(msg));
   };
   return {
     default: {
@@ -66,7 +66,7 @@ let consoleOutput: string[];
 
 beforeEach(() => {
   vi.clearAllMocks();
-  clackLogs.length = 0;
+  uiLogs.length = 0;
   testHome = mkdtempSync(join(tmpdir(), 'mcp-test-'));
   vi.mocked(homedir).mockReturnValue(testHome);
   // Default: every shell-out succeeds (overridden per test).
@@ -326,7 +326,7 @@ describe('runMcpInstall / runMcpRemove (human mode)', () => {
     makeDir('.cursor');
     mockExec(() => ({ status: 0 }));
     await runMcpInstall();
-    const joined = clackLogs.join('\n');
+    const joined = uiLogs.join('\n');
     expect(joined).toContain('Claude Code');
     expect(joined).toContain('Codex');
     expect(joined).toContain('Cursor');
@@ -336,7 +336,7 @@ describe('runMcpInstall / runMcpRemove (human mode)', () => {
     mockExec((_c, args) => (args[0] === '--version' ? { status: 1 } : { status: 0 }));
     const exit = await captureExit(() => runMcpInstall());
     expect(exit).toBeUndefined();
-    expect(clackLogs.join('\n')).toContain('No supported coding agents detected');
+    expect(uiLogs.join('\n')).toContain('No supported coding agents detected');
   });
 
   it('exits 1 when any agent fails, after emitting the full matrix', async () => {
@@ -349,7 +349,7 @@ describe('runMcpInstall / runMcpRemove (human mode)', () => {
     });
     const exit = await captureExit(() => runMcpInstall());
     expect(exit?.exitCode).toBe(1);
-    const joined = clackLogs.join('\n');
+    const joined = uiLogs.join('\n');
     expect(joined).toContain('Claude Code');
     expect(joined).toContain('Cursor');
   });

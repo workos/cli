@@ -71,6 +71,18 @@ export function wrapAnsiAware(input: string, maxWidth: number): string[] {
  * is word-wrapped (ANSI-aware) and the box grows to multiple lines so the
  * border never breaks on a narrow terminal.
  */
+/**
+ * Flat, gutterless notice to stderr — the de-boxed replacement for
+ * `renderStderrBox` on the startup notices. Callers pass already-styled lines;
+ * this indents them two spaces and frames them with a single blank line above
+ * and below so the notice reads as its own beat without a border.
+ */
+export function renderStderrNotice(...lines: string[]): void {
+  console.error('');
+  for (const ln of lines) console.error(`  ${ln}`);
+  console.error('');
+}
+
 export function renderStderrBox(inner: string, color: typeof chalk.yellow | typeof chalk.green): void {
   const cols = terminalWidth();
   const plainLen = visibleWidth(inner);

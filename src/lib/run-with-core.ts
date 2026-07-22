@@ -36,7 +36,7 @@ import { getCliAuthClientId, getAuthkitDomain } from './settings.js';
 import { getTelemetryUrl } from '../utils/urls.js';
 import { analytics } from '../utils/analytics.js';
 import { getVersion } from './settings.js';
-import { isInGitRepo, getUncommittedOrUntrackedFiles } from '../utils/clack-utils.js';
+import { isInGitRepo, getUncommittedOrUntrackedFiles } from '../utils/ui-utils.js';
 import {
   getCurrentBranch,
   isProtectedBranch,
@@ -105,7 +105,7 @@ export async function detectSingleIntegration(
   integration: string,
   options: Pick<InstallerOptions, 'installDir'>,
 ): Promise<boolean> {
-  const { getPackageDotJson } = await import('../utils/clack-utils.js');
+  const { getPackageDotJson } = await import('../utils/ui-utils.js');
   const { hasPackageInstalled } = await import('../utils/package-json.js');
   const { existsSync } = await import('node:fs');
   const { join } = await import('node:path');

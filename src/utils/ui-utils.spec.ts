@@ -7,7 +7,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
  * prompt is exactly the hang this guard fixes.
  */
 
-vi.mock('./clack.js', () => ({
+vi.mock('./ui.js', () => ({
   default: {
     isCancel: vi.fn(() => false),
     cancel: vi.fn(),
@@ -28,18 +28,18 @@ vi.mock('./analytics.js', () => ({
   analytics: { shutdown: vi.fn(), setTag: vi.fn(), capture: vi.fn() },
 }));
 
-const clack = (await import('./clack.js')).default;
+const ui = (await import('./ui.js')).default;
 const { setInteractionMode, resetInteractionModeForTests } = await import('./interaction-mode.js');
 const { CliExit } = await import('./cli-exit.js');
 const { setOutputMode } = await import('./output.js');
-const { abortIfCancelled, getOrAskForWorkOSCredentials } = await import('./clack-utils.js');
+const { abortIfCancelled, getOrAskForWorkOSCredentials } = await import('./ui-utils.js');
 
 describe('abortIfCancelled — non-interactive guard', () => {
   beforeEach(() => {
     resetInteractionModeForTests();
     setOutputMode('human');
     vi.clearAllMocks();
-    vi.mocked(clack.isCancel).mockReturnValue(false);
+    vi.mocked(ui.isCancel).mockReturnValue(false);
   });
 
   afterEach(() => {
@@ -74,7 +74,7 @@ describe('abortIfCancelled — non-interactive guard', () => {
 
   it('human mode passes a resolved value through', async () => {
     setInteractionMode({ mode: 'human', source: 'default' });
-    vi.mocked(clack.isCancel).mockReturnValue(false);
+    vi.mocked(ui.isCancel).mockReturnValue(false);
     await expect(abortIfCancelled('value')).resolves.toBe('value');
   });
 });
@@ -96,8 +96,8 @@ describe('getOrAskForWorkOSCredentials — credential-source-aware copy', () => 
       vi.clearAllMocks();
       const result = await getOrAskForWorkOSCredentials({ ...base, credentialSource });
       expect(result).toEqual({ apiKey: 'sk_test', clientId: 'client_x' });
-      expect(clack.log.info).toHaveBeenCalledTimes(1);
-      expect(clack.log.info).toHaveBeenCalledWith('Using the WorkOS credentials you provided');
+      expect(ui.log.info).toHaveBeenCalledTimes(1);
+      expect(ui.log.info).toHaveBeenCalledWith('Using the WorkOS credentials you provided');
     }
   });
 
@@ -105,18 +105,18 @@ describe('getOrAskForWorkOSCredentials — credential-source-aware copy', () => 
     for (const credentialSource of ['device', 'stored', 'env'] as const) {
       vi.clearAllMocks();
       await getOrAskForWorkOSCredentials({ ...base, credentialSource });
-      expect(clack.log.info).not.toHaveBeenCalled();
+      expect(ui.log.info).not.toHaveBeenCalled();
     }
   });
 
   it('stays silent in dashboard mode', async () => {
     await getOrAskForWorkOSCredentials({ ...base, dashboard: true, credentialSource: 'cli' });
-    expect(clack.log.info).not.toHaveBeenCalled();
+    expect(ui.log.info).not.toHaveBeenCalled();
   });
 
   it('stays silent in JSON output mode (no human copy into JSON)', async () => {
     setOutputMode('json');
     await getOrAskForWorkOSCredentials({ ...base, credentialSource: 'cli' });
-    expect(clack.log.info).not.toHaveBeenCalled();
+    expect(ui.log.info).not.toHaveBeenCalled();
   });
 });

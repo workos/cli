@@ -13,7 +13,7 @@ import {
   getOrAskForWorkOSCredentials,
   getPackageDotJson,
   isUsingTypeScript,
-} from '../utils/clack-utils.js';
+} from '../utils/ui-utils.js';
 import { analytics } from '../utils/analytics.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from './constants.js';
 import { initializeAgent, runAgent, type RetryConfig } from './agent-interface.js';

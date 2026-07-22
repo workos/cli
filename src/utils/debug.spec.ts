@@ -12,8 +12,8 @@ vi.mock('os', async () => {
   return { ...actual, homedir: () => testDir };
 });
 
-// Mock clack to avoid side effects
-vi.mock('./clack.js', () => ({
+// Mock the UI facade
+vi.mock('./ui.js', () => ({
   default: {
     log: { info: vi.fn() },
   },
@@ -60,7 +60,7 @@ describe('debug logging', () => {
       const actual = await vi.importActual('os');
       return { ...actual, homedir: () => testDir };
     });
-    vi.doMock('./clack.js', () => ({
+    vi.doMock('./ui.js', () => ({
       default: { log: { info: vi.fn() } },
     }));
 
@@ -94,7 +94,7 @@ describe('debug logging', () => {
       const actual = await vi.importActual('os');
       return { ...actual, homedir: () => testDir };
     });
-    vi.doMock('./clack.js', () => ({
+    vi.doMock('./ui.js', () => ({
       default: { log: { info: vi.fn() } },
     }));
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -117,7 +117,7 @@ describe('debug logging', () => {
       const actual = await vi.importActual('os');
       return { ...actual, homedir: () => testDir };
     });
-    vi.doMock('./clack.js', () => ({
+    vi.doMock('./ui.js', () => ({
       default: { log: { info: vi.fn() } },
     }));
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -141,7 +141,7 @@ describe('debug logging', () => {
       const actual = await vi.importActual('os');
       return { ...actual, homedir: () => testDir };
     });
-    vi.doMock('./clack.js', () => ({
+    vi.doMock('./ui.js', () => ({
       default: { log: { info: vi.fn() } },
     }));
 

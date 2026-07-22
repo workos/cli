@@ -1299,6 +1299,18 @@ const commands: CommandSchema[] = [
     ],
   },
   {
+    name: 'setup',
+    description: 'Set up your coding agent (install WorkOS skills + MCP server)',
+    options: [
+      insecureStorageOpt,
+      { name: 'agents', type: 'string', description: 'Comma-separated agent keys', required: false, hidden: false },
+      { name: 'skills-only', type: 'boolean', description: 'Install skills only', required: false, hidden: false },
+      { name: 'mcp-only', type: 'boolean', description: 'Install the MCP server only', required: false, hidden: false },
+      { name: 'yes', type: 'boolean', description: 'Install without prompting', required: false, hidden: false },
+      { name: 'reset', type: 'boolean', description: 'Re-enable automatic setup offers', required: false, hidden: false },
+    ],
+  },
+  {
     name: 'setup-org',
     description: 'One-shot organization onboarding',
     positionals: [{ name: 'name', type: 'string', description: 'Organization name', required: true }],

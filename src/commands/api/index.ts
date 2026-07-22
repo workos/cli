@@ -25,7 +25,7 @@ export interface ApiCommandOptions {
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 export async function runApiInteractive(options?: { apiKey?: string }): Promise<void> {
-  // Interactive mode is inherently human-oriented (clack prompts, preview text,
+  // Interactive mode is inherently human-oriented (interactive prompts, preview text,
   // etc.). Refuse to enter it whenever JSON output was requested, regardless of
   // TTY status, so stdout stays machine-readable.
   if (isJsonMode()) {
@@ -140,11 +140,11 @@ export async function runApiRequest(endpoint: string, options: ApiCommandOptions
         recovery: confirmationRecovery(confirmCommand),
       });
     }
-    const clack = (await import('../../utils/clack.js')).default;
+    const ui = (await import('../../utils/ui.js')).default;
     console.log(`\n${chalk.yellow('About to')} ${method} ${endpoint}`);
     if (hasBody) prettyPrint(body);
-    const ok = await clack.confirm({ message: 'Proceed?' });
-    if (!ok || clack.isCancel(ok)) {
+    const ok = await ui.confirm({ message: 'Proceed?' });
+    if (!ok || ui.isCancel(ok)) {
       exitWithCode(ExitCode.CANCELLED);
     }
   }

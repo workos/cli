@@ -1,10 +1,11 @@
-import clack from '../utils/clack.js';
+import ui from '../utils/ui.js';
 import { outputSuccess, outputJson, outputTable, exitWithError, isJsonMode } from '../utils/output.js';
 import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
 import {
   createMcpClients,
   detectMcpClients,
   MCP_AGENT_KEYS,
+  MCP_OUTCOME_LABELS,
   type McpAgentKey,
   type McpClientResult,
 } from '../lib/mcp-clients.js';
@@ -21,16 +22,6 @@ import {
 export interface McpCommandOptions {
   agent?: string[];
 }
-
-/** Human phrasing for each outcome (JSON mode emits the raw `outcome` value). */
-const OUTCOME_LABEL: Record<McpClientResult['outcome'], string> = {
-  installed: 'installed',
-  'already-installed': 'already installed',
-  removed: 'removed',
-  'not-installed': 'not installed',
-  skipped: 'skipped',
-  failed: 'failed',
-};
 
 /**
  * Validate `--agent` values against known keys. Unknown values exit with a
@@ -54,7 +45,7 @@ function reportNoAgents(): void {
   if (isJsonMode()) {
     outputSuccess('No supported coding agents detected', { agents: [] });
   } else {
-    clack.log.info('No supported coding agents detected (looked for Claude Code, Codex, Cursor).');
+    ui.log.info('No supported coding agents detected (looked for Claude Code, Codex, Cursor).');
   }
 }
 
@@ -67,13 +58,13 @@ function reportResults(message: string, results: McpClientResult[]): void {
     outputSuccess(message, { agents: results });
   } else {
     for (const r of results) {
-      const line = `${r.displayName}: ${OUTCOME_LABEL[r.outcome]}`;
+      const line = `${r.displayName}: ${MCP_OUTCOME_LABELS[r.outcome]}`;
       if (r.outcome === 'failed') {
-        clack.log.error(r.error ? `${line} — ${r.error}` : line);
+        ui.log.error(r.error ? `${line} — ${r.error}` : line);
       } else if (r.outcome === 'installed' || r.outcome === 'removed' || r.outcome === 'already-installed') {
-        clack.log.success(line);
+        ui.log.success(line);
       } else {
-        clack.log.info(line);
+        ui.log.info(line);
       }
     }
   }

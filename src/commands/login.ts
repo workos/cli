@@ -1,6 +1,6 @@
 import open from 'open';
 import chalk from 'chalk';
-import clack from '../utils/clack.js';
+import ui from '../utils/ui.js';
 import { saveCredentials, getCredentials, getAccessToken, isTokenExpired, updateTokens } from '../lib/credentials.js';
 import { getCliAuthClientId, getAuthkitDomain } from '../lib/settings.js';
 import { refreshAccessToken } from '../lib/token-refresh-client.js';
@@ -9,46 +9,12 @@ import { fetchStagingCredentials } from '../lib/staging-api.js';
 import { getConfig, saveConfig, getActiveEnvironment, setActiveEnvironment, freshEnvKey } from '../lib/config-store.js';
 import type { CliConfig, EnvironmentConfig } from '../lib/config-store.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
-import { autoInstallSkills } from './install-skill.js';
+import { maybeRunSetupAfter } from './setup.js';
 import { isJsonMode, outputJson } from '../utils/output.js';
 import { isAgentMode, isCiMode, isPromptAllowed } from '../utils/interaction-mode.js';
 import { ExitCode, exitWithAuthRequired, exitWithCode } from '../utils/exit-codes.js';
 import { requestDeviceCode, pollForToken, DeviceAuthTimeoutError } from '../lib/device-auth.js';
 import { observeHostFailure } from '../lib/host-probe.js';
-
-/**
- * Best-effort skill install after a successful auth-login.
- *
- * Mirrors the install.ts hook copy, but wraps `autoInstallSkills` in its own
- * try/catch AND a 30s timeout so a skill install hang (e.g. blocked filesystem
- * call) never blocks login completion. Login already succeeded by the time
- * this runs — the user having a working session is the contract that must hold.
- *
- * Extracted from runLogin so it can be unit-tested without standing up the
- * device-auth polling loop.
- */
-export const SKILL_INSTALL_TIMEOUT_MS = 30 * 1000;
-
-export async function installSkillsAfterLogin(): Promise<void> {
-  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-  try {
-    const timeout = new Promise<null>((resolve) => {
-      timeoutHandle = setTimeout(() => resolve(null), SKILL_INSTALL_TIMEOUT_MS);
-      // Don't keep the event loop alive on this timer — process should exit
-      // immediately if everything else has resolved.
-      timeoutHandle.unref?.();
-    });
-    const result = await Promise.race([autoInstallSkills(), timeout]);
-    if (result && !isJsonMode()) {
-      const skillWord = result.skills.length === 1 ? 'skill' : 'skills';
-      clack.log.info(`Installed ${result.skills.length} WorkOS ${skillWord} for ${result.agents.join(', ')}.`);
-    }
-  } catch {
-    // Skill install must never fail login.
-  } finally {
-    if (timeoutHandle) clearTimeout(timeoutHandle);
-  }
-}
 
 /**
  * Result of a post-login staging provision. Carries enough context for
@@ -180,27 +146,27 @@ export async function runLogin(): Promise<void> {
 
   const authkitDomain = getAuthkitDomain();
 
-  clack.log.step('Starting authentication...');
+  ui.log.step('Starting authentication...');
 
   let deviceAuth;
   try {
     deviceAuth = await requestDeviceCode({ clientId, authkitDomain });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    clack.log.error(`Failed to start authentication: ${msg}`);
+    ui.log.error(`Failed to start authentication: ${msg}`);
     exitWithCode(ExitCode.GENERAL_ERROR);
   }
 
-  clack.log.info(`\nOpen this URL in your browser:\n`);
+  ui.log.info(`\nOpen this URL in your browser:\n`);
   console.log(`  ${deviceAuth.verification_uri}`);
   console.log(`\nEnter code: ${deviceAuth.user_code}\n`);
 
   try {
     await open(deviceAuth.verification_uri_complete, { wait: false });
     if (isAgentMode()) {
-      clack.log.info('Browser launch attempted. If it did not open on the host, use the manual URL and code above.');
+      ui.log.info('Browser launch attempted. If it did not open on the host, use the manual URL and code above.');
     } else {
-      clack.log.info('Browser opened automatically');
+      ui.log.info('Browser opened automatically');
     }
   } catch (error) {
     observeHostFailure('browser-launch', error, {
@@ -208,10 +174,10 @@ export async function runLogin(): Promise<void> {
       target: deviceAuth.verification_uri_complete,
       label: 'auth login browser',
     });
-    clack.log.info('Could not open browser — open the URL above manually.');
+    ui.log.info('Could not open browser — open the URL above manually.');
   }
 
-  const spinner = clack.spinner();
+  const spinner = ui.spinner();
   spinner.start('Waiting for authentication...');
 
   try {
@@ -232,8 +198,8 @@ export async function runLogin(): Promise<void> {
     });
 
     spinner.stop('Authentication successful!');
-    clack.log.success(`Logged in as ${result.email || result.userId}`);
-    clack.log.info(`Token expires in ${expiresInSec} seconds`);
+    ui.log.success(`Logged in as ${result.email || result.userId}`);
+    ui.log.info(`Token expires in ${expiresInSec} seconds`);
 
     const account = { email: result.email, userId: result.userId };
     const provision = await provisionStagingEnvironment(result.accessToken, account);
@@ -249,38 +215,38 @@ export async function runLogin(): Promise<void> {
       if (provision.mismatch) {
         const priorLabel = provision.priorAccount?.email ?? provision.priorAccount?.clientId ?? provision.priorEnvName;
         if (isPromptAllowed()) {
-          const answer = await clack.confirm({
+          const answer = await ui.confirm({
             message: `You were using ${provision.priorEnvName} (${priorLabel}, a different account). Switch active environment to ${account.email ?? account.userId}'s Staging?`,
             initialValue: false, // default: keep current
           });
-          if (!clack.isCancel(answer) && answer && provision.envName) {
+          if (!ui.isCancel(answer) && answer && provision.envName) {
             setActiveEnvironment(provision.envName);
           }
         } else {
-          clack.log.warn(
+          ui.log.warn(
             `Logged in as ${account.email ?? account.userId}, but the active environment "${provision.priorEnvName}" belongs to a different account (${priorLabel}). Keeping it active. Run \`${formatWorkOSCommand('env switch')}\` to change environments.`,
           );
         }
       }
       const active = getActiveEnvironment();
       if (active) {
-        clack.log.success(`Now using: ${active.name} (${active.type}) — ${account.email ?? account.userId}`);
+        ui.log.success(`Now using: ${active.name} (${active.type}) — ${account.email ?? account.userId}`);
       } else {
-        clack.log.info(chalk.dim(`Run \`${formatWorkOSCommand('env add')}\` to configure an environment manually`));
+        ui.log.info(chalk.dim(`Run \`${formatWorkOSCommand('env add')}\` to configure an environment manually`));
       }
     } else {
-      clack.log.info(chalk.dim(`Run \`${formatWorkOSCommand('env add')}\` to configure an environment manually`));
+      ui.log.info(chalk.dim(`Run \`${formatWorkOSCommand('env add')}\` to configure an environment manually`));
     }
 
-    await installSkillsAfterLogin();
+    await maybeRunSetupAfter('login');
   } catch (error) {
     if (error instanceof DeviceAuthTimeoutError) {
       spinner.stop('Authentication timed out');
-      clack.log.error('Authentication timed out. Please try again.');
+      ui.log.error('Authentication timed out. Please try again.');
     } else {
       spinner.stop('Authentication failed');
       const msg = error instanceof Error ? error.message : String(error);
-      clack.log.error(`Authentication error: ${msg}`);
+      ui.log.error(`Authentication error: ${msg}`);
     }
     exitWithCode(ExitCode.GENERAL_ERROR);
   }

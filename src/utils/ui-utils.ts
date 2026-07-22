@@ -14,7 +14,7 @@ import type { InstallerOptions } from './types.js';
 import { getPackageVersion } from './package-json.js';
 import { ISSUES_URL, type Integration } from '../lib/constants.js';
 import { analytics } from './analytics.js';
-import clack from './clack.js';
+import ui from './ui.js';
 import { INTEGRATION_CONFIG } from '../lib/config.js';
 import { SPAWN_OPTS } from './platform.js';
 import { isPromptAllowed } from './interaction-mode.js';
@@ -53,7 +53,7 @@ export interface CliSetupConfigContent {
 export async function abort(message?: string, status?: number): Promise<never> {
   await analytics.shutdown('cancelled');
 
-  clack.outro(message ?? 'Installer setup cancelled.');
+  ui.outro(message ?? 'Installer setup cancelled.');
   return process.exit(status ?? 1);
 }
 
@@ -86,13 +86,10 @@ export async function abortIfCancelled<T>(
   await analytics.shutdown('cancelled');
   const resolvedInput = await input;
 
-  if (
-    clack.isCancel(resolvedInput) ||
-    (typeof resolvedInput === 'symbol' && resolvedInput.description === 'clack:cancel')
-  ) {
+  if (ui.isCancel(resolvedInput)) {
     const docsUrl = integration ? INTEGRATION_CONFIG[integration].docsUrl : 'https://workos.com/docs/user-management';
 
-    clack.cancel(
+    ui.cancel(
       `Installer setup cancelled. You can read the documentation for ${
         integration ?? 'WorkOS AuthKit'
       } at ${chalk.cyan(docsUrl)} to continue with the setup manually.`,
@@ -104,15 +101,13 @@ export async function abortIfCancelled<T>(
 }
 
 export function printWelcome(options: { wizardName: string; message?: string }): void {
-  // eslint-disable-next-line no-console
-  console.log('');
-  clack.intro(chalk.inverse(` ${options.wizardName} `));
+  ui.intro('WorkOS', options.wizardName);
 
   const welcomeText =
     options.message ||
     `The ${options.wizardName} will help you set up WorkOS AuthKit for your application.\nThank you for using WorkOS AuthKit :)`;
 
-  clack.note(welcomeText);
+  ui.note(welcomeText);
 }
 
 export async function confirmContinueIfNoOrDirtyGitRepo(options: Pick<InstallerOptions, 'ci'>): Promise<void> {
@@ -122,7 +117,7 @@ export async function confirmContinueIfNoOrDirtyGitRepo(options: Pick<InstallerO
       const continueWithoutGit = options.ci
         ? true
         : await abortIfCancelled(
-            clack.confirm({
+            ui.confirm({
               message:
                 'You are not inside a git repository. The installer will create and update files. Do you want to continue anyway?',
             }),
@@ -141,12 +136,12 @@ export async function confirmContinueIfNoOrDirtyGitRepo(options: Pick<InstallerO
     if (uncommittedOrUntrackedFiles.length) {
       // CI mode: auto-continue with dirty repo
       if (options.ci) {
-        clack.log.info(`CI mode: continuing with uncommitted/untracked files in repo`);
+        ui.log.info(`CI mode: continuing with uncommitted/untracked files in repo`);
         analytics.setTag('continue-with-dirty-repo', true);
         return;
       }
 
-      clack.log.warn(
+      ui.log.warn(
         `You have uncommitted or untracked files in your repo:
 
 ${uncommittedOrUntrackedFiles.join('\n')}
@@ -154,7 +149,7 @@ ${uncommittedOrUntrackedFiles.join('\n')}
 The installer will create and update files.`,
       );
       const continueWithDirtyRepo = await abortIfCancelled(
-        clack.confirm({
+        ui.confirm({
           message: 'Do you want to continue anyway?',
         }),
       );
@@ -202,7 +197,7 @@ export function getUncommittedOrUntrackedFiles(): string[] {
 
 export async function askForItemSelection(items: string[], message: string): Promise<{ value: string; index: number }> {
   const selection = await abortIfCancelled<{ value: string; index: number } | symbol>(
-    clack.select({
+    ui.select({
       maxItems: 12,
       message: message,
       options: items.map((item, index) => {
@@ -243,15 +238,15 @@ export async function confirmContinueIfPackageVersionNotSupported({
       return;
     }
 
-    clack.log.warn(
+    ui.log.warn(
       `You have an unsupported version of ${packageName} installed:
 
   ${packageId}@${packageVersion}`,
     );
 
-    clack.note(note ?? `Please upgrade to ${acceptableVersions} if you wish to use the WorkOS AuthKit installer.`);
+    ui.note(note ?? `Please upgrade to ${acceptableVersions} if you wish to use the WorkOS AuthKit installer.`);
     const continueWithUnsupportedVersion = await abortIfCancelled(
-      clack.confirm({
+      ui.confirm({
         message: 'Do you want to continue anyway?',
       }),
     );
@@ -315,7 +310,7 @@ export async function installPackage({
   return traceStep('install-package', async () => {
     if (alreadyInstalled && askBeforeUpdating) {
       const shouldUpdatePackage = await abortIfCancelled(
-        clack.confirm({
+        ui.confirm({
           message: `The ${chalk.bold.cyan(
             packageNameDisplayLabel ?? packageName,
           )} package is already installed. Do you want to update it to the latest version?`,
@@ -327,7 +322,7 @@ export async function installPackage({
       }
     }
 
-    const sdkInstallSpinner = clack.spinner();
+    const sdkInstallSpinner = ui.spinner();
 
     const pkgManager = packageManager || (await getPackageManager({ installDir }));
 
@@ -379,7 +374,7 @@ export async function installPackage({
       });
     } catch (e) {
       sdkInstallSpinner.stop('Installation failed.');
-      clack.log.error(
+      ui.log.error(
         `${chalk.red(
           'Encountered the following error during installation:',
           // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
@@ -435,7 +430,7 @@ export async function ensurePackageIsInstalled(
       }
 
       const continueWithoutPackage = await abortIfCancelled(
-        clack.confirm({
+        ui.confirm({
           message: `${packageName} does not seem to be installed. Do you still want to continue?`,
           initialValue: false,
         }),
@@ -450,7 +445,7 @@ export async function ensurePackageIsInstalled(
 
 export async function getPackageDotJson({ installDir }: Pick<InstallerOptions, 'installDir'>): Promise<PackageDotJson> {
   const packageJsonFileContents = await fs.promises.readFile(join(installDir, 'package.json'), 'utf8').catch(() => {
-    clack.log.error('Could not find package.json. Make sure to run the installer in the root of your app!');
+    ui.log.error('Could not find package.json. Make sure to run the installer in the root of your app!');
     return abort();
   });
 
@@ -460,7 +455,7 @@ export async function getPackageDotJson({ installDir }: Pick<InstallerOptions, '
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     packageJson = JSON.parse(packageJsonFileContents);
   } catch {
-    clack.log.error(`Unable to parse your ${chalk.cyan('package.json')}. Make sure it has a valid format!`);
+    ui.log.error(`Unable to parse your ${chalk.cyan('package.json')}. Make sure it has a valid format!`);
 
     await abort();
   }
@@ -483,7 +478,7 @@ export async function updatePackageDotJson(
       },
     );
   } catch {
-    clack.log.error(`Unable to update your ${chalk.cyan('package.json')}.`);
+    ui.log.error(`Unable to update your ${chalk.cyan('package.json')}.`);
 
     await abort();
   }
@@ -506,7 +501,7 @@ export async function getPackageManager(
   // CI mode: auto-select first detected or npm
   if (options.ci) {
     const selectedPackageManager = detectedPackageManagers.length > 0 ? detectedPackageManagers[0] : npm;
-    clack.log.info(`CI mode: auto-selected package manager: ${selectedPackageManager.label}`);
+    ui.log.info(`CI mode: auto-selected package manager: ${selectedPackageManager.label}`);
     analytics.setTag('package-manager', selectedPackageManager.name);
     return selectedPackageManager;
   }
@@ -520,7 +515,7 @@ export async function getPackageManager(
       : 'Please select your package manager.';
 
   const selectedPackageManager = await abortIfCancelled<PackageManager | symbol>(
-    clack.select({
+    ui.select({
       message,
       options: pkgOptions.map((packageManager) => ({
         value: packageManager,
@@ -565,7 +560,7 @@ export async function getOrAskForWorkOSCredentials(
     const source = _options.credentialSource;
     const userProvided = source === 'cli' || source === 'manual' || source === undefined;
     if (!_options.dashboard && !isJsonMode() && userProvided) {
-      clack.log.info('Using the WorkOS credentials you provided');
+      ui.log.info('Using the WorkOS credentials you provided');
     }
     return { apiKey: apiKey || '', clientId };
   }
@@ -583,7 +578,7 @@ export async function getOrAskForWorkOSCredentials(
       // Use existing credentials if both are present (or API key not required)
       if (existingClientId && (!requireApiKey || existingApiKey)) {
         if (!_options.dashboard) {
-          clack.log.success(`Found existing WorkOS credentials in .env.local`);
+          ui.log.success(`Found existing WorkOS credentials in .env.local`);
         }
         return {
           apiKey: existingApiKey || '',
@@ -597,12 +592,12 @@ export async function getOrAskForWorkOSCredentials(
   }
 
   // Otherwise, prompt user for credentials
-  clack.log.step(`Get your credentials from ${chalk.cyan('https://dashboard.workos.com')}`);
+  ui.log.step(`Get your credentials from ${chalk.cyan('https://dashboard.workos.com')}`);
 
   if (requireApiKey && !apiKey) {
-    clack.log.info(`${chalk.dim('ℹ️ Your API key will be hidden for security and saved to .env.local')}`);
+    ui.log.info(`${chalk.dim('ℹ️ Your API key will be hidden for security and saved to .env.local')}`);
     apiKey = (await abortIfCancelled(
-      clack.password({
+      ui.password({
         message: 'Enter your WorkOS API Key',
         validate: (value) => {
           if (!value) return 'API Key is required';
@@ -614,12 +609,12 @@ export async function getOrAskForWorkOSCredentials(
       }),
     )) as string;
   } else if (!requireApiKey) {
-    clack.log.info(`${chalk.dim('ℹ️ Client-only SDK - API key not required')}`);
+    ui.log.info(`${chalk.dim('ℹ️ Client-only SDK - API key not required')}`);
   }
 
   if (!clientId) {
     clientId = (await abortIfCancelled(
-      clack.text({
+      ui.text({
         message: 'Enter your WorkOS Client ID',
         placeholder: 'client_...',
         validate: (value) => {

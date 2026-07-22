@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 vi.mock('fast-glob', () => ({ default: vi.fn(async () => []) }));
 
-vi.mock('../../utils/clack.js', () => ({
+vi.mock('../../utils/ui.js', () => ({
   default: {
     select: vi.fn(),
     isCancel: vi.fn(() => false),
@@ -12,12 +12,12 @@ vi.mock('../../utils/clack.js', () => ({
 
 // Passthrough abortIfCancelled + a package.json with no react-router version, so
 // getReactRouterMode always hits the ambiguous "no version" prompt branch.
-vi.mock('../../utils/clack-utils.js', () => ({
+vi.mock('../../utils/ui-utils.js', () => ({
   abortIfCancelled: vi.fn(async (p) => await p),
   getPackageDotJson: vi.fn(async () => ({})),
 }));
 
-const clack = (await import('../../utils/clack.js')).default;
+const ui = (await import('../../utils/ui.js')).default;
 const { getReactRouterMode, ReactRouterMode } = await import('./utils.js');
 const { setInteractionMode, resetInteractionModeForTests } = await import('../../utils/interaction-mode.js');
 
@@ -25,7 +25,7 @@ describe('getReactRouterMode — ambiguous-branch defaults', () => {
   beforeEach(() => {
     resetInteractionModeForTests();
     vi.clearAllMocks();
-    vi.mocked(clack.isCancel).mockReturnValue(false);
+    vi.mocked(ui.isCancel).mockReturnValue(false);
   });
 
   afterEach(() => {
@@ -38,8 +38,8 @@ describe('getReactRouterMode — ambiguous-branch defaults', () => {
     const result = await getReactRouterMode({ installDir: '/proj' } as never);
 
     expect(result).toBe(ReactRouterMode.V7_FRAMEWORK);
-    expect(clack.select).not.toHaveBeenCalled();
-    expect(clack.log.warn).toHaveBeenCalled();
+    expect(ui.select).not.toHaveBeenCalled();
+    expect(ui.log.warn).toHaveBeenCalled();
   });
 
   it('ci mode with no detectable version defaults to v7 Framework with a warning (no prompt)', async () => {
@@ -48,17 +48,17 @@ describe('getReactRouterMode — ambiguous-branch defaults', () => {
     const result = await getReactRouterMode({ installDir: '/proj' } as never);
 
     expect(result).toBe(ReactRouterMode.V7_FRAMEWORK);
-    expect(clack.select).not.toHaveBeenCalled();
-    expect(clack.log.warn).toHaveBeenCalled();
+    expect(ui.select).not.toHaveBeenCalled();
+    expect(ui.log.warn).toHaveBeenCalled();
   });
 
   it('human mode with no detectable version prompts and uses the answer', async () => {
     setInteractionMode({ mode: 'human', source: 'default' });
-    vi.mocked(clack.select).mockResolvedValueOnce(ReactRouterMode.V6 as never);
+    vi.mocked(ui.select).mockResolvedValueOnce(ReactRouterMode.V6 as never);
 
     const result = await getReactRouterMode({ installDir: '/proj' } as never);
 
     expect(result).toBe(ReactRouterMode.V6);
-    expect(clack.select).toHaveBeenCalledOnce();
+    expect(ui.select).toHaveBeenCalledOnce();
   });
 });
