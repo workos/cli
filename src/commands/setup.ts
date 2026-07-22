@@ -142,7 +142,8 @@ export async function runSetup(opts: RunSetupOptions): Promise<void> {
   // The offer.
   if (!opts.assumeYes) {
     ui.heading('Set up your coding agent');
-    const what = wantSkills && wantMcp ? 'WorkOS skills and the MCP server' : wantMcp ? 'the WorkOS MCP server' : 'WorkOS skills';
+    const what =
+      wantSkills && wantMcp ? 'WorkOS skills and the MCP server' : wantMcp ? 'the WorkOS MCP server' : 'WorkOS skills';
     ui.note(
       `Add ${what} to ${names.join(', ')} so your coding agent can\n` +
         `scaffold auth and manage WorkOS resources. Nothing is written until you confirm.`,

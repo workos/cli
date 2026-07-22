@@ -1307,7 +1307,13 @@ const commands: CommandSchema[] = [
       { name: 'skills-only', type: 'boolean', description: 'Install skills only', required: false, hidden: false },
       { name: 'mcp-only', type: 'boolean', description: 'Install the MCP server only', required: false, hidden: false },
       { name: 'yes', type: 'boolean', description: 'Install without prompting', required: false, hidden: false },
-      { name: 'reset', type: 'boolean', description: 'Re-enable automatic setup offers', required: false, hidden: false },
+      {
+        name: 'reset',
+        type: 'boolean',
+        description: 'Re-enable automatic setup offers',
+        required: false,
+        hidden: false,
+      },
     ],
   },
   {

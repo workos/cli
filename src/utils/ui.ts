@@ -227,7 +227,10 @@ interface ConfirmOptions {
 }
 async function confirm(options: ConfirmOptions): Promise<boolean | symbol> {
   try {
-    return await inquirerConfirm({ message: options.message, default: options.initialValue }, { signal: options.signal });
+    return await inquirerConfirm(
+      { message: options.message, default: options.initialValue },
+      { signal: options.signal },
+    );
   } catch (error) {
     if (isCancelError(error)) return CANCEL;
     throw error;
@@ -251,7 +254,11 @@ async function select<T>(options: SelectOptions<T>): Promise<T | symbol> {
     return await inquirerSelect<T>(
       {
         message: options.message,
-        choices: options.options.map((o) => ({ value: o.value, name: o.label ?? String(o.value), description: o.hint })),
+        choices: options.options.map((o) => ({
+          value: o.value,
+          name: o.label ?? String(o.value),
+          description: o.hint,
+        })),
         default: options.initialValue,
         pageSize: options.maxItems,
       },
@@ -298,7 +305,10 @@ interface PasswordOptions {
 }
 async function password(options: PasswordOptions): Promise<string | symbol> {
   try {
-    return await inquirerPassword({ message: options.message, mask: true, validate: adaptValidate(options.validate) }, { signal: options.signal });
+    return await inquirerPassword(
+      { message: options.message, mask: true, validate: adaptValidate(options.validate) },
+      { signal: options.signal },
+    );
   } catch (error) {
     if (isCancelError(error)) return CANCEL;
     throw error;

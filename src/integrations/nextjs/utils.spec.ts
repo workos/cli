@@ -7,7 +7,15 @@ vi.mock('../../utils/ui.js', () => ({
   default: {
     select: vi.fn(),
     isCancel: vi.fn(() => false),
-    log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), success: vi.fn(), step: vi.fn(), message: vi.fn(), detail: vi.fn() },
+    log: {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      success: vi.fn(),
+      step: vi.fn(),
+      message: vi.fn(),
+      detail: vi.fn(),
+    },
   },
 }));
 

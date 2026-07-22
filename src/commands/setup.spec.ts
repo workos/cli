@@ -299,7 +299,10 @@ describe('runSetup — command trigger', () => {
 
     await runSetup({ trigger: 'command', assumeYes: true });
 
-    expect(outputSuccess).toHaveBeenCalledWith('Setup complete', expect.objectContaining({ skills: expect.anything() }));
+    expect(outputSuccess).toHaveBeenCalledWith(
+      'Setup complete',
+      expect.objectContaining({ skills: expect.anything() }),
+    );
   });
 });
 
