@@ -74,8 +74,6 @@ export const OVERRIDES: Record<string, CommandMeta> = {
   // Still INERT (present here, absent from manifest.ts):
   // - `createUserlandUser`: the CLI's `user` command has never had a `create`
   //   subcommand and the migration deliberately does not add one.
-  // - the `*UserlandUserInvite` ops: invitations are the `invitation` command's
-  //   turf (migrating in Phase 4) — do not activate these under the `user` noun.
   //
   // `userlandUsers` also remains the leak-spec worked example proving the
   // curation layer cleans a `userland`-leaking op name to a clean noun — it is
@@ -85,9 +83,44 @@ export const OVERRIDES: Record<string, CommandMeta> = {
   updateUserlandUser: { command: 'user update', describe: "Update an AuthKit user's profile" },
   createUserlandUser: { command: 'user create', describe: 'Create a user' },
   deleteUserlandUser: { command: 'user delete', describe: 'Delete an AuthKit user' },
-  createUserlandUserInvite: { command: 'user invite', describe: 'Invite a user by email' },
-  resendUserlandUserInvite: { command: 'user invite resend', describe: 'Resend a pending user invitation' },
-  revokeUserlandUserInvite: { command: 'user invite revoke', describe: 'Revoke a pending user invitation' },
+
+  // --- identity cluster (resource migration Phase 4) ---
+  // The invite overrides staged in Phase 3 under the `user invite*` nouns went
+  // LIVE here under the `invitation` command (their real owner) when the REST
+  // `invitation` command was replaced. Memberships and sessions follow the same
+  // pattern: every manifest-curated op gets an override so the manifest's clean
+  // `command` noun is the single source of truth, and every `userland*` name is
+  // hidden behind it.
+  //
+  // `membership list` and `invitation list` are each backed by two ops (by-user
+  // vs by-org, env-wide vs by-org) — both ops resolve to the same command noun.
+  userlandUserOrganizationMemberships: {
+    command: 'membership list',
+    describe: "List an AuthKit user's organization memberships",
+  },
+  userlandUsersByOrg: { command: 'membership list', describe: "List an organization's members" },
+  userlandUserOrganizationMembership: { command: 'membership get', describe: 'Get an organization membership by ID' },
+  addUserlandUserToOrg: { command: 'membership create', describe: 'Add a user to an organization' },
+  updateRoleOnOrganizationMembership: {
+    command: 'membership update',
+    describe: "Change the role on a user's organization membership",
+  },
+  removeMemberFromOrganization: { command: 'membership delete', describe: 'Remove a user from an organization' },
+  deactivateOrganizationMembership: {
+    command: 'membership deactivate',
+    describe: 'Deactivate an organization membership',
+  },
+  reactivateOrganizationMembership: {
+    command: 'membership reactivate',
+    describe: 'Reactivate an inactive organization membership',
+  },
+  userlandUserInvites: { command: 'invitation list', describe: 'List user invitations in the current environment' },
+  userlandUserInvitesByOrg: { command: 'invitation list', describe: "List an organization's pending invitations" },
+  createUserlandUserInvite: { command: 'invitation send', describe: 'Invite a user by email' },
+  resendUserlandUserInvite: { command: 'invitation resend', describe: 'Resend a pending invitation' },
+  revokeUserlandUserInvite: { command: 'invitation revoke', describe: 'Revoke a pending invitation' },
+  userlandSessions: { command: 'session list', describe: "List an AuthKit user's sessions" },
+  revokeUserlandSession: { command: 'session revoke', describe: 'Revoke a user session' },
 
   // --- organization (resource migration Phase 3) ---
   // Op names/descriptions are clean upstream, but every curated op still needs

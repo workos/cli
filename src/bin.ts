@@ -1613,173 +1613,186 @@ async function runCli(): Promise<void> {
       return yargs.demandCommand(1, 'Please specify a permission subcommand').strict();
     })
     .command('membership', 'Manage organization memberships', (yargs) => {
-      yargs.options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } });
+      yargs.options(insecureStorageOption);
       registerSubcommand(
         yargs,
         'list',
-        'List memberships',
+        'List memberships by user or organization',
         (y) =>
           y.options({
-            org: { type: 'string' },
-            user: { type: 'string' },
-            limit: { type: 'number' },
-            before: { type: 'string' },
-            after: { type: 'string' },
-            order: { type: 'string' },
+            org: { type: 'string', describe: 'Organization ID (org_*)' },
+            user: { type: 'string', describe: 'User ID (user_*)' },
+            limit: { type: 'number', describe: 'Limit number of results (--org only)' },
+            before: { type: 'string', describe: 'Cursor for results before a specific item (--org only)' },
+            after: { type: 'string', describe: 'Cursor for results after a specific item (--org only)' },
+            order: { type: 'string', describe: 'Order of results, asc or desc (--org only)' },
+            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runMembershipList } = await import('./commands/membership.js');
-          await runMembershipList(
-            {
-              org: argv.org,
-              user: argv.user,
-              limit: argv.limit,
-              before: argv.before,
-              after: argv.after,
-              order: argv.order,
-            },
-            resolveApiKey({ apiKey: argv.apiKey }),
-            resolveApiBaseUrl(),
-          );
+          await runMembershipList({
+            org: argv.org,
+            user: argv.user,
+            limit: argv.limit,
+            before: argv.before,
+            after: argv.after,
+            order: argv.order,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       registerSubcommand(
         yargs,
         'get <id>',
         'Get a membership',
-        (y) => y.positional('id', { type: 'string', demandOption: true }),
+        (y) =>
+          y
+            .positional('id', { type: 'string', demandOption: true, describe: 'Membership ID' })
+            .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runMembershipGet } = await import('./commands/membership.js');
-          await runMembershipGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runMembershipGet(argv.id, { environmentId: argv.environmentId as string | undefined });
         },
       );
       registerSubcommand(
         yargs,
         'create',
-        'Create a membership',
+        'Add a user to an organization',
         (y) =>
           y.options({
-            org: { type: 'string', demandOption: true },
-            user: { type: 'string', demandOption: true },
-            role: { type: 'string' },
+            org: { type: 'string', demandOption: true, describe: 'Organization ID (org_*)' },
+            user: { type: 'string', demandOption: true, describe: 'User ID (user_*)' },
+            role: { type: 'string', describe: 'Role ID (role_*) to assign' },
+            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runMembershipCreate } = await import('./commands/membership.js');
-          await runMembershipCreate(
-            { org: argv.org, user: argv.user, role: argv.role },
-            resolveApiKey({ apiKey: argv.apiKey }),
-            resolveApiBaseUrl(),
-          );
+          await runMembershipCreate({
+            org: argv.org,
+            user: argv.user,
+            role: argv.role,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       registerSubcommand(
         yargs,
         'update <id>',
-        'Update a membership',
-        (y) => y.positional('id', { type: 'string', demandOption: true }).option('role', { type: 'string' }),
+        "Change a membership's role",
+        (y) =>
+          y
+            .positional('id', { type: 'string', demandOption: true, describe: 'Membership ID' })
+            .option('role', { type: 'string', describe: 'Role ID (role_*) to assign' })
+            .option('yes', { alias: 'y', type: 'boolean', default: false, describe: 'Confirm the change (required non-interactively)' })
+            .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runMembershipUpdate } = await import('./commands/membership.js');
-          await runMembershipUpdate(argv.id, argv.role, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runMembershipUpdate(argv.id, {
+            role: argv.role,
+            yes: argv.yes,
+            json: argv.json as boolean | undefined,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       registerSubcommand(
         yargs,
         'delete <id>',
-        'Delete a membership',
-        (y) => y.positional('id', { type: 'string', demandOption: true }),
+        'Delete a membership (removes the user from the organization)',
+        (y) =>
+          y
+            .positional('id', { type: 'string', demandOption: true, describe: 'Membership ID' })
+            .option('yes', { alias: 'y', type: 'boolean', default: false, describe: 'Skip the confirmation prompt' })
+            .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runMembershipDelete } = await import('./commands/membership.js');
-          await runMembershipDelete(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runMembershipDelete(argv.id, {
+            yes: argv.yes,
+            json: argv.json as boolean | undefined,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       registerSubcommand(
         yargs,
         'deactivate <id>',
         'Deactivate a membership',
-        (y) => y.positional('id', { type: 'string', demandOption: true }),
+        (y) =>
+          y
+            .positional('id', { type: 'string', demandOption: true, describe: 'Membership ID' })
+            .option('yes', { alias: 'y', type: 'boolean', default: false, describe: 'Confirm the change (required non-interactively)' })
+            .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runMembershipDeactivate } = await import('./commands/membership.js');
-          await runMembershipDeactivate(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runMembershipDeactivate(argv.id, {
+            yes: argv.yes,
+            json: argv.json as boolean | undefined,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       registerSubcommand(
         yargs,
         'reactivate <id>',
         'Reactivate a membership',
-        (y) => y.positional('id', { type: 'string', demandOption: true }),
+        (y) =>
+          y
+            .positional('id', { type: 'string', demandOption: true, describe: 'Membership ID' })
+            .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runMembershipReactivate } = await import('./commands/membership.js');
-          await runMembershipReactivate(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runMembershipReactivate(argv.id, { environmentId: argv.environmentId as string | undefined });
         },
       );
       return yargs.demandCommand(1, 'Please specify a membership subcommand').strict();
     })
     .command('invitation', 'Manage user invitations', (yargs) => {
-      yargs.options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } });
+      yargs.options(insecureStorageOption);
       registerSubcommand(
         yargs,
         'list',
         'List invitations',
         (y) =>
           y.options({
-            org: { type: 'string' },
-            email: { type: 'string' },
-            limit: { type: 'number' },
-            before: { type: 'string' },
-            after: { type: 'string' },
-            order: { type: 'string' },
+            org: { type: 'string', describe: 'Organization ID (org_*)' },
+            email: { type: 'string', describe: 'Filter by email (search)' },
+            limit: { type: 'number', describe: 'Limit number of results' },
+            before: { type: 'string', describe: 'Cursor for results before a specific item' },
+            after: { type: 'string', describe: 'Cursor for results after a specific item' },
+            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runInvitationList } = await import('./commands/invitation.js');
-          await runInvitationList(
-            {
-              org: argv.org,
-              email: argv.email,
-              limit: argv.limit,
-              before: argv.before,
-              after: argv.after,
-              order: argv.order,
-            },
-            resolveApiKey({ apiKey: argv.apiKey }),
-            resolveApiBaseUrl(),
-          );
+          await runInvitationList({
+            org: argv.org,
+            email: argv.email,
+            limit: argv.limit,
+            before: argv.before,
+            after: argv.after,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       registerSubcommand(
         yargs,
         'get <id>',
-        'Get an invitation',
-        (y) => y.positional('id', { type: 'string', demandOption: true }),
+        'Get an invitation (searches the most recent invitations)',
+        (y) =>
+          y
+            .positional('id', { type: 'string', demandOption: true, describe: 'Invitation ID' })
+            .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runInvitationGet } = await import('./commands/invitation.js');
-          await runInvitationGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runInvitationGet(argv.id, { environmentId: argv.environmentId as string | undefined });
         },
       );
       registerSubcommand(
@@ -1788,88 +1801,100 @@ async function runCli(): Promise<void> {
         'Send an invitation',
         (y) =>
           y.options({
-            email: { type: 'string', demandOption: true },
-            org: { type: 'string' },
-            role: { type: 'string' },
-            'expires-in-days': { type: 'number' },
+            email: { type: 'string', demandOption: true, describe: 'Email address to invite' },
+            org: { type: 'string', describe: 'Organization ID (org_*)' },
+            role: { type: 'string', describe: 'Role ID (role_*) to assign on acceptance' },
+            'expires-in-days': { type: 'number', describe: 'Expiration in days (default 7)' },
+            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runInvitationSend } = await import('./commands/invitation.js');
-          await runInvitationSend(
-            { email: argv.email, org: argv.org, role: argv.role, expiresInDays: argv.expiresInDays },
-            resolveApiKey({ apiKey: argv.apiKey }),
-            resolveApiBaseUrl(),
-          );
+          await runInvitationSend({
+            email: argv.email,
+            org: argv.org,
+            role: argv.role,
+            expiresInDays: argv.expiresInDays,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       registerSubcommand(
         yargs,
         'revoke <id>',
         'Revoke an invitation',
-        (y) => y.positional('id', { type: 'string', demandOption: true }),
+        (y) =>
+          y
+            .positional('id', { type: 'string', demandOption: true, describe: 'Invitation ID' })
+            .option('yes', { alias: 'y', type: 'boolean', default: false, describe: 'Skip the confirmation prompt' })
+            .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runInvitationRevoke } = await import('./commands/invitation.js');
-          await runInvitationRevoke(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runInvitationRevoke(argv.id, {
+            yes: argv.yes,
+            json: argv.json as boolean | undefined,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       registerSubcommand(
         yargs,
         'resend <id>',
         'Resend an invitation',
-        (y) => y.positional('id', { type: 'string', demandOption: true }),
+        (y) =>
+          y
+            .positional('id', { type: 'string', demandOption: true, describe: 'Invitation ID' })
+            .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runInvitationResend } = await import('./commands/invitation.js');
-          await runInvitationResend(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runInvitationResend(argv.id, { environmentId: argv.environmentId as string | undefined });
         },
       );
       return yargs.demandCommand(1, 'Please specify an invitation subcommand').strict();
     })
     .command('session', 'Manage user sessions', (yargs) => {
-      yargs.options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } });
+      yargs.options(insecureStorageOption);
       registerSubcommand(
         yargs,
         'list <userId>',
         'List sessions for a user',
         (y) =>
-          y.positional('userId', { type: 'string', demandOption: true }).options({
-            limit: { type: 'number' },
-            before: { type: 'string' },
-            after: { type: 'string' },
-            order: { type: 'string' },
+          y.positional('userId', { type: 'string', demandOption: true, describe: 'User ID (user_*)' }).options({
+            limit: { type: 'number', describe: 'Limit number of results' },
+            before: { type: 'string', describe: 'Cursor for results before a specific item' },
+            after: { type: 'string', describe: 'Cursor for results after a specific item' },
+            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runSessionList } = await import('./commands/session.js');
-          await runSessionList(
-            argv.userId,
-            { limit: argv.limit, before: argv.before, after: argv.after, order: argv.order },
-            resolveApiKey({ apiKey: argv.apiKey }),
-            resolveApiBaseUrl(),
-          );
+          await runSessionList(argv.userId, {
+            limit: argv.limit,
+            before: argv.before,
+            after: argv.after,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       registerSubcommand(
         yargs,
         'revoke <sessionId>',
         'Revoke a session',
-        (y) => y.positional('sessionId', { type: 'string', demandOption: true }),
+        (y) =>
+          y
+            .positional('sessionId', { type: 'string', demandOption: true, describe: 'Session ID' })
+            .option('yes', { alias: 'y', type: 'boolean', default: false, describe: 'Skip the confirmation prompt' })
+            .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runSessionRevoke } = await import('./commands/session.js');
-          await runSessionRevoke(argv.sessionId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runSessionRevoke(argv.sessionId, {
+            yes: argv.yes,
+            json: argv.json as boolean | undefined,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       return yargs.demandCommand(1, 'Please specify a session subcommand').strict();
