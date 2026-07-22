@@ -13,7 +13,7 @@ import {
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { gunzipSync } from 'node:zlib';
+import { extractTarEntry as extractNpmTarEntry } from './npm-tarball.js';
 import {
   AGENT_SDK_EXECUTABLE_NAME,
   AGENT_SDK_EXECUTABLE_SHA256,
@@ -54,8 +54,12 @@ function runtimeTarget(): string {
   return `${process.platform}-${process.arch}${isMuslRuntime() ? '-musl' : ''}`;
 }
 
-/** Running from a compiled binary: the module graph lives in Bun's virtual filesystem. */
-function isCompiledBinary(): boolean {
+/**
+ * Running from a compiled binary: the module graph lives in Bun's virtual
+ * filesystem. Shared with runtime-assets.ts, which gates runtime bundle
+ * downloads the same way.
+ */
+export function isCompiledBinary(): boolean {
   return import.meta.url.includes('$bunfs') || import.meta.url.includes('~BUN');
 }
 
@@ -88,35 +92,11 @@ function resolveFromNodeModules(): string {
 const MAX_TARBALL_UNCOMPRESSED_BYTES = AGENT_SDK_EXECUTABLE_SIZE + 64 * 1024 * 1024;
 
 /**
- * Extract a single entry from a gzipped npm tarball. Exported for tests.
- *
- * Minimal ustar reader: npm tarballs are flat `package/…` archives well within
- * ustar limits, so pax/GNU long-name extensions never apply to the entry we
- * want — unknown entry types are skipped by the generic size-based walk.
+ * Extract a single entry from the gzipped Agent SDK tarball. Thin wrapper over
+ * the shared ustar reader in npm-tarball.ts. Exported for tests.
  */
 export function extractTarEntry(tarGz: Buffer, entryName: string): Buffer {
-  const raw = gunzipSync(tarGz, { maxOutputLength: MAX_TARBALL_UNCOMPRESSED_BYTES });
-  let offset = 0;
-  while (offset + 512 <= raw.length) {
-    const header = raw.subarray(offset, offset + 512);
-    if (header.every((byte) => byte === 0)) break;
-    const name = header.subarray(0, 100).toString('utf8').replace(/\0.*$/s, '');
-    const prefix = header.subarray(345, 500).toString('utf8').replace(/\0.*$/s, '');
-    const fullName = prefix ? `${prefix}/${name}` : name;
-    const size = Number.parseInt(header.subarray(124, 136).toString('utf8').replace(/\0.*$/s, '').trim(), 8);
-    if (Number.isNaN(size) || size < 0) {
-      throw new Error(`Malformed tar header at offset ${offset}`);
-    }
-    const dataStart = offset + 512;
-    if (fullName === entryName) {
-      if (dataStart + size > raw.length) {
-        throw new Error(`Truncated tar entry ${entryName}`);
-      }
-      return Buffer.from(raw.subarray(dataStart, dataStart + size));
-    }
-    offset = dataStart + Math.ceil(size / 512) * 512;
-  }
-  throw new Error(`Entry ${entryName} not found in tarball`);
+  return extractNpmTarEntry(tarGz, entryName, MAX_TARBALL_UNCOMPRESSED_BYTES);
 }
 
 /** Abort a download that goes this long without a data chunk, so a stalled connection can't hang forever. */
