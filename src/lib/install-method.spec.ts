@@ -14,6 +14,7 @@ describe('detectInstallMethod', () => {
   it.each([
     ['/usr/local/lib/node_modules/@workos/cli-darwin-arm64/bin/workos', 'npm'], // global prefix
     ['/Users/dev/.nvm/versions/node/v20.11.0/lib/node_modules/@workos/cli-linux-x64/bin/workos', 'npm'], // nvm
+    ['C:\\Users\\me\\AppData\\Roaming\\npm\\node_modules\\@workos\\cli-win32-x64\\bin\\workos.exe', 'npm'], // Windows
   ] as const)('detects npm from %s', (execPath, expected) => {
     expect(detectInstallMethod(execPath)).toBe(expected);
   });
@@ -22,6 +23,7 @@ describe('detectInstallMethod', () => {
     ['/usr/local/bin/workos', 'download'], // manual copy onto PATH
     ['/Users/dev/Downloads/workos-darwin-arm64', 'download'], // ran from Downloads
     ['/Users/dev/.local/bin/workos', 'download'],
+    ['C:\\Users\\me\\bin\\workos.exe', 'download'], // Windows manual copy
   ] as const)('falls back to download from %s', (execPath, expected) => {
     expect(detectInstallMethod(execPath)).toBe(expected);
   });

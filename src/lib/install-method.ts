@@ -21,10 +21,14 @@ const RELEASES_URL = 'https://github.com/workos/cli/releases/latest';
  * @param execPath overridable for testing; defaults to the running binary.
  */
 export function detectInstallMethod(execPath: string = process.execPath): InstallMethod {
-  if (execPath.includes('/Cellar/') || execPath.includes('/opt/homebrew/') || execPath.includes('/.linuxbrew/')) {
+  // Normalize Windows separators first: the npm launcher's binary lives at
+  // …\npm\node_modules\@workos\cli-win32-x64\bin\workos.exe, which the
+  // POSIX-style markers below would otherwise miss.
+  const path = execPath.replaceAll('\\', '/');
+  if (path.includes('/Cellar/') || path.includes('/opt/homebrew/') || path.includes('/.linuxbrew/')) {
     return 'homebrew';
   }
-  if (execPath.includes('/node_modules/')) {
+  if (path.includes('/node_modules/')) {
     return 'npm';
   }
   return 'download';
