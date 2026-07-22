@@ -166,7 +166,10 @@ export async function runApiRequest(endpoint: string, options: ApiCommandOptions
       response.status === 401 || response.status === 403
         ? authLoginRecovery({ mode: getInteractionMode().mode })
         : response.status === 404
-          ? missingArgsRecovery(formatWorkOSCommand('api ls'), 'List available endpoints, then re-run with a valid path.')
+          ? missingArgsRecovery(
+              formatWorkOSCommand('api ls'),
+              'List available endpoints, then re-run with a valid path.',
+            )
           : undefined;
     exitWithError({
       code: `http_${response.status}`,
