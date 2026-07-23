@@ -154,7 +154,8 @@ export async function runAuthkitRedirectUrisSet(options: RedirectUrisSetOptions)
 
   const result = data.setRedirectUris;
   if (result.__typename !== 'RedirectUrisSet' || !('redirectUris' in result)) {
-    const detail = 'message' in result ? `${result.message} (${(result as { uri: string }).uri})` : 'Invalid redirect URI.';
+    const detail =
+      'message' in result ? `${result.message} (${(result as { uri: string }).uri})` : 'Invalid redirect URI.';
     exitWithError({ code: 'invalid_redirect_uri', message: detail });
   }
 

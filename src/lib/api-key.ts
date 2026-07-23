@@ -61,7 +61,11 @@ export interface ResolvedApiBaseUrl {
  */
 export function getApiBaseUrlSource(): ResolvedApiBaseUrl {
   if (process.env.WORKOS_API_URL) {
-    return { baseUrl: normalizeApiBaseUrl(process.env.WORKOS_API_URL, 'WORKOS_API_URL'), source: 'env', via: 'WORKOS_API_URL' };
+    return {
+      baseUrl: normalizeApiBaseUrl(process.env.WORKOS_API_URL, 'WORKOS_API_URL'),
+      source: 'env',
+      via: 'WORKOS_API_URL',
+    };
   }
   if (process.env.WORKOS_API_BASE_URL) {
     return {

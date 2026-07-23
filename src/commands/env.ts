@@ -316,8 +316,7 @@ export async function runEnvList(): Promise<void> {
   const baseUrlSource = getApiBaseUrlSource();
   // Only an env-var override supersedes the stored profiles below; a profile
   // endpoint is already shown in the table, so don't double-report it here.
-  const override =
-    baseUrlSource.source === 'env' ? { baseUrl: baseUrlSource.baseUrl, via: baseUrlSource.via } : null;
+  const override = baseUrlSource.source === 'env' ? { baseUrl: baseUrlSource.baseUrl, via: baseUrlSource.via } : null;
 
   if (isJsonMode()) {
     const data = entries.map(([key, env]) => ({
@@ -369,6 +368,8 @@ export async function runEnvList(): Promise<void> {
 
   if (override) {
     console.log('');
-    console.log(chalk.yellow(`Override: ${override.via}=${override.baseUrl} `) + chalk.dim('(active for all commands)'));
+    console.log(
+      chalk.yellow(`Override: ${override.via}=${override.baseUrl} `) + chalk.dim('(active for all commands)'),
+    );
   }
 }

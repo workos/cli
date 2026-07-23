@@ -157,7 +157,10 @@ describe('organization command', () => {
     });
 
     it('rejects an unknown state', async () => {
-      const err = await expectExit(Promise.resolve().then(() => parseDomainArgs(['foo.com:bogus'])), 1);
+      const err = await expectExit(
+        Promise.resolve().then(() => parseDomainArgs(['foo.com:bogus'])),
+        1,
+      );
       expect(err.context?.errorCode).toBe('invalid_argument');
     });
   });
@@ -283,7 +286,12 @@ describe('organization command', () => {
       expect(mockGraphqlRequest.mock.calls[1][1]).toEqual({
         token: 'tok_123',
         variables: {
-          input: { environmentId: 'env_profile', name: 'Test', domains: ['foo.com', 'bar.com'], domainsDeveloperVerified: true },
+          input: {
+            environmentId: 'env_profile',
+            name: 'Test',
+            domains: ['foo.com', 'bar.com'],
+            domainsDeveloperVerified: true,
+          },
         },
         environmentId: 'env_profile',
       });

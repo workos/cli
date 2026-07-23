@@ -120,9 +120,9 @@ describe('resolveEnvironmentTarget', () => {
 
     it('exits environment_stale for a flag-supplied ID unknown to the team on mutations', async () => {
       mockGraphqlRequest.mockResolvedValue(teamData([{ id: 'env_other' }]));
-      await expect(
-        resolveEnvironmentTarget('tok', { flagValue: 'env_typo', forMutation: true }),
-      ).rejects.toMatchObject({ name: 'CliExit', context: { errorCode: 'environment_stale' } });
+      await expect(resolveEnvironmentTarget('tok', { flagValue: 'env_typo', forMutation: true })).rejects.toMatchObject(
+        { name: 'CliExit', context: { errorCode: 'environment_stale' } },
+      );
       // Only the validation fetch was issued — never the operation itself.
       expect(mockGraphqlRequest).toHaveBeenCalledTimes(1);
     });

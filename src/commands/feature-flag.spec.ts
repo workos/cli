@@ -508,7 +508,11 @@ describe('feature-flag command', () => {
       // project derivation); the flag operation is what the gate rejects.
       mockGraphqlRequest.mockImplementation(async (doc: unknown) => {
         if (String(doc).includes('teamProjectsV2')) return TEAM_ENVIRONMENTS_PAYLOAD;
-        throw new DashboardGraphqlError('The dashboard GraphQL API rejected this session (HTTP 403).', 'forbidden', 403);
+        throw new DashboardGraphqlError(
+          'The dashboard GraphQL API rejected this session (HTTP 403).',
+          'forbidden',
+          403,
+        );
       });
       await expectExit(run(), 1);
       const err = consoleErrors.join('\n');

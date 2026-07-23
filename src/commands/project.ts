@@ -58,7 +58,10 @@ export async function runProjectCreate(options: ProjectCreateOptions): Promise<v
 
   const result = data.createProjectWithNewEnvironments;
   if (result.__typename === 'ProjectNameAlreadyUsed') {
-    exitWithError({ code: 'name_already_used', message: `A project named "${options.name}" already exists in this team.` });
+    exitWithError({
+      code: 'name_already_used',
+      message: `A project named "${options.name}" already exists in this team.`,
+    });
   }
   if (result.__typename !== 'ProjectCreated' || !('project' in result)) {
     exitWithError({ code: 'unexpected_result', message: `Could not create project "${options.name}".` });
@@ -101,7 +104,10 @@ export async function runProjectRename(options: ProjectRenameOptions): Promise<v
 
   const result = data.renameProject;
   if (result.__typename === 'ProjectNameAlreadyUsed') {
-    exitWithError({ code: 'name_already_used', message: `A project named "${options.name}" already exists in this team.` });
+    exitWithError({
+      code: 'name_already_used',
+      message: `A project named "${options.name}" already exists in this team.`,
+    });
   }
   if (result.__typename === 'ProjectNotFound') {
     exitWithError({ code: 'not_found', message: `Project "${options.projectId}" was not found.` });

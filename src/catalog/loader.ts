@@ -1,9 +1,5 @@
 import snapshot from './mcp-catalog.snapshot.json' with { type: 'json' };
-import type {
-  CatalogOperation,
-  ManagementCatalog,
-  RawManagementCatalog,
-} from './catalog-types.js';
+import type { CatalogOperation, ManagementCatalog, RawManagementCatalog } from './catalog-types.js';
 
 /**
  * Loads the Management operation catalog behind a single seam.
@@ -50,8 +46,6 @@ export function loadManagementCatalog(
 ): ManagementCatalog {
   const raw = source.load();
   const all: CatalogOperation[] = Object.values(raw.operations);
-  const operations = options.includeFeatureFlagged
-    ? all
-    : all.filter((op) => !op.featureFlagGated);
+  const operations = options.includeFeatureFlagged ? all : all.filter((op) => !op.featureFlagGated);
   return { operations, fragments: raw.fragments, inputTypes: raw.inputTypes };
 }

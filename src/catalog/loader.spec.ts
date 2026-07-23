@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  loadManagementCatalog,
-  snapshotSource,
-  type CatalogSource,
-} from './loader.js';
+import { loadManagementCatalog, snapshotSource, type CatalogSource } from './loader.js';
 import type { RawManagementCatalog } from './catalog-types.js';
 
 // Visible operation count: 357 in the snapshot minus the 4 feature-flag-gated

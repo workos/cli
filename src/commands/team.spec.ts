@@ -95,7 +95,9 @@ describe('team command', () => {
 
     it('outputs JSON in json mode', async () => {
       setOutputMode('json');
-      mockGraphqlRequest.mockResolvedValue({ currentTeam: { memberships: [{ id: 'uo_1', role: 'ADMIN', state: 'active', user: null }] } });
+      mockGraphqlRequest.mockResolvedValue({
+        currentTeam: { memberships: [{ id: 'uo_1', role: 'ADMIN', state: 'active', user: null }] },
+      });
       await runTeamMembers();
       const out = JSON.parse(consoleOutput[0]);
       expect(out.members[0].id).toBe('uo_1');
@@ -115,7 +117,12 @@ describe('team command', () => {
       mockGraphqlRequest.mockResolvedValue({
         inviteUserToTeam: {
           __typename: 'UserInvitedToTeam',
-          invitedMember: { id: 'uo_2', role: 'MEMBER', state: 'invited', user: { id: 'u_2', email: 'a@b.com', name: null } },
+          invitedMember: {
+            id: 'uo_2',
+            role: 'MEMBER',
+            state: 'invited',
+            user: { id: 'u_2', email: 'a@b.com', name: null },
+          },
         },
       });
       await runTeamInvite({ email: 'a@b.com', role: 'member' });
@@ -196,7 +203,9 @@ describe('team command', () => {
 
   describe('resend-invite', () => {
     it('proceeds on a resendable invite', async () => {
-      mockGraphqlRequest.mockResolvedValue({ resendDashboardInvite: { __typename: 'DashboardInviteResent', resentInvitation: true } });
+      mockGraphqlRequest.mockResolvedValue({
+        resendDashboardInvite: { __typename: 'DashboardInviteResent', resentInvitation: true },
+      });
       await runTeamResendInvite({ membershipId: 'uo_1' });
       expect(consoleOutput.join('\n')).toContain('uo_1');
     });
@@ -222,7 +231,9 @@ describe('team command', () => {
     });
 
     it('errors on InvalidTeamName', async () => {
-      mockGraphqlRequest.mockResolvedValue({ updateTeamDetails: { __typename: 'InvalidTeamName', team: { id: 'team_1' } } });
+      mockGraphqlRequest.mockResolvedValue({
+        updateTeamDetails: { __typename: 'InvalidTeamName', team: { id: 'team_1' } },
+      });
       const err = await expectExit(runTeamUpdate({ name: '' }), 1);
       expect(err.context?.errorCode).toBe('invalid_team_name');
     });
@@ -239,7 +250,10 @@ describe('team command', () => {
     it('proceeds non-interactive with --yes and maps requireMfa', async () => {
       setInteractionMode({ mode: 'ci', source: 'ci_env' });
       mockGraphqlRequest.mockResolvedValue({
-        updateTeamMfaRequirement: { __typename: 'TeamMfaRequirementUpdated', team: { id: 'team_1', isMfaRequired: true } },
+        updateTeamMfaRequirement: {
+          __typename: 'TeamMfaRequirementUpdated',
+          team: { id: 'team_1', isMfaRequired: true },
+        },
       });
       await runTeamSetMfa({ required: true, yes: true });
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('updateTeamMfaRequirement'), {

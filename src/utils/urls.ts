@@ -19,5 +19,4 @@ export const getLlmGatewayUrl = (): string => `${getWorkOSApiUrl()}/llm-gateway`
 /** CLI telemetry endpoint, served under the WorkOS API host. */
 export const getTelemetryUrl = (): string => `${getWorkOSApiUrl()}/cli`;
 
-export const getWorkOSDashboardUrl = (): string =>
-  process.env.WORKOS_DASHBOARD_URL || 'https://dashboard.workos.com';
+export const getWorkOSDashboardUrl = (): string => process.env.WORKOS_DASHBOARD_URL || 'https://dashboard.workos.com';

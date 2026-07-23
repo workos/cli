@@ -262,7 +262,10 @@ export async function runFeatureFlagGet(slug: string, options: FeatureFlagEnviro
     ['Enabled', flag.enabled ? 'Yes' : 'No'],
     ['Description', flag.description],
     ['Access type', flag.accessType],
-    ['Organization targets', flag.organizationTargets.length > 0 ? flag.organizationTargets.map((t) => t.id).join(', ') : null],
+    [
+      'Organization targets',
+      flag.organizationTargets.length > 0 ? flag.organizationTargets.map((t) => t.id).join(', ') : null,
+    ],
     ['User targets', flag.userTargets.length > 0 ? flag.userTargets.map((t) => t.id).join(', ') : null],
     ['Created', flag.createdAt],
   ];
@@ -336,11 +339,7 @@ async function executeFlagEnvironmentUpdate(
   }
 }
 
-async function setFlagEnabled(
-  slug: string,
-  enabled: boolean,
-  options: FeatureFlagEnvironmentOptions,
-): Promise<void> {
+async function setFlagEnabled(slug: string, enabled: boolean, options: FeatureFlagEnvironmentOptions): Promise<void> {
   const token = await requireCommandToken();
 
   // Environment-scoped mutation: pre-validated resolved target as header.

@@ -613,14 +613,14 @@ workos install --api-key sk_test_xxx --client-id client_xxx --no-commit 2>/dev/n
 
 ### Environment Variables
 
-| Variable                 | Effect                                                            |
-| ------------------------ | ----------------------------------------------------------------- |
+| Variable                 | Effect                                                                                                                                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `WORKOS_API_KEY`         | API key for `workos api`, the still-REST commands (connection, directory, audit-log, api-key, vault), and workflow/debug commands. Resource commands use the `workos auth login` session instead |
-| `WORKOS_API_URL`         | Override the API base URL for all CLI commands (e.g. a local API)  |
-| `WORKOS_API_BASE_URL`    | Accepted alias for `WORKOS_API_URL` (what `workos dev` sets)       |
-| `WORKOS_MODE`            | Interaction mode: `human`, `agent`, or `ci`                       |
-| `WORKOS_FORCE_TTY=1`     | Force human (non-JSON) **output** mode even when piped            |
-| `WORKOS_TELEMETRY=false` | Disable telemetry                                                 |
+| `WORKOS_API_URL`         | Override the API base URL for all CLI commands (e.g. a local API)                                                                                                                                |
+| `WORKOS_API_BASE_URL`    | Accepted alias for `WORKOS_API_URL` (what `workos dev` sets)                                                                                                                                     |
+| `WORKOS_MODE`            | Interaction mode: `human`, `agent`, or `ci`                                                                                                                                                      |
+| `WORKOS_FORCE_TTY=1`     | Force human (non-JSON) **output** mode even when piped                                                                                                                                           |
+| `WORKOS_TELEMETRY=false` | Disable telemetry                                                                                                                                                                                |
 
 > `WORKOS_API_URL` controls where the **CLI's own** commands (`workos user`, `workos api`, etc.) send requests — set it to point the CLI at a locally-running API. This is distinct from `workos dev`, which sets API vars for your **app's** dev process so it talks to the in-process emulator.
 

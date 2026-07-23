@@ -39,7 +39,9 @@ export function getOperation(
 ): CatalogOperation {
   const op = catalog.operations.find((candidate) => candidate.name === name);
   if (!op) {
-    throw new Error(`Catalog operation "${name}" not found. The vendored snapshot may be stale; run \`pnpm catalog:vendor\`.`);
+    throw new Error(
+      `Catalog operation "${name}" not found. The vendored snapshot may be stale; run \`pnpm catalog:vendor\`.`,
+    );
   }
   return op;
 }

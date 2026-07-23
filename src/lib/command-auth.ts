@@ -161,7 +161,9 @@ export async function requireCommandToken(): Promise<string> {
   // (network/server); the user is NOT logged out and must not be told so.
   if (hadSession && hasCredentials()) {
     exitWithAuthRequired(
-      process.env.WORKOS_API_KEY ? DASHBOARD_ERROR_MESSAGES.refreshFailedApiKeySet : DASHBOARD_ERROR_MESSAGES.refreshFailed,
+      process.env.WORKOS_API_KEY
+        ? DASHBOARD_ERROR_MESSAGES.refreshFailedApiKeySet
+        : DASHBOARD_ERROR_MESSAGES.refreshFailed,
     );
   }
 

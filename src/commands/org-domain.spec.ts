@@ -159,14 +159,18 @@ describe('org-domain command', () => {
       vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
         consoleErrors.push(args.map(String).join(' '));
       });
-      respondWith({ organizations: { data: [{ id: 'org_1', domains: [] }], listMetadata: { before: null, after: null } } });
+      respondWith({
+        organizations: { data: [{ id: 'org_1', domains: [] }], listMetadata: { before: null, after: null } },
+      });
       const err = await expectExit(runOrgDomainGet('org_domain_missing', {}), 1);
       expect(err.context?.errorCode).toBe('not_found');
       expect(consoleErrors.join('\n')).toContain(`first ${ORG_DOMAIN_GET_SCAN_LIMIT} organizations`);
     });
 
     it('honors an --environment-id override', async () => {
-      respondWith({ organizations: { data: [{ id: 'org_1', domains: [DOMAIN_NODE] }], listMetadata: { before: null, after: null } } });
+      respondWith({
+        organizations: { data: [{ id: 'org_1', domains: [DOMAIN_NODE] }], listMetadata: { before: null, after: null } },
+      });
       await runOrgDomainGet('org_domain_1', { environmentId: 'env_flag' });
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('organizations'), {
         token: 'tok_123',
@@ -177,7 +181,9 @@ describe('org-domain command', () => {
 
     it('--json emits the documented curated shape', async () => {
       setOutputMode('json');
-      respondWith({ organizations: { data: [{ id: 'org_1', domains: [DOMAIN_NODE] }], listMetadata: { before: null, after: null } } });
+      respondWith({
+        organizations: { data: [{ id: 'org_1', domains: [DOMAIN_NODE] }], listMetadata: { before: null, after: null } },
+      });
       await runOrgDomainGet('org_domain_1', {});
       const raw = consoleOutput[0];
       expect(raw).not.toMatch(/graphql|userland/i);

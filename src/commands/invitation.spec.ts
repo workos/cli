@@ -48,8 +48,14 @@ const { setOutputMode } = await import('../utils/output.js');
 const { resetInteractionModeForTests, setInteractionMode } = await import('../utils/interaction-mode.js');
 const { DashboardGraphqlError } = await import('../lib/dashboard-graphql.js');
 const { CliExit } = await import('../utils/cli-exit.js');
-const { runInvitationList, runInvitationGet, runInvitationSend, runInvitationRevoke, runInvitationResend, INVITATION_GET_SCAN_LIMIT } =
-  await import('./invitation.js');
+const {
+  runInvitationList,
+  runInvitationGet,
+  runInvitationSend,
+  runInvitationRevoke,
+  runInvitationResend,
+  INVITATION_GET_SCAN_LIMIT,
+} = await import('./invitation.js');
 
 const TEAM_ENVIRONMENTS_PAYLOAD = {
   currentTeam: {

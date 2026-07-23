@@ -206,7 +206,9 @@ export async function runOrgDomainCreate(domain: string, options: OrgDomainCreat
   }
   // Divergence from REST (loud): the dashboard adds the domain already
   // verified; there is no DNS-verification step to complete.
-  outputSuccess(`Added domain ${chalk.bold(domain)} to organization ${chalk.bold(options.org)} (state: ${added.state ?? 'unknown'})`);
+  outputSuccess(
+    `Added domain ${chalk.bold(domain)} to organization ${chalk.bold(options.org)} (state: ${added.state ?? 'unknown'})`,
+  );
 }
 
 export interface OrgDomainVerifyOptions {
@@ -242,7 +244,9 @@ export async function runOrgDomainVerify(id: string, options: OrgDomainVerifyOpt
     outputJson({ domain });
     return;
   }
-  outputSuccess(`Restarted verification for domain ${chalk.bold(domain.domain ?? id)} (state: ${domain.state ?? 'unknown'})`);
+  outputSuccess(
+    `Restarted verification for domain ${chalk.bold(domain.domain ?? id)} (state: ${domain.state ?? 'unknown'})`,
+  );
   if (domain.verificationContent) {
     console.log(chalk.dim(`Verification record: ${domain.verificationContent}`));
   }

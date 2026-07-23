@@ -59,7 +59,9 @@ describe('environment command', () => {
 
   describe('create', () => {
     it('maps name + sandbox to the createEnvironment input and sends the resolved environment header', async () => {
-      mockGraphqlRequest.mockResolvedValue({ createEnvironment: { environment: { id: 'env_1', name: 'Staging', sandbox: true } } });
+      mockGraphqlRequest.mockResolvedValue({
+        createEnvironment: { environment: { id: 'env_1', name: 'Staging', sandbox: true } },
+      });
       await runEnvironmentCreate({ name: 'Staging', sandbox: true });
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('createEnvironment'), {
         token: 'tok_123',
@@ -116,7 +118,9 @@ describe('environment command', () => {
 
     it('outputs JSON in json mode', async () => {
       setOutputMode('json');
-      mockGraphqlRequest.mockResolvedValue({ createEnvironment: { environment: { id: 'env_1', name: 'Prod', sandbox: false } } });
+      mockGraphqlRequest.mockResolvedValue({
+        createEnvironment: { environment: { id: 'env_1', name: 'Prod', sandbox: false } },
+      });
       await runEnvironmentCreate({ name: 'Prod', sandbox: false });
       const out = JSON.parse(consoleOutput[0]);
       expect(out.environment.id).toBe('env_1');

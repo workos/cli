@@ -157,7 +157,11 @@ describe('command-auth', () => {
 
       expect(session).toEqual({ accessToken: 'new_access_token', refreshed: true });
       expect(mockRefreshAccessToken).toHaveBeenCalledExactlyOnceWith('https://auth.test.com', 'test_client_id');
-      expect(updateTokensSpy).toHaveBeenCalledExactlyOnceWith('new_access_token', expect.any(Number), 'new_refresh_token');
+      expect(updateTokensSpy).toHaveBeenCalledExactlyOnceWith(
+        'new_access_token',
+        expect.any(Number),
+        'new_refresh_token',
+      );
       const stored = getCredentials();
       expect(stored?.accessToken).toBe('new_access_token');
       expect(stored?.refreshToken).toBe('new_refresh_token');

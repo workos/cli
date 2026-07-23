@@ -253,7 +253,10 @@ export async function runConfigHomepageUrlSet(url: string, options: ConfigHomepa
   // whose variant names are internal — matched on, never echoed.
   let data: {
     updateUserlandApplication:
-      | { __typename: 'UserlandApplicationUpdated'; userlandApplication: { id: string; appHomepageUrl?: string | null } }
+      | {
+          __typename: 'UserlandApplicationUpdated';
+          userlandApplication: { id: string; appHomepageUrl?: string | null };
+        }
       | { __typename: 'UserlandApplicationNotFound'; applicationId: string }
       | { __typename: 'UserlandApplicationValidationFailed'; message: string }
       | { __typename: string };

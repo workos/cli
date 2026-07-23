@@ -104,7 +104,9 @@ describe('authkit command', () => {
 
     it('outputs JSON in json mode', async () => {
       setOutputMode('json');
-      mockGraphqlRequest.mockResolvedValue({ redirectUris: { data: [{ id: 'ru_1', uri: 'https://a.com', isDefault: false }] } });
+      mockGraphqlRequest.mockResolvedValue({
+        redirectUris: { data: [{ id: 'ru_1', uri: 'https://a.com', isDefault: false }] },
+      });
       await runAuthkitRedirectUrisList({ environmentId: 'env_1' });
       const out = JSON.parse(consoleOutput[0]);
       expect(out.redirectUris[0].uri).toBe('https://a.com');
@@ -112,7 +114,12 @@ describe('authkit command', () => {
   });
 
   describe('redirect-uris set', () => {
-    const ok = { setRedirectUris: { __typename: 'RedirectUrisSet', redirectUris: [{ id: 'ru_1', uri: 'https://a.com/cb', isDefault: false }] } };
+    const ok = {
+      setRedirectUris: {
+        __typename: 'RedirectUrisSet',
+        redirectUris: [{ id: 'ru_1', uri: 'https://a.com/cb', isDefault: false }],
+      },
+    };
 
     it('maps --uri to the env-level setRedirectUris input (not the application-level userland op)', async () => {
       mockGraphqlRequest.mockResolvedValue(ok);
@@ -195,9 +202,9 @@ describe('authkit command', () => {
       mockGraphqlRequest.mockRejectedValue(
         new DashboardGraphqlError('The dashboard GraphQL API rejected this session (HTTP 403).', 'forbidden', 403),
       );
-      await expect(runAuthkitRedirectUrisSet({ environmentId: 'env_1', uris: ['https://a.com/cb'] })).rejects.toBeInstanceOf(
-        CliExit,
-      );
+      await expect(
+        runAuthkitRedirectUrisSet({ environmentId: 'env_1', uris: ['https://a.com/cb'] }),
+      ).rejects.toBeInstanceOf(CliExit);
       const err = consoleErrors.join('\n');
       expect(err).toMatch(/account-plane capability/i);
       expect(err).not.toMatch(/graphql/i);
@@ -217,7 +224,9 @@ describe('authkit command', () => {
     });
 
     it('set maps --origin to flat top-level variables (not an input object)', async () => {
-      mockGraphqlRequest.mockResolvedValue({ setWebOrigins: { __typename: 'WebOriginsSet', origins: ['https://app.com'] } });
+      mockGraphqlRequest.mockResolvedValue({
+        setWebOrigins: { __typename: 'WebOriginsSet', origins: ['https://app.com'] },
+      });
       await runAuthkitCorsSet({ environmentId: 'env_1', origins: ['https://app.com'] });
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('updateCorsConfig'), {
         token: 'tok_123',
@@ -240,7 +249,9 @@ describe('authkit command', () => {
 
   describe('logout-uris', () => {
     it('list passes environmentId', async () => {
-      mockGraphqlRequest.mockResolvedValue({ logoutUris: { data: [{ id: 'lo_1', uri: 'https://app.com/out', isDefault: false }] } });
+      mockGraphqlRequest.mockResolvedValue({
+        logoutUris: { data: [{ id: 'lo_1', uri: 'https://app.com/out', isDefault: false }] },
+      });
       await runAuthkitLogoutUrisList({ environmentId: 'env_1' });
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('logoutUris'), {
         token: 'tok_123',
@@ -252,7 +263,10 @@ describe('authkit command', () => {
 
     it('set maps --uri to the setLogoutUris input', async () => {
       mockGraphqlRequest.mockResolvedValue({
-        setLogoutUris: { __typename: 'LogoutUrisSet', logoutUris: [{ id: 'lo_1', uri: 'https://app.com/out', isDefault: false }] },
+        setLogoutUris: {
+          __typename: 'LogoutUrisSet',
+          logoutUris: [{ id: 'lo_1', uri: 'https://app.com/out', isDefault: false }],
+        },
       });
       await runAuthkitLogoutUrisSet({ environmentId: 'env_1', uris: ['https://app.com/out'] });
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('setLogoutUris'), {

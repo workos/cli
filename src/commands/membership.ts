@@ -161,9 +161,7 @@ export async function runMembershipList(options: MembershipListOptions = {}): Pr
   if (options.user) {
     // The by-user operation supports no pagination or ordering — refuse the
     // flags loudly rather than silently ignoring them.
-    const unsupported = (['limit', 'before', 'after', 'order'] as const).filter(
-      (flag) => options[flag] !== undefined,
-    );
+    const unsupported = (['limit', 'before', 'after', 'order'] as const).filter((flag) => options[flag] !== undefined);
     if (unsupported.length > 0) {
       exitWithError({
         code: 'invalid_argument',

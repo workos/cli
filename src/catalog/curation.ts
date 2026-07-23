@@ -213,12 +213,18 @@ export const OVERRIDES: Record<string, CommandMeta> = {
   // `environmentAppBranding`, NOT `appBranding` (whose upstream description is the
   // rot "Return the team for the current dashboard session").
   redirectUris: { command: 'authkit redirect-uris list', describe: 'List configured redirect URIs for an environment' },
-  setRedirectUris: { command: 'authkit redirect-uris set', describe: 'Set the allowed redirect URIs for an environment' },
+  setRedirectUris: {
+    command: 'authkit redirect-uris set',
+    describe: 'Set the allowed redirect URIs for an environment',
+  },
   corsConfig: { command: 'authkit cors get', describe: 'Show the allowed web origins (CORS) for an environment' },
   updateCorsConfig: { command: 'authkit cors set', describe: 'Set the allowed web origins (CORS) for an environment' },
   logoutUris: { command: 'authkit logout-uris list', describe: 'List configured logout URIs for an environment' },
   setLogoutUris: { command: 'authkit logout-uris set', describe: 'Set the allowed logout URIs for an environment' },
-  environmentAppBranding: { command: 'authkit branding get', describe: 'Show AuthKit branding (logos, theme) for an environment' },
+  environmentAppBranding: {
+    command: 'authkit branding get',
+    describe: 'Show AuthKit branding (logos, theme) for an environment',
+  },
 };
 
 /**

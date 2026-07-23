@@ -126,8 +126,8 @@ describe('no GraphQL/userland leak in dashboard-plane error copy', () => {
 
   it('forbidden copy no longer claims the capability is staging-gated', () => {
     expect(DASHBOARD_ERROR_MESSAGES.forbidden).not.toMatch(/staging/i);
-    expect(
-      dashboardErrorMessage(new DashboardGraphqlError('x', 'forbidden', 403)),
-    ).toBe(DASHBOARD_ERROR_MESSAGES.forbidden);
+    expect(dashboardErrorMessage(new DashboardGraphqlError('x', 'forbidden', 403))).toBe(
+      DASHBOARD_ERROR_MESSAGES.forbidden,
+    );
   });
 });

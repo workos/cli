@@ -432,7 +432,10 @@ describe('role command', () => {
     });
 
     it('errors not_found on the RoleNotFound mutation variant', async () => {
-      respondWith({ envList: ENV_LIST, updateRole: { updateRole: { __typename: 'RoleNotFound', roleId: 'role_env' } } });
+      respondWith({
+        envList: ENV_LIST,
+        updateRole: { updateRole: { __typename: 'RoleNotFound', roleId: 'role_env' } },
+      });
       const err = await expectExit(runRoleUpdate('admin', { name: 'X', yes: true }), 1);
       expect(err.context?.errorCode).toBe('not_found');
     });
@@ -513,7 +516,10 @@ describe('role command', () => {
 
     it('errors not_found on the RoleNotFound mutation variant', async () => {
       setInteractionMode({ mode: 'ci', source: 'ci_env' });
-      respondWith({ orgList: ORG_LIST, deleteRole: { deleteRole: { __typename: 'RoleNotFound', roleId: 'role_org' } } });
+      respondWith({
+        orgList: ORG_LIST,
+        deleteRole: { deleteRole: { __typename: 'RoleNotFound', roleId: 'role_org' } },
+      });
       const err = await expectExit(runRoleDelete('org-admin', { org: 'org_1', yes: true }), 1);
       expect(err.context?.errorCode).toBe('not_found');
     });
@@ -551,7 +557,12 @@ describe('role command', () => {
       expect(mockGraphqlRequest.mock.calls[2][1]).toEqual({
         token: 'tok_123',
         variables: {
-          input: { roleId: 'role_env', name: 'Admin', description: 'Administrator', permissions: ['a:read', 'b:write'] },
+          input: {
+            roleId: 'role_env',
+            name: 'Admin',
+            description: 'Administrator',
+            permissions: ['a:read', 'b:write'],
+          },
         },
         environmentId: 'env_profile',
       });
@@ -564,7 +575,10 @@ describe('role command', () => {
     });
 
     it('errors not_found on the RoleNotFound mutation variant', async () => {
-      respondWith({ envList: ENV_LIST, updateRole: { updateRole: { __typename: 'RoleNotFound', roleId: 'role_env' } } });
+      respondWith({
+        envList: ENV_LIST,
+        updateRole: { updateRole: { __typename: 'RoleNotFound', roleId: 'role_env' } },
+      });
       const err = await expectExit(runRoleSetPermissions('admin', ['a:read'], { yes: true }), 1);
       expect(err.context?.errorCode).toBe('not_found');
     });
@@ -626,7 +640,10 @@ describe('role command', () => {
     });
 
     it('errors not_found on the RoleNotFound mutation variant', async () => {
-      respondWith({ envList: ENV_LIST, updateRole: { updateRole: { __typename: 'RoleNotFound', roleId: 'role_env' } } });
+      respondWith({
+        envList: ENV_LIST,
+        updateRole: { updateRole: { __typename: 'RoleNotFound', roleId: 'role_env' } },
+      });
       const err = await expectExit(runRoleAddPermission('admin', 'billing:manage', { yes: true }), 1);
       expect(err.context?.errorCode).toBe('not_found');
     });
@@ -669,8 +686,14 @@ describe('role command', () => {
     });
 
     it('errors not_found on the RoleNotFound mutation variant', async () => {
-      respondWith({ orgList: ORG_LIST, updateRole: { updateRole: { __typename: 'RoleNotFound', roleId: 'role_org' } } });
-      const err = await expectExit(runRoleRemovePermission('org-admin', 'billing:manage', { org: 'org_1', yes: true }), 1);
+      respondWith({
+        orgList: ORG_LIST,
+        updateRole: { updateRole: { __typename: 'RoleNotFound', roleId: 'role_org' } },
+      });
+      const err = await expectExit(
+        runRoleRemovePermission('org-admin', 'billing:manage', { org: 'org_1', yes: true }),
+        1,
+      );
       expect(err.context?.errorCode).toBe('not_found');
     });
 
@@ -753,7 +776,11 @@ describe('role command', () => {
       // request is what the capability gate rejects.
       mockGraphqlRequest.mockImplementation(async (doc: unknown) => {
         if (String(doc).includes('teamProjectsV2')) return TEAM_ENVIRONMENTS_PAYLOAD;
-        throw new DashboardGraphqlError('The dashboard GraphQL API rejected this session (HTTP 403).', 'forbidden', 403);
+        throw new DashboardGraphqlError(
+          'The dashboard GraphQL API rejected this session (HTTP 403).',
+          'forbidden',
+          403,
+        );
       });
       await expectExit(run(), 1);
       const err = consoleErrors.join('\n');

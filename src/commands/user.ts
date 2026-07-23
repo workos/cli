@@ -220,7 +220,13 @@ export async function runUserList(options: UserListOptions = {}): Promise<void> 
   ]);
   console.log(
     formatTable(
-      [{ header: 'ID' }, { header: 'Email' }, { header: 'First Name' }, { header: 'Last Name' }, { header: 'Verified' }],
+      [
+        { header: 'ID' },
+        { header: 'Email' },
+        { header: 'First Name' },
+        { header: 'Last Name' },
+        { header: 'Verified' },
+      ],
       rows,
     ),
   );
@@ -353,7 +359,10 @@ export async function runUserDelete(userId: string, options: UserDeleteOptions =
   });
 
   let data: {
-    deleteUserlandUser: { __typename: 'UserlandUserDeleted' } | { __typename: 'UserlandUserNotFound' } | { __typename: string };
+    deleteUserlandUser:
+      | { __typename: 'UserlandUserDeleted' }
+      | { __typename: 'UserlandUserNotFound' }
+      | { __typename: string };
   };
   try {
     data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {

@@ -475,13 +475,21 @@ export async function runRoleSetPermissions(
     requireOrgScopedRole(role, slug, options.org);
   }
 
-  const updated = await executeRoleUpdate(token, environmentId, { ...mergedUpdateInput(role, {}), permissions }, slug, permissions);
+  const updated = await executeRoleUpdate(
+    token,
+    environmentId,
+    { ...mergedUpdateInput(role, {}), permissions },
+    slug,
+    permissions,
+  );
 
   if (isJsonMode()) {
     outputJson({ role: updated });
     return;
   }
-  outputSuccess(`Set ${permissions.length} permission${permissions.length === 1 ? '' : 's'} on role ${chalk.bold(slug)}`);
+  outputSuccess(
+    `Set ${permissions.length} permission${permissions.length === 1 ? '' : 's'} on role ${chalk.bold(slug)}`,
+  );
 }
 
 export async function runRoleAddPermission(
@@ -509,7 +517,13 @@ export async function runRoleAddPermission(
   const current = permissionSlugsOf(role);
   const permissions = [...new Set([...current, permissionSlug])];
 
-  const updated = await executeRoleUpdate(token, environmentId, { ...mergedUpdateInput(role, {}), permissions }, slug, permissions);
+  const updated = await executeRoleUpdate(
+    token,
+    environmentId,
+    { ...mergedUpdateInput(role, {}), permissions },
+    slug,
+    permissions,
+  );
 
   if (isJsonMode()) {
     outputJson({ role: updated });
@@ -550,7 +564,13 @@ export async function runRoleRemovePermission(
   }
   const permissions = current.filter((candidate) => candidate !== permissionSlug);
 
-  const updated = await executeRoleUpdate(token, environmentId, { ...mergedUpdateInput(role, {}), permissions }, slug, permissions);
+  const updated = await executeRoleUpdate(
+    token,
+    environmentId,
+    { ...mergedUpdateInput(role, {}), permissions },
+    slug,
+    permissions,
+  );
 
   if (isJsonMode()) {
     outputJson({ role: updated });

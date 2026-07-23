@@ -38,9 +38,8 @@ const { setOutputMode } = await import('../utils/output.js');
 const { resetInteractionModeForTests } = await import('../utils/interaction-mode.js');
 const { DashboardGraphqlError } = await import('../lib/dashboard-graphql.js');
 const { CliExit } = await import('../utils/cli-exit.js');
-const { runConfigRedirectAdd, runConfigCorsAdd, runConfigHomepageUrlSet, REDIRECT_MERGE_SCAN_LIMIT } = await import(
-  './config.js'
-);
+const { runConfigRedirectAdd, runConfigCorsAdd, runConfigHomepageUrlSet, REDIRECT_MERGE_SCAN_LIMIT } =
+  await import('./config.js');
 
 const TEAM_ENVIRONMENTS_PAYLOAD = {
   currentTeam: {

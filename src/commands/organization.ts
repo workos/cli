@@ -264,7 +264,11 @@ export async function runOrgCreate(name: string, domainArgs: string[], options: 
     createOrganization:
       | { __typename: 'OrganizationCreated'; organization: OrganizationNode }
       | { __typename: 'EnvironmentNotFound'; environmentId: string }
-      | { __typename: 'OrganizationDomainAlreadyInUse'; domain: string; organization: { id: string; name: string | null } }
+      | {
+          __typename: 'OrganizationDomainAlreadyInUse';
+          domain: string;
+          organization: { id: string; name: string | null };
+        }
       | { __typename: 'ConsumerDomainForbidden'; domain: string }
       | { __typename: 'ExternalIDAlreadyUsed'; externalId: string }
       | { __typename: string };

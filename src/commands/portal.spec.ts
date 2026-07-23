@@ -219,7 +219,11 @@ describe('portal command', () => {
       });
       mockGraphqlRequest.mockImplementation(async (doc: unknown) => {
         if (String(doc).includes('teamProjectsV2')) return TEAM_ENVIRONMENTS_PAYLOAD;
-        throw new DashboardGraphqlError('The dashboard GraphQL API rejected this session (HTTP 403).', 'forbidden', 403);
+        throw new DashboardGraphqlError(
+          'The dashboard GraphQL API rejected this session (HTTP 403).',
+          'forbidden',
+          403,
+        );
       });
       await expectExit(runPortalGenerateLink({ intent: 'sso', organization: 'org_123' }), 1);
       const err = consoleErrors.join('\n');
