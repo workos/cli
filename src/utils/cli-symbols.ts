@@ -21,6 +21,19 @@ export const symbols = {
 } as const;
 
 /**
+ * WorkOS brand palette (hex). Single source shared by the `ui` facade and the
+ * install summary box so the flat CLI output and the summary render identical
+ * brand colors. chalk auto-disables color when `chalk.level === 0` (JSON mode).
+ */
+export const palette = {
+  accent: chalk.hex('#6363f1'), // WorkOS indigo
+  green: chalk.hex('#34d399'),
+  red: chalk.hex('#f87171'),
+  yellow: chalk.hex('#fbbf24'),
+  cyan: chalk.hex('#7dd3fc'), // values, paths, URLs
+} as const;
+
+/**
  * Pre-styled output functions for consistent CLI formatting.
  * Uses chalk for coloring with appropriate symbols.
  */

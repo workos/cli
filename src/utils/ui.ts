@@ -16,13 +16,13 @@
  */
 
 import chalk from 'chalk';
-import {
-  confirm as inquirerConfirm,
-  select as inquirerSelect,
-  input as inquirerInput,
-  password as inquirerPassword,
-} from '@inquirer/prompts';
 import { isJsonMode } from './output.js';
+import { palette } from './cli-symbols.js';
+
+// @inquirer/prompts is loaded lazily (inside each prompt fn) so the barrel — all
+// ten widgets — stays off every non-interactive path (--json, --version, --help,
+// resource commands), which is most invocations. import() is module-cached, so
+// only the first prompt pays.
 
 // ── Dashboard mode ──────────────────────────────────────────────────────────
 // When true, suppress all human output (the Dashboard adapter drives its own UI).
@@ -34,13 +34,9 @@ export function isDashboardMode(): boolean {
   return dashboardMode;
 }
 
-// ── Palette (chalk auto-disables color when chalk.level === 0, set by
-// setOutputMode in JSON mode) ────────────────────────────────────────────────
-const accent = chalk.hex('#6363f1'); // WorkOS indigo
-const green = chalk.hex('#34d399');
-const red = chalk.hex('#f87171');
-const yellow = chalk.hex('#fbbf24');
-const cyan = chalk.hex('#7dd3fc'); // values, paths, URLs
+// Brand palette (shared with summary-box via cli-symbols). chalk auto-disables
+// color when chalk.level === 0, set by setOutputMode in JSON mode.
+const { accent, green, red, yellow, cyan } = palette;
 const { dim, bold } = chalk;
 
 /**
@@ -55,10 +51,18 @@ export function pill(label: string, kind: 'info' | 'warn' = 'info'): string {
 
 const INDENT = '  ';
 
+// Every stdout write routes through line()/blank(), which are the single
+// dashboard-mode guard — so no output surface below has to re-check the flag.
 /** Print one indented line to stdout (suppressed in dashboard mode). */
 function line(text = ''): void {
   if (dashboardMode) return;
   console.log(INDENT + text);
+}
+
+/** Print a vertical blank line (suppressed in dashboard mode). */
+function blank(): void {
+  if (dashboardMode) return;
+  console.log('');
 }
 
 // ── Output surface ───────────────────────────────────────────────────────────
@@ -68,38 +72,32 @@ function line(text = ''): void {
  * `Title · subtitle` (accent-bold name, dim subtitle) — the dad-style header.
  */
 function intro(title: string, subtitle?: string): void {
-  if (dashboardMode) return;
-  console.log('');
+  blank();
   line(subtitle ? `${accent(bold(title))}  ${dim('·')}  ${dim(subtitle)}` : accent(bold(title)));
-  console.log('');
+  blank();
 }
 
 /** Closing line. */
 function outro(message = ''): void {
-  if (dashboardMode) return;
-  console.log('');
+  blank();
   if (message) line(dim(message));
-  console.log('');
+  blank();
 }
 
 /** A titled section header — anchors a "moment" that owns several lines. */
 function heading(title: string): void {
-  if (dashboardMode) return;
-  console.log('');
+  blank();
   line(accent(bold(title)));
 }
 
-/** Multi-line indented note. Body dim; optional bold title. */
-function note(message: string, title?: string): void {
-  if (dashboardMode) return;
-  console.log('');
-  if (title) line(bold(title));
+/** Multi-line indented note (body dim, framed by blank lines). */
+function note(message: string): void {
+  blank();
   for (const l of String(message).split('\n')) line(dim(l));
-  console.log('');
+  blank();
 }
 
 const log = {
-  message: (m: string) => line(m),
   info: (m: string) => line(m),
   step: (m: string) => line(`${accent('›')} ${m}`),
   success: (m: string) => line(`${green('✓')} ${m}`),
@@ -342,6 +340,7 @@ interface ConfirmOptions {
 }
 async function confirm(options: ConfirmOptions): Promise<boolean | symbol> {
   return withPrompt(async () => {
+    const { confirm: inquirerConfirm } = await import('@inquirer/prompts');
     try {
       return await inquirerConfirm(
         { message: options.message, default: options.initialValue },
@@ -368,6 +367,7 @@ interface SelectOptions<T> {
 }
 async function select<T>(options: SelectOptions<T>): Promise<T | symbol> {
   return withPrompt(async () => {
+    const { select: inquirerSelect } = await import('@inquirer/prompts');
     try {
       return await inquirerSelect<T>(
         {
@@ -403,6 +403,7 @@ async function text(options: TextOptions): Promise<string | symbol> {
     // would auto-submit the hint as the real value on an empty enter. Fold it
     // into the message so the hint survives (rendered as ghost text previously).
     const message = options.placeholder ? `${options.message} (${options.placeholder})` : options.message;
+    const { input: inquirerInput } = await import('@inquirer/prompts');
     try {
       return await inquirerInput(
         {
@@ -426,6 +427,7 @@ interface PasswordOptions {
 }
 async function password(options: PasswordOptions): Promise<string | symbol> {
   return withPrompt(async () => {
+    const { password: inquirerPassword } = await import('@inquirer/prompts');
     try {
       return await inquirerPassword(
         { message: options.message, mask: true, validate: adaptValidate(options.validate) },

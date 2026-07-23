@@ -72,6 +72,22 @@ export class CLIAdapter implements InstallerAdapter {
     logs.forEach((fn) => fn());
   }
 
+  /**
+   * Run a prompt with the log queue engaged: mark a prompt active so async log
+   * events (detection:complete, branch:created, …) buffer instead of scribbling
+   * over the question, then release and flush once it resolves. Wraps every
+   * prompt handler so the active/flush lifecycle lives in one place.
+   */
+  private async withPromptActive<T>(run: () => Promise<T>): Promise<T> {
+    this.isPromptActive = true;
+    try {
+      return await run();
+    } finally {
+      this.isPromptActive = false;
+      this.flushPendingLogs();
+    }
+  }
+
   async start(): Promise<void> {
     if (this.isStarted) return;
     this.isStarted = true;
@@ -279,14 +295,13 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handleEnvScanPrompt = async ({ files }: InstallerEvents['credentials:env:prompt']): Promise<void> => {
-    this.isPromptActive = true;
     const fileList = files.length === 1 ? files[0] : files.slice(0, 2).join(', ');
-    const confirmed = await ui.confirm({
-      message: `Found ${fileList}. Check for existing WorkOS credentials?`,
-      initialValue: true,
-    });
-    this.isPromptActive = false;
-    this.flushPendingLogs();
+    const confirmed = await this.withPromptActive(() =>
+      ui.confirm({
+        message: `Found ${fileList}. Check for existing WorkOS credentials?`,
+        initialValue: true,
+      }),
+    );
 
     this.sendEvent({
       type: ui.isCancel(confirmed) || !confirmed ? 'ENV_SCAN_DECLINED' : 'ENV_SCAN_APPROVED',
@@ -355,14 +370,13 @@ export class CLIAdapter implements InstallerAdapter {
       ui.log.info(chalk.dim(`  ... and ${files.length - 5} more`));
     }
 
-    this.isPromptActive = true;
-    const confirmed = await ui.confirm({
-      message: 'Continue anyway?',
-      initialValue: false,
-      signal: this.promptAbort?.signal,
-    });
-    this.isPromptActive = false;
-    this.flushPendingLogs();
+    const confirmed = await this.withPromptActive(() =>
+      ui.confirm({
+        message: 'Continue anyway?',
+        initialValue: false,
+        signal: this.promptAbort?.signal,
+      }),
+    );
 
     this.sendEvent({
       type: ui.isCancel(confirmed) || !confirmed ? 'GIT_CANCELLED' : 'GIT_CONFIRMED',
@@ -579,13 +593,12 @@ export class CLIAdapter implements InstallerAdapter {
 
   private handleScaffoldPrompt = async ({ packageManager }: InstallerEvents['scaffold:prompt']): Promise<void> => {
     this.scaffoldPackageManager = packageManager;
-    this.isPromptActive = true;
-    const confirmed = await ui.confirm({
-      message: 'This directory is empty. Scaffold a new Next.js app with AuthKit here?',
-      initialValue: true,
-    });
-    this.isPromptActive = false;
-    this.flushPendingLogs();
+    const confirmed = await this.withPromptActive(() =>
+      ui.confirm({
+        message: 'This directory is empty. Scaffold a new Next.js app with AuthKit here?',
+        initialValue: true,
+      }),
+    );
 
     this.sendEvent({
       type: ui.isCancel(confirmed) || !confirmed ? 'SCAFFOLD_CANCELLED' : 'SCAFFOLD_CONFIRMED',
@@ -618,18 +631,17 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handleBranchPrompt = async ({ branch }: InstallerEvents['branch:prompt']): Promise<void> => {
-    this.isPromptActive = true;
-    const choice = await ui.select({
-      message: `You are on ${chalk.bold(branch)}. Create a feature branch?`,
-      options: [
-        { value: 'create', label: 'Create feat/add-workos-authkit' },
-        { value: 'continue', label: 'Continue on current branch' },
-        { value: 'cancel', label: 'Cancel' },
-      ],
-      signal: this.promptAbort?.signal,
-    });
-    this.isPromptActive = false;
-    this.flushPendingLogs();
+    const choice = await this.withPromptActive(() =>
+      ui.select({
+        message: `You are on ${chalk.bold(branch)}. Create a feature branch?`,
+        options: [
+          { value: 'create', label: 'Create feat/add-workos-authkit' },
+          { value: 'continue', label: 'Continue on current branch' },
+          { value: 'cancel', label: 'Cancel' },
+        ],
+        signal: this.promptAbort?.signal,
+      }),
+    );
 
     if (ui.isCancel(choice) || choice === 'cancel') {
       this.sendEvent({ type: 'BRANCH_CANCEL' });
@@ -651,13 +663,12 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handleCommitPrompt = async (): Promise<void> => {
-    this.isPromptActive = true;
-    const confirmed = await ui.confirm({
-      message: 'Commit the changes?',
-      initialValue: true,
-    });
-    this.isPromptActive = false;
-    this.flushPendingLogs();
+    const confirmed = await this.withPromptActive(() =>
+      ui.confirm({
+        message: 'Commit the changes?',
+        initialValue: true,
+      }),
+    );
 
     this.sendEvent({
       type: ui.isCancel(confirmed) || !confirmed ? 'COMMIT_DECLINED' : 'COMMIT_APPROVED',
@@ -680,13 +691,12 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handlePrPrompt = async (): Promise<void> => {
-    this.isPromptActive = true;
-    const confirmed = await ui.confirm({
-      message: 'Create a pull request?',
-      initialValue: true,
-    });
-    this.isPromptActive = false;
-    this.flushPendingLogs();
+    const confirmed = await this.withPromptActive(() =>
+      ui.confirm({
+        message: 'Create a pull request?',
+        initialValue: true,
+      }),
+    );
 
     this.sendEvent({
       type: ui.isCancel(confirmed) || !confirmed ? 'PR_DECLINED' : 'PR_APPROVED',

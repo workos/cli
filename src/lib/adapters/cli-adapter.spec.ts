@@ -64,6 +64,14 @@ vi.mock('../../utils/cli-symbols.js', () => ({
     progressFilled: '▓',
     progressEmpty: '░',
   },
+  // Identity functions so summary-box renders without chalk color codes.
+  palette: {
+    accent: (text: string) => text,
+    green: (text: string) => text,
+    red: (text: string) => text,
+    yellow: (text: string) => text,
+    cyan: (text: string) => text,
+  },
 }));
 
 describe('CLIAdapter', () => {

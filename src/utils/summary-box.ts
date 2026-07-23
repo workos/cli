@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import { isUnicodeSupported } from './vendor/is-unicorn-supported.js';
 import { type LockExpression, getLockArt, LOCK_WIDTH } from './lock-art.js';
-import { symbols } from './cli-symbols.js';
+import { symbols, palette } from './cli-symbols.js';
 import type { CompletionData } from '../lib/events.js';
 
 /** Max number of changed files listed in the success box before collapsing. */
@@ -69,8 +69,7 @@ const ITEM_ICONS: Record<SummaryBoxItem['type'], string> = {
 
 // ── Flat (de-boxed) rendering — the install opener + closer ───────────────────
 
-const accent = chalk.hex('#6363f1'); // WorkOS indigo
-const flatCyan = chalk.hex('#7dd3fc'); // values, paths, URLs
+const { accent, cyan: flatCyan } = palette;
 
 /** Flat glyphs matching the ui facade (green ✓ / accent › / red ✗). */
 const FLAT_ICONS: Record<SummaryBoxItem['type'], string> = {
