@@ -12,7 +12,7 @@ WorkOS CLI for installing AuthKit integrations and managing WorkOS resources (or
 ## Non-TTY Behavior
 
 - **Output**: Auto-switches to JSON when piped or `--json` flag. `WORKOS_FORCE_TTY=1` overrides.
-- **Auth**: Exits code 4 instead of opening browser. Requires prior `workos auth login` or `WORKOS_API_KEY` env var.
+- **Auth**: Exits code 4 instead of opening browser. Resource commands (organization, user, role, permission, membership, invitation, session, event, feature-flag, org-domain, portal, webhook, config) use the dashboard session from a prior `workos auth login`; expired access tokens refresh silently while the stored refresh token is valid, so only a truly dead session exits 4. `WORKOS_API_KEY` applies only to `workos api` and the still-REST commands (`connection`, `directory`, `audit-log`, `api-key`, `vault`, plus the workflow/debug commands `seed`, `setup-org`, `onboard-user`, `verify-login`, `debug-sso`, `debug-sync`, `migrations`).
 - **Errors**: Structured JSON to stderr: `{ "error": { "code": "...", "message": "..." } }`
 - **Exit codes**: 0=success, 1=error, 2=cancelled, 4=auth required (follows `gh` CLI convention)
 - **Headless flags**: `--no-branch`, `--no-commit`, `--create-pr`, `--no-git-check`. CI mode (`WORKOS_MODE=ci`) auto-continues past a dirty tree without `--no-git-check`; agent mode requires the flag.
