@@ -32,6 +32,18 @@ function requireAtLeastOne(values: string[] | undefined, flag: string): string[]
   return values;
 }
 
+/**
+ * Reject wildcard web origins before they reach the server: an accepted
+ * wildcard would allow every browser origin — equivalent to disabling CORS.
+ * No legitimate origin contains `*`, so any occurrence is rejected.
+ */
+export function rejectWildcardOrigins(origins: string[]): void {
+  const wildcard = origins.find((origin) => origin.includes('*'));
+  if (wildcard !== undefined) {
+    exitWithError({ code: 'invalid_web_origin', message: `Wildcard origins are not permitted: "${wildcard}".` });
+  }
+}
+
 interface UriNode {
   id?: string | null;
   uri: string;
@@ -216,6 +228,7 @@ export interface CorsSetOptions {
 
 export async function runAuthkitCorsSet(options: CorsSetOptions): Promise<void> {
   const origins = requireAtLeastOne(options.origins, '--origin');
+  rejectWildcardOrigins(origins);
   const dryRun = !!options.dryRun;
   const token = await requireCommandToken();
   const op = getOperation('updateCorsConfig');

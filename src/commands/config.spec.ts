@@ -290,6 +290,14 @@ describe('config command', () => {
       expect(err.context?.errorCode).toBe('invalid_web_origin');
     });
 
+    it('rejects wildcard origins before reading the current list', async () => {
+      const err = await expectExit(runConfigCorsAdd('*', {}), 1);
+      expect(err.context?.errorCode).toBe('invalid_web_origin');
+      const err2 = await expectExit(runConfigCorsAdd('https://*.example.com', {}), 1);
+      expect(err2.context?.errorCode).toBe('invalid_web_origin');
+      expect(mockGraphqlRequest).not.toHaveBeenCalled();
+    });
+
     it('--json emits { origin, alreadyExists }', async () => {
       setOutputMode('json');
       respondByDocument([

@@ -54,11 +54,16 @@ export function getConfig(): InstallerConfig {
 }
 
 /**
- * Get the CLI auth client ID.
- * Env var (WORKOS_CLIENT_ID) overrides the config default.
+ * Get the CLI auth client ID (from config; not env-overridable).
+ *
+ * NOTE: WORKOS_CLIENT_ID is already claimed by the developer's own
+ * application client ID (read by credential-discovery.ts). Overriding
+ * the CLI's own OAuth client ID with it causes token refresh to use the
+ * wrong client and clear credentials. Use a distinct env var if an
+ * override is needed.
  */
 export function getCliAuthClientId(): string {
-  return process.env.WORKOS_CLIENT_ID || config.workos.clientId;
+  return config.workos.clientId;
 }
 
 /**

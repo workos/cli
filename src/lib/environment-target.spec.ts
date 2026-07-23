@@ -51,6 +51,7 @@ vi.mock('node:os', async (importOriginal) => {
 
 const { getConfig, saveConfig, setInsecureConfigStorage, clearConfig } = await import('./config-store.js');
 const { resolveEnvironmentTarget, tryResolveProfileEnvironmentId } = await import('./environment-target.js');
+const { DashboardGraphqlError } = await import('./dashboard-graphql.js');
 const { setInteractionMode, resetInteractionModeForTests } = await import('../utils/interaction-mode.js');
 const { CliExit } = await import('../utils/cli-exit.js');
 const clack = (await import('../utils/clack.js')).default;
@@ -265,6 +266,19 @@ describe('resolveEnvironmentTarget', () => {
       });
       const err = errorSpy.mock.calls.map((c) => c.map(String).join(' ')).join('\n');
       expect(err).toMatch(/network or server error/i);
+      expect(err).not.toMatch(/graphql/i);
+    });
+
+    it('surfaces a 403 as forbidden guidance, not a transient retry hint', async () => {
+      seedProfile({ clientId: 'client_abc' });
+      mockGraphqlRequest.mockRejectedValue(new DashboardGraphqlError('denied', 'forbidden', 403));
+      await expect(resolveEnvironmentTarget('tok', { forMutation: false })).rejects.toMatchObject({
+        name: 'CliExit',
+        context: { errorCode: 'forbidden' },
+      });
+      const err = errorSpy.mock.calls.map((c) => c.map(String).join(' ')).join('\n');
+      expect(err).toMatch(/not enabled for this team/i);
+      expect(err).not.toMatch(/try again/i);
       expect(err).not.toMatch(/graphql/i);
     });
 

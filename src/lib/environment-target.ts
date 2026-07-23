@@ -29,9 +29,9 @@
 
 import clack from '../utils/clack.js';
 import { getConfig, getActiveEnvironment, setProfileEnvironmentId } from './config-store.js';
-import { dashboardGraphqlRequest } from './dashboard-graphql.js';
+import { dashboardGraphqlRequest, DashboardGraphqlError } from './dashboard-graphql.js';
 import { getOperation, resolveExecutableDocument } from '../catalog/operation.js';
-import { refreshIfExpired } from './command-auth.js';
+import { refreshIfExpired, DASHBOARD_ERROR_MESSAGES } from './command-auth.js';
 import { exitWithError } from '../utils/output.js';
 import { isPromptAllowed } from '../utils/interaction-mode.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
@@ -147,7 +147,12 @@ export async function resolveEnvironmentTarget(
   let environments: TeamEnvironment[];
   try {
     environments = await fetchTeamEnvironments(token);
-  } catch {
+  } catch (error) {
+    // A 403 is not transient — the team lacks the capability or the account
+    // isn't team-backed. Surface the forbidden copy instead of a retry hint.
+    if (error instanceof DashboardGraphqlError && error.code === 'forbidden') {
+      exitWithError({ code: 'forbidden', message: DASHBOARD_ERROR_MESSAGES.forbidden });
+    }
     exitWithError({
       code: 'environment_unresolved',
       message: `Could not resolve the target WorkOS environment (network or server error). Try again. ${remedies()}`,

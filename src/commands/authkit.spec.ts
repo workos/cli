@@ -235,6 +235,17 @@ describe('authkit command', () => {
       });
     });
 
+    it('set rejects wildcard origins before any request is made', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      await expect(
+        runAuthkitCorsSet({ environmentId: 'env_1', origins: ['https://app.com', '*'] }),
+      ).rejects.toMatchObject({ name: 'CliExit', context: { errorCode: 'invalid_web_origin' } });
+      await expect(
+        runAuthkitCorsSet({ environmentId: 'env_1', origins: ['https://*.example.com'] }),
+      ).rejects.toMatchObject({ name: 'CliExit', context: { errorCode: 'invalid_web_origin' } });
+      expect(mockGraphqlRequest).not.toHaveBeenCalled();
+    });
+
     it('set surfaces a malformed-origin union error', async () => {
       vi.spyOn(console, 'error').mockImplementation(() => {});
       mockGraphqlRequest.mockResolvedValue({

@@ -32,6 +32,7 @@ import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
 import { resolveEnvironmentTarget } from '../lib/environment-target.js';
 import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
+import { rejectWildcardOrigins } from './authkit.js';
 
 /**
  * `redirect add` merges over one page of existing URIs — a single bounded
@@ -146,6 +147,7 @@ export interface ConfigCorsAddOptions {
 }
 
 export async function runConfigCorsAdd(origin: string, options: ConfigCorsAddOptions = {}): Promise<void> {
+  rejectWildcardOrigins([origin]);
   const token = await requireCommandToken();
   const readOp = getOperation('corsConfig');
   const writeOp = getOperation('updateCorsConfig');
