@@ -1,186 +1,560 @@
-import { createWorkOSClient } from '../lib/workos-client.js';
+/**
+ * `workos role` — RBAC role management on the dashboard account plane.
+ *
+ * Migrated from the API-key REST SDK (graphql-resource-migration Phase 5): the
+ * subcommand surface (list/get/create/update/delete/set-permissions/
+ * add-permission/remove-permission) is unchanged, but every operation now runs
+ * catalog-backed dashboard operations with the user's OAuth bearer. Output
+ * shapes are new curated shapes (approved breaking change); the authoritative
+ * examples live in `role.spec.ts`.
+ *
+ * Backend divergences from REST (all loud, none faked):
+ * - The backing mutations are ID-keyed while the frozen grammar is slug-keyed,
+ *   so every mutation first resolves the slug via the scope's list operation
+ *   (one extra read — the membership-delete precedent).
+ * - The update mutation REQUIRES a name and CLEARS the description when it is
+ *   omitted, so updates read-merge-write: the current name/description ride
+ *   along whenever the flags are omitted.
+ * - `--org` listing includes environment roles the organization inherits.
+ *   Mutating one of those through the org scope would change it
+ *   environment-wide, so org-scoped mutations require the matched role to be
+ *   organization-scoped and error otherwise.
+ * - The permission trio (set-permissions/add-permission/remove-permission)
+ *   rides the update mutation's full permission list via read-merge-write.
+ *
+ * Safety posture per the manifest: `delete` is destructive →
+ * `confirmDestructive` (prompt, or --yes); create/update/set-permissions/
+ * add-permission/remove-permission are privilege changes → `require-flag`
+ * (non-interactive callers must pass --yes).
+ */
+
+import chalk from 'chalk';
+import { requireCommandToken } from '../lib/command-auth.js';
+import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
+import { resolveEnvironmentTarget } from '../lib/environment-target.js';
+import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
+import { confirmDestructive, requireConfirmationFlag } from '../catalog/confirm.js';
+import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
 import { formatTable } from '../utils/table.js';
-import { outputSuccess, outputJson, isJsonMode } from '../utils/output.js';
-import { createApiErrorHandler } from '../lib/api-error-handler.js';
 
-const handleApiError = createApiErrorHandler('Role');
-
-export async function runRoleList(orgId: string | undefined, apiKey: string, baseUrl?: string): Promise<void> {
-  const client = createWorkOSClient(apiKey, baseUrl);
-
-  try {
-    const result = orgId
-      ? await client.sdk.authorization.listOrganizationRoles(orgId)
-      : await client.sdk.authorization.listEnvironmentRoles();
-
-    if (isJsonMode()) {
-      outputJson({ data: result.data });
-      return;
-    }
-
-    if (result.data.length === 0) {
-      console.log('No roles found.');
-      return;
-    }
-
-    const rows = result.data.map((role) => [
-      role.slug,
-      role.name,
-      role.type,
-      String(role.permissions.length),
-      new Date(role.createdAt).toLocaleDateString(),
-    ]);
-
-    console.log(
-      formatTable(
-        [{ header: 'Slug' }, { header: 'Name' }, { header: 'Type' }, { header: 'Permissions' }, { header: 'Created' }],
-        rows,
-      ),
-    );
-  } catch (error) {
-    handleApiError(error);
-  }
+interface RoleNode {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  state?: string | null;
+  type?: string | null;
+  permissions?: Array<{ id: string; slug: string }> | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
-export async function runRoleGet(
-  slug: string,
+/**
+ * The curated role shape — the `--json` contract for every subcommand.
+ * camelCase, stable keys, no internal fields; see role.spec.ts for the
+ * authoritative example. `permissions` is the role's permission slugs.
+ */
+function shapeRole(role: RoleNode) {
+  return {
+    id: role.id,
+    slug: role.slug,
+    name: role.name,
+    description: role.description ?? null,
+    type: role.type ?? null,
+    permissions: (role.permissions ?? []).map((permission) => permission.slug),
+    createdAt: role.createdAt ?? null,
+    updatedAt: role.updatedAt ?? null,
+  };
+}
+
+type ShapedRole = ReturnType<typeof shapeRole>;
+
+/**
+ * Fetch the roles visible in the requested scope: the environment's roles, or
+ * (with `orgId`) the roles assignable within an organization. The org listing
+ * includes environment roles the organization inherits — org-scoped mutations
+ * must therefore check `type` before acting (see {@link requireOrgScopedRole}).
+ */
+async function fetchRoles(token: string, environmentId: string, orgId: string | undefined): Promise<RoleNode[]> {
+  if (orgId) {
+    const op = getOperation('rolesForOrganization');
+    let data: { rolesForOrganization: { roles: RoleNode[] } | null };
+    try {
+      data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
+        token,
+        variables: { organizationId: orgId, environmentId },
+        environmentId,
+      });
+    } catch (error) {
+      reportDashboardError(error);
+    }
+    return data.rolesForOrganization?.roles ?? [];
+  }
+
+  const op = getOperation('roles');
+  let data: { rolesForEnvironment: { roles: RoleNode[] } | null };
+  try {
+    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
+      token,
+      variables: { id: environmentId },
+      environmentId,
+    });
+  } catch (error) {
+    reportDashboardError(error);
+  }
+  return data.rolesForEnvironment?.roles ?? [];
+}
+
+/** Resolve a slug within the scope's role list, or exit not_found. */
+async function requireRoleBySlug(
+  token: string,
+  environmentId: string,
   orgId: string | undefined,
-  apiKey: string,
-  baseUrl?: string,
-): Promise<void> {
-  const client = createWorkOSClient(apiKey, baseUrl);
+  slug: string,
+): Promise<RoleNode> {
+  const roles = await fetchRoles(token, environmentId, orgId);
+  const role = roles.find((candidate) => candidate.slug === slug);
+  if (!role) {
+    exitWithError({
+      code: 'not_found',
+      message: orgId
+        ? `Role "${slug}" was not found in organization "${orgId}".`
+        : `Role "${slug}" was not found in this environment.`,
+    });
+  }
+  return role;
+}
 
-  try {
-    const role = orgId
-      ? await client.sdk.authorization.getOrganizationRole(orgId, slug)
-      : await client.sdk.authorization.getEnvironmentRole(slug);
-    outputJson(role);
-  } catch (error) {
-    handleApiError(error);
+/**
+ * Guard for org-scoped mutations: the org listing dedupes by slug with the
+ * organization's own role winning, so a match can still be an INHERITED
+ * environment role — mutating that through the org scope would change it
+ * environment-wide. Refuse loudly instead.
+ */
+function requireOrgScopedRole(role: RoleNode, slug: string, orgId: string): void {
+  if (role.type !== 'Organization') {
+    exitWithError({
+      code: 'invalid_argument',
+      message:
+        `Role "${slug}" in organization "${orgId}" is an environment role. ` +
+        'Modifying it here would change it for every organization — rerun without --org to update the environment role.',
+    });
   }
 }
 
-export interface RoleCreateOptions {
+function renderRoleTable(roles: ShapedRole[]): void {
+  const rows = roles.map((role) => [
+    role.slug,
+    role.name,
+    role.type ?? chalk.dim('-'),
+    String(role.permissions.length),
+    role.createdAt ?? chalk.dim('-'),
+  ]);
+  console.log(
+    formatTable(
+      [{ header: 'Slug' }, { header: 'Name' }, { header: 'Type' }, { header: 'Permissions' }, { header: 'Created' }],
+      rows,
+    ),
+  );
+}
+
+function renderRoleFields(role: ShapedRole): void {
+  const fields: Array<[string, unknown]> = [
+    ['Slug', role.slug],
+    ['Name', role.name],
+    ['Type', role.type],
+    ['Description', role.description],
+    ['Permissions', role.permissions.length > 0 ? role.permissions.join(', ') : null],
+    ['Created', role.createdAt],
+  ];
+  for (const [label, value] of fields) {
+    if (value === null || value === undefined || value === '') continue;
+    console.log(`${chalk.bold(label)}: ${String(value)}`);
+  }
+  console.log(chalk.dim('Run with --json for the full record.'));
+}
+
+export interface RoleScopeOptions {
+  /** `--environment-id` override; defaults from the active profile. */
+  environmentId?: string;
+  /** `--org`: act on the organization scope instead of the environment. */
+  org?: string;
+}
+
+export async function runRoleList(options: RoleScopeOptions = {}): Promise<void> {
+  const token = await requireCommandToken();
+
+  // Environment-scoped read: both list ops take the resolved ID as a variable
+  // and it rides as the environment header.
+  const { environmentId } = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: false,
+  });
+
+  const roles = (await fetchRoles(token, environmentId, options.org)).map(shapeRole);
+
+  if (isJsonMode()) {
+    outputJson({ roles });
+    return;
+  }
+  if (roles.length === 0) {
+    console.log('No roles found.');
+    return;
+  }
+  renderRoleTable(roles);
+}
+
+export async function runRoleGet(slug: string, options: RoleScopeOptions = {}): Promise<void> {
+  const token = await requireCommandToken();
+
+  const { environmentId } = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: false,
+  });
+
+  const role = shapeRole(await requireRoleBySlug(token, environmentId, options.org, slug));
+
+  if (isJsonMode()) {
+    outputJson({ role });
+    return;
+  }
+  renderRoleFields(role);
+}
+
+export interface RoleCreateOptions extends RoleScopeOptions {
   slug: string;
   name: string;
   description?: string;
+  yes?: boolean;
+  json?: boolean;
 }
 
-export async function runRoleCreate(
-  options: RoleCreateOptions,
-  orgId: string | undefined,
-  apiKey: string,
-  baseUrl?: string,
-): Promise<void> {
-  const client = createWorkOSClient(apiKey, baseUrl);
+export async function runRoleCreate(options: RoleCreateOptions): Promise<void> {
+  // require-flag: expands the privilege surface; non-interactive callers must pass --yes.
+  await requireConfirmationFlag(options, { action: `create role ${options.slug}` });
 
-  const opts = {
-    slug: options.slug,
-    name: options.name,
-    ...(options.description && { description: options.description }),
+  const token = await requireCommandToken();
+  const op = getOperation('createRole');
+
+  // Environment-scoped mutation: pre-validated resolved target as header (the
+  // create input carries no environment field — the header IS the scope).
+  const { environmentId } = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: op.kind === 'mutation',
+  });
+
+  let data: {
+    createRole:
+      | { __typename: 'RoleCreated'; role: RoleNode }
+      | { __typename: 'RoleAlreadyExists'; slug: string }
+      | { __typename: 'EnvironmentNotFound'; environmentId: string }
+      | { __typename: string };
   };
-
   try {
-    const role = orgId
-      ? await client.sdk.authorization.createOrganizationRole(orgId, opts)
-      : await client.sdk.authorization.createEnvironmentRole(opts);
-    outputSuccess('Created role', role);
+    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
+      token,
+      variables: {
+        input: {
+          slug: options.slug,
+          name: options.name,
+          ...(options.description !== undefined ? { description: options.description } : {}),
+          ...(options.org ? { organizationId: options.org } : {}),
+        },
+      },
+      environmentId,
+    });
   } catch (error) {
-    handleApiError(error);
+    reportDashboardError(error);
   }
+
+  const result = data.createRole;
+  if (result.__typename === 'RoleAlreadyExists') {
+    exitWithError({ code: 'already_exists', message: `A role with slug "${options.slug}" already exists.` });
+  }
+  if (result.__typename === 'EnvironmentNotFound') {
+    exitWithError({ code: 'not_found', message: 'The target environment was not found.' });
+  }
+  if (result.__typename !== 'RoleCreated' || !('role' in result)) {
+    exitWithError({ code: 'unexpected_result', message: `Could not create role "${options.slug}".` });
+  }
+
+  const role = shapeRole((result as { role: RoleNode }).role);
+  if (isJsonMode()) {
+    outputJson({ role });
+    return;
+  }
+  outputSuccess(`Created role ${chalk.bold(role.slug)}`);
 }
 
-export interface RoleUpdateOptions {
+/**
+ * Shared updateRole call: the input REQUIRES `name` and CLEARS `description`
+ * when omitted, so callers pass the full merged trio (and optionally the full
+ * permission-slug list — omitting `permissions` leaves them unchanged).
+ *
+ * The mutation's response role carries NO permission selection, so the shaped
+ * result overlays `effectivePermissions` — the slugs known to hold after this
+ * mutation (the list that was sent, or the pre-mutation list when none was).
+ */
+async function executeRoleUpdate(
+  token: string,
+  environmentId: string,
+  input: { roleId: string; name: string; description?: string; permissions?: string[] },
+  slug: string,
+  effectivePermissions: string[],
+): Promise<ShapedRole> {
+  const op = getOperation('updateRole');
+
+  let data: {
+    updateRole:
+      | { __typename: 'RoleUpdated'; role: RoleNode }
+      | { __typename: 'RoleNotFound'; roleId: string }
+      | { __typename: string };
+  };
+  try {
+    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
+      token,
+      variables: { input },
+      environmentId,
+    });
+  } catch (error) {
+    reportDashboardError(error);
+  }
+
+  const result = data.updateRole;
+  if (result.__typename === 'RoleNotFound') {
+    exitWithError({ code: 'not_found', message: `Role "${slug}" was not found in this environment.` });
+  }
+  if (result.__typename !== 'RoleUpdated' || !('role' in result)) {
+    exitWithError({ code: 'unexpected_result', message: `Could not update role "${slug}".` });
+  }
+  return { ...shapeRole((result as { role: RoleNode }).role), permissions: effectivePermissions };
+}
+
+/** The role's current permission slugs (from the scope's list operation). */
+function permissionSlugsOf(role: RoleNode): string[] {
+  return (role.permissions ?? []).map((permission) => permission.slug);
+}
+
+/** Merge current name/description into an update input (see executeRoleUpdate). */
+function mergedUpdateInput(
+  role: RoleNode,
+  overrides: { name?: string; description?: string },
+): { roleId: string; name: string; description?: string } {
+  const description = overrides.description ?? role.description ?? undefined;
+  return {
+    roleId: role.id,
+    name: overrides.name ?? role.name,
+    ...(description !== undefined ? { description } : {}),
+  };
+}
+
+export interface RoleUpdateOptions extends RoleScopeOptions {
   name?: string;
   description?: string;
+  yes?: boolean;
+  json?: boolean;
 }
 
-export async function runRoleUpdate(
-  slug: string,
-  options: RoleUpdateOptions,
-  orgId: string | undefined,
-  apiKey: string,
-  baseUrl?: string,
-): Promise<void> {
-  const client = createWorkOSClient(apiKey, baseUrl);
+export async function runRoleUpdate(slug: string, options: RoleUpdateOptions = {}): Promise<void> {
+  if (options.name === undefined && options.description === undefined) {
+    exitWithError({ code: 'missing_argument', message: 'Nothing to update. Pass --name and/or --description.' });
+  }
 
-  const opts = {
-    ...(options.name !== undefined && { name: options.name }),
-    ...(options.description !== undefined && { description: options.description }),
+  // require-flag: a privilege change; non-interactive callers must pass --yes.
+  await requireConfirmationFlag(options, { action: `update role ${slug}` });
+
+  const token = await requireCommandToken();
+
+  // Environment-scoped mutation: pre-validated resolved target as header.
+  const { environmentId } = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: true,
+  });
+
+  // The mutation is ID-keyed; resolve the frozen slug grammar via the scope's
+  // list first (and refuse to touch an inherited environment role via --org).
+  const role = await requireRoleBySlug(token, environmentId, options.org, slug);
+  if (options.org) {
+    requireOrgScopedRole(role, slug, options.org);
+  }
+
+  const updated = await executeRoleUpdate(
+    token,
+    environmentId,
+    mergedUpdateInput(role, { name: options.name, description: options.description }),
+    slug,
+    permissionSlugsOf(role), // permissions unchanged by this input
+  );
+
+  if (isJsonMode()) {
+    outputJson({ role: updated });
+    return;
+  }
+  outputSuccess(`Updated role ${chalk.bold(updated.slug)}`);
+}
+
+export interface RoleDeleteOptions extends RoleScopeOptions {
+  /** Required by the command grammar: only organization roles can be deleted. */
+  org: string;
+  yes?: boolean;
+  json?: boolean;
+}
+
+export async function runRoleDelete(slug: string, options: RoleDeleteOptions): Promise<void> {
+  // Destructive per the manifest: permanently deletes the role; members lose it.
+  await confirmDestructive(options, {
+    action: `delete role ${slug} — this permanently removes the role and unassigns its members`,
+  });
+
+  const token = await requireCommandToken();
+  const op = getOperation('deleteRole');
+
+  // Environment-scoped mutation: pre-validated resolved target as header.
+  const { environmentId } = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: op.kind === 'mutation',
+  });
+
+  const role = await requireRoleBySlug(token, environmentId, options.org, slug);
+  requireOrgScopedRole(role, slug, options.org);
+
+  let data: {
+    deleteRole:
+      | { __typename: 'RoleDeleted' }
+      | { __typename: 'RoleNotFound'; roleId: string }
+      | { __typename: 'EnvironmentNotFound'; environmentId: string }
+      | { __typename: string };
   };
-
   try {
-    const role = orgId
-      ? await client.sdk.authorization.updateOrganizationRole(orgId, slug, opts)
-      : await client.sdk.authorization.updateEnvironmentRole(slug, opts);
-    outputSuccess('Updated role', role);
+    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
+      token,
+      variables: { input: { roleId: role.id } },
+      environmentId,
+    });
   } catch (error) {
-    handleApiError(error);
+    reportDashboardError(error);
   }
+
+  const result = data.deleteRole;
+  if (result.__typename === 'RoleNotFound' || result.__typename === 'EnvironmentNotFound') {
+    exitWithError({ code: 'not_found', message: `Role "${slug}" was not found in organization "${options.org}".` });
+  }
+  if (result.__typename !== 'RoleDeleted') {
+    exitWithError({ code: 'unexpected_result', message: `Could not delete role "${slug}".` });
+  }
+
+  if (isJsonMode()) {
+    outputJson({ deleted: slug });
+    return;
+  }
+  outputSuccess(`Deleted role ${chalk.bold(slug)}`);
 }
 
-export async function runRoleDelete(slug: string, orgId: string, apiKey: string, baseUrl?: string): Promise<void> {
-  const client = createWorkOSClient(apiKey, baseUrl);
-
-  try {
-    await client.sdk.authorization.deleteOrganizationRole(orgId, slug);
-    outputSuccess('Deleted role', { slug, organizationId: orgId });
-  } catch (error) {
-    handleApiError(error);
-  }
+export interface RolePermissionsOptions extends RoleScopeOptions {
+  yes?: boolean;
+  json?: boolean;
 }
 
 export async function runRoleSetPermissions(
   slug: string,
   permissions: string[],
-  orgId: string | undefined,
-  apiKey: string,
-  baseUrl?: string,
+  options: RolePermissionsOptions = {},
 ): Promise<void> {
-  const client = createWorkOSClient(apiKey, baseUrl);
+  // require-flag: a privilege change; non-interactive callers must pass --yes.
+  await requireConfirmationFlag(options, { action: `replace the permissions on role ${slug}` });
 
-  try {
-    const role = orgId
-      ? await client.sdk.authorization.setOrganizationRolePermissions(orgId, slug, { permissions })
-      : await client.sdk.authorization.setEnvironmentRolePermissions(slug, { permissions });
-    outputSuccess('Set permissions on role', role);
-  } catch (error) {
-    handleApiError(error);
+  const token = await requireCommandToken();
+
+  const { environmentId } = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: true,
+  });
+
+  const role = await requireRoleBySlug(token, environmentId, options.org, slug);
+  if (options.org) {
+    requireOrgScopedRole(role, slug, options.org);
   }
+
+  const updated = await executeRoleUpdate(token, environmentId, { ...mergedUpdateInput(role, {}), permissions }, slug, permissions);
+
+  if (isJsonMode()) {
+    outputJson({ role: updated });
+    return;
+  }
+  outputSuccess(`Set ${permissions.length} permission${permissions.length === 1 ? '' : 's'} on role ${chalk.bold(slug)}`);
 }
 
 export async function runRoleAddPermission(
   slug: string,
   permissionSlug: string,
-  orgId: string | undefined,
-  apiKey: string,
-  baseUrl?: string,
+  options: RolePermissionsOptions = {},
 ): Promise<void> {
-  const client = createWorkOSClient(apiKey, baseUrl);
+  // require-flag: a privilege change; non-interactive callers must pass --yes.
+  await requireConfirmationFlag(options, { action: `add permission ${permissionSlug} to role ${slug}` });
 
-  try {
-    const role = orgId
-      ? await client.sdk.authorization.addOrganizationRolePermission(orgId, slug, { permissionSlug })
-      : await client.sdk.authorization.addEnvironmentRolePermission(slug, { permissionSlug });
-    outputSuccess('Added permission to role', role);
-  } catch (error) {
-    handleApiError(error);
+  const token = await requireCommandToken();
+
+  const { environmentId } = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: true,
+  });
+
+  const role = await requireRoleBySlug(token, environmentId, options.org, slug);
+  if (options.org) {
+    requireOrgScopedRole(role, slug, options.org);
   }
+
+  // The backing mutation carries the FULL permission list — merge (deduped)
+  // rather than sending just the addition.
+  const current = permissionSlugsOf(role);
+  const permissions = [...new Set([...current, permissionSlug])];
+
+  const updated = await executeRoleUpdate(token, environmentId, { ...mergedUpdateInput(role, {}), permissions }, slug, permissions);
+
+  if (isJsonMode()) {
+    outputJson({ role: updated });
+    return;
+  }
+  outputSuccess(`Added permission ${chalk.bold(permissionSlug)} to role ${chalk.bold(slug)}`);
+}
+
+export interface RoleRemovePermissionOptions extends RolePermissionsOptions {
+  /** Required by the command grammar: org-scoped removal only. */
+  org: string;
 }
 
 export async function runRoleRemovePermission(
   slug: string,
   permissionSlug: string,
-  orgId: string,
-  apiKey: string,
-  baseUrl?: string,
+  options: RoleRemovePermissionOptions,
 ): Promise<void> {
-  const client = createWorkOSClient(apiKey, baseUrl);
+  // require-flag: a privilege change; non-interactive callers must pass --yes.
+  await requireConfirmationFlag(options, { action: `remove permission ${permissionSlug} from role ${slug}` });
 
-  try {
-    await client.sdk.authorization.removeOrganizationRolePermission(orgId, slug, { permissionSlug });
-    outputSuccess('Removed permission from role', { slug, permissionSlug, organizationId: orgId });
-  } catch (error) {
-    handleApiError(error);
+  const token = await requireCommandToken();
+
+  const { environmentId } = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: true,
+  });
+
+  const role = await requireRoleBySlug(token, environmentId, options.org, slug);
+  requireOrgScopedRole(role, slug, options.org);
+
+  const current = permissionSlugsOf(role);
+  if (!current.includes(permissionSlug)) {
+    exitWithError({
+      code: 'not_found',
+      message: `Role "${slug}" does not have permission "${permissionSlug}".`,
+    });
   }
+  const permissions = current.filter((candidate) => candidate !== permissionSlug);
+
+  const updated = await executeRoleUpdate(token, environmentId, { ...mergedUpdateInput(role, {}), permissions }, slug, permissions);
+
+  if (isJsonMode()) {
+    outputJson({ role: updated });
+    return;
+  }
+  outputSuccess(`Removed permission ${chalk.bold(permissionSlug)} from role ${chalk.bold(slug)}`);
 }

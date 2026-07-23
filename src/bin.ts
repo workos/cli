@@ -106,6 +106,10 @@ if (hasJsonFlag && (rawArgs.includes('--help') || rawArgs.includes('-h'))) {
   const { buildCommandTree, extractHelpJsonCommand } = await import('./utils/help-json.js');
   const command = extractHelpJsonCommand(rawArgs);
   outputJson(buildCommandTree(command));
+  // Writes to a piped stdout are asynchronous: exiting immediately truncates
+  // anything past the 64KiB pipe buffer (the full command tree is larger).
+  // Queue an empty write and exit only once everything before it has flushed.
+  await new Promise<void>((resolve) => process.stdout.write('', () => resolve()));
   process.exit(0);
 }
 
@@ -1358,33 +1362,32 @@ async function runCli(): Promise<void> {
     .command('role', 'Manage WorkOS roles (environment and organization-scoped)', (yargs) => {
       yargs.options({
         ...insecureStorageOption,
-        'api-key': { type: 'string' as const, describe: 'WorkOS API key' },
-        org: { type: 'string' as const, describe: 'Organization ID (for org-scoped roles)' },
+        org: { type: 'string' as const, describe: 'Organization ID (for organization roles)' },
       });
       registerSubcommand(
         yargs,
         'list',
         'List roles',
-        (y) => y,
+        (y) =>
+          y.option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runRoleList } = await import('./commands/role.js');
-          await runRoleList(argv.org, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runRoleList({ org: argv.org, environmentId: argv.environmentId as string | undefined });
         },
       );
       registerSubcommand(
         yargs,
         'get <slug>',
         'Get a role by slug',
-        (y) => y.positional('slug', { type: 'string', demandOption: true }),
+        (y) =>
+          y
+            .positional('slug', { type: 'string', demandOption: true })
+            .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runRoleGet } = await import('./commands/role.js');
-          await runRoleGet(argv.slug, argv.org, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runRoleGet(argv.slug, { org: argv.org, environmentId: argv.environmentId as string | undefined });
         },
       );
       registerSubcommand(
@@ -1396,18 +1399,21 @@ async function runCli(): Promise<void> {
             slug: { type: 'string', demandOption: true, describe: 'Role slug' },
             name: { type: 'string', demandOption: true, describe: 'Role name' },
             description: { type: 'string', describe: 'Role description' },
+            yes: { alias: 'y', type: 'boolean', default: false, describe: 'Confirm the change (required non-interactively)' },
+            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runRoleCreate } = await import('./commands/role.js');
-          await runRoleCreate(
-            { slug: argv.slug, name: argv.name, description: argv.description },
-            argv.org,
-            resolveApiKey({ apiKey: argv.apiKey }),
-            resolveApiBaseUrl(),
-          );
+          await runRoleCreate({
+            slug: argv.slug,
+            name: argv.name,
+            description: argv.description,
+            org: argv.org,
+            yes: argv.yes,
+            json: argv.json as boolean | undefined,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       registerSubcommand(
@@ -1415,34 +1421,46 @@ async function runCli(): Promise<void> {
         'update <slug>',
         'Update a role',
         (y) =>
-          y
-            .positional('slug', { type: 'string', demandOption: true })
-            .options({ name: { type: 'string' }, description: { type: 'string' } }),
+          y.positional('slug', { type: 'string', demandOption: true }).options({
+            name: { type: 'string' },
+            description: { type: 'string' },
+            yes: { alias: 'y', type: 'boolean', default: false, describe: 'Confirm the change (required non-interactively)' },
+            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+          }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runRoleUpdate } = await import('./commands/role.js');
-          await runRoleUpdate(
-            argv.slug,
-            { name: argv.name, description: argv.description },
-            argv.org,
-            resolveApiKey({ apiKey: argv.apiKey }),
-            resolveApiBaseUrl(),
-          );
+          await runRoleUpdate(argv.slug, {
+            name: argv.name,
+            description: argv.description,
+            org: argv.org,
+            yes: argv.yes,
+            json: argv.json as boolean | undefined,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       registerSubcommand(
         yargs,
         'delete <slug>',
         'Delete an org-scoped role (requires --org)',
-        (y) => y.positional('slug', { type: 'string', demandOption: true }).demandOption('org'),
+        (y) =>
+          y
+            .positional('slug', { type: 'string', demandOption: true })
+            .demandOption('org')
+            .options({
+              yes: { alias: 'y', type: 'boolean', default: false, describe: 'Skip the confirmation prompt' },
+              'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+            }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runRoleDelete } = await import('./commands/role.js');
-          await runRoleDelete(argv.slug, argv.org!, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runRoleDelete(argv.slug, {
+            org: argv.org!,
+            yes: argv.yes,
+            json: argv.json as boolean | undefined,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       registerSubcommand(
@@ -1450,23 +1468,20 @@ async function runCli(): Promise<void> {
         'set-permissions <slug>',
         'Set all permissions on a role (replaces existing)',
         (y) =>
-          y.positional('slug', { type: 'string', demandOption: true }).option('permissions', {
-            type: 'string',
-            demandOption: true,
-            describe: 'Comma-separated permission slugs',
+          y.positional('slug', { type: 'string', demandOption: true }).options({
+            permissions: { type: 'string', demandOption: true, describe: 'Comma-separated permission slugs' },
+            yes: { alias: 'y', type: 'boolean', default: false, describe: 'Confirm the change (required non-interactively)' },
+            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runRoleSetPermissions } = await import('./commands/role.js');
-          await runRoleSetPermissions(
-            argv.slug,
-            argv.permissions.split(','),
-            argv.org,
-            resolveApiKey({ apiKey: argv.apiKey }),
-            resolveApiBaseUrl(),
-          );
+          await runRoleSetPermissions(argv.slug, argv.permissions.split(','), {
+            org: argv.org,
+            yes: argv.yes,
+            json: argv.json as boolean | undefined,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       registerSubcommand(
@@ -1476,19 +1491,20 @@ async function runCli(): Promise<void> {
         (y) =>
           y
             .positional('slug', { type: 'string', demandOption: true })
-            .positional('permissionSlug', { type: 'string', demandOption: true }),
+            .positional('permissionSlug', { type: 'string', demandOption: true })
+            .options({
+              yes: { alias: 'y', type: 'boolean', default: false, describe: 'Confirm the change (required non-interactively)' },
+              'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+            }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runRoleAddPermission } = await import('./commands/role.js');
-          await runRoleAddPermission(
-            argv.slug,
-            argv.permissionSlug,
-            argv.org,
-            resolveApiKey({ apiKey: argv.apiKey }),
-            resolveApiBaseUrl(),
-          );
+          await runRoleAddPermission(argv.slug, argv.permissionSlug, {
+            org: argv.org,
+            yes: argv.yes,
+            json: argv.json as boolean | undefined,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       registerSubcommand(
@@ -1499,59 +1515,50 @@ async function runCli(): Promise<void> {
           y
             .positional('slug', { type: 'string', demandOption: true })
             .positional('permissionSlug', { type: 'string', demandOption: true })
-            .demandOption('org'),
+            .demandOption('org')
+            .options({
+              yes: { alias: 'y', type: 'boolean', default: false, describe: 'Confirm the change (required non-interactively)' },
+              'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+            }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runRoleRemovePermission } = await import('./commands/role.js');
-          await runRoleRemovePermission(
-            argv.slug,
-            argv.permissionSlug,
-            argv.org!,
-            resolveApiKey({ apiKey: argv.apiKey }),
-            resolveApiBaseUrl(),
-          );
+          await runRoleRemovePermission(argv.slug, argv.permissionSlug, {
+            org: argv.org!,
+            yes: argv.yes,
+            json: argv.json as boolean | undefined,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       return yargs.demandCommand(1, 'Please specify a role subcommand').strict();
     })
     .command('permission', 'Manage WorkOS permissions', (yargs) => {
-      yargs.options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } });
+      yargs.options(insecureStorageOption);
       registerSubcommand(
         yargs,
         'list',
         'List permissions',
         (y) =>
-          y.options({
-            limit: { type: 'number' },
-            before: { type: 'string' },
-            after: { type: 'string' },
-            order: { type: 'string' },
-          }),
+          y.option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runPermissionList } = await import('./commands/permission.js');
-          await runPermissionList(
-            { limit: argv.limit, before: argv.before, after: argv.after, order: argv.order },
-            resolveApiKey({ apiKey: argv.apiKey }),
-            resolveApiBaseUrl(),
-          );
+          await runPermissionList({ environmentId: argv.environmentId as string | undefined });
         },
       );
       registerSubcommand(
         yargs,
         'get <slug>',
         'Get a permission',
-        (y) => y.positional('slug', { type: 'string', demandOption: true }),
+        (y) =>
+          y
+            .positional('slug', { type: 'string', demandOption: true })
+            .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runPermissionGet } = await import('./commands/permission.js');
-          await runPermissionGet(argv.slug, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runPermissionGet(argv.slug, { environmentId: argv.environmentId as string | undefined });
         },
       );
       registerSubcommand(
@@ -1560,20 +1567,23 @@ async function runCli(): Promise<void> {
         'Create a permission',
         (y) =>
           y.options({
-            slug: { type: 'string', demandOption: true },
-            name: { type: 'string', demandOption: true },
-            description: { type: 'string' },
+            slug: { type: 'string', demandOption: true, describe: 'Permission slug' },
+            name: { type: 'string', demandOption: true, describe: 'Permission name' },
+            description: { type: 'string', describe: 'Permission description' },
+            yes: { alias: 'y', type: 'boolean', default: false, describe: 'Confirm the change (required non-interactively)' },
+            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runPermissionCreate } = await import('./commands/permission.js');
-          await runPermissionCreate(
-            { slug: argv.slug, name: argv.name, description: argv.description },
-            resolveApiKey({ apiKey: argv.apiKey }),
-            resolveApiBaseUrl(),
-          );
+          await runPermissionCreate({
+            slug: argv.slug,
+            name: argv.name,
+            description: argv.description,
+            yes: argv.yes,
+            json: argv.json as boolean | undefined,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       registerSubcommand(
@@ -1581,33 +1591,41 @@ async function runCli(): Promise<void> {
         'update <slug>',
         'Update a permission',
         (y) =>
-          y
-            .positional('slug', { type: 'string', demandOption: true })
-            .options({ name: { type: 'string' }, description: { type: 'string' } }),
+          y.positional('slug', { type: 'string', demandOption: true }).options({
+            name: { type: 'string' },
+            description: { type: 'string' },
+            yes: { alias: 'y', type: 'boolean', default: false, describe: 'Confirm the change (required non-interactively)' },
+            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+          }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runPermissionUpdate } = await import('./commands/permission.js');
-          await runPermissionUpdate(
-            argv.slug,
-            { name: argv.name, description: argv.description },
-            resolveApiKey({ apiKey: argv.apiKey }),
-            resolveApiBaseUrl(),
-          );
+          await runPermissionUpdate(argv.slug, {
+            name: argv.name,
+            description: argv.description,
+            yes: argv.yes,
+            json: argv.json as boolean | undefined,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       registerSubcommand(
         yargs,
         'delete <slug>',
         'Delete a permission',
-        (y) => y.positional('slug', { type: 'string', demandOption: true }),
+        (y) =>
+          y.positional('slug', { type: 'string', demandOption: true }).options({
+            yes: { alias: 'y', type: 'boolean', default: false, describe: 'Skip the confirmation prompt' },
+            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+          }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runPermissionDelete } = await import('./commands/permission.js');
-          await runPermissionDelete(argv.slug, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runPermissionDelete(argv.slug, {
+            yes: argv.yes,
+            json: argv.json as boolean | undefined,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       return yargs.demandCommand(1, 'Please specify a permission subcommand').strict();
@@ -2252,109 +2270,105 @@ async function runCli(): Promise<void> {
       return yargs.demandCommand(1, 'Please specify an audit-log subcommand').strict();
     })
     .command('feature-flag', 'Manage feature flags', (yargs) => {
-      yargs.options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } });
+      yargs.options(insecureStorageOption);
       registerSubcommand(
         yargs,
         'list',
         'List feature flags',
         (y) =>
           y.options({
-            limit: { type: 'number' },
-            before: { type: 'string' },
-            after: { type: 'string' },
-            order: { type: 'string' },
+            limit: { type: 'number', describe: 'Limit number of results' },
+            before: { type: 'string', describe: 'Cursor for results before a specific item' },
+            after: { type: 'string', describe: 'Cursor for results after a specific item' },
+            order: { type: 'string', describe: 'Order of results, asc or desc' },
+            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runFeatureFlagList } = await import('./commands/feature-flag.js');
-          await runFeatureFlagList(
-            { limit: argv.limit, before: argv.before, after: argv.after, order: argv.order },
-            resolveApiKey({ apiKey: argv.apiKey }),
-            resolveApiBaseUrl(),
-          );
+          await runFeatureFlagList({
+            limit: argv.limit,
+            before: argv.before,
+            after: argv.after,
+            order: argv.order,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       registerSubcommand(
         yargs,
         'get <slug>',
         'Get a feature flag',
-        (y) => y.positional('slug', { type: 'string', demandOption: true }),
+        (y) =>
+          y
+            .positional('slug', { type: 'string', demandOption: true })
+            .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runFeatureFlagGet } = await import('./commands/feature-flag.js');
-          await runFeatureFlagGet(argv.slug, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runFeatureFlagGet(argv.slug, { environmentId: argv.environmentId as string | undefined });
         },
       );
       registerSubcommand(
         yargs,
         'enable <slug>',
         'Enable a feature flag',
-        (y) => y.positional('slug', { type: 'string', demandOption: true }),
+        (y) =>
+          y
+            .positional('slug', { type: 'string', demandOption: true })
+            .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runFeatureFlagEnable } = await import('./commands/feature-flag.js');
-          await runFeatureFlagEnable(argv.slug, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runFeatureFlagEnable(argv.slug, { environmentId: argv.environmentId as string | undefined });
         },
       );
       registerSubcommand(
         yargs,
         'disable <slug>',
         'Disable a feature flag',
-        (y) => y.positional('slug', { type: 'string', demandOption: true }),
+        (y) =>
+          y
+            .positional('slug', { type: 'string', demandOption: true })
+            .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runFeatureFlagDisable } = await import('./commands/feature-flag.js');
-          await runFeatureFlagDisable(argv.slug, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runFeatureFlagDisable(argv.slug, { environmentId: argv.environmentId as string | undefined });
         },
       );
       registerSubcommand(
         yargs,
         'add-target <slug> <targetId>',
-        'Add a target to a feature flag',
+        'Add a target (user_* or org_*) to a feature flag',
         (y) =>
           y
             .positional('slug', { type: 'string', demandOption: true })
-            .positional('targetId', { type: 'string', demandOption: true }),
+            .positional('targetId', { type: 'string', demandOption: true })
+            .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runFeatureFlagAddTarget } = await import('./commands/feature-flag.js');
-          await runFeatureFlagAddTarget(
-            argv.slug,
-            argv.targetId,
-            resolveApiKey({ apiKey: argv.apiKey }),
-            resolveApiBaseUrl(),
-          );
+          await runFeatureFlagAddTarget(argv.slug, argv.targetId, {
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       registerSubcommand(
         yargs,
         'remove-target <slug> <targetId>',
-        'Remove a target from a feature flag',
+        'Remove a target (user_* or org_*) from a feature flag',
         (y) =>
           y
             .positional('slug', { type: 'string', demandOption: true })
-            .positional('targetId', { type: 'string', demandOption: true }),
+            .positional('targetId', { type: 'string', demandOption: true })
+            .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runFeatureFlagRemoveTarget } = await import('./commands/feature-flag.js');
-          await runFeatureFlagRemoveTarget(
-            argv.slug,
-            argv.targetId,
-            resolveApiKey({ apiKey: argv.apiKey }),
-            resolveApiBaseUrl(),
-          );
+          await runFeatureFlagRemoveTarget(argv.slug, argv.targetId, {
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       return yargs.demandCommand(1, 'Please specify a feature-flag subcommand').strict();

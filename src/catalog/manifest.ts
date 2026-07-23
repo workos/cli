@@ -513,6 +513,163 @@ const MANIFEST: CommandJustification[] = [
     destructive: true,
     ciPolicy: 'allow',
   },
+
+  // --- Resource migration: authorization cluster (role / permission / feature-flag) ---
+  // graphql-resource-migration Phase 5. Same recipe as the earlier clusters:
+  // unchanged subcommand grammar, dashboard-plane backend, new curated shapes.
+  //
+  // Mapping notes:
+  // - `role list` is backed by TWO ops (environment-scoped vs organization-scoped
+  //   listing); both entries share the command noun.
+  // - `role get` has no single-role operation: it is a client-side filter over
+  //   the scope's list op, so it deliberately has no manifest entry of its own
+  //   (invitation-get precedent). The same list ops back the slug→ID resolution
+  //   step of every role mutation.
+  // - `role set-permissions` / `role add-permission` / `role remove-permission`
+  //   ride the `role update` op: the backing mutation carries the role's full
+  //   permission set, so the handlers read-merge-write over it. One op, one
+  //   manifest entry — the `role update` entry's ciPolicy governs all four.
+  // - `permission get/update/delete` resolve slugs via the `permission list` op.
+  // - `feature-flag get` also backs the lookup step of every flag mutation, and
+  //   `feature-flag enable` / `disable` / `add-target` / `remove-target` all ride
+  //   the same per-environment update op (one op, one manifest entry).
+  // - Privilege-shaping mutations (role/permission create+update, and the
+  //   permission-assignment subcommands riding `role update`) follow the
+  //   `team change-role` precedent: ciPolicy `require-flag`. Deletes are
+  //   `destructive` (confirmDestructive; ciPolicy stays `allow` because the
+  //   destructive gate already covers non-interactive runs). Feature-flag
+  //   mutations are reversible configuration toggles, not privilege changes —
+  //   ciPolicy `allow`.
+  {
+    command: 'role list',
+    mapsTo: 'roles',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'List the roles defined in the active environment (audits, scripting)',
+    load: 'cheap',
+    mutation: false,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'role list',
+    mapsTo: 'rolesForOrganization',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: "List the roles assignable within an organization (audits, scripting)",
+    load: 'cheap',
+    mutation: false,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'role create',
+    mapsTo: 'createRole',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'Create an environment or organization role from setup scripts or CI',
+    load: 'cheap',
+    mutation: true,
+    destructive: false,
+    // require-flag: expands the privilege surface; require explicit consent in
+    // non-interactive use (team change-role precedent).
+    ciPolicy: 'require-flag',
+  },
+  {
+    command: 'role update',
+    mapsTo: 'updateRole',
+    audiences: ['human', 'agent'],
+    useCase: "Update a role's name, description, or assigned permissions",
+    load: 'cheap',
+    mutation: true,
+    destructive: false,
+    // require-flag: a privilege change (also gates set-permissions /
+    // add-permission / remove-permission, which ride this op).
+    ciPolicy: 'require-flag',
+  },
+  {
+    command: 'role delete',
+    mapsTo: 'deleteRole',
+    audiences: ['human', 'agent'],
+    useCase: 'Delete an organization-scoped role (cleanup, offboarding)',
+    load: 'cheap',
+    mutation: true,
+    // destructive: permanently deletes the role; members lose it.
+    destructive: true,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'permission list',
+    mapsTo: 'permissions',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'List the permissions defined in the active environment (audits, scripting)',
+    load: 'cheap',
+    mutation: false,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'permission create',
+    mapsTo: 'createPermission',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'Create a permission during RBAC setup automation',
+    load: 'cheap',
+    mutation: true,
+    destructive: false,
+    // require-flag: expands the privilege surface (team change-role precedent).
+    ciPolicy: 'require-flag',
+  },
+  {
+    command: 'permission update',
+    mapsTo: 'updatePermission',
+    audiences: ['human', 'agent'],
+    useCase: "Update a custom permission's name or description",
+    load: 'cheap',
+    mutation: true,
+    destructive: false,
+    // require-flag: a privilege-surface change (team change-role precedent).
+    ciPolicy: 'require-flag',
+  },
+  {
+    command: 'permission delete',
+    mapsTo: 'deletePermission',
+    audiences: ['human', 'agent'],
+    useCase: 'Delete a custom permission (cleanup)',
+    load: 'cheap',
+    mutation: true,
+    // destructive: permanently removes the permission from every role using it.
+    destructive: true,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'feature-flag list',
+    mapsTo: 'flags',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: "List the project's feature flags with the active environment's state",
+    load: 'cheap',
+    mutation: false,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'feature-flag get',
+    mapsTo: 'flagBySlug',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'Inspect a feature flag by slug (also backs the lookup step of flag mutations)',
+    load: 'cheap',
+    mutation: false,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'feature-flag enable',
+    mapsTo: 'updateFlagEnvironment',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: "Toggle a flag or adjust its targeting in the active environment (enable/disable/add-target/remove-target all ride this op)",
+    load: 'cheap',
+    mutation: true,
+    destructive: false,
+    // allow: reversible configuration toggle, not a privilege change; flipping
+    // flags from CI/scripts is the intended automation.
+    ciPolicy: 'allow',
+  },
 ];
 
 /** Returns the curated command allowlist. */

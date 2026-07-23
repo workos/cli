@@ -858,24 +858,24 @@ const commands: CommandSchema[] = [
   // --- Resource Management Commands ---
   {
     name: 'role',
-    description: 'Manage WorkOS roles (environment and organization-scoped)',
+    description: 'Manage roles in the active environment (environment and organization-scoped)',
     options: [
       insecureStorageOpt,
-      apiKeyOpt,
       {
         name: 'org',
         type: 'string',
-        description: 'Organization ID (for org-scoped roles)',
+        description: 'Organization ID (for organization roles)',
         required: false,
         hidden: false,
       },
     ],
     commands: [
-      { name: 'list', description: 'List roles', options: [] },
+      { name: 'list', description: 'List roles', options: [environmentIdOpt] },
       {
         name: 'get',
         description: 'Get a role by slug',
         positionals: [{ name: 'slug', type: 'string', description: 'Role slug', required: true }],
+        options: [environmentIdOpt],
       },
       {
         name: 'create',
@@ -884,6 +884,8 @@ const commands: CommandSchema[] = [
           { name: 'slug', type: 'string', description: 'Role slug', required: true, hidden: false },
           { name: 'name', type: 'string', description: 'Role name', required: true, hidden: false },
           { name: 'description', type: 'string', description: 'Role description', required: false, hidden: false },
+          requireFlagYesOpt,
+          environmentIdOpt,
         ],
       },
       {
@@ -893,12 +895,15 @@ const commands: CommandSchema[] = [
         options: [
           { name: 'name', type: 'string', description: 'New name', required: false, hidden: false },
           { name: 'description', type: 'string', description: 'New description', required: false, hidden: false },
+          requireFlagYesOpt,
+          environmentIdOpt,
         ],
       },
       {
         name: 'delete',
         description: 'Delete an org-scoped role (requires --org)',
         positionals: [{ name: 'slug', type: 'string', description: 'Role slug', required: true }],
+        options: [confirmYesOpt, environmentIdOpt],
       },
       {
         name: 'set-permissions',
@@ -912,6 +917,8 @@ const commands: CommandSchema[] = [
             required: true,
             hidden: false,
           },
+          requireFlagYesOpt,
+          environmentIdOpt,
         ],
       },
       {
@@ -921,6 +928,7 @@ const commands: CommandSchema[] = [
           { name: 'slug', type: 'string', description: 'Role slug', required: true },
           { name: 'permissionSlug', type: 'string', description: 'Permission slug', required: true },
         ],
+        options: [requireFlagYesOpt, environmentIdOpt],
       },
       {
         name: 'remove-permission',
@@ -929,19 +937,21 @@ const commands: CommandSchema[] = [
           { name: 'slug', type: 'string', description: 'Role slug', required: true },
           { name: 'permissionSlug', type: 'string', description: 'Permission slug', required: true },
         ],
+        options: [requireFlagYesOpt, environmentIdOpt],
       },
     ],
   },
   {
     name: 'permission',
-    description: 'Manage WorkOS permissions',
-    options: [insecureStorageOpt, apiKeyOpt],
+    description: 'Manage permissions in the active environment',
+    options: [insecureStorageOpt],
     commands: [
-      { name: 'list', description: 'List permissions', options: [...paginationOpts] },
+      { name: 'list', description: 'List permissions', options: [environmentIdOpt] },
       {
         name: 'get',
         description: 'Get a permission',
         positionals: [{ name: 'slug', type: 'string', description: 'Permission slug', required: true }],
+        options: [environmentIdOpt],
       },
       {
         name: 'create',
@@ -956,6 +966,8 @@ const commands: CommandSchema[] = [
             required: false,
             hidden: false,
           },
+          requireFlagYesOpt,
+          environmentIdOpt,
         ],
       },
       {
@@ -965,12 +977,15 @@ const commands: CommandSchema[] = [
         options: [
           { name: 'name', type: 'string', description: 'New name', required: false, hidden: false },
           { name: 'description', type: 'string', description: 'New description', required: false, hidden: false },
+          requireFlagYesOpt,
+          environmentIdOpt,
         ],
       },
       {
         name: 'delete',
         description: 'Delete a permission',
         positionals: [{ name: 'slug', type: 'string', description: 'Permission slug', required: true }],
+        options: [confirmYesOpt, environmentIdOpt],
       },
     ],
   },
@@ -1361,40 +1376,45 @@ const commands: CommandSchema[] = [
   },
   {
     name: 'feature-flag',
-    description: 'Manage feature flags',
-    options: [insecureStorageOpt, apiKeyOpt],
+    description: 'Manage feature flags in the active environment',
+    options: [insecureStorageOpt],
     commands: [
-      { name: 'list', description: 'List feature flags', options: [...paginationOpts] },
+      { name: 'list', description: 'List feature flags', options: [...paginationOpts, environmentIdOpt] },
       {
         name: 'get',
         description: 'Get a feature flag',
         positionals: [{ name: 'slug', type: 'string', description: 'Feature flag slug', required: true }],
+        options: [environmentIdOpt],
       },
       {
         name: 'enable',
         description: 'Enable a feature flag',
         positionals: [{ name: 'slug', type: 'string', description: 'Feature flag slug', required: true }],
+        options: [environmentIdOpt],
       },
       {
         name: 'disable',
         description: 'Disable a feature flag',
         positionals: [{ name: 'slug', type: 'string', description: 'Feature flag slug', required: true }],
+        options: [environmentIdOpt],
       },
       {
         name: 'add-target',
-        description: 'Add a target to a feature flag',
+        description: 'Add a target (user or organization) to a feature flag',
         positionals: [
           { name: 'slug', type: 'string', description: 'Feature flag slug', required: true },
-          { name: 'targetId', type: 'string', description: 'Target ID', required: true },
+          { name: 'targetId', type: 'string', description: 'Target ID (user_* or org_*)', required: true },
         ],
+        options: [environmentIdOpt],
       },
       {
         name: 'remove-target',
-        description: 'Remove a target from a feature flag',
+        description: 'Remove a target (user or organization) from a feature flag',
         positionals: [
           { name: 'slug', type: 'string', description: 'Feature flag slug', required: true },
-          { name: 'targetId', type: 'string', description: 'Target ID', required: true },
+          { name: 'targetId', type: 'string', description: 'Target ID (user_* or org_*)', required: true },
         ],
+        options: [environmentIdOpt],
       },
     ],
   },

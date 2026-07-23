@@ -132,6 +132,31 @@ export const OVERRIDES: Record<string, CommandMeta> = {
   updateOrganization: { command: 'organization update', describe: "Update an organization's name or domains" },
   deleteOrganization: { command: 'organization delete', describe: 'Delete an organization' },
 
+  // --- authorization cluster (resource migration Phase 5) ---
+  // Op names are clean upstream, but several descriptions are rotten (the
+  // vendored docstrings concatenate the sub-queries: "List roles defined in an
+  // environment ... Return the role configuration for an environment"), and
+  // every manifest-curated op needs an override so the manifest's clean
+  // `command` noun is the single source of truth. One op ↔ one command noun:
+  // multi-subcommand ops (`updateRole`, `updateFlagEnvironment`, the list ops
+  // that back get/lookup steps) are keyed under their primary command — see the
+  // manifest comment.
+  roles: { command: 'role list', describe: 'List roles in the current environment' },
+  rolesForOrganization: { command: 'role list', describe: "List an organization's assignable roles" },
+  createRole: { command: 'role create', describe: 'Create an environment or organization role' },
+  updateRole: { command: 'role update', describe: "Update a role's name, description, or permissions" },
+  deleteRole: { command: 'role delete', describe: 'Delete an organization role' },
+  permissions: { command: 'permission list', describe: 'List permissions in the current environment' },
+  createPermission: { command: 'permission create', describe: 'Create a permission' },
+  updatePermission: { command: 'permission update', describe: "Update a custom permission's name or description" },
+  deletePermission: { command: 'permission delete', describe: 'Delete a custom permission' },
+  flags: { command: 'feature-flag list', describe: 'List feature flags in the current project' },
+  flagBySlug: { command: 'feature-flag get', describe: 'Get a feature flag by slug' },
+  updateFlagEnvironment: {
+    command: 'feature-flag enable',
+    describe: "Update a feature flag's state and targeting in the current environment",
+  },
+
   // --- Phase 4: AuthKit app config ---
   // These op names/descriptions are already clean (no leak), but each still needs
   // an override so resolveCommandMeta returns the manifest's clean noun (the leak
