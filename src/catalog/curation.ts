@@ -157,6 +157,22 @@ export const OVERRIDES: Record<string, CommandMeta> = {
     describe: "Update a feature flag's state and targeting in the current environment",
   },
 
+  // --- org-infrastructure cluster (resource migration Phase 6) ---
+  // Op names/descriptions are clean upstream, but every manifest-curated op
+  // still needs an override so the manifest's clean `command` noun is the
+  // single source of truth. `org-domain get` rides the `organizations` op
+  // (owned by `organization list` above) with no entry of its own — see the
+  // manifest comment. The `directory` command stays REST this phase (stop-rule:
+  // no environment-wide directory listing exists), so no directory ops are
+  // curated here.
+  environmentEvents: { command: 'event list', describe: 'List recent events in the current environment' },
+  addDomains: { command: 'org-domain create', describe: 'Add a verified domain to an organization' },
+  restartOrganizationDomainVerification: {
+    command: 'org-domain verify',
+    describe: 'Restart verification for an organization domain',
+  },
+  deleteOrganizationDomain: { command: 'org-domain delete', describe: 'Remove a domain from an organization' },
+
   // --- Phase 4: AuthKit app config ---
   // These op names/descriptions are already clean (no leak), but each still needs
   // an override so resolveCommandMeta returns the manifest's clean noun (the leak

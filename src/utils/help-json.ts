@@ -1301,11 +1301,11 @@ const commands: CommandSchema[] = [
   {
     name: 'event',
     description: 'Query WorkOS events',
-    options: [insecureStorageOpt, apiKeyOpt],
+    options: [insecureStorageOpt],
     commands: [
       {
         name: 'list',
-        description: 'List events',
+        description: 'List events in the active environment',
         options: [
           {
             name: 'events',
@@ -1314,7 +1314,6 @@ const commands: CommandSchema[] = [
             required: true,
             hidden: false,
           },
-          { name: 'org', type: 'string', description: 'Filter by organization ID', required: false, hidden: false },
           {
             name: 'range-start',
             type: 'string',
@@ -1323,7 +1322,21 @@ const commands: CommandSchema[] = [
             hidden: false,
           },
           { name: 'range-end', type: 'string', description: 'Range end (ISO date)', required: false, hidden: false },
-          ...paginationOpts,
+          {
+            name: 'after',
+            type: 'string',
+            description: 'Pagination cursor for results after a specific item',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'limit',
+            type: 'number',
+            description: 'Maximum number of results to return',
+            required: false,
+            hidden: false,
+          },
+          environmentIdOpt,
         ],
       },
     ],
@@ -1662,28 +1675,34 @@ const commands: CommandSchema[] = [
   {
     name: 'org-domain',
     description: 'Manage organization domains',
-    options: [insecureStorageOpt, apiKeyOpt],
+    options: [insecureStorageOpt],
     commands: [
       {
         name: 'get',
         description: 'Get a domain',
         positionals: [{ name: 'id', type: 'string', description: 'Domain ID', required: true }],
+        options: [environmentIdOpt],
       },
       {
         name: 'create',
-        description: 'Create a domain',
+        description: 'Add a domain to an organization (added as verified)',
         positionals: [{ name: 'domain', type: 'string', description: 'Domain name', required: true }],
-        options: [{ name: 'org', type: 'string', description: 'Organization ID', required: true, hidden: false }],
+        options: [
+          { name: 'org', type: 'string', description: 'Organization ID (org_*)', required: true, hidden: false },
+          environmentIdOpt,
+        ],
       },
       {
         name: 'verify',
-        description: 'Verify a domain',
+        description: 'Restart verification for a domain (issues a fresh verification token)',
         positionals: [{ name: 'id', type: 'string', description: 'Domain ID', required: true }],
+        options: [environmentIdOpt],
       },
       {
         name: 'delete',
         description: 'Delete a domain',
         positionals: [{ name: 'id', type: 'string', description: 'Domain ID', required: true }],
+        options: [confirmYesOpt, environmentIdOpt],
       },
     ],
   },

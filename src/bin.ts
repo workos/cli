@@ -2097,7 +2097,7 @@ async function runCli(): Promise<void> {
       return yargs.demandCommand(1, 'Please specify a directory subcommand').strict();
     })
     .command('event', 'Query WorkOS events', (yargs) => {
-      yargs.options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } });
+      yargs.options(insecureStorageOption);
       registerSubcommand(
         yargs,
         'list',
@@ -2105,29 +2105,23 @@ async function runCli(): Promise<void> {
         (y) =>
           y.options({
             events: { type: 'string', demandOption: true, describe: 'Comma-separated event types' },
-            after: { type: 'string' },
-            org: { type: 'string' },
-            'range-start': { type: 'string' },
-            'range-end': { type: 'string' },
-            limit: { type: 'number' },
+            after: { type: 'string', describe: 'Cursor for results after a specific item' },
+            'range-start': { type: 'string', describe: 'Range start (ISO date)' },
+            'range-end': { type: 'string', describe: 'Range end (ISO date)' },
+            limit: { type: 'number', describe: 'Limit number of results' },
+            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runEventList } = await import('./commands/event.js');
-          await runEventList(
-            {
-              events: argv.events.split(','),
-              after: argv.after,
-              organizationId: argv.org,
-              rangeStart: argv.rangeStart,
-              rangeEnd: argv.rangeEnd,
-              limit: argv.limit,
-            },
-            resolveApiKey({ apiKey: argv.apiKey }),
-            resolveApiBaseUrl(),
-          );
+          await runEventList({
+            events: argv.events.split(','),
+            after: argv.after,
+            rangeStart: argv.rangeStart,
+            rangeEnd: argv.rangeEnd,
+            limit: argv.limit,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       return yargs.demandCommand(1, 'Please specify an event subcommand').strict();
@@ -2760,60 +2754,70 @@ async function runCli(): Promise<void> {
       return yargs.demandCommand(1, 'Please specify an api-key subcommand').strict();
     })
     .command('org-domain', 'Manage organization domains', (yargs) => {
-      yargs.options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } });
+      yargs.options(insecureStorageOption);
       registerSubcommand(
         yargs,
         'get <id>',
         'Get a domain',
-        (y) => y.positional('id', { type: 'string', demandOption: true }),
+        (y) =>
+          y
+            .positional('id', { type: 'string', demandOption: true, describe: 'Domain ID' })
+            .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runOrgDomainGet } = await import('./commands/org-domain.js');
-          await runOrgDomainGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runOrgDomainGet(argv.id, { environmentId: argv.environmentId as string | undefined });
         },
       );
       registerSubcommand(
         yargs,
         'create <domain>',
-        'Create a domain',
+        'Add a domain to an organization (added as verified)',
         (y) =>
           y
-            .positional('domain', { type: 'string', demandOption: true })
-            .option('org', { type: 'string', demandOption: true }),
+            .positional('domain', { type: 'string', demandOption: true, describe: 'Domain name' })
+            .option('org', { type: 'string', demandOption: true, describe: 'Organization ID (org_*)' })
+            .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runOrgDomainCreate } = await import('./commands/org-domain.js');
-          await runOrgDomainCreate(argv.domain, argv.org, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runOrgDomainCreate(argv.domain, {
+            org: argv.org,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       registerSubcommand(
         yargs,
         'verify <id>',
-        'Verify a domain',
-        (y) => y.positional('id', { type: 'string', demandOption: true }),
+        'Restart verification for a domain (issues a fresh verification token)',
+        (y) =>
+          y
+            .positional('id', { type: 'string', demandOption: true, describe: 'Domain ID' })
+            .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runOrgDomainVerify } = await import('./commands/org-domain.js');
-          await runOrgDomainVerify(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runOrgDomainVerify(argv.id, { environmentId: argv.environmentId as string | undefined });
         },
       );
       registerSubcommand(
         yargs,
         'delete <id>',
         'Delete a domain',
-        (y) => y.positional('id', { type: 'string', demandOption: true }),
+        (y) =>
+          y
+            .positional('id', { type: 'string', demandOption: true, describe: 'Domain ID' })
+            .option('yes', { alias: 'y', type: 'boolean', default: false, describe: 'Skip the confirmation prompt' })
+            .option('environment-id', { type: 'string', describe: 'Environment ID (defaults to the active environment)' }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runOrgDomainDelete } = await import('./commands/org-domain.js');
-          await runOrgDomainDelete(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runOrgDomainDelete(argv.id, {
+            yes: argv.yes,
+            json: argv.json as boolean | undefined,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       return yargs.demandCommand(1, 'Please specify an org-domain subcommand').strict();

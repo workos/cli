@@ -670,6 +670,72 @@ const MANIFEST: CommandJustification[] = [
     // flags from CI/scripts is the intended automation.
     ciPolicy: 'allow',
   },
+
+  // --- Resource migration: org-infrastructure cluster (event / org-domain) ---
+  // graphql-resource-migration Phase 6. Same recipe as the earlier clusters:
+  // unchanged subcommand grammar, dashboard-plane backend, new curated shapes.
+  //
+  // Mapping notes:
+  // - `directory` STAYS on the REST plane this phase: the delta's stop-rule
+  //   triggered. The catalog's only directory listings are org-scoped
+  //   (`directoriesForOrganization`) or per-directory (`directorySummary`), and
+  //   the upstream schema has no environment-wide directories query at all, so
+  //   migrating would force `--org` onto `directory list` — a frozen-grammar
+  //   violation. Recorded as the upstream catalog ask.
+  // - `org-domain get` has NO backing single-domain query (the delta's
+  //   `teamDashboardOrgDomains` candidate returns the domains of the team's OWN
+  //   WorkOS organization — wrong plane): it is a client-side filter over one
+  //   page of the `organizations` op (capped, loud miss wording), so it
+  //   deliberately has no manifest entry of its own (invitation-get precedent).
+  // - `org-domain verify` maps to the restart-DNS-verification op, which is what
+  //   REST verify did (initiate verification); the instant manual-verify op is
+  //   deliberately NOT surfaced (grammar frozen).
+  // - Domain setters follow the `organization create/update` precedent (those
+  //   already write domains): ciPolicy `allow`. The delete is `destructive`
+  //   (confirmDestructive; ciPolicy stays `allow` because the destructive gate
+  //   already covers non-interactive runs).
+  {
+    command: 'event list',
+    mapsTo: 'environmentEvents',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'Audit recent activity in the active environment (debugging, sync monitoring, scripting)',
+    load: 'cheap',
+    mutation: false,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'org-domain create',
+    mapsTo: 'addDomains',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'Add a verified domain to an organization from setup scripts or CI',
+    load: 'cheap',
+    mutation: true,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'org-domain verify',
+    mapsTo: 'restartOrganizationDomainVerification',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'Restart DNS verification for an organization domain (issues a fresh verification token)',
+    load: 'cheap',
+    mutation: true,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'org-domain delete',
+    mapsTo: 'deleteOrganizationDomain',
+    audiences: ['human', 'agent'],
+    useCase: 'Remove a domain from an organization (cleanup, offboarding)',
+    load: 'cheap',
+    mutation: true,
+    // destructive: removes the domain; domain-based sign-in and capture stop
+    // working for it.
+    destructive: true,
+    ciPolicy: 'allow',
+  },
 ];
 
 /** Returns the curated command allowlist. */
