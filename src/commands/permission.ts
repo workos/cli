@@ -60,8 +60,6 @@ function shapePermission(permission: PermissionNode) {
   };
 }
 
-type ShapedPermission = ReturnType<typeof shapePermission>;
-
 /** Fetch the environment's full permission set (the op is unpaginated). */
 async function fetchPermissions(token: string, environmentId: string): Promise<PermissionNode[]> {
   const op = getOperation('permissions');

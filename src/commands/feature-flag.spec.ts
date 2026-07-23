@@ -45,7 +45,7 @@ vi.mock('../lib/config-store.js', async (importActual) => {
 });
 
 const { setOutputMode } = await import('../utils/output.js');
-const { resetInteractionModeForTests, setInteractionMode } = await import('../utils/interaction-mode.js');
+const { resetInteractionModeForTests } = await import('../utils/interaction-mode.js');
 const { DashboardGraphqlError } = await import('../lib/dashboard-graphql.js');
 const { CliExit } = await import('../utils/cli-exit.js');
 const {
