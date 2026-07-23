@@ -23,12 +23,10 @@
  */
 
 import chalk from 'chalk';
-import { requireCommandToken } from '../lib/command-auth.js';
-import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
-import { resolveEnvironmentTarget } from '../lib/environment-target.js';
-import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
+import { runEnvScopedOperation } from '../lib/dashboard-operation.js';
 import { confirmDestructive } from '../catalog/confirm.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
+import { printDetailFields } from '../utils/resource-command.js';
 
 /**
  * `get <id>` scans one page of organizations (each carrying its domains) — a
@@ -75,11 +73,7 @@ function printOrgDomainFields(domain: ShapedOrgDomain): void {
     ['Org ID', domain.organizationId],
     ['Verification', domain.verificationStrategy],
   ];
-  for (const [label, value] of fields) {
-    if (value === null || value === undefined || value === '') continue;
-    console.log(`${chalk.bold(label)}: ${String(value)}`);
-  }
-  console.log(chalk.dim('Run with --json for the full record.'));
+  printDetailFields(fields);
 }
 
 export interface OrgDomainGetOptions {
@@ -88,31 +82,13 @@ export interface OrgDomainGetOptions {
 }
 
 export async function runOrgDomainGet(id: string, options: OrgDomainGetOptions = {}): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('organizations');
-
-  // Environment-scoped read: resolved target as variable + header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
   // There is no single-domain operation, so filter one page of organizations'
   // domains client-side — capped, never an unbounded scan.
-  let data: {
+  const { data } = await runEnvScopedOperation<{
     organizations: {
       data: Array<{ id: string; domains?: OrgDomainNode[] | null }>;
     } | null;
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { environmentId, limit: ORG_DOMAIN_GET_SCAN_LIMIT },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  }>('organizations', options, (environmentId) => ({ environmentId, limit: ORG_DOMAIN_GET_SCAN_LIMIT }));
 
   let match: ShapedOrgDomain | undefined;
   for (const organization of data.organizations?.data ?? []) {
@@ -145,51 +121,31 @@ export interface OrgDomainCreateOptions {
 }
 
 export async function runOrgDomainCreate(domain: string, options: OrgDomainCreateOptions): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('addDomains');
-
-  // Environment-scoped mutation: pre-validated resolved target as header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  // The backing operation takes a domain list; the frozen single-domain grammar
+  // passes a one-element list.
+  const { data } = await runEnvScopedOperation<{
     addDomains:
       | { __typename: 'DomainsAdded'; domains: OrgDomainNode[] }
       | { __typename: 'ConsumerDomainForbidden'; domain: string }
       | { __typename: 'OrganizationDomainAlreadyInUse'; domain: string; organization: { name: string | null } }
-      | { __typename: 'ExistingNonVerifiedDomain'; nonVerifiedDomain: { state: string | null; domain: string } }
-      | { __typename: string };
-  };
-  try {
-    // The backing operation takes a domain list; the frozen single-domain
-    // grammar passes a one-element list.
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { input: { organizationId: options.org, domains: [domain] } },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      | { __typename: 'ExistingNonVerifiedDomain'; nonVerifiedDomain: { state: string | null; domain: string } };
+  }>('addDomains', options, { input: { organizationId: options.org, domains: [domain] } });
 
   const result = data.addDomains;
   if (result.__typename === 'OrganizationDomainAlreadyInUse') {
-    const taken = result as { domain: string; organization: { name: string | null } };
     exitWithError({
       code: 'domain_in_use',
-      message: `Domain "${taken.domain}" is already in use by organization ${taken.organization?.name ?? 'another organization'}.`,
+      message: `Domain "${result.domain}" is already in use by organization ${result.organization?.name ?? 'another organization'}.`,
     });
   }
   if (result.__typename === 'ConsumerDomainForbidden') {
     exitWithError({
       code: 'consumer_domain_forbidden',
-      message: `"${(result as { domain: string }).domain}" is a consumer email domain and cannot be added to an organization.`,
+      message: `"${result.domain}" is a consumer email domain and cannot be added to an organization.`,
     });
   }
   if (result.__typename === 'ExistingNonVerifiedDomain') {
-    const existing = (result as { nonVerifiedDomain: { state: string | null; domain: string } }).nonVerifiedDomain;
+    const existing = result.nonVerifiedDomain;
     exitWithError({
       code: 'domain_pending',
       message: `Domain "${existing.domain}" already exists on this organization in a non-verified state (${existing.state ?? 'pending'}). Delete it with \`org-domain delete\` before re-adding it.`,
@@ -199,7 +155,7 @@ export async function runOrgDomainCreate(domain: string, options: OrgDomainCreat
     exitWithError({ code: 'unexpected_result', message: `Could not add domain "${domain}".` });
   }
 
-  const added = shapeOrgDomain((result as { domains: OrgDomainNode[] }).domains[0] ?? { domain }, options.org);
+  const added = shapeOrgDomain(result.domains[0] ?? { domain }, options.org);
   if (isJsonMode()) {
     outputJson({ domain: added });
     return;
@@ -217,27 +173,13 @@ export interface OrgDomainVerifyOptions {
 }
 
 export async function runOrgDomainVerify(id: string, options: OrgDomainVerifyOptions = {}): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('restartOrganizationDomainVerification');
-
-  // Environment-scoped mutation: pre-validated resolved target as header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
   // No result union: a bad ID surfaces as a wire-level error via
   // reportDashboardError.
-  let data: { restartOrganizationDomainVerification: OrgDomainNode };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { id },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  const { data } = await runEnvScopedOperation<{ restartOrganizationDomainVerification: OrgDomainNode }>(
+    'restartOrganizationDomainVerification',
+    options,
+    { id },
+  );
 
   const domain = shapeOrgDomain(data.restartOrganizationDomainVerification ?? { id }, null);
   if (isJsonMode()) {
@@ -266,26 +208,9 @@ export async function runOrgDomainDelete(id: string, options: OrgDomainDeleteOpt
     action: `delete domain ${id} from its organization — domain-based sign-in and capture stop working for it`,
   });
 
-  const token = await requireCommandToken();
-  const op = getOperation('deleteOrganizationDomain');
-
-  // Environment-scoped mutation: pre-validated resolved target as header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
   // No result union: a bad ID surfaces as a wire-level error via
   // reportDashboardError.
-  try {
-    await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { id },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  await runEnvScopedOperation('deleteOrganizationDomain', options, { id });
 
   if (isJsonMode()) {
     outputJson({ deleted: id });

@@ -12,7 +12,14 @@
  *   structured error — they never open a browser.
  */
 
-import { getCredentials, hasCredentials, updateTokens, isTokenExpired, clearCredentials } from './credentials.js';
+import {
+  getCredentials,
+  hasCredentials,
+  updateTokens,
+  isTokenExpired,
+  clearCredentials,
+  type Credentials,
+} from './credentials.js';
 import { refreshAccessToken } from './token-refresh-client.js';
 import { getCliAuthClientId, getAuthkitDomain } from './settings.js';
 import { logInfo } from '../utils/debug.js';
@@ -96,10 +103,11 @@ export const DASHBOARD_ERROR_MESSAGES: Record<
  * Deliberately policy-free about the dead-session case: callers can derive the
  * reason from observable store state (credentials surviving the call means the
  * failure was transient).
+ *
+ * Callers that already read the store may pass `creds` to skip the (keyring
+ * IPC) re-read; the default preserves the zero-argument contract.
  */
-export async function refreshIfExpired(): Promise<UsableSession | null> {
-  const creds = getCredentials();
-
+export async function refreshIfExpired(creds: Credentials | null = getCredentials()): Promise<UsableSession | null> {
   // No credentials (or unreadable/corrupt) — clean up any leftover files.
   if (!creds) {
     clearCredentials();
@@ -150,9 +158,10 @@ export async function refreshIfExpired(): Promise<UsableSession | null> {
  * browser or triggers the login flow. Never returns on failure.
  */
 export async function requireCommandToken(): Promise<string> {
-  const hadSession = getCredentials() !== null;
+  const creds = getCredentials();
+  const hadSession = creds !== null;
 
-  const session = await refreshIfExpired();
+  const session = await refreshIfExpired(creds);
   if (session) {
     return session.accessToken;
   }

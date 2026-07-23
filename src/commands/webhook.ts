@@ -18,13 +18,11 @@
  */
 
 import chalk from 'chalk';
-import { requireCommandToken } from '../lib/command-auth.js';
-import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
-import { resolveEnvironmentTarget } from '../lib/environment-target.js';
-import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
+import { runEnvScopedOperation } from '../lib/dashboard-operation.js';
 import { confirmDestructive } from '../catalog/confirm.js';
 import { isJsonMode, outputJson, outputSuccess } from '../utils/output.js';
 import { formatTable } from '../utils/table.js';
+import { printPaginationFooter } from '../utils/resource-command.js';
 
 interface WebhookEndpointNode {
   id?: string | null;
@@ -79,30 +77,13 @@ export interface WebhookListOptions {
 }
 
 export async function runWebhookList(options: WebhookListOptions = {}): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('webhookEndpoints');
-
   // Environment-scoped read: resolved target as variable + header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  const { data } = await runEnvScopedOperation<{
     webhookEndpoints: {
       data: WebhookEndpointNode[];
       listMetadata?: { before?: string | null; after?: string | null } | null;
     } | null;
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { environmentId },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  }>('webhookEndpoints', options, (environmentId) => ({ environmentId }));
 
   const endpoints = (data.webhookEndpoints?.data ?? []).map(shapeWebhookEndpoint);
   const pagination = {
@@ -134,14 +115,7 @@ export async function runWebhookList(options: WebhookListOptions = {}): Promise<
     ),
   );
 
-  const { before, after } = pagination;
-  if (before && after) {
-    console.log(chalk.dim(`Before: ${before}  After: ${after}`));
-  } else if (before) {
-    console.log(chalk.dim(`Before: ${before}`));
-  } else if (after) {
-    console.log(chalk.dim(`After: ${after}`));
-  }
+  printPaginationFooter(pagination);
 }
 
 export interface WebhookCreateOptions {
@@ -152,28 +126,14 @@ export interface WebhookCreateOptions {
 }
 
 export async function runWebhookCreate(options: WebhookCreateOptions): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('createWebhookEndpoint');
-
   // Environment-scoped mutation: pre-validated resolved target as variable +
-  // header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  // No result union: validation failures (e.g. a non-HTTPS endpoint URL)
-  // surface as wire-level errors via reportDashboardError.
-  let data: { createWebhookEndpoint: { id: string } | null };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { endpointUrl: options.url, environmentId, events: options.events },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  // header. No result union: validation failures (e.g. a non-HTTPS endpoint
+  // URL) surface as wire-level errors via reportDashboardError.
+  const { data } = await runEnvScopedOperation<{ createWebhookEndpoint: { id: string } | null }>(
+    'createWebhookEndpoint',
+    options,
+    (environmentId) => ({ endpointUrl: options.url, environmentId, events: options.events }),
+  );
 
   // The backing operation returns only the new endpoint's ID; echo the inputs
   // so the output is self-describing.
@@ -202,26 +162,10 @@ export async function runWebhookDelete(id: string, options: WebhookDeleteOptions
     action: `delete webhook endpoint ${id} — it stops receiving events immediately`,
   });
 
-  const token = await requireCommandToken();
-  const op = getOperation('deleteWebhookEndpoint');
-
-  // Environment-scoped mutation: pre-validated resolved target as header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  // No result union: a bad ID surfaces as a wire-level error via
+  // Environment-scoped mutation: pre-validated resolved target as header. No
+  // result union: a bad ID surfaces as a wire-level error via
   // reportDashboardError.
-  try {
-    await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { id },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  await runEnvScopedOperation('deleteWebhookEndpoint', options, { id });
 
   if (isJsonMode()) {
     outputJson({ deleted: id });

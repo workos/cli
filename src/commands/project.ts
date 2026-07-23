@@ -13,9 +13,7 @@
  */
 
 import chalk from 'chalk';
-import { requireCommandToken } from '../lib/command-auth.js';
-import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
-import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
+import { runTeamScopedOperation } from '../lib/dashboard-operation.js';
 import { requireConfirmationFlag } from '../catalog/confirm.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
 import { formatTable } from '../utils/table.js';
@@ -37,24 +35,14 @@ export async function runProjectCreate(options: ProjectCreateOptions): Promise<v
   // require-flag: non-interactive callers must pass --yes before provisioning.
   await requireConfirmationFlag(options, { action: `create project "${options.name}"` });
 
-  const token = await requireCommandToken();
-  const op = getOperation('createProjectWithNewEnvironments');
-
-  let data: {
+  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
+  const { data } = await runTeamScopedOperation<{
     createProjectWithNewEnvironments:
       | { __typename: 'ProjectCreated'; project: ProjectNode }
-      | { __typename: 'ProjectNameAlreadyUsed'; name: string }
-      | { __typename: string };
-  };
-  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { input: { name: options.name, includeProductionEnvironment: options.production } },
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      | { __typename: 'ProjectNameAlreadyUsed'; name: string };
+  }>('createProjectWithNewEnvironments', {
+    input: { name: options.name, includeProductionEnvironment: options.production },
+  });
 
   const result = data.createProjectWithNewEnvironments;
   if (result.__typename === 'ProjectNameAlreadyUsed') {
@@ -67,7 +55,7 @@ export async function runProjectCreate(options: ProjectCreateOptions): Promise<v
     exitWithError({ code: 'unexpected_result', message: `Could not create project "${options.name}".` });
   }
 
-  const project = (result as { project: ProjectNode }).project;
+  const project = result.project;
   if (isJsonMode()) {
     outputJson({ project });
     return;
@@ -82,25 +70,13 @@ export interface ProjectRenameOptions {
 }
 
 export async function runProjectRename(options: ProjectRenameOptions): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('renameProject');
-
-  let data: {
+  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
+  const { data } = await runTeamScopedOperation<{
     renameProject:
       | { __typename: 'ProjectRenamed'; project: ProjectNode }
       | { __typename: 'ProjectNameAlreadyUsed'; name: string }
-      | { __typename: 'ProjectNotFound'; projectId: string }
-      | { __typename: string };
-  };
-  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { input: { projectId: options.projectId, name: options.name } },
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      | { __typename: 'ProjectNotFound'; projectId: string };
+  }>('renameProject', { input: { projectId: options.projectId, name: options.name } });
 
   const result = data.renameProject;
   if (result.__typename === 'ProjectNameAlreadyUsed') {
@@ -116,7 +92,7 @@ export async function runProjectRename(options: ProjectRenameOptions): Promise<v
     exitWithError({ code: 'unexpected_result', message: `Could not rename project "${options.projectId}".` });
   }
 
-  const project = (result as { project: ProjectNode }).project;
+  const project = result.project;
   if (isJsonMode()) {
     outputJson({ project });
     return;
@@ -132,16 +108,10 @@ interface ProjectListNode {
 }
 
 export async function runProjectList(): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('teamProjectsV2');
-
-  let data: { currentTeam: { id: string; projectsV2: ProjectListNode[] } | null };
   // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), { token });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  const { data } = await runTeamScopedOperation<{ currentTeam: { id: string; projectsV2: ProjectListNode[] } | null }>(
+    'teamProjectsV2',
+  );
 
   const projects = data.currentTeam?.projectsV2 ?? [];
   if (isJsonMode()) {

@@ -17,10 +17,7 @@
  */
 
 import chalk from 'chalk';
-import { requireCommandToken } from '../lib/command-auth.js';
-import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
-import { resolveEnvironmentTarget } from '../lib/environment-target.js';
-import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
+import { runEnvScopedOperation } from '../lib/dashboard-operation.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
 import { formatTable } from '../utils/table.js';
 
@@ -97,26 +94,13 @@ export interface RedirectUrisListOptions {
 }
 
 export async function runAuthkitRedirectUrisList(options: RedirectUrisListOptions): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('redirectUris');
-
   // Environment-scoped: the resolved target rides as both the operation
   // variable and the environment header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: { redirectUris: { data: UriNode[] } | null };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { environmentId, ...(options.limit !== undefined ? { limit: options.limit } : {}) },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  const { data } = await runEnvScopedOperation<{ redirectUris: { data: UriNode[] } | null }>(
+    'redirectUris',
+    options,
+    (environmentId) => ({ environmentId, ...(options.limit !== undefined ? { limit: options.limit } : {}) }),
+  );
 
   const uris = data.redirectUris?.data ?? [];
   if (isJsonMode()) {
@@ -137,41 +121,25 @@ export interface RedirectUrisSetOptions {
 export async function runAuthkitRedirectUrisSet(options: RedirectUrisSetOptions): Promise<void> {
   const uris = requireAtLeastOne(options.uris, '--uri');
   const dryRun = !!options.dryRun;
-  const token = await requireCommandToken();
-  const op = getOperation('setRedirectUris');
 
   // Environment-scoped mutation: pre-validated resolved target, sent as both
   // input field and environment header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  const { data } = await runEnvScopedOperation<{
     setRedirectUris:
       | { __typename: 'RedirectUrisSet'; redirectUris: UriNode[] }
       | { __typename: 'InvalidRedirectUriError'; message: string; uri: string }
-      | { __typename: 'InvalidWildcardRedirectUri'; message: string; uri: string }
-      | { __typename: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { input: { environmentId, redirectUris: toUriInputs(uris, options.default), dryRun } },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      | { __typename: 'InvalidWildcardRedirectUri'; message: string; uri: string };
+  }>('setRedirectUris', options, (environmentId) => ({
+    input: { environmentId, redirectUris: toUriInputs(uris, options.default), dryRun },
+  }));
 
   const result = data.setRedirectUris;
   if (result.__typename !== 'RedirectUrisSet' || !('redirectUris' in result)) {
-    const detail =
-      'message' in result ? `${result.message} (${(result as { uri: string }).uri})` : 'Invalid redirect URI.';
+    const detail = 'message' in result ? `${result.message} (${result.uri})` : 'Invalid redirect URI.';
     exitWithError({ code: 'invalid_redirect_uri', message: detail });
   }
 
-  const saved = (result as { redirectUris: UriNode[] }).redirectUris;
+  const saved = result.redirectUris;
   if (isJsonMode()) {
     outputJson({ redirectUris: saved, dryRun });
     return;
@@ -187,25 +155,10 @@ export interface CorsGetOptions {
 }
 
 export async function runAuthkitCorsGet(options: CorsGetOptions): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('corsConfig');
-
   // Environment-scoped: resolved target as variable + header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: { webOrigins: { webOrigins: { origins: string[] } | null } | null };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { environmentId },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  const { data } = await runEnvScopedOperation<{
+    webOrigins: { webOrigins: { origins: string[] } | null } | null;
+  }>('corsConfig', options, (environmentId) => ({ environmentId }));
 
   const origins = data.webOrigins?.webOrigins?.origins ?? [];
   if (isJsonMode()) {
@@ -230,29 +183,13 @@ export async function runAuthkitCorsSet(options: CorsSetOptions): Promise<void> 
   const origins = requireAtLeastOne(options.origins, '--origin');
   rejectWildcardOrigins(origins);
   const dryRun = !!options.dryRun;
-  const token = await requireCommandToken();
-  const op = getOperation('updateCorsConfig');
 
   // Environment-scoped mutation: pre-validated resolved target.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  const { data } = await runEnvScopedOperation<{
     setWebOrigins:
       | { __typename: 'WebOriginsSet'; origins: string[] }
       | { __typename: string; message?: string; uri?: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { environmentId, origins, dryRun },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  }>('updateCorsConfig', options, (environmentId) => ({ environmentId, origins, dryRun }));
 
   const result = data.setWebOrigins;
   if (result.__typename !== 'WebOriginsSet' || !('origins' in result)) {
@@ -283,25 +220,12 @@ export interface LogoutUrisListOptions {
 }
 
 export async function runAuthkitLogoutUrisList(options: LogoutUrisListOptions): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('logoutUris');
-
   // Environment-scoped: resolved target as variable + header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: { logoutUris: { data: UriNode[] } | null };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { environmentId, ...(options.limit !== undefined ? { limit: options.limit } : {}) },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  const { data } = await runEnvScopedOperation<{ logoutUris: { data: UriNode[] } | null }>(
+    'logoutUris',
+    options,
+    (environmentId) => ({ environmentId, ...(options.limit !== undefined ? { limit: options.limit } : {}) }),
+  );
 
   const uris = data.logoutUris?.data ?? [];
   if (isJsonMode()) {
@@ -322,29 +246,15 @@ export interface LogoutUrisSetOptions {
 export async function runAuthkitLogoutUrisSet(options: LogoutUrisSetOptions): Promise<void> {
   const uris = requireAtLeastOne(options.uris, '--uri');
   const dryRun = !!options.dryRun;
-  const token = await requireCommandToken();
-  const op = getOperation('setLogoutUris');
 
   // Environment-scoped mutation: pre-validated resolved target.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  const { data } = await runEnvScopedOperation<{
     setLogoutUris:
       | { __typename: 'LogoutUrisSet'; logoutUris: UriNode[] }
       | { __typename: string; message?: string; uri?: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { input: { environmentId, logoutUris: toUriInputs(uris, options.default), dryRun } },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  }>('setLogoutUris', options, (environmentId) => ({
+    input: { environmentId, logoutUris: toUriInputs(uris, options.default), dryRun },
+  }));
 
   const result = data.setLogoutUris;
   if (result.__typename !== 'LogoutUrisSet' || !('logoutUris' in result)) {
@@ -381,25 +291,10 @@ export interface BrandingGetOptions {
 }
 
 export async function runAuthkitBrandingGet(options: BrandingGetOptions): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('environmentAppBranding');
-
   // Environment-scoped: resolved target as variable + header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: { environment: { appBranding: AppBranding | null } | null };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { environmentId },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  const { data } = await runEnvScopedOperation<{
+    environment: { appBranding: AppBranding | null } | null;
+  }>('environmentAppBranding', options, (environmentId) => ({ environmentId }));
 
   const branding = data.environment?.appBranding ?? null;
   if (isJsonMode()) {

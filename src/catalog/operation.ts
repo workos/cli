@@ -24,6 +24,19 @@ import type { CatalogOperation, ManagementCatalog } from './catalog-types.js';
  * call — a missing header silently targets the team's production environment.
  */
 
+// Name → operation indexes, one per catalog instance (loadManagementCatalog
+// memoizes the snapshot, so the default path builds this exactly once).
+const operationIndexes = new WeakMap<ManagementCatalog, Map<string, CatalogOperation>>();
+
+function operationIndex(catalog: ManagementCatalog): Map<string, CatalogOperation> {
+  let index = operationIndexes.get(catalog);
+  if (!index) {
+    index = new Map(catalog.operations.map((op) => [op.name, op]));
+    operationIndexes.set(catalog, index);
+  }
+  return index;
+}
+
 /**
  * Look up a catalog operation by its name (the `mapsTo` value in the manifest).
  *
@@ -37,7 +50,7 @@ export function getOperation(
   name: string,
   catalog: ManagementCatalog = loadManagementCatalog(undefined, { includeFeatureFlagged: true }),
 ): CatalogOperation {
-  const op = catalog.operations.find((candidate) => candidate.name === name);
+  const op = operationIndex(catalog).get(name);
   if (!op) {
     throw new Error(
       `Catalog operation "${name}" not found. The vendored snapshot may be stale; run \`pnpm catalog:vendor\`.`,

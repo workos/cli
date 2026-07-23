@@ -19,12 +19,11 @@
  */
 
 import chalk from 'chalk';
-import { requireCommandToken } from '../lib/command-auth.js';
-import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
-import { resolveEnvironmentTarget } from '../lib/environment-target.js';
-import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
+import { getOperation } from '../catalog/operation.js';
 import { confirmDestructive } from '../catalog/confirm.js';
+import { runEnvScopedOperation } from '../lib/dashboard-operation.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
+import { normalizeOrder, printDetailFields, printPaginationFooter } from '../utils/resource-command.js';
 import { formatTable } from '../utils/table.js';
 
 const DOMAIN_STATES = ['verified', 'pending'] as const;
@@ -65,15 +64,6 @@ function domainsDeveloperVerified(domains: ParsedDomain[]): boolean {
     });
   }
   return !states.has('pending');
-}
-
-/** Map the CLI `--order asc|desc` flag onto the catalog's pagination enum. */
-function normalizeOrder(order: string | undefined): 'Asc' | 'Desc' | undefined {
-  if (order === undefined) return undefined;
-  const lower = order.toLowerCase();
-  if (lower === 'asc') return 'Asc';
-  if (lower === 'desc') return 'Desc';
-  exitWithError({ code: 'invalid_argument', message: `Invalid --order "${order}". Allowed values: asc, desc.` });
 }
 
 interface OrganizationDomainNode {
@@ -124,37 +114,19 @@ export interface OrgListOptions {
 
 export async function runOrgList(options: OrgListOptions = {}): Promise<void> {
   const order = normalizeOrder(options.order);
-  const token = await requireCommandToken();
-  const op = getOperation('organizations');
-
-  // Environment-scoped read: resolved target as variable + header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  const { data } = await runEnvScopedOperation<{
     organizations: {
       data: OrganizationNode[];
       listMetadata: { before: string | null; after: string | null };
     } | null;
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: {
-        environmentId,
-        ...(options.domain ? { search: options.domain } : {}),
-        ...(options.limit !== undefined ? { limit: options.limit } : {}),
-        ...(options.before ? { before: options.before } : {}),
-        ...(options.after ? { after: options.after } : {}),
-        ...(order ? { order } : {}),
-      },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  }>('organizations', options, (environmentId) => ({
+    environmentId,
+    ...(options.domain ? { search: options.domain } : {}),
+    ...(options.limit !== undefined ? { limit: options.limit } : {}),
+    ...(options.before ? { before: options.before } : {}),
+    ...(options.after ? { after: options.after } : {}),
+    ...(order ? { order } : {}),
+  }));
 
   const organizations = data.organizations?.data ?? [];
   const pagination = {
@@ -179,14 +151,7 @@ export async function runOrgList(options: OrgListOptions = {}): Promise<void> {
   ]);
   console.log(formatTable([{ header: 'ID' }, { header: 'Name' }, { header: 'Domains' }], rows));
 
-  const { before, after } = pagination;
-  if (before && after) {
-    console.log(chalk.dim(`Before: ${before}  After: ${after}`));
-  } else if (before) {
-    console.log(chalk.dim(`Before: ${before}`));
-  } else if (after) {
-    console.log(chalk.dim(`After: ${after}`));
-  }
+  printPaginationFooter(pagination);
 }
 
 export interface OrgGetOptions {
@@ -195,26 +160,10 @@ export interface OrgGetOptions {
 }
 
 export async function runOrgGet(orgId: string, options: OrgGetOptions = {}): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('organization');
-
-  // Environment-scoped read: the op takes only `id`, but the target still
-  // rides as the environment header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
+  // The op takes only `id`; the resolved target still rides as the environment header.
+  const { data } = await runEnvScopedOperation<{ organization: OrganizationNode | null }>('organization', options, {
+    id: orgId,
   });
-
-  let data: { organization: OrganizationNode | null };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { id: orgId },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
 
   if (!data.organization) {
     exitWithError({ code: 'not_found', message: `Organization "${orgId}" was not found in this environment.` });
@@ -234,11 +183,7 @@ export async function runOrgGet(orgId: string, options: OrgGetOptions = {}): Pro
     ['External ID', organization.externalId],
     ['Domains', organization.domains.map((d) => `${d.domain} (${d.state ?? 'unknown'})`).join(', ') || null],
   ];
-  for (const [label, value] of fields) {
-    if (value === null || value === undefined || value === '') continue;
-    console.log(`${chalk.bold(label)}: ${String(value)}`);
-  }
-  console.log(chalk.dim('Run with --json for the full record.'));
+  printDetailFields(fields);
 }
 
 export interface OrgCreateOptions {
@@ -250,17 +195,8 @@ export async function runOrgCreate(name: string, domainArgs: string[], options: 
   const domains = parseDomainArgs(domainArgs);
   const developerVerified = domains.length > 0 ? domainsDeveloperVerified(domains) : undefined;
 
-  const token = await requireCommandToken();
-  const op = getOperation('createOrganization');
-
-  // Environment-scoped mutation: pre-validated resolved target, sent as both
-  // input field and environment header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  // The resolved target is sent as both an input field and the environment header.
+  const { data } = await runEnvScopedOperation<{
     createOrganization:
       | { __typename: 'OrganizationCreated'; organization: OrganizationNode }
       | { __typename: 'EnvironmentNotFound'; environmentId: string }
@@ -270,58 +206,47 @@ export async function runOrgCreate(name: string, domainArgs: string[], options: 
           organization: { id: string; name: string | null };
         }
       | { __typename: 'ConsumerDomainForbidden'; domain: string }
-      | { __typename: 'ExternalIDAlreadyUsed'; externalId: string }
-      | { __typename: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: {
-        input: {
-          environmentId,
-          name,
-          ...(domains.length > 0
-            ? { domains: domains.map((d) => d.domain), domainsDeveloperVerified: developerVerified }
-            : {}),
-        },
-      },
+      | { __typename: 'ExternalIDAlreadyUsed'; externalId: string };
+  }>('createOrganization', options, (environmentId) => ({
+    input: {
       environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      name,
+      ...(domains.length > 0
+        ? { domains: domains.map((d) => d.domain), domainsDeveloperVerified: developerVerified }
+        : {}),
+    },
+  }));
 
   const result = data.createOrganization;
   if (result.__typename === 'EnvironmentNotFound') {
     exitWithError({
       code: 'environment_not_found',
-      message: `Environment "${(result as { environmentId: string }).environmentId}" was not found.`,
+      message: `Environment "${result.environmentId}" was not found.`,
     });
   }
   if (result.__typename === 'OrganizationDomainAlreadyInUse') {
-    const taken = result as { domain: string; organization: { id: string; name: string | null } };
     exitWithError({
       code: 'domain_in_use',
-      message: `Domain "${taken.domain}" is already in use by organization ${taken.organization.name ?? taken.organization.id}.`,
+      message: `Domain "${result.domain}" is already in use by organization ${result.organization.name ?? result.organization.id}.`,
     });
   }
   if (result.__typename === 'ConsumerDomainForbidden') {
     exitWithError({
       code: 'consumer_domain_forbidden',
-      message: `"${(result as { domain: string }).domain}" is a consumer email domain and cannot be added to an organization.`,
+      message: `"${result.domain}" is a consumer email domain and cannot be added to an organization.`,
     });
   }
   if (result.__typename === 'ExternalIDAlreadyUsed') {
     exitWithError({
       code: 'external_id_in_use',
-      message: `External ID "${(result as { externalId: string }).externalId}" is already in use.`,
+      message: `External ID "${result.externalId}" is already in use.`,
     });
   }
   if (result.__typename !== 'OrganizationCreated' || !('organization' in result)) {
     exitWithError({ code: 'unexpected_result', message: `Could not create organization "${name}".` });
   }
 
-  const organization = shapeOrganization((result as { organization: OrganizationNode }).organization);
+  const organization = shapeOrganization(result.organization);
   if (isJsonMode()) {
     outputJson({ organization });
     return;
@@ -340,57 +265,38 @@ export interface OrgUpdateOptions {
 export async function runOrgUpdate(orgId: string, name: string, options: OrgUpdateOptions = {}): Promise<void> {
   const domains = options.domain ? parseDomainArgs([`${options.domain}:${options.state || 'verified'}`]) : [];
 
-  const token = await requireCommandToken();
-  const op = getOperation('updateOrganization');
-
-  // Environment-scoped mutation: pre-validated resolved target as header (the
-  // op itself takes flat variables keyed by organization ID).
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  // The op takes flat variables keyed by organization ID; the resolved target rides as the header.
+  const { data } = await runEnvScopedOperation<{
     updateOrganization:
       | { __typename: 'UpdateOrganizationPayload'; organization: OrganizationNode }
       | { __typename: 'ConsumerDomainForbidden'; domain: string }
-      | { __typename: 'ExternalIDAlreadyUsed'; externalId: string }
-      | { __typename: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: {
-        id: orgId,
-        name,
-        ...(domains.length > 0
-          ? { domains: domains.map((d) => d.domain), domainsDeveloperVerified: domainsDeveloperVerified(domains) }
-          : {}),
-      },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      | { __typename: 'ExternalIDAlreadyUsed'; externalId: string };
+  }>('updateOrganization', options, {
+    id: orgId,
+    name,
+    ...(domains.length > 0
+      ? { domains: domains.map((d) => d.domain), domainsDeveloperVerified: domainsDeveloperVerified(domains) }
+      : {}),
+  });
 
   const result = data.updateOrganization;
   if (result.__typename === 'ConsumerDomainForbidden') {
     exitWithError({
       code: 'consumer_domain_forbidden',
-      message: `"${(result as { domain: string }).domain}" is a consumer email domain and cannot be added to an organization.`,
+      message: `"${result.domain}" is a consumer email domain and cannot be added to an organization.`,
     });
   }
   if (result.__typename === 'ExternalIDAlreadyUsed') {
     exitWithError({
       code: 'external_id_in_use',
-      message: `External ID "${(result as { externalId: string }).externalId}" is already in use.`,
+      message: `External ID "${result.externalId}" is already in use.`,
     });
   }
   if (result.__typename !== 'UpdateOrganizationPayload' || !('organization' in result)) {
     exitWithError({ code: 'unexpected_result', message: `Could not update organization "${orgId}".` });
   }
 
-  const organization = shapeOrganization((result as { organization: OrganizationNode }).organization);
+  const organization = shapeOrganization(result.organization);
   if (isJsonMode()) {
     outputJson({ organization });
     return;
@@ -413,23 +319,7 @@ export async function runOrgDelete(orgId: string, options: OrgDeleteOptions = {}
   const consequence = op.confirmation ? ` — this ${op.confirmation}` : '';
   await confirmDestructive(options, { action: `delete organization ${orgId}${consequence}` });
 
-  const token = await requireCommandToken();
-
-  // Environment-scoped mutation: pre-validated resolved target as header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  try {
-    await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { input: { organizationId: orgId } },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  await runEnvScopedOperation('deleteOrganization', options, { input: { organizationId: orgId } });
 
   if (isJsonMode()) {
     outputJson({ deleted: orgId });

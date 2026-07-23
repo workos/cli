@@ -28,7 +28,7 @@
  */
 
 import clack from '../utils/clack.js';
-import { getConfig, getActiveEnvironment, setProfileEnvironmentId } from './config-store.js';
+import { getConfig, getActiveEnvironment, setProfileEnvironmentId, type CliConfig } from './config-store.js';
 import { dashboardGraphqlRequest, DashboardGraphqlError } from './dashboard-graphql.js';
 import { getOperation, resolveExecutableDocument } from '../catalog/operation.js';
 import { refreshIfExpired, DASHBOARD_ERROR_MESSAGES } from './command-auth.js';
@@ -88,9 +88,11 @@ async function fetchTeamEnvironments(token: string): Promise<TeamEnvironment[]> 
  * profile (the foreign-profile fall-through, where the join missed) could be
  * overridden here if that clientId later appears in the team's list — the
  * join is then the fresher truth for this team, so that override is desired.
+ *
+ * Takes the already-read config: every caller has one in hand, and the store
+ * read is keyring IPC.
  */
-function healActiveProfile(environments: TeamEnvironment[]): void {
-  const config = getConfig();
+function healActiveProfile(config: CliConfig | null, environments: TeamEnvironment[]): void {
   if (!config?.activeEnvironment) return;
   const profile = config.environments[config.activeEnvironment];
   if (!profile?.clientId) return;
@@ -168,9 +170,13 @@ export async function resolveEnvironmentTarget(
     });
   }
 
+  // One store read serves healing and the picker-persist branch below; only
+  // the post-heal profile re-read needs fresher state than this snapshot.
+  const config = getConfig();
+
   // Heal before validating: a stale stored ID whose profile clientId still
   // joins to a live environment is silently repaired instead of erroring.
-  healActiveProfile(environments);
+  healActiveProfile(config, environments);
 
   if (flagValue) {
     // An explicit-but-mistyped ID hitting the server's silent fallback on a
@@ -196,7 +202,8 @@ export async function resolveEnvironmentTarget(
     if (choice === null) exitWithCode(ExitCode.CANCELLED);
     // Persist so the picker runs at most once per profile (no-op without an
     // active profile — the choice then applies to this invocation only).
-    const config = getConfig();
+    // Healing never changes which profile is active, so the earlier config
+    // snapshot is still authoritative for the profile name.
     if (config?.activeEnvironment) {
       setProfileEnvironmentId(config.activeEnvironment, choice);
     }

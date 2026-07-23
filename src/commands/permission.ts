@@ -26,11 +26,12 @@
 
 import chalk from 'chalk';
 import { requireCommandToken } from '../lib/command-auth.js';
-import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
 import { resolveEnvironmentTarget } from '../lib/environment-target.js';
-import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
+import { runEnvScopedOperation, executeDashboardOperation } from '../lib/dashboard-operation.js';
+import { getOperation } from '../catalog/operation.js';
 import { confirmDestructive, requireConfirmationFlag } from '../catalog/confirm.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
+import { printDetailFields } from '../utils/resource-command.js';
 import { formatTable } from '../utils/table.js';
 
 interface PermissionNode {
@@ -63,16 +64,9 @@ function shapePermission(permission: PermissionNode) {
 /** Fetch the environment's full permission set (the op is unpaginated). */
 async function fetchPermissions(token: string, environmentId: string): Promise<PermissionNode[]> {
   const op = getOperation('permissions');
-  let data: { permissionsForEnvironment: { permissions: PermissionNode[] } | null };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { id: environmentId },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  const data = await executeDashboardOperation<{
+    permissionsForEnvironment: { permissions: PermissionNode[] } | null;
+  }>(op, { token, variables: { id: environmentId }, environmentId });
   return data.permissionsForEnvironment?.permissions ?? [];
 }
 
@@ -155,11 +149,7 @@ export async function runPermissionGet(slug: string, options: PermissionEnvironm
     ['System', permission.system ? 'yes' : null],
     ['Created', permission.createdAt],
   ];
-  for (const [label, value] of fields) {
-    if (value === null || value === undefined || value === '') continue;
-    console.log(`${chalk.bold(label)}: ${String(value)}`);
-  }
-  console.log(chalk.dim('Run with --json for the full record.'));
+  printDetailFields(fields);
 }
 
 export interface PermissionCreateOptions extends PermissionEnvironmentOptions {
@@ -174,39 +164,21 @@ export async function runPermissionCreate(options: PermissionCreateOptions): Pro
   // require-flag: expands the privilege surface; non-interactive callers must pass --yes.
   await requireConfirmationFlag(options, { action: `create permission ${options.slug}` });
 
-  const token = await requireCommandToken();
-  const op = getOperation('createPermission');
-
   // Environment-scoped mutation: pre-validated resolved target as header (the
   // create input carries no environment field — the header IS the scope).
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  const { data } = await runEnvScopedOperation<{
     createPermission:
       | { __typename: 'PermissionCreated'; permission: PermissionNode }
       | { __typename: 'PermissionAlreadyExists'; slug: string }
       | { __typename: 'PermissionSlugInvalid'; slug: string }
-      | { __typename: 'EnvironmentNotFound'; environmentId: string }
-      | { __typename: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: {
-        input: {
-          slug: options.slug,
-          name: options.name,
-          ...(options.description !== undefined ? { description: options.description } : {}),
-        },
-      },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      | { __typename: 'EnvironmentNotFound'; environmentId: string };
+  }>('createPermission', options, {
+    input: {
+      slug: options.slug,
+      name: options.name,
+      ...(options.description !== undefined ? { description: options.description } : {}),
+    },
+  });
 
   const result = data.createPermission;
   if (result.__typename === 'PermissionAlreadyExists') {
@@ -222,7 +194,7 @@ export async function runPermissionCreate(options: PermissionCreateOptions): Pro
     exitWithError({ code: 'unexpected_result', message: `Could not create permission "${options.slug}".` });
   }
 
-  const permission = shapePermission((result as { permission: PermissionNode }).permission);
+  const permission = shapePermission(result.permission);
   if (isJsonMode()) {
     outputJson({ permission });
     return;
@@ -260,27 +232,21 @@ export async function runPermissionUpdate(slug: string, options: PermissionUpdat
   refuseSystemPermission(existing, slug, 'modified');
   const description = options.description ?? existing.description ?? undefined;
 
-  let data: {
+  const data = await executeDashboardOperation<{
     updatePermission:
       | { __typename: 'PermissionUpdated'; permission: PermissionNode }
-      | { __typename: 'PermissionNotFound'; permissionId: string }
-      | { __typename: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: {
-        input: {
-          permissionId: existing.id,
-          name: options.name ?? existing.name,
-          ...(description !== undefined ? { description } : {}),
-        },
+      | { __typename: 'PermissionNotFound'; permissionId: string };
+  }>(op, {
+    token,
+    variables: {
+      input: {
+        permissionId: existing.id,
+        name: options.name ?? existing.name,
+        ...(description !== undefined ? { description } : {}),
       },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+    },
+    environmentId,
+  });
 
   const result = data.updatePermission;
   if (result.__typename === 'PermissionNotFound') {
@@ -290,7 +256,7 @@ export async function runPermissionUpdate(slug: string, options: PermissionUpdat
     exitWithError({ code: 'unexpected_result', message: `Could not update permission "${slug}".` });
   }
 
-  const permission = shapePermission((result as { permission: PermissionNode }).permission);
+  const permission = shapePermission(result.permission);
   if (isJsonMode()) {
     outputJson({ permission });
     return;
@@ -321,22 +287,12 @@ export async function runPermissionDelete(slug: string, options: PermissionDelet
   const existing = await requirePermissionBySlug(token, environmentId, slug);
   refuseSystemPermission(existing, slug, 'deleted');
 
-  let data: {
+  const data = await executeDashboardOperation<{
     deletePermission:
       | { __typename: 'PermissionDeleted'; permissionId: string }
       | { __typename: 'PermissionNotFound'; permissionId: string }
-      | { __typename: 'EnvironmentNotFound'; environmentId: string }
-      | { __typename: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { input: { permissionId: existing.id } },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      | { __typename: 'EnvironmentNotFound'; environmentId: string };
+  }>(op, { token, variables: { input: { permissionId: existing.id } }, environmentId });
 
   const result = data.deletePermission;
   if (result.__typename === 'PermissionNotFound' || result.__typename === 'EnvironmentNotFound') {

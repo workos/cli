@@ -30,11 +30,12 @@
 
 import chalk from 'chalk';
 import { requireCommandToken } from '../lib/command-auth.js';
-import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
 import { resolveEnvironmentTarget } from '../lib/environment-target.js';
-import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
+import { runEnvScopedOperation, executeDashboardOperation } from '../lib/dashboard-operation.js';
+import { getOperation } from '../catalog/operation.js';
 import { confirmDestructive, requireConfirmationFlag } from '../catalog/confirm.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
+import { printDetailFields } from '../utils/resource-command.js';
 import { formatTable } from '../utils/table.js';
 
 interface RoleNode {
@@ -78,30 +79,20 @@ type ShapedRole = ReturnType<typeof shapeRole>;
 async function fetchRoles(token: string, environmentId: string, orgId: string | undefined): Promise<RoleNode[]> {
   if (orgId) {
     const op = getOperation('rolesForOrganization');
-    let data: { rolesForOrganization: { roles: RoleNode[] } | null };
-    try {
-      data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-        token,
-        variables: { organizationId: orgId, environmentId },
-        environmentId,
-      });
-    } catch (error) {
-      reportDashboardError(error);
-    }
+    const data = await executeDashboardOperation<{ rolesForOrganization: { roles: RoleNode[] } | null }>(op, {
+      token,
+      variables: { organizationId: orgId, environmentId },
+      environmentId,
+    });
     return data.rolesForOrganization?.roles ?? [];
   }
 
   const op = getOperation('roles');
-  let data: { rolesForEnvironment: { roles: RoleNode[] } | null };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { id: environmentId },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  const data = await executeDashboardOperation<{ rolesForEnvironment: { roles: RoleNode[] } | null }>(op, {
+    token,
+    variables: { id: environmentId },
+    environmentId,
+  });
   return data.rolesForEnvironment?.roles ?? [];
 }
 
@@ -167,11 +158,7 @@ function renderRoleFields(role: ShapedRole): void {
     ['Permissions', role.permissions.length > 0 ? role.permissions.join(', ') : null],
     ['Created', role.createdAt],
   ];
-  for (const [label, value] of fields) {
-    if (value === null || value === undefined || value === '') continue;
-    console.log(`${chalk.bold(label)}: ${String(value)}`);
-  }
-  console.log(chalk.dim('Run with --json for the full record.'));
+  printDetailFields(fields);
 }
 
 export interface RoleScopeOptions {
@@ -233,39 +220,21 @@ export async function runRoleCreate(options: RoleCreateOptions): Promise<void> {
   // require-flag: expands the privilege surface; non-interactive callers must pass --yes.
   await requireConfirmationFlag(options, { action: `create role ${options.slug}` });
 
-  const token = await requireCommandToken();
-  const op = getOperation('createRole');
-
   // Environment-scoped mutation: pre-validated resolved target as header (the
   // create input carries no environment field — the header IS the scope).
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  const { data } = await runEnvScopedOperation<{
     createRole:
       | { __typename: 'RoleCreated'; role: RoleNode }
       | { __typename: 'RoleAlreadyExists'; slug: string }
-      | { __typename: 'EnvironmentNotFound'; environmentId: string }
-      | { __typename: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: {
-        input: {
-          slug: options.slug,
-          name: options.name,
-          ...(options.description !== undefined ? { description: options.description } : {}),
-          ...(options.org ? { organizationId: options.org } : {}),
-        },
-      },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      | { __typename: 'EnvironmentNotFound'; environmentId: string };
+  }>('createRole', options, {
+    input: {
+      slug: options.slug,
+      name: options.name,
+      ...(options.description !== undefined ? { description: options.description } : {}),
+      ...(options.org ? { organizationId: options.org } : {}),
+    },
+  });
 
   const result = data.createRole;
   if (result.__typename === 'RoleAlreadyExists') {
@@ -278,7 +247,7 @@ export async function runRoleCreate(options: RoleCreateOptions): Promise<void> {
     exitWithError({ code: 'unexpected_result', message: `Could not create role "${options.slug}".` });
   }
 
-  const role = shapeRole((result as { role: RoleNode }).role);
+  const role = shapeRole(result.role);
   if (isJsonMode()) {
     outputJson({ role });
     return;
@@ -304,21 +273,9 @@ async function executeRoleUpdate(
 ): Promise<ShapedRole> {
   const op = getOperation('updateRole');
 
-  let data: {
-    updateRole:
-      | { __typename: 'RoleUpdated'; role: RoleNode }
-      | { __typename: 'RoleNotFound'; roleId: string }
-      | { __typename: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { input },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  const data = await executeDashboardOperation<{
+    updateRole: { __typename: 'RoleUpdated'; role: RoleNode } | { __typename: 'RoleNotFound'; roleId: string };
+  }>(op, { token, variables: { input }, environmentId });
 
   const result = data.updateRole;
   if (result.__typename === 'RoleNotFound') {
@@ -327,7 +284,7 @@ async function executeRoleUpdate(
   if (result.__typename !== 'RoleUpdated' || !('role' in result)) {
     exitWithError({ code: 'unexpected_result', message: `Could not update role "${slug}".` });
   }
-  return { ...shapeRole((result as { role: RoleNode }).role), permissions: effectivePermissions };
+  return { ...shapeRole(result.role), permissions: effectivePermissions };
 }
 
 /** The role's current permission slugs (from the scope's list operation). */
@@ -418,22 +375,12 @@ export async function runRoleDelete(slug: string, options: RoleDeleteOptions): P
   const role = await requireRoleBySlug(token, environmentId, options.org, slug);
   requireOrgScopedRole(role, slug, options.org);
 
-  let data: {
+  const data = await executeDashboardOperation<{
     deleteRole:
       | { __typename: 'RoleDeleted' }
       | { __typename: 'RoleNotFound'; roleId: string }
-      | { __typename: 'EnvironmentNotFound'; environmentId: string }
-      | { __typename: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { input: { roleId: role.id } },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      | { __typename: 'EnvironmentNotFound'; environmentId: string };
+  }>(op, { token, variables: { input: { roleId: role.id } }, environmentId });
 
   const result = data.deleteRole;
   if (result.__typename === 'RoleNotFound' || result.__typename === 'EnvironmentNotFound') {

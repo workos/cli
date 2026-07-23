@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import { createWorkOSClient } from '../lib/workos-client.js';
 import { formatTable } from '../utils/table.js';
+import { printPaginationFooter } from '../utils/resource-command.js';
 import { outputSuccess, outputJson, isJsonMode, exitWithError } from '../utils/output.js';
 import { createApiErrorHandler } from '../lib/api-error-handler.js';
 
@@ -38,14 +39,7 @@ export async function runVaultList(options: VaultListOptions, apiKey: string, ba
 
     console.log(formatTable([{ header: 'ID' }, { header: 'Name' }, { header: 'Updated At' }], rows));
 
-    const { before, after } = result.listMetadata;
-    if (before && after) {
-      console.log(chalk.dim(`Before: ${before}  After: ${after}`));
-    } else if (before) {
-      console.log(chalk.dim(`Before: ${before}`));
-    } else if (after) {
-      console.log(chalk.dim(`After: ${after}`));
-    }
+    printPaginationFooter(result.listMetadata);
   } catch (error) {
     handleApiError(error);
   }

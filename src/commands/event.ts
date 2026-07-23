@@ -18,11 +18,9 @@
  */
 
 import chalk from 'chalk';
-import { requireCommandToken } from '../lib/command-auth.js';
-import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
-import { resolveEnvironmentTarget } from '../lib/environment-target.js';
-import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
+import { runEnvScopedOperation } from '../lib/dashboard-operation.js';
 import { isJsonMode, outputJson, exitWithError } from '../utils/output.js';
+import { printPaginationFooter } from '../utils/resource-command.js';
 import { formatTable } from '../utils/table.js';
 
 interface EventNode {
@@ -61,39 +59,21 @@ export interface EventListOptions {
 }
 
 export async function runEventList(options: EventListOptions): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('environmentEvents');
-
-  // Environment-scoped read: resolved target as variable + header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  const { data, environmentId } = await runEnvScopedOperation<{
     environment: {
       events: {
         data: EventNode[];
         listMetadata: { before: string | null; after: string | null };
       } | null;
     } | null;
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: {
-        environmentId,
-        names: options.events,
-        ...(options.after ? { after: options.after } : {}),
-        ...(options.rangeStart ? { rangeStart: options.rangeStart } : {}),
-        ...(options.rangeEnd ? { rangeEnd: options.rangeEnd } : {}),
-        ...(options.limit !== undefined ? { limit: options.limit } : {}),
-      },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  }>('environmentEvents', options, (environmentId) => ({
+    environmentId,
+    names: options.events,
+    ...(options.after ? { after: options.after } : {}),
+    ...(options.rangeStart ? { rangeStart: options.rangeStart } : {}),
+    ...(options.rangeEnd ? { rangeEnd: options.rangeEnd } : {}),
+    ...(options.limit !== undefined ? { limit: options.limit } : {}),
+  }));
 
   if (!data.environment) {
     exitWithError({ code: 'environment_not_found', message: `Environment "${environmentId}" was not found.` });
@@ -118,12 +98,5 @@ export async function runEventList(options: EventListOptions): Promise<void> {
   const rows = events.map((event) => [event.id, event.event ?? chalk.dim('-'), event.createdAt ?? chalk.dim('-')]);
   console.log(formatTable([{ header: 'ID' }, { header: 'Event Type' }, { header: 'Created At' }], rows));
 
-  const { before, after } = pagination;
-  if (before && after) {
-    console.log(chalk.dim(`Before: ${before}  After: ${after}`));
-  } else if (before) {
-    console.log(chalk.dim(`Before: ${before}`));
-  } else if (after) {
-    console.log(chalk.dim(`After: ${after}`));
-  }
+  printPaginationFooter(pagination);
 }

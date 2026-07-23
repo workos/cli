@@ -18,22 +18,12 @@
  */
 
 import chalk from 'chalk';
-import { requireCommandToken } from '../lib/command-auth.js';
-import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
-import { resolveEnvironmentTarget } from '../lib/environment-target.js';
-import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
+import { getOperation } from '../catalog/operation.js';
 import { confirmDestructive } from '../catalog/confirm.js';
+import { runEnvScopedOperation } from '../lib/dashboard-operation.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
+import { normalizeOrder, printDetailFields, printPaginationFooter } from '../utils/resource-command.js';
 import { formatTable } from '../utils/table.js';
-
-/** Map the CLI `--order asc|desc` flag onto the catalog's pagination enum. */
-function normalizeOrder(order: string | undefined): 'Asc' | 'Desc' | undefined {
-  if (order === undefined) return undefined;
-  const lower = order.toLowerCase();
-  if (lower === 'asc') return 'Asc';
-  if (lower === 'desc') return 'Desc';
-  exitWithError({ code: 'invalid_argument', message: `Invalid --order "${order}". Allowed values: asc, desc.` });
-}
 
 interface IdentityNode {
   id: string;
@@ -97,26 +87,10 @@ export interface UserGetOptions {
 }
 
 export async function runUserGet(userId: string, options: UserGetOptions = {}): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('userlandUser');
-
-  // Environment-scoped read: the op takes only `id`, but the target still
-  // rides as the environment header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
+  // The op takes only `id`; the resolved target still rides as the environment header.
+  const { data } = await runEnvScopedOperation<{ userlandUser: UserNode | null }>('userlandUser', options, {
+    id: userId,
   });
-
-  let data: { userlandUser: UserNode | null };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { id: userId },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
 
   if (!data.userlandUser) {
     exitWithError({ code: 'not_found', message: `User "${userId}" was not found in this environment.` });
@@ -143,11 +117,7 @@ export async function runUserGet(userId: string, options: UserGetOptions = {}): 
     ['Last sign-in', user.lastSignedInAt],
     ['External ID', user.externalId],
   ];
-  for (const [label, value] of fields) {
-    if (value === null || value === undefined || value === '') continue;
-    console.log(`${chalk.bold(label)}: ${String(value)}`);
-  }
-  console.log(chalk.dim('Run with --json for the full record.'));
+  printDetailFields(fields);
 }
 
 export interface UserListOptions {
@@ -163,37 +133,19 @@ export interface UserListOptions {
 
 export async function runUserList(options: UserListOptions = {}): Promise<void> {
   const order = normalizeOrder(options.order);
-  const token = await requireCommandToken();
-  const op = getOperation('userlandUsers');
-
-  // Environment-scoped read: resolved target as variable + header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  const { data } = await runEnvScopedOperation<{
     userlandUsers: {
       data: UserNode[];
       listMetadata: { before: string | null; after: string | null };
     } | null;
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: {
-        environmentId,
-        ...(options.email ? { search: options.email } : {}),
-        ...(options.limit !== undefined ? { limit: options.limit } : {}),
-        ...(options.before ? { before: options.before } : {}),
-        ...(options.after ? { after: options.after } : {}),
-        ...(order ? { order } : {}),
-      },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  }>('userlandUsers', options, (environmentId) => ({
+    environmentId,
+    ...(options.email ? { search: options.email } : {}),
+    ...(options.limit !== undefined ? { limit: options.limit } : {}),
+    ...(options.before ? { before: options.before } : {}),
+    ...(options.after ? { after: options.after } : {}),
+    ...(order ? { order } : {}),
+  }));
 
   const users = data.userlandUsers?.data ?? [];
   const pagination = {
@@ -231,14 +183,7 @@ export async function runUserList(options: UserListOptions = {}): Promise<void> 
     ),
   );
 
-  const { before, after } = pagination;
-  if (before && after) {
-    console.log(chalk.dim(`Before: ${before}  After: ${after}`));
-  } else if (before) {
-    console.log(chalk.dim(`Before: ${before}`));
-  } else if (after) {
-    console.log(chalk.dim(`After: ${after}`));
-  }
+  printPaginationFooter(pagination);
 }
 
 export interface UserUpdateOptions {
@@ -266,16 +211,7 @@ export async function runUserUpdate(userId: string, options: UserUpdateOptions =
     });
   }
 
-  const token = await requireCommandToken();
-  const op = getOperation('updateUserlandUser');
-
-  // Environment-scoped mutation: pre-validated resolved target as header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  const { data } = await runEnvScopedOperation<{
     updateUserlandUser:
       | {
           __typename: 'UserlandUserUpdated';
@@ -283,18 +219,8 @@ export async function runUserUpdate(userId: string, options: UserUpdateOptions =
         }
       | { __typename: 'UserlandUserNotFound' }
       | { __typename: 'UserlandUserChangeEmailError'; reason: string }
-      | { __typename: 'ExternalIDAlreadyUsed'; externalId: string }
-      | { __typename: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { input: { userlandUserId: userId, ...updates } },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      | { __typename: 'ExternalIDAlreadyUsed'; externalId: string };
+  }>('updateUserlandUser', options, { input: { userlandUserId: userId, ...updates } });
 
   const result = data.updateUserlandUser;
   if (result.__typename === 'UserlandUserNotFound') {
@@ -311,18 +237,14 @@ export async function runUserUpdate(userId: string, options: UserUpdateOptions =
   if (result.__typename === 'ExternalIDAlreadyUsed') {
     exitWithError({
       code: 'external_id_in_use',
-      message: `External ID "${(result as { externalId: string }).externalId}" is already in use.`,
+      message: `External ID "${result.externalId}" is already in use.`,
     });
   }
   if (result.__typename !== 'UserlandUserUpdated' || !('userlandUser' in result)) {
     exitWithError({ code: 'unexpected_result', message: `Could not update user "${userId}".` });
   }
 
-  const updated = (
-    result as {
-      userlandUser: { id: string; email: string | null; firstName: string | null; lastName: string | null };
-    }
-  ).userlandUser;
+  const updated = result.userlandUser;
   const user = {
     id: updated.id,
     email: updated.email ?? null,
@@ -350,29 +272,9 @@ export async function runUserDelete(userId: string, options: UserDeleteOptions =
   const consequence = op.confirmation ? ` — this ${op.confirmation}` : '';
   await confirmDestructive(options, { action: `delete user ${userId}${consequence}` });
 
-  const token = await requireCommandToken();
-
-  // Environment-scoped mutation: pre-validated resolved target as header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
-    deleteUserlandUser:
-      | { __typename: 'UserlandUserDeleted' }
-      | { __typename: 'UserlandUserNotFound' }
-      | { __typename: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { input: { userlandUserId: userId } },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  const { data } = await runEnvScopedOperation<{
+    deleteUserlandUser: { __typename: 'UserlandUserDeleted' } | { __typename: 'UserlandUserNotFound' };
+  }>('deleteUserlandUser', options, { input: { userlandUserId: userId } });
 
   if (data.deleteUserlandUser.__typename === 'UserlandUserNotFound') {
     exitWithError({ code: 'not_found', message: `User "${userId}" was not found in this environment.` });

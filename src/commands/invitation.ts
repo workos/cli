@@ -25,12 +25,13 @@
 
 import chalk from 'chalk';
 import { requireCommandToken } from '../lib/command-auth.js';
-import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
 import { resolveEnvironmentTarget } from '../lib/environment-target.js';
-import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
+import { getOperation } from '../catalog/operation.js';
+import { runEnvScopedOperation, executeDashboardOperation } from '../lib/dashboard-operation.js';
 import { confirmDestructive } from '../catalog/confirm.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
 import { formatTable } from '../utils/table.js';
+import { printDetailFields, printPaginationFooter } from '../utils/resource-command.js';
 
 /** `invitation get` scans at most this many recent invitations (no fan-out). */
 export const INVITATION_GET_SCAN_LIMIT = 100;
@@ -81,17 +82,6 @@ function renderInvitationTable(invitations: ShapedInvitation[]): void {
   );
 }
 
-function renderPagination(pagination: { before: string | null; after: string | null }): void {
-  const { before, after } = pagination;
-  if (before && after) {
-    console.log(chalk.dim(`Before: ${before}  After: ${after}`));
-  } else if (before) {
-    console.log(chalk.dim(`Before: ${before}`));
-  } else if (after) {
-    console.log(chalk.dim(`After: ${after}`));
-  }
-}
-
 interface InvitationPage {
   invitations: ShapedInvitation[];
   pagination: { before: string | null; after: string | null };
@@ -104,21 +94,12 @@ async function fetchEnvironmentInvitations(
   variables: { search?: string; limit?: number; before?: string; after?: string },
 ): Promise<InvitationPage> {
   const op = getOperation('userlandUserInvites');
-  let data: {
+  const data = await executeDashboardOperation<{
     userlandUserInvites: {
       data: InvitationNode[];
       listMetadata: { before: string | null; after: string | null };
     } | null;
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { environmentId, ...variables },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  }>(op, { token, variables: { environmentId, ...variables }, environmentId });
   return {
     invitations: (data.userlandUserInvites?.data ?? []).map(shapeInvitation),
     pagination: {
@@ -156,23 +137,14 @@ export async function runInvitationList(options: InvitationListOptions = {}): Pr
       forMutation: op.kind === 'mutation',
     });
 
-    let data: {
+    const data = await executeDashboardOperation<{
       organization: {
         userlandUserInvites: {
           data: InvitationNode[];
           listMetadata: { before: string | null; after: string | null };
         } | null;
       } | null;
-    };
-    try {
-      data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-        token,
-        variables: { organizationId: options.org, ...pageVariables },
-        environmentId,
-      });
-    } catch (error) {
-      reportDashboardError(error);
-    }
+    }>(op, { token, variables: { organizationId: options.org, ...pageVariables }, environmentId });
 
     if (!data.organization) {
       exitWithError({
@@ -211,7 +183,7 @@ export async function runInvitationList(options: InvitationListOptions = {}): Pr
     return;
   }
   renderInvitationTable(page.invitations);
-  renderPagination(page.pagination);
+  printPaginationFooter(page.pagination);
 }
 
 export interface InvitationGetOptions {
@@ -252,11 +224,7 @@ export async function runInvitationGet(id: string, options: InvitationGetOptions
     ['State', invitation.state],
     ['Created', invitation.createdAt],
   ];
-  for (const [label, value] of fields) {
-    if (value === null || value === undefined || value === '') continue;
-    console.log(`${chalk.bold(label)}: ${String(value)}`);
-  }
-  console.log(chalk.dim('Run with --json for the full record.'));
+  printDetailFields(fields);
 }
 
 export interface InvitationSendOptions {
@@ -270,39 +238,24 @@ export interface InvitationSendOptions {
 }
 
 export async function runInvitationSend(options: InvitationSendOptions): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('createUserlandUserInvite');
-
   // Environment-scoped mutation: pre-validated resolved target, sent as both
-  // input field and environment header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  // input field and environment header. The catch-all stays: the business-error
+  // variants are dispatched by typename through `sendErrors` below, not by
+  // per-variant narrowing.
+  const { data } = await runEnvScopedOperation<{
     createUserlandUserInvite:
       | { __typename: 'UserlandUserInviteCreated'; userlandUserInvite: { id: string } }
       | { __typename: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: {
-        input: {
-          environmentId,
-          inviteeEmail: options.email,
-          // Required server-side; default matches the REST plane's behavior.
-          expiresInDays: options.expiresInDays ?? DEFAULT_EXPIRES_IN_DAYS,
-          ...(options.org ? { organizationId: options.org } : {}),
-          ...(options.role ? { roleId: options.role } : {}),
-        },
-      },
+  }>('createUserlandUserInvite', options, (environmentId) => ({
+    input: {
       environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      inviteeEmail: options.email,
+      // Required server-side; default matches the REST plane's behavior.
+      expiresInDays: options.expiresInDays ?? DEFAULT_EXPIRES_IN_DAYS,
+      ...(options.org ? { organizationId: options.org } : {}),
+      ...(options.role ? { roleId: options.role } : {}),
+    },
+  }));
 
   const result = data.createUserlandUserInvite;
   // Business-error variants carry only their typename; map each to clean copy.
@@ -382,31 +335,13 @@ export async function runInvitationRevoke(id: string, options: InvitationRevokeO
     action: `revoke invitation ${id} — the invite link can no longer be accepted`,
   });
 
-  const token = await requireCommandToken();
-  const op = getOperation('revokeUserlandUserInvite');
-
   // Environment-scoped mutation: pre-validated resolved target as header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  const { data } = await runEnvScopedOperation<{
     revokeUserlandUserInvite:
       | { __typename: 'UserlandUserInviteRevoked'; userlandUserInvite: { id: string } }
       | { __typename: 'UserlandUserInviteNotFound' }
-      | { __typename: 'UserlandUserInviteNotPending' }
-      | { __typename: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { input: { userlandUserInviteId: id } },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      | { __typename: 'UserlandUserInviteNotPending' };
+  }>('revokeUserlandUserInvite', options, { input: { userlandUserInviteId: id } });
 
   const result = data.revokeUserlandUserInvite;
   if (result.__typename === 'UserlandUserInviteNotFound') {
@@ -435,31 +370,13 @@ export interface InvitationResendOptions {
 }
 
 export async function runInvitationResend(id: string, options: InvitationResendOptions = {}): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('resendUserlandUserInvite');
-
   // Environment-scoped mutation: pre-validated resolved target as header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  const { data } = await runEnvScopedOperation<{
     resendUserlandUserInvite:
       | { __typename: 'UserlandUserInviteResent'; userlandUserInvite: { id: string } }
       | { __typename: 'UserlandUserInviteNotFound' }
-      | { __typename: 'UserlandUserInviteNotPending' }
-      | { __typename: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { input: { userlandUserInviteId: id } },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      | { __typename: 'UserlandUserInviteNotPending' };
+  }>('resendUserlandUserInvite', options, { input: { userlandUserInviteId: id } });
 
   const result = data.resendUserlandUserInvite;
   if (result.__typename === 'UserlandUserInviteNotFound') {

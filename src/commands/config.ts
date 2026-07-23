@@ -28,9 +28,9 @@
 
 import chalk from 'chalk';
 import { requireCommandToken } from '../lib/command-auth.js';
-import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
 import { resolveEnvironmentTarget } from '../lib/environment-target.js';
-import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
+import { getOperation } from '../catalog/operation.js';
+import { executeDashboardOperation } from '../lib/dashboard-operation.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
 import { rejectWildcardOrigins } from './authkit.js';
 
@@ -64,21 +64,12 @@ export async function runConfigRedirectAdd(uri: string, options: ConfigRedirectA
   });
 
   // READ: the current full list (the backing setter replaces the whole list).
-  let current: {
+  const current = await executeDashboardOperation<{
     redirectUris: {
       data: UriNode[];
       listMetadata?: { before?: string | null; after?: string | null } | null;
     } | null;
-  };
-  try {
-    current = await dashboardGraphqlRequest(resolveExecutableDocument(readOp), {
-      token,
-      variables: { environmentId, limit: REDIRECT_MERGE_SCAN_LIMIT },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  }>(readOp, { token, variables: { environmentId, limit: REDIRECT_MERGE_SCAN_LIMIT }, environmentId });
 
   const existing = current.redirectUris?.data ?? [];
   // Refuse to merge over a truncated read: rewriting the list from one page
@@ -110,20 +101,11 @@ export async function runConfigRedirectAdd(uri: string, options: ConfigRedirectA
     { uri },
   ];
 
-  let data: {
+  const data = await executeDashboardOperation<{
     setRedirectUris:
       | { __typename: 'RedirectUrisSet'; redirectUris: UriNode[] }
       | { __typename: string; message?: string; uri?: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(writeOp), {
-      token,
-      variables: { input: { environmentId, redirectUris: merged } },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  }>(writeOp, { token, variables: { input: { environmentId, redirectUris: merged } }, environmentId });
 
   const result = data.setRedirectUris;
   if (result.__typename !== 'RedirectUrisSet' || !('redirectUris' in result)) {
@@ -160,16 +142,9 @@ export async function runConfigCorsAdd(origin: string, options: ConfigCorsAddOpt
 
   // READ: the current full list (the backing setter replaces the whole list;
   // origins are unpaginated).
-  let current: { webOrigins: { webOrigins: { origins: string[] } | null } | null };
-  try {
-    current = await dashboardGraphqlRequest(resolveExecutableDocument(readOp), {
-      token,
-      variables: { environmentId },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  const current = await executeDashboardOperation<{
+    webOrigins: { webOrigins: { origins: string[] } | null } | null;
+  }>(readOp, { token, variables: { environmentId }, environmentId });
 
   const existing = current.webOrigins?.webOrigins?.origins ?? [];
   if (existing.includes(origin)) {
@@ -182,20 +157,11 @@ export async function runConfigCorsAdd(origin: string, options: ConfigCorsAddOpt
   }
 
   // MERGE-WRITE: append and set the whole list.
-  let data: {
+  const data = await executeDashboardOperation<{
     setWebOrigins:
       | { __typename: 'WebOriginsSet'; origins: string[] }
       | { __typename: string; message?: string; uri?: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(writeOp), {
-      token,
-      variables: { environmentId, origins: [...existing, origin] },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  }>(writeOp, { token, variables: { environmentId, origins: [...existing, origin] }, environmentId });
 
   const result = data.setWebOrigins;
   if (result.__typename !== 'WebOriginsSet' || !('origins' in result)) {
@@ -232,16 +198,11 @@ export async function runConfigHomepageUrlSet(url: string, options: ConfigHomepa
   // Step 1: resolve the environment's AuthKit application — the update is
   // keyed by application ID, and this is the application the REST endpoint
   // wrote to.
-  let lookup: { defaultUserlandApplication: { id: string } | null };
-  try {
-    lookup = await dashboardGraphqlRequest(resolveExecutableDocument(lookupOp), {
-      token,
-      variables: { environmentId },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  const lookup = await executeDashboardOperation<{ defaultUserlandApplication: { id: string } | null }>(lookupOp, {
+    token,
+    variables: { environmentId },
+    environmentId,
+  });
 
   const applicationId = lookup.defaultUserlandApplication?.id;
   if (!applicationId) {
@@ -253,25 +214,15 @@ export async function runConfigHomepageUrlSet(url: string, options: ConfigHomepa
 
   // Step 2: set the homepage URL on it. The result is a discriminated union
   // whose variant names are internal — matched on, never echoed.
-  let data: {
+  const data = await executeDashboardOperation<{
     updateUserlandApplication:
       | {
           __typename: 'UserlandApplicationUpdated';
           userlandApplication: { id: string; appHomepageUrl?: string | null };
         }
       | { __typename: 'UserlandApplicationNotFound'; applicationId: string }
-      | { __typename: 'UserlandApplicationValidationFailed'; message: string }
-      | { __typename: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(writeOp), {
-      token,
-      variables: { input: { applicationId, appHomepageUrl: url } },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      | { __typename: 'UserlandApplicationValidationFailed'; message: string };
+  }>(writeOp, { token, variables: { input: { applicationId, appHomepageUrl: url } }, environmentId });
 
   const result = data.updateUserlandApplication;
   if (result.__typename === 'UserlandApplicationNotFound') {
@@ -283,7 +234,7 @@ export async function runConfigHomepageUrlSet(url: string, options: ConfigHomepa
   if (result.__typename === 'UserlandApplicationValidationFailed') {
     exitWithError({
       code: 'invalid_argument',
-      message: (result as { message: string }).message || `Could not set the homepage URL to "${url}".`,
+      message: result.message || `Could not set the homepage URL to "${url}".`,
     });
   }
   if (result.__typename !== 'UserlandApplicationUpdated') {

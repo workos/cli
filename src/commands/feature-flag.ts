@@ -27,21 +27,13 @@
 
 import chalk from 'chalk';
 import { requireCommandToken } from '../lib/command-auth.js';
-import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
 import { resolveEnvironmentTarget } from '../lib/environment-target.js';
-import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
+import { executeDashboardOperation } from '../lib/dashboard-operation.js';
+import { getOperation } from '../catalog/operation.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
+import { normalizeOrder, printDetailFields, printPaginationFooter } from '../utils/resource-command.js';
 import { formatTable } from '../utils/table.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
-
-/** Map the CLI `--order asc|desc` flag onto the catalog's pagination enum. */
-function normalizeOrder(order: string | undefined): 'Asc' | 'Desc' | undefined {
-  if (order === undefined) return undefined;
-  const lower = order.toLowerCase();
-  if (lower === 'asc') return 'Asc';
-  if (lower === 'desc') return 'Desc';
-  exitWithError({ code: 'invalid_argument', message: `Invalid --order "${order}". Allowed values: asc, desc.` });
-}
 
 interface FlagEnvironmentNode {
   id: string;
@@ -112,13 +104,8 @@ interface TeamProjectsData {
  */
 async function resolveProjectId(token: string, environmentId: string): Promise<string> {
   const op = getOperation('teamProjectsV2');
-  let data: TeamProjectsData;
-  try {
-    // Team-scoped read: deliberately no environment header.
-    data = await dashboardGraphqlRequest<TeamProjectsData>(resolveExecutableDocument(op), { token });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  // Team-scoped read: deliberately no environment header.
+  const data = await executeDashboardOperation<TeamProjectsData>(op, { token });
 
   const projects = data.currentTeam?.projectsV2 ?? [];
   const project = projects.find((candidate) =>
@@ -155,27 +142,22 @@ export async function runFeatureFlagList(options: FeatureFlagListOptions = {}): 
   });
   const projectId = await resolveProjectId(token, environmentId);
 
-  let data: {
+  const data = await executeDashboardOperation<{
     flagsForProject: {
       data: FlagNode[];
       listMetadata: { before: string | null; after: string | null };
     } | null;
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: {
-        projectId,
-        ...(options.limit !== undefined ? { limit: options.limit } : {}),
-        ...(options.before ? { before: options.before } : {}),
-        ...(options.after ? { after: options.after } : {}),
-        ...(order ? { order } : {}),
-      },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  }>(op, {
+    token,
+    variables: {
+      projectId,
+      ...(options.limit !== undefined ? { limit: options.limit } : {}),
+      ...(options.before ? { before: options.before } : {}),
+      ...(options.after ? { after: options.after } : {}),
+      ...(order ? { order } : {}),
+    },
+    environmentId,
+  });
 
   const flags = (data.flagsForProject?.data ?? []).map((flag) => shapeFlag(flag, environmentId));
   const pagination = {
@@ -202,14 +184,7 @@ export async function runFeatureFlagList(options: FeatureFlagListOptions = {}): 
     formatTable([{ header: 'Slug' }, { header: 'Name' }, { header: 'Enabled' }, { header: 'Description' }], rows),
   );
 
-  const { before, after } = pagination;
-  if (before && after) {
-    console.log(chalk.dim(`Before: ${before}  After: ${after}`));
-  } else if (before) {
-    console.log(chalk.dim(`Before: ${before}`));
-  } else if (after) {
-    console.log(chalk.dim(`After: ${after}`));
-  }
+  printPaginationFooter(pagination);
 }
 
 export interface FeatureFlagEnvironmentOptions {
@@ -225,16 +200,11 @@ async function requireFlagBySlug(
   slug: string,
 ): Promise<FlagNode> {
   const op = getOperation('flagBySlug');
-  let data: { flagBySlug: FlagNode | null };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { projectId, slug },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  const data = await executeDashboardOperation<{ flagBySlug: FlagNode | null }>(op, {
+    token,
+    variables: { projectId, slug },
+    environmentId,
+  });
   if (!data.flagBySlug) {
     exitWithError({ code: 'not_found', message: `Feature flag "${slug}" was not found.` });
   }
@@ -269,11 +239,7 @@ export async function runFeatureFlagGet(slug: string, options: FeatureFlagEnviro
     ['User targets', flag.userTargets.length > 0 ? flag.userTargets.map((t) => t.id).join(', ') : null],
     ['Created', flag.createdAt],
   ];
-  for (const [label, value] of fields) {
-    if (value === null || value === undefined || value === '') continue;
-    console.log(`${chalk.bold(label)}: ${String(value)}`);
-  }
-  console.log(chalk.dim('Run with --json for the full record.'));
+  printDetailFields(fields);
 }
 
 /**
@@ -305,30 +271,24 @@ async function executeFlagEnvironmentUpdate(
 ): Promise<void> {
   const op = getOperation('updateFlagEnvironment');
 
-  let data: {
+  const data = await executeDashboardOperation<{
     updateFlagEnvironment:
       | { __typename: 'FlagEnvironmentUpdated'; flagEnvironment: FlagEnvironmentNode }
-      | { __typename: 'FlagEnvironmentNotFound'; flagEnvironmentId: string }
-      | { __typename: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: {
-        input: {
-          flagEnvironmentId: state.id,
-          flagEnabled: overrides.flagEnabled ?? state.flagEnabled ?? false,
-          defaultEnabled: state.defaultEnabled ?? false,
-          accessType: state.accessType ?? 'NONE',
-          organizationIds: overrides.organizationIds ?? (state.organizations ?? []).map((org) => org.id),
-          userIds: overrides.userIds ?? (state.users ?? []).map((user) => user.id),
-        },
+      | { __typename: 'FlagEnvironmentNotFound'; flagEnvironmentId: string };
+  }>(op, {
+    token,
+    variables: {
+      input: {
+        flagEnvironmentId: state.id,
+        flagEnabled: overrides.flagEnabled ?? state.flagEnabled ?? false,
+        defaultEnabled: state.defaultEnabled ?? false,
+        accessType: state.accessType ?? 'NONE',
+        organizationIds: overrides.organizationIds ?? (state.organizations ?? []).map((org) => org.id),
+        userIds: overrides.userIds ?? (state.users ?? []).map((user) => user.id),
       },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+    },
+    environmentId,
+  });
 
   const result = data.updateFlagEnvironment;
   if (result.__typename === 'FlagEnvironmentNotFound') {

@@ -19,10 +19,7 @@
  */
 
 import chalk from 'chalk';
-import { requireCommandToken } from '../lib/command-auth.js';
-import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
-import { resolveEnvironmentTarget } from '../lib/environment-target.js';
-import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
+import { runEnvScopedOperation } from '../lib/dashboard-operation.js';
 import { isJsonMode, outputJson, exitWithError } from '../utils/output.js';
 
 /**
@@ -87,40 +84,21 @@ export async function runPortalGenerateLink(options: PortalGenerateOptions): Pro
     });
   }
 
-  const token = await requireCommandToken();
-  const op = getOperation('generatePortalSetupLink');
-
-  // Environment-scoped mutation: pre-validated resolved target as header (the
-  // organization lives in the environment).
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  // The organization lives in the resolved environment, which rides as the header.
+  // expireIntents is passed explicitly: omitted, the server expires ALL of the
+  // organization's active setup links; scoped to the requested intent it expires
+  // only prior links of the same intent (what the help text says).
+  const { data } = await runEnvScopedOperation<{
     generatePortalSetupLink:
       | { __typename: 'PortalSetupLinkGenerated'; portalSetupLink: PortalSetupLinkNode }
-      | { __typename: 'OrganizationNotFound'; organizationId: string }
-      | { __typename: string };
-  };
-  try {
-    // expireIntents is passed explicitly: omitted, the server expires ALL of
-    // the organization's active setup links; scoped to the requested intent it
-    // expires only prior links of the same intent (what the help text says).
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: {
-        input: {
-          organizationId: options.organization,
-          intents: [mappedIntent],
-          expireIntents: [mappedIntent],
-        },
-      },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      | { __typename: 'OrganizationNotFound'; organizationId: string };
+  }>('generatePortalSetupLink', options, {
+    input: {
+      organizationId: options.organization,
+      intents: [mappedIntent],
+      expireIntents: [mappedIntent],
+    },
+  });
 
   const result = data.generatePortalSetupLink;
   if (result.__typename === 'OrganizationNotFound') {
@@ -133,7 +111,7 @@ export async function runPortalGenerateLink(options: PortalGenerateOptions): Pro
     exitWithError({ code: 'unexpected_result', message: 'Could not generate an Admin Portal setup link.' });
   }
 
-  const link = shapePortalSetupLink((result as { portalSetupLink: PortalSetupLinkNode }).portalSetupLink);
+  const link = shapePortalSetupLink(result.portalSetupLink);
   if (isJsonMode()) {
     outputJson({ portalSetupLink: link });
     return;

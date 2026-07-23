@@ -14,9 +14,7 @@
  */
 
 import chalk from 'chalk';
-import { requireCommandToken } from '../lib/command-auth.js';
-import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
-import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
+import { runTeamScopedOperation } from '../lib/dashboard-operation.js';
 import { confirmDestructive, requireConfirmationFlag } from '../catalog/confirm.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
 import { formatTable } from '../utils/table.js';
@@ -45,16 +43,10 @@ interface MembershipNode {
 }
 
 export async function runTeamMembers(): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('teamMemberships');
-
-  let data: { currentTeam: { memberships: MembershipNode[] } | null };
   // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), { token });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  const { data } = await runTeamScopedOperation<{ currentTeam: { memberships: MembershipNode[] } | null }>(
+    'teamMemberships',
+  );
 
   const memberships = data.currentTeam?.memberships ?? [];
   if (isJsonMode()) {
@@ -91,34 +83,23 @@ export interface TeamInviteOptions {
 
 export async function runTeamInvite(options: TeamInviteOptions): Promise<void> {
   const role = normalizeRole(options.role);
-  const token = await requireCommandToken();
-  const op = getOperation('inviteUserToTeam');
 
-  let data: {
+  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
+  const { data } = await runTeamScopedOperation<{
     inviteUserToTeam:
       | { __typename: 'UserInvitedToTeam'; invitedMember: MembershipNode }
       | { __typename: 'UserAlreadyBelongsToCurrentTeam'; email: string }
-      | { __typename: 'UserAlreadyBelongsToAnotherTeam'; email: string }
-      | { __typename: string };
-  };
-  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: {
-        input: {
-          user: {
-            email: options.email,
-            role,
-            ...(options.firstName ? { firstName: options.firstName } : {}),
-            ...(options.lastName ? { lastName: options.lastName } : {}),
-          },
-        },
+      | { __typename: 'UserAlreadyBelongsToAnotherTeam'; email: string };
+  }>('inviteUserToTeam', {
+    input: {
+      user: {
+        email: options.email,
+        role,
+        ...(options.firstName ? { firstName: options.firstName } : {}),
+        ...(options.lastName ? { lastName: options.lastName } : {}),
       },
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+    },
+  });
 
   const result = data.inviteUserToTeam;
   if (result.__typename === 'UserAlreadyBelongsToCurrentTeam') {
@@ -131,7 +112,7 @@ export async function runTeamInvite(options: TeamInviteOptions): Promise<void> {
     exitWithError({ code: 'unexpected_result', message: `Could not invite ${options.email}.` });
   }
 
-  const member = (result as { invitedMember: MembershipNode }).invitedMember;
+  const member = result.invitedMember;
   if (isJsonMode()) {
     outputJson({ member });
     return;
@@ -152,19 +133,11 @@ export async function runTeamChangeRole(options: TeamChangeRoleOptions): Promise
   // require-flag: a privilege change; non-interactive callers must pass --yes.
   await requireConfirmationFlag(options, { action: `change the role of ${options.membershipId} to ${role}` });
 
-  const token = await requireCommandToken();
-  const op = getOperation('changeRole');
-
-  let data: { changeRole: { id: string; role: string | null } };
   // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { usersOrganizationsId: options.membershipId, role },
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  const { data } = await runTeamScopedOperation<{ changeRole: { id: string; role: string | null } }>('changeRole', {
+    usersOrganizationsId: options.membershipId,
+    role,
+  });
 
   if (isJsonMode()) {
     outputJson({ member: data.changeRole });
@@ -183,18 +156,8 @@ export async function runTeamRemove(options: TeamRemoveOptions): Promise<void> {
   // Destructive: revokes the member's access. Prompt (or require --yes).
   await confirmDestructive(options, { action: `remove member ${options.membershipId} from the team` });
 
-  const token = await requireCommandToken();
-  const op = getOperation('removeUserFromTeam');
-
   // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
-  try {
-    await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { usersOrganizationsId: options.membershipId },
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  await runTeamScopedOperation('removeUserFromTeam', { usersOrganizationsId: options.membershipId });
 
   if (isJsonMode()) {
     outputJson({ removed: options.membershipId });
@@ -208,19 +171,11 @@ export interface TeamResendInviteOptions {
 }
 
 export async function runTeamResendInvite(options: TeamResendInviteOptions): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('resendDashboardInvite');
-
-  let data: { resendDashboardInvite: { __typename: string } };
   // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { input: { teamMembershipId: options.membershipId } },
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  const { data } = await runTeamScopedOperation<{ resendDashboardInvite: { __typename: string } }>(
+    'resendDashboardInvite',
+    { input: { teamMembershipId: options.membershipId } },
+  );
 
   const result = data.resendDashboardInvite;
   if (result.__typename === 'DashboardInviteNotFound') {
@@ -245,24 +200,12 @@ export interface TeamUpdateOptions {
 }
 
 export async function runTeamUpdate(options: TeamUpdateOptions): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('updateTeamDetails');
-
-  let data: {
+  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
+  const { data } = await runTeamScopedOperation<{
     updateTeamDetails:
       | { __typename: 'TeamDetailsUpdated'; team: { id: string; name: string | null } }
-      | { __typename: 'InvalidTeamName'; team: { id: string } }
-      | { __typename: string };
-  };
-  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { input: { name: options.name } },
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      | { __typename: 'InvalidTeamName'; team: { id: string } };
+  }>('updateTeamDetails', { input: { name: options.name } });
 
   const result = data.updateTeamDetails;
   if (result.__typename === 'InvalidTeamName') {
@@ -272,7 +215,7 @@ export async function runTeamUpdate(options: TeamUpdateOptions): Promise<void> {
     exitWithError({ code: 'unexpected_result', message: 'Could not update the team.' });
   }
 
-  const team = (result as { team: { id: string; name: string | null } }).team;
+  const team = result.team;
   if (isJsonMode()) {
     outputJson({ team });
     return;
@@ -292,21 +235,10 @@ export async function runTeamSetMfa(options: TeamSetMfaOptions): Promise<void> {
     action: `set MFA requirement to ${options.required ? 'required' : 'not required'}`,
   });
 
-  const token = await requireCommandToken();
-  const op = getOperation('updateTeamMfaRequirement');
-
-  let data: {
-    updateTeamMfaRequirement: { __typename: string; team?: { id: string; isMfaRequired?: boolean | null } };
-  };
   // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { input: { requireMfa: options.required } },
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  const { data } = await runTeamScopedOperation<{
+    updateTeamMfaRequirement: { __typename: string; team?: { id: string; isMfaRequired?: boolean | null } };
+  }>('updateTeamMfaRequirement', { input: { requireMfa: options.required } });
 
   if (isJsonMode()) {
     outputJson({ team: data.updateTeamMfaRequirement.team ?? null, requireMfa: options.required });

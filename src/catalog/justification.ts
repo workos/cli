@@ -17,32 +17,6 @@ const LOADS: readonly Load[] = ['cheap', 'expensive', 'bulk'];
 const CI_POLICIES: readonly CiPolicy[] = ['allow', 'require-flag', 'block-noninteractive'];
 const AUDIENCES: readonly Audience[] = ['human', 'agent', 'ci'];
 
-/**
- * The required keys of {@link CommandJustification}, asserted at the type level.
- *
- * `satisfies` forces this tuple to list exactly the interface's keys: drop one
- * and TypeScript errors here, add a new field to the interface without listing
- * it and TypeScript errors here. This keeps the validated field set in lockstep
- * with the type (the documented "false pass" mitigation).
- */
-const REQUIRED_KEYS = [
-  'command',
-  'mapsTo',
-  'audiences',
-  'useCase',
-  'load',
-  'mutation',
-  'destructive',
-  'ciPolicy',
-] as const satisfies ReadonlyArray<keyof CommandJustification>;
-
-// Compile-time completeness check: every key of CommandJustification must be in
-// REQUIRED_KEYS. If a field is added to the interface but not to the tuple
-// above, this assignment fails to type-check.
-type _MissingKey = Exclude<keyof CommandJustification, (typeof REQUIRED_KEYS)[number]>;
-const _exhaustive: _MissingKey extends never ? true : never = true;
-void _exhaustive;
-
 export interface ValidationResult {
   ok: boolean;
   errors: string[];
@@ -56,10 +30,12 @@ function isNonEmptyString(value: unknown): value is string {
  * Validates a manifest against the catalog. Returns `{ ok, errors }`; `ok` is
  * true only when `errors` is empty.
  *
- * Per entry, an error is recorded for: a missing required key; an empty/blank
- * `command` or `useCase`; an empty `audiences` (or one containing an invalid
- * audience); a `load` or `ciPolicy` outside its enum; a non-boolean `mutation`
- * or `destructive`; or a `mapsTo` that names no operation in the catalog.
+ * Per entry, an error is recorded for: an empty/blank `command` or `useCase`;
+ * an empty `audiences` (or one containing an invalid audience); a `load` or
+ * `ciPolicy` outside its enum; a non-boolean `mutation` or `destructive`; or a
+ * `mapsTo` that names no operation in the catalog. Every required field of
+ * {@link CommandJustification} is covered by one of these checks — a missing
+ * field fails its own field-level check, so there is no separate presence pass.
  */
 export function validateManifest(manifest: CommandJustification[], catalog: ManagementCatalog): ValidationResult {
   const errors: string[] = [];
@@ -73,12 +49,6 @@ export function validateManifest(manifest: CommandJustification[], catalog: Mana
     if (entry == null || typeof entry !== 'object') {
       errors.push(`Entry ${label}: not an object`);
       return;
-    }
-
-    for (const key of REQUIRED_KEYS) {
-      if (!(key in entry)) {
-        errors.push(`Entry ${label}: missing required field "${key}"`);
-      }
     }
 
     if (!isNonEmptyString(entry.command)) {

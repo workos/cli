@@ -34,6 +34,11 @@ export const snapshotSource: CatalogSource = {
   },
 };
 
+// The snapshot is static and immutable, so the two normalized shapes (with and
+// without flag-gated operations) are built once per process. Non-default
+// sources are never cached — a future live source owns its own freshness.
+const snapshotCache = new Map<boolean, ManagementCatalog>();
+
 /**
  * Returns the catalog as a normalized {@link ManagementCatalog}: operations are
  * flattened from the raw name-keyed Record into an array, and feature-flag-gated
@@ -44,8 +49,19 @@ export function loadManagementCatalog(
   source: CatalogSource = snapshotSource,
   options: LoadCatalogOptions = {},
 ): ManagementCatalog {
+  const includeFeatureFlagged = options.includeFeatureFlagged === true;
+  if (source === snapshotSource) {
+    const cached = snapshotCache.get(includeFeatureFlagged);
+    if (cached) return cached;
+  }
+
   const raw = source.load();
   const all: CatalogOperation[] = Object.values(raw.operations);
-  const operations = options.includeFeatureFlagged ? all : all.filter((op) => !op.featureFlagGated);
-  return { operations, fragments: raw.fragments, inputTypes: raw.inputTypes };
+  const operations = includeFeatureFlagged ? all : all.filter((op) => !op.featureFlagGated);
+  const catalog = { operations, fragments: raw.fragments, inputTypes: raw.inputTypes };
+
+  if (source === snapshotSource) {
+    snapshotCache.set(includeFeatureFlagged, catalog);
+  }
+  return catalog;
 }

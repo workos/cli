@@ -81,6 +81,14 @@ await loadDeviceId();
 // NO await — must not block startup (flush timeout is 3s).
 recoverPendingEvents();
 
+// The standard `--environment-id` flag shared by every environment-scoped
+// resource subcommand. The two commands that need different copy (`whoami`,
+// `environment create`) declare their own inline.
+const environmentIdOption = {
+  type: 'string',
+  describe: 'Environment ID (defaults to the active environment)',
+} as const;
+
 // Resolve output mode early from raw argv (before yargs parses)
 // Bun preserves the Node-style [runtime, entrypoint, ...args] argv shape in
 // both source mode and standalone executables.
@@ -521,10 +529,7 @@ async function runCli(): Promise<void> {
             'List configured redirect URIs for an environment',
             (y) =>
               y
-                .option('environment-id', {
-                  type: 'string',
-                  describe: 'Environment ID (defaults to the active environment)',
-                })
+                .option('environment-id', environmentIdOption)
                 .option('limit', { type: 'number', describe: 'Maximum number of URIs to return' }),
             async (argv) => {
               await applyInsecureStorage(argv.insecureStorage);
@@ -541,10 +546,7 @@ async function runCli(): Promise<void> {
             'Set the allowed redirect URIs for an environment (replaces the full list)',
             (y) =>
               y
-                .option('environment-id', {
-                  type: 'string',
-                  describe: 'Environment ID (defaults to the active environment)',
-                })
+                .option('environment-id', environmentIdOption)
                 .option('uri', {
                   type: 'string',
                   array: true,
@@ -572,11 +574,7 @@ async function runCli(): Promise<void> {
             yargs,
             'get',
             'Show the allowed web origins (CORS) for an environment',
-            (y) =>
-              y.option('environment-id', {
-                type: 'string',
-                describe: 'Environment ID (defaults to the active environment)',
-              }),
+            (y) => y.option('environment-id', environmentIdOption),
             async (argv) => {
               await applyInsecureStorage(argv.insecureStorage);
               const { runAuthkitCorsGet } = await import('./commands/authkit.js');
@@ -589,10 +587,7 @@ async function runCli(): Promise<void> {
             'Set the allowed web origins (CORS) for an environment (replaces the full list)',
             (y) =>
               y
-                .option('environment-id', {
-                  type: 'string',
-                  describe: 'Environment ID (defaults to the active environment)',
-                })
+                .option('environment-id', environmentIdOption)
                 .option('origin', {
                   type: 'string',
                   array: true,
@@ -620,10 +615,7 @@ async function runCli(): Promise<void> {
             'List configured logout URIs for an environment',
             (y) =>
               y
-                .option('environment-id', {
-                  type: 'string',
-                  describe: 'Environment ID (defaults to the active environment)',
-                })
+                .option('environment-id', environmentIdOption)
                 .option('limit', { type: 'number', describe: 'Maximum number of URIs to return' }),
             async (argv) => {
               await applyInsecureStorage(argv.insecureStorage);
@@ -640,10 +632,7 @@ async function runCli(): Promise<void> {
             'Set the allowed logout URIs for an environment (replaces the full list)',
             (y) =>
               y
-                .option('environment-id', {
-                  type: 'string',
-                  describe: 'Environment ID (defaults to the active environment)',
-                })
+                .option('environment-id', environmentIdOption)
                 .option('uri', { type: 'string', array: true, demandOption: true, describe: 'Logout URI (repeatable)' })
                 .option('default', { type: 'string', describe: 'Which URI to mark as the default' })
                 .option('dry-run', { type: 'boolean', default: false, describe: 'Validate without saving' }),
@@ -666,11 +655,7 @@ async function runCli(): Promise<void> {
             yargs,
             'get',
             'Show AuthKit branding (logos, theme) for an environment',
-            (y) =>
-              y.option('environment-id', {
-                type: 'string',
-                describe: 'Environment ID (defaults to the active environment)',
-              }),
+            (y) => y.option('environment-id', environmentIdOption),
             async (argv) => {
               await applyInsecureStorage(argv.insecureStorage);
               const { runAuthkitBrandingGet } = await import('./commands/authkit.js');
@@ -1231,10 +1216,7 @@ async function runCli(): Promise<void> {
               array: true,
               describe: 'Domains in format domain:state (state defaults to verified)',
             })
-            .option('environment-id', {
-              type: 'string',
-              describe: 'Environment ID (defaults to the active environment)',
-            }),
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runOrgCreate } = await import('./commands/organization.js');
@@ -1253,10 +1235,7 @@ async function runCli(): Promise<void> {
             .positional('name', { type: 'string', demandOption: true, describe: 'Organization name' })
             .positional('domain', { type: 'string', describe: 'Domain' })
             .positional('state', { type: 'string', describe: 'Domain state (verified or pending)' })
-            .option('environment-id', {
-              type: 'string',
-              describe: 'Environment ID (defaults to the active environment)',
-            }),
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runOrgUpdate } = await import('./commands/organization.js');
@@ -1274,10 +1253,7 @@ async function runCli(): Promise<void> {
         (y) =>
           y
             .positional('orgId', { type: 'string', demandOption: true, describe: 'Organization ID' })
-            .option('environment-id', {
-              type: 'string',
-              describe: 'Environment ID (defaults to the active environment)',
-            }),
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runOrgGet } = await import('./commands/organization.js');
@@ -1295,7 +1271,7 @@ async function runCli(): Promise<void> {
             before: { type: 'string', describe: 'Cursor for results before a specific item' },
             after: { type: 'string', describe: 'Cursor for results after a specific item' },
             order: { type: 'string', describe: 'Order of results (asc or desc)' },
-            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+            'environment-id': environmentIdOption,
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -1318,10 +1294,7 @@ async function runCli(): Promise<void> {
           y
             .positional('orgId', { type: 'string', demandOption: true, describe: 'Organization ID' })
             .option('yes', { alias: 'y', type: 'boolean', default: false, describe: 'Skip the confirmation prompt' })
-            .option('environment-id', {
-              type: 'string',
-              describe: 'Environment ID (defaults to the active environment)',
-            }),
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runOrgDelete } = await import('./commands/organization.js');
@@ -1341,10 +1314,9 @@ async function runCli(): Promise<void> {
         'get <userId>',
         'Get a user by ID',
         (y) =>
-          y.positional('userId', { type: 'string', demandOption: true, describe: 'User ID' }).option('environment-id', {
-            type: 'string',
-            describe: 'Environment ID (defaults to the active environment)',
-          }),
+          y
+            .positional('userId', { type: 'string', demandOption: true, describe: 'User ID' })
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runUserGet } = await import('./commands/user.js');
@@ -1362,7 +1334,7 @@ async function runCli(): Promise<void> {
             before: { type: 'string', describe: 'Cursor for results before a specific item' },
             after: { type: 'string', describe: 'Cursor for results after a specific item' },
             order: { type: 'string', describe: 'Order of results (asc or desc)' },
-            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+            'environment-id': environmentIdOption,
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -1388,7 +1360,7 @@ async function runCli(): Promise<void> {
             email: { type: 'string', describe: 'New email address' },
             locale: { type: 'string', describe: 'Locale (e.g. en-US)' },
             'external-id': { type: 'string', describe: 'External ID' },
-            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+            'environment-id': environmentIdOption,
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -1411,10 +1383,7 @@ async function runCli(): Promise<void> {
           y
             .positional('userId', { type: 'string', demandOption: true, describe: 'User ID' })
             .option('yes', { alias: 'y', type: 'boolean', default: false, describe: 'Skip the confirmation prompt' })
-            .option('environment-id', {
-              type: 'string',
-              describe: 'Environment ID (defaults to the active environment)',
-            }),
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runUserDelete } = await import('./commands/user.js');
@@ -1437,11 +1406,7 @@ async function runCli(): Promise<void> {
         yargs,
         'list',
         'List roles',
-        (y) =>
-          y.option('environment-id', {
-            type: 'string',
-            describe: 'Environment ID (defaults to the active environment)',
-          }),
+        (y) => y.option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runRoleList } = await import('./commands/role.js');
@@ -1453,10 +1418,7 @@ async function runCli(): Promise<void> {
         'get <slug>',
         'Get a role by slug',
         (y) =>
-          y.positional('slug', { type: 'string', demandOption: true }).option('environment-id', {
-            type: 'string',
-            describe: 'Environment ID (defaults to the active environment)',
-          }),
+          y.positional('slug', { type: 'string', demandOption: true }).option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runRoleGet } = await import('./commands/role.js');
@@ -1478,7 +1440,7 @@ async function runCli(): Promise<void> {
               default: false,
               describe: 'Confirm the change (required non-interactively)',
             },
-            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+            'environment-id': environmentIdOption,
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -1508,7 +1470,7 @@ async function runCli(): Promise<void> {
               default: false,
               describe: 'Confirm the change (required non-interactively)',
             },
-            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+            'environment-id': environmentIdOption,
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -1533,7 +1495,7 @@ async function runCli(): Promise<void> {
             .demandOption('org')
             .options({
               yes: { alias: 'y', type: 'boolean', default: false, describe: 'Skip the confirmation prompt' },
-              'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+              'environment-id': environmentIdOption,
             }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -1559,7 +1521,7 @@ async function runCli(): Promise<void> {
               default: false,
               describe: 'Confirm the change (required non-interactively)',
             },
-            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+            'environment-id': environmentIdOption,
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -1587,7 +1549,7 @@ async function runCli(): Promise<void> {
                 default: false,
                 describe: 'Confirm the change (required non-interactively)',
               },
-              'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+              'environment-id': environmentIdOption,
             }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -1616,7 +1578,7 @@ async function runCli(): Promise<void> {
                 default: false,
                 describe: 'Confirm the change (required non-interactively)',
               },
-              'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+              'environment-id': environmentIdOption,
             }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -1637,11 +1599,7 @@ async function runCli(): Promise<void> {
         yargs,
         'list',
         'List permissions',
-        (y) =>
-          y.option('environment-id', {
-            type: 'string',
-            describe: 'Environment ID (defaults to the active environment)',
-          }),
+        (y) => y.option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runPermissionList } = await import('./commands/permission.js');
@@ -1653,10 +1611,7 @@ async function runCli(): Promise<void> {
         'get <slug>',
         'Get a permission',
         (y) =>
-          y.positional('slug', { type: 'string', demandOption: true }).option('environment-id', {
-            type: 'string',
-            describe: 'Environment ID (defaults to the active environment)',
-          }),
+          y.positional('slug', { type: 'string', demandOption: true }).option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runPermissionGet } = await import('./commands/permission.js');
@@ -1678,7 +1633,7 @@ async function runCli(): Promise<void> {
               default: false,
               describe: 'Confirm the change (required non-interactively)',
             },
-            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+            'environment-id': environmentIdOption,
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -1707,7 +1662,7 @@ async function runCli(): Promise<void> {
               default: false,
               describe: 'Confirm the change (required non-interactively)',
             },
-            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+            'environment-id': environmentIdOption,
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -1728,7 +1683,7 @@ async function runCli(): Promise<void> {
         (y) =>
           y.positional('slug', { type: 'string', demandOption: true }).options({
             yes: { alias: 'y', type: 'boolean', default: false, describe: 'Skip the confirmation prompt' },
-            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+            'environment-id': environmentIdOption,
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -1756,7 +1711,7 @@ async function runCli(): Promise<void> {
             before: { type: 'string', describe: 'Cursor for results before a specific item (--org only)' },
             after: { type: 'string', describe: 'Cursor for results after a specific item (--org only)' },
             order: { type: 'string', describe: 'Order of results, asc or desc (--org only)' },
-            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+            'environment-id': environmentIdOption,
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -1779,10 +1734,7 @@ async function runCli(): Promise<void> {
         (y) =>
           y
             .positional('id', { type: 'string', demandOption: true, describe: 'Membership ID' })
-            .option('environment-id', {
-              type: 'string',
-              describe: 'Environment ID (defaults to the active environment)',
-            }),
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runMembershipGet } = await import('./commands/membership.js');
@@ -1798,7 +1750,7 @@ async function runCli(): Promise<void> {
             org: { type: 'string', demandOption: true, describe: 'Organization ID (org_*)' },
             user: { type: 'string', demandOption: true, describe: 'User ID (user_*)' },
             role: { type: 'string', describe: 'Role ID (role_*) to assign' },
-            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+            'environment-id': environmentIdOption,
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -1825,10 +1777,7 @@ async function runCli(): Promise<void> {
               default: false,
               describe: 'Confirm the change (required non-interactively)',
             })
-            .option('environment-id', {
-              type: 'string',
-              describe: 'Environment ID (defaults to the active environment)',
-            }),
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runMembershipUpdate } = await import('./commands/membership.js');
@@ -1848,10 +1797,7 @@ async function runCli(): Promise<void> {
           y
             .positional('id', { type: 'string', demandOption: true, describe: 'Membership ID' })
             .option('yes', { alias: 'y', type: 'boolean', default: false, describe: 'Skip the confirmation prompt' })
-            .option('environment-id', {
-              type: 'string',
-              describe: 'Environment ID (defaults to the active environment)',
-            }),
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runMembershipDelete } = await import('./commands/membership.js');
@@ -1875,10 +1821,7 @@ async function runCli(): Promise<void> {
               default: false,
               describe: 'Confirm the change (required non-interactively)',
             })
-            .option('environment-id', {
-              type: 'string',
-              describe: 'Environment ID (defaults to the active environment)',
-            }),
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runMembershipDeactivate } = await import('./commands/membership.js');
@@ -1896,10 +1839,7 @@ async function runCli(): Promise<void> {
         (y) =>
           y
             .positional('id', { type: 'string', demandOption: true, describe: 'Membership ID' })
-            .option('environment-id', {
-              type: 'string',
-              describe: 'Environment ID (defaults to the active environment)',
-            }),
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runMembershipReactivate } = await import('./commands/membership.js');
@@ -1921,7 +1861,7 @@ async function runCli(): Promise<void> {
             limit: { type: 'number', describe: 'Limit number of results' },
             before: { type: 'string', describe: 'Cursor for results before a specific item' },
             after: { type: 'string', describe: 'Cursor for results after a specific item' },
-            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+            'environment-id': environmentIdOption,
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -1943,10 +1883,7 @@ async function runCli(): Promise<void> {
         (y) =>
           y
             .positional('id', { type: 'string', demandOption: true, describe: 'Invitation ID' })
-            .option('environment-id', {
-              type: 'string',
-              describe: 'Environment ID (defaults to the active environment)',
-            }),
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runInvitationGet } = await import('./commands/invitation.js');
@@ -1963,7 +1900,7 @@ async function runCli(): Promise<void> {
             org: { type: 'string', describe: 'Organization ID (org_*)' },
             role: { type: 'string', describe: 'Role ID (role_*) to assign on acceptance' },
             'expires-in-days': { type: 'number', describe: 'Expiration in days (default 7)' },
-            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+            'environment-id': environmentIdOption,
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -1985,10 +1922,7 @@ async function runCli(): Promise<void> {
           y
             .positional('id', { type: 'string', demandOption: true, describe: 'Invitation ID' })
             .option('yes', { alias: 'y', type: 'boolean', default: false, describe: 'Skip the confirmation prompt' })
-            .option('environment-id', {
-              type: 'string',
-              describe: 'Environment ID (defaults to the active environment)',
-            }),
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runInvitationRevoke } = await import('./commands/invitation.js');
@@ -2006,10 +1940,7 @@ async function runCli(): Promise<void> {
         (y) =>
           y
             .positional('id', { type: 'string', demandOption: true, describe: 'Invitation ID' })
-            .option('environment-id', {
-              type: 'string',
-              describe: 'Environment ID (defaults to the active environment)',
-            }),
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runInvitationResend } = await import('./commands/invitation.js');
@@ -2029,7 +1960,7 @@ async function runCli(): Promise<void> {
             limit: { type: 'number', describe: 'Limit number of results' },
             before: { type: 'string', describe: 'Cursor for results before a specific item' },
             after: { type: 'string', describe: 'Cursor for results after a specific item' },
-            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+            'environment-id': environmentIdOption,
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -2050,10 +1981,7 @@ async function runCli(): Promise<void> {
           y
             .positional('sessionId', { type: 'string', demandOption: true, describe: 'Session ID' })
             .option('yes', { alias: 'y', type: 'boolean', default: false, describe: 'Skip the confirmation prompt' })
-            .option('environment-id', {
-              type: 'string',
-              describe: 'Environment ID (defaults to the active environment)',
-            }),
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runSessionRevoke } = await import('./commands/session.js');
@@ -2258,7 +2186,7 @@ async function runCli(): Promise<void> {
             'range-start': { type: 'string', describe: 'Range start (ISO date)' },
             'range-end': { type: 'string', describe: 'Range end (ISO date)' },
             limit: { type: 'number', describe: 'Limit number of results' },
-            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+            'environment-id': environmentIdOption,
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -2424,7 +2352,7 @@ async function runCli(): Promise<void> {
             before: { type: 'string', describe: 'Cursor for results before a specific item' },
             after: { type: 'string', describe: 'Cursor for results after a specific item' },
             order: { type: 'string', describe: 'Order of results, asc or desc' },
-            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+            'environment-id': environmentIdOption,
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -2443,10 +2371,7 @@ async function runCli(): Promise<void> {
         'get <slug>',
         'Get a feature flag',
         (y) =>
-          y.positional('slug', { type: 'string', demandOption: true }).option('environment-id', {
-            type: 'string',
-            describe: 'Environment ID (defaults to the active environment)',
-          }),
+          y.positional('slug', { type: 'string', demandOption: true }).option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runFeatureFlagGet } = await import('./commands/feature-flag.js');
@@ -2458,10 +2383,7 @@ async function runCli(): Promise<void> {
         'enable <slug>',
         'Enable a feature flag',
         (y) =>
-          y.positional('slug', { type: 'string', demandOption: true }).option('environment-id', {
-            type: 'string',
-            describe: 'Environment ID (defaults to the active environment)',
-          }),
+          y.positional('slug', { type: 'string', demandOption: true }).option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runFeatureFlagEnable } = await import('./commands/feature-flag.js');
@@ -2473,10 +2395,7 @@ async function runCli(): Promise<void> {
         'disable <slug>',
         'Disable a feature flag',
         (y) =>
-          y.positional('slug', { type: 'string', demandOption: true }).option('environment-id', {
-            type: 'string',
-            describe: 'Environment ID (defaults to the active environment)',
-          }),
+          y.positional('slug', { type: 'string', demandOption: true }).option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runFeatureFlagDisable } = await import('./commands/feature-flag.js');
@@ -2491,10 +2410,7 @@ async function runCli(): Promise<void> {
           y
             .positional('slug', { type: 'string', demandOption: true })
             .positional('targetId', { type: 'string', demandOption: true })
-            .option('environment-id', {
-              type: 'string',
-              describe: 'Environment ID (defaults to the active environment)',
-            }),
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runFeatureFlagAddTarget } = await import('./commands/feature-flag.js');
@@ -2511,10 +2427,7 @@ async function runCli(): Promise<void> {
           y
             .positional('slug', { type: 'string', demandOption: true })
             .positional('targetId', { type: 'string', demandOption: true })
-            .option('environment-id', {
-              type: 'string',
-              describe: 'Environment ID (defaults to the active environment)',
-            }),
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runFeatureFlagRemoveTarget } = await import('./commands/feature-flag.js');
@@ -2531,11 +2444,7 @@ async function runCli(): Promise<void> {
         yargs,
         'list',
         'List webhook endpoints',
-        (y) =>
-          y.option('environment-id', {
-            type: 'string',
-            describe: 'Environment ID (defaults to the active environment)',
-          }),
+        (y) => y.option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runWebhookList } = await import('./commands/webhook.js');
@@ -2550,7 +2459,7 @@ async function runCli(): Promise<void> {
           y.options({
             url: { type: 'string', demandOption: true, describe: 'Webhook endpoint URL (HTTPS)' },
             events: { type: 'string', demandOption: true, describe: 'Comma-separated event types' },
-            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+            'environment-id': environmentIdOption,
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -2570,10 +2479,7 @@ async function runCli(): Promise<void> {
           y
             .positional('id', { type: 'string', demandOption: true, describe: 'Webhook endpoint ID' })
             .option('yes', { alias: 'y', type: 'boolean', default: false, describe: 'Skip the confirmation prompt' })
-            .option('environment-id', {
-              type: 'string',
-              describe: 'Environment ID (defaults to the active environment)',
-            }),
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runWebhookDelete } = await import('./commands/webhook.js');
@@ -2596,10 +2502,7 @@ async function runCli(): Promise<void> {
           (y) =>
             y
               .positional('uri', { type: 'string', demandOption: true, describe: 'Redirect URI' })
-              .option('environment-id', {
-                type: 'string',
-                describe: 'Environment ID (defaults to the active environment)',
-              }),
+              .option('environment-id', environmentIdOption),
           async (argv) => {
             await applyInsecureStorage(argv.insecureStorage);
             const { runConfigRedirectAdd } = await import('./commands/config.js');
@@ -2616,10 +2519,7 @@ async function runCli(): Promise<void> {
           (y) =>
             y
               .positional('origin', { type: 'string', demandOption: true, describe: 'CORS origin' })
-              .option('environment-id', {
-                type: 'string',
-                describe: 'Environment ID (defaults to the active environment)',
-              }),
+              .option('environment-id', environmentIdOption),
           async (argv) => {
             await applyInsecureStorage(argv.insecureStorage);
             const { runConfigCorsAdd } = await import('./commands/config.js');
@@ -2636,10 +2536,7 @@ async function runCli(): Promise<void> {
           (y) =>
             y
               .positional('url', { type: 'string', demandOption: true, describe: 'Homepage URL' })
-              .option('environment-id', {
-                type: 'string',
-                describe: 'Environment ID (defaults to the active environment)',
-              }),
+              .option('environment-id', environmentIdOption),
           async (argv) => {
             await applyInsecureStorage(argv.insecureStorage);
             const { runConfigHomepageUrlSet } = await import('./commands/config.js');
@@ -2664,7 +2561,7 @@ async function runCli(): Promise<void> {
               describe: 'Portal intent (sso, dsync, log_streams, domain_verification, certificate_renewal)',
             },
             org: { type: 'string', demandOption: true, describe: 'Organization ID' },
-            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
+            'environment-id': environmentIdOption,
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
@@ -2936,10 +2833,9 @@ async function runCli(): Promise<void> {
         'get <id>',
         'Get a domain',
         (y) =>
-          y.positional('id', { type: 'string', demandOption: true, describe: 'Domain ID' }).option('environment-id', {
-            type: 'string',
-            describe: 'Environment ID (defaults to the active environment)',
-          }),
+          y
+            .positional('id', { type: 'string', demandOption: true, describe: 'Domain ID' })
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runOrgDomainGet } = await import('./commands/org-domain.js');
@@ -2954,10 +2850,7 @@ async function runCli(): Promise<void> {
           y
             .positional('domain', { type: 'string', demandOption: true, describe: 'Domain name' })
             .option('org', { type: 'string', demandOption: true, describe: 'Organization ID (org_*)' })
-            .option('environment-id', {
-              type: 'string',
-              describe: 'Environment ID (defaults to the active environment)',
-            }),
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runOrgDomainCreate } = await import('./commands/org-domain.js');
@@ -2972,10 +2865,9 @@ async function runCli(): Promise<void> {
         'verify <id>',
         'Restart verification for a domain (issues a fresh verification token)',
         (y) =>
-          y.positional('id', { type: 'string', demandOption: true, describe: 'Domain ID' }).option('environment-id', {
-            type: 'string',
-            describe: 'Environment ID (defaults to the active environment)',
-          }),
+          y
+            .positional('id', { type: 'string', demandOption: true, describe: 'Domain ID' })
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runOrgDomainVerify } = await import('./commands/org-domain.js');
@@ -2990,10 +2882,7 @@ async function runCli(): Promise<void> {
           y
             .positional('id', { type: 'string', demandOption: true, describe: 'Domain ID' })
             .option('yes', { alias: 'y', type: 'boolean', default: false, describe: 'Skip the confirmation prompt' })
-            .option('environment-id', {
-              type: 'string',
-              describe: 'Environment ID (defaults to the active environment)',
-            }),
+            .option('environment-id', environmentIdOption),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
           const { runOrgDomainDelete } = await import('./commands/org-domain.js');

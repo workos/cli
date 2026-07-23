@@ -18,12 +18,10 @@
  */
 
 import chalk from 'chalk';
-import { requireCommandToken } from '../lib/command-auth.js';
-import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
-import { resolveEnvironmentTarget } from '../lib/environment-target.js';
-import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
 import { confirmDestructive } from '../catalog/confirm.js';
+import { runEnvScopedOperation } from '../lib/dashboard-operation.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
+import { printPaginationFooter } from '../utils/resource-command.js';
 import { formatTable } from '../utils/table.js';
 
 interface SessionStateNode {
@@ -96,17 +94,8 @@ export interface SessionListOptions {
 }
 
 export async function runSessionList(userId: string, options: SessionListOptions = {}): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('userlandSessions');
-
-  // Environment-scoped read: the op takes the user ID, and the target rides as
-  // the environment header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  // The op takes the user ID; the resolved target rides as the environment header.
+  const { data } = await runEnvScopedOperation<{
     userlandUser: {
       id: string;
       sessions: {
@@ -114,21 +103,12 @@ export async function runSessionList(userId: string, options: SessionListOptions
         listMetadata: { before: string | null; after: string | null };
       } | null;
     } | null;
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: {
-        userId,
-        ...(options.limit !== undefined ? { limit: options.limit } : {}),
-        ...(options.before ? { before: options.before } : {}),
-        ...(options.after ? { after: options.after } : {}),
-      },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  }>('userlandSessions', options, {
+    userId,
+    ...(options.limit !== undefined ? { limit: options.limit } : {}),
+    ...(options.before ? { before: options.before } : {}),
+    ...(options.after ? { after: options.after } : {}),
+  });
 
   if (!data.userlandUser) {
     exitWithError({ code: 'not_found', message: `User "${userId}" was not found in this environment.` });
@@ -172,14 +152,7 @@ export async function runSessionList(userId: string, options: SessionListOptions
     ),
   );
 
-  const { before, after } = pagination;
-  if (before && after) {
-    console.log(chalk.dim(`Before: ${before}  After: ${after}`));
-  } else if (before) {
-    console.log(chalk.dim(`Before: ${before}`));
-  } else if (after) {
-    console.log(chalk.dim(`After: ${after}`));
-  }
+  printPaginationFooter(pagination);
 }
 
 export interface SessionRevokeOptions {
@@ -195,27 +168,13 @@ export async function runSessionRevoke(sessionId: string, options: SessionRevoke
     action: `revoke session ${sessionId} — it can no longer be used to sign in`,
   });
 
-  const token = await requireCommandToken();
-  const op = getOperation('revokeUserlandSession');
-
-  // Environment-scoped mutation: pre-validated resolved target as header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
   // The operation's result selects only the success variant's sessionId (no
   // typename), so success is detected by its presence.
-  let data: { revokeUserlandSession: { sessionId?: string } | null };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { input: { sessionId } },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  const { data } = await runEnvScopedOperation<{ revokeUserlandSession: { sessionId?: string } | null }>(
+    'revokeUserlandSession',
+    options,
+    { input: { sessionId } },
+  );
 
   if (!data.revokeUserlandSession?.sessionId) {
     exitWithError({

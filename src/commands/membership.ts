@@ -25,21 +25,13 @@
 
 import chalk from 'chalk';
 import { requireCommandToken } from '../lib/command-auth.js';
-import { dashboardGraphqlRequest } from '../lib/dashboard-graphql.js';
 import { resolveEnvironmentTarget } from '../lib/environment-target.js';
-import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
+import { getOperation } from '../catalog/operation.js';
+import { runEnvScopedOperation, executeDashboardOperation } from '../lib/dashboard-operation.js';
 import { confirmDestructive, requireConfirmationFlag } from '../catalog/confirm.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
 import { formatTable } from '../utils/table.js';
-
-/** Map the CLI `--order asc|desc` flag onto the catalog's pagination enum. */
-function normalizeOrder(order: string | undefined): 'Asc' | 'Desc' | undefined {
-  if (order === undefined) return undefined;
-  const lower = order.toLowerCase();
-  if (lower === 'asc') return 'Asc';
-  if (lower === 'desc') return 'Desc';
-  exitWithError({ code: 'invalid_argument', message: `Invalid --order "${order}". Allowed values: asc, desc.` });
-}
+import { normalizeOrder, printDetailFields, printPaginationFooter } from '../utils/resource-command.js';
 
 /**
  * `role`/`roles` come back as unselected scalars on the membership record but
@@ -178,28 +170,11 @@ export async function runMembershipList(options: MembershipListOptions = {}): Pr
 }
 
 async function listMembershipsByUser(userId: string, options: MembershipListOptions): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('userlandUserOrganizationMemberships');
-
   // Environment-scoped read: the op takes only the user ID, but the target
   // still rides as the environment header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  const { data } = await runEnvScopedOperation<{
     userlandUserOrganizationMemberships: { organizationMemberships: MembershipNode[] } | null;
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { userlandUserId: userId },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  }>('userlandUserOrganizationMemberships', options, { userlandUserId: userId });
 
   const memberships = (data.userlandUserOrganizationMemberships?.organizationMemberships ?? []).map(shapeMembership);
 
@@ -216,37 +191,20 @@ async function listMembershipsByUser(userId: string, options: MembershipListOpti
 
 async function listMembershipsByOrg(orgId: string, options: MembershipListOptions): Promise<void> {
   const order = normalizeOrder(options.order);
-  const token = await requireCommandToken();
-  const op = getOperation('userlandUsersByOrg');
-
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  const { data } = await runEnvScopedOperation<{
     organization: {
       userlandUsers: {
         data: Array<{ id: string; identities?: { data: IdentityNode[] } | null }>;
         listMetadata: { before: string | null; after: string | null };
       } | null;
     } | null;
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: {
-        organizationId: orgId,
-        ...(options.limit !== undefined ? { limit: options.limit } : {}),
-        ...(options.before ? { before: options.before } : {}),
-        ...(options.after ? { after: options.after } : {}),
-        ...(order ? { order } : {}),
-      },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  }>('userlandUsersByOrg', options, {
+    organizationId: orgId,
+    ...(options.limit !== undefined ? { limit: options.limit } : {}),
+    ...(options.before ? { before: options.before } : {}),
+    ...(options.after ? { after: options.after } : {}),
+    ...(order ? { order } : {}),
+  });
 
   if (!data.organization) {
     exitWithError({ code: 'not_found', message: `Organization "${orgId}" was not found in this environment.` });
@@ -285,15 +243,7 @@ async function listMembershipsByOrg(orgId: string, options: MembershipListOption
     return;
   }
   renderMembershipTable(memberships);
-
-  const { before, after } = pagination;
-  if (before && after) {
-    console.log(chalk.dim(`Before: ${before}  After: ${after}`));
-  } else if (before) {
-    console.log(chalk.dim(`Before: ${before}`));
-  } else if (after) {
-    console.log(chalk.dim(`After: ${after}`));
-  }
+  printPaginationFooter(pagination);
 }
 
 export interface MembershipGetOptions {
@@ -302,24 +252,11 @@ export interface MembershipGetOptions {
 }
 
 export async function runMembershipGet(id: string, options: MembershipGetOptions = {}): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('userlandUserOrganizationMembership');
-
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: { userlandUserOrganizationMembership: MembershipNode | null };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { id },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  const { data } = await runEnvScopedOperation<{ userlandUserOrganizationMembership: MembershipNode | null }>(
+    'userlandUserOrganizationMembership',
+    options,
+    { id },
+  );
 
   if (!data.userlandUserOrganizationMembership) {
     exitWithError({ code: 'not_found', message: `Membership "${id}" was not found in this environment.` });
@@ -339,11 +276,7 @@ export async function runMembershipGet(id: string, options: MembershipGetOptions
     ['Status', membership.status],
     ['Created', membership.createdAt],
   ];
-  for (const [label, value] of fields) {
-    if (value === null || value === undefined || value === '') continue;
-    console.log(`${chalk.bold(label)}: ${String(value)}`);
-  }
-  console.log(chalk.dim('Run with --json for the full record.'));
+  printDetailFields(fields);
 }
 
 export interface MembershipCreateOptions {
@@ -356,38 +289,20 @@ export interface MembershipCreateOptions {
 }
 
 export async function runMembershipCreate(options: MembershipCreateOptions): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('addUserlandUserToOrg');
-
   // Environment-scoped mutation: pre-validated resolved target as header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  const { data } = await runEnvScopedOperation<{
     addUserlandUserToOrganization:
       | { __typename: 'UserlandUserAddedToOrganization' }
       | { __typename: 'OrganizationNotFound'; organizationId: string }
       | { __typename: 'UserlandUserNotFound'; userlandUserId: string }
-      | { __typename: 'UserlandUserAlreadyInvited'; userlandUserId: string; organizationId: string }
-      | { __typename: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: {
-        input: {
-          organizationId: options.org,
-          userlandUserId: options.user,
-          ...(options.role ? { roleId: options.role } : {}),
-        },
-      },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      | { __typename: 'UserlandUserAlreadyInvited'; userlandUserId: string; organizationId: string };
+  }>('addUserlandUserToOrg', options, {
+    input: {
+      organizationId: options.org,
+      userlandUserId: options.user,
+      ...(options.role ? { roleId: options.role } : {}),
+    },
+  });
 
   const result = data.addUserlandUserToOrganization;
   if (result.__typename === 'OrganizationNotFound') {
@@ -438,37 +353,21 @@ export async function runMembershipUpdate(id: string, options: MembershipUpdateO
   // require-flag: a privilege change; non-interactive callers must pass --yes.
   await requireConfirmationFlag(options, { action: `change the role on membership ${id}` });
 
-  const token = await requireCommandToken();
-  const op = getOperation('updateRoleOnOrganizationMembership');
-
   // Environment-scoped mutation: pre-validated resolved target as header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  const { data } = await runEnvScopedOperation<{
     updateRoleOnOrganizationMembership:
       | { __typename: 'RoleOnOrganizationMembershipUpdated'; organizationMembership: MembershipNode }
       | { __typename: 'RoleNotFound'; roleId: string }
-      | { __typename: 'UserlandUserOrganizationMembershipNotFound'; message: string }
-      | { __typename: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { input: { organizationMembershipId: id, roleId: options.role } },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      | { __typename: 'UserlandUserOrganizationMembershipNotFound'; message: string };
+  }>('updateRoleOnOrganizationMembership', options, {
+    input: { organizationMembershipId: id, roleId: options.role },
+  });
 
   const result = data.updateRoleOnOrganizationMembership;
   if (result.__typename === 'RoleNotFound') {
     exitWithError({
       code: 'not_found',
-      message: `Role "${(result as { roleId: string }).roleId}" was not found in this environment.`,
+      message: `Role "${result.roleId}" was not found in this environment.`,
     });
   }
   if (result.__typename === 'UserlandUserOrganizationMembershipNotFound') {
@@ -478,7 +377,7 @@ export async function runMembershipUpdate(id: string, options: MembershipUpdateO
     exitWithError({ code: 'unexpected_result', message: `Could not update membership "${id}".` });
   }
 
-  const membership = shapeMembership((result as { organizationMembership: MembershipNode }).organizationMembership);
+  const membership = shapeMembership(result.organizationMembership);
   if (isJsonMode()) {
     outputJson({ membership });
     return;
@@ -511,41 +410,30 @@ export async function runMembershipDelete(id: string, options: MembershipDeleteO
   // The remove operation is keyed by organization + user, not by membership ID,
   // so resolve the membership first to preserve the frozen `delete <id>` grammar.
   const getOp = getOperation('userlandUserOrganizationMembership');
-  let lookup: { userlandUserOrganizationMembership: MembershipNode | null };
-  try {
-    lookup = await dashboardGraphqlRequest(resolveExecutableDocument(getOp), {
-      token,
-      variables: { id },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+  const lookup = await executeDashboardOperation<{ userlandUserOrganizationMembership: MembershipNode | null }>(getOp, {
+    token,
+    variables: { id },
+    environmentId,
+  });
 
   const membership = lookup.userlandUserOrganizationMembership;
   if (!membership || !membership.organizationId || !membership.userlandUserId) {
     exitWithError({ code: 'not_found', message: `Membership "${id}" was not found in this environment.` });
   }
 
-  let data: {
+  const data = await executeDashboardOperation<{
     removeUserlandUserFromOrganization:
       | { __typename: 'UserlandUserRemovedFromOrganization' }
       | { __typename: 'OrganizationNotFound'; organizationId: string }
       | { __typename: 'UserlandUserNotFound'; userlandUserId: string }
-      | { __typename: 'UserlandUserOrganizationMembershipNotFound'; message: string }
-      | { __typename: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(removeOp), {
-      token,
-      variables: {
-        input: { organizationId: membership.organizationId, userlandUserId: membership.userlandUserId },
-      },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      | { __typename: 'UserlandUserOrganizationMembershipNotFound'; message: string };
+  }>(removeOp, {
+    token,
+    variables: {
+      input: { organizationId: membership.organizationId, userlandUserId: membership.userlandUserId },
+    },
+    environmentId,
+  });
 
   const result = data.removeUserlandUserFromOrganization;
   if (
@@ -577,30 +465,12 @@ export async function runMembershipDeactivate(id: string, options: MembershipDea
   // require-flag: an access removal; non-interactive callers must pass --yes.
   await requireConfirmationFlag(options, { action: `deactivate membership ${id}` });
 
-  const token = await requireCommandToken();
-  const op = getOperation('deactivateOrganizationMembership');
-
   // Environment-scoped mutation: pre-validated resolved target as header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  const { data } = await runEnvScopedOperation<{
     deactivateUserlandUserOrganizationMembership:
       | { __typename: 'UserlandUserOrganizationMembershipDeactivated' }
-      | { __typename: 'UserlandUserOrganizationMembershipNotFound'; message: string }
-      | { __typename: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { input: { userlandUserOrganizationMembershipId: id } },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      | { __typename: 'UserlandUserOrganizationMembershipNotFound'; message: string };
+  }>('deactivateOrganizationMembership', options, { input: { userlandUserOrganizationMembershipId: id } });
 
   const result = data.deactivateUserlandUserOrganizationMembership;
   if (result.__typename === 'UserlandUserOrganizationMembershipNotFound') {
@@ -623,30 +493,12 @@ export interface MembershipReactivateOptions {
 }
 
 export async function runMembershipReactivate(id: string, options: MembershipReactivateOptions = {}): Promise<void> {
-  const token = await requireCommandToken();
-  const op = getOperation('reactivateOrganizationMembership');
-
   // Environment-scoped mutation: pre-validated resolved target as header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
-    forMutation: op.kind === 'mutation',
-  });
-
-  let data: {
+  const { data } = await runEnvScopedOperation<{
     reactivateUserlandUserOrganizationMembership:
       | { __typename: 'UserlandUserOrganizationMembershipReactivated' }
-      | { __typename: 'UserlandUserOrganizationMembershipNotFound'; message: string }
-      | { __typename: string };
-  };
-  try {
-    data = await dashboardGraphqlRequest(resolveExecutableDocument(op), {
-      token,
-      variables: { input: { userlandUserOrganizationMembershipId: id } },
-      environmentId,
-    });
-  } catch (error) {
-    reportDashboardError(error);
-  }
+      | { __typename: 'UserlandUserOrganizationMembershipNotFound'; message: string };
+  }>('reactivateOrganizationMembership', options, { input: { userlandUserOrganizationMembershipId: id } });
 
   const result = data.reactivateUserlandUserOrganizationMembership;
   if (result.__typename === 'UserlandUserOrganizationMembershipNotFound') {
