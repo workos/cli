@@ -1434,28 +1434,30 @@ const commands: CommandSchema[] = [
   {
     name: 'webhook',
     description: 'Manage webhooks',
-    options: [insecureStorageOpt, apiKeyOpt],
+    options: [insecureStorageOpt],
     commands: [
-      { name: 'list', description: 'List webhooks' },
+      { name: 'list', description: 'List webhook endpoints', options: [environmentIdOpt] },
       {
         name: 'create',
-        description: 'Create a webhook',
+        description: 'Create a webhook endpoint (the signing secret is only visible in the WorkOS Dashboard)',
         options: [
-          { name: 'url', type: 'string', description: 'Webhook endpoint URL', required: true, hidden: false },
+          { name: 'url', type: 'string', description: 'Webhook endpoint URL (HTTPS)', required: true, hidden: false },
           { name: 'events', type: 'string', description: 'Comma-separated event types', required: true, hidden: false },
+          environmentIdOpt,
         ],
       },
       {
         name: 'delete',
-        description: 'Delete a webhook',
-        positionals: [{ name: 'id', type: 'string', description: 'Webhook ID', required: true }],
+        description: 'Delete a webhook endpoint',
+        positionals: [{ name: 'id', type: 'string', description: 'Webhook endpoint ID', required: true }],
+        options: [confirmYesOpt, environmentIdOpt],
       },
     ],
   },
   {
     name: 'config',
-    description: 'Manage WorkOS configuration (redirect URIs, CORS, homepage)',
-    options: [insecureStorageOpt, apiKeyOpt],
+    description: 'Manage AuthKit app configuration (redirect URIs, CORS, homepage)',
+    options: [insecureStorageOpt],
     commands: [
       {
         name: 'redirect',
@@ -1463,8 +1465,10 @@ const commands: CommandSchema[] = [
         commands: [
           {
             name: 'add',
-            description: 'Add a redirect URI',
+            description:
+              'Add a redirect URI (merges over the current list; a concurrent edit elsewhere may be overwritten)',
             positionals: [{ name: 'uri', type: 'string', description: 'Redirect URI', required: true }],
+            options: [environmentIdOpt],
           },
         ],
       },
@@ -1474,8 +1478,10 @@ const commands: CommandSchema[] = [
         commands: [
           {
             name: 'add',
-            description: 'Add a CORS origin',
+            description:
+              'Add a CORS origin (merges over the current list; a concurrent edit elsewhere may be overwritten)',
             positionals: [{ name: 'origin', type: 'string', description: 'CORS origin', required: true }],
+            options: [environmentIdOpt],
           },
         ],
       },
@@ -1485,8 +1491,9 @@ const commands: CommandSchema[] = [
         commands: [
           {
             name: 'set',
-            description: 'Set the homepage URL',
+            description: "Set the app homepage URL on the environment's AuthKit application",
             positionals: [{ name: 'url', type: 'string', description: 'Homepage URL', required: true }],
+            options: [environmentIdOpt],
           },
         ],
       },
@@ -1495,28 +1502,22 @@ const commands: CommandSchema[] = [
   {
     name: 'portal',
     description: 'Manage Admin Portal',
-    options: [insecureStorageOpt, apiKeyOpt],
+    options: [insecureStorageOpt],
     commands: [
       {
         name: 'generate-link',
-        description: 'Generate an Admin Portal link',
+        description:
+          'Generate an Admin Portal setup link (expires prior links of the same intent; --return-url/--success-url and the audit_logs intent are not supported on this plane)',
         options: [
           {
             name: 'intent',
             type: 'string',
-            description: 'Portal intent (sso, dsync, audit_logs, log_streams)',
+            description: 'Portal intent (sso, dsync, log_streams, domain_verification, certificate_renewal)',
             required: true,
             hidden: false,
           },
           { name: 'org', type: 'string', description: 'Organization ID', required: true, hidden: false },
-          {
-            name: 'return-url',
-            type: 'string',
-            description: 'Return URL after portal',
-            required: false,
-            hidden: false,
-          },
-          { name: 'success-url', type: 'string', description: 'Success URL', required: false, hidden: false },
+          environmentIdOpt,
         ],
       },
     ],

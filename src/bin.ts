@@ -2368,71 +2368,84 @@ async function runCli(): Promise<void> {
       return yargs.demandCommand(1, 'Please specify a feature-flag subcommand').strict();
     })
     .command('webhook', 'Manage webhooks', (yargs) => {
-      yargs.options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } });
+      yargs.options(insecureStorageOption);
       registerSubcommand(
         yargs,
         'list',
-        'List webhooks',
-        (y) => y,
+        'List webhook endpoints',
+        (y) =>
+          y.option('environment-id', {
+            type: 'string',
+            describe: 'Environment ID (defaults to the active environment)',
+          }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runWebhookList } = await import('./commands/webhook.js');
-          await runWebhookList(resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runWebhookList({ environmentId: argv.environmentId as string | undefined });
         },
       );
       registerSubcommand(
         yargs,
         'create',
-        'Create a webhook',
+        'Create a webhook endpoint (the signing secret is only visible in the WorkOS Dashboard)',
         (y) =>
           y.options({
-            url: { type: 'string', demandOption: true },
+            url: { type: 'string', demandOption: true, describe: 'Webhook endpoint URL (HTTPS)' },
             events: { type: 'string', demandOption: true, describe: 'Comma-separated event types' },
+            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runWebhookCreate } = await import('./commands/webhook.js');
-          await runWebhookCreate(
-            argv.url,
-            argv.events.split(','),
-            resolveApiKey({ apiKey: argv.apiKey }),
-            resolveApiBaseUrl(),
-          );
+          await runWebhookCreate({
+            url: argv.url,
+            events: argv.events.split(','),
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       registerSubcommand(
         yargs,
         'delete <id>',
-        'Delete a webhook',
-        (y) => y.positional('id', { type: 'string', demandOption: true }),
+        'Delete a webhook endpoint',
+        (y) =>
+          y
+            .positional('id', { type: 'string', demandOption: true, describe: 'Webhook endpoint ID' })
+            .option('yes', { alias: 'y', type: 'boolean', default: false, describe: 'Skip the confirmation prompt' })
+            .option('environment-id', {
+              type: 'string',
+              describe: 'Environment ID (defaults to the active environment)',
+            }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runWebhookDelete } = await import('./commands/webhook.js');
-          await runWebhookDelete(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+          await runWebhookDelete(argv.id, {
+            yes: argv.yes,
+            json: argv.json as boolean | undefined,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       return yargs.demandCommand(1, 'Please specify a webhook subcommand').strict();
     })
-    .command('config', 'Manage WorkOS configuration (redirect URIs, CORS, homepage)', (yargs) => {
-      yargs.options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } });
+    .command('config', 'Manage AuthKit app configuration (redirect URIs, CORS, homepage)', (yargs) => {
+      yargs.options(insecureStorageOption);
       yargs.command('redirect', 'Manage redirect URIs', (yargs) => {
         registerSubcommand(
           yargs,
           'add <uri>',
-          'Add a redirect URI',
-          (y) => y.positional('uri', { type: 'string', demandOption: true }),
+          'Add a redirect URI (merges over the current list; a concurrent edit elsewhere may be overwritten)',
+          (y) =>
+            y
+              .positional('uri', { type: 'string', demandOption: true, describe: 'Redirect URI' })
+              .option('environment-id', {
+                type: 'string',
+                describe: 'Environment ID (defaults to the active environment)',
+              }),
           async (argv) => {
             await applyInsecureStorage(argv.insecureStorage);
-
-            const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
             const { runConfigRedirectAdd } = await import('./commands/config.js');
-            await runConfigRedirectAdd(argv.uri, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+            await runConfigRedirectAdd(argv.uri, { environmentId: argv.environmentId as string | undefined });
           },
         );
         return yargs.demandCommand(1).strict();
@@ -2441,14 +2454,18 @@ async function runCli(): Promise<void> {
         registerSubcommand(
           yargs,
           'add <origin>',
-          'Add a CORS origin',
-          (y) => y.positional('origin', { type: 'string', demandOption: true }),
+          'Add a CORS origin (merges over the current list; a concurrent edit elsewhere may be overwritten)',
+          (y) =>
+            y
+              .positional('origin', { type: 'string', demandOption: true, describe: 'CORS origin' })
+              .option('environment-id', {
+                type: 'string',
+                describe: 'Environment ID (defaults to the active environment)',
+              }),
           async (argv) => {
             await applyInsecureStorage(argv.insecureStorage);
-
-            const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
             const { runConfigCorsAdd } = await import('./commands/config.js');
-            await runConfigCorsAdd(argv.origin, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+            await runConfigCorsAdd(argv.origin, { environmentId: argv.environmentId as string | undefined });
           },
         );
         return yargs.demandCommand(1).strict();
@@ -2457,14 +2474,18 @@ async function runCli(): Promise<void> {
         registerSubcommand(
           yargs,
           'set <url>',
-          'Set the homepage URL',
-          (y) => y.positional('url', { type: 'string', demandOption: true }),
+          "Set the app homepage URL on the environment's AuthKit application",
+          (y) =>
+            y
+              .positional('url', { type: 'string', demandOption: true, describe: 'Homepage URL' })
+              .option('environment-id', {
+                type: 'string',
+                describe: 'Environment ID (defaults to the active environment)',
+              }),
           async (argv) => {
             await applyInsecureStorage(argv.insecureStorage);
-
-            const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
             const { runConfigHomepageUrlSet } = await import('./commands/config.js');
-            await runConfigHomepageUrlSet(argv.url, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+            await runConfigHomepageUrlSet(argv.url, { environmentId: argv.environmentId as string | undefined });
           },
         );
         return yargs.demandCommand(1).strict();
@@ -2472,32 +2493,29 @@ async function runCli(): Promise<void> {
       return yargs.demandCommand(1, 'Please specify a config subcommand').strict();
     })
     .command('portal', 'Manage Admin Portal', (yargs) => {
-      yargs.options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } });
+      yargs.options(insecureStorageOption);
       registerSubcommand(
         yargs,
         'generate-link',
-        'Generate an Admin Portal link',
+        'Generate an Admin Portal setup link (expires prior links of the same intent; --return-url/--success-url and the audit_logs intent are not supported on this plane)',
         (y) =>
           y.options({
             intent: {
               type: 'string',
               demandOption: true,
-              describe: 'Portal intent (sso, dsync, audit_logs, log_streams)',
+              describe: 'Portal intent (sso, dsync, log_streams, domain_verification, certificate_renewal)',
             },
             org: { type: 'string', demandOption: true, describe: 'Organization ID' },
-            'return-url': { type: 'string' },
-            'success-url': { type: 'string' },
+            'environment-id': { type: 'string', describe: 'Environment ID (defaults to the active environment)' },
           }),
         async (argv) => {
           await applyInsecureStorage(argv.insecureStorage);
-
-          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runPortalGenerateLink } = await import('./commands/portal.js');
-          await runPortalGenerateLink(
-            { intent: argv.intent, organization: argv.org, returnUrl: argv.returnUrl, successUrl: argv.successUrl },
-            resolveApiKey({ apiKey: argv.apiKey }),
-            resolveApiBaseUrl(),
-          );
+          await runPortalGenerateLink({
+            intent: argv.intent,
+            organization: argv.org,
+            environmentId: argv.environmentId as string | undefined,
+          });
         },
       );
       return yargs.demandCommand(1, 'Please specify a portal subcommand').strict();

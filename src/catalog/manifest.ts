@@ -736,6 +736,95 @@ const MANIFEST: CommandJustification[] = [
     destructive: true,
     ciPolicy: 'allow',
   },
+
+  // --- Resource migration: app-config cluster (webhook / portal / config) ---
+  // graphql-resource-migration Phase 7. Same recipe as the earlier clusters:
+  // unchanged subcommand grammar, dashboard-plane backend, new curated shapes.
+  //
+  // Mapping notes:
+  // - `config redirect add` and `config cors add` have NO entries of their own:
+  //   the backing ops (`redirectUris`/`setRedirectUris`, `corsConfig`/
+  //   `updateCorsConfig`) are already owned by the `authkit redirect-uris *` /
+  //   `authkit cors *` entries above, and OVERRIDES is op-keyed (one op ↔ one
+  //   command noun — the invitation-get precedent). The config subcommands are
+  //   read-merge-write conveniences over those same full-list setters: fetch
+  //   current, no-op if present, else append and set. The concurrent-editor
+  //   race window is accepted and noted in help text (the same trade-off
+  //   `authkit redirect-uris set` already makes).
+  // - `config homepage-url set` is backed by TWO ops sharing the noun (the
+  //   `membership list` precedent): `defaultAuthkitApplication` resolves the
+  //   environment's default AuthKit application ID, then
+  //   `updateAuthkitApplication` sets its homepage URL. This matches the REST
+  //   endpoint's semantics, which dual-wrote the default application.
+  // - `portal generate-link` generates a setup link and expires prior links of
+  //   the same intent server-side; not destructive (links are re-generable) and
+  //   generating them from scripts/CI is the intended automation (the
+  //   onboard-org workflow precedent).
+  // - `webhook delete` is `destructive` (confirmDestructive; the op carries no
+  //   catalog confirmation phrase, so the consequence copy is hand-written;
+  //   ciPolicy stays `allow` because the destructive gate already covers
+  //   non-interactive runs).
+  {
+    command: 'webhook list',
+    mapsTo: 'webhookEndpoints',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'List webhook endpoints in the active environment (verify setup, audits, scripting)',
+    load: 'cheap',
+    mutation: false,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'webhook create',
+    mapsTo: 'createWebhookEndpoint',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'Register a webhook endpoint from setup scripts or CI',
+    load: 'cheap',
+    mutation: true,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'webhook delete',
+    mapsTo: 'deleteWebhookEndpoint',
+    audiences: ['human', 'agent'],
+    useCase: 'Delete a webhook endpoint (cleanup, decommissioned receivers)',
+    load: 'cheap',
+    mutation: true,
+    // destructive: the endpoint stops receiving events immediately.
+    destructive: true,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'portal generate-link',
+    mapsTo: 'generatePortalSetupLink',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'Generate an Admin Portal setup link for an organization during onboarding automation',
+    load: 'cheap',
+    mutation: true,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'config homepage-url set',
+    mapsTo: 'defaultAuthkitApplication',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: "Resolve the environment's AuthKit application (the lookup step of homepage-url set)",
+    load: 'cheap',
+    mutation: false,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
+  {
+    command: 'config homepage-url set',
+    mapsTo: 'updateAuthkitApplication',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'Set the app homepage URL when wiring AuthKit (setup scripts/CI)',
+    load: 'cheap',
+    mutation: true,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
 ];
 
 /** Returns the curated command allowlist. */

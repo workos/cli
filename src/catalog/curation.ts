@@ -173,6 +173,39 @@ export const OVERRIDES: Record<string, CommandMeta> = {
   },
   deleteOrganizationDomain: { command: 'org-domain delete', describe: 'Remove a domain from an organization' },
 
+  // --- app-config cluster (resource migration Phase 7) ---
+  // Op names/descriptions are clean upstream, but every manifest-curated op
+  // still needs an override so the manifest's clean `command` noun is the
+  // single source of truth. `config redirect add` / `config cors add` ride the
+  // redirectUris/setRedirectUris/corsConfig/updateCorsConfig ops that the
+  // `authkit` nouns above already own (OVERRIDES is op-keyed; one op ↔ one
+  // command noun) — see the manifest comment. `config homepage-url set` is
+  // backed by TWO ops sharing the noun: the default-application resolution read
+  // and the update mutation, whose `Userland*`-named input/union types the leak
+  // test cannot see (it inspects op names/descriptions only) — the command
+  // handlers must never echo those type names.
+  webhookEndpoints: { command: 'webhook list', describe: 'List webhook endpoints in the current environment' },
+  createWebhookEndpoint: {
+    command: 'webhook create',
+    describe: 'Create a webhook endpoint subscribed to the given events',
+  },
+  deleteWebhookEndpoint: {
+    command: 'webhook delete',
+    describe: 'Delete a webhook endpoint so it stops receiving events',
+  },
+  generatePortalSetupLink: {
+    command: 'portal generate-link',
+    describe: 'Generate an Admin Portal setup link for an organization',
+  },
+  defaultAuthkitApplication: {
+    command: 'config homepage-url set',
+    describe: "Set the app homepage URL on the environment's AuthKit application",
+  },
+  updateAuthkitApplication: {
+    command: 'config homepage-url set',
+    describe: "Set the app homepage URL on the environment's AuthKit application",
+  },
+
   // --- Phase 4: AuthKit app config ---
   // These op names/descriptions are already clean (no leak), but each still needs
   // an override so resolveCommandMeta returns the manifest's clean noun (the leak
