@@ -30,10 +30,16 @@ vi.mock('./unclaimed-env-api.js', () => ({
   UnclaimedEnvApiError: MockUnclaimedEnvApiError,
 }));
 
-// Mock box utility
-const mockRenderStderrBox = vi.fn();
+// Mock the flat notice renderer
+const mockRenderStderrNotice = vi.fn();
 vi.mock('../utils/box.js', () => ({
-  renderStderrBox: (...args: unknown[]) => mockRenderStderrBox(...args),
+  renderStderrNotice: (...args: unknown[]) => mockRenderStderrNotice(...args),
+}));
+
+// pill() is a pure string helper; stub it so the spec doesn't pull in the
+// prompt engine via ui.js.
+vi.mock('../utils/ui.js', () => ({
+  pill: (label: string) => label,
 }));
 
 const { warnIfUnclaimed, resetUnclaimedWarningState } = await import('./unclaimed-warning.js');
@@ -55,7 +61,7 @@ describe('unclaimed-warning', () => {
 
     await warnIfUnclaimed();
 
-    expect(mockRenderStderrBox).toHaveBeenCalled();
+    expect(mockRenderStderrNotice).toHaveBeenCalled();
   });
 
   it('does not show warning when active env is not unclaimed', async () => {
@@ -68,7 +74,7 @@ describe('unclaimed-warning', () => {
 
     await warnIfUnclaimed();
 
-    expect(mockRenderStderrBox).not.toHaveBeenCalled();
+    expect(mockRenderStderrNotice).not.toHaveBeenCalled();
   });
 
   it('does not show warning when no active env', async () => {
@@ -76,7 +82,7 @@ describe('unclaimed-warning', () => {
 
     await warnIfUnclaimed();
 
-    expect(mockRenderStderrBox).not.toHaveBeenCalled();
+    expect(mockRenderStderrNotice).not.toHaveBeenCalled();
   });
 
   it('shows warning only once per session (dedup)', async () => {
@@ -88,11 +94,11 @@ describe('unclaimed-warning', () => {
     mockIsUnclaimedEnvironment.mockReturnValue(true);
 
     await warnIfUnclaimed();
-    expect(mockRenderStderrBox).toHaveBeenCalledTimes(1);
+    expect(mockRenderStderrNotice).toHaveBeenCalledTimes(1);
     await warnIfUnclaimed();
 
     // Second call should not add any more output (dedup)
-    expect(mockRenderStderrBox).toHaveBeenCalledTimes(1);
+    expect(mockRenderStderrNotice).toHaveBeenCalledTimes(1);
   });
 
   it('suppresses warning in JSON mode', async () => {
@@ -106,7 +112,7 @@ describe('unclaimed-warning', () => {
 
     await warnIfUnclaimed();
 
-    expect(mockRenderStderrBox).not.toHaveBeenCalled();
+    expect(mockRenderStderrNotice).not.toHaveBeenCalled();
   });
 
   it('resetUnclaimedWarningState allows re-testing', async () => {
@@ -118,12 +124,12 @@ describe('unclaimed-warning', () => {
     mockIsUnclaimedEnvironment.mockReturnValue(true);
 
     await warnIfUnclaimed();
-    expect(mockRenderStderrBox).toHaveBeenCalledTimes(1);
+    expect(mockRenderStderrNotice).toHaveBeenCalledTimes(1);
 
     resetUnclaimedWarningState();
     await warnIfUnclaimed();
     // Should have doubled the output (warning shown again after reset)
-    expect(mockRenderStderrBox).toHaveBeenCalledTimes(2);
+    expect(mockRenderStderrNotice).toHaveBeenCalledTimes(2);
   });
 
   it('detects claimed status and updates config', async () => {
@@ -140,7 +146,7 @@ describe('unclaimed-warning', () => {
     await warnIfUnclaimed();
 
     expect(mockMarkEnvironmentClaimed).toHaveBeenCalled();
-    expect(mockRenderStderrBox).not.toHaveBeenCalled();
+    expect(mockRenderStderrNotice).not.toHaveBeenCalled();
   });
 
   it('shows warning when claim check fails', async () => {
@@ -156,7 +162,7 @@ describe('unclaimed-warning', () => {
 
     await warnIfUnclaimed();
 
-    expect(mockRenderStderrBox).toHaveBeenCalled();
+    expect(mockRenderStderrNotice).toHaveBeenCalled();
   });
 
   it('promotes to claimed when claim check returns 401', async () => {
@@ -173,7 +179,7 @@ describe('unclaimed-warning', () => {
     await warnIfUnclaimed();
 
     expect(mockMarkEnvironmentClaimed).toHaveBeenCalled();
-    expect(mockRenderStderrBox).not.toHaveBeenCalled();
+    expect(mockRenderStderrNotice).not.toHaveBeenCalled();
   });
 
   it('never throws even if getActiveEnvironment throws', async () => {

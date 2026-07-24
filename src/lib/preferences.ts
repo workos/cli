@@ -25,8 +25,10 @@ export interface CliPreferences {
     noticeShownAt?: string;
   };
   /**
-   * MCP-install onboarding state. Owned semantically by lib/mcp-notice.ts; the
-   * shape lives here so it rides the same plain-JSON prefs store as telemetry.
+   * Legacy MCP-install onboarding state. The MCP offer folded into `setup` (see
+   * commands/setup.ts); these fields are retained for back-compat so a user who
+   * declined the old standalone MCP offer is still treated as setup-declined
+   * (see isSetupDeclined). Kept in this plain-JSON store alongside telemetry.
    */
   mcp?: {
     /**
@@ -37,6 +39,18 @@ export interface CliPreferences {
     promptDeclined?: boolean;
     /** ISO timestamp the one-time MCP banner was shown. */
     bannerShownAt?: string;
+  };
+  /**
+   * Consolidated agent-setup onboarding state (skills + MCP). Owned by
+   * commands/setup.ts. `declined` is absolute for the automatic surfaces
+   * (post-login / post-install); `workos setup` stays available manually.
+   * Legacy `mcp.promptDeclined` is treated as an implicit setup-decline on read
+   * (see isSetupDeclined) so users who already declined MCP are never re-asked.
+   */
+  setup?: {
+    declined?: boolean;
+    /** ISO timestamp the user completed a setup run. */
+    completedAt?: string;
   };
 }
 
@@ -127,14 +141,15 @@ export function savePreferences(next: CliPreferences): void {
     // No existing file (or unreadable) — start from empty.
   }
 
-  const merged: CliPreferences = {
-    ...current,
-    ...next,
-    ...(current.telemetry || next.telemetry ? { telemetry: { ...current.telemetry, ...next.telemetry } } : {}),
-    // Deep-merge mcp too so writing one marker (e.g. bannerShownAt) never
-    // clobbers the other (promptDeclined), which are written at different times.
-    ...(current.mcp || next.mcp ? { mcp: { ...current.mcp, ...next.mcp } } : {}),
-  };
+  // Shallow-merge each known nested group (one level) so writing one field
+  // (e.g. setup.completedAt) never clobbers a sibling written at a different
+  // time (e.g. setup.declined). A new nested group is one entry in this list.
+  const merged: CliPreferences = { ...current, ...next };
+  for (const key of ['telemetry', 'mcp', 'setup'] as const) {
+    if (current[key] || next[key]) {
+      Object.assign(merged, { [key]: { ...current[key], ...next[key] } });
+    }
+  }
 
   fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
   fs.writeFileSync(filePath, JSON.stringify(merged), { encoding: 'utf8', mode: 0o600 });
@@ -164,6 +179,36 @@ export function isNoticeShown(): boolean {
  */
 export function markNoticeShown(): void {
   savePreferences({ telemetry: { noticeShownAt: new Date().toISOString() } });
+}
+
+/**
+ * Whether an automatic setup offer should be suppressed. Absolute once the user
+ * declines. Treats the legacy `mcp.promptDeclined` flag as an implicit decline
+ * so anyone who declined the old MCP offer is never re-prompted by the new flow.
+ */
+export function isSetupDeclined(): boolean {
+  const prefs = getPreferences();
+  return prefs.setup?.declined === true || prefs.mcp?.promptDeclined === true;
+}
+
+/** Whether the user has completed a setup run (ever). */
+export function isSetupCompleted(): boolean {
+  return !!getPreferences().setup?.completedAt;
+}
+
+/** Persist an explicit setup decline. Throws on write failure (see savePreferences). */
+export function recordSetupDeclined(): void {
+  savePreferences({ setup: { declined: true } });
+}
+
+/** Persist a completed setup run, stamping the current time. */
+export function recordSetupCompleted(): void {
+  savePreferences({ setup: { completedAt: new Date().toISOString() } });
+}
+
+/** Clear the setup decline (new + legacy) so automatic offers resume. For `workos setup --reset`. */
+export function clearSetupDecline(): void {
+  savePreferences({ setup: { declined: false }, mcp: { promptDeclined: false } });
 }
 
 /**

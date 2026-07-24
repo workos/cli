@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import type { Integration } from '../lib/constants.js';
 import { traceStep } from '../telemetry.js';
 import { analytics } from '../utils/analytics.js';
-import clack from '../utils/clack.js';
+import ui from '../utils/ui.js';
 import * as fs from 'fs';
 import path from 'path';
 
@@ -64,14 +64,14 @@ export async function addOrUpdateEnvironmentVariablesStep({
             encoding: 'utf8',
             flag: 'w',
           });
-          clack.log.success(`Updated environment variables in ${chalk.bold.cyan(relativeEnvFilePath)}`);
+          ui.log.success(`Updated environment variables in ${chalk.bold.cyan(relativeEnvFilePath)}`);
         } else {
-          clack.log.success(`${chalk.bold.cyan(relativeEnvFilePath)} already has the necessary environment variables.`);
+          ui.log.success(`${chalk.bold.cyan(relativeEnvFilePath)} already has the necessary environment variables.`);
         }
 
         addedEnvVariables = true;
       } catch (error) {
-        clack.log.warning(
+        ui.log.warning(
           `Failed to update environment variables in ${chalk.bold.cyan(
             relativeEnvFilePath,
           )}. Please update them manually.`,
@@ -95,11 +95,11 @@ export async function addOrUpdateEnvironmentVariablesStep({
           encoding: 'utf8',
           flag: 'w',
         });
-        clack.log.success(`Created ${chalk.bold.cyan(relativeEnvFilePath)} with environment variables.`);
+        ui.log.success(`Created ${chalk.bold.cyan(relativeEnvFilePath)} with environment variables.`);
 
         addedEnvVariables = true;
       } catch (error) {
-        clack.log.warning(
+        ui.log.warning(
           `Failed to create ${chalk.bold.cyan(
             relativeEnvFilePath,
           )} with environment variables. Please add them manually.`,
@@ -136,10 +136,10 @@ export async function addOrUpdateEnvironmentVariablesStep({
             encoding: 'utf8',
             flag: 'w',
           });
-          clack.log.success(`Updated ${chalk.bold.cyan('.gitignore')} to include ${chalk.bold.cyan(envFileName)}.`);
+          ui.log.success(`Updated ${chalk.bold.cyan('.gitignore')} to include ${chalk.bold.cyan(envFileName)}.`);
           addedGitignore = true;
         } catch (error) {
-          clack.log.warning(
+          ui.log.warning(
             `Failed to update ${chalk.bold.cyan('.gitignore')} to include ${chalk.bold.cyan(envFileName)}.`,
           );
 
@@ -163,10 +163,10 @@ export async function addOrUpdateEnvironmentVariablesStep({
           encoding: 'utf8',
           flag: 'w',
         });
-        clack.log.success(`Created ${chalk.bold.cyan('.gitignore')} with environment files.`);
+        ui.log.success(`Created ${chalk.bold.cyan('.gitignore')} with environment files.`);
         addedGitignore = true;
       } catch (error) {
-        clack.log.warning(`Failed to create ${chalk.bold.cyan('.gitignore')} with environment files.`);
+        ui.log.warning(`Failed to create ${chalk.bold.cyan('.gitignore')} with environment files.`);
 
         analytics.capture('installer interaction', {
           action: 'failed to create gitignore',

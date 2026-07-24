@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { traceStep } from '../telemetry.js';
-import { getPackageDotJson, updatePackageDotJson } from './clack-utils.js';
+import { getPackageDotJson, updatePackageDotJson } from './ui-utils.js';
 import { analytics } from './analytics.js';
 import type { InstallerOptions } from './types.js';
 

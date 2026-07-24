@@ -3,22 +3,30 @@ import type { InteractionMode } from '../../utils/interaction-mode.js';
 
 vi.mock('fast-glob', () => ({ default: vi.fn() }));
 
-vi.mock('../../utils/clack.js', () => ({
+vi.mock('../../utils/ui.js', () => ({
   default: {
     select: vi.fn(),
     isCancel: vi.fn(() => false),
-    log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), success: vi.fn(), step: vi.fn(), message: vi.fn() },
+    log: {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      success: vi.fn(),
+      step: vi.fn(),
+      message: vi.fn(),
+      detail: vi.fn(),
+    },
   },
 }));
 
-// Passthrough — the guard itself is covered by clack-utils.spec.ts; here we only
-// need clack.select's resolved value to flow through in the human path.
-vi.mock('../../utils/clack-utils.js', () => ({
+// Passthrough — the guard itself is covered by ui-utils.spec.ts; here we only
+// need ui.select's resolved value to flow through in the human path.
+vi.mock('../../utils/ui-utils.js', () => ({
   abortIfCancelled: vi.fn(async (p) => await p),
 }));
 
 const fg = (await import('fast-glob')).default;
-const clack = (await import('../../utils/clack.js')).default;
+const ui = (await import('../../utils/ui.js')).default;
 const { getNextJsRouter, NextJsRouter } = await import('./utils.js');
 const { setInteractionMode, resetInteractionModeForTests } = await import('../../utils/interaction-mode.js');
 
@@ -36,7 +44,7 @@ describe('getNextJsRouter', () => {
   beforeEach(() => {
     resetInteractionModeForTests();
     vi.clearAllMocks();
-    vi.mocked(clack.isCancel).mockReturnValue(false);
+    vi.mocked(ui.isCancel).mockReturnValue(false);
   });
 
   afterEach(() => {
@@ -50,7 +58,7 @@ describe('getNextJsRouter', () => {
     const result = await getNextJsRouter({ installDir: '/proj' });
 
     expect(result).toBe(NextJsRouter.PAGES_ROUTER);
-    expect(clack.select).not.toHaveBeenCalled();
+    expect(ui.select).not.toHaveBeenCalled();
   });
 
   it.each(modes)('app-only detection returns app router without prompting (%s mode)', async (mode) => {
@@ -60,18 +68,18 @@ describe('getNextJsRouter', () => {
     const result = await getNextJsRouter({ installDir: '/proj' });
 
     expect(result).toBe(NextJsRouter.APP_ROUTER);
-    expect(clack.select).not.toHaveBeenCalled();
+    expect(ui.select).not.toHaveBeenCalled();
   });
 
   it('ambiguous detection in human mode prompts and uses the answer', async () => {
     setInteractionMode({ mode: 'human', source: 'default' });
     mockDetection({ pages: true, app: true });
-    vi.mocked(clack.select).mockResolvedValueOnce(NextJsRouter.PAGES_ROUTER as never);
+    vi.mocked(ui.select).mockResolvedValueOnce(NextJsRouter.PAGES_ROUTER as never);
 
     const result = await getNextJsRouter({ installDir: '/proj' });
 
     expect(result).toBe(NextJsRouter.PAGES_ROUTER);
-    expect(clack.select).toHaveBeenCalledOnce();
+    expect(ui.select).toHaveBeenCalledOnce();
   });
 
   it('ambiguous detection in agent mode defaults to app router with a warning (no prompt)', async () => {
@@ -81,8 +89,8 @@ describe('getNextJsRouter', () => {
     const result = await getNextJsRouter({ installDir: '/proj' });
 
     expect(result).toBe(NextJsRouter.APP_ROUTER);
-    expect(clack.select).not.toHaveBeenCalled();
-    expect(clack.log.warn).toHaveBeenCalled();
+    expect(ui.select).not.toHaveBeenCalled();
+    expect(ui.log.warn).toHaveBeenCalled();
   });
 
   it('ambiguous detection in ci mode defaults to app router with a warning (no prompt)', async () => {
@@ -92,8 +100,8 @@ describe('getNextJsRouter', () => {
     const result = await getNextJsRouter({ installDir: '/proj' });
 
     expect(result).toBe(NextJsRouter.APP_ROUTER);
-    expect(clack.select).not.toHaveBeenCalled();
-    expect(clack.log.warn).toHaveBeenCalled();
+    expect(ui.select).not.toHaveBeenCalled();
+    expect(ui.log.warn).toHaveBeenCalled();
   });
 
   it('--router pages overrides ambiguous detection with no prompt', async () => {
@@ -103,7 +111,7 @@ describe('getNextJsRouter', () => {
     const result = await getNextJsRouter({ installDir: '/proj', router: 'pages' });
 
     expect(result).toBe(NextJsRouter.PAGES_ROUTER);
-    expect(clack.select).not.toHaveBeenCalled();
+    expect(ui.select).not.toHaveBeenCalled();
   });
 
   it('--router app wins over detection with no prompt', async () => {
@@ -113,6 +121,6 @@ describe('getNextJsRouter', () => {
     const result = await getNextJsRouter({ installDir: '/proj', router: 'app' });
 
     expect(result).toBe(NextJsRouter.APP_ROUTER);
-    expect(clack.select).not.toHaveBeenCalled();
+    expect(ui.select).not.toHaveBeenCalled();
   });
 });

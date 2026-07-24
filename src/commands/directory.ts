@@ -4,7 +4,7 @@ import { formatTable } from '../utils/table.js';
 import { outputSuccess, outputJson, isJsonMode, exitWithError } from '../utils/output.js';
 import { createApiErrorHandler } from '../lib/api-error-handler.js';
 import { isCiMode, isPromptAllowed } from '../utils/interaction-mode.js';
-import clack from '../utils/clack.js';
+import ui from '../utils/ui.js';
 
 const handleApiError = createApiErrorHandler('Directory');
 
@@ -101,11 +101,11 @@ export async function runDirectoryDelete(
       });
     }
 
-    const confirmed = await clack.confirm({
+    const confirmed = await ui.confirm({
       message: `Delete directory ${id}? This cannot be undone.`,
     });
 
-    if (clack.isCancel(confirmed) || !confirmed) {
+    if (ui.isCancel(confirmed) || !confirmed) {
       console.log('Delete cancelled.');
       return;
     }

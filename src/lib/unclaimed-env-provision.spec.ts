@@ -9,8 +9,8 @@ vi.mock('../utils/debug.js', () => ({
   logError: vi.fn(),
 }));
 
-// Mock clack
-const mockClack = {
+// Mock the UI facade
+const mockUi = {
   log: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -19,7 +19,7 @@ const mockClack = {
     success: vi.fn(),
   },
 };
-vi.mock('../utils/clack.js', () => ({ default: mockClack }));
+vi.mock('../utils/ui.js', () => ({ default: mockUi }));
 
 // Mock config-store — track calls
 const mockGetConfig = vi.fn();
@@ -50,7 +50,7 @@ vi.mock('./unclaimed-env-api.js', () => ({
 
 // Mock box utility
 vi.mock('../utils/box.js', () => ({
-  renderStderrBox: vi.fn(),
+  renderStderrNotice: vi.fn(),
 }));
 
 const { tryProvisionUnclaimedEnv } = await import('./unclaimed-env-provision.js');
@@ -198,11 +198,11 @@ describe('unclaimed-env-provision', () => {
 
     it('shows provisioning message to user', async () => {
       mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
-      const { renderStderrBox } = await import('../utils/box.js');
+      const { renderStderrNotice } = await import('../utils/box.js');
 
       await tryProvisionUnclaimedEnv({ installDir: testDir });
 
-      expect(renderStderrBox).toHaveBeenCalled();
+      expect(renderStderrNotice).toHaveBeenCalled();
     });
 
     it('returns false when config read-back fails after save', async () => {
@@ -214,7 +214,7 @@ describe('unclaimed-env-provision', () => {
 
       expect(result).toBe(false);
       expect(mockSaveConfig).toHaveBeenCalled();
-      expect(mockClack.log.warn).toHaveBeenCalledWith(expect.stringContaining('config storage may be unreliable'));
+      expect(mockUi.log.warn).toHaveBeenCalledWith(expect.stringContaining('config storage may be unreliable'));
     });
 
     it('returns false on API failure (network error)', async () => {
@@ -235,7 +235,7 @@ describe('unclaimed-env-provision', () => {
       const result = await tryProvisionUnclaimedEnv({ installDir: testDir });
 
       expect(result).toBe(false);
-      expect(mockClack.log.warn).toHaveBeenCalledWith(expect.stringContaining('falling back to login'));
+      expect(mockUi.log.warn).toHaveBeenCalledWith(expect.stringContaining('falling back to login'));
     });
 
     it('returns false on API failure (server error)', async () => {
