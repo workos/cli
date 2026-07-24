@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import clack from '../utils/clack.js';
+import ui from '../utils/ui.js';
 import {
   getCredentials,
   saveCredentials,
@@ -241,15 +241,15 @@ export async function runDebugReset({
       });
     }
 
-    const confirmed = await clack.confirm({
+    const confirmed = await ui.confirm({
       message: `Clear all ${targets}? This cannot be undone.`,
     });
 
-    if (clack.isCancel(confirmed) || !confirmed) {
+    if (ui.isCancel(confirmed) || !confirmed) {
       if (isJsonMode()) {
         outputJson({ cleared: false, cancelled: true });
       } else {
-        clack.log.info('Reset cancelled');
+        ui.log.info('Reset cancelled');
       }
       return;
     }
@@ -262,7 +262,7 @@ export async function runDebugReset({
   if (isJsonMode()) {
     outputJson({ cleared: true, credentials: clearCreds, config: clearConf, preferences: clearPrefs });
   } else {
-    clack.log.success(`Cleared ${targets}`);
+    ui.log.success(`Cleared ${targets}`);
   }
 }
 
@@ -358,7 +358,7 @@ export async function runDebugSimulate({
     outputJson({ simulated: true, actions });
   } else {
     for (const action of actions) {
-      clack.log.success(action);
+      ui.log.success(action);
     }
   }
 }

@@ -509,7 +509,13 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
       model: getConfig().model,
-      allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch'],
+      // Empty on purpose. A tool listed here is auto-approved BEFORE `canUseTool`
+      // (installerCanUseTool) runs, which both defeats the Bash safety gate and
+      // triggers the SDK's CLAUDE_SDK_CAN_USE_TOOL_SHADOWED warning. Leaving this
+      // empty routes every tool call through canUseTool so the gate is
+      // authoritative. Tool *availability* comes from the `tools` preset below,
+      // not from this list.
+      allowedTools: [],
       sdkEnv,
       claudeExecutablePath,
     };

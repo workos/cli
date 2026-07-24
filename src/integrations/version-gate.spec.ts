@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InstallerOptions } from '../utils/types.js';
 import { InstallDeclinedError } from '../lib/installer-errors.js';
 
-vi.mock('../utils/clack.js', () => ({
+vi.mock('../utils/ui.js', () => ({
   default: {
     log: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
     outro: vi.fn(),

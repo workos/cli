@@ -13,11 +13,11 @@ vi.mock('../lib/workos-client.js', () => ({
   createWorkOSClient: () => ({ sdk: mockSdk }),
 }));
 
-// Mock clack for confirmation prompts
+// Mock the UI facade
 const mockConfirm = vi.fn();
 const mockIsCancel = vi.fn(() => false);
 
-vi.mock('../utils/clack.js', () => ({
+vi.mock('../utils/ui.js', () => ({
   default: {
     confirm: (...args: unknown[]) => mockConfirm(...args),
     isCancel: (...args: unknown[]) => mockIsCancel(...args),
@@ -142,7 +142,7 @@ describe('connection commands', () => {
       expect(consoleOutput.some((l) => l.includes('cancelled'))).toBe(true);
     });
 
-    it('cancels on clack cancel', async () => {
+    it('cancels on user cancel', async () => {
       mockConfirm.mockResolvedValue(Symbol('cancel'));
       mockIsCancel.mockReturnValue(true);
       await runConnectionDelete('conn_01ABC', {}, 'sk_test');

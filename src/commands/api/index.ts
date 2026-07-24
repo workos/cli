@@ -5,8 +5,8 @@ import { apiRequest } from './request.js';
 import { resolveApiBaseUrl } from '../../lib/api-key.js';
 import { exitWithError, isJsonMode, outputJson } from '../../utils/output.js';
 import { ExitCode, exitWithCode } from '../../utils/exit-codes.js';
-import { isCiMode, isPromptAllowed } from '../../utils/interaction-mode.js';
-import { confirmationRecovery } from '../../utils/recovery-hints.js';
+import { isCiMode, isPromptAllowed, getInteractionMode } from '../../utils/interaction-mode.js';
+import { confirmationRecovery, authLoginRecovery, missingArgsRecovery } from '../../utils/recovery-hints.js';
 import { formatWorkOSCommand, formatWorkOSCommandArgs } from '../../utils/command-invocation.js';
 import { colorMethod, printResponse } from './format.js';
 
@@ -25,7 +25,7 @@ export interface ApiCommandOptions {
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 export async function runApiInteractive(options?: { apiKey?: string }): Promise<void> {
-  // Interactive mode is inherently human-oriented (clack prompts, preview text,
+  // Interactive mode is inherently human-oriented (interactive prompts, preview text,
   // etc.). Refuse to enter it whenever JSON output was requested, regardless of
   // TTY status, so stdout stays machine-readable.
   if (isJsonMode()) {
@@ -140,11 +140,11 @@ export async function runApiRequest(endpoint: string, options: ApiCommandOptions
         recovery: confirmationRecovery(confirmCommand),
       });
     }
-    const clack = (await import('../../utils/clack.js')).default;
+    const ui = (await import('../../utils/ui.js')).default;
     console.log(`\n${chalk.yellow('About to')} ${method} ${endpoint}`);
     if (hasBody) prettyPrint(body);
-    const ok = await clack.confirm({ message: 'Proceed?' });
-    if (!ok || clack.isCancel(ok)) {
+    const ok = await ui.confirm({ message: 'Proceed?' });
+    if (!ok || ui.isCancel(ok)) {
       exitWithCode(ExitCode.CANCELLED);
     }
   }
@@ -160,10 +160,22 @@ export async function runApiRequest(endpoint: string, options: ApiCommandOptions
   printResponse(response, { includeStatus: options.include });
 
   if (response.status >= 400) {
+    // Give the caller a concrete next step keyed off the status: re-auth for
+    // 401/403, discover endpoints for 404.
+    const recovery =
+      response.status === 401 || response.status === 403
+        ? authLoginRecovery({ mode: getInteractionMode().mode })
+        : response.status === 404
+          ? missingArgsRecovery(
+              formatWorkOSCommand('api ls'),
+              'List available endpoints, then re-run with a valid path.',
+            )
+          : undefined;
     exitWithError({
       code: `http_${response.status}`,
       message: `API request failed with status ${response.status}`,
       apiContext: { status: response.status },
+      ...(recovery && { recovery }),
     });
   }
 }

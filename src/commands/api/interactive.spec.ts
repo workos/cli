@@ -102,7 +102,7 @@ const mockConfirm = vi.fn();
 const cancelSymbol = Symbol('cancel');
 const mockIsCancel = vi.fn((value: unknown) => value === cancelSymbol);
 
-vi.mock('../../utils/clack.js', () => ({
+vi.mock('../../utils/ui.js', () => ({
   default: {
     select: (...args: unknown[]) => mockSelect(...args),
     text: (...args: unknown[]) => mockText(...args),

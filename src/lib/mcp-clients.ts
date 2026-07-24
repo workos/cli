@@ -40,6 +40,20 @@ export type McpAgentKey = 'claude-code' | 'codex' | 'cursor';
 
 export type McpOutcome = 'installed' | 'already-installed' | 'removed' | 'not-installed' | 'skipped' | 'failed';
 
+/**
+ * Human phrasing for each outcome (JSON mode emits the raw `outcome` value).
+ * Lives with the `McpOutcome` type so every consumer (`mcp` command, `setup`)
+ * stays in lockstep when an outcome is added.
+ */
+export const MCP_OUTCOME_LABELS: Record<McpOutcome, string> = {
+  installed: 'installed',
+  'already-installed': 'already installed',
+  removed: 'removed',
+  'not-installed': 'not installed',
+  skipped: 'skipped',
+  failed: 'failed',
+};
+
 export interface McpClientResult {
   agent: McpAgentKey;
   displayName: string;
