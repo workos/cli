@@ -44,6 +44,16 @@ export interface CredentialProxyHandle {
   stop: () => Promise<void>;
 }
 
+/**
+ * Socket inactivity timeout for gateway requests. Node's `timeout` option is
+ * already an idle timer, so this is a value change, not a mechanism change.
+ * 600s matches the Anthropic SDK's own 10-minute non-streaming ceiling. It must
+ * stay well above a single agent turn: when the gateway aggregates a stream
+ * internally, a non-streaming client receives no bytes until the turn completes,
+ * and the old 120s cut those requests off mid-flight.
+ */
+const UPSTREAM_IDLE_TIMEOUT_MS = 600_000;
+
 // Hop-by-hop headers that must not be forwarded by proxies (RFC 7230 §6.1)
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',
@@ -311,7 +321,7 @@ async function handleRequest(
     path: finalPath,
     method: req.method,
     headers,
-    timeout: 120_000, // 2 minute timeout
+    timeout: UPSTREAM_IDLE_TIMEOUT_MS,
   };
 
   const transport = useHttps ? https : http;
@@ -398,7 +408,7 @@ export async function startClaimTokenProxy(options: {
         path: finalPath,
         method: req.method,
         headers,
-        timeout: 120_000,
+        timeout: UPSTREAM_IDLE_TIMEOUT_MS,
       },
       (proxyRes) => {
         res.writeHead(proxyRes.statusCode || 500, filterHeaders(proxyRes.headers));

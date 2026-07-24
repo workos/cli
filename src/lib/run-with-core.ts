@@ -1,7 +1,5 @@
 import { createActor, fromPromise } from 'xstate';
 import open from 'open';
-import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
 import { installerMachine } from './installer-core.js';
 import { createInstallerEventEmitter } from './events.js';
 import type { CompletionData } from './events.js';
@@ -24,7 +22,7 @@ import type {
 } from './installer-core.types.js';
 import { isScaffoldableEmptyDir, resolvePackageManager, runCreateNextApp } from './scaffold/index.js';
 import type { Integration } from './constants.js';
-import { parseEnvFile } from '../utils/env-parser.js';
+import { readProjectEnvCredentials } from './project-env.js';
 import { enableDebugLogs, initLogFile, logInfo, logError } from '../utils/debug.js';
 
 import { getAccessToken, saveCredentials, getStagingCredentials, saveStagingCredentials } from './credentials.js';
@@ -62,24 +60,6 @@ async function runIntegrationInstallerFn(integration: Integration, options: Inst
     throw new Error(`Unknown integration: ${integration}`);
   }
   return mod.run(options);
-}
-
-function readExistingCredentials(installDir: string): { apiKey?: string; clientId?: string } {
-  const envPath = join(installDir, '.env.local');
-  if (!existsSync(envPath)) {
-    return {};
-  }
-
-  try {
-    const content = readFileSync(envPath, 'utf-8');
-    const envVars = parseEnvFile(content);
-    return {
-      apiKey: envVars.WORKOS_API_KEY || undefined,
-      clientId: envVars.WORKOS_CLIENT_ID || undefined,
-    };
-  } catch {
-    return {};
-  }
 }
 
 async function detectIntegrationFn(options: Pick<InstallerOptions, 'installDir'>): Promise<Integration | undefined> {
@@ -192,7 +172,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   const gatewayUrl = getTelemetryUrl();
   analytics.setGatewayUrl(gatewayUrl);
 
-  const existingCreds = readExistingCredentials(options.installDir);
+  const existingCreds = readProjectEnvCredentials(options.installDir);
   const augmentedOptions: InstallerOptions = {
     ...options,
     apiKey: options.apiKey || existingCreds.apiKey,

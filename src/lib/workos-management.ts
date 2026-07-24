@@ -1,15 +1,23 @@
 import type { Integration } from './constants.js';
+import type { EnvironmentConfig } from './config-store.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from './constants.js';
 import { analytics } from '../utils/analytics.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 import ui from '../utils/ui.js';
+import { getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
 import { getCallbackPath } from './port-detection.js';
 
 const WORKOS_API_BASE = 'https://api.workos.com';
 
+const HOMEPAGE_URL_ENDPOINT = '/user_management/app_homepage_url';
+
+/** Provenance wording when no stored environment can be named. */
+const SUPPLIED_KEY_PROVENANCE = 'the API key supplied to this run';
+
 export interface AutoConfigResult {
   redirectUri: { success: boolean; alreadyExists: boolean };
   corsOrigin: { success: boolean; alreadyExists: boolean };
-  homepageUrl: { success: boolean };
+  homepageUrl: { success: boolean; alreadyExists: boolean };
 }
 
 interface FetchError {
@@ -19,10 +27,10 @@ interface FetchError {
 }
 
 async function workosRequest(
-  method: 'POST' | 'PUT',
+  method: 'GET' | 'POST' | 'PUT',
   endpoint: string,
   apiKey: string,
-  body: Record<string, string>,
+  body?: Record<string, string>,
 ): Promise<Response> {
   return fetch(`${WORKOS_API_BASE}${endpoint}`, {
     method,
@@ -30,7 +38,7 @@ async function workosRequest(
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(body),
+    ...(body ? { body: JSON.stringify(body) } : {}),
   });
 }
 
@@ -89,17 +97,64 @@ async function createCorsOrigin(apiKey: string, origin: string): Promise<{ succe
 }
 
 /**
- * Set the app homepage URL in WorkOS.
+ * Set the app homepage URL in WorkOS, skipping the write when it already matches.
+ *
+ * The homepage URL is a single-valued setting, so an unconditional PUT silently
+ * overwrites whatever a logged-in user already had configured. Reading first
+ * makes the common case a no-op that reports itself honestly.
+ *
+ * A read failure is not fatal: fall through to the PUT, which is the old
+ * behavior, rather than abandoning configuration over a GET we just added.
  */
-async function setHomepageUrl(apiKey: string, url: string): Promise<{ success: boolean }> {
-  const response = await workosRequest('PUT', '/user_management/app_homepage_url', apiKey, { url });
+async function setHomepageUrl(apiKey: string, url: string): Promise<{ success: boolean; alreadyExists: boolean }> {
+  try {
+    const current = await workosRequest('GET', HOMEPAGE_URL_ENDPOINT, apiKey);
+    if (current.ok) {
+      const data = (await current.json()) as { url?: string } | null;
+      if (data?.url === url) {
+        return { success: true, alreadyExists: true };
+      }
+    }
+  } catch {
+    // Read failed (endpoint missing, non-JSON body, network error) — fall
+    // through to the write so behavior is never worse than before.
+  }
+
+  const response = await workosRequest('PUT', HOMEPAGE_URL_ENDPOINT, apiKey, { url });
 
   if (!response.ok) {
     const error = await parseFetchError(response);
     throw new Error(error.message || `HTTP ${error.status}`);
   }
 
-  return { success: true };
+  return { success: true, alreadyExists: false };
+}
+
+/**
+ * Where the credentials being used came from, so the rows below say *where* the
+ * writes landed and not just what was written.
+ *
+ * Derived locally: the WorkOS API exposes no environment identity this module
+ * can reach (`workosRequest` is GET/POST/PUT against user_management only, and
+ * the config store holds no environment id). `activeEnvironment.name` is a
+ * local label, so it is only ever a parenthetical, never an authoritative id.
+ */
+function describeCredentialProvenance(): string {
+  let activeEnv: EnvironmentConfig | null = null;
+  try {
+    activeEnv = getActiveEnvironment();
+  } catch {
+    // Keyring locked or unavailable — a label is not worth aborting over.
+    return SUPPLIED_KEY_PROVENANCE;
+  }
+
+  if (!activeEnv) return SUPPLIED_KEY_PROVENANCE;
+
+  if (isUnclaimedEnvironment(activeEnv)) {
+    return `a new unclaimed environment (${activeEnv.name}) — run \`${formatWorkOSCommand('env claim')}\` to keep it`;
+  }
+
+  return `your active environment (${activeEnv.name})`;
 }
 
 export interface AutoConfigOptions {
@@ -148,12 +203,15 @@ export async function autoConfigureWorkOSEnvironment(
       port,
       redirectUri: redirectUri.alreadyExists ? 'existed' : 'created',
       corsOrigin: corsOrigin.alreadyExists ? 'existed' : 'created',
+      homepageUrl: homepageUrl.alreadyExists ? 'existed' : 'updated',
     });
 
     // Aligned key/value feedback: value in accent, a dim status for "already
-    // existed" vs. a green status for a fresh create/update.
+    // existed" vs. a green status for a fresh create/update. The provenance row
+    // comes first — it is the context for the three rows below it.
     ui.log.success('WorkOS dashboard configured');
     ui.rows([
+      { key: 'Environment', value: describeCredentialProvenance(), statusKind: 'muted' },
       {
         key: 'Redirect URI',
         value: callbackUrl,
@@ -166,7 +224,12 @@ export async function autoConfigureWorkOSEnvironment(
         status: corsOrigin.alreadyExists ? 'already set' : 'created',
         statusKind: corsOrigin.alreadyExists ? 'muted' : 'ok',
       },
-      { key: 'Homepage URL', value: homepageUrlValue, status: 'updated', statusKind: 'ok' },
+      {
+        key: 'Homepage URL',
+        value: homepageUrlValue,
+        status: homepageUrl.alreadyExists ? 'already set' : 'updated',
+        statusKind: homepageUrl.alreadyExists ? 'muted' : 'ok',
+      },
     ]);
 
     return results;

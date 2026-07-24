@@ -1,18 +1,17 @@
 import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { basename, join } from 'path';
 import { parseEnvFile } from '../utils/env-parser.js';
 
 const ENV_LOCAL_COVERING_PATTERNS = ['.env.local', '.env*.local', '.env*'];
 const ENV_COVERING_PATTERNS = ['.env', '.env*'];
 
 /**
- * Ensure the given env filename is in .gitignore.
+ * Ensure the given filename is in .gitignore.
  * Creates .gitignore if it doesn't exist.
- * No-ops if a covering pattern is already present.
+ * No-ops if one of `coveringPatterns` is already present.
  */
-function ensureGitignore(installDir: string, filename: '.env' | '.env.local'): void {
+function ensureGitignore(installDir: string, filename: string, coveringPatterns: string[]): void {
   const gitignorePath = join(installDir, '.gitignore');
-  const coveringPatterns = filename === '.env' ? ENV_COVERING_PATTERNS : ENV_LOCAL_COVERING_PATTERNS;
 
   if (!existsSync(gitignorePath)) {
     writeFileSync(gitignorePath, `${filename}\n`);
@@ -51,36 +50,102 @@ function generateCookiePassword(): string {
 }
 
 /**
+ * Set `vars` in `content` without disturbing comments, blank lines, or key order.
+ * Existing keys are rewritten in place; new keys are appended.
+ *
+ * An existing key is rewritten as `key=value` with no leading whitespace even if
+ * the original line was indented — indented env lines are vanishingly rare and
+ * preserving the indent adds branching for no real benefit.
+ *
+ * Key extraction splits on the first `=`, matching `parseEnvFile`, so values
+ * containing `=` survive. Duplicate keys in a malformed source file: only the
+ * first occurrence is rewritten (`parseEnvFile` reads last-wins, so a duplicate
+ * still shadows the update — a pre-existing pathology, not handled here).
+ */
+function upsertEnvLines(content: string, vars: Record<string, string>): string {
+  const hadTrailingNewline = content.endsWith('\n');
+  const body = hadTrailingNewline ? content.slice(0, -1) : content;
+  const pending = new Map(Object.entries(vars));
+
+  // An empty body has no lines at all — splitting it would invent a blank one.
+  const lines =
+    body === ''
+      ? []
+      : body.split(/\r?\n/).map((line) => {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) return line;
+          const eq = trimmed.indexOf('=');
+          if (eq === -1) return line;
+          const key = trimmed.slice(0, eq);
+          if (!pending.has(key)) return line;
+          const value = pending.get(key)!;
+          pending.delete(key);
+          return `${key}=${value}`;
+        });
+
+  for (const [key, value] of pending) {
+    lines.push(`${key}=${value}`);
+  }
+
+  // Always exactly one trailing newline, matching the previous writer.
+  return lines.join('\n') + '\n';
+}
+
+/**
+ * Copy `envPath` to `{envPath}.bak` before the first CLI mutation.
+ *
+ * Stateless: existence of the backup IS the "already backed up" flag, so a
+ * second write in the same run — or a later run — never overwrites the original
+ * pre-CLI file. Deliberately not a module-level flag: this module is otherwise
+ * pure, and the writers have four call sites across the codebase.
+ *
+ * `ensureGitignore` runs BEFORE the write so a crash between the two cannot
+ * leave an unignored secret on disk: `stageAndCommit` runs `git add -A`, and the
+ * env file holds a live API key and claim token.
+ */
+function backupEnvFile(installDir: string, envPath: string): void {
+  if (!existsSync(envPath)) return; // nothing to back up
+  const backupPath = `${envPath}.bak`;
+  if (existsSync(backupPath)) return; // never overwrite an earlier backup
+
+  const backupName = basename(backupPath);
+  ensureGitignore(installDir, backupName, [backupName, '.env*', '*.bak']);
+  writeFileSync(backupPath, readFileSync(envPath, 'utf-8'));
+}
+
+/** Drop keys whose value is undefined so they never serialize as `KEY=undefined`. */
+function definedVars(envVars: Partial<EnvVars>): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [key, value] of Object.entries(envVars)) {
+    if (value !== undefined) result[key] = value;
+  }
+  return result;
+}
+
+/**
  * Write environment variables to .env.local before agent runs.
- * Merges with existing .env.local if present (new vars take precedence).
- * Auto-generates WORKOS_COOKIE_PASSWORD if not provided.
+ * Upserts into an existing .env.local if present (new vars take precedence),
+ * preserving comments, blank lines, and key order.
+ * Auto-generates WORKOS_COOKIE_PASSWORD if not already set.
  */
 export function writeEnvLocal(installDir: string, envVars: Partial<EnvVars>): void {
   const envPath = join(installDir, '.env.local');
 
-  // Read existing env if present
-  let existingEnv: Record<string, string> = {};
-  if (existsSync(envPath)) {
-    const content = readFileSync(envPath, 'utf-8');
-    existingEnv = parseEnvFile(content);
+  backupEnvFile(installDir, envPath);
+
+  const existingContent = existsSync(envPath) ? readFileSync(envPath, 'utf-8') : '';
+  const existingEnv = parseEnvFile(existingContent);
+
+  const vars = definedVars(envVars);
+
+  // Generate cookie password only when neither the caller nor the file has one
+  if (!vars.WORKOS_COOKIE_PASSWORD && !existingEnv.WORKOS_COOKIE_PASSWORD) {
+    vars.WORKOS_COOKIE_PASSWORD = generateCookiePassword();
   }
 
-  // Merge with new vars (new vars take precedence)
-  const merged = { ...existingEnv, ...envVars };
+  ensureGitignore(installDir, '.env.local', ENV_LOCAL_COVERING_PATTERNS);
 
-  // Generate cookie password if not provided
-  if (!merged.WORKOS_COOKIE_PASSWORD) {
-    merged.WORKOS_COOKIE_PASSWORD = generateCookiePassword();
-  }
-
-  // Write back
-  const content = Object.entries(merged)
-    .map(([key, value]) => `${key}=${value}`)
-    .join('\n');
-
-  ensureGitignore(installDir, '.env.local');
-
-  writeFileSync(envPath, content + '\n');
+  writeFileSync(envPath, upsertEnvLines(existingContent, vars));
 }
 
 /**
@@ -91,6 +156,11 @@ export function writeEnvLocal(installDir: string, envVars: Partial<EnvVars>): vo
  *
  * Used by pre-detection flows that write credentials before the framework
  * integration is known (unclaimed env provisioning).
+ *
+ * KEEP IN SYNC: `resolveProjectEnvPath` in ./project-env.ts mirrors the
+ * package.json test below so the no-clobber check reads the same file this
+ * writes. If they disagree, the installer can check one file and overwrite
+ * another — the original bug.
  */
 export function writeCredentialsEnv(installDir: string, envVars: Partial<EnvVars>): void {
   const hasPackageJson = existsSync(join(installDir, 'package.json'));
@@ -100,18 +170,12 @@ export function writeCredentialsEnv(installDir: string, envVars: Partial<EnvVars
   }
 
   const envPath = join(installDir, '.env');
-  let existingEnv: Record<string, string> = {};
-  if (existsSync(envPath)) {
-    const content = readFileSync(envPath, 'utf-8');
-    existingEnv = parseEnvFile(content);
-  }
 
-  const merged = { ...existingEnv, ...envVars };
-  const content = Object.entries(merged)
-    .map(([key, value]) => `${key}=${value}`)
-    .join('\n');
+  backupEnvFile(installDir, envPath);
 
-  ensureGitignore(installDir, '.env');
+  const existingContent = existsSync(envPath) ? readFileSync(envPath, 'utf-8') : '';
 
-  writeFileSync(envPath, content + '\n');
+  ensureGitignore(installDir, '.env', ENV_COVERING_PATTERNS);
+
+  writeFileSync(envPath, upsertEnvLines(existingContent, definedVars(envVars)));
 }

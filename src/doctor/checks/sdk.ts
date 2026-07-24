@@ -18,7 +18,13 @@ const SDK_PACKAGES = [
   'workos', // very old legacy
 ] as const;
 
-const AUTHKIT_PACKAGES = new Set([
+/**
+ * AuthKit SDKs only — deliberately excludes `@workos-inc/node` and legacy
+ * `workos`, which are present in plenty of projects that never installed
+ * AuthKit. Consumed by the install preflight guard (`lib/preflight-authkit.ts`),
+ * where matching the base SDK would block legitimate first-time installs.
+ */
+export const AUTHKIT_PACKAGES = new Set([
   '@workos/authkit-tanstack-react-start',
   '@workos/authkit-sveltekit',
   '@workos-inc/authkit-nextjs',

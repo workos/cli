@@ -39,9 +39,22 @@ export async function resolveInstallCredentials(
       return;
     }
 
+    const dir = installDir ?? process.cwd();
+
+    // The CLI has no credentials, but the project might: provisioning writes to
+    // the project's env file, so a key already sitting there means we must not
+    // provision. Fall back to login instead — the project has a key, we just
+    // have no gateway auth.
+    const { readProjectEnvCredentials } = await import('./project-env.js');
+    if (readProjectEnvCredentials(dir).apiKey) {
+      const { logInfo } = await import('../utils/debug.js');
+      logInfo('[resolve-install-credentials] Project env already has WORKOS_API_KEY — skipping provisioning');
+      if (!skipAuth) await authenticate();
+      return;
+    }
+
     // No existing credentials — try unclaimed env provisioning
     const { tryProvisionUnclaimedEnv } = await import('./unclaimed-env-provision.js');
-    const dir = installDir ?? process.cwd();
     const provisioned = await tryProvisionUnclaimedEnv({ installDir: dir });
     if (!provisioned) {
       // Unclaimed env provisioning failed — fall back to login

@@ -300,9 +300,38 @@ describe('service unavailability handling', () => {
     }) as typeof emitter.emit;
   });
 
-  it('detects is_error result with API 500 as SERVICE_UNAVAILABLE', async () => {
+  // The gateway's generic 500 branch also fires for request-shape failures, so
+  // this text is NOT evidence of an outage. Telling the user to wait a few
+  // minutes costs them another four-minute run that fails identically.
+  it('treats the gateway generic 500 as deterministic, not a transient outage', async () => {
     const apiErrorText = 'API Error: 500 {"error":{"type":"internal_error","message":"An unexpected error occurred"}}';
     mockQuery.mockImplementation(createMockSDKResponse([{ text: apiErrorText, is_error: true }]));
+
+    const result = await runAgent(makeAgentConfig(), 'Test prompt', makeOptions(), undefined, emitter);
+
+    expect(result.error).toBe(AgentErrorType.EXECUTION_ERROR);
+    expect(result.errorMessage).not.toMatch(/temporarily unavailable/);
+    expect(result.errorMessage).not.toMatch(/few minutes|try again shortly/i);
+    expect(result.errorMessage).toMatch(/likely to fail the same way/);
+  });
+
+  it("treats the proxy's own upstream_timeout as deterministic", async () => {
+    mockQuery.mockImplementation(
+      createMockSDKResponse([
+        { text: '{"error":"upstream_timeout","message":"Upstream server timed out"}', is_error: true },
+      ]),
+    );
+
+    const result = await runAgent(makeAgentConfig(), 'Test prompt', makeOptions(), undefined, emitter);
+
+    expect(result.error).toBe(AgentErrorType.EXECUTION_ERROR);
+    expect(result.errorMessage).not.toMatch(/temporarily unavailable/);
+  });
+
+  it('detects a 503 as SERVICE_UNAVAILABLE', async () => {
+    mockQuery.mockImplementation(
+      createMockSDKResponse([{ text: 'API Error: 503 Service Unavailable', is_error: true }]),
+    );
 
     const result = await runAgent(makeAgentConfig(), 'Test prompt', makeOptions(), undefined, emitter);
 
@@ -328,8 +357,7 @@ describe('service unavailability handling', () => {
   });
 
   it('skips validation retries when service is unavailable', async () => {
-    const apiErrorText = 'API Error: 500 {"error":{"type":"internal_error","message":"An unexpected error occurred"}}';
-    mockQuery.mockImplementation(createMockSDKResponse([{ text: apiErrorText, is_error: true }]));
+    mockQuery.mockImplementation(createMockSDKResponse([{ text: 'API Error: 503 overloaded_error', is_error: true }]));
 
     const validateAndFormat = vi.fn().mockResolvedValue('Still broken');
 

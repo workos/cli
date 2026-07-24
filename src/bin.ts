@@ -134,6 +134,20 @@ const insecureStorageOption = {
   },
 } as const;
 
+/**
+ * Shared override for the "AuthKit is already installed" preflight guard.
+ *
+ * Distinct from `--force-install` below, which only relaxes peer-dependency
+ * checks during package installation.
+ */
+const forceOption = {
+  force: {
+    default: false,
+    describe: 'Continue even if AuthKit is already installed in this project',
+    type: 'boolean' as const,
+  },
+} as const;
+
 const installerOptions = {
   direct: {
     alias: 'D',
@@ -240,6 +254,7 @@ const installerOptions = {
     describe: 'Next.js router to target when detection is ambiguous (app or pages)',
     type: 'string' as const,
   },
+  ...forceOption,
 };
 
 // Check for updates (blocks up to 500ms, skip in JSON/non-human modes to keep machine streams clean)
@@ -2542,6 +2557,11 @@ async function runCli(): Promise<void> {
       (yargs) => yargs.options(installerOptions),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
+        // MUST run before credential resolution below: that provisions a WorkOS
+        // environment and writes its credentials into the project's env file,
+        // so a guard placed after it is no guard at all.
+        const preflight = await import('./lib/preflight-authkit.js');
+        await preflight.assertNoExistingAuthKit({ installDir: argv.installDir ?? process.cwd(), force: argv.force });
         await resolveInstallCredentials(argv.apiKey, argv.installDir, argv.skipAuth, ensureAuthenticated);
         const { handleInstall } = await import('./commands/install.js');
         await handleInstall(argv);
@@ -2754,6 +2774,9 @@ async function runCli(): Promise<void> {
       (yargs) => yargs.options(installerOptions),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
+        // Guard first, before credential resolution — see the `install` handler above.
+        const preflight = await import('./lib/preflight-authkit.js');
+        await preflight.assertNoExistingAuthKit({ installDir: argv.installDir ?? process.cwd(), force: argv.force });
         await resolveInstallCredentials(argv.apiKey, argv.installDir, argv.skipAuth, ensureAuthenticated);
         const { handleInstall } = await import('./commands/install.js');
         await handleInstall({ ...argv, dashboard: true });
@@ -2762,7 +2785,9 @@ async function runCli(): Promise<void> {
     .command(
       ['$0'],
       'WorkOS AuthKit CLI',
-      (yargs) => yargs.options(insecureStorageOption),
+      // `--force` must be registered here too: this parser is .strict(), so
+      // `npx workos --force` would die as an unknown argument otherwise.
+      (yargs) => yargs.options({ ...insecureStorageOption, ...forceOption }),
       async (argv) => {
         // Non-human modes: emit machine-readable command tree (JSON) or the
         // fully-configured parser help (human non-TTY edge) instead of prompting.
@@ -2786,6 +2811,10 @@ async function runCli(): Promise<void> {
         }
 
         await applyInsecureStorage(argv.insecureStorage);
+        // After the confirm above (two prompts back to back is worse UX), but
+        // still before credential resolution touches the project.
+        const preflight = await import('./lib/preflight-authkit.js');
+        await preflight.assertNoExistingAuthKit({ installDir: process.cwd(), force: argv.force });
         await resolveInstallCredentials(undefined, undefined, false, ensureAuthenticated);
 
         const { handleInstall } = await import('./commands/install.js');
