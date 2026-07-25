@@ -17,6 +17,18 @@ import { getWorkOSApiUrl } from '../utils/urls.js';
 
 const REQUEST_TIMEOUT_MS = 30_000;
 
+/**
+ * Apollo runs `csrfPrevention: { requestHeaders: ['X-CSRF-Token'] }`. A
+ * `multipart/form-data` POST is a CORS-simple request, so Apollo demands one of
+ * those headers to force a preflight that a cross-origin page could not survive.
+ * The *value* is never checked for a bearer-authenticated request — the server's
+ * CSRF guard short-circuits on the Authorization header, since a bearer request
+ * cannot be forged by a browser in the first place — so any non-empty string
+ * satisfies it. JSON requests need nothing here: `application/json` is itself a
+ * non-simple content type and already forces the preflight.
+ */
+const MULTIPART_CSRF_HEADER_VALUE = 'workos-cli';
+
 export type DashboardGraphqlErrorCode =
   | 'forbidden' // 401/403: capability disabled, or token not backed by a team
   | 'http_error' // other non-2xx
@@ -67,6 +79,19 @@ export interface DashboardGraphqlOptions {
  * classified by failure mode (forbidden / http / graphql / network).
  */
 export async function dashboardGraphqlRequest<T>(query: string, options: DashboardGraphqlOptions): Promise<T> {
+  return sendDashboardRequest<T>(
+    options,
+    { 'Content-Type': 'application/json' },
+    JSON.stringify({ query, variables: options.variables ?? {} }),
+  );
+}
+
+/** POST a prepared payload to `<api>/graphql`, classifying every failure mode. */
+async function sendDashboardRequest<T>(
+  options: DashboardGraphqlOptions,
+  headers: Record<string, string>,
+  payload: string | FormData,
+): Promise<T> {
   const url = `${getWorkOSApiUrl()}/graphql`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -76,11 +101,11 @@ export async function dashboardGraphqlRequest<T>(query: string, options: Dashboa
     res = await fetch(url, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        ...headers,
         Authorization: `Bearer ${options.token}`,
         ...(options.environmentId ? { 'x-url-environment-id': options.environmentId } : {}),
       },
-      body: JSON.stringify({ query, variables: options.variables ?? {} }),
+      body: payload,
       signal: controller.signal,
     });
   } catch (error) {
@@ -126,4 +151,90 @@ export async function dashboardGraphqlRequest<T>(query: string, options: Dashboa
   }
 
   return body.data;
+}
+
+/** One file to attach, bound to the variable slot it fills. */
+export interface DashboardUploadFile {
+  /**
+   * Dotted path to the variable this file substitutes into, rooted at
+   * `variables` (e.g. `variables.input.lightLogoFile`). The slot MUST hold
+   * `null` in `options.variables` — see {@link assertNullPlaceholder}.
+   */
+  variablePath: string;
+  filename: string;
+  contentType: string;
+  bytes: Uint8Array;
+}
+
+/**
+ * Execute a GraphQL operation carrying file uploads, using the GraphQL
+ * multipart request spec: an `operations` field (the ordinary JSON body, with
+ * `null` standing in for each file), a `map` field binding each file part to a
+ * variable path, and one part per file.
+ *
+ * This is the whole reason a CLI can set branding assets when an MCP server
+ * cannot: `Upload` is not a JSON-representable scalar, so it needs a transport
+ * that can carry bytes. MCP tool arguments are JSON Schema and have no file
+ * type; raw HTTP has multipart. Same endpoint, same bearer token, no extra
+ * server surface.
+ */
+export async function dashboardGraphqlUpload<T>(
+  query: string,
+  options: DashboardGraphqlOptions & { files: DashboardUploadFile[] },
+): Promise<T> {
+  if (options.files.length === 0) {
+    throw new DashboardGraphqlError('An upload request requires at least one file.', 'graphql_error');
+  }
+
+  const variables = options.variables ?? {};
+  const form = new FormData();
+  const map: Record<string, [string]> = {};
+
+  options.files.forEach((file, index) => {
+    assertNullPlaceholder(variables, file.variablePath);
+    map[String(index)] = [file.variablePath];
+  });
+
+  form.append('operations', JSON.stringify({ query, variables }));
+  form.append('map', JSON.stringify(map));
+  options.files.forEach((file, index) => {
+    form.append(String(index), new Blob([file.bytes], { type: file.contentType }), file.filename);
+  });
+
+  // No explicit Content-Type: `fetch` derives it from the FormData so the
+  // multipart boundary matches the body it actually encodes.
+  return sendDashboardRequest<T>(options, { 'X-CSRF-Token': MULTIPART_CSRF_HEADER_VALUE }, form);
+}
+
+/**
+ * Verify a file's declared variable path resolves to an existing slot holding
+ * `null`, throwing otherwise.
+ *
+ * This is a correctness guard, not defensive noise. The server substitutes
+ * files by walking `map` paths; a path that matches nothing is silently
+ * ignored, leaving the literal `null` in place. For `updateAppBranding` a null
+ * image field means "clear this asset", so a mistyped path would quietly
+ * DELETE the branding image the caller was trying to upload. Fail loudly here
+ * instead.
+ */
+function assertNullPlaceholder(variables: Record<string, unknown>, variablePath: string): void {
+  const segments = variablePath.split('.');
+  if (segments.shift() !== 'variables' || segments.length === 0) {
+    throw new DashboardGraphqlError(`Upload path "${variablePath}" must be rooted at "variables".`, 'graphql_error');
+  }
+
+  let cursor: unknown = variables;
+  for (const segment of segments) {
+    if (cursor === null || typeof cursor !== 'object' || !(segment in cursor)) {
+      throw new DashboardGraphqlError(
+        `Upload path "${variablePath}" does not exist in the variables.`,
+        'graphql_error',
+      );
+    }
+    cursor = (cursor as Record<string, unknown>)[segment];
+  }
+
+  if (cursor !== null) {
+    throw new DashboardGraphqlError(`Upload path "${variablePath}" must be null in the variables.`, 'graphql_error');
+  }
 }

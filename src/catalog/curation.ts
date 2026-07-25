@@ -225,6 +225,13 @@ export const OVERRIDES: Record<string, CommandMeta> = {
     command: 'authkit branding get',
     describe: 'Show AuthKit branding (logos, theme) for an environment',
   },
+  // Upstream describes this as updating "branding assets ... and theme
+  // settings"; the CLI exposes only the image uploads, so the description is
+  // narrowed to what the command actually does.
+  updateAppBranding: {
+    command: 'authkit branding set',
+    describe: 'Upload AuthKit branding images (logo, icon, favicon) for an environment',
+  },
 };
 
 /**

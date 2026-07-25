@@ -18,7 +18,7 @@
  */
 
 import { requireCommandToken } from './command-auth.js';
-import { dashboardGraphqlRequest } from './dashboard-graphql.js';
+import { dashboardGraphqlRequest, dashboardGraphqlUpload, type DashboardUploadFile } from './dashboard-graphql.js';
 import { resolveEnvironmentTarget } from './environment-target.js';
 import { getOperation, resolveExecutableDocument, reportDashboardError } from '../catalog/operation.js';
 import type { CatalogOperation } from '../catalog/catalog-types.js';
@@ -55,6 +55,22 @@ export async function executeDashboardOperation<T>(
 ): Promise<T> {
   try {
     return await dashboardGraphqlRequest<T>(resolveExecutableDocument(op), options);
+  } catch (error) {
+    reportDashboardError(error);
+  }
+}
+
+/**
+ * {@link executeDashboardOperation} for an operation carrying file uploads —
+ * same already-resolved token/environment contract, same structured exit, but
+ * sent as a GraphQL multipart request so `Upload` variables can carry bytes.
+ */
+export async function executeDashboardUpload<T>(
+  op: CatalogOperation,
+  options: { token: string; variables?: Variables; environmentId?: string; files: DashboardUploadFile[] },
+): Promise<T> {
+  try {
+    return await dashboardGraphqlUpload<T>(resolveExecutableDocument(op), options);
   } catch (error) {
     reportDashboardError(error);
   }

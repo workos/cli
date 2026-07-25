@@ -6,26 +6,40 @@
 # Prereq: `workos auth login` (device flow) with the environment you want to
 # target set as the active env. Then:
 #
-#   ./scripts/smoke-dashboard-plane.sh                  # read-only (safe)
-#   ./scripts/smoke-dashboard-plane.sh --mutate         # + CRUD round-trips in a disposable org
-#   ./scripts/smoke-dashboard-plane.sh --config-writes  # + config redirect/cors add (snapshot & restore)
-#   ./scripts/smoke-dashboard-plane.sh --keep           # don't clean up created resources
+#   ./scripts/smoke-dashboard-plane.sh                    # read-only (safe)
+#   ./scripts/smoke-dashboard-plane.sh --mutate           # + CRUD round-trips in a disposable org
+#   ./scripts/smoke-dashboard-plane.sh --config-writes    # + config redirect/cors add (snapshot & restore)
+#   ./scripts/smoke-dashboard-plane.sh --branding-writes  # + branding image upload (multipart; see below)
+#   ./scripts/smoke-dashboard-plane.sh --keep             # don't clean up created resources
+#
+# --branding-writes is the only tier that uploads files. It exercises the
+# GraphQL multipart transport, which is what an MCP client cannot do. It
+# REPLACES the environment's real logo/icon/favicon with generated test images
+# and CANNOT restore them: the API returns asset paths, not the original bytes,
+# and there is no re-upload-from-URL operation. Run it on a sandbox environment
+# you do not mind re-branding.
 #
 # Env overrides:
-#   WORKOS_BIN          command to invoke the CLI (default: node <repo>/dist/bin.js)
-#   SMOKE_EVENT_TYPES   comma-separated event types for `event list` (default: user.created)
+#   WORKOS_BIN              command to invoke the CLI (default: node <repo>/dist/bin.js)
+#   SMOKE_EVENT_TYPES       comma-separated event types for `event list` (default: user.created)
+#   SMOKE_BRANDING_ENV_ID   environment for --branding-writes (default: the active one).
+#                           Point this at a throwaway environment so the tier
+#                           never rebrands anything you care about. Creating one:
+#                           `workos project create scratch --yes` gives a fresh
+#                           project whose environments start with no branding.
 #
 # Exit code: 0 if every executed test passed, 1 otherwise.
 set -u
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MUTATE=0 CONFIG_WRITES=0 KEEP=0
+MUTATE=0 CONFIG_WRITES=0 BRANDING_WRITES=0 KEEP=0
 for a in "$@"; do
   case "$a" in
     --mutate) MUTATE=1 ;;
     --config-writes) CONFIG_WRITES=1 ;;
+    --branding-writes) BRANDING_WRITES=1 ;;
     --keep) KEEP=1 ;;
-    -h|--help) sed -n '2,18p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -h|--help) sed -n '2,26p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "unknown flag: $a (see --help)"; exit 2 ;;
   esac
 done
@@ -128,7 +142,7 @@ echo "workos dashboard-plane smoke test"
 echo "  bin:         ${BIN[*]}"
 echo "  user:        $EMAIL  (team: $TEAM)"
 echo "  environment: $ENV_NAME  ${ENV_ID:-<unresolved>}"
-echo "  tiers:       reads$( [ $MUTATE -eq 1 ] && printf ' + mutate' )$( [ $CONFIG_WRITES -eq 1 ] && printf ' + config-writes' )"
+echo "  tiers:       reads$( [ $MUTATE -eq 1 ] && printf ' + mutate' )$( [ $CONFIG_WRITES -eq 1 ] && printf ' + config-writes' )$( [ $BRANDING_WRITES -eq 1 ] && printf ' + branding-writes' )"
 echo "  raw output:  $WORK"
 if [ -z "$ENV_ID" ]; then
   echo "could not resolve the active environment from whoami — aborting"
@@ -151,6 +165,7 @@ t "feature-flag list"            "${BIN[@]}" feature-flag list --json
 FLAG_SLUG="$(jget "$LAST" flags.0.slug || true)"
 t "webhook list"                 "${BIN[@]}" webhook list --json
 t "event list"                   "${BIN[@]}" event list --events "${SMOKE_EVENT_TYPES:-user.created}" --limit 5 --json
+t "authkit branding get"         "${BIN[@]}" authkit branding get --json
 
 if [ -n "$ORG_ID" ]; then
   t "organization get"           "${BIN[@]}" organization get "$ORG_ID" --json
@@ -322,6 +337,96 @@ if [ "$CONFIG_WRITES" -eq 1 ]; then
   fi
 
   skip "config homepage-url set" "no read-back exists to restore the current value — test manually"
+fi
+
+# -------------------------------------------------------- branding writes
+# The multipart (`Upload`) path. Everything else in this script is a JSON
+# request; this tier is the only coverage of the transport that lets a CLI set
+# branding images at all — the reason this exists rather than living in the MCP
+# server, which cannot carry file bytes over JSON tool arguments.
+#
+# The negative cases run first and cost nothing: they must be refused locally,
+# before any upload. The positive case then uploads and proves the write landed
+# by watching the stored asset paths change (each upload gets a fresh ULID
+# filename, so a changed path means new bytes were actually stored).
+if [ "$BRANDING_WRITES" -eq 1 ]; then
+  # An explicit target keeps the one destructive tier off whatever environment
+  # happens to be active.
+  BR_ENV=()
+  if [ -n "${SMOKE_BRANDING_ENV_ID:-}" ]; then
+    BR_ENV=(--environment-id "$SMOKE_BRANDING_ENV_ID")
+    say "— branding writes (uploads REAL images to $SMOKE_BRANDING_ENV_ID; not restorable) —"
+  else
+    say "— branding writes (uploads REAL images to the ACTIVE env $ENV_NAME; not restorable) —"
+  fi
+
+  IMG_DIR="$WORK/branding"
+  mkdir -p "$IMG_DIR"
+  # A genuine 1x1 PNG, so the server sees real image bytes rather than padding.
+  node -e '
+    const fs = require("fs");
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    for (const name of ["logo.png", "icon.png", "favicon.png"]) {
+      fs.writeFileSync(`${process.argv[1]}/${name}`, png);
+    }
+    // 400KB is the server cap; one byte over must be refused client-side.
+    fs.writeFileSync(`${process.argv[1]}/too-big.png`, Buffer.alloc(400 * 1024 + 1, 1));
+    fs.writeFileSync(`${process.argv[1]}/logo.bmp`, png);
+  ' "$IMG_DIR"
+
+  t_refuse "branding set with no images refused"      "${BIN[@]}" authkit branding set ${BR_ENV[@]+"${BR_ENV[@]}"} --json
+  t_refuse "branding set rejects oversized image"     "${BIN[@]}" authkit branding set ${BR_ENV[@]+"${BR_ENV[@]}"} --logo "$IMG_DIR/too-big.png" --json
+  t_refuse "branding set rejects unsupported type"    "${BIN[@]}" authkit branding set ${BR_ENV[@]+"${BR_ENV[@]}"} --logo "$IMG_DIR/logo.bmp" --json
+  t_refuse "branding set rejects a missing file"      "${BIN[@]}" authkit branding set ${BR_ENV[@]+"${BR_ENV[@]}"} --logo "$IMG_DIR/nope.png" --json
+  t_refuse "branding set refuses a bogus environment" "${BIN[@]}" authkit branding set --logo "$IMG_DIR/logo.png" --environment-id env_smoke_bogus_0000 --json
+
+  if t "branding get (snapshot before upload)" "${BIN[@]}" authkit branding get ${BR_ENV[@]+"${BR_ENV[@]}"} --json; then
+    BEFORE_LOGO="$(jget "$LAST" branding.lightLogoPath || echo '')"
+    BEFORE_ICON="$(jget "$LAST" branding.lightLogoIconPath || echo '')"
+    BEFORE_FAVICON="$(jget "$LAST" branding.lightFaviconPath || echo '')"
+
+    if t "branding set (logo + icon + favicon, multipart upload)" \
+      "${BIN[@]}" authkit branding set ${BR_ENV[@]+"${BR_ENV[@]}"} \
+        --logo "$IMG_DIR/logo.png" \
+        --icon "$IMG_DIR/icon.png" \
+        --favicon "$IMG_DIR/favicon.png" \
+        --json; then
+      UPLOADED_COUNT="$(node -e '
+        const d = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+        process.stdout.write(String((d.uploaded ?? []).length));
+      ' "$LAST")"
+      if [ "$UPLOADED_COUNT" != "3" ]; then
+        echo "          ${c_y}warning:${c_0} expected 3 uploaded assets, got $UPLOADED_COUNT"
+      fi
+
+      # Read back: the stored paths must differ from the snapshot, which is
+      # what proves the bytes reached S3 rather than the mutation merely
+      # returning success.
+      if t "branding get (read back after upload)" "${BIN[@]}" authkit branding get ${BR_ENV[@]+"${BR_ENV[@]}"} --json; then
+        AFTER_LOGO="$(jget "$LAST" branding.lightLogoPath || echo '')"
+        AFTER_ICON="$(jget "$LAST" branding.lightLogoIconPath || echo '')"
+        AFTER_FAVICON="$(jget "$LAST" branding.lightFaviconPath || echo '')"
+
+        for pair in "logo:$BEFORE_LOGO:$AFTER_LOGO" "icon:$BEFORE_ICON:$AFTER_ICON" "favicon:$BEFORE_FAVICON:$AFTER_FAVICON"; do
+          label="${pair%%:*}"; rest="${pair#*:}"; before="${rest%%:*}"; after="${rest#*:}"
+          N=$((N+1))
+          if [ -n "$after" ] && [ "$before" != "$after" ]; then
+            NPASS=$((NPASS+1))
+            printf '  %sok%s    %s path changed after upload  %s(%s)%s\n' "$c_g" "$c_0" "$label" "$c_d" "$after" "$c_0"
+          else
+            NFAIL=$((NFAIL+1)); FAILURES+=("$label path unchanged after upload")
+            printf '  %sFAIL%s  %s path unchanged after upload  %s(before=%s after=%s)%s\n' \
+              "$c_r" "$c_0" "$label" "$c_d" "${before:-<unset>}" "${after:-<unset>}" "$c_0"
+          fi
+        done
+      fi
+    fi
+  fi
+
+  skip "restore previous branding images" "the API exposes asset paths, not the original bytes — re-upload manually if needed"
 fi
 
 # ---------------------------------------------------------------- summary

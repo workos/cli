@@ -662,6 +662,33 @@ async function runCli(): Promise<void> {
               await runAuthkitBrandingGet({ environmentId: argv.environmentId as string | undefined });
             },
           );
+          registerSubcommand(
+            yargs,
+            'set',
+            'Upload AuthKit branding images (logo, icon, favicon) for an environment',
+            (y) =>
+              y
+                .option('environment-id', environmentIdOption)
+                .option('logo', { type: 'string', describe: 'Path to the light-mode logo image' })
+                .option('logo-dark', { type: 'string', describe: 'Path to the dark-mode logo image' })
+                .option('icon', { type: 'string', describe: 'Path to the light-mode app icon image' })
+                .option('icon-dark', { type: 'string', describe: 'Path to the dark-mode app icon image' })
+                .option('favicon', { type: 'string', describe: 'Path to the light-mode favicon' })
+                .option('favicon-dark', { type: 'string', describe: 'Path to the dark-mode favicon' }),
+            async (argv) => {
+              await applyInsecureStorage(argv.insecureStorage);
+              const { runAuthkitBrandingSet } = await import('./commands/authkit.js');
+              await runAuthkitBrandingSet({
+                environmentId: argv.environmentId as string | undefined,
+                logo: argv.logo as string | undefined,
+                logoDark: argv.logoDark as string | undefined,
+                icon: argv.icon as string | undefined,
+                iconDark: argv.iconDark as string | undefined,
+                favicon: argv.favicon as string | undefined,
+                faviconDark: argv.faviconDark as string | undefined,
+              });
+            },
+          );
           return yargs.demandCommand(1, 'Please specify a branding subcommand').strict();
         });
 

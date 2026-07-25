@@ -234,6 +234,22 @@ const MANIFEST: CommandJustification[] = [
     destructive: false,
     ciPolicy: 'allow',
   },
+  {
+    // The only command that uploads files. Its input fields are `Upload`
+    // scalars, which no JSON transport can carry — an MCP client physically
+    // cannot call this, so the CLI is the agent-reachable path to setting
+    // branding images. Not `destructive`: it replaces individual images, each
+    // of which is re-uploadable, and it never clears one (an image is only
+    // touched when its flag is passed).
+    command: 'authkit branding set',
+    mapsTo: 'updateAppBranding',
+    audiences: ['human', 'agent', 'ci'],
+    useCase: 'Upload AuthKit logo, icon, and favicon images when branding an app (setup scripts/CI)',
+    load: 'cheap',
+    mutation: true,
+    destructive: false,
+    ciPolicy: 'allow',
+  },
 
   // --- Resource migration: organization + user ---
   // First resource commands moved off the API-key REST plane onto the dashboard
