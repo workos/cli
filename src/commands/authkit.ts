@@ -4,9 +4,9 @@
  * The AuthKit setup surface a developer (or an agent/CI script) configures when
  * wiring auth: redirect URIs, CORS web origins, and logout URIs. These
  * run on the dashboard account plane with the user's OAuth bearer — the same
- * gated capability `whoami` / `environment` / `team` use, distinct from the
- * API-key-based `workos config` command (which adds individual redirect/CORS
- * entries via the REST plane). Here the writes are full-list *set* operations and
+ * gated capability `whoami` / `environment` / `team` use. Distinct from
+ * `workos config`, which runs on the same plane but ADDS individual
+ * redirect/CORS entries; here the writes are full-list *set* operations and
  * expose a native `--dry-run` validation, so none are destructive.
  *
  * Selection note: the redirect/logout setters map to the environment-level ops

@@ -125,6 +125,8 @@ Resource Management:
   feature-flag           Manage feature flags
   webhook                Manage webhooks
   config                 Manage redirect URIs, CORS, homepage URL
+  authkit                Manage AuthKit app config (redirect URIs, CORS, logout URIs)
+  branding               Manage branding images (logo, icon, favicon)
   portal                 Generate Admin Portal links
   vault                  Manage encrypted secrets
   api-key                Manage per-org API keys
@@ -305,7 +307,7 @@ API keys are stored in the system keychain via `@napi-rs/keyring`, with a JSON f
 
 All resource commands follow the same pattern: `workos <resource> <action> [args] [--options]`.
 
-Most resource commands — organization, user, role, permission, membership, invitation, session, event, feature-flag, org-domain, portal, webhook, config — authenticate with your WorkOS dashboard session from `workos auth login` and target the active environment (see `workos env`). Pass `--environment-id <id>` on any of them to target a different environment for a single invocation. Access tokens refresh automatically while the session is valid, so a logged-in machine keeps working headlessly; a dead session exits with code 4.
+Most resource commands — organization, user, role, permission, membership, invitation, session, event, feature-flag, org-domain, portal, webhook, config, authkit, branding — authenticate with your WorkOS dashboard session from `workos auth login` and target the active environment (see `workos env`). Pass `--environment-id <id>` on any of them to target a different environment for a single invocation. Access tokens refresh automatically while the session is valid, so a logged-in machine keeps working headlessly; a dead session exits with code 4.
 
 The remaining commands (`connection`, `directory`, `audit-log`, `api-key`, `vault`) still use the REST plane, as does the raw escape hatch `workos api`. Those resolve an API key via: `--api-key` flag → `WORKOS_API_KEY` env var → active environment's stored key.
 
@@ -445,6 +447,45 @@ workos config redirect add <uri>
 workos config cors add <origin>
 workos config homepage-url set <url>
 ```
+
+`config` adds a single entry to a list. To replace a whole list, use `authkit` below.
+
+#### authkit
+
+Per-environment AuthKit app configuration. Unlike `config`, these setters replace the entire list, and each accepts `--dry-run` to validate without saving.
+
+```bash
+workos authkit redirect-uris list [--limit]
+workos authkit redirect-uris set --uri <uri> [--uri <uri> ...] [--default <uri>] [--dry-run]
+workos authkit cors get
+workos authkit cors set --origin <origin> [--origin <origin> ...] [--dry-run]
+workos authkit logout-uris list [--limit]
+workos authkit logout-uris set --uri <uri> [--uri <uri> ...] [--default <uri>] [--dry-run]
+```
+
+Wildcard web origins are rejected — an accepted `*` would allow every browser origin, which is equivalent to disabling CORS.
+
+#### branding
+
+The logo, icon, and favicon an environment renders, each with a light and dark variant. Branding is not AuthKit-only: the same record drives hosted AuthKit pages and transactional emails.
+
+```bash
+workos branding get
+workos branding set <slot> <file>
+workos branding set [--logo] [--logo-dark] [--icon] [--icon-dark] [--favicon] [--favicon-dark]
+```
+
+Slots are `logo`, `logo-dark`, `icon`, `icon-dark`, `favicon`, and `favicon-dark`. Set one image positionally, or several at once with the matching flags — the two forms cannot be combined in a single invocation.
+
+```bash
+# One image
+workos branding set icon ./icon.png
+
+# Several at once
+workos branding set --logo ./logo.png --logo-dark ./logo-dark.png --favicon ./favicon.ico
+```
+
+Images must be under 400 KB each and one of `.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`, `.webp`, `.avif`, or `.ico`. Only the images you name are changed; the rest are left as they are. There is no way to clear an image from the CLI — upload a replacement instead.
 
 #### portal
 
