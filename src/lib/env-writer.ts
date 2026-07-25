@@ -49,6 +49,10 @@ function generateCookiePassword(): string {
   return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
+// Captures the optional `export ` prefix (group 1) and the variable name (group 2)
+// of an assignment line. Deliberately mirrors the patterns in `lib/project-env.ts`.
+const ENV_ASSIGNMENT = /^[ \t]*(export[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*=/;
+
 /**
  * Set `vars` in `content` without disturbing comments, blank lines, or key order.
  * Existing keys are rewritten in place; new keys are appended.
@@ -57,10 +61,17 @@ function generateCookiePassword(): string {
  * the original line was indented — indented env lines are vanishingly rare and
  * preserving the indent adds branching for no real benefit.
  *
- * Key extraction splits on the first `=`, matching `parseEnvFile`, so values
- * containing `=` survive. Duplicate keys in a malformed source file: only the
- * first occurrence is rewritten (`parseEnvFile` reads last-wins, so a duplicate
- * still shadows the update — a pre-existing pathology, not handled here).
+ * Key extraction recognizes exactly the line shapes `readProjectEnvCredentials`
+ * (`lib/project-env.ts`) recognizes — optional indentation, an optional `export `
+ * prefix, and whitespace around `=`. The two must agree: a line the reader counts
+ * as configured but the writer fails to match would be left holding its old value
+ * while the new one is appended below it, so the file would carry the key twice
+ * with conflicting values. Only the text up to the first `=` is matched, so
+ * values containing `=` are irrelevant here.
+ *
+ * Duplicate keys in a malformed source file: only the first occurrence is
+ * rewritten (`parseEnvFile` reads last-wins, so a duplicate still shadows the
+ * update — a pre-existing pathology, not handled here).
  *
  * The file's dominant line terminator is detected once and reused, so a CRLF
  * file is not silently rewritten to LF (which would turn a two-line change into
@@ -80,15 +91,17 @@ function upsertEnvLines(content: string, vars: Record<string, string>): string {
     body === ''
       ? []
       : body.split(/\r?\n/).map((line) => {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed.startsWith('#')) return line;
-          const eq = trimmed.indexOf('=');
-          if (eq === -1) return line;
-          const key = trimmed.slice(0, eq);
+          // Blank lines and `#` comments cannot match: only spaces and tabs may
+          // precede the name, so no separate guard for them is needed.
+          const match = ENV_ASSIGNMENT.exec(line);
+          if (!match) return line;
+          const [, exportPrefix, key] = match;
           if (!pending.has(key)) return line;
           const value = pending.get(key)!;
           pending.delete(key);
-          return `${key}=${value}`;
+          // Keep `export ` — dropping it would stop the var being exported when
+          // the file is sourced, which is why the author wrote it.
+          return `${exportPrefix ?? ''}${key}=${value}`;
         });
 
   for (const [key, value] of pending) {

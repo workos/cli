@@ -196,6 +196,27 @@ describe('workos-management', () => {
       expect(bodies).toEqual([undefined]);
     });
 
+    it('declares Content-Type only on the requests that carry a body', async () => {
+      const seen: Array<{ method: string; contentType?: string }> = [];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string, init: { method: string; headers: Record<string, string> }) => {
+          if (url === HOMEPAGE_ENDPOINT) {
+            seen.push({ method: init.method, contentType: init.headers['Content-Type'] });
+          }
+          // Differing URL forces the PUT, so both methods are observed.
+          return jsonResponse(200, { url: 'https://app.example.com' });
+        }),
+      );
+
+      await autoConfigureWorkOSEnvironment(API_KEY, INTEGRATION, PORT);
+
+      expect(seen).toEqual([
+        { method: 'GET', contentType: undefined },
+        { method: 'PUT', contentType: 'application/json' },
+      ]);
+    });
+
     it('warns instead of aborting when the PUT fails', async () => {
       stubFetch((method) =>
         method === 'GET' ? jsonResponse(404, {}) : jsonResponse(403, { message: 'API key lacks permission' }),

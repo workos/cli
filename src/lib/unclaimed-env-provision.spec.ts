@@ -276,6 +276,21 @@ describe('unclaimed-env-provision', () => {
         expect(readFileSync(join(testDir, '.env'), 'utf-8')).toBe('WORKOS_API_KEY=sk_existing\n');
       });
 
+      // The write target and the file holding the key are not the same thing: a
+      // JS project writes `.env.local`, but the key may already sit in `.env`.
+      // Naming the write target would send the user to edit the wrong file.
+      it('names the file the key was found in, not the file it would have written', async () => {
+        writeFileSync(join(testDir, 'package.json'), '{}');
+        writeFileSync(join(testDir, '.env'), 'WORKOS_API_KEY=sk_existing\n');
+
+        const result = await tryProvisionUnclaimedEnv({ installDir: testDir });
+
+        expect(result).toBe(false);
+        expect(mockUi.log.warn).toHaveBeenCalledWith(
+          `${join(testDir, '.env')} already has WORKOS_API_KEY — not provisioning a new environment.`,
+        );
+      });
+
       it('still provisions when the env file exists without a WorkOS key', async () => {
         writeFileSync(join(testDir, 'package.json'), '{}');
         writeFileSync(join(testDir, '.env.local'), 'DATABASE_URL=postgres://localhost/dev\n');

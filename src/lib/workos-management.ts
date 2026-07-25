@@ -36,7 +36,9 @@ async function workosRequest(
     method,
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
+      // Only declare a body's type when there is a body. A bodyless GET that
+      // claims `application/json` is malformed, and strict proxies may reject it.
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });

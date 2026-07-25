@@ -218,6 +218,55 @@ describe('writeEnvLocal', () => {
       expect(readFileSync(envPath, 'utf-8')).toBe('WORKOS_COOKIE_PASSWORD=a=b=c\nWORKOS_CLIENT_ID=client_123\n');
     });
 
+    // The writer has to recognize every line shape `readProjectEnvCredentials`
+    // treats as already-configured. Where it doesn't, the old line survives and
+    // the new value lands beneath it — the file then holds the key twice with
+    // conflicting values, which is how a stale key outlives its own update.
+    it('updates a key written with spaces around the equals sign, without duplicating it', () => {
+      const envPath = join(testDir, '.env.local');
+      writeFileSync(envPath, 'WORKOS_CLIENT_ID = client_old\nWORKOS_COOKIE_PASSWORD=pw\n');
+
+      writeEnvLocal(testDir, { WORKOS_CLIENT_ID: 'client_new' });
+
+      expect(readFileSync(envPath, 'utf-8')).toBe('WORKOS_CLIENT_ID=client_new\nWORKOS_COOKIE_PASSWORD=pw\n');
+    });
+
+    it('updates an `export `-prefixed key in place, keeping the prefix', () => {
+      const envPath = join(testDir, '.env.local');
+      writeFileSync(
+        envPath,
+        '# top\nexport WORKOS_CLIENT_ID=client_old\nWORKOS_COOKIE_PASSWORD=pw\nDATABASE_URL=postgres://localhost/dev\n',
+      );
+
+      writeEnvLocal(testDir, { WORKOS_CLIENT_ID: 'client_new' });
+
+      expect(readFileSync(envPath, 'utf-8')).toBe(
+        '# top\nexport WORKOS_CLIENT_ID=client_new\nWORKOS_COOKIE_PASSWORD=pw\nDATABASE_URL=postgres://localhost/dev\n',
+      );
+    });
+
+    it('rewrites an indented key exactly once', () => {
+      const envPath = join(testDir, '.env.local');
+      writeFileSync(envPath, '  WORKOS_CLIENT_ID=client_old\nWORKOS_COOKIE_PASSWORD=pw\n');
+
+      writeEnvLocal(testDir, { WORKOS_CLIENT_ID: 'client_new' });
+
+      const content = readFileSync(envPath, 'utf-8');
+      expect(content.match(/^\s*WORKOS_CLIENT_ID=/gm)).toHaveLength(1);
+      expect(content).toBe('WORKOS_CLIENT_ID=client_new\nWORKOS_COOKIE_PASSWORD=pw\n');
+    });
+
+    it('leaves a commented-out assignment commented, appending the real one', () => {
+      const envPath = join(testDir, '.env.local');
+      writeFileSync(envPath, '# WORKOS_CLIENT_ID=do_not_touch\nWORKOS_COOKIE_PASSWORD=pw\n');
+
+      writeEnvLocal(testDir, { WORKOS_CLIENT_ID: 'client_new' });
+
+      expect(readFileSync(envPath, 'utf-8')).toBe(
+        '# WORKOS_CLIENT_ID=do_not_touch\nWORKOS_COOKIE_PASSWORD=pw\nWORKOS_CLIENT_ID=client_new\n',
+      );
+    });
+
     it('adds exactly one trailing newline to a file that lacked one', () => {
       const envPath = join(testDir, '.env.local');
       writeFileSync(envPath, '# top\nWORKOS_COOKIE_PASSWORD=pw');
