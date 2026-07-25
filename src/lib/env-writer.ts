@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { basename, join } from 'path';
 import { parseEnvFile } from '../utils/env-parser.js';
 
@@ -61,10 +61,18 @@ function generateCookiePassword(): string {
  * containing `=` survive. Duplicate keys in a malformed source file: only the
  * first occurrence is rewritten (`parseEnvFile` reads last-wins, so a duplicate
  * still shadows the update — a pre-existing pathology, not handled here).
+ *
+ * The file's dominant line terminator is detected once and reused, so a CRLF
+ * file is not silently rewritten to LF (which would turn a two-line change into
+ * a whole-file diff and leave mixed endings behind).
  */
 function upsertEnvLines(content: string, vars: Record<string, string>): string {
-  const hadTrailingNewline = content.endsWith('\n');
-  const body = hadTrailingNewline ? content.slice(0, -1) : content;
+  const eol = content.includes('\r\n') ? '\r\n' : '\n';
+  const body = content.endsWith('\r\n')
+    ? content.slice(0, -2)
+    : content.endsWith('\n')
+      ? content.slice(0, -1)
+      : content;
   const pending = new Map(Object.entries(vars));
 
   // An empty body has no lines at all — splitting it would invent a blank one.
@@ -88,7 +96,17 @@ function upsertEnvLines(content: string, vars: Record<string, string>): string {
   }
 
   // Always exactly one trailing newline, matching the previous writer.
-  return lines.join('\n') + '\n';
+  return lines.join(eol) + eol;
+}
+
+/**
+ * Write a secrets-bearing file, birthing a NEW file as 0600.
+ *
+ * `mode` is only honored on create, so an existing file's permissions are the
+ * user's business and are left exactly as they are.
+ */
+function writeSecretFile(path: string, contents: string, existed: boolean): void {
+  writeFileSync(path, contents, existed ? {} : { mode: 0o600 });
 }
 
 /**
@@ -102,6 +120,11 @@ function upsertEnvLines(content: string, vars: Record<string, string>): string {
  * `ensureGitignore` runs BEFORE the write so a crash between the two cannot
  * leave an unignored secret on disk: `stageAndCommit` runs `git add -A`, and the
  * env file holds a live API key and claim token.
+ *
+ * The copy mirrors the source's permission bits: a `chmod 600 .env.local` must
+ * not gain a world-readable twin, and `.bak` sits outside the `.env*` glob most
+ * secret-scanning and editor-hiding tooling watches. The `existsSync` guard
+ * above guarantees this write is always a create, so `mode` is honored.
  */
 function backupEnvFile(installDir: string, envPath: string): void {
   if (!existsSync(envPath)) return; // nothing to back up
@@ -110,7 +133,7 @@ function backupEnvFile(installDir: string, envPath: string): void {
 
   const backupName = basename(backupPath);
   ensureGitignore(installDir, backupName, [backupName, '.env*', '*.bak']);
-  writeFileSync(backupPath, readFileSync(envPath, 'utf-8'));
+  writeFileSync(backupPath, readFileSync(envPath, 'utf-8'), { mode: statSync(envPath).mode & 0o777 });
 }
 
 /** Drop keys whose value is undefined so they never serialize as `KEY=undefined`. */
@@ -133,7 +156,8 @@ export function writeEnvLocal(installDir: string, envVars: Partial<EnvVars>): vo
 
   backupEnvFile(installDir, envPath);
 
-  const existingContent = existsSync(envPath) ? readFileSync(envPath, 'utf-8') : '';
+  const envExisted = existsSync(envPath);
+  const existingContent = envExisted ? readFileSync(envPath, 'utf-8') : '';
   const existingEnv = parseEnvFile(existingContent);
 
   const vars = definedVars(envVars);
@@ -145,7 +169,7 @@ export function writeEnvLocal(installDir: string, envVars: Partial<EnvVars>): vo
 
   ensureGitignore(installDir, '.env.local', ENV_LOCAL_COVERING_PATTERNS);
 
-  writeFileSync(envPath, upsertEnvLines(existingContent, vars));
+  writeSecretFile(envPath, upsertEnvLines(existingContent, vars), envExisted);
 }
 
 /**
@@ -173,9 +197,10 @@ export function writeCredentialsEnv(installDir: string, envVars: Partial<EnvVars
 
   backupEnvFile(installDir, envPath);
 
-  const existingContent = existsSync(envPath) ? readFileSync(envPath, 'utf-8') : '';
+  const envExisted = existsSync(envPath);
+  const existingContent = envExisted ? readFileSync(envPath, 'utf-8') : '';
 
   ensureGitignore(installDir, '.env', ENV_COVERING_PATTERNS);
 
-  writeFileSync(envPath, upsertEnvLines(existingContent, definedVars(envVars)));
+  writeSecretFile(envPath, upsertEnvLines(existingContent, definedVars(envVars)), envExisted);
 }

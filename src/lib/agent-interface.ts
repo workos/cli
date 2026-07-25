@@ -21,13 +21,7 @@ import { startCredentialProxy, startClaimTokenProxy, type CredentialProxyHandle 
 import { getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
 import { getAuthkitDomain, getCliAuthClientId } from './settings.js';
 import { classifyAgentFailure, formatAgentFailure } from './failure-classifier.js';
-import type {
-  SDKMessage,
-  SDKUserMessage,
-  Options as AgentSDKOptions,
-  PermissionResult,
-  query as queryFn,
-} from '@anthropic-ai/claude-agent-sdk';
+import type { SDKMessage, SDKUserMessage, PermissionResult, query as queryFn } from '@anthropic-ai/claude-agent-sdk';
 
 // File content cache for computing edit diffs
 const fileContentCache = new Map<string, string>();

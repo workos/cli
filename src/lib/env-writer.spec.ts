@@ -1,8 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { writeCredentialsEnv, writeEnvLocal } from './env-writer.js';
+
+/** POSIX permission bits of `path`. */
+const modeOf = (path: string): number => statSync(path).mode & 0o777;
+
+// Windows has no meaningful POSIX permission bits.
+const itPosix = it.skipIf(process.platform === 'win32');
 
 describe('writeEnvLocal', () => {
   let testDir: string;
@@ -219,6 +225,70 @@ describe('writeEnvLocal', () => {
       writeEnvLocal(testDir, { WORKOS_CLIENT_ID: 'client_123' });
 
       expect(readFileSync(envPath, 'utf-8')).toBe('# top\nWORKOS_COOKIE_PASSWORD=pw\nWORKOS_CLIENT_ID=client_123\n');
+    });
+
+    it('keeps CRLF line endings on touched, untouched, and appended lines', () => {
+      const envPath = join(testDir, '.env.local');
+      writeFileSync(envPath, '# top\r\nWORKOS_CLIENT_ID=client_old\r\nDATABASE_URL=postgres://localhost/dev\r\n');
+
+      writeEnvLocal(testDir, {
+        WORKOS_CLIENT_ID: 'client_new',
+        WORKOS_COOKIE_PASSWORD: 'pw',
+      });
+
+      expect(readFileSync(envPath, 'utf-8')).toBe(
+        '# top\r\nWORKOS_CLIENT_ID=client_new\r\nDATABASE_URL=postgres://localhost/dev\r\nWORKOS_COOKIE_PASSWORD=pw\r\n',
+      );
+    });
+
+    it('keeps CRLF endings on a file that lacked a trailing newline', () => {
+      const envPath = join(testDir, '.env.local');
+      writeFileSync(envPath, '# top\r\nWORKOS_COOKIE_PASSWORD=pw');
+
+      writeEnvLocal(testDir, { WORKOS_CLIENT_ID: 'client_123' });
+
+      expect(readFileSync(envPath, 'utf-8')).toBe(
+        '# top\r\nWORKOS_COOKIE_PASSWORD=pw\r\nWORKOS_CLIENT_ID=client_123\r\n',
+      );
+    });
+  });
+
+  describe('file permissions', () => {
+    const envVars = {
+      WORKOS_CLIENT_ID: 'client_123',
+      WORKOS_COOKIE_PASSWORD: 'pw',
+    };
+
+    itPosix('mirrors the source file mode onto the backup', () => {
+      const envPath = join(testDir, '.env.local');
+      writeFileSync(envPath, 'WORKOS_API_KEY=sk_live_secret\n');
+      chmodSync(envPath, 0o600);
+
+      writeEnvLocal(testDir, envVars);
+
+      expect(modeOf(join(testDir, '.env.local.bak'))).toBe(0o600);
+    });
+
+    itPosix('creates a new env file as 0600', () => {
+      writeEnvLocal(testDir, envVars);
+
+      expect(modeOf(join(testDir, '.env.local'))).toBe(0o600);
+    });
+
+    itPosix('leaves the permissions of an existing env file alone', () => {
+      const envPath = join(testDir, '.env.local');
+      writeFileSync(envPath, 'DATABASE_URL=postgres://localhost/dev\n');
+      chmodSync(envPath, 0o640);
+
+      writeEnvLocal(testDir, envVars);
+
+      expect(modeOf(envPath)).toBe(0o640);
+    });
+
+    itPosix('creates a new .env as 0600 outside the JS branch', () => {
+      writeCredentialsEnv(testDir, envVars);
+
+      expect(modeOf(join(testDir, '.env'))).toBe(0o600);
     });
   });
 

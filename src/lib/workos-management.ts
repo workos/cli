@@ -138,8 +138,13 @@ async function setHomepageUrl(apiKey: string, url: string): Promise<{ success: b
  * can reach (`workosRequest` is GET/POST/PUT against user_management only, and
  * the config store holds no environment id). `activeEnvironment.name` is a
  * local label, so it is only ever a parenthetical, never an authoritative id.
+ *
+ * The stored active environment is only named when its key is the one that
+ * actually did the writes — `--api-key` (or `WORKOS_API_KEY`) bypasses the
+ * store entirely, and naming an untouched environment is exactly the confusion
+ * this row exists to prevent.
  */
-function describeCredentialProvenance(): string {
+function describeCredentialProvenance(apiKey: string): string {
   let activeEnv: EnvironmentConfig | null = null;
   try {
     activeEnv = getActiveEnvironment();
@@ -148,7 +153,7 @@ function describeCredentialProvenance(): string {
     return SUPPLIED_KEY_PROVENANCE;
   }
 
-  if (!activeEnv) return SUPPLIED_KEY_PROVENANCE;
+  if (!activeEnv || activeEnv.apiKey !== apiKey) return SUPPLIED_KEY_PROVENANCE;
 
   if (isUnclaimedEnvironment(activeEnv)) {
     return `a new unclaimed environment (${activeEnv.name}) — run \`${formatWorkOSCommand('env claim')}\` to keep it`;
@@ -211,7 +216,7 @@ export async function autoConfigureWorkOSEnvironment(
     // comes first — it is the context for the three rows below it.
     ui.log.success('WorkOS dashboard configured');
     ui.rows([
-      { key: 'Environment', value: describeCredentialProvenance(), statusKind: 'muted' },
+      { key: 'Environment', value: describeCredentialProvenance(apiKey), statusKind: 'muted' },
       {
         key: 'Redirect URI',
         value: callbackUrl,

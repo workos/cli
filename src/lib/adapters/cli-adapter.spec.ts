@@ -396,7 +396,13 @@ describe('CLIAdapter', () => {
       );
 
       expect(output).not.toMatch(/temporarily unavailable/i);
-      expect(output).toMatch(/could not complete this request/i);
+
+      // The headline must be re-derived, not echoed: a pass-through of the
+      // already-rendered string would put all three sentences in log.error.
+      const ui = await import('../../utils/ui.js');
+      expect(vi.mocked(ui.default.log.error).mock.calls[0]?.[0]).toBe(
+        'The AI service could not complete this request.',
+      );
     });
 
     it('still shows the transient copy for a real 503', async () => {

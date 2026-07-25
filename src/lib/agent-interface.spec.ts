@@ -315,10 +315,15 @@ describe('service unavailability handling', () => {
     expect(result.errorMessage).toMatch(/likely to fail the same way/);
   });
 
+  // The proxy answers its own socket timeout with a 504, so the message carries a
+  // 5xx that the old "any 5xx is transient" rule misread as an outage.
   it("treats the proxy's own upstream_timeout as deterministic", async () => {
     mockQuery.mockImplementation(
       createMockSDKResponse([
-        { text: '{"error":"upstream_timeout","message":"Upstream server timed out"}', is_error: true },
+        {
+          text: 'API Error: 504 {"error":"upstream_timeout","message":"Upstream server timed out"}',
+          is_error: true,
+        },
       ]),
     );
 
@@ -326,6 +331,7 @@ describe('service unavailability handling', () => {
 
     expect(result.error).toBe(AgentErrorType.EXECUTION_ERROR);
     expect(result.errorMessage).not.toMatch(/temporarily unavailable/);
+    expect(result.errorMessage).toMatch(/likely to fail the same way/);
   });
 
   it('detects a 503 as SERVICE_UNAVAILABLE', async () => {

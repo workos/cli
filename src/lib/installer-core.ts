@@ -234,7 +234,11 @@ export const installerMachine = setup({
       context.emitter.emit('complete', { success: false, summary: 'Installer cancelled by user' });
     },
     emitError: ({ context }) => {
-      const message = context.error?.message ?? 'An unexpected error occurred';
+      // Must NOT be 'An unexpected error occurred': that is the LLM gateway's
+      // generic-500 signature, which the failure classifier reads as a
+      // deterministic AI failure. A git/fs/detection error reaching the error
+      // state without an assigned `error` would otherwise be blamed on the AI.
+      const message = context.error?.message ?? 'The installer failed for an unknown reason';
       // Declines carry a structured code so machine consumers can tell "we
       // refused to install" apart from unexpected failures.
       const declineCode = context.error instanceof InstallDeclinedError ? context.error.code : undefined;

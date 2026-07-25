@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CliExit } from '../utils/cli-exit.js';
 import { resetInteractionModeForTests, setInteractionMode } from '../utils/interaction-mode.js';
+import { setOutputMode } from '../utils/output.js';
 
 // Mock the UI facade — the interactive branch prompts, which has no place in a unit test.
 const mockConfirm = vi.fn();
@@ -39,6 +40,7 @@ describe('preflight-authkit', () => {
   afterEach(() => {
     rmSync(testDir, { recursive: true, force: true });
     resetInteractionModeForTests();
+    setOutputMode('human');
     errorSpy.mockRestore();
   });
 
@@ -129,6 +131,24 @@ describe('preflight-authkit', () => {
       expect(mockConfirm).not.toHaveBeenCalled();
     });
 
+    // --json on a real TTY: output mode is json while interaction mode stays
+    // human, so isPromptAllowed() alone is not enough of a gate. Prompting here
+    // would put plain text in the JSON stream and report prompt_unavailable.
+    it('refuses without prompting or printing under --json on a TTY (interaction mode human)', async () => {
+      writePackageJson(testDir, { '@workos-inc/authkit-nextjs': '^2.6.0' });
+      setInteractionMode({ mode: 'human', source: 'default' });
+      setOutputMode('json');
+
+      const error = await assertNoExistingAuthKit({ installDir: testDir }).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(CliExit);
+      expect((error as InstanceType<typeof CliExit>).context?.errorCode).toBe('authkit_already_installed');
+      expect(mockConfirm).not.toHaveBeenCalled();
+      expect(mockUi.log.warn).not.toHaveBeenCalled();
+      expect(mockUi.log.info).not.toHaveBeenCalled();
+      expect(mockUi.rows).not.toHaveBeenCalled();
+    });
+
     it('also refuses in CI mode', async () => {
       writePackageJson(testDir, { '@workos-inc/authkit-remix': '^1.0.0' });
       setInteractionMode({ mode: 'ci', source: 'ci_env' });
@@ -163,6 +183,33 @@ describe('preflight-authkit', () => {
       ]);
       // Names the exact file at risk — .env.local here, since package.json exists.
       expect(mockUi.log.info).toHaveBeenCalledWith(expect.stringContaining(join(testDir, '.env.local')));
+    });
+
+    // The consent copy must not promise an outcome that cannot happen: with a key
+    // already on disk, credential resolution refuses to provision and logs in.
+    it('promises credentials will be KEPT (not rewritten) when the project env already has a key', async () => {
+      writePackageJson(testDir, { '@workos-inc/authkit-nextjs': '^2.6.0' });
+      writeFileSync(join(testDir, '.env.local'), 'WORKOS_API_KEY=sk_existing\n');
+      mockConfirm.mockResolvedValueOnce(true);
+
+      await expect(assertNoExistingAuthKit({ installDir: testDir })).resolves.toBeUndefined();
+
+      const printed = mockUi.log.info.mock.calls.map((call) => String(call[0])).join('\n');
+      expect(printed).toContain('will be kept');
+      expect(printed).not.toContain('provision a new WorkOS environment');
+    });
+
+    it('names the file the key actually lives in, even when it is not the write target', async () => {
+      writePackageJson(testDir, { '@workos-inc/authkit-nextjs': '^2.6.0' });
+      // JS project, so the write target is .env.local — but the real key is in .env.
+      writeFileSync(join(testDir, '.env'), 'WORKOS_API_KEY=sk_existing\n');
+      mockConfirm.mockResolvedValueOnce(true);
+
+      await expect(assertNoExistingAuthKit({ installDir: testDir })).resolves.toBeUndefined();
+
+      const printed = mockUi.log.info.mock.calls.map((call) => String(call[0])).join('\n');
+      expect(printed).toContain(join(testDir, '.env'));
+      expect(printed).not.toContain(join(testDir, '.env.local'));
     });
 
     it('throws CliExit (exit 2) and writes nothing when an interactive user declines', async () => {

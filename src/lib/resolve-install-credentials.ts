@@ -45,10 +45,23 @@ export async function resolveInstallCredentials(
     // the project's env file, so a key already sitting there means we must not
     // provision. Fall back to login instead — the project has a key, we just
     // have no gateway auth.
-    const { readProjectEnvCredentials } = await import('./project-env.js');
-    if (readProjectEnvCredentials(dir).apiKey) {
+    const { readProjectEnvCredentials, resolveProjectEnvPath } = await import('./project-env.js');
+    const projectEnv = readProjectEnvCredentials(dir);
+    if (projectEnv.apiKey) {
       const { logInfo } = await import('../utils/debug.js');
       logInfo('[resolve-install-credentials] Project env already has WORKOS_API_KEY — skipping provisioning');
+
+      // Say it out loud. This is the branch that actually fires, and without a
+      // line here the login that follows looks identical to a provisioning
+      // network failure — the user never learns their key was found and kept.
+      const { isJsonMode } = await import('../utils/output.js');
+      if (!isJsonMode()) {
+        const ui = (await import('../utils/ui.js')).default;
+        const envPath = projectEnv.apiKeyPath ?? resolveProjectEnvPath(dir);
+        ui.log.info(`${envPath} already has WORKOS_API_KEY — keeping it.`);
+        if (!skipAuth) ui.log.info('Signing you in so the AI installer can run.');
+      }
+
       if (!skipAuth) await authenticate();
       return;
     }

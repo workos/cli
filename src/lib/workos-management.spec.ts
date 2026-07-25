@@ -268,6 +268,29 @@ describe('workos-management', () => {
       expect(rowFor('Environment').value).toBe('the API key supplied to this run');
     });
 
+    it('does not name a stored environment whose key did not do the writes', async () => {
+      // `--api-key sk_live_prod...` bypasses the store: the writes landed in the
+      // supplied key's environment, not the stored active one.
+      getActiveEnvironment.mockReturnValue(unclaimedEnv);
+
+      await autoConfigureWorkOSEnvironment('sk_live_prod_999', INTEGRATION, PORT);
+
+      const value = rowFor('Environment').value;
+      expect(value).toBe('the API key supplied to this run');
+      expect(value).not.toContain('unclaimed-2');
+      expect(value).not.toContain('env claim');
+    });
+
+    it('does not name a claimed stored environment whose key did not do the writes', async () => {
+      getActiveEnvironment.mockReturnValue(claimedEnv);
+
+      await autoConfigureWorkOSEnvironment('sk_live_prod_999', INTEGRATION, PORT);
+
+      const value = rowFor('Environment').value;
+      expect(value).toBe('the API key supplied to this run');
+      expect(value).not.toContain('sandbox');
+    });
+
     it('degrades to the supplied-key wording when the config store throws', async () => {
       getActiveEnvironment.mockImplementation(() => {
         throw new Error('keyring locked');

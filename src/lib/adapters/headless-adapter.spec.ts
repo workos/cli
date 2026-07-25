@@ -474,6 +474,39 @@ describe('HeadlessAdapter', () => {
       });
       await adapter.stop();
     });
+
+    // The gateway's generic 500 branch also fires for request-shape failures, so
+    // agents and CI must not be told to wait it out: the retry fails identically.
+    it('codes the gateway generic 500 as deterministic, not a transient outage', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('error', { message: 'API Error: 500 An unexpected error occurred', stack: undefined });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({
+        type: 'error',
+        code: 'deterministic_error',
+        message: expect.stringContaining('likely to fail the same way'),
+      });
+      expect(mockWriteNDJSON).not.toHaveBeenCalledWith(
+        expect.objectContaining({ message: expect.stringContaining('temporarily unavailable') }),
+      );
+      await adapter.stop();
+    });
+
+    it('still codes a real 503 as service_unavailable', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('error', { message: 'API Error: 503 Service Unavailable', stack: undefined });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({
+        type: 'error',
+        code: 'service_unavailable',
+        message: expect.stringContaining('temporarily unavailable'),
+      });
+      await adapter.stop();
+    });
   });
 
   describe('staging events', () => {
