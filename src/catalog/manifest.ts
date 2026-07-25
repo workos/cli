@@ -224,11 +224,15 @@ const MANIFEST: CommandJustification[] = [
     destructive: false,
     ciPolicy: 'allow',
   },
+
+  // --- branding ---
+  // Its own top-level noun rather than a member of the `authkit` group: the
+  // same record drives hosted AuthKit pages and transactional emails.
   {
-    command: 'authkit branding get',
+    command: 'branding get',
     mapsTo: 'environmentAppBranding',
     audiences: ['human', 'agent'],
-    useCase: 'Inspect AuthKit branding (logos, theme) for an environment',
+    useCase: 'Inspect branding (logos, theme) for an environment',
     load: 'cheap',
     mutation: false,
     destructive: false,
@@ -240,11 +244,11 @@ const MANIFEST: CommandJustification[] = [
     // cannot call this, so the CLI is the agent-reachable path to setting
     // branding images. Not `destructive`: it replaces individual images, each
     // of which is re-uploadable, and it never clears one (an image is only
-    // touched when its flag is passed).
-    command: 'authkit branding set',
+    // touched when it is named).
+    command: 'branding set',
     mapsTo: 'updateAppBranding',
     audiences: ['human', 'agent', 'ci'],
-    useCase: 'Upload AuthKit logo, icon, and favicon images when branding an app (setup scripts/CI)',
+    useCase: 'Upload logo, icon, and favicon images when branding an app (setup scripts/CI)',
     load: 'cheap',
     mutation: true,
     destructive: false,

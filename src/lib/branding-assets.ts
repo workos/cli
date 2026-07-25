@@ -42,6 +42,12 @@ export const BRANDING_ASSET_CONTENT_TYPES: Record<string, string> = {
 export interface BrandingAssetSpec {
   /** camelCase option key as yargs parses it. */
   option: string;
+  /**
+   * Kebab-case name, used for BOTH the `--flag` and the positional slot, so
+   * `branding set icon f.png` and `branding set --icon f.png` name the image
+   * identically.
+   */
+  flag: string;
   /** Field on `UpdateAppBrandingInput`. */
   field: string;
   /** Human label for command output. */
@@ -49,13 +55,21 @@ export interface BrandingAssetSpec {
 }
 
 export const BRANDING_ASSETS: readonly BrandingAssetSpec[] = [
-  { option: 'logo', field: 'lightLogoFile', label: 'logo (light)' },
-  { option: 'logoDark', field: 'darkLogoFile', label: 'logo (dark)' },
-  { option: 'icon', field: 'lightLogoIconFile', label: 'icon (light)' },
-  { option: 'iconDark', field: 'darkLogoIconFile', label: 'icon (dark)' },
-  { option: 'favicon', field: 'lightFaviconFile', label: 'favicon (light)' },
-  { option: 'faviconDark', field: 'darkFaviconFile', label: 'favicon (dark)' },
+  { option: 'logo', flag: 'logo', field: 'lightLogoFile', label: 'logo (light)' },
+  { option: 'logoDark', flag: 'logo-dark', field: 'darkLogoFile', label: 'logo (dark)' },
+  { option: 'icon', flag: 'icon', field: 'lightLogoIconFile', label: 'icon (light)' },
+  { option: 'iconDark', flag: 'icon-dark', field: 'darkLogoIconFile', label: 'icon (dark)' },
+  { option: 'favicon', flag: 'favicon', field: 'lightFaviconFile', label: 'favicon (light)' },
+  { option: 'faviconDark', flag: 'favicon-dark', field: 'darkFaviconFile', label: 'favicon (dark)' },
 ];
+
+/** Every slot name, for help text and error messages. */
+export const BRANDING_SLOTS: readonly string[] = BRANDING_ASSETS.map((asset) => asset.flag);
+
+/** Look up an asset by positional slot name; undefined when the name is unknown. */
+export function findBrandingAsset(slot: string): BrandingAssetSpec | undefined {
+  return BRANDING_ASSETS.find((asset) => asset.flag === slot);
+}
 
 export interface LoadedBrandingAsset {
   spec: BrandingAssetSpec;

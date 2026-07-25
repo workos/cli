@@ -11,14 +11,11 @@ vi.mock('../lib/command-auth.js', async (importActual) => {
   };
 });
 
-const mockGraphqlUpload = vi.fn();
-
 vi.mock('../lib/dashboard-graphql.js', async (importActual) => {
   const actual = await importActual<typeof import('../lib/dashboard-graphql.js')>();
   return {
     ...actual,
     dashboardGraphqlRequest: (...args: unknown[]) => mockGraphqlRequest(...args),
-    dashboardGraphqlUpload: (...args: unknown[]) => mockGraphqlUpload(...args),
   };
 });
 
@@ -44,12 +41,7 @@ const {
   runAuthkitCorsSet,
   runAuthkitLogoutUrisList,
   runAuthkitLogoutUrisSet,
-  runAuthkitBrandingGet,
-  runAuthkitBrandingSet,
 } = await import('./authkit.js');
-const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
-const { tmpdir } = await import('node:os');
-const { join } = await import('node:path');
 
 describe('authkit command', () => {
   let consoleOutput: string[];
@@ -295,217 +287,6 @@ describe('authkit command', () => {
     });
   });
 
-  describe('branding get', () => {
-    it('maps to the env-scoped environmentAppBranding op (not the session-scoped appBranding)', async () => {
-      mockGraphqlRequest.mockResolvedValue({
-        environment: { appBranding: { id: 'br_1', displayName: 'Acme', theme: 'light' } },
-      });
-      await runAuthkitBrandingGet({ environmentId: 'env_1' });
-      const sentDocument = mockGraphqlRequest.mock.calls[0][0] as string;
-      expect(sentDocument).toContain('environmentAppBranding');
-      expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('environmentAppBranding'), {
-        token: 'tok_123',
-        variables: { environmentId: 'env_1' },
-        environmentId: 'env_1',
-      });
-      expect(consoleOutput.join('\n')).toContain('Acme');
-    });
-
-    it('emits JSON with no graphql/userland strings', async () => {
-      setOutputMode('json');
-      mockGraphqlRequest.mockResolvedValue({
-        environment: { appBranding: { id: 'br_1', displayName: 'Acme', theme: 'light' } },
-      });
-      await runAuthkitBrandingGet({ environmentId: 'env_1' });
-      const raw = consoleOutput[0];
-      expect(raw).not.toMatch(/graphql|userland/i);
-      const out = JSON.parse(raw);
-      expect(out.branding.displayName).toBe('Acme');
-    });
-  });
-
-  describe('branding set', () => {
-    // Real files on disk: the validation path (existence, extension, size) is
-    // the point of these tests, so stubbing fs would test nothing.
-    let dir: string;
-    let logoPath: string;
-
-    beforeEach(async () => {
-      dir = await mkdtemp(join(tmpdir(), 'workos-branding-'));
-      logoPath = join(dir, 'logo.png');
-      await writeFile(logoPath, Buffer.alloc(64, 1));
-      // The id lookup that precedes every upload.
-      mockGraphqlRequest.mockResolvedValue({ environment: { appBranding: { id: 'br_1' } } });
-      mockGraphqlUpload.mockResolvedValue({
-        updateAppBranding: { __typename: 'AppBrandingUpdated', appBranding: { id: 'br_1', displayName: 'Acme' } },
-      });
-    });
-
-    afterEach(async () => {
-      await rm(dir, { recursive: true, force: true });
-    });
-
-    it('reads the branding id, then uploads with a null placeholder per file', async () => {
-      await runAuthkitBrandingSet({ environmentId: 'env_1', logo: logoPath });
-
-      // Step 1: env-scoped read to address the branding record.
-      expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('environmentAppBranding'), {
-        token: 'tok_123',
-        variables: { environmentId: 'env_1' },
-        environmentId: 'env_1',
-      });
-
-      // Step 2: multipart mutation. The image field must be null in the
-      // variables — the file part is what fills it.
-      const [document, options] = mockGraphqlUpload.mock.calls[0] as [string, Record<string, never>];
-      expect(document).toContain('updateAppBranding');
-      expect(options).toMatchObject({
-        token: 'tok_123',
-        environmentId: 'env_1',
-        variables: { input: { id: 'br_1', lightLogoFile: null } },
-      });
-      expect(options.files).toEqual([
-        {
-          variablePath: 'variables.input.lightLogoFile',
-          filename: 'logo.png',
-          contentType: 'image/png',
-          bytes: expect.anything(),
-        },
-      ]);
-    });
-
-    it('addresses the record by id and does not send environmentId in the input', async () => {
-      // Sending `environmentId` would force the environment-scoped write path,
-      // which AuthKit does not render unless per-environment branding is on.
-      // Passing only `id` lets the server pick the correct scope.
-      await runAuthkitBrandingSet({ environmentId: 'env_1', logo: logoPath });
-      const options = mockGraphqlUpload.mock.calls[0][1] as { variables: { input: Record<string, unknown> } };
-      expect(options.variables.input).not.toHaveProperty('environmentId');
-    });
-
-    it('falls back to naming the environment when no branding record exists yet', async () => {
-      mockGraphqlRequest.mockResolvedValue({ environment: { appBranding: null } });
-      await runAuthkitBrandingSet({ environmentId: 'env_1', logo: logoPath });
-      const options = mockGraphqlUpload.mock.calls[0][1] as { variables: { input: Record<string, unknown> } };
-      expect(options.variables.input).toMatchObject({ id: '', environmentId: 'env_1' });
-    });
-
-    it('maps every asset flag to its input field', async () => {
-      const paths: Record<string, string> = {};
-      for (const [option, file] of [
-        ['logo', 'logo.png'],
-        ['logoDark', 'logo-dark.png'],
-        ['icon', 'icon.png'],
-        ['iconDark', 'icon-dark.png'],
-        ['favicon', 'favicon.ico'],
-        ['faviconDark', 'favicon-dark.ico'],
-      ]) {
-        const path = join(dir, file!);
-        await writeFile(path, Buffer.alloc(16, 1));
-        paths[option!] = path;
-      }
-
-      await runAuthkitBrandingSet({ environmentId: 'env_1', ...paths });
-
-      const options = mockGraphqlUpload.mock.calls[0][1] as {
-        variables: { input: Record<string, unknown> };
-        files: Array<{ variablePath: string }>;
-      };
-      expect(
-        Object.keys(options.variables.input)
-          .filter((key) => key.endsWith('File'))
-          .sort(),
-      ).toEqual([
-        'darkFaviconFile',
-        'darkLogoFile',
-        'darkLogoIconFile',
-        'lightFaviconFile',
-        'lightLogoFile',
-        'lightLogoIconFile',
-      ]);
-      // Every declared path points at a slot that is null.
-      for (const file of options.files) {
-        const field = file.variablePath.replace('variables.input.', '');
-        expect(options.variables.input[field]).toBeNull();
-      }
-    });
-
-    it('only touches the images that were passed', async () => {
-      await runAuthkitBrandingSet({ environmentId: 'env_1', logo: logoPath });
-      const options = mockGraphqlUpload.mock.calls[0][1] as { variables: { input: Record<string, unknown> } };
-      // An absent field is left alone; a null one would CLEAR that image.
-      expect(options.variables.input).not.toHaveProperty('darkLogoFile');
-      expect(options.variables.input).not.toHaveProperty('lightFaviconFile');
-    });
-
-    it('requires at least one image', async () => {
-      await expect(runAuthkitBrandingSet({ environmentId: 'env_1' })).rejects.toBeInstanceOf(CliExit);
-      expect(mockGraphqlRequest).not.toHaveBeenCalled();
-      expect(mockGraphqlUpload).not.toHaveBeenCalled();
-    });
-
-    it('rejects an unsupported image type before authenticating', async () => {
-      const bad = join(dir, 'logo.bmp');
-      await writeFile(bad, Buffer.alloc(16, 1));
-      await expect(runAuthkitBrandingSet({ environmentId: 'env_1', logo: bad })).rejects.toBeInstanceOf(CliExit);
-      expect(mockGraphqlUpload).not.toHaveBeenCalled();
-    });
-
-    it('rejects a missing file', async () => {
-      await expect(
-        runAuthkitBrandingSet({ environmentId: 'env_1', logo: join(dir, 'nope.png') }),
-      ).rejects.toBeInstanceOf(CliExit);
-      expect(mockGraphqlUpload).not.toHaveBeenCalled();
-    });
-
-    it('rejects a file over the server size cap without spending the upload', async () => {
-      const big = join(dir, 'big.png');
-      await writeFile(big, Buffer.alloc(400 * 1024 + 1, 1));
-      await expect(runAuthkitBrandingSet({ environmentId: 'env_1', logo: big })).rejects.toBeInstanceOf(CliExit);
-      expect(mockGraphqlUpload).not.toHaveBeenCalled();
-    });
-
-    it('validates every file before uploading any of them', async () => {
-      const bad = join(dir, 'icon.bmp');
-      await writeFile(bad, Buffer.alloc(16, 1));
-      await expect(runAuthkitBrandingSet({ environmentId: 'env_1', logo: logoPath, icon: bad })).rejects.toBeInstanceOf(
-        CliExit,
-      );
-      expect(mockGraphqlUpload).not.toHaveBeenCalled();
-    });
-
-    it('surfaces a server-side upload rejection', async () => {
-      mockGraphqlUpload.mockResolvedValue({
-        updateAppBranding: { __typename: 'AppBrandingUploadAssetsError', errorMessage: 'Invalid file format' },
-      });
-      await expect(runAuthkitBrandingSet({ environmentId: 'env_1', logo: logoPath })).rejects.toBeInstanceOf(CliExit);
-    });
-
-    it('surfaces a missing branding record', async () => {
-      mockGraphqlUpload.mockResolvedValue({ updateAppBranding: { __typename: 'AppBrandingNotFound' } });
-      await expect(runAuthkitBrandingSet({ environmentId: 'env_1', logo: logoPath })).rejects.toBeInstanceOf(CliExit);
-    });
-
-    it('pre-validates the environment once, for both requests', async () => {
-      await runAuthkitBrandingSet({ logo: logoPath });
-      expect(mockResolveEnvironmentTarget).toHaveBeenCalledTimes(1);
-      expect(mockResolveEnvironmentTarget).toHaveBeenCalledWith('tok_123', {
-        flagValue: undefined,
-        forMutation: true,
-      });
-    });
-
-    it('emits JSON with no graphql/userland strings', async () => {
-      setOutputMode('json');
-      await runAuthkitBrandingSet({ environmentId: 'env_1', logo: logoPath });
-      const raw = consoleOutput[0];
-      expect(raw).not.toMatch(/graphql|userland/i);
-      const out = JSON.parse(raw);
-      expect(out.branding.id).toBe('br_1');
-      expect(out.uploaded).toEqual([{ asset: 'logo (light)', file: logoPath, bytes: 64 }]);
-    });
-  });
-
   describe('required-flag validation (shared guards)', () => {
     it('cors set requires at least one --origin', async () => {
       await expect(runAuthkitCorsSet({ environmentId: 'env_1', origins: [] })).rejects.toBeInstanceOf(CliExit);
@@ -531,15 +312,6 @@ describe('authkit command', () => {
       mockGraphqlRequest.mockResolvedValue({ logoutUris: { data: [] } });
       await runAuthkitLogoutUrisList({});
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('logoutUris'), {
-        token: 'tok_123',
-        variables: { environmentId: 'env_profile' },
-        environmentId: 'env_profile',
-      });
-    });
-    it('branding get resolves the environment from the active profile', async () => {
-      mockGraphqlRequest.mockResolvedValue({ environment: { appBranding: null } });
-      await runAuthkitBrandingGet({});
-      expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('environmentAppBranding'), {
         token: 'tok_123',
         variables: { environmentId: 'env_profile' },
         environmentId: 'env_profile',

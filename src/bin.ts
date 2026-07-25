@@ -34,6 +34,9 @@ import {
 import ui, { PromptUnavailableError } from './utils/ui.js';
 import { getApiBaseUrlSource } from './lib/api-key.js';
 import { registerSubcommand } from './utils/register-subcommand.js';
+// Slot names drive both the positional `choices` and its help text, so the
+// accepted values can never drift from the asset table.
+import { BRANDING_SLOTS } from './lib/branding-assets.js';
 import { installCrashReporter, sanitizeMessage } from './utils/crash-reporter.js';
 import { installStoreForward, recoverPendingEvents } from './utils/telemetry-store-forward.js';
 import { loadDeviceId } from './lib/device-id.js';
@@ -650,51 +653,63 @@ async function runCli(): Promise<void> {
           return yargs.demandCommand(1, 'Please specify a logout-uris subcommand').strict();
         });
 
-        yargs.command('branding', 'Manage AuthKit branding', (yargs) => {
-          registerSubcommand(
-            yargs,
-            'get',
-            'Show AuthKit branding (logos, theme) for an environment',
-            (y) => y.option('environment-id', environmentIdOption),
-            async (argv) => {
-              await applyInsecureStorage(argv.insecureStorage);
-              const { runAuthkitBrandingGet } = await import('./commands/authkit.js');
-              await runAuthkitBrandingGet({ environmentId: argv.environmentId as string | undefined });
-            },
-          );
-          registerSubcommand(
-            yargs,
-            'set',
-            'Upload AuthKit branding images (logo, icon, favicon) for an environment',
-            (y) =>
-              y
-                .option('environment-id', environmentIdOption)
-                .option('logo', { type: 'string', describe: 'Path to the light-mode logo image' })
-                .option('logo-dark', { type: 'string', describe: 'Path to the dark-mode logo image' })
-                .option('icon', { type: 'string', describe: 'Path to the light-mode app icon image' })
-                .option('icon-dark', { type: 'string', describe: 'Path to the dark-mode app icon image' })
-                .option('favicon', { type: 'string', describe: 'Path to the light-mode favicon' })
-                .option('favicon-dark', { type: 'string', describe: 'Path to the dark-mode favicon' }),
-            async (argv) => {
-              await applyInsecureStorage(argv.insecureStorage);
-              const { runAuthkitBrandingSet } = await import('./commands/authkit.js');
-              await runAuthkitBrandingSet({
-                environmentId: argv.environmentId as string | undefined,
-                logo: argv.logo as string | undefined,
-                logoDark: argv.logoDark as string | undefined,
-                icon: argv.icon as string | undefined,
-                iconDark: argv.iconDark as string | undefined,
-                favicon: argv.favicon as string | undefined,
-                faviconDark: argv.faviconDark as string | undefined,
-              });
-            },
-          );
-          return yargs.demandCommand(1, 'Please specify a branding subcommand').strict();
-        });
-
         return yargs.demandCommand(1, 'Please specify an authkit subcommand').strict();
       },
     )
+    .command('branding', 'Manage branding images (logo, icon, favicon) for an environment', (yargs) => {
+      yargs.options(insecureStorageOption);
+      registerSubcommand(
+        yargs,
+        'get',
+        'Show branding (logos, theme) for an environment',
+        (y) => y.option('environment-id', environmentIdOption),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { runBrandingGet } = await import('./commands/branding.js');
+          await runBrandingGet({ environmentId: argv.environmentId as string | undefined });
+        },
+      );
+      registerSubcommand(
+        yargs,
+        // Positionals are optional so the flag form still parses; the handler
+        // rejects mixing the two.
+        'set [slot] [file]',
+        'Upload branding images (logo, icon, favicon) for an environment',
+        (y) =>
+          y
+            .positional('slot', {
+              type: 'string',
+              describe: `Which image to set (${BRANDING_SLOTS.join(', ')})`,
+              choices: BRANDING_SLOTS,
+            })
+            .positional('file', { type: 'string', describe: 'Path to the image file' })
+            .option('environment-id', environmentIdOption)
+            .option('logo', { type: 'string', describe: 'Path to the light-mode logo image' })
+            .option('logo-dark', { type: 'string', describe: 'Path to the dark-mode logo image' })
+            .option('icon', { type: 'string', describe: 'Path to the light-mode app icon image' })
+            .option('icon-dark', { type: 'string', describe: 'Path to the dark-mode app icon image' })
+            .option('favicon', { type: 'string', describe: 'Path to the light-mode favicon' })
+            .option('favicon-dark', { type: 'string', describe: 'Path to the dark-mode favicon' })
+            .example('$0 branding set icon ./icon.png', 'Set one image')
+            .example('$0 branding set --logo ./logo.png --favicon ./favicon.png', 'Set several at once'),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+          const { runBrandingSet } = await import('./commands/branding.js');
+          await runBrandingSet({
+            environmentId: argv.environmentId as string | undefined,
+            slot: argv.slot as string | undefined,
+            file: argv.file as string | undefined,
+            logo: argv.logo as string | undefined,
+            logoDark: argv.logoDark as string | undefined,
+            icon: argv.icon as string | undefined,
+            iconDark: argv.iconDark as string | undefined,
+            favicon: argv.favicon as string | undefined,
+            faviconDark: argv.faviconDark as string | undefined,
+          });
+        },
+      );
+      return yargs.demandCommand(1, 'Please specify a branding subcommand').strict();
+    })
     .command('team', 'Manage the WorkOS dashboard team (members, invites, settings)', (yargs) => {
       yargs.options(insecureStorageOption);
       registerSubcommand(

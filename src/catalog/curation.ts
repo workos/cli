@@ -221,16 +221,18 @@ export const OVERRIDES: Record<string, CommandMeta> = {
   updateCorsConfig: { command: 'authkit cors set', describe: 'Set the allowed web origins (CORS) for an environment' },
   logoutUris: { command: 'authkit logout-uris list', describe: 'List configured logout URIs for an environment' },
   setLogoutUris: { command: 'authkit logout-uris set', describe: 'Set the allowed logout URIs for an environment' },
+  // Branding sits under its own top-level noun (not `authkit`) — the record
+  // also drives transactional emails.
   environmentAppBranding: {
-    command: 'authkit branding get',
-    describe: 'Show AuthKit branding (logos, theme) for an environment',
+    command: 'branding get',
+    describe: 'Show branding (logos, theme) for an environment',
   },
   // Upstream describes this as updating "branding assets ... and theme
   // settings"; the CLI exposes only the image uploads, so the description is
   // narrowed to what the command actually does.
   updateAppBranding: {
-    command: 'authkit branding set',
-    describe: 'Upload AuthKit branding images (logo, icon, favicon) for an environment',
+    command: 'branding set',
+    describe: 'Upload branding images (logo, icon, favicon) for an environment',
   },
 };
 

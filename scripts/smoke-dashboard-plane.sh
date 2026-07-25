@@ -165,7 +165,7 @@ t "feature-flag list"            "${BIN[@]}" feature-flag list --json
 FLAG_SLUG="$(jget "$LAST" flags.0.slug || true)"
 t "webhook list"                 "${BIN[@]}" webhook list --json
 t "event list"                   "${BIN[@]}" event list --events "${SMOKE_EVENT_TYPES:-user.created}" --limit 5 --json
-t "authkit branding get"         "${BIN[@]}" authkit branding get --json
+t "branding get"         "${BIN[@]}" branding get --json
 
 if [ -n "$ORG_ID" ]; then
   t "organization get"           "${BIN[@]}" organization get "$ORG_ID" --json
@@ -377,19 +377,22 @@ if [ "$BRANDING_WRITES" -eq 1 ]; then
     fs.writeFileSync(`${process.argv[1]}/logo.bmp`, png);
   ' "$IMG_DIR"
 
-  t_refuse "branding set with no images refused"      "${BIN[@]}" authkit branding set ${BR_ENV[@]+"${BR_ENV[@]}"} --json
-  t_refuse "branding set rejects oversized image"     "${BIN[@]}" authkit branding set ${BR_ENV[@]+"${BR_ENV[@]}"} --logo "$IMG_DIR/too-big.png" --json
-  t_refuse "branding set rejects unsupported type"    "${BIN[@]}" authkit branding set ${BR_ENV[@]+"${BR_ENV[@]}"} --logo "$IMG_DIR/logo.bmp" --json
-  t_refuse "branding set rejects a missing file"      "${BIN[@]}" authkit branding set ${BR_ENV[@]+"${BR_ENV[@]}"} --logo "$IMG_DIR/nope.png" --json
-  t_refuse "branding set refuses a bogus environment" "${BIN[@]}" authkit branding set --logo "$IMG_DIR/logo.png" --environment-id env_smoke_bogus_0000 --json
+  t_refuse "branding set with no images refused"      "${BIN[@]}" branding set ${BR_ENV[@]+"${BR_ENV[@]}"} --json
+  t_refuse "branding set rejects an unknown slot"     "${BIN[@]}" branding set ikon "$IMG_DIR/logo.png" ${BR_ENV[@]+"${BR_ENV[@]}"} --json
+  t_refuse "branding set rejects a slot with no file" "${BIN[@]}" branding set icon ${BR_ENV[@]+"${BR_ENV[@]}"} --json
+  t_refuse "branding set rejects mixing the forms"    "${BIN[@]}" branding set icon "$IMG_DIR/icon.png" --logo "$IMG_DIR/logo.png" ${BR_ENV[@]+"${BR_ENV[@]}"} --json
+  t_refuse "branding set rejects oversized image"     "${BIN[@]}" branding set ${BR_ENV[@]+"${BR_ENV[@]}"} --logo "$IMG_DIR/too-big.png" --json
+  t_refuse "branding set rejects unsupported type"    "${BIN[@]}" branding set ${BR_ENV[@]+"${BR_ENV[@]}"} --logo "$IMG_DIR/logo.bmp" --json
+  t_refuse "branding set rejects a missing file"      "${BIN[@]}" branding set ${BR_ENV[@]+"${BR_ENV[@]}"} --logo "$IMG_DIR/nope.png" --json
+  t_refuse "branding set refuses a bogus environment" "${BIN[@]}" branding set --logo "$IMG_DIR/logo.png" --environment-id env_smoke_bogus_0000 --json
 
-  if t "branding get (snapshot before upload)" "${BIN[@]}" authkit branding get ${BR_ENV[@]+"${BR_ENV[@]}"} --json; then
+  if t "branding get (snapshot before upload)" "${BIN[@]}" branding get ${BR_ENV[@]+"${BR_ENV[@]}"} --json; then
     BEFORE_LOGO="$(jget "$LAST" branding.lightLogoPath || echo '')"
     BEFORE_ICON="$(jget "$LAST" branding.lightLogoIconPath || echo '')"
     BEFORE_FAVICON="$(jget "$LAST" branding.lightFaviconPath || echo '')"
 
     if t "branding set (logo + icon + favicon, multipart upload)" \
-      "${BIN[@]}" authkit branding set ${BR_ENV[@]+"${BR_ENV[@]}"} \
+      "${BIN[@]}" branding set ${BR_ENV[@]+"${BR_ENV[@]}"} \
         --logo "$IMG_DIR/logo.png" \
         --icon "$IMG_DIR/icon.png" \
         --favicon "$IMG_DIR/favicon.png" \
@@ -405,7 +408,7 @@ if [ "$BRANDING_WRITES" -eq 1 ]; then
       # Read back: the stored paths must differ from the snapshot, which is
       # what proves the bytes reached S3 rather than the mutation merely
       # returning success.
-      if t "branding get (read back after upload)" "${BIN[@]}" authkit branding get ${BR_ENV[@]+"${BR_ENV[@]}"} --json; then
+      if t "branding get (read back after upload)" "${BIN[@]}" branding get ${BR_ENV[@]+"${BR_ENV[@]}"} --json; then
         AFTER_LOGO="$(jget "$LAST" branding.lightLogoPath || echo '')"
         AFTER_ICON="$(jget "$LAST" branding.lightLogoIconPath || echo '')"
         AFTER_FAVICON="$(jget "$LAST" branding.lightFaviconPath || echo '')"
@@ -422,6 +425,25 @@ if [ "$BRANDING_WRITES" -eq 1 ]; then
               "$c_r" "$c_0" "$label" "$c_d" "${before:-<unset>}" "${after:-<unset>}" "$c_0"
           fi
         done
+
+        # The positional form is a separate parse path, so cover it live too:
+        # set one image and confirm only that one moved.
+        if t "branding set icon <file> (positional form)" \
+          "${BIN[@]}" branding set icon "$IMG_DIR/icon.png" ${BR_ENV[@]+"${BR_ENV[@]}"} --json; then
+          if t "branding get (read back after positional set)" "${BIN[@]}" branding get ${BR_ENV[@]+"${BR_ENV[@]}"} --json; then
+            POS_ICON="$(jget "$LAST" branding.lightLogoIconPath || echo '')"
+            POS_LOGO="$(jget "$LAST" branding.lightLogoPath || echo '')"
+            N=$((N+1))
+            if [ -n "$POS_ICON" ] && [ "$POS_ICON" != "$AFTER_ICON" ] && [ "$POS_LOGO" = "$AFTER_LOGO" ]; then
+              NPASS=$((NPASS+1))
+              printf '  %sok%s    positional set moved only the icon\n' "$c_g" "$c_0"
+            else
+              NFAIL=$((NFAIL+1)); FAILURES+=("positional set did not move only the icon")
+              printf '  %sFAIL%s  positional set did not move only the icon  %s(icon %s→%s, logo %s→%s)%s\n' \
+                "$c_r" "$c_0" "$c_d" "$AFTER_ICON" "$POS_ICON" "$AFTER_LOGO" "$POS_LOGO" "$c_0"
+            fi
+          fi
+        fi
       fi
     fi
   fi

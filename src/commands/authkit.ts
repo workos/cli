@@ -2,7 +2,7 @@
  * `workos authkit` — per-environment AuthKit app configuration.
  *
  * The AuthKit setup surface a developer (or an agent/CI script) configures when
- * wiring auth: redirect URIs, CORS web origins, logout URIs, and branding. These
+ * wiring auth: redirect URIs, CORS web origins, and logout URIs. These
  * run on the dashboard account plane with the user's OAuth bearer — the same
  * gated capability `whoami` / `environment` / `team` use, distinct from the
  * API-key-based `workos config` command (which adds individual redirect/CORS
@@ -12,14 +12,14 @@
  * Selection note: the redirect/logout setters map to the environment-level ops
  * (`setRedirectUris`/`setLogoutUris`), not the application-level
  * `setAuthkitApplication*` ops whose input types carry internal `userland`
- * naming. Branding reads via `environmentAppBranding` (env-scoped, clean), not
- * `appBranding` (session-scoped with a rotten upstream description).
+ * naming.
+ *
+ * Branding lives in `branding.ts` under its own top-level noun: the same record
+ * drives transactional emails too, so it is not AuthKit-specific.
  */
 
 import chalk from 'chalk';
-import { executeDashboardUpload, runEnvScopedOperation } from '../lib/dashboard-operation.js';
-import { getOperation } from '../catalog/operation.js';
-import { BRANDING_ASSETS, formatBytes, loadBrandingAsset, type LoadedBrandingAsset } from '../lib/branding-assets.js';
+import { runEnvScopedOperation } from '../lib/dashboard-operation.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
 import { formatTable } from '../utils/table.js';
 
@@ -273,179 +273,4 @@ export async function runAuthkitLogoutUrisSet(options: LogoutUrisSetOptions): Pr
     return;
   }
   renderUriSetResult(saved, 'logout URI', dryRun);
-}
-
-// --- branding ---
-
-interface AppBranding {
-  id?: string | null;
-  displayName?: string | null;
-  theme?: string | null;
-  lightLogoPath?: string | null;
-  darkLogoPath?: string | null;
-  font?: { family?: string | null } | null;
-  [key: string]: unknown;
-}
-
-export interface BrandingGetOptions {
-  /** `--environment-id` override; defaults from the active profile. */
-  environmentId?: string;
-}
-
-export async function runAuthkitBrandingGet(options: BrandingGetOptions): Promise<void> {
-  // Environment-scoped: resolved target as variable + header.
-  const { data } = await runEnvScopedOperation<{
-    environment: { appBranding: AppBranding | null } | null;
-  }>('environmentAppBranding', options, (environmentId) => ({ environmentId }));
-
-  const branding = data.environment?.appBranding ?? null;
-  if (isJsonMode()) {
-    outputJson({ branding });
-    return;
-  }
-
-  if (!branding) {
-    console.log('No branding configured for this environment.');
-    return;
-  }
-  // Human view shows a concise subset; the full object (custom CSS/HTML, all
-  // colors, localized text) is available via --json.
-  const fields: Array<[string, unknown]> = [
-    ['Display name', branding.displayName],
-    ['Theme', branding.theme],
-    ['Font', branding.font?.family],
-    ['Light logo', branding.lightLogoPath],
-    ['Dark logo', branding.darkLogoPath],
-  ];
-  const shown = fields.filter(([, value]) => value !== null && value !== undefined && value !== '');
-  if (shown.length === 0) {
-    // Branding exists but only sets fields outside this summary (e.g. custom CSS).
-    console.log('Branding is configured. Run with --json to view the full configuration.');
-    return;
-  }
-  for (const [label, value] of shown) console.log(`${chalk.bold(label)}: ${String(value)}`);
-  console.log(chalk.dim('Run with --json for the full branding configuration.'));
-}
-
-export interface BrandingSetOptions {
-  /** `--environment-id` override; defaults from the active profile. */
-  environmentId?: string;
-  /** One path per asset flag; every one is optional, but at least one is required. */
-  logo?: string;
-  logoDark?: string;
-  icon?: string;
-  iconDark?: string;
-  favicon?: string;
-  faviconDark?: string;
-}
-
-type UpdateBrandingResult = {
-  updateAppBranding:
-    | { __typename: 'AppBrandingUpdated'; appBranding: AppBranding }
-    | { __typename: 'AppBrandingUploadAssetsError'; errorMessage: string }
-    | { __typename: string };
-};
-
-/**
- * Upload branding images (logo, icon, favicon — light and dark) for an
- * environment.
- *
- * This is the one command that cannot go through the ordinary JSON request
- * path: the branding image fields are `Upload` scalars, which only exist over
- * the GraphQL multipart transport. Everything else (auth, environment
- * targeting, error translation) is the standard dashboard-plane preamble.
- *
- * Scope: we address the environment's own branding record by `id` and do NOT
- * send `environmentId`. The server decides how far the write reaches — with
- * per-environment branding on, only this environment's record changes; with it
- * off, the API mirrors the write across the project's records to preserve the
- * legacy shared-branding behavior. Passing `environmentId` would instead force
- * the environment-scoped path, which is invisible to AuthKit whenever
- * per-environment branding is off. Letting the server choose is correct under
- * both, and matches what the dashboard's own editor does.
- */
-export async function runAuthkitBrandingSet(options: BrandingSetOptions): Promise<void> {
-  const requested = BRANDING_ASSETS.map((spec) => ({
-    spec,
-    path: options[spec.option as keyof BrandingSetOptions] as string | undefined,
-  })).filter((entry): entry is { spec: (typeof BRANDING_ASSETS)[number]; path: string } => Boolean(entry.path));
-
-  if (requested.length === 0) {
-    const flags = BRANDING_ASSETS.map((spec) => `--${toFlag(spec.option)}`).join(', ');
-    exitWithError({
-      code: 'missing_argument',
-      message: `Provide at least one image to upload (${flags}).`,
-    });
-  }
-
-  // Read and validate every file BEFORE resolving auth or touching the network,
-  // so a bad path fails instantly and without a partial upload.
-  const assets: LoadedBrandingAsset[] = [];
-  for (const { spec, path } of requested) {
-    assets.push(await loadBrandingAsset(spec, path));
-  }
-
-  // Read the environment's branding to address the record we update. Marked as
-  // a mutation so the environment is pre-validated once for both requests.
-  const { data, token, environmentId } = await runEnvScopedOperation<{
-    environment: { appBranding: AppBranding | null } | null;
-  }>('environmentAppBranding', { ...options, forMutation: true }, (env) => ({ environmentId: env }));
-
-  const brandingId = data.environment?.appBranding?.id ?? null;
-
-  // Every environment normally has a branding record. When one does not exist
-  // yet the record cannot be addressed by id, so fall back to naming the
-  // environment and let the API create it (the same fallback the dashboard
-  // editor uses).
-  const input: Record<string, unknown> = brandingId ? { id: brandingId } : { id: '', environmentId };
-  for (const asset of assets) {
-    input[asset.spec.field] = null; // multipart placeholder; the file part fills it
-  }
-
-  const result = await executeDashboardUpload<UpdateBrandingResult>(getOperation('updateAppBranding'), {
-    token,
-    environmentId,
-    variables: { input },
-    files: assets.map((asset) => ({
-      variablePath: `variables.input.${asset.spec.field}`,
-      filename: asset.filename,
-      contentType: asset.contentType,
-      bytes: asset.bytes,
-    })),
-  });
-
-  const updated = result.updateAppBranding;
-  if (updated.__typename === 'AppBrandingUploadAssetsError') {
-    exitWithError({
-      code: 'branding_upload_failed',
-      message: (updated as { errorMessage: string }).errorMessage,
-    });
-  }
-  if (updated.__typename !== 'AppBrandingUpdated') {
-    exitWithError({
-      code: 'branding_not_found',
-      message: 'No branding configuration was found for this environment.',
-    });
-  }
-
-  const branding = (updated as { appBranding: AppBranding }).appBranding;
-  const uploaded = assets.map((asset) => ({
-    asset: asset.spec.label,
-    file: asset.path,
-    bytes: asset.bytes.byteLength,
-  }));
-
-  if (isJsonMode()) {
-    outputJson({ branding, uploaded });
-    return;
-  }
-  outputSuccess(`Uploaded ${uploaded.length} branding image${uploaded.length === 1 ? '' : 's'}`);
-  for (const asset of assets) {
-    console.log(chalk.dim(`  • ${asset.spec.label}: ${asset.path} (${formatBytes(asset.bytes.byteLength)})`));
-  }
-}
-
-/** camelCase option key → kebab-case CLI flag (`logoDark` → `logo-dark`). */
-function toFlag(option: string): string {
-  return option.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`);
 }
