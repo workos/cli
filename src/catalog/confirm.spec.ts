@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const mockConfirm = vi.fn();
 const mockIsCancel = vi.fn(() => false);
-vi.mock('../utils/clack.js', () => ({
+vi.mock('../utils/ui.js', () => ({
   default: {
     confirm: (...args: unknown[]) => mockConfirm(...args),
     isCancel: (...args: unknown[]) => mockIsCancel(...args),
@@ -124,7 +124,7 @@ describe('confirmDestructive', () => {
   it('exits 2 (CANCELLED) when the interactive prompt is cancelled (Ctrl+C)', async () => {
     setInteractionMode({ mode: 'human', source: 'default' });
     setOutputMode('human');
-    const cancelSymbol = Symbol('clack-cancel');
+    const cancelSymbol = Symbol('ui-cancel');
     mockConfirm.mockResolvedValue(cancelSymbol);
     mockIsCancel.mockImplementation((v: unknown) => v === cancelSymbol);
     await expectExit(confirmDestructive({}, { action: 'delete user usr_1' }), 2);

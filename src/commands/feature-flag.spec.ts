@@ -23,7 +23,7 @@ vi.mock('../lib/dashboard-graphql.js', async (importActual) => {
   };
 });
 
-vi.mock('../utils/clack.js', () => ({
+vi.mock('../utils/ui.js', () => ({
   default: {
     confirm: (...args: unknown[]) => mockConfirm(...args),
     isCancel: (...args: unknown[]) => mockIsCancel(...args),

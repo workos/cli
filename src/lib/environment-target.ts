@@ -27,7 +27,7 @@
  * healed via its clientId join.
  */
 
-import clack from '../utils/clack.js';
+import ui from '../utils/ui.js';
 import { getConfig, getActiveEnvironment, setProfileEnvironmentId, type CliConfig } from './config-store.js';
 import { dashboardGraphqlRequest, DashboardGraphqlError } from './dashboard-graphql.js';
 import { getOperation, resolveExecutableDocument } from '../catalog/operation.js';
@@ -111,7 +111,7 @@ function exitStale(environmentId: string): never {
 }
 
 async function promptForEnvironment(environments: TeamEnvironment[]): Promise<string | null> {
-  const choice = await clack.select({
+  const choice = await ui.select({
     message: 'Select the WorkOS environment to target',
     options: environments.map((env) => ({
       value: env.id,
@@ -119,7 +119,7 @@ async function promptForEnvironment(environments: TeamEnvironment[]): Promise<st
       hint: env.id,
     })),
   });
-  if (clack.isCancel(choice)) return null;
+  if (ui.isCancel(choice)) return null;
   return String(choice);
 }
 

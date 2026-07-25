@@ -30,7 +30,7 @@ vi.mock('./command-auth.js', async (importActual) => {
   };
 });
 
-vi.mock('../utils/clack.js', () => ({
+vi.mock('../utils/ui.js', () => ({
   default: {
     log: { success: vi.fn(), error: vi.fn(), info: vi.fn(), step: vi.fn(), warn: vi.fn() },
     select: vi.fn(),
@@ -54,7 +54,7 @@ const { resolveEnvironmentTarget, tryResolveProfileEnvironmentId } = await impor
 const { DashboardGraphqlError } = await import('./dashboard-graphql.js');
 const { setInteractionMode, resetInteractionModeForTests } = await import('../utils/interaction-mode.js');
 const { CliExit } = await import('../utils/cli-exit.js');
-const clack = (await import('../utils/clack.js')).default;
+const ui = (await import('../utils/ui.js')).default;
 
 /** teamProjectsV2 response with the given environments spread over projects. */
 function teamData(environments: Array<{ id: string; name?: string; clientId?: string; sandbox?: boolean }>) {
@@ -88,7 +88,7 @@ describe('resolveEnvironmentTarget', () => {
     setInsecureConfigStorage(true);
     resetInteractionModeForTests();
     vi.clearAllMocks();
-    vi.mocked(clack.isCancel).mockReturnValue(false);
+    vi.mocked(ui.isCancel).mockReturnValue(false);
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
@@ -212,18 +212,18 @@ describe('resolveEnvironmentTarget', () => {
     it('prompts once and persists the choice to the active profile', async () => {
       seedProfile({});
       mockGraphqlRequest.mockResolvedValue(teamData([{ id: 'env_a' }, { id: 'env_b', sandbox: true }]));
-      vi.mocked(clack.select).mockResolvedValue('env_b');
+      vi.mocked(ui.select).mockResolvedValue('env_b');
       const target = await resolveEnvironmentTarget('tok', { forMutation: false });
       expect(target).toEqual({ environmentId: 'env_b', source: 'picker' });
-      expect(clack.select).toHaveBeenCalledTimes(1);
+      expect(ui.select).toHaveBeenCalledTimes(1);
       expect(getConfig()?.environments.staging.environmentId).toBe('env_b');
     });
 
     it('exits cancelled (code 2) when the picker is dismissed', async () => {
       seedProfile({});
       mockGraphqlRequest.mockResolvedValue(teamData([{ id: 'env_a' }]));
-      vi.mocked(clack.select).mockResolvedValue(Symbol('cancel'));
-      vi.mocked(clack.isCancel).mockReturnValue(true);
+      vi.mocked(ui.select).mockResolvedValue(Symbol('cancel'));
+      vi.mocked(ui.isCancel).mockReturnValue(true);
       await expect(resolveEnvironmentTarget('tok', { forMutation: false })).rejects.toMatchObject({
         name: 'CliExit',
         exitCode: 2,
@@ -232,7 +232,7 @@ describe('resolveEnvironmentTarget', () => {
 
     it('still resolves via picker with no active profile at all (nothing persisted)', async () => {
       mockGraphqlRequest.mockResolvedValue(teamData([{ id: 'env_a' }]));
-      vi.mocked(clack.select).mockResolvedValue('env_a');
+      vi.mocked(ui.select).mockResolvedValue('env_a');
       const target = await resolveEnvironmentTarget('tok', { forMutation: false });
       expect(target).toEqual({ environmentId: 'env_a', source: 'picker' });
       expect(getConfig()).toBeNull();
@@ -248,7 +248,7 @@ describe('resolveEnvironmentTarget', () => {
         name: 'CliExit',
         context: { errorCode: 'environment_unresolved' },
       });
-      expect(clack.select).not.toHaveBeenCalled();
+      expect(ui.select).not.toHaveBeenCalled();
       const err = errorSpy.mock.calls.map((c) => c.map(String).join(' ')).join('\n');
       expect(err).toContain('--environment-id');
       expect(err).toContain('env switch');
@@ -310,7 +310,7 @@ describe('tryResolveProfileEnvironmentId', () => {
     setInsecureConfigStorage(true);
     resetInteractionModeForTests();
     vi.clearAllMocks();
-    vi.mocked(clack.isCancel).mockReturnValue(false);
+    vi.mocked(ui.isCancel).mockReturnValue(false);
     mockRefreshIfExpired.mockResolvedValue({ accessToken: 'tok_refreshed', refreshed: false });
   });
 
@@ -362,7 +362,7 @@ describe('tryResolveProfileEnvironmentId', () => {
   it('offers the picker when allowed in human mode and the join misses', async () => {
     seedProfile({});
     mockGraphqlRequest.mockResolvedValue(teamData([{ id: 'env_a' }, { id: 'env_b' }]));
-    vi.mocked(clack.select).mockResolvedValue('env_a');
+    vi.mocked(ui.select).mockResolvedValue('env_a');
     await expect(tryResolveProfileEnvironmentId('staging', { allowPicker: true })).resolves.toBe(true);
     expect(getConfig()?.environments.staging.environmentId).toBe('env_a');
   });
@@ -370,8 +370,8 @@ describe('tryResolveProfileEnvironmentId', () => {
   it('treats picker cancel as a skip, leaving the profile untouched', async () => {
     seedProfile({});
     mockGraphqlRequest.mockResolvedValue(teamData([{ id: 'env_a' }]));
-    vi.mocked(clack.select).mockResolvedValue(Symbol('cancel'));
-    vi.mocked(clack.isCancel).mockReturnValue(true);
+    vi.mocked(ui.select).mockResolvedValue(Symbol('cancel'));
+    vi.mocked(ui.isCancel).mockReturnValue(true);
     await expect(tryResolveProfileEnvironmentId('staging', { allowPicker: true })).resolves.toBe(false);
     expect(getConfig()?.environments.staging.environmentId).toBeUndefined();
   });
@@ -380,7 +380,7 @@ describe('tryResolveProfileEnvironmentId', () => {
     seedProfile({});
     mockGraphqlRequest.mockResolvedValue(teamData([{ id: 'env_a' }]));
     await expect(tryResolveProfileEnvironmentId('staging')).resolves.toBe(false);
-    expect(clack.select).not.toHaveBeenCalled();
+    expect(ui.select).not.toHaveBeenCalled();
   });
 
   it('never prompts in agent mode even when the picker is allowed', async () => {
@@ -388,7 +388,7 @@ describe('tryResolveProfileEnvironmentId', () => {
     seedProfile({});
     mockGraphqlRequest.mockResolvedValue(teamData([{ id: 'env_a' }]));
     await expect(tryResolveProfileEnvironmentId('staging', { allowPicker: true })).resolves.toBe(false);
-    expect(clack.select).not.toHaveBeenCalled();
+    expect(ui.select).not.toHaveBeenCalled();
   });
 
   it('reports false for a missing profile key', async () => {

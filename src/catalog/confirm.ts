@@ -9,7 +9,7 @@ import { isCiMode, isPromptAllowed } from '../utils/interaction-mode.js';
  * Mirrors the request-confirmation pattern in `src/commands/api/index.ts`
  * (the `MUTATING_METHODS` gate): a non-interactive caller must pass `--yes`,
  * a JSON-mode caller must pass `--yes` (so stdout stays machine-readable), and
- * an interactive caller is prompted via clack. The api gate is entangled with
+ * an interactive caller is prompted via the `ui` facade. The api gate is entangled with
  * request-specific state (endpoint, method, body, recovery-command building),
  * so the shared behavior is mirrored here rather than extracted — see the
  * Phase 2 implementation notes.
@@ -56,10 +56,10 @@ export async function confirmDestructive(
     });
   }
 
-  const clack = (await import('../utils/clack.js')).default;
+  const ui = (await import('../utils/ui.js')).default;
   console.log(`\n${chalk.yellow('About to')} ${opts.action}`);
-  const ok = await clack.confirm({ message: 'Proceed?' });
-  if (!ok || clack.isCancel(ok)) {
+  const ok = await ui.confirm({ message: 'Proceed?' });
+  if (!ok || ui.isCancel(ok)) {
     // Active cancellation of an interactive prompt => CANCELLED (exit 2).
     exitWithCode(ExitCode.CANCELLED);
   }
