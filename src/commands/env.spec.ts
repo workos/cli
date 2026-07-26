@@ -505,7 +505,7 @@ describe('env commands', () => {
     });
   });
 
-  describe('command hints route through formatWorkOSCommand (npx vs bare)', () => {
+  describe('command hints route through formatWorkOSCommand', () => {
     // getWorkOSCommand reads all three of these; clear/set them deterministically.
     const NPM_KEYS = ['npm_command', 'npm_execpath', 'npm_config_user_agent'] as const;
     let saved: Record<string, string | undefined>;
@@ -531,13 +531,13 @@ describe('env commands', () => {
       expect(ui.log.info).not.toHaveBeenCalledWith(expect.stringContaining('npx workos@latest'));
     });
 
-    it('runEnvList empty hint uses npx form when launched via npm exec', async () => {
+    it('runEnvList empty hint keeps the standalone binary form when npm variables are present', async () => {
       process.env.npm_command = 'exec';
       await runEnvList();
-      expect(ui.log.info).toHaveBeenCalledWith(expect.stringContaining('npx workos@latest env add'));
+      expect(ui.log.info).toHaveBeenCalledWith(expect.stringContaining('workos env add'));
     });
 
-    it('unclaimed-table footer uses npx form when launched via npm exec', async () => {
+    it('unclaimed-table footer keeps the standalone binary form when npm variables are present', async () => {
       process.env.npm_command = 'exec';
       saveConfig({
         activeEnvironment: 'unclaimed',
@@ -556,10 +556,10 @@ describe('env commands', () => {
         out.push(args.map(String).join(' '));
       });
       await runEnvList();
-      expect(out.join('\n')).toContain('npx workos@latest env claim');
+      expect(out.join('\n')).toContain('workos env claim');
     });
 
-    it('runEnvSwitch no-envs JSON error carries npx form', async () => {
+    it('runEnvSwitch no-envs JSON error keeps the standalone binary form with npm variables present', async () => {
       process.env.npm_command = 'exec';
       setOutputMode('json');
       setInteractionMode({ mode: 'agent', source: 'env' });
@@ -567,7 +567,7 @@ describe('env commands', () => {
       try {
         await expect(runEnvSwitch('anything')).rejects.toThrow(CliExit);
         const parsed = JSON.parse(String(errorSpy.mock.calls[0][0]));
-        expect(parsed.error.message).toContain('npx workos@latest env add');
+        expect(parsed.error.message).toContain('workos env add');
       } finally {
         errorSpy.mockRestore();
         setOutputMode('human');

@@ -164,6 +164,43 @@ describe('credential-store', () => {
     });
   });
 
+  describe('malformed stored credentials read as logged out', () => {
+    // A partial write or older schema can leave a blob without the required
+    // token fields; returning it would crash every authenticated command
+    // (new Date(undefined).toISOString() throws), bricking the CLI.
+    it('keyring blob missing required fields returns null', () => {
+      mockKeyring.set(
+        'workos-cli:credentials',
+        JSON.stringify({ staging: { clientId: 'client_x', apiKey: 'sk_x', fetchedAt: Date.now() } }),
+      );
+      expect(getCredentials()).toBeNull();
+      expect(hasCredentials()).toBe(false);
+    });
+
+    it('keyring blob with non-numeric expiresAt returns null', () => {
+      mockKeyring.set('workos-cli:credentials', JSON.stringify({ ...validCreds, expiresAt: 'not-a-timestamp' }));
+      expect(getCredentials()).toBeNull();
+    });
+
+    it('malformed file blob returns null and is not migrated to keyring', () => {
+      mkdirSync(installerDir, { recursive: true });
+      writeFileSync(credentialsFile, JSON.stringify({ userId: 'user_abc' }));
+      expect(getCredentials()).toBeNull();
+      // hasCredentials must agree with getCredentials — a present-but-malformed
+      // file is logged-out, not "has credentials".
+      expect(hasCredentials()).toBe(false);
+      expect(mockKeyring.has('workos-cli:credentials')).toBe(false);
+    });
+
+    it('malformed file blob reads as logged out under --insecure-storage too', () => {
+      setInsecureStorage(true);
+      mkdirSync(installerDir, { recursive: true });
+      writeFileSync(credentialsFile, JSON.stringify({ userId: 'user_abc' }));
+      expect(getCredentials()).toBeNull();
+      expect(hasCredentials()).toBe(false);
+    });
+  });
+
   describe('file fallback (keyring unavailable)', () => {
     beforeEach(() => {
       keyringAvailable = false;

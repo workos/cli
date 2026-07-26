@@ -5,7 +5,7 @@ export class BuildGrader {
   constructor(protected workDir: string) {}
 
   async checkBuild(): Promise<GradeCheck> {
-    const result = await execFileNoThrow('pnpm', ['build'], {
+    const result = await execFileNoThrow('bun', ['run', 'build'], {
       cwd: this.workDir,
       timeout: 120000, // 2 minute timeout
     });
@@ -46,7 +46,7 @@ export class BuildGrader {
   }
 
   async checkTypecheck(): Promise<GradeCheck> {
-    const result = await execFileNoThrow('pnpm', ['tsc', '--noEmit'], {
+    const result = await execFileNoThrow('bun', ['run', 'tsc', '--noEmit'], {
       cwd: this.workDir,
       timeout: 60000,
     });

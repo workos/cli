@@ -201,13 +201,13 @@ describe('runApiInteractive', () => {
       expect(error.details?.usage?.some((u) => u.includes('npx'))).toBe(false);
     });
 
-    it('JSON refusal carries the npx form when launched via npm exec', async () => {
+    it('JSON refusal keeps the standalone binary form when npm variables are present', async () => {
       process.env.npm_command = 'exec';
       setOutputMode('json');
       await expectExit(runApiInteractive(), 1);
       const error = parseTtyError();
-      expect(error.message).toContain('npx workos@latest api ls');
-      expect(error.details?.usage).toContain('npx workos@latest api <endpoint>');
+      expect(error.message).toContain('workos api ls');
+      expect(error.details?.usage).toContain('workos api <endpoint>');
     });
   });
 });

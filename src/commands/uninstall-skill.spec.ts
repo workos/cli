@@ -200,6 +200,28 @@ describe('runUninstallSkill', () => {
     await expectCliExit(runUninstallSkill({ skill: ['nonexistent-skill'] }));
   });
 
+  it('exits with a structured error when skills materialization fails', async () => {
+    vi.resetModules();
+    vi.doMock('./install-skill.js', async (importOriginal) => {
+      const mod = await importOriginal<typeof import('./install-skill.js')>();
+      return {
+        ...mod,
+        getSkillsDir: () => {
+          throw new Error('embedded asset extraction failed');
+        },
+        createAgents: () => ({ test: makeTestAgent() }),
+        detectAgents: () => [makeTestAgent()],
+      };
+    });
+    const { runUninstallSkill } = await import('./uninstall-skill.js');
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expectCliExit(runUninstallSkill({}));
+    const output = errorSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(output).toContain('https://github.com/workos/cli/releases/latest');
+    errorSpy.mockRestore();
+  });
+
   it('does not uninstall all skills when --skill filter partially matches', async () => {
     // Set up known skills
     for (const name of ['skill-a', 'skill-b']) {

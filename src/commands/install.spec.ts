@@ -27,7 +27,8 @@ vi.mock('../utils/debug.js', () => ({
 
 const { runInstaller } = await import('../run.js');
 const { maybeRunSetupAfter } = await import('./setup.js');
-const { exitWithError } = await import('../utils/output.js');
+const { exitWithError, isJsonMode } = await import('../utils/output.js');
+const ui = await import('../utils/ui.js');
 const { CliExit } = await import('../utils/cli-exit.js');
 const { setInteractionMode, resetInteractionModeForTests } = await import('../utils/interaction-mode.js');
 
@@ -78,6 +79,32 @@ describe('handleInstall', () => {
 
     expect(runInstaller).toHaveBeenCalledOnce();
     expect(maybeRunSetupAfter).toHaveBeenCalledOnce();
+  });
+
+  describe('declined installs (e.g. unsupported framework version)', () => {
+    it('carries the structured decline code in JSON mode and exits non-zero', async () => {
+      const { InstallDeclinedError } = await import('../lib/installer-errors.js');
+      vi.mocked(runInstaller).mockRejectedValue(new InstallDeclinedError('Next.js 14 is unsupported'));
+      vi.mocked(isJsonMode).mockReturnValue(true);
+
+      await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).rejects.toThrow(CliExit);
+
+      expect(exitWithError).toHaveBeenCalledWith({
+        code: 'unsupported_framework_version',
+        message: 'Next.js 14 is unsupported',
+      });
+    });
+
+    it('exits non-zero without extra output in human mode (guidance already printed)', async () => {
+      const { InstallDeclinedError } = await import('../lib/installer-errors.js');
+      vi.mocked(runInstaller).mockRejectedValue(new InstallDeclinedError('Next.js 14 is unsupported'));
+      vi.mocked(isJsonMode).mockReturnValue(false);
+
+      await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).rejects.toThrow(CliExit);
+
+      expect(exitWithError).not.toHaveBeenCalled();
+      expect(ui.default.log.info).not.toHaveBeenCalled();
+    });
   });
 
   describe('CI-mode required-arg validation', () => {

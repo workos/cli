@@ -39,7 +39,8 @@ export interface InstallerEvents {
   'credentials:request': { requiresApiKey: boolean };
   'credentials:response': { apiKey: string; clientId: string };
   complete: { success: boolean; summary?: string; completion?: CompletionData };
-  error: { message: string; stack?: string };
+  /** `code` is set for structured declines (e.g. unsupported framework version); absent for unexpected failures. */
+  error: { message: string; stack?: string; code?: string };
 
   'state:enter': { state: string };
   'state:exit': { state: string };

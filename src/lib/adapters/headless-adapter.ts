@@ -411,17 +411,20 @@ export class HeadlessAdapter implements InstallerAdapter {
     });
   };
 
-  private handleError = ({ message, stack }: InstallerEvents['error']): void => {
+  private handleError = ({ message, stack, code: declineCode }: InstallerEvents['error']): void => {
     const isServiceError =
       /\b50[0-9]\b/.test(message) || /server_error|internal_error|overloaded|service.*unavailable/i.test(message);
     const isRateLimit = /\b429\b/.test(message) || /rate.limit/i.test(message);
     const isNetworkError = /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|fetch failed/i.test(message);
     const isProcessExit = /process exited with code/i.test(message);
 
-    let code = 'installer_error';
+    let code = declineCode ?? 'installer_error';
     let displayMessage = message;
 
-    if (isServiceError) {
+    if (declineCode) {
+      // A structured decline (e.g. unsupported framework version) is already
+      // user-facing — don't rewrite it as an AI-service failure.
+    } else if (isServiceError) {
       code = 'service_unavailable';
       displayMessage = 'The AI service is temporarily unavailable. Please try again in a few minutes.';
     } else if (isRateLimit) {

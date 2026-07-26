@@ -6,7 +6,7 @@ const integrationsDir = join(import.meta.dirname, '.');
 
 /**
  * Guard against regressions where integration prompts reference the Skill tool.
- * All integrations should inject reference content from @workos/skills directly,
+ * All integrations should inject bundled @workos/skills reference content directly,
  * not tell the agent to invoke a skill.
  */
 describe('no Skill tool references in integrations', () => {
@@ -38,5 +38,15 @@ describe('allowedTools does not include Skill', () => {
     const match = content.match(/allowedTools:\s*\[([^\]]*)\]/);
     expect(match).toBeTruthy();
     expect(match![1]).not.toContain("'Skill'");
+  });
+});
+
+describe('no MCP docs server', () => {
+  // Skills references (inlined into prompts) replaced the docs MCP server.
+  // Spawning it via `npx -y` also broke the compiled binary's self-containment
+  // (required node/npx on PATH).
+  it('agent-interface.ts should not spawn @workos/mcp-docs-server', () => {
+    const content = readFileSync(join(import.meta.dirname, '..', 'lib', 'agent-interface.ts'), 'utf-8');
+    expect(content).not.toContain('mcp-docs-server');
   });
 });

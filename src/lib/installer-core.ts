@@ -16,6 +16,7 @@ import type { InstallerOptions } from '../utils/types.js';
 import type { CompletionData } from './events.js';
 import type { DeviceAuthResult, DeviceAuthResponse } from './device-auth.js';
 import type { StagingCredentials } from './staging-api.js';
+import { InstallDeclinedError } from './installer-errors.js';
 import { getManualPrInstructions } from './post-install.js';
 import { hasGhCli } from '../utils/git-utils.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
@@ -234,8 +235,15 @@ export const installerMachine = setup({
     },
     emitError: ({ context }) => {
       const message = context.error?.message ?? 'An unexpected error occurred';
-      context.emitter.emit('error', { message, stack: context.error?.stack });
-      context.emitter.emit('complete', { success: false });
+      // Declines carry a structured code so machine consumers can tell "we
+      // refused to install" apart from unexpected failures.
+      const declineCode = context.error instanceof InstallDeclinedError ? context.error.code : undefined;
+      context.emitter.emit('error', {
+        message,
+        stack: context.error?.stack,
+        ...(declineCode ? { code: declineCode } : {}),
+      });
+      context.emitter.emit('complete', { success: false, ...(declineCode ? { summary: message } : {}) });
     },
     // Post-install actions
     assignChangedFiles: assign({

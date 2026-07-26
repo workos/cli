@@ -63,8 +63,8 @@ export class FixtureManager {
   private async installDependencies(workDir: string): Promise<void> {
     // JS projects
     if (existsSync(join(workDir, 'package.json'))) {
-      const result = await execFileNoThrow('pnpm', ['install'], { cwd: workDir });
-      if (result.status !== 0) throw new Error(`pnpm install failed: ${result.stderr}`);
+      const result = await execFileNoThrow('bun', ['install'], { cwd: workDir });
+      if (result.status !== 0) throw new Error(`bun install failed: ${result.stderr}`);
       return;
     }
 

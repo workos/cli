@@ -18,7 +18,7 @@ This fixture has the strictest TypeScript configuration possible. It tests wheth
 
 ## Success Criteria
 
-- [ ] `pnpm build` passes with zero type errors
+- [ ] `bun run build` passes with zero type errors
 - [ ] Generated middleware.ts has proper types
 - [ ] Generated callback route has proper types
 - [ ] No implicit any errors

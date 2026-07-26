@@ -7,35 +7,94 @@ on:
 
 jobs:
   ci:
-    name: Node ${{ matrix.node }}
+    name: Bun
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node: [20, 22, 24]
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # 7.0.0
 
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # 6.0.9
-
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # 6.4.0
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # 2.0.2
         with:
-          node-version: ${{ matrix.node }}
-          cache: pnpm
+          bun-version: 1.3.14
 
       - name: Install
-        run: pnpm install
+        run: bun install --frozen-lockfile
 
       - name: Lint
-        run: pnpm lint
+        run: bun run lint
 
       - name: Format
-        run: pnpm format:check
+        run: bun run format:check
 
       - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Build
-        run: pnpm build
+        run: bun run typecheck
 
       - name: Test
-        run: pnpm test
+        run: bun run test
+
+      - name: Check committed integration manifest is fresh
+        run: git diff --exit-code src/integrations/_manifest.ts
+
+      # Compile the same baseline variant that release.yml ships for linux-x64,
+      # not the host-default "modern" build — they embed different Bun runtimes.
+      - name: Build standalone binary
+        env:
+          WORKOS_BUILD_TARGET: bun-linux-x64-baseline
+        run: bun run build
+
+      # The full command contract (exit codes, structured JSON errors, JSON
+      # output — see scripts/command-smoke.sh) must hold standalone: no Bun,
+      # no Node.js, no node_modules, and no network.
+      - name: Smoke test command contract without Bun, Node.js, or network
+        run: >-
+          docker run --rm --network none
+          --volume "${PWD}/dist/workos:/workos:ro"
+          --volume "${PWD}/scripts/command-smoke.sh:/command-smoke.sh:ro"
+          --env HOME=/tmp/home
+          debian:bookworm-slim
+          sh /command-smoke.sh /workos
+
+      # `internal verify-assets` performs the first-run download of the pinned
+      # Agent SDK executable (checksum-verified) and spawns it, so a broken
+      # download path fails every PR here instead of on a user's first
+      # `workos install`. Needs network; still no Bun/Node/node_modules.
+      - name: Smoke test agent runtime first-run download
+        run: >-
+          docker run --rm
+          --volume "${PWD}/dist/workos:/workos:ro"
+          --env HOME=/tmp/home
+          debian:bookworm-slim
+          sh -eu -c
+          '/workos internal verify-assets --json'
+
+      # Authenticated command execution against a real WorkOS staging
+      # environment: list plus a create → get → delete round-trip. The secret
+      # is a dedicated staging-environment API key; fork PRs receive no
+      # secrets, so this skips there instead of failing.
+      - name: Smoke test authenticated commands
+        env:
+          WORKOS_API_KEY: ${{ secrets.WORKOS_SMOKE_API_KEY }}
+          # Optional: set when the smoke key belongs to a non-default API host
+          # (e.g. an internal staging deployment).
+          WORKOS_SMOKE_API_URL: ${{ secrets.WORKOS_SMOKE_API_URL }}
+        run: |
+          if [ -z "$WORKOS_API_KEY" ]; then
+            echo "Skipped: WORKOS_SMOKE_API_KEY secret not available (fork PR or not yet configured)"
+            exit 0
+          fi
+          if [ -n "$WORKOS_SMOKE_API_URL" ]; then
+            export WORKOS_API_URL="$WORKOS_SMOKE_API_URL"
+          fi
+          sh scripts/command-smoke.sh ./dist/workos
+
+      # Publish the generated packages to a throwaway local registry and run
+      # the real user flows — `npx workos`, `npm install -g workos`, platform
+      # selection, and the launcher's no-binary error path — from a hermetic
+      # environment. This exercises the npm machinery the in-repo launcher
+      # check can't (registry fetch, optionalDependencies, npx cache/bin).
+      - name: Smoke test npm distribution against a local registry
+        env:
+          WORKOS_NPM_ALLOW_MISSING: '1'
+        run: |
+          cp dist/workos dist/workos-linux-x64
+          bun run ./scripts/gen-npm-packages.ts
+          bun run ./scripts/npm-dist-smoke.ts

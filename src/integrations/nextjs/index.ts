@@ -4,6 +4,7 @@ import type { InstallerOptions } from '../../utils/types.js';
 import { enableDebugLogs } from '../../utils/debug.js';
 import { getPackageVersion } from '../../utils/package-json.js';
 import { getPackageDotJson } from '../../utils/ui-utils.js';
+import { InstallDeclinedError } from '../../lib/installer-errors.js';
 import ui from '../../utils/ui.js';
 import chalk from 'chalk';
 import * as semver from 'semver';
@@ -96,12 +97,13 @@ export async function run(options: InstallerOptions): Promise<string> {
     if (coercedVersion && semver.lt(coercedVersion, MINIMUM_NEXTJS_VERSION)) {
       const docsUrl = config.metadata.unsupportedVersionDocsUrl ?? config.metadata.docsUrl;
 
-      ui.log.warn(
-        `Sorry: the installer can't help you with Next.js ${nextVersion}. Upgrade to Next.js ${MINIMUM_NEXTJS_VERSION} or later, or check out the manual setup guide.`,
-      );
+      const message = `Sorry: the installer can't help you with Next.js ${nextVersion}. Upgrade to Next.js ${MINIMUM_NEXTJS_VERSION} or later, or check out the manual setup guide.`;
+      ui.log.warn(message);
       ui.log.info(`Setup Next.js manually: ${chalk.cyan(docsUrl)}`);
       ui.outro('WorkOS AuthKit installer will see you next time!');
-      return '';
+      // Returning normally here used to surface as "Successfully installed"
+      // with exit 0 — machine consumers must see a decline, not a success.
+      throw new InstallDeclinedError(message);
     }
   }
 

@@ -110,14 +110,14 @@ describe('detectIssues', () => {
       expect(mcp?.remediation).toBe('Run: workos mcp install');
     });
 
-    it('uses npx form when launched via npm exec', () => {
+    it('keeps the standalone binary form when npm variables are present', () => {
       process.env.npm_command = 'exec';
 
       const skills = detectIssues(reportWithStaleSkills()).find((i) => i.code === 'SKILLS_OUTDATED');
-      expect(skills?.remediation).toBe('Run: npx workos@latest skills install');
+      expect(skills?.remediation).toBe('Run: workos skills install');
 
       const mcp = detectIssues(reportWithMisconfiguredMcp()).find((i) => i.code === 'MCP_MISCONFIGURED');
-      expect(mcp?.remediation).toBe('Run: npx workos@latest mcp install');
+      expect(mcp?.remediation).toBe('Run: workos mcp install');
     });
   });
 

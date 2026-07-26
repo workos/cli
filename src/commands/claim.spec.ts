@@ -467,7 +467,7 @@ describe('claim command', () => {
       expect(mockUi.log.info).toHaveBeenCalledWith(expect.stringContaining('Could not open browser'));
     });
 
-    it('timeout hint uses the npx form when launched via npm exec', async () => {
+    it('timeout hint keeps the standalone binary form when npm variables are present', async () => {
       const NPM_KEYS = ['npm_command', 'npm_execpath', 'npm_config_user_agent'] as const;
       const saved: Record<string, string | undefined> = {};
       for (const k of NPM_KEYS) {
@@ -491,7 +491,7 @@ describe('claim command', () => {
         await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 5_000);
         await claimPromise;
 
-        expect(mockUi.log.info).toHaveBeenCalledWith(expect.stringContaining('npx workos@latest env list'));
+        expect(mockUi.log.info).toHaveBeenCalledWith(expect.stringContaining('workos env list'));
       } finally {
         for (const k of NPM_KEYS) {
           if (saved[k] === undefined) delete process.env[k];

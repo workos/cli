@@ -19,8 +19,8 @@ vi.mock('os', async (importOriginal) => {
   return { ...actual, homedir: vi.fn(actual.homedir) };
 });
 
-vi.mock('@workos/skills', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@workos/skills')>();
+vi.mock('../lib/skills-assets.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/skills-assets.js')>();
   return { ...actual, getSkillsDir: vi.fn(actual.getSkillsDir) };
 });
 
@@ -354,7 +354,7 @@ describe('install-skill', () => {
   describe('autoInstallSkills', () => {
     beforeEach(async () => {
       const { homedir } = await import('os');
-      const { getSkillsDir } = await import('@workos/skills');
+      const { getSkillsDir } = await import('../lib/skills-assets.js');
       vi.mocked(homedir).mockReturnValue(homeDir);
       vi.mocked(getSkillsDir).mockReturnValue(skillsDir);
     });
@@ -386,34 +386,23 @@ describe('install-skill', () => {
       expect(result!.agents.sort()).toEqual(['Claude Code', 'Codex']);
     });
 
-    it('writes a version marker per agent when the bundled version is resolvable', async () => {
-      // Plant a deterministic package layout so getBundledSkillsVersion finds
-      // a real version. The function walks up 3 dirnames from skillsDir to
-      // locate the package.json, so we mirror that layout here:
-      //   <packageRoot>/package.json   ← version source
-      //   <packageRoot>/plugins/workos/skills   ← skillsDir
+    it('writes the generated bundled version marker per agent', async () => {
       const { SKILL_VERSION_MARKER_FILENAME } = await import('./install-skill.js');
-      const { getSkillsDir } = await import('@workos/skills');
+      const { BUNDLED_SKILLS_VERSION } = await import('../lib/skills-assets.js');
 
-      const packageRoot = join(testDir, 'pkg');
-      mkdirSync(packageRoot);
-      writeFileSync(join(packageRoot, 'package.json'), JSON.stringify({ name: '@workos/skills', version: '9.9.9' }));
-      const deepSkillsDir = join(packageRoot, 'plugins/workos/skills');
-      mkdirSync(deepSkillsDir, { recursive: true });
-      mkdirSync(join(deepSkillsDir, 'skill-a'));
-      writeFileSync(join(deepSkillsDir, 'skill-a', 'SKILL.md'), '# Skill A');
-      vi.mocked(getSkillsDir).mockReturnValue(deepSkillsDir);
+      mkdirSync(join(skillsDir, 'skill-a'));
+      writeFileSync(join(skillsDir, 'skill-a', 'SKILL.md'), '# Skill A');
 
       mkdirSync(join(homeDir, '.claude'));
 
       const result = await autoInstallSkills();
 
       expect(result).not.toBeNull();
-      expect(result!.version).toBe('9.9.9');
+      expect(result!.version).toBe(BUNDLED_SKILLS_VERSION);
 
       const marker = join(homeDir, '.claude/skills', SKILL_VERSION_MARKER_FILENAME);
       expect(existsSync(marker)).toBe(true);
-      expect(readFileSync(marker, 'utf8')).toBe('9.9.9');
+      expect(readFileSync(marker, 'utf8')).toBe(BUNDLED_SKILLS_VERSION);
     });
 
     it('returns null when no agents are detected', async () => {
@@ -433,7 +422,7 @@ describe('install-skill', () => {
 
     it('swallows errors from discoverSkills and returns null', async () => {
       // Point to a nonexistent skills directory
-      const { getSkillsDir } = await import('@workos/skills');
+      const { getSkillsDir } = await import('../lib/skills-assets.js');
       vi.mocked(getSkillsDir).mockReturnValue('/nonexistent/path');
 
       await expect(autoInstallSkills()).resolves.toBeNull();
@@ -479,7 +468,7 @@ describe('install-skill', () => {
   describe('refreshWorkOSSkills', () => {
     beforeEach(async () => {
       const { homedir } = await import('os');
-      const { getSkillsDir } = await import('@workos/skills');
+      const { getSkillsDir } = await import('../lib/skills-assets.js');
       vi.mocked(homedir).mockReturnValue(homeDir);
       vi.mocked(getSkillsDir).mockReturnValue(skillsDir);
     });
@@ -508,12 +497,10 @@ describe('install-skill', () => {
         'claude-code': '0.0.1',
         codex: null,
       });
-      // After: in this fixture skillsDir isn't an npm package layout, so
-      // getBundledSkillsVersion returns null and no marker is rewritten.
-      // Therefore perAgentAfter must equal perAgentBefore for every agent.
+      const { BUNDLED_SKILLS_VERSION } = await import('../lib/skills-assets.js');
       expect(result!.perAgentAfter).toMatchObject({
-        'claude-code': '0.0.1',
-        codex: null,
+        'claude-code': BUNDLED_SKILLS_VERSION,
+        codex: BUNDLED_SKILLS_VERSION,
       });
     });
 

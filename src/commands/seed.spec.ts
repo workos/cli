@@ -319,27 +319,27 @@ config:
       return (JSON.parse(line!) as { error: { message: string } }).error.message;
     }
 
-    it('missing --file error carries the npx seed hints', async () => {
+    it('missing --file error carries the standalone seed hints', async () => {
       await expect(runSeed({}, 'sk_test')).rejects.toThrow(CliExit);
       const message = lastErrorMessage();
-      expect(message).toContain('npx workos@latest seed --file=workos-seed.yml');
-      expect(message).toContain('npx workos@latest seed --init');
+      expect(message).toContain('workos seed --file=workos-seed.yml');
+      expect(message).toContain('workos seed --init');
     });
 
-    it('file-not-found error carries the npx seed hint', async () => {
+    it('file-not-found error carries the standalone seed hint', async () => {
       mockExistsSync.mockReturnValue(false);
       await expect(runSeed({ file: 'missing.yml' }, 'sk_test')).rejects.toThrow(CliExit);
-      expect(lastErrorMessage()).toContain('npx workos@latest seed');
+      expect(lastErrorMessage()).toContain('workos seed');
     });
 
-    it('seed-failed error carries the npx seed --clean hint', async () => {
+    it('seed-failed error carries the standalone seed --clean hint', async () => {
       mockExistsSync.mockReturnValue(true);
       mockReadFileSync.mockReturnValue(FULL_SEED_YAML);
       mockSdk.authorization.createPermission.mockResolvedValue({ slug: 'read-users' });
       mockSdk.authorization.createEnvironmentRole.mockRejectedValue(new Error('Server exploded'));
 
       await expect(runSeed({ file: 'workos-seed.yml' }, 'sk_test')).rejects.toThrow(CliExit);
-      expect(lastErrorMessage()).toContain('npx workos@latest seed --clean');
+      expect(lastErrorMessage()).toContain('workos seed --clean');
     });
   });
 

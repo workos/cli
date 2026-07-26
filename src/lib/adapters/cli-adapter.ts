@@ -544,7 +544,14 @@ export class CLIAdapter implements InstallerAdapter {
     }
   };
 
-  private handleError = ({ message, stack }: InstallerEvents['error']): void => {
+  private handleError = ({ message, stack, code }: InstallerEvents['error']): void => {
+    // A structured decline (e.g. unsupported framework version) already
+    // printed its guidance via the integration — don't restyle it as a
+    // generic failure.
+    if (code) {
+      this.stopSpinner('Installation skipped');
+      return;
+    }
     this.stopSpinner('Failed', 1);
 
     // Rewrite raw API/SDK errors into user-friendly messages with a next step.

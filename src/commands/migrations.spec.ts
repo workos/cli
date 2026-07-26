@@ -67,10 +67,10 @@ describe('runMigrations', () => {
       expect(mockName).toHaveBeenCalledWith('workos migrations');
     });
 
-    it('uses the npx command name when launched via npm exec', async () => {
+    it('keeps the standalone command name when npm variables are present', async () => {
       process.env.npm_command = 'exec';
       await runMigrations(['wizard']);
-      expect(mockName).toHaveBeenCalledWith('npx workos@latest migrations');
+      expect(mockName).toHaveBeenCalledWith('workos migrations');
     });
   });
 

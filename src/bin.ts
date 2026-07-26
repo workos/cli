@@ -1,32 +1,19 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 // Load .env.local for local development when --local flag is used
 if (process.argv.includes('--local') || process.env.WORKOS_DEV) {
   const { config } = await import('dotenv');
-  // bin.ts compiles to dist/bin.js, so go up one level to find .env.local
+  const { existsSync } = await import('node:fs');
   const { fileURLToPath } = await import('node:url');
-  config({ path: fileURLToPath(new URL('../.env.local', import.meta.url)) });
+  const envPath = fileURLToPath(new URL('../.env.local', import.meta.url));
+  if (existsSync(envPath)) config({ path: envPath, quiet: true });
 }
 
-import { satisfies } from 'semver';
-import { red } from './utils/logging.js';
-import { getConfig, getVersion } from './lib/settings.js';
+import { getVersion } from './lib/settings.js';
 
 import yargs from 'yargs';
-import { hideBin } from 'yargs/helpers';
 import { ensureAuthenticated } from './lib/ensure-auth.js';
 import { checkForUpdates } from './lib/version-check.js';
-
-const NODE_VERSION_RANGE = getConfig().nodeVersion;
-
-// Have to run this above the other imports because they are importing the UI facade that
-// has the problematic imports.
-if (!satisfies(process.version, NODE_VERSION_RANGE)) {
-  red(
-    `WorkOS AuthKit installer requires Node.js ${NODE_VERSION_RANGE}. You are using Node.js ${process.version}. Please upgrade your Node.js version.`,
-  );
-  process.exit(1);
-}
 
 import {
   InvalidInteractionModeError,
@@ -93,7 +80,9 @@ await loadDeviceId();
 recoverPendingEvents();
 
 // Resolve output mode early from raw argv (before yargs parses)
-const rawArgs = hideBin(process.argv);
+// Bun preserves the Node-style [runtime, entrypoint, ...args] argv shape in
+// both source mode and standalone executables.
+const rawArgs = process.argv.slice(2);
 const hasJsonFlag = rawArgs.includes('--json');
 const baseOutputMode = resolveOutputMode(hasJsonFlag);
 setOutputMode(baseOutputMode);
@@ -262,6 +251,7 @@ async function runCli(): Promise<void> {
   const flags = extractUserFlags(rawArgs);
 
   const parser = yargs(rawArgs)
+    .scriptName('workos')
     .parserConfiguration({ 'populate--': true })
     .exitProcess(false)
     .fail((msg, err) => {
@@ -324,6 +314,7 @@ async function runCli(): Promise<void> {
           'install',
           'setup',
           'debug',
+          'internal',
           'dashboard',
           'emulate',
           'dev',
@@ -2720,6 +2711,19 @@ async function runCli(): Promise<void> {
         },
       );
       return yargs.demandCommand(1, `Run "${getWorkOSCommand()} debug <command>" for debug tools.`).strict();
+    })
+    .command('internal', false, (yargs) => {
+      registerSubcommand(
+        yargs,
+        'verify-assets',
+        'Verify embedded assets (skills, Agent SDK) extract and run on this machine',
+        (y) => y,
+        async () => {
+          const { runVerifyAssets } = await import('./commands/internal-verify-assets.js');
+          await runVerifyAssets();
+        },
+      );
+      return yargs.demandCommand(1, 'Run "workos internal <command>" for internal tools.').strict();
     })
     .command(
       'migrations',

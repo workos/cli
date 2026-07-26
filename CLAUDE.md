@@ -19,8 +19,8 @@ WorkOS CLI for installing AuthKit integrations and managing WorkOS resources (or
 
 ## Tech Constraints
 
-- **pnpm** only
-- Avoid Node-specific sync APIs (crypto, fs sync) unless necessary
+- **Bun** only; the shipped CLI is a Bun-compiled standalone binary
+- Runtime assets must be statically imported or materialized from the compiled binary. Exception: the Agent SDK `claude` executable is downloaded on first agent use — pinned by version + sha256 in the generated manifest — and cached under `~/.workos/cache/agent-sdk/`
 
 ## Commit Conventions
 
@@ -29,18 +29,17 @@ WorkOS CLI for installing AuthKit integrations and managing WorkOS resources (or
 ## Commands
 
 ```bash
-pnpm build        # Build the project
-pnpm dev          # Dev mode (build + watch + link)
-pnpm test         # Run tests
-pnpm typecheck    # Type check
+bun run build        # Build the standalone binary
+bun run dev          # Run source in watch mode
+bun run test         # Run tests
+bun run typecheck    # Type check
 ```
 
 ## Adding a New Framework
 
-1. Create `src/{framework}/{framework}-installer-agent.ts`
-2. Add to `Integration` enum in `lib/constants.ts`
-3. Add detection logic in `lib/config.ts`
-4. Wire up in `run.ts` switch statement
+1. Create `src/integrations/{framework}/index.ts` exporting `config` and `run`
+2. Run `bun run generate` to refresh `src/integrations/_manifest.ts`
+3. Add or update detection and validation tests for the integration
 
 ## Adding a New Resource Command
 
@@ -94,14 +93,14 @@ All commands automatically emit a `command` telemetry event with name, duration,
 **Don't:**
 
 - Use Node-specific sync APIs (crypto, fs sync) unless necessary
-- Use npm or yarn -- pnpm only
+- Add runtime filesystem discovery or import.meta.url-relative package asset reads
 - Skip JSON mode tests in spec files
 - Forget to wire up new frameworks in `src/run.ts` switch statement
 
 ## PR Checklist
 
-- [ ] `pnpm build` passes
-- [ ] `pnpm test` passes
-- [ ] `pnpm typecheck` passes
+- [ ] `bun run build` passes
+- [ ] `bun run test` passes
+- [ ] `bun run typecheck` passes
 - [ ] Conventional Commit message format used (`feat:`, `fix:`, `feat!:` for breaking)
 - [ ] New commands include JSON mode support and tests

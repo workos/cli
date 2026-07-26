@@ -4,7 +4,8 @@
  */
 
 import { dirname } from 'path';
-import { getSkillsDir as getSkillsPackageDir } from '@workos/skills';
+import { getSkillsDir as getSkillsPackageDir } from './skills-assets.js';
+import { ensureClaudeCodeExecutable } from './agent-sdk-assets.js';
 import { debug, logInfo, logWarn, logError, initLogFile, getLogFilePath } from '../utils/debug.js';
 import type { InstallerOptions } from '../utils/types.js';
 import { analytics } from '../utils/analytics.js';
@@ -19,13 +20,7 @@ import type { InstallerEventEmitter } from './events.js';
 import { startCredentialProxy, startClaimTokenProxy, type CredentialProxyHandle } from './credential-proxy.js';
 import { getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
 import { getAuthkitDomain, getCliAuthClientId } from './settings.js';
-import type {
-  SDKMessage,
-  SDKUserMessage,
-  Options as AgentSDKOptions,
-  PermissionResult,
-  query as queryFn,
-} from '@anthropic-ai/claude-agent-sdk';
+import type { SDKMessage, SDKUserMessage, PermissionResult, query as queryFn } from '@anthropic-ai/claude-agent-sdk';
 
 // File content cache for computing edit diffs
 const fileContentCache = new Map<string, string>();
@@ -97,10 +92,10 @@ export interface RetryConfig {
  */
 export type AgentRunConfig = {
   workingDirectory: string;
-  mcpServers: AgentSDKOptions['mcpServers'];
   model: string;
   allowedTools: string[];
   sdkEnv: Record<string, string | undefined>;
+  claudeExecutablePath: string;
 };
 
 /**
@@ -489,15 +484,30 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
       analytics.setTag('api_mode', activeProxyHandle ? 'gateway-proxy' : 'gateway');
     }
 
-    // Configure WorkOS MCP docs server for accessing WorkOS documentation
+    // First run from a compiled binary downloads the pinned agent runtime
+    // (~230MB, one-time, cached under ~/.workos); dev resolves node_modules.
+    let lastReportedPct = -1;
+    const claudeExecutablePath = await ensureClaudeCodeExecutable(
+      ({ receivedBytes, totalBytes }) => {
+        if (!totalBytes) return;
+        const pct = Math.floor((receivedBytes / totalBytes) * 100);
+        if (pct >= lastReportedPct + 25 || (lastReportedPct === -1 && pct === 0)) {
+          lastReportedPct = pct;
+          options.emitter?.emit('status', {
+            message: `Downloading Claude agent runtime (one-time, ${Math.round(totalBytes / 1024 / 1024)}MB): ${pct}%`,
+          });
+        }
+      },
+      () => {
+        // The retry restarts the byte count at 0; reset the throttle so the
+        // fresh attempt's progress isn't suppressed until it re-passes the peak.
+        lastReportedPct = -1;
+        options.emitter?.emit('status', { message: 'Download interrupted; retrying…' });
+      },
+    );
+
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
-      mcpServers: {
-        workos: {
-          command: 'npx',
-          args: ['-y', '@workos/mcp-docs-server'],
-        },
-      },
       model: getConfig().model,
       // Empty on purpose. A tool listed here is auto-approved BEFORE `canUseTool`
       // (installerCanUseTool) runs, which both defeats the Bash safety gate and
@@ -507,6 +517,7 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
       // not from this list.
       allowedTools: [],
       sdkEnv,
+      claudeExecutablePath,
     };
 
     const configInfo = { workingDirectory: agentRunConfig.workingDirectory, authMode, useMcp: false };
@@ -651,7 +662,6 @@ export async function runAgent(
         model: agentConfig.model,
         cwd: agentConfig.workingDirectory,
         permissionMode: 'acceptEdits',
-        mcpServers: agentConfig.mcpServers,
         env: agentConfig.sdkEnv,
         canUseTool: (toolName, input) => {
           logInfo('canUseTool called:', { toolName, input });
@@ -662,6 +672,7 @@ export async function runAgent(
         tools: { type: 'preset', preset: 'claude_code' },
         allowedTools: agentConfig.allowedTools,
         plugins: [{ type: 'local', path: pluginPath }],
+        pathToClaudeCodeExecutable: agentConfig.claudeExecutablePath,
         // Capture stderr from CLI subprocess for debugging
         stderr: (data: string) => {
           logInfo('CLI stderr:', data);
@@ -919,7 +930,13 @@ function handleSDKMessage(
       const isResultError = (message as Record<string, unknown>).is_error === true;
 
       if (isResultError) {
-        const resultText = typeof message.result === 'string' ? message.result : '';
+        const resultRecord = message as unknown as Record<string, unknown>;
+        const resultText =
+          typeof resultRecord.result === 'string'
+            ? resultRecord.result
+            : Array.isArray(resultRecord.errors)
+              ? resultRecord.errors.filter((error): error is string => typeof error === 'string').join('\n')
+              : '';
         logError('Agent result marked as error:', resultText);
 
         // Detect rate limiting (429) — check before 5xx so it gets distinct messaging

@@ -5,6 +5,19 @@ import fg from 'fast-glob';
 import type { ValidationResult, ValidationRules, ValidationIssue } from './types.js';
 import { runBuildValidation } from './build-validator.js';
 import { detectPort } from '../port-detection.js';
+import nextjsRules from './rules/nextjs.json' with { type: 'json' };
+import reactRouterRules from './rules/react-router.json' with { type: 'json' };
+import reactRules from './rules/react.json' with { type: 'json' };
+import tanstackStartRules from './rules/tanstack-start.json' with { type: 'json' };
+import vanillaJsRules from './rules/vanilla-js.json' with { type: 'json' };
+
+const RULES_BY_FRAMEWORK: Readonly<Record<string, ValidationRules>> = {
+  nextjs: nextjsRules as ValidationRules,
+  'react-router': reactRouterRules as ValidationRules,
+  react: reactRules as ValidationRules,
+  'tanstack-start': tanstackStartRules as ValidationRules,
+  'vanilla-js': vanillaJsRules as ValidationRules,
+};
 
 export interface ValidateOptions {
   variant?: string;
@@ -53,26 +66,21 @@ export async function validateInstallation(
 }
 
 async function loadRules(framework: string, variant?: string): Promise<ValidationRules | null> {
-  const rulesPath = new URL(`./rules/${framework}.json`, import.meta.url);
-  try {
-    const content = await readFile(rulesPath, 'utf-8');
-    const rules = JSON.parse(content) as ValidationRules;
+  const rules = RULES_BY_FRAMEWORK[framework];
+  if (!rules) return null;
 
-    // Merge variant rules if specified
-    if (variant && rules.variants?.[variant]) {
-      const variantRules = rules.variants[variant];
-      return {
-        ...rules,
-        files: [...rules.files, ...(variantRules.files || [])],
-        packages: [...rules.packages, ...(variantRules.packages || [])],
-        envVars: [...rules.envVars, ...(variantRules.envVars || [])],
-      };
-    }
-
-    return rules;
-  } catch {
-    return null; // No rules for this framework yet
+  // Merge variant rules if specified
+  if (variant && rules.variants?.[variant]) {
+    const variantRules = rules.variants[variant];
+    return {
+      ...rules,
+      files: [...rules.files, ...(variantRules.files || [])],
+      packages: [...rules.packages, ...(variantRules.packages || [])],
+      envVars: [...rules.envVars, ...(variantRules.envVars || [])],
+    };
   }
+
+  return rules;
 }
 
 export async function validatePackages(rules: ValidationRules, projectDir: string): Promise<ValidationIssue[]> {

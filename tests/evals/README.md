@@ -6,13 +6,13 @@ Automated evaluation framework for testing WorkOS AuthKit installer skills.
 
 ```bash
 # Run all evaluations
-pnpm eval
+bun run eval
 
 # Run specific framework
-pnpm eval --framework=nextjs
+bun run eval --framework=nextjs
 
 # Run with quality grading
-pnpm eval --quality
+bun run eval --quality
 ```
 
 ## Success Criteria
@@ -91,16 +91,16 @@ Every run tracks:
 
 ```bash
 # List recent runs
-pnpm eval:history
+bun run eval:history
 
 # Show more runs
-pnpm eval:history --limit=20
+bun run eval:history --limit=20
 
 # Compare two runs
-pnpm eval:diff 2024-01-15T10-30-00 2024-01-16T14-45-00
+bun run eval:diff 2024-01-15T10-30-00 2024-01-16T14-45-00
 
 # Use 'latest' as alias for most recent run
-pnpm eval:diff latest 2024-01-15T10-30-00
+bun run eval:diff latest 2024-01-15T10-30-00
 ```
 
 The diff command shows:
@@ -139,10 +139,10 @@ Prune old results:
 
 ```bash
 # Keep only 10 most recent (default)
-pnpm eval:prune
+bun run eval:prune
 
 # Keep specific number
-pnpm eval:prune --keep=5
+bun run eval:prune --keep=5
 ```
 
 ## Adding a New Fixture
@@ -159,8 +159,8 @@ pnpm eval:prune --keep=5
 
    ```bash
    cd tests/fixtures/{framework}/{state}
-   pnpm install
-   pnpm build
+   bun install
+   bun run build
    ```
 
 4. Add scenario to `tests/evals/runner.ts` SCENARIOS array
@@ -208,30 +208,30 @@ return { passed: checks.every((c) => c.passed), checks };
 Use `--keep-on-fail` to preserve temp directory and inspect:
 
 ```bash
-pnpm eval --framework=nextjs --keep-on-fail
-cd /tmp/eval-nextjs-xxxxx && pnpm build
+bun run eval --framework=nextjs --keep-on-fail
+cd /tmp/eval-nextjs-xxxxx && bun run build
 ```
 
 ### Flaky passes/failures
 
-Increase retries: `pnpm eval --retry=3`
+Increase retries: `bun run eval --retry=3`
 
 If consistently flaky, check if skill instructions are ambiguous.
 
 ### Pass rate regression
 
-1. Run `pnpm eval:diff latest <previous-run>`
+1. Run `bun run eval:diff latest <previous-run>`
 2. Check "Likely Causes" section
 3. Review skill file changes listed
 4. If no skill changes, check for external factors (API changes, dependency updates)
 
-### "pnpm install failed"
+### "bun install failed"
 
 The fixture's dependencies may have version conflicts. Check:
 
 ```bash
 cd tests/fixtures/{framework}/{state}
-pnpm install
+bun install
 ```
 
 ### High latency

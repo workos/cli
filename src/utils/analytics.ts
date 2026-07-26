@@ -203,7 +203,7 @@ export class Analytics {
       'auth.mode': this.authMode,
       'env.os': process.platform,
       'env.os_version': osVersion,
-      'env.node_version': process.version,
+      'env.runtime_version': process.versions.bun ? `bun-${process.versions.bun}` : `node-${process.versions.node}`,
       'env.shell': basename(process.env.SHELL ?? process.env.COMSPEC ?? 'unknown'),
       'env.ci': Boolean(process.env.CI || process.env.GITHUB_ACTIONS || process.env.BUILDKITE),
       ...(ciProvider ? { 'env.ci_provider': ciProvider } : {}),

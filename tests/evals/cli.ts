@@ -167,7 +167,7 @@ export function parseArgs(args: string[]): CliOptions {
 
 export function printHelp(): void {
   console.log(`
-Usage: pnpm eval [command] [options]
+Usage: bun run eval [command] [options]
 
 Commands:
   run (default)       Run evaluations
@@ -213,16 +213,16 @@ Options:
   --help, -h          Show this help message
 
 Examples:
-  pnpm eval                           # Run all 10 scenarios
-  pnpm eval --framework=nextjs        # Run only Next.js scenarios
-  pnpm eval --state=example           # Run only example app scenarios
-  pnpm eval --framework=react --state=example-auth0
+  bun run eval                           # Run all 10 scenarios
+  bun run eval --framework=nextjs        # Run only Next.js scenarios
+  bun run eval --state=example           # Run only example app scenarios
+  bun run eval --framework=react --state=example-auth0
                                       # Run specific scenario
-  pnpm eval --debug                   # Verbose output, keep failed dirs
-  pnpm eval --retry=3                 # More retry attempts
-  pnpm eval:history                   # List recent runs
-  pnpm eval:history --limit=20        # Show more runs
-  pnpm eval:diff <id1> <id2>          # Compare two runs
-  pnpm eval:prune --keep=5            # Keep only 5 most recent runs
+  bun run eval --debug                   # Verbose output, keep failed dirs
+  bun run eval --retry=3                 # More retry attempts
+  bun run eval:history                   # List recent runs
+  bun run eval:history --limit=20        # Show more runs
+  bun run eval:diff <id1> <id2>          # Compare two runs
+  bun run eval:prune --keep=5            # Keep only 5 most recent runs
 `);
 }

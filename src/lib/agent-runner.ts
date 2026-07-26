@@ -1,4 +1,4 @@
-import { getReference } from '@workos/skills';
+import { getReference } from './skills-assets.js';
 import { SPINNER_MESSAGE, type FrameworkConfig } from './framework-config.js';
 import { validateInstallation, quickCheckValidateAndFormat } from './validation/index.js';
 import {

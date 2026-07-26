@@ -28,6 +28,24 @@ export interface Credentials {
   refreshToken?: string;
 }
 
+/**
+ * A stored blob missing required fields (partial write, older schema) must
+ * read as logged-out: consumers assume accessToken/expiresAt/userId exist,
+ * and an invalid object otherwise crashes every authenticated command —
+ * `new Date(undefined).toISOString()` throws — bricking the CLI until the
+ * entry is manually deleted.
+ */
+function isValidCredentials(value: unknown): value is Credentials {
+  const creds = value as Credentials | null;
+  return (
+    typeof creds === 'object' &&
+    creds !== null &&
+    typeof creds.accessToken === 'string' &&
+    Number.isFinite(creds.expiresAt) &&
+    typeof creds.userId === 'string'
+  );
+}
+
 const SERVICE_NAME = 'workos-cli';
 const ACCOUNT_NAME = 'credentials';
 
@@ -57,7 +75,12 @@ function readFromFile(): Credentials | null {
   const filePath = getCredentialsPath();
   try {
     const content = fs.readFileSync(filePath, 'utf-8');
-    return JSON.parse(content);
+    const parsed: unknown = JSON.parse(content);
+    if (!isValidCredentials(parsed)) {
+      logWarn('[credential-store] file: stored credentials are missing required fields; treating as logged out');
+      return null;
+    }
+    return parsed;
   } catch (error) {
     observeHostFailure('home-fs', error, {
       operation: 'read',
@@ -117,7 +140,12 @@ function readFromKeyring(): Credentials | null {
       logWarn('[credential-store] keyring: entry exists but data is null/empty');
       return null;
     }
-    return JSON.parse(data);
+    const parsed: unknown = JSON.parse(data);
+    if (!isValidCredentials(parsed)) {
+      logWarn('[credential-store] keyring: stored credentials are missing required fields; treating as logged out');
+      return null;
+    }
+    return parsed;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logWarn(`[credential-store] keyring read failed: ${msg}`);
@@ -175,10 +203,14 @@ function showFallbackWarning(): void {
 }
 
 export function hasCredentials(): boolean {
+  // Validate rather than just probing for a file/entry: a malformed blob must
+  // read as logged-out here too, so this never disagrees with getCredentials().
+  // (readFrom* both run isValidCredentials; avoids getCredentials()'s keyring
+  // migration side effect.)
   if (forceInsecureStorage) {
-    return fileExists();
+    return readFromFile() !== null;
   }
-  return readFromKeyring() !== null || fileExists();
+  return readFromKeyring() !== null || readFromFile() !== null;
 }
 
 export function getCredentials(): Credentials | null {

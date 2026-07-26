@@ -373,16 +373,16 @@ describe('vault-run', () => {
         }
       });
 
-      it('missing-command usage error carries the npx form', async () => {
+      it('missing-command usage error keeps the standalone binary form', async () => {
         await expect(runVaultRun({ secrets: ['DB_URL=db'], command: [] })).rejects.toThrow(/__EXIT__/);
-        expect(exitErrors[0].message).toContain('npx workos@latest vault run --secret ENV=name -- command');
+        expect(exitErrors[0].message).toContain('workos vault run --secret ENV=name -- command');
       });
 
-      it('unknown-env error carries the npx env-list hint', async () => {
+      it('unknown-env error carries the standalone env-list hint', async () => {
         await expect(runVaultRun({ secrets: ['DB_URL=db'], command: ['echo'], env: 'no-such-env' })).rejects.toThrow(
           /__EXIT__/,
         );
-        expect(exitErrors[0].message).toContain('npx workos@latest env list');
+        expect(exitErrors[0].message).toContain('workos env list');
       });
     });
   });
