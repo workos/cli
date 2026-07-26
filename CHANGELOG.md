@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.1](https://github.com/workos/cli/compare/v0.20.0...v0.20.1) (2026-07-26)
+
+
+### Bug Fixes
+
+* detect Bun compiled binary when import.meta.url percent-encodes ~BUN ([#208](https://github.com/workos/cli/issues/208)) ([4c66d6e](https://github.com/workos/cli/commit/4c66d6e255c9b55b600d9fb1c980116679fc9a49))
+
 ## [0.20.0](https://github.com/workos/cli/compare/v0.19.0...v0.20.0) (2026-07-26)
 
 
