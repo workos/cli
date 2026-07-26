@@ -1,4 +1,4 @@
-name: CI
+name: Test
 
 on:
   push:
@@ -6,8 +6,8 @@ on:
   pull_request:
 
 jobs:
-  ci:
-    name: Bun
+  test:
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # 7.0.0
@@ -19,18 +19,11 @@ jobs:
       - name: Install
         run: bun install --frozen-lockfile
 
-      - name: Lint
-        run: bun run lint
-
-      - name: Format
-        run: bun run format:check
-
-      - name: Typecheck
-        run: bun run typecheck
-
       - name: Test
         run: bun run test
 
+      # `bun run test` regenerates the manifests via its pre-hook, so a stale
+      # committed manifest shows up as a diff here.
       - name: Check committed integration manifest is fresh
         run: git diff --exit-code src/integrations/_manifest.ts
 
