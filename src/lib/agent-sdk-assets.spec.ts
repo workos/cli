@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AGENT_SDK_TARGET, AGENT_SDK_VERSION } from '../generated/agent-sdk-manifest.js';
-import { downloadTarball, ensureClaudeCodeExecutable, extractTarEntry } from './agent-sdk-assets.js';
+import { downloadTarball, ensureClaudeCodeExecutable, extractTarEntry, isBunVirtualFsUrl } from './agent-sdk-assets.js';
 
 function tarHeader(name: string, size: number): Buffer {
   const header = Buffer.alloc(512);
@@ -26,6 +26,25 @@ function makeTarball(entries: Array<[string, Buffer]>): Buffer {
   parts.push(Buffer.alloc(1024)); // end-of-archive
   return gzipSync(Buffer.concat(parts));
 }
+
+describe('isBunVirtualFsUrl', () => {
+  it('detects the POSIX compiled-binary virtual filesystem', () => {
+    expect(isBunVirtualFsUrl('file:///$bunfs/root/workos')).toBe(true);
+  });
+
+  it('detects the Windows virtual filesystem with the tilde percent-encoded', () => {
+    expect(isBunVirtualFsUrl('file:///B:/%7EBUN/root/workos-windows-x64.exe')).toBe(true);
+  });
+
+  it('detects a raw Windows virtual path', () => {
+    expect(isBunVirtualFsUrl('B:\\~BUN\\root\\workos-windows-x64.exe')).toBe(true);
+  });
+
+  it('rejects source-mode module URLs', () => {
+    expect(isBunVirtualFsUrl(import.meta.url)).toBe(false);
+    expect(isBunVirtualFsUrl('file:///home/dev/cli/src/lib/agent-sdk-assets.ts')).toBe(false);
+  });
+});
 
 describe('ensureClaudeCodeExecutable', () => {
   it('resolves the current platform executable from node_modules in source mode', async () => {
