@@ -40,7 +40,7 @@ $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
 Invoke-WebRequest "https://github.com/workos/cli/releases/latest/download/workos-windows-$arch.exe" -OutFile workos.exe
 ```
 
-Move `workos.exe` to a directory on your `PATH`, then run `workos install`.
+Move `workos.exe` to a directory on your `PATH`, then run `workos install`. (If you already have Node.js, the npm install below works on Windows too.)
 
 npm (thin launcher that installs the same prebuilt binary for your platform):
 
