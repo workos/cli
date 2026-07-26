@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0](https://github.com/workos/cli/compare/v0.19.0...v0.20.0) (2026-07-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* The npm package no longer exports a library API — `main`/`exports` are gone and it only provides the `workos` binary. Development now requires Bun >= 1.3.0 instead of Node >= 22.11.
+
+### Features
+
+* Add Homebrew channel and install-aware updates ([#196](https://github.com/workos/cli/issues/196)) ([c524855](https://github.com/workos/cli/commit/c5248559cd0c9625a8b40cf29f85abd3efb78135))
+* Ship the CLI as a Bun standalone binary ([#195](https://github.com/workos/cli/issues/195)) ([a5e9b46](https://github.com/workos/cli/commit/a5e9b468cdd62ccf973ae9d1f5046b214cac1d68))
+
 ## [0.19.0](https://github.com/workos/cli/compare/v0.18.0...v0.19.0) (2026-07-24)
 
 
