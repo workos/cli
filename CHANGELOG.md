@@ -10,7 +10,6 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### ⚠ BREAKING CHANGES
 
 * The npm package no longer exports a library API — `main`/`exports` are gone and it only provides the `workos` binary. Development now requires Bun >= 1.3.0 instead of Node >= 22.11.
-* The npm package no longer exports a library API — `main`/`exports` are gone and it only provides the `workos` binary. Development now requires Bun >= 1.3.0 instead of Node >= 22.11.
 
 ### Features
 
