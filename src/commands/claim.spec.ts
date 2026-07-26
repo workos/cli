@@ -9,13 +9,13 @@ vi.mock('../utils/debug.js', () => ({
 const mockOpen = vi.fn().mockResolvedValue(undefined);
 vi.mock('open', () => ({ default: mockOpen }));
 
-// Mock clack
+// Mock the UI facade
 const mockSpinner = {
   start: vi.fn(),
   stop: vi.fn(),
   message: vi.fn(),
 };
-const mockClack = {
+const mockUi = {
   log: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -25,7 +25,7 @@ const mockClack = {
   },
   spinner: () => mockSpinner,
 };
-vi.mock('../utils/clack.js', () => ({ default: mockClack }));
+vi.mock('../utils/ui.js', () => ({ default: mockUi }));
 
 // Mock output utilities
 const mockOutputJson = vi.fn();
@@ -95,7 +95,7 @@ describe('claim command', () => {
 
       await runClaim();
 
-      expect(mockClack.log.info).toHaveBeenCalledWith(expect.stringContaining('No unclaimed environment found'));
+      expect(mockUi.log.info).toHaveBeenCalledWith(expect.stringContaining('No unclaimed environment found'));
     });
 
     it('exits with info when active environment is not unclaimed', async () => {
@@ -108,7 +108,7 @@ describe('claim command', () => {
 
       await runClaim();
 
-      expect(mockClack.log.info).toHaveBeenCalledWith(expect.stringContaining('No unclaimed environment found'));
+      expect(mockUi.log.info).toHaveBeenCalledWith(expect.stringContaining('No unclaimed environment found'));
     });
 
     it('outputs JSON when no unclaimed environment in JSON mode', async () => {
@@ -137,7 +137,7 @@ describe('claim command', () => {
 
       await runClaim();
 
-      expect(mockClack.log.success).toHaveBeenCalledWith('Environment already claimed!');
+      expect(mockUi.log.success).toHaveBeenCalledWith('Environment already claimed!');
       expect(mockMarkEnvironmentClaimed).toHaveBeenCalled();
     });
 
@@ -223,11 +223,11 @@ describe('claim command', () => {
       await claimPromise;
 
       const warnCall = vi
-        .mocked(mockClack.log.warn)
+        .mocked(mockUi.log.warn)
         .mock.calls.find((c) => /permanent|cannot be undone/i.test(String(c[0])));
       expect(warnCall).toBeDefined();
       // The permanence warning must fire before the browser is opened.
-      const warnOrder = vi.mocked(mockClack.log.warn).mock.invocationCallOrder[0];
+      const warnOrder = vi.mocked(mockUi.log.warn).mock.invocationCallOrder[0];
       const openOrder = vi.mocked(mockOpen).mock.invocationCallOrder[0];
       expect(warnOrder).toBeLessThan(openOrder);
     });
@@ -303,7 +303,7 @@ describe('claim command', () => {
       await claimPromise;
 
       expect(mockSpinner.stop).toHaveBeenCalledWith('Claim timed out');
-      expect(mockClack.log.info).toHaveBeenCalledWith(expect.stringContaining('Complete the claim in your browser'));
+      expect(mockUi.log.info).toHaveBeenCalledWith(expect.stringContaining('Complete the claim in your browser'));
     });
 
     it('continues polling on transient poll errors', async () => {
@@ -379,7 +379,7 @@ describe('claim command', () => {
 
       expect(mockSpinner.stop).toHaveBeenCalledWith('Claim token is invalid or expired.');
       expect(mockMarkEnvironmentClaimed).toHaveBeenCalled();
-      expect(mockClack.log.warn).toHaveBeenCalledWith(expect.stringContaining('workos auth login'));
+      expect(mockUi.log.warn).toHaveBeenCalledWith(expect.stringContaining('workos auth login'));
     });
 
     it('shows connection issues after 3 consecutive poll failures', async () => {
@@ -438,7 +438,7 @@ describe('claim command', () => {
       await claimPromise;
 
       expect(mockSpinner.stop).toHaveBeenCalledWith('Too many connection failures');
-      expect(mockClack.log.error).toHaveBeenCalledWith(expect.stringContaining('Polling failed 10 times'));
+      expect(mockUi.log.error).toHaveBeenCalledWith(expect.stringContaining('Polling failed 10 times'));
       expect(mockMarkEnvironmentClaimed).not.toHaveBeenCalled();
     });
 
@@ -464,7 +464,7 @@ describe('claim command', () => {
       await vi.advanceTimersByTimeAsync(6_000);
       await claimPromise;
 
-      expect(mockClack.log.info).toHaveBeenCalledWith(expect.stringContaining('Could not open browser'));
+      expect(mockUi.log.info).toHaveBeenCalledWith(expect.stringContaining('Could not open browser'));
     });
 
     it('timeout hint keeps the standalone binary form when npm variables are present', async () => {
@@ -491,7 +491,7 @@ describe('claim command', () => {
         await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 5_000);
         await claimPromise;
 
-        expect(mockClack.log.info).toHaveBeenCalledWith(expect.stringContaining('workos env list'));
+        expect(mockUi.log.info).toHaveBeenCalledWith(expect.stringContaining('workos env list'));
       } finally {
         for (const k of NPM_KEYS) {
           if (saved[k] === undefined) delete process.env[k];

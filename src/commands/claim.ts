@@ -7,7 +7,7 @@
  */
 
 import open from 'open';
-import clack from '../utils/clack.js';
+import ui from '../utils/ui.js';
 import { getActiveEnvironment, isUnclaimedEnvironment, markEnvironmentClaimed } from '../lib/config-store.js';
 import { createClaimNonce, UnclaimedEnvApiError } from '../lib/unclaimed-env-api.js';
 import { observeHostFailure } from '../lib/host-probe.js';
@@ -16,6 +16,7 @@ import { isJsonMode, outputJson, exitWithError } from '../utils/output.js';
 import { isAgentMode, isCiMode } from '../utils/interaction-mode.js';
 import { sleep } from '../lib/helper-functions.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
+import { networkRetryRecovery } from '../utils/recovery-hints.js';
 
 const POLL_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const POLL_INTERVAL_MS = 5_000; // 5 seconds
@@ -31,7 +32,7 @@ export async function runClaim(): Promise<void> {
     if (isJsonMode()) {
       outputJson({ status: 'no_unclaimed_environment', message: 'No unclaimed environment found. Nothing to claim.' });
     } else {
-      clack.log.info('No unclaimed environment found. Nothing to claim.');
+      ui.log.info('No unclaimed environment found. Nothing to claim.');
     }
     return;
   }
@@ -41,7 +42,7 @@ export async function runClaim(): Promise<void> {
   logInfo('[claim] Starting claim flow for environment:', activeEnv.name);
 
   try {
-    clack.log.step('Generating claim link...');
+    ui.log.step('Generating claim link...');
 
     const result = await createClaimNonce(activeEnv.clientId, activeEnv.claimToken);
 
@@ -50,8 +51,8 @@ export async function runClaim(): Promise<void> {
       if (isJsonMode()) {
         outputJson({ status: 'already_claimed', message: 'Environment already claimed!' });
       } else {
-        clack.log.success('Environment already claimed!');
-        clack.log.info(`Run \`${formatWorkOSCommand('auth login')}\` to connect your account.`);
+        ui.log.success('Environment already claimed!');
+        ui.log.info(`Run \`${formatWorkOSCommand('auth login')}\` to connect your account.`);
       }
       return;
     }
@@ -77,15 +78,15 @@ export async function runClaim(): Promise<void> {
       });
     }
 
-    clack.log.warn('Claiming permanently links this environment to your account and cannot be undone.');
-    clack.log.info(`Open this URL to claim your environment:\n\n  ${claimUrl}`);
+    ui.log.warn('Claiming permanently links this environment to your account and cannot be undone.');
+    ui.log.info(`Open this URL to claim your environment:\n\n  ${claimUrl}`);
 
     try {
       await open(claimUrl, { wait: false });
       if (isAgentMode()) {
-        clack.log.info('Browser launch attempted. If it did not open on the host, use the URL above.');
+        ui.log.info('Browser launch attempted. If it did not open on the host, use the URL above.');
       } else {
-        clack.log.info('Browser opened automatically');
+        ui.log.info('Browser opened automatically');
       }
     } catch (openError) {
       observeHostFailure('browser-launch', openError, {
@@ -94,11 +95,11 @@ export async function runClaim(): Promise<void> {
         label: 'environment claim browser',
       });
       logError('[claim] Failed to open browser:', openError instanceof Error ? openError.message : String(openError));
-      clack.log.info('Could not open browser — open the URL above manually.');
+      ui.log.info('Could not open browser — open the URL above manually.');
     }
 
     // Poll for claim completion
-    const spinner = clack.spinner();
+    const spinner = ui.spinner();
     spinner.start('Waiting for claim...');
 
     const startTime = Date.now();
@@ -111,7 +112,7 @@ export async function runClaim(): Promise<void> {
         if (check.alreadyClaimed) {
           spinner.stop('Environment claimed!');
           markEnvironmentClaimed();
-          clack.log.info(`Run \`${formatWorkOSCommand('auth login')}\` to connect your account.`);
+          ui.log.info(`Run \`${formatWorkOSCommand('auth login')}\` to connect your account.`);
           return;
         }
         consecutiveFailures = 0;
@@ -122,14 +123,14 @@ export async function runClaim(): Promise<void> {
           // when the environment is claimed. Safe to promote to sandbox.
           spinner.stop('Claim token is invalid or expired.');
           markEnvironmentClaimed();
-          clack.log.warn(`Run \`${formatWorkOSCommand('auth login')}\` to set up your environment.`);
+          ui.log.warn(`Run \`${formatWorkOSCommand('auth login')}\` to set up your environment.`);
           return;
         }
         consecutiveFailures++;
         logError('[claim] Poll error:', pollError instanceof Error ? pollError.message : 'Unknown');
         if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
           spinner.stop('Too many connection failures');
-          clack.log.error(
+          ui.log.error(
             `Polling failed ${consecutiveFailures} times in a row. Check your network and try again.\n` +
               `You can also complete the claim at: ${claimUrl}`,
           );
@@ -142,10 +143,14 @@ export async function runClaim(): Promise<void> {
     }
 
     spinner.stop('Claim timed out');
-    clack.log.info(`Complete the claim in your browser, then run \`${formatWorkOSCommand('env list')}\` to verify.`);
+    ui.log.info(`Complete the claim in your browser, then run \`${formatWorkOSCommand('env list')}\` to verify.`);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     logError('[claim] Error:', message);
-    exitWithError({ code: 'claim_failed', message: `Claim failed: ${message}` });
+    exitWithError({
+      code: 'claim_failed',
+      message: `Could not claim this environment: ${message}`,
+      recovery: networkRetryRecovery({ command: formatWorkOSCommand('env claim') }),
+    });
   }
 }

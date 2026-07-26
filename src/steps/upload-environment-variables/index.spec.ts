@@ -10,7 +10,7 @@ vi.mock('./providers/vercel.js', () => ({
   },
 }));
 
-vi.mock('../../utils/clack.js', () => ({
+vi.mock('../../utils/ui.js', () => ({
   default: {
     select: vi.fn(),
     isCancel: vi.fn(() => false),
@@ -22,7 +22,7 @@ vi.mock('../../utils/analytics.js', () => ({
   analytics: { capture: vi.fn(), shutdown: vi.fn(), setTag: vi.fn() },
 }));
 
-const clack = (await import('../../utils/clack.js')).default;
+const ui = (await import('../../utils/ui.js')).default;
 const { uploadEnvironmentVariablesStep } = await import('./index.js');
 const { setInteractionMode, resetInteractionModeForTests } = await import('../../utils/interaction-mode.js');
 
@@ -33,7 +33,7 @@ describe('uploadEnvironmentVariablesStep — non-interactive skip', () => {
   beforeEach(() => {
     resetInteractionModeForTests();
     vi.clearAllMocks();
-    vi.mocked(clack.isCancel).mockReturnValue(false);
+    vi.mocked(ui.isCancel).mockReturnValue(false);
   });
 
   afterEach(() => {
@@ -46,16 +46,16 @@ describe('uploadEnvironmentVariablesStep — non-interactive skip', () => {
     const result = await uploadEnvironmentVariablesStep({}, { integration, options });
 
     expect(result).toEqual([]);
-    expect(clack.select).not.toHaveBeenCalled();
+    expect(ui.select).not.toHaveBeenCalled();
   });
 
   it('human mode reaches the prompt', async () => {
     setInteractionMode({ mode: 'human', source: 'default' });
-    vi.mocked(clack.select).mockResolvedValueOnce(false as never);
+    vi.mocked(ui.select).mockResolvedValueOnce(false as never);
 
     const result = await uploadEnvironmentVariablesStep({}, { integration, options });
 
     expect(result).toEqual([]);
-    expect(clack.select).toHaveBeenCalledOnce();
+    expect(ui.select).toHaveBeenCalledOnce();
   });
 });

@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0](https://github.com/workos/cli/compare/v0.18.0...v0.19.0) (2026-07-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* `workos auth login` and `workos install` no longer auto-install skills. Skills + MCP are installed only through the consented setup flow (`workos setup`, or the post-login/install offer on a human TTY). Agent / CI / non-TTY / JSON runs write nothing.
+
+### Features
+
+* add env provision + verify-login commands, fix non-interactive installs (agent/CI), Vite port detection, and misleading command hints ([#192](https://github.com/workos/cli/issues/192)) ([dd20929](https://github.com/workos/cli/commit/dd20929ffeba24d35b0276f7b4336d11a104895a))
+* consent-gated agent setup and flat CLI output ([#200](https://github.com/workos/cli/issues/200)) ([9b0deb8](https://github.com/workos/cli/commit/9b0deb8daca054958f6e28623c3cc970c4a3a68b))
+
+
+### Bug Fixes
+
+* **deps:** bump @workos/openapi-spec to drop tree-sitter chain ([#204](https://github.com/workos/cli/issues/204)) ([7b03394](https://github.com/workos/cli/commit/7b03394593e155d4f3cad5ba9779f4fd7663b683)), closes [#202](https://github.com/workos/cli/issues/202)
+* Extract emulator to @workos/emulate ([#171](https://github.com/workos/cli/issues/171)) ([d20c0ca](https://github.com/workos/cli/commit/d20c0ca29144d2f10949b77a320f147589cdc801))
+
 ## [0.18.0](https://github.com/workos/cli/compare/v0.17.1...v0.18.0) (2026-07-06)
 
 

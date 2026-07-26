@@ -29,8 +29,8 @@ vi.mock('../utils/debug.js', () => ({
   logWarn: vi.fn(),
 }));
 
-// Mock clack prompts
-vi.mock('../utils/clack.js', () => ({
+// Mock the UI facade
+vi.mock('../utils/ui.js', () => ({
   default: {
     log: {
       success: vi.fn(),
@@ -52,11 +52,25 @@ vi.mock('../utils/clack.js', () => ({
 const mockFetchStagingCredentials = vi.fn();
 vi.mock('../lib/staging-api.js', () => ({
   fetchStagingCredentials: (...args: unknown[]) => mockFetchStagingCredentials(...args),
+  StagingApiError: class StagingApiError extends Error {
+    constructor(
+      message: string,
+      public readonly statusCode?: number,
+    ) {
+      super(message);
+      this.name = 'StagingApiError';
+    }
+  },
 }));
 
-// Mock skill install + JSON mode — installSkillsAfterLogin tests drive both.
-vi.mock('./install-skill.js', () => ({
-  autoInstallSkills: vi.fn(),
+// The consolidated setup offer (skills + MCP) runs behind one consented hook
+// after a successful login. runLogin just invokes it; gating lives in setup.ts.
+vi.mock('./setup.js', () => ({
+  maybeRunSetupAfter: vi.fn(),
+}));
+
+vi.mock('../utils/analytics.js', () => ({
+  analytics: { capture: vi.fn(), captureException: vi.fn() },
 }));
 
 vi.mock('../utils/output.js', () => ({
@@ -80,12 +94,12 @@ vi.mock('node:os', async (importOriginal) => {
 });
 
 const { getConfig, saveConfig, setInsecureConfigStorage, clearConfig } = await import('../lib/config-store.js');
-const { provisionStagingEnvironment, installSkillsAfterLogin, runLogin } = await import('./login.js');
-const { autoInstallSkills } = await import('./install-skill.js');
+const { provisionStagingEnvironment, runLogin } = await import('./login.js');
+const { maybeRunSetupAfter } = await import('./setup.js');
 const { isJsonMode, outputJson } = await import('../utils/output.js');
 const { clearCredentials, setInsecureStorage } = await import('../lib/credentials.js');
 const { resetInteractionModeForTests, setInteractionMode } = await import('../utils/interaction-mode.js');
-const clackMod = await import('../utils/clack.js');
+const uiMod = await import('../utils/ui.js');
 
 describe('login', () => {
   beforeEach(() => {
@@ -359,7 +373,7 @@ describe('login', () => {
 
     it('prints manual fallback and attempts browser launch in agent mode', async () => {
       setInteractionMode({ mode: 'agent', source: 'env' });
-      const infoSpy = vi.mocked(clackMod.default.log.info);
+      const infoSpy = vi.mocked(uiMod.default.log.info);
 
       await runLogin();
 
@@ -374,7 +388,7 @@ describe('login', () => {
 
       await runLogin();
 
-      const successSpy = vi.mocked(clackMod.default.log.success);
+      const successSpy = vi.mocked(uiMod.default.log.success);
       const nowUsing = successSpy.mock.calls.map((c) => String(c[0])).find((m) => m.includes('Now using'));
       expect(nowUsing).toBeDefined();
       expect(nowUsing).toContain('user@example.com');
@@ -387,7 +401,7 @@ describe('login', () => {
         environments: { sandbox: { name: 'sandbox', type: 'sandbox', apiKey: 'sk', clientId: 'client_other' } },
       });
       mockFetchStagingCredentials.mockResolvedValue({ clientId: 'client_user', apiKey: 'sk_test_user' });
-      vi.mocked(clackMod.default.confirm).mockResolvedValueOnce(true);
+      vi.mocked(uiMod.default.confirm).mockResolvedValueOnce(true);
 
       await runLogin();
 
@@ -401,7 +415,7 @@ describe('login', () => {
         environments: { sandbox: { name: 'sandbox', type: 'sandbox', apiKey: 'sk', clientId: 'client_other' } },
       });
       mockFetchStagingCredentials.mockResolvedValue({ clientId: 'client_user', apiKey: 'sk_test_user' });
-      vi.mocked(clackMod.default.confirm).mockResolvedValueOnce(false);
+      vi.mocked(uiMod.default.confirm).mockResolvedValueOnce(false);
 
       await runLogin();
 
@@ -418,10 +432,10 @@ describe('login', () => {
 
       await runLogin();
 
-      expect(clackMod.default.confirm).not.toHaveBeenCalled();
+      expect(uiMod.default.confirm).not.toHaveBeenCalled();
       expect(getConfig()?.activeEnvironment).toBe('sandbox');
       const warned = vi
-        .mocked(clackMod.default.log.warn)
+        .mocked(uiMod.default.log.warn)
         .mock.calls.map((c) => String(c[0]))
         .join('\n');
       expect(warned).toContain('sandbox');
@@ -438,7 +452,7 @@ describe('login', () => {
 
       await runLogin();
 
-      expect(clackMod.default.confirm).not.toHaveBeenCalled();
+      expect(uiMod.default.confirm).not.toHaveBeenCalled();
       expect(outputJson).toHaveBeenCalledWith(
         expect.objectContaining({
           mismatch: true,
@@ -449,84 +463,15 @@ describe('login', () => {
     });
   });
 
-  describe('installSkillsAfterLogin', () => {
-    it('invokes autoInstallSkills', async () => {
-      vi.mocked(autoInstallSkills).mockResolvedValueOnce(null);
+  describe('setup offer after login', () => {
+    it('runs the consolidated setup offer on a successful login', async () => {
+      setInteractionMode({ mode: 'agent', source: 'env' });
 
-      await installSkillsAfterLogin();
+      await runLogin();
 
-      expect(autoInstallSkills).toHaveBeenCalledOnce();
-    });
-
-    it('returns without throwing when autoInstallSkills rejects', async () => {
-      vi.mocked(autoInstallSkills).mockRejectedValueOnce(new Error('install boom'));
-
-      // The whole point of the helper: login must keep its success even when
-      // skill install fails. Asserting no rejection IS the test.
-      await expect(installSkillsAfterLogin()).resolves.toBeUndefined();
-    });
-
-    it('logs a one-line success message in human mode', async () => {
-      vi.mocked(autoInstallSkills).mockResolvedValueOnce({
-        skills: ['workos', 'workos-widgets'],
-        agents: ['Claude Code', 'Codex'],
-        version: '0.4.0',
-      });
-
-      const infoSpy = vi.mocked(clackMod.default.log.info);
-      infoSpy.mockClear();
-
-      await installSkillsAfterLogin();
-
-      expect(infoSpy).toHaveBeenCalledOnce();
-      const message = infoSpy.mock.calls[0]?.[0] as string;
-      expect(message).toContain('2 WorkOS skills');
-      expect(message).toContain('Claude Code');
-      expect(message).toContain('Codex');
-    });
-
-    it('uses singular "skill" when exactly one skill installed', async () => {
-      vi.mocked(autoInstallSkills).mockResolvedValueOnce({
-        skills: ['workos'],
-        agents: ['Claude Code'],
-        version: '0.4.0',
-      });
-
-      const infoSpy = vi.mocked(clackMod.default.log.info);
-      infoSpy.mockClear();
-
-      await installSkillsAfterLogin();
-
-      const message = infoSpy.mock.calls[0]?.[0] as string;
-      expect(message).toContain('1 WorkOS skill ');
-      expect(message).not.toContain('1 WorkOS skills');
-    });
-
-    it('skips logging in JSON mode', async () => {
-      vi.mocked(isJsonMode).mockReturnValueOnce(true);
-      vi.mocked(autoInstallSkills).mockResolvedValueOnce({
-        skills: ['workos'],
-        agents: ['Claude Code'],
-        version: '0.4.0',
-      });
-
-      const infoSpy = vi.mocked(clackMod.default.log.info);
-      infoSpy.mockClear();
-
-      await installSkillsAfterLogin();
-
-      expect(infoSpy).not.toHaveBeenCalled();
-    });
-
-    it('skips logging when autoInstallSkills returns null', async () => {
-      vi.mocked(autoInstallSkills).mockResolvedValueOnce(null);
-
-      const infoSpy = vi.mocked(clackMod.default.log.info);
-      infoSpy.mockClear();
-
-      await installSkillsAfterLogin();
-
-      expect(infoSpy).not.toHaveBeenCalled();
+      // Skills no longer auto-install at login; the consented setup hook fires
+      // instead (its own gating decides whether anything is written).
+      expect(maybeRunSetupAfter).toHaveBeenCalledWith('login');
     });
   });
 });

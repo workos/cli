@@ -66,10 +66,10 @@ vi.mock('../utils/output.js', () => ({
   }),
 }));
 
-// Mock clack
+// Mock the UI facade
 const mockConfirm = vi.fn();
 const mockIsCancel = vi.fn(() => false);
-vi.mock('../utils/clack.js', () => ({
+vi.mock('../utils/ui.js', () => ({
   default: {
     confirm: (...args: unknown[]) => mockConfirm(...args),
     isCancel: (...args: unknown[]) => mockIsCancel(...args),

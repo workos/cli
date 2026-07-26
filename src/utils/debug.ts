@@ -4,7 +4,7 @@ import { homedir } from 'os';
 import chalk from 'chalk';
 import { prepareMessage } from './logging.js';
 import { redactCredentials } from './redact.js';
-import clack from './clack.js';
+import ui from './ui.js';
 import { isJsonMode } from './output.js';
 
 let debugEnabled = false;
@@ -69,7 +69,7 @@ function writeLog(level: 'INFO' | 'WARN' | 'ERROR', emoji: string, args: unknown
   // Write to console if debug enabled
   if (debugEnabled && !isJsonMode()) {
     const color = level === 'ERROR' ? chalk.red : level === 'WARN' ? chalk.yellow : chalk.dim;
-    clack.log.info(color(`${emoji} ${msg}`));
+    ui.log.info(color(`${emoji} ${msg}`));
   }
 
   // Write to log file
@@ -107,7 +107,7 @@ export function logError(...args: unknown[]): void {
 export function debug(...args: unknown[]): void {
   if (!isDebugEnabled()) return;
   const msg = args.map((a) => prepareMessage(a)).join(' ');
-  clack.log.info(chalk.dim(msg));
+  ui.log.info(chalk.dim(msg));
 }
 
 export function isDebugEnabled(): boolean {

@@ -1,8 +1,8 @@
 import type { Integration } from '../../lib/constants.js';
 import { traceStep } from '../../telemetry.js';
 import { analytics } from '../../utils/analytics.js';
-import clack from '../../utils/clack.js';
-import { abortIfCancelled } from '../../utils/clack-utils.js';
+import ui from '../../utils/ui.js';
+import { abortIfCancelled } from '../../utils/ui-utils.js';
 import { isPromptAllowed } from '../../utils/interaction-mode.js';
 import type { InstallerOptions } from '../../utils/types.js';
 import { EnvironmentProvider } from './EnvironmentProvider.js';
@@ -51,7 +51,7 @@ export const uploadEnvironmentVariablesStep = async (
   }
 
   const upload: boolean = await abortIfCancelled(
-    clack.select({
+    ui.select({
       message: `It looks like you are using ${provider.name}. Would you like to upload the environment variables?`,
       options: [
         {
