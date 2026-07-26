@@ -6,7 +6,13 @@ WorkOS CLI for installing AuthKit integrations and managing WorkOS resources.
 
 The CLI is distributed as a standalone executable from GitHub Releases. It does not require Node.js, Bun, or an npm installation. The first agent-driven command (e.g. `workos install`) performs a one-time, checksum-verified download of the Claude agent runtime (~230 MB, cached under `~/.workos`).
 
-macOS and Linux:
+Homebrew (macOS and Linux):
+
+```bash
+brew install workos/tap/workos
+```
+
+macOS and Linux (direct download):
 
 ```bash
 case "$(uname -m)" in
