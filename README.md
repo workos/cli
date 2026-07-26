@@ -6,7 +6,13 @@ WorkOS CLI for installing AuthKit integrations and managing WorkOS resources.
 
 The CLI is distributed as a standalone executable from GitHub Releases. It does not require Node.js, Bun, or an npm installation. The first agent-driven command (e.g. `workos install`) performs a one-time, checksum-verified download of the Claude agent runtime (~230 MB, cached under `~/.workos`).
 
-macOS and Linux:
+Homebrew (macOS and Linux):
+
+```bash
+brew install workos/tap/workos
+```
+
+macOS and Linux (direct download):
 
 ```bash
 case "$(uname -m)" in
@@ -34,7 +40,7 @@ $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
 Invoke-WebRequest "https://github.com/workos/cli/releases/latest/download/workos-windows-$arch.exe" -OutFile workos.exe
 ```
 
-Move `workos.exe` to a directory on your `PATH`, then run `workos install`.
+Move `workos.exe` to a directory on your `PATH`, then run `workos install`. (If you already have Node.js, the npm install below works on Windows too.)
 
 npm (thin launcher that installs the same prebuilt binary for your platform):
 
