@@ -1,13 +1,17 @@
 /**
  * Output mode system for non-TTY / JSON support.
  *
- * Resolves once at startup, drives all output formatting.
+ * Resolves once at startup, drives output formatting only.
  * In JSON mode: structured JSON to stdout, structured errors to stderr.
  * In human mode: chalk-formatted output (existing behavior).
  */
 
 import chalk from 'chalk';
+import { CliExit } from './cli-exit.js';
+import { resolveErrorCode } from './exit-codes.js';
 import { formatTable, type TableColumn } from './table.js';
+import type { RecoveryHints } from './recovery-hints.js';
+import type { InteractionModeInfo } from './interaction-mode.js';
 
 export type OutputMode = 'human' | 'json';
 
@@ -18,16 +22,25 @@ let currentMode: OutputMode = 'human';
  *
  * Priority:
  * 1. Explicit --json flag
- * 2. WORKOS_FORCE_TTY env var → human
+ * 2. WORKOS_FORCE_TTY env var → human output compatibility
  * 3. Non-TTY auto-detection → json
  * 4. Default → human
+ *
+ * Note: agent interaction mode (WORKOS_MODE=agent) also forces JSON output,
+ * applied separately via resolveEffectiveOutputMode().
  */
 export function resolveOutputMode(jsonFlag?: boolean): OutputMode {
   if (jsonFlag) return 'json';
   if (process.env.WORKOS_FORCE_TTY === '1' || process.env.WORKOS_FORCE_TTY === 'true') return 'human';
-  if (process.env.WORKOS_NO_PROMPT === '1' || process.env.WORKOS_NO_PROMPT === 'true') return 'json';
   if (!process.stdout.isTTY) return 'json';
   return 'human';
+}
+
+export function resolveEffectiveOutputMode(mode: OutputMode, interaction: InteractionModeInfo): OutputMode {
+  if (interaction.mode === 'human' || interaction.source === 'non_tty') {
+    return mode;
+  }
+  return 'json';
 }
 
 export function setOutputMode(mode: OutputMode): void {
@@ -74,12 +87,30 @@ export function outputSuccess(
   }
 }
 
+export interface StructuredError {
+  code: string;
+  message: string;
+  details?: unknown;
+  /**
+   * Optional structured recovery metadata for agents.
+   *
+   * Only include for deterministic recovery paths. Human output prints the
+   * first hint as a follow-up line; JSON output serializes the full structure.
+   */
+  recovery?: RecoveryHints;
+}
+
 /** Write a structured error to stderr. */
-export function outputError(error: { code: string; message: string; details?: unknown }): void {
+export function outputError(error: StructuredError): void {
   if (currentMode === 'json') {
     console.error(JSON.stringify({ error }));
   } else {
     console.error(chalk.red(error.message));
+    const firstHint = error.recovery?.hints[0];
+    if (firstHint) {
+      const suffix = firstHint.command ? ` Run: ${firstHint.command}` : '';
+      console.error(chalk.dim(`→ ${firstHint.description}${suffix}`));
+    }
   }
 }
 
@@ -104,8 +135,17 @@ export function outputTable(columns: TableColumn[], rows: string[][], rawData?: 
   }
 }
 
-/** Exit with a structured error. Writes error then exits with code 1. */
-export function exitWithError(error: { code: string; message: string; details?: unknown }): never {
+export function exitWithError(
+  error: StructuredError & {
+    apiContext?: { status?: number; code?: string; resource?: string };
+  },
+): never {
   outputError(error);
-  process.exit(1);
+  const { reason: codeReason, exit } = resolveErrorCode(error.code);
+  const reason = error.apiContext && codeReason === 'validation_error' ? 'api_error' : codeReason;
+  throw new CliExit(exit, {
+    reason,
+    errorCode: error.code,
+    apiContext: error.apiContext,
+  });
 }

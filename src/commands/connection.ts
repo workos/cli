@@ -4,8 +4,8 @@ import { createWorkOSClient } from '../lib/workos-client.js';
 import { formatTable } from '../utils/table.js';
 import { outputSuccess, outputJson, isJsonMode, exitWithError } from '../utils/output.js';
 import { createApiErrorHandler } from '../lib/api-error-handler.js';
-import { isNonInteractiveEnvironment } from '../utils/environment.js';
-import clack from '../utils/clack.js';
+import { isCiMode, isPromptAllowed } from '../utils/interaction-mode.js';
+import ui from '../utils/ui.js';
 
 const handleApiError = createApiErrorHandler('Connection');
 
@@ -99,18 +99,20 @@ export async function runConnectionDelete(
   baseUrl?: string,
 ): Promise<void> {
   if (!options.force) {
-    if (isNonInteractiveEnvironment()) {
+    if (!isPromptAllowed()) {
       exitWithError({
         code: 'confirmation_required',
-        message: 'Destructive operation requires --force flag in non-interactive mode.',
+        message: isCiMode()
+          ? 'Destructive operation requires --force flag in CI mode.'
+          : 'Destructive operation requires --force flag in agent mode.',
       });
     }
 
-    const confirmed = await clack.confirm({
+    const confirmed = await ui.confirm({
       message: `Delete connection ${id}? This cannot be undone.`,
     });
 
-    if (clack.isCancel(confirmed) || !confirmed) {
+    if (ui.isCancel(confirmed) || !confirmed) {
       console.log('Delete cancelled.');
       return;
     }

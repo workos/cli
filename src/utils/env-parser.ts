@@ -4,7 +4,7 @@
  */
 export function parseEnvFile(content: string): Record<string, string> {
   const result: Record<string, string> = {};
-  for (const line of content.split('\n')) {
+  for (const line of content.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (trimmed && !trimmed.startsWith('#')) {
       const [key, ...valueParts] = trimmed.split('=');

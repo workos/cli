@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { renderSummaryBox, type SummaryBoxItem } from './summary-box.js';
+import { renderSummaryBox, renderCompletionSummary, renderBrandMark, type SummaryBoxItem } from './summary-box.js';
+import type { CompletionData } from '../lib/events.js';
 
 // Simple ANSI code stripper (avoids needing strip-ansi as a dependency)
 function strip(str: string): string {
@@ -127,6 +128,86 @@ describe('summary-box', () => {
       for (const line of lines) {
         expect(line.length).toBe(firstLineWidth);
       }
+    });
+  });
+
+  describe('renderCompletionSummary', () => {
+    function makeCompletion(overrides: Partial<CompletionData> = {}): CompletionData {
+      return {
+        integration: 'nextjs',
+        devCommand: 'pnpm run dev',
+        url: 'http://localhost:8080',
+        files: ['app/auth/route.ts', '.env.local'],
+        nextSteps: ['Run `pnpm run dev` to start your dev server', 'Open http://localhost:8080 to test authentication'],
+        docsUrl: 'https://workos.com/docs/user-management/authkit/nextjs',
+        dashboardUrl: 'https://dashboard.workos.com',
+        ...overrides,
+      };
+    }
+
+    it('renders structured success data (dev command, files, url)', () => {
+      const result = strip(renderCompletionSummary(true, 'ignored on success', makeCompletion()));
+
+      expect(result).toContain('WorkOS AuthKit Installed');
+      expect(result).toContain('pnpm run dev');
+      expect(result).toContain('app/auth/route.ts');
+      expect(result).toContain('http://localhost:8080');
+      // The old static strings must NOT appear when structured data is present.
+      expect(result).not.toContain('Start dev server to test authentication');
+      expect(result).not.toContain('Visit WorkOS Dashboard to manage users');
+    });
+
+    it('caps the file list at 5 with a "…and N more" line', () => {
+      const files = Array.from({ length: 7 }, (_, i) => `file-${i + 1}.ts`);
+      const result = strip(renderCompletionSummary(true, undefined, makeCompletion({ files })));
+
+      expect(result).toContain('…and 2 more');
+      expect(result).not.toContain('file-6.ts');
+      expect(result).not.toContain('file-7.ts');
+    });
+
+    it('falls back to the static box when no completion data is present', () => {
+      const result = strip(renderCompletionSummary(true));
+
+      expect(result).toContain('WorkOS AuthKit Installed');
+      expect(result).toContain('Start dev server to test authentication');
+    });
+
+    it('renders the failure summary', () => {
+      const result = strip(renderCompletionSummary(false, 'Something went wrong'));
+
+      expect(result).toContain('Installation Failed');
+      expect(result).toContain('Something went wrong');
+    });
+
+    it('renders de-boxed (variable-width lines, not a fixed-width box)', () => {
+      const result = strip(renderCompletionSummary(true, undefined, makeCompletion()));
+      // A bordered box forces every line to the same width; the flat summary does not.
+      const widths = new Set(
+        result
+          .split('\n')
+          .filter((l) => l.trim())
+          .map((l) => l.length),
+      );
+      expect(widths.size).toBeGreaterThan(1);
+    });
+  });
+
+  describe('renderBrandMark', () => {
+    it('places the wordmark beside the lock and stays 6 lines tall', () => {
+      const result = strip(renderBrandMark('AuthKit installer'));
+
+      expect(result).toContain('WorkOS');
+      expect(result).toContain('AuthKit installer');
+      // The compact brand mark is exactly the lock art height — no block banner.
+      expect(result.split('\n')).toHaveLength(6);
+    });
+
+    it('renders without a subtitle', () => {
+      const result = strip(renderBrandMark());
+
+      expect(result).toContain('WorkOS');
+      expect(result).not.toContain('AuthKit installer');
     });
   });
 });

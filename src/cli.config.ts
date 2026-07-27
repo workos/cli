@@ -7,11 +7,12 @@ export const config = {
   model: 'claude-opus-4-5-20251101',
   doctorModel: 'claude-haiku-4-5-20251001',
 
-  // Production defaults - override via env vars for local dev
+  // Production defaults - override via env vars for local dev.
+  // The LLM gateway and CLI telemetry endpoints live under the WorkOS API
+  // host, so they're derived from WORKOS_API_URL rather than configured here.
   workos: {
     clientId: 'client_01KFKHSZWK9ADVJV854PDFQCCR',
     authkitDomain: 'https://signin.workos.com',
-    llmGatewayUrl: 'https://api.workos.com/llm-gateway',
   },
 
   telemetry: {
@@ -23,8 +24,6 @@ export const config = {
     // Refresh token when it expires within this window (default: 1 minute)
     refreshThresholdMs: 60_000,
   },
-
-  nodeVersion: '>=20.20',
 
   logging: {
     debugMode: false,

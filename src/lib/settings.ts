@@ -13,7 +13,6 @@ export interface InstallerConfig {
   workos: {
     clientId: string;
     authkitDomain: string;
-    llmGatewayUrl: string;
   };
   telemetry: {
     enabled: boolean;
@@ -22,7 +21,6 @@ export interface InstallerConfig {
   proxy: {
     refreshThresholdMs: number;
   };
-  nodeVersion: string;
   logging: {
     debugMode: boolean;
   };
@@ -56,8 +54,7 @@ export function getConfig(): InstallerConfig {
 }
 
 /**
- * Get the CLI auth client ID.
- * Env var overrides config default.
+ * Get the CLI auth client ID (from config; not env-overridable).
  */
 export function getCliAuthClientId(): string {
   return config.workos.clientId;
@@ -66,15 +63,11 @@ export function getCliAuthClientId(): string {
 /**
  * Get the AuthKit domain.
  * Env var overrides config default.
+ *
+ * Note: WorkOS service endpoints (API, dashboard, LLM gateway, telemetry)
+ * live in utils/urls.ts. AuthKit's domain stays here because it's config-
+ * backed rather than derived from the API host.
  */
 export function getAuthkitDomain(): string {
   return process.env.WORKOS_AUTHKIT_DOMAIN || config.workos.authkitDomain;
-}
-
-/**
- * Get the LLM gateway URL.
- * Env var overrides config default.
- */
-export function getLlmGatewayUrl(): string {
-  return process.env.WORKOS_LLM_GATEWAY_URL || config.workos.llmGatewayUrl;
 }

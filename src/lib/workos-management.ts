@@ -1,7 +1,7 @@
 import type { Integration } from './constants.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from './constants.js';
 import { analytics } from '../utils/analytics.js';
-import clack from '../utils/clack.js';
+import ui from '../utils/ui.js';
 import { getCallbackPath } from './port-detection.js';
 
 const WORKOS_API_BASE = 'https://api.workos.com';
@@ -131,10 +131,7 @@ export async function autoConfigureWorkOSEnvironment(
   const callbackUrl = options.redirectUri || `${baseUrl}${callbackPath}`;
   const homepageUrlValue = options.homepageUrl || baseUrl;
 
-  clack.log.step('Configuring WorkOS dashboard settings via API...');
-  clack.log.info(`  Redirect URI: ${callbackUrl}`);
-  clack.log.info(`  CORS origin: ${baseUrl}`);
-  clack.log.info(`  Homepage URL: ${homepageUrlValue}`);
+  ui.log.step('Configuring WorkOS dashboard settings...');
 
   try {
     const [redirectUri, corsOrigin, homepageUrl] = await Promise.all([
@@ -153,19 +150,24 @@ export async function autoConfigureWorkOSEnvironment(
       corsOrigin: corsOrigin.alreadyExists ? 'existed' : 'created',
     });
 
-    // Build user feedback
-    const messages: string[] = [];
-    messages.push(
-      redirectUri.alreadyExists
-        ? `Redirect URI: ${callbackUrl} (already existed)`
-        : `Redirect URI: ${callbackUrl} (created)`,
-    );
-    messages.push(
-      corsOrigin.alreadyExists ? `CORS origin: ${baseUrl} (already existed)` : `CORS origin: ${baseUrl} (created)`,
-    );
-    messages.push(`Homepage URL: ${homepageUrlValue} (updated)`);
-
-    clack.log.success('WorkOS dashboard configured:\n  ' + messages.join('\n  '));
+    // Aligned key/value feedback: value in accent, a dim status for "already
+    // existed" vs. a green status for a fresh create/update.
+    ui.log.success('WorkOS dashboard configured');
+    ui.rows([
+      {
+        key: 'Redirect URI',
+        value: callbackUrl,
+        status: redirectUri.alreadyExists ? 'already set' : 'created',
+        statusKind: redirectUri.alreadyExists ? 'muted' : 'ok',
+      },
+      {
+        key: 'CORS origin',
+        value: baseUrl,
+        status: corsOrigin.alreadyExists ? 'already set' : 'created',
+        statusKind: corsOrigin.alreadyExists ? 'muted' : 'ok',
+      },
+      { key: 'Homepage URL', value: homepageUrlValue, status: 'updated', statusKind: 'ok' },
+    ]);
 
     return results;
   } catch (error) {
@@ -173,17 +175,17 @@ export async function autoConfigureWorkOSEnvironment(
 
     // Provide specific guidance for common errors
     if (message.includes('401') || message.includes('Invalid API key')) {
-      clack.log.warn('Could not configure WorkOS dashboard: Invalid API key');
+      ui.log.warn('Could not configure WorkOS dashboard: Invalid API key');
     } else if (message.includes('403') || message.includes('permission')) {
-      clack.log.warn('Could not configure WorkOS dashboard: API key lacks permission');
+      ui.log.warn('Could not configure WorkOS dashboard: API key lacks permission');
     } else if (message.includes('422') || message.includes('Validation')) {
-      clack.log.warn(`Could not configure WorkOS dashboard: Validation error`);
-      clack.log.info(`  Error: ${message}`);
+      ui.log.warn(`Could not configure WorkOS dashboard: Validation error`);
+      ui.log.info(`  Error: ${message}`);
     } else {
-      clack.log.warn(`Could not configure WorkOS dashboard: ${message}`);
+      ui.log.warn(`Could not configure WorkOS dashboard: ${message}`);
     }
 
-    clack.log.info('You can configure these settings manually in the WorkOS dashboard.');
+    ui.log.info('You can configure these settings manually in the WorkOS dashboard.');
 
     analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
       action: 'workos environment auto-config failed',

@@ -1,20 +1,35 @@
+import os from 'node:os';
+import { basename } from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
 import { debug } from './debug.js';
 import { telemetryClient } from './telemetry-client.js';
 import type {
+  AuthMode,
   SessionStartEvent,
   SessionEndEvent,
   StepEvent,
   AgentToolEvent,
   AgentLLMEvent,
+  CommandEvent,
+  CrashEvent,
+  TerminationReason,
+  EnvFingerprint,
 } from './telemetry-types.js';
-import { WORKOS_TELEMETRY_ENABLED } from '../lib/constants.js';
+import { isTelemetryEnabled } from '../lib/preferences.js';
+import { getVersion } from '../lib/settings.js';
+import { getTelemetryUrl } from './urls.js';
+import { getCredentials, isTokenExpired } from '../lib/credentials.js';
+import { getActiveEnvironment, isUnclaimedEnvironment } from '../lib/config-store.js';
+import { getDeviceId } from '../lib/device-id.js';
+import { sanitizeMessage, sanitizeStack } from './crash-reporter.js';
 
 export class Analytics {
   private tags: Record<string, string | boolean | number | null | undefined> = {};
   private sessionId: string;
   private sessionStartTime: Date;
   private distinctId?: string;
+  private mode?: 'cli' | 'tui' | 'headless';
+  private authMode: AuthMode = 'none';
 
   // Agent metrics tracking
   private totalInputTokens = 0;
@@ -35,8 +50,89 @@ export class Analytics {
     telemetryClient.setAccessToken(token);
   }
 
+  setApiKeyAuth(apiKey: string) {
+    telemetryClient.setApiKeyAuth(apiKey);
+  }
+
+  setClaimTokenAuth(clientId: string, claimToken: string) {
+    telemetryClient.setClaimTokenAuth(clientId, claimToken);
+  }
+
+  /**
+   * Set the auth mode explicitly for special cases. Normal CLI flows should use
+   * `configureAuthFromAvailableSources()` so transport and auth.mode stay aligned.
+   */
+  setAuthMode(mode: AuthMode) {
+    this.authMode = mode;
+  }
+
   setGatewayUrl(url: string) {
     telemetryClient.setGatewayUrl(url);
+  }
+
+  private isEnabled(): boolean {
+    return isTelemetryEnabled();
+  }
+
+  /**
+   * Configure telemetry transport and auth.mode from all available CLI auth
+   * sources. Priority: stored JWT, unclaimed-environment claim token, active
+   * environment API key, then WORKOS_API_KEY.
+   */
+  configureAuthFromAvailableSources(): AuthMode {
+    if (!this.isEnabled()) return this.authMode;
+
+    this.authMode = 'none';
+    const creds = getCredentials();
+    // Only treat the JWT as usable auth when it is still valid. An expired
+    // access token would 401 against the telemetry guard and the event would
+    // be dropped, so fall through to claim-token / api-key auth instead.
+    if (creds?.accessToken && !isTokenExpired(creds)) {
+      telemetryClient.setAccessToken(creds.accessToken);
+      this.authMode = 'jwt';
+    }
+    // Preserve identity even when the token is expired.
+    if (creds?.userId) {
+      this.distinctId = creds.userId;
+    }
+
+    // Check for unclaimed environment — fall back to claim-token auth
+    // so unclaimed users' telemetry still reaches the backend.
+    try {
+      const env = getActiveEnvironment();
+      if (env && isUnclaimedEnvironment(env)) {
+        telemetryClient.setClaimTokenAuth(env.clientId, env.claimToken);
+        // Tag distinctId so unclaimed sessions are identifiable in analytics
+        this.distinctId = this.distinctId ?? `unclaimed:${env.clientId}`;
+        if (this.authMode === 'none') this.authMode = 'claim_token';
+      } else if (env?.apiKey && this.authMode === 'none') {
+        telemetryClient.setApiKeyAuth(env.apiKey);
+        if (env.clientId) this.distinctId = this.distinctId ?? `env:${env.clientId}`;
+        this.authMode = 'api_key';
+      }
+    } catch {
+      // Config-store failure is non-fatal for telemetry
+    }
+
+    // WORKOS_API_KEY covers API-key-only users. Lowest priority — JWT and
+    // claim-token auth have richer identity context when available.
+    if (this.authMode === 'none' && process.env.WORKOS_API_KEY) {
+      telemetryClient.setApiKeyAuth(process.env.WORKOS_API_KEY);
+      this.authMode = 'api_key';
+    }
+
+    return this.authMode;
+  }
+
+  /**
+   * Initialize telemetry for non-installer commands.
+   * Sets telemetry URL from default config and loads auth credentials.
+   */
+  initForNonInstaller(): void {
+    if (!this.isEnabled()) return;
+
+    telemetryClient.setGatewayUrl(getTelemetryUrl());
+    this.configureAuthFromAvailableSources();
   }
 
   setTag(key: string, value: string | boolean | number | null | undefined) {
@@ -44,7 +140,7 @@ export class Analytics {
   }
 
   capture(eventName: string, properties?: Record<string, unknown>) {
-    if (!WORKOS_TELEMETRY_ENABLED) return;
+    if (!this.isEnabled()) return;
 
     debug(`[Analytics] capture: ${eventName}`, properties);
 
@@ -59,11 +155,15 @@ export class Analytics {
   }
 
   captureException(error: Error, properties: Record<string, unknown> = {}) {
-    if (!WORKOS_TELEMETRY_ENABLED) return;
+    if (!this.isEnabled()) return;
 
-    debug('[Analytics] captureException:', error.message, properties);
-    this.tags['error.type'] = error.name;
-    this.tags['error.message'] = error.message;
+    // Sanitize BEFORE logging — raw error.message can carry Bearer tokens /
+    // sk_ keys / JWTs on auth-failure paths, which would surface in stdout
+    // under WORKOS_DEBUG=1.
+    const { type, message } = this.extractErrorFields(error);
+    debug('[Analytics] captureException:', message, properties);
+    this.tags['error.type'] = type;
+    this.tags['error.message'] = message;
   }
 
   async getFeatureFlag(_flagKey: string): Promise<string | boolean | undefined> {
@@ -71,8 +171,49 @@ export class Analytics {
     return undefined;
   }
 
+  /** All capture methods that record error details MUST go through this. */
+  private extractErrorFields(error: Error): { type: string; message: string } {
+    return {
+      type: error.name,
+      message: sanitizeMessage(error.message),
+    };
+  }
+
+  private detectCiProvider(): string | undefined {
+    if (process.env.GITHUB_ACTIONS) return 'github-actions';
+    if (process.env.BUILDKITE) return 'buildkite';
+    if (process.env.CIRCLECI) return 'circleci';
+    if (process.env.GITLAB_CI) return 'gitlab-ci';
+    if (process.env.JENKINS_URL) return 'jenkins';
+    return undefined;
+  }
+
+  private getEnvFingerprint(): EnvFingerprint {
+    let osVersion: string;
+    try {
+      osVersion = os.release();
+    } catch {
+      osVersion = 'unknown';
+    }
+
+    const ciProvider = this.detectCiProvider();
+
+    return {
+      'device.id': getDeviceId(),
+      'auth.mode': this.authMode,
+      'env.os': process.platform,
+      'env.os_version': osVersion,
+      'env.runtime_version': process.versions.bun ? `bun-${process.versions.bun}` : `node-${process.versions.node}`,
+      'env.shell': basename(process.env.SHELL ?? process.env.COMSPEC ?? 'unknown'),
+      'env.ci': Boolean(process.env.CI || process.env.GITHUB_ACTIONS || process.env.BUILDKITE),
+      ...(ciProvider ? { 'env.ci_provider': ciProvider } : {}),
+    };
+  }
+
   sessionStart(mode: 'cli' | 'tui' | 'headless', version: string) {
-    if (!WORKOS_TELEMETRY_ENABLED) return;
+    if (!this.isEnabled()) return;
+
+    this.mode = mode;
 
     const event: SessionStartEvent = {
       type: 'session.start',
@@ -82,6 +223,7 @@ export class Analytics {
         'installer.version': version,
         'installer.mode': mode,
         'workos.user_id': this.distinctId,
+        ...this.getEnvFingerprint(),
       },
     };
 
@@ -89,29 +231,31 @@ export class Analytics {
   }
 
   stepCompleted(name: string, durationMs: number, success: boolean, error?: Error) {
-    if (!WORKOS_TELEMETRY_ENABLED) return;
+    if (!this.isEnabled()) return;
 
     const event: StepEvent = {
       type: 'step',
       sessionId: this.sessionId,
       timestamp: new Date().toISOString(),
       name,
+      startTimestamp: new Date(Date.now() - durationMs).toISOString(),
       durationMs,
       success,
-      error: error ? { type: error.name, message: error.message } : undefined,
+      error: error ? this.extractErrorFields(error) : undefined,
     };
 
     telemetryClient.queueEvent(event);
   }
 
   toolCalled(toolName: string, durationMs: number, success: boolean) {
-    if (!WORKOS_TELEMETRY_ENABLED) return;
+    if (!this.isEnabled()) return;
 
     const event: AgentToolEvent = {
       type: 'agent.tool',
       sessionId: this.sessionId,
       timestamp: new Date().toISOString(),
       toolName,
+      startTimestamp: new Date(Date.now() - durationMs).toISOString(),
       durationMs,
       success,
     };
@@ -120,7 +264,7 @@ export class Analytics {
   }
 
   llmRequest(model: string, inputTokens: number, outputTokens: number) {
-    if (!WORKOS_TELEMETRY_ENABLED) return;
+    if (!this.isEnabled()) return;
 
     this.totalInputTokens += inputTokens;
     this.totalOutputTokens += outputTokens;
@@ -141,8 +285,80 @@ export class Analytics {
     this.agentIterations++;
   }
 
+  emitCommandEvent(
+    name: string,
+    durationMs: number,
+    success: boolean,
+    options?: {
+      error?: Error;
+      flags?: string[];
+      reason?: TerminationReason;
+      errorCode?: string;
+      apiContext?: { status?: number; code?: string; resource?: string };
+      extraAttributes?: Record<string, string | number | boolean>;
+    },
+  ) {
+    if (!this.isEnabled()) return;
+
+    const errorFields = options?.error ? this.extractErrorFields(options.error) : undefined;
+
+    const event: CommandEvent = {
+      type: 'command',
+      sessionId: this.sessionId,
+      timestamp: new Date().toISOString(),
+      attributes: {
+        // Extras first: standard fields below win on key collision, so callers
+        // can never override command.name, error fields, or the fingerprint.
+        ...options?.extraAttributes,
+        'command.name': name,
+        'command.duration_ms': durationMs,
+        'command.success': success,
+        'cli.version': getVersion(),
+        ...(this.distinctId ? { 'workos.user_id': this.distinctId } : {}),
+        ...(errorFields
+          ? {
+              'command.error_type': errorFields.type,
+              'command.error_message': errorFields.message,
+            }
+          : {}),
+        ...(options?.flags?.length ? { 'command.flags': options.flags.join(',') } : {}),
+        ...(options?.reason ? { 'termination.reason': options.reason } : {}),
+        ...(options?.errorCode ? { 'error.code': options.errorCode } : {}),
+        ...(options?.apiContext?.status !== undefined ? { 'api.status': options.apiContext.status } : {}),
+        ...(options?.apiContext?.code ? { 'api.code': options.apiContext.code } : {}),
+        ...(options?.apiContext?.resource ? { 'api.resource': options.apiContext.resource } : {}),
+        ...this.getEnvFingerprint(),
+      },
+    };
+
+    telemetryClient.queueEvent(event);
+  }
+
+  captureUnhandledCrash(error: Error, options?: { command?: string; version?: string }) {
+    if (!this.isEnabled()) return;
+
+    const { type, message } = this.extractErrorFields(error);
+
+    const event: CrashEvent = {
+      type: 'crash',
+      sessionId: this.sessionId,
+      timestamp: new Date().toISOString(),
+      attributes: {
+        'crash.error_type': type,
+        'crash.error_message': message,
+        'crash.stack': sanitizeStack(error.stack),
+        ...(options?.command ? { 'crash.command': options.command } : {}),
+        'cli.version': options?.version ?? getVersion(),
+        ...(this.distinctId ? { 'workos.user_id': this.distinctId } : {}),
+        ...this.getEnvFingerprint(),
+      },
+    };
+
+    telemetryClient.queueEvent(event);
+  }
+
   async shutdown(status: 'success' | 'error' | 'cancelled') {
-    if (!WORKOS_TELEMETRY_ENABLED) return;
+    if (!this.isEnabled()) return;
 
     const duration = Date.now() - this.sessionStartTime.getTime();
 
@@ -151,6 +367,8 @@ export class Analytics {
       string,
       string | number | boolean
     >;
+
+    const envFingerprint = this.getEnvFingerprint();
 
     const event: SessionEndEvent = {
       type: 'session.end',
@@ -162,6 +380,8 @@ export class Analytics {
         'installer.agent.iterations': this.agentIterations,
         'installer.agent.tokens.input': this.totalInputTokens,
         'installer.agent.tokens.output': this.totalOutputTokens,
+        ...envFingerprint,
+        ...(this.mode ? { 'installer.mode': this.mode } : {}),
         ...extraAttributes,
       },
     };

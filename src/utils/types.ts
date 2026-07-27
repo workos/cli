@@ -1,3 +1,5 @@
+import type { CredentialSource } from '../lib/installer-core.types.js';
+
 export type InstallerOptions = {
   /**
    * Whether to enable debug mode.
@@ -45,6 +47,14 @@ export type InstallerOptions = {
   clientId?: string;
 
   /**
+   * How the WorkOS credentials were resolved by the state machine
+   * (`cli`|`env`|`stored`|`device`|`manual`). Threaded downstream so
+   * user-facing copy can be source-accurate (e.g. avoid claiming the user
+   * "provided" credentials on the auto-provisioned path).
+   */
+  credentialSource?: CredentialSource;
+
+  /**
    * App homepage URL for WorkOS dashboard config.
    * Defaults to http://localhost:{detected_port}
    */
@@ -65,11 +75,6 @@ export type InstallerOptions = {
    * Event emitter for dashboard mode
    */
   emitter?: import('../lib/events.js').InstallerEventEmitter;
-
-  /**
-   * Pre-selected framework integration (bypasses detection)
-   */
-  integration?: import('../lib/constants.js').Integration;
 
   /**
    * Enable XState inspector - opens browser to visualize state machine live
@@ -113,6 +118,21 @@ export type InstallerOptions = {
    * Default: 2. Set to 0 to disable retries entirely.
    */
   maxRetries?: number;
+
+  /**
+   * Scaffold a new Next.js app when run in an empty directory.
+   * Auto-enabled in headless mode; opt-in via --scaffold in interactive mode.
+   */
+  scaffold?: boolean;
+
+  /**
+   * Package manager for the scaffolded app (npm/pnpm/yarn/bun).
+   * Overrides detection from npm_config_user_agent.
+   */
+  pm?: string;
+
+  /** Next.js router to target when detection is ambiguous (from --router). */
+  router?: 'app' | 'pages';
 };
 
 export interface Feature {

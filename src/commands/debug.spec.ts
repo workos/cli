@@ -38,6 +38,23 @@ vi.mock('../lib/config-store.js', () => ({
   diagnoseConfig: (...args: unknown[]) => mockDiagnoseConfig(...args),
 }));
 
+// Mock preferences store
+const mockClearPreferences = vi.fn();
+const mockGetPreferencesPath = vi.fn(() => '/home/user/.workos/preferences.json');
+const mockGetTelemetrySource = vi.fn(() => 'default');
+const mockIsNoticeShown = vi.fn(() => false);
+const mockIsTelemetryEnabled = vi.fn(() => true);
+const mockIsTelemetryOptedOut = vi.fn(() => false);
+
+vi.mock('../lib/preferences.js', () => ({
+  clearPreferences: (...args: unknown[]) => mockClearPreferences(...args),
+  getPreferencesPath: (...args: unknown[]) => mockGetPreferencesPath(...args),
+  getTelemetrySource: (...args: unknown[]) => mockGetTelemetrySource(...args),
+  isNoticeShown: (...args: unknown[]) => mockIsNoticeShown(...args),
+  isTelemetryEnabled: (...args: unknown[]) => mockIsTelemetryEnabled(...args),
+  isTelemetryOptedOut: (...args: unknown[]) => mockIsTelemetryOptedOut(...args),
+}));
+
 // Mock output
 let jsonMode = false;
 vi.mock('../utils/output.js', () => ({
@@ -49,10 +66,10 @@ vi.mock('../utils/output.js', () => ({
   }),
 }));
 
-// Mock clack
+// Mock the UI facade
 const mockConfirm = vi.fn();
 const mockIsCancel = vi.fn(() => false);
-vi.mock('../utils/clack.js', () => ({
+vi.mock('../utils/ui.js', () => ({
   default: {
     confirm: (...args: unknown[]) => mockConfirm(...args),
     isCancel: (...args: unknown[]) => mockIsCancel(...args),
@@ -64,10 +81,10 @@ vi.mock('../utils/clack.js', () => ({
   },
 }));
 
-// Mock environment
-const mockIsNonInteractive = vi.fn(() => false);
-vi.mock('../utils/environment.js', () => ({
-  isNonInteractiveEnvironment: () => mockIsNonInteractive(),
+// Mock interaction mode
+const mockIsPromptAllowed = vi.fn(() => true);
+vi.mock('../utils/interaction-mode.js', () => ({
+  isPromptAllowed: () => mockIsPromptAllowed(),
 }));
 
 const { runDebugState, runDebugReset, runDebugSimulate, runDebugToken, runDebugEnv } = await import('./debug.js');
@@ -101,6 +118,7 @@ describe('debug commands', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     jsonMode = false;
+    mockIsPromptAllowed.mockReturnValue(true);
     consoleOutput = [];
     consoleErrors = [];
     vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
@@ -211,6 +229,31 @@ describe('debug commands', () => {
       expect(output).toContain('keyring');
     });
 
+    it('reports telemetry status (human + JSON)', async () => {
+      mockGetCredentials.mockReturnValue(makeCreds());
+      mockGetConfig.mockReturnValue(makeConfig());
+      mockIsTokenExpired.mockReturnValue(false);
+      mockIsTelemetryEnabled.mockReturnValue(false);
+      mockIsTelemetryOptedOut.mockReturnValue(true);
+      mockGetTelemetrySource.mockReturnValue('preference');
+      mockIsNoticeShown.mockReturnValue(true);
+
+      await runDebugState({ showSecrets: false });
+      expect(consoleOutput.join('\n')).toContain('Telemetry');
+
+      consoleOutput.length = 0;
+      jsonMode = true;
+      await runDebugState({ showSecrets: false });
+      const parsed = JSON.parse(consoleOutput[0]);
+      expect(parsed.telemetry).toEqual({
+        enabled: false,
+        optedOut: true,
+        source: 'preference',
+        noticeShown: true,
+      });
+      expect(parsed.storage.preferencesPath).toBeDefined();
+    });
+
     it('shows file source when insecure storage', async () => {
       mockGetCredentials.mockReturnValue(makeCreds());
       mockGetConfig.mockReturnValue(makeConfig());
@@ -233,55 +276,69 @@ describe('debug commands', () => {
   });
 
   describe('debug reset', () => {
-    it('clears both credentials and config by default', async () => {
+    it('clears credentials, config, and preferences by default', async () => {
       mockConfirm.mockResolvedValue(true);
 
       await runDebugReset({ force: false, credentialsOnly: false, configOnly: false });
 
       expect(mockClearCredentials).toHaveBeenCalled();
       expect(mockClearConfig).toHaveBeenCalled();
+      expect(mockClearPreferences).toHaveBeenCalled();
     });
 
-    it('--credentials-only clears only credentials', async () => {
+    it('--credentials-only clears only credentials, leaving preferences intact', async () => {
       mockConfirm.mockResolvedValue(true);
 
       await runDebugReset({ force: false, credentialsOnly: true, configOnly: false });
 
       expect(mockClearCredentials).toHaveBeenCalled();
       expect(mockClearConfig).not.toHaveBeenCalled();
+      expect(mockClearPreferences).not.toHaveBeenCalled();
     });
 
-    it('--config-only clears only config', async () => {
+    it('--config-only clears config and preferences, leaving credentials intact', async () => {
       mockConfirm.mockResolvedValue(true);
 
       await runDebugReset({ force: false, credentialsOnly: false, configOnly: true });
 
       expect(mockClearConfig).toHaveBeenCalled();
+      expect(mockClearPreferences).toHaveBeenCalled();
       expect(mockClearCredentials).not.toHaveBeenCalled();
     });
 
-    it('--force skips confirmation', async () => {
+    it('--force skips confirmation and clears all three', async () => {
       await runDebugReset({ force: true, credentialsOnly: false, configOnly: false });
 
       expect(mockConfirm).not.toHaveBeenCalled();
       expect(mockClearCredentials).toHaveBeenCalled();
       expect(mockClearConfig).toHaveBeenCalled();
+      expect(mockClearPreferences).toHaveBeenCalled();
     });
 
-    it('both --credentials-only and --config-only clears both', async () => {
+    it('both --credentials-only and --config-only clears everything', async () => {
       mockConfirm.mockResolvedValue(true);
 
       await runDebugReset({ force: false, credentialsOnly: true, configOnly: true });
 
       expect(mockClearCredentials).toHaveBeenCalled();
       expect(mockClearConfig).toHaveBeenCalled();
+      expect(mockClearPreferences).toHaveBeenCalled();
     });
 
-    it('errors in non-interactive mode without --force', async () => {
-      mockIsNonInteractive.mockReturnValue(true);
+    it('lists preferences as a cleared target in the confirmation prompt', async () => {
+      mockConfirm.mockResolvedValue(true);
+
+      await runDebugReset({ force: false, credentialsOnly: false, configOnly: false });
+
+      const promptArg = mockConfirm.mock.calls[0][0] as { message: string };
+      expect(promptArg.message).toContain('preferences');
+    });
+
+    it('errors in agent/CI mode without --force', async () => {
+      mockIsPromptAllowed.mockReturnValue(false);
 
       await expect(runDebugReset({ force: false, credentialsOnly: false, configOnly: false })).rejects.toThrow(
-        'Use --force to reset in non-interactive mode',
+        'Use --force to reset in agent or CI mode',
       );
     });
 
@@ -294,6 +351,7 @@ describe('debug commands', () => {
       expect(parsed.cleared).toBe(true);
       expect(parsed.credentials).toBe(true);
       expect(parsed.config).toBe(true);
+      expect(parsed.preferences).toBe(true);
     });
   });
 
@@ -355,6 +413,20 @@ describe('debug commands', () => {
           noAuth: true,
         }),
       ).rejects.toThrow("can't expire a cleared token");
+    });
+
+    it('--crash throws a plain Error (drives the unhandled-crash telemetry path)', async () => {
+      const promise = runDebugSimulate({
+        expiredToken: false,
+        noKeyring: false,
+        unclaimed: false,
+        noAuth: false,
+        crash: true,
+      });
+      await expect(promise).rejects.toThrow(/simulated crash/i);
+      // Must NOT be a CliExit — the lifecycle only records a crash event for
+      // unexpected (non-CliExit) errors.
+      await expect(promise).rejects.toSatisfy((e: unknown) => e instanceof Error && e.constructor.name === 'Error');
     });
 
     it('requires at least one flag', async () => {
@@ -521,16 +593,16 @@ describe('debug commands', () => {
 
     it('outputs valid JSON in json mode', async () => {
       jsonMode = true;
-      process.env.WORKOS_NO_PROMPT = '1';
+      process.env.WORKOS_DEBUG = '1';
 
       await runDebugEnv();
 
       const parsed = JSON.parse(consoleOutput[0]);
-      expect(parsed.variables.WORKOS_NO_PROMPT.value).toBe('1');
-      expect(parsed.set).toContain('WORKOS_NO_PROMPT');
-      expect(parsed.unset).not.toContain('WORKOS_NO_PROMPT');
+      expect(parsed.variables.WORKOS_DEBUG.value).toBe('1');
+      expect(parsed.set).toContain('WORKOS_DEBUG');
+      expect(parsed.unset).not.toContain('WORKOS_DEBUG');
 
-      delete process.env.WORKOS_NO_PROMPT;
+      delete process.env.WORKOS_DEBUG;
     });
 
     it('lists all known env vars', async () => {
@@ -542,7 +614,7 @@ describe('debug commands', () => {
       expect(Object.keys(parsed.variables)).toContain('WORKOS_API_KEY');
       expect(Object.keys(parsed.variables)).toContain('WORKOS_FORCE_TTY');
       expect(Object.keys(parsed.variables)).toContain('WORKOS_TELEMETRY');
-      expect(Object.keys(parsed.variables)).toContain('INSTALLER_DEV');
+      expect(Object.keys(parsed.variables)).toContain('WORKOS_DEV');
     });
   });
 });

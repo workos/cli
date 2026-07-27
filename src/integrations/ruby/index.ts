@@ -6,9 +6,9 @@ import { SPINNER_MESSAGE } from '../../lib/framework-config.js';
 import { analytics } from '../../utils/analytics.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from '../../lib/constants.js';
 import { initializeAgent, runAgent } from '../../lib/agent-interface.js';
-import { getOrAskForWorkOSCredentials } from '../../utils/clack-utils.js';
+import { getOrAskForWorkOSCredentials } from '../../utils/ui-utils.js';
 import { autoConfigureWorkOSEnvironment } from '../../lib/workos-management.js';
-import { getReference } from '@workos/skills';
+import { getReference } from '../../lib/skills-assets.js';
 
 export const config: FrameworkConfig = {
   metadata: {

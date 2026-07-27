@@ -5,7 +5,7 @@ import type { EnvironmentCheckResult, DoctorOptions } from '../types.js';
 function parseEnvFile(content: string): Record<string, string> {
   const result: Record<string, string> = {};
 
-  for (const line of content.split('\n')) {
+  for (const line of content.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
 

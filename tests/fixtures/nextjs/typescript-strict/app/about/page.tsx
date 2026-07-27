@@ -1,4 +1,6 @@
-export default function About(): JSX.Element {
+import type { ReactElement } from 'react';
+
+export default function About(): ReactElement {
   return (
     <main>
       <h1>About</h1>

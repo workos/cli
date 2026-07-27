@@ -146,7 +146,7 @@ describe('generateCompletions', () => {
   it('does not complete hidden commands absent from registry', () => {
     const result = generateCompletions(['']);
     const names = result.completions.map((c) => c.name);
-    expect(names).not.toContain('emulate');
+    expect(names).toContain('emulate');
     expect(names).not.toContain('dashboard');
     expect(names).not.toContain('debug');
   });

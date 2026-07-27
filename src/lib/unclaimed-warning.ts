@@ -12,7 +12,10 @@ import { getActiveEnvironment, isUnclaimedEnvironment, markEnvironmentClaimed } 
 import { createClaimNonce, UnclaimedEnvApiError } from './unclaimed-env-api.js';
 import { logError, logInfo } from '../utils/debug.js';
 import { isJsonMode } from '../utils/output.js';
-import { renderStderrBox } from '../utils/box.js';
+import { renderStderrNotice } from '../utils/box.js';
+import { pill } from '../utils/ui.js';
+import { markStartupNoticeShown } from './startup-notice-gate.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 let warningShownThisSession = false;
 let claimCheckDoneThisSession = false;
@@ -59,8 +62,12 @@ export async function warnIfUnclaimed(): Promise<void> {
     warningShownThisSession = true;
 
     if (!isJsonMode()) {
-      const inner = ` ${chalk.yellow('⚠ Unclaimed environment')} — Run ${chalk.cyan('workos env claim')} to keep your data. `;
-      renderStderrBox(inner, chalk.yellow);
+      renderStderrNotice(
+        `${pill('WARN', 'warn')}  ${chalk.bold('Unclaimed environment')} ${chalk.dim('— not linked to your account')}`,
+        `${chalk.dim('Run')} ${chalk.bold.cyan(formatWorkOSCommand('env claim'))} ${chalk.dim('to save it — its credentials live only on this machine.')}`,
+      );
+      // Claim the one-notice-per-run slot so the lower-priority MCP banner defers.
+      markStartupNoticeShown();
     }
   } catch (error) {
     // Never block command execution, but log for diagnostics

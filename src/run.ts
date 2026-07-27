@@ -1,15 +1,14 @@
 import { readEnvironment } from './utils/environment.js';
 import { runWithCore } from './lib/run-with-core.js';
 import type { InstallerOptions } from './utils/types.js';
-import type { Integration } from './lib/constants.js';
 import { createInstallerEventEmitter } from './lib/events.js';
+import { isCiMode } from './utils/interaction-mode.js';
 import path from 'path';
 import { EventEmitter } from 'events';
 
 EventEmitter.defaultMaxListeners = 50;
 
 export type InstallerArgs = {
-  integration?: Integration;
   debug?: boolean;
   forceInstall?: boolean;
   installDir?: string;
@@ -33,6 +32,9 @@ export type InstallerArgs = {
   noGitCheck?: boolean;
   gitCheck?: boolean;
   direct?: boolean;
+  scaffold?: boolean;
+  pm?: string;
+  router?: 'app' | 'pages';
 };
 
 /**
@@ -58,14 +60,15 @@ function buildOptions(argv: InstallerArgs): InstallerOptions {
     forceInstall: merged.forceInstall ?? false,
     installDir,
     local: merged.local ?? false,
-    ci: merged.ci ?? false,
+    // Bridge WORKOS_MODE=ci to the downstream `options.ci` paths (git checks,
+    // package-manager select) so it fully behaves like the hidden --ci flag.
+    ci: (merged.ci ?? false) || isCiMode(),
     skipAuth: merged.skipAuth ?? false,
     apiKey: merged.apiKey,
     clientId: merged.clientId,
     homepageUrl: merged.homepageUrl,
     redirectUri: merged.redirectUri,
     dashboard: merged.dashboard ?? false,
-    integration: merged.integration,
     inspect: merged.inspect ?? false,
     noValidate: merged.noValidate ?? merged.validate === false,
     noCommit: merged.noCommit ?? merged.commit === false,
@@ -73,6 +76,9 @@ function buildOptions(argv: InstallerArgs): InstallerOptions {
     createPr: merged.createPr ?? false,
     noGitCheck: merged.noGitCheck ?? merged.gitCheck === false,
     direct: merged.direct ?? false,
+    scaffold: merged.scaffold ?? false,
+    pm: merged.pm,
+    router: merged.router,
     emitter: createInstallerEventEmitter(), // Will be replaced in runWithCore
   };
 }

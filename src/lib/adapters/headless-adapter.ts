@@ -14,6 +14,8 @@ export interface HeadlessOptions {
   noCommit?: boolean;
   createPr?: boolean;
   noGitCheck?: boolean;
+  /** CI mode (WORKOS_MODE=ci, or --ci when headless): pipelines never stop for a dirty tree. */
+  ci?: boolean;
 }
 
 /**
@@ -29,6 +31,8 @@ export class HeadlessAdapter implements InstallerAdapter {
   private debug: boolean;
   private options: HeadlessOptions;
   private isStarted = false;
+  private scaffolded = false;
+  private lastFileOp: string | null = null;
   private handlers = new Map<string, (...args: unknown[]) => void>();
 
   constructor(config: AdapterConfig & { options: HeadlessOptions }) {
@@ -45,6 +49,13 @@ export class HeadlessAdapter implements InstallerAdapter {
     // Auth events
     this.subscribe('auth:success', this.handleAuthSuccess);
     this.subscribe('auth:failure', this.handleAuthFailure);
+
+    // Scaffold events (empty-directory app scaffolding) — auto-routed, no prompt
+    this.subscribe('scaffold:checking', this.handleScaffoldChecking);
+    this.subscribe('scaffold:start', this.handleScaffoldStart);
+    this.subscribe('scaffold:progress', this.handleScaffoldProgress);
+    this.subscribe('scaffold:complete', this.handleScaffoldComplete);
+    this.subscribe('scaffold:failed', this.handleScaffoldFailed);
 
     // Detection events
     this.subscribe('detection:complete', this.handleDetectionComplete);
@@ -72,6 +83,11 @@ export class HeadlessAdapter implements InstallerAdapter {
     // Agent progress
     this.subscribe('agent:start', this.handleAgentStart);
     this.subscribe('agent:progress', this.handleAgentProgress);
+
+    // File operations + tool calls — path/detail only, never content
+    this.subscribe('file:write', this.handleFileWrite);
+    this.subscribe('file:edit', this.handleFileEdit);
+    this.subscribe('agent:tool', this.handleAgentTool);
 
     // Validation
     this.subscribe('validation:start', this.handleValidationStart);
@@ -134,6 +150,30 @@ export class HeadlessAdapter implements InstallerAdapter {
     process.exit(ExitCode.AUTH_REQUIRED);
   };
 
+  // ===== Scaffold Handlers (auto-routed) =====
+
+  private handleScaffoldChecking = (): void => {
+    writeNDJSON({ type: 'scaffold:checking' });
+  };
+
+  private handleScaffoldStart = ({ packageManager }: InstallerEvents['scaffold:start']): void => {
+    writeNDJSON({ type: 'scaffold:start', packageManager });
+  };
+
+  // create-next-app output is verbose; surface it only under --debug.
+  private handleScaffoldProgress = ({ text }: InstallerEvents['scaffold:progress']): void => {
+    this.debugLog(text);
+  };
+
+  private handleScaffoldComplete = (): void => {
+    this.scaffolded = true;
+    writeNDJSON({ type: 'scaffold:complete' });
+  };
+
+  private handleScaffoldFailed = ({ error }: InstallerEvents['scaffold:failed']): void => {
+    writeNDJSON({ type: 'scaffold:failed', error });
+  };
+
   // ===== Detection Handlers =====
 
   private handleDetectionComplete = ({ integration }: InstallerEvents['detection:complete']): void => {
@@ -149,7 +189,7 @@ export class HeadlessAdapter implements InstallerAdapter {
   private handleGitDirty = ({ files }: InstallerEvents['git:dirty']): void => {
     writeNDJSON({ type: 'git:status', dirty: true, files });
 
-    if (this.options.noGitCheck) {
+    if (this.options.noGitCheck || this.options.ci) {
       writeNDJSON({ type: 'git:decision', action: 'continue' });
       this.sendEvent({ type: 'GIT_CONFIRMED' });
       return;
@@ -226,8 +266,8 @@ export class HeadlessAdapter implements InstallerAdapter {
     writeNDJSON({ type: 'staging:fetching' });
   };
 
-  private handleStagingSuccess = (): void => {
-    writeNDJSON({ type: 'staging:success' });
+  private handleStagingSuccess = ({ source }: InstallerEvents['staging:success']): void => {
+    writeNDJSON({ type: 'staging:success', source });
   };
 
   // ===== Config =====
@@ -245,6 +285,26 @@ export class HeadlessAdapter implements InstallerAdapter {
   private handleAgentProgress = ({ step, detail }: InstallerEvents['agent:progress']): void => {
     const message = detail ? `${step}: ${detail}` : step;
     writeNDJSON({ type: 'agent:progress', message });
+  };
+
+  // ===== File Operations (path-only, no content) =====
+
+  private writeFileOp(type: 'file:write' | 'file:edit', path: string): void {
+    if (path === this.lastFileOp) return; // dedupe consecutive same-path ops
+    this.lastFileOp = path;
+    writeNDJSON({ type, path });
+  }
+
+  private handleFileWrite = ({ path }: InstallerEvents['file:write']): void => {
+    this.writeFileOp('file:write', path);
+  };
+
+  private handleFileEdit = ({ path }: InstallerEvents['file:edit']): void => {
+    this.writeFileOp('file:edit', path);
+  };
+
+  private handleAgentTool = ({ kind, detail }: InstallerEvents['agent:tool']): void => {
+    writeNDJSON({ type: 'agent:tool', kind, detail });
   };
 
   // ===== Validation =====
@@ -331,21 +391,40 @@ export class HeadlessAdapter implements InstallerAdapter {
 
   // ===== Terminal Events =====
 
-  private handleComplete = ({ success, summary }: InstallerEvents['complete']): void => {
-    writeNDJSON({ type: 'complete', success, summary });
+  private handleComplete = ({ success, summary, completion }: InstallerEvents['complete']): void => {
+    writeNDJSON({
+      type: 'complete',
+      success,
+      summary,
+      scaffolded: this.scaffolded,
+      // Spread structured fields only when present, so existing consumers that
+      // emit `complete` without `completion` keep their exact payload shape.
+      ...(completion
+        ? {
+            integration: completion.integration,
+            devCommand: completion.devCommand,
+            url: completion.url,
+            files: completion.files,
+            nextSteps: completion.nextSteps,
+          }
+        : {}),
+    });
   };
 
-  private handleError = ({ message, stack }: InstallerEvents['error']): void => {
+  private handleError = ({ message, stack, code: declineCode }: InstallerEvents['error']): void => {
     const isServiceError =
       /\b50[0-9]\b/.test(message) || /server_error|internal_error|overloaded|service.*unavailable/i.test(message);
     const isRateLimit = /\b429\b/.test(message) || /rate.limit/i.test(message);
     const isNetworkError = /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|fetch failed/i.test(message);
     const isProcessExit = /process exited with code/i.test(message);
 
-    let code = 'installer_error';
+    let code = declineCode ?? 'installer_error';
     let displayMessage = message;
 
-    if (isServiceError) {
+    if (declineCode) {
+      // A structured decline (e.g. unsupported framework version) is already
+      // user-facing — don't rewrite it as an AI-service failure.
+    } else if (isServiceError) {
       code = 'service_unavailable';
       displayMessage = 'The AI service is temporarily unavailable. Please try again in a few minutes.';
     } else if (isRateLimit) {

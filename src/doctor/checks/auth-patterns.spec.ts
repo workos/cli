@@ -648,6 +648,31 @@ describe('checkAuthPatterns', () => {
       expect(result.findings.find((f) => f.code === 'API_KEY_IN_SOURCE')).toBeDefined();
     });
 
+    it('no finding when WorkOS keys appear in test files', async () => {
+      writeFixtureFile(testDir, 'src/config.spec.ts', 'const apiKey = "sk_test_abc123def456";');
+      writeFixtureFile(testDir, 'src/config.test.ts', 'const apiKey = "sk_live_abc123def456";');
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: 'Express' }),
+        makeEnv(),
+        makeSdk({ name: '@workos-inc/node', isAuthKit: false }),
+      );
+      expect(result.findings.find((f) => f.code === 'API_KEY_IN_SOURCE')).toBeUndefined();
+    });
+
+    it('no finding when WorkOS keys appear in test, eval, or fixture directories', async () => {
+      writeFixtureFile(testDir, 'tests/evals/env-loader.ts', 'const apiKey = "sk_test_abc123def456";');
+      writeFixtureFile(testDir, 'src/__fixtures__/config.ts', 'const apiKey = "sk_live_abc123def456";');
+      writeFixtureFile(testDir, 'src/__tests__/config.ts', 'const apiKey = "sk_test_abcdef123456";');
+      const result = await checkAuthPatterns(
+        makeOptions(testDir),
+        makeFramework({ name: 'Express' }),
+        makeEnv(),
+        makeSdk({ name: '@workos-inc/node', isAuthKit: false }),
+      );
+      expect(result.findings.find((f) => f.code === 'API_KEY_IN_SOURCE')).toBeUndefined();
+    });
+
     it('no finding when key is only in .env file', async () => {
       writeFixtureFile(testDir, '.env', 'WORKOS_API_KEY=sk_test_abc123def456');
       writeFixtureFile(testDir, 'src/app.ts', 'const key = process.env.WORKOS_API_KEY;');

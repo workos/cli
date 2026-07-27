@@ -6,17 +6,16 @@ vi.mock('../utils/debug.js', () => ({
   logError: vi.fn(),
 }));
 
-// Mock opn (browser open)
 const mockOpen = vi.fn().mockResolvedValue(undefined);
-vi.mock('opn', () => ({ default: mockOpen }));
+vi.mock('open', () => ({ default: mockOpen }));
 
-// Mock clack
+// Mock the UI facade
 const mockSpinner = {
   start: vi.fn(),
   stop: vi.fn(),
   message: vi.fn(),
 };
-const mockClack = {
+const mockUi = {
   log: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -26,7 +25,7 @@ const mockClack = {
   },
   spinner: () => mockSpinner,
 };
-vi.mock('../utils/clack.js', () => ({ default: mockClack }));
+vi.mock('../utils/ui.js', () => ({ default: mockUi }));
 
 // Mock output utilities
 const mockOutputJson = vi.fn();
@@ -38,6 +37,13 @@ vi.mock('../utils/output.js', () => ({
   isJsonMode: () => jsonMode,
   outputJson: (...args: unknown[]) => mockOutputJson(...args),
   exitWithError: (...args: unknown[]) => mockExitWithError(...args),
+}));
+
+const mockIsAgentMode = vi.fn(() => false);
+const mockIsCiMode = vi.fn(() => false);
+vi.mock('../utils/interaction-mode.js', () => ({
+  isAgentMode: () => mockIsAgentMode(),
+  isCiMode: () => mockIsCiMode(),
 }));
 
 // Mock helper-functions
@@ -73,6 +79,8 @@ describe('claim command', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     jsonMode = false;
+    mockIsAgentMode.mockReturnValue(false);
+    mockIsCiMode.mockReturnValue(false);
     vi.useFakeTimers({ shouldAdvanceTime: true });
   });
 
@@ -87,7 +95,7 @@ describe('claim command', () => {
 
       await runClaim();
 
-      expect(mockClack.log.info).toHaveBeenCalledWith(expect.stringContaining('No unclaimed environment found'));
+      expect(mockUi.log.info).toHaveBeenCalledWith(expect.stringContaining('No unclaimed environment found'));
     });
 
     it('exits with info when active environment is not unclaimed', async () => {
@@ -100,7 +108,7 @@ describe('claim command', () => {
 
       await runClaim();
 
-      expect(mockClack.log.info).toHaveBeenCalledWith(expect.stringContaining('No unclaimed environment found'));
+      expect(mockUi.log.info).toHaveBeenCalledWith(expect.stringContaining('No unclaimed environment found'));
     });
 
     it('outputs JSON when no unclaimed environment in JSON mode', async () => {
@@ -129,7 +137,7 @@ describe('claim command', () => {
 
       await runClaim();
 
-      expect(mockClack.log.success).toHaveBeenCalledWith('Environment already claimed!');
+      expect(mockUi.log.success).toHaveBeenCalledWith('Environment already claimed!');
       expect(mockMarkEnvironmentClaimed).toHaveBeenCalled();
     });
 
@@ -184,14 +192,70 @@ describe('claim command', () => {
 
       await runClaim();
 
-      expect(mockOutputJson).toHaveBeenCalledWith({
-        status: 'claim_url',
-        claimUrl: 'https://dashboard.workos.com/claim?nonce=nonce_abc123',
-        nonce: 'nonce_abc123',
-      });
+      expect(mockOutputJson).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'claim_url',
+          claimUrl: 'https://dashboard.workos.com/claim?nonce=nonce_abc123',
+          nonce: 'nonce_abc123',
+          permanent: true,
+        }),
+      );
       // Should NOT open browser or start polling in JSON mode
       expect(mockOpen).not.toHaveBeenCalled();
       expect(mockSpinner.start).not.toHaveBeenCalled();
+    });
+
+    it('warns that claiming is permanent before opening the browser (human mode)', async () => {
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'unclaimed',
+        type: 'unclaimed',
+        apiKey: 'sk_test_xxx',
+        clientId: 'client_01ABC',
+        claimToken: 'ct_token',
+      });
+      mockIsUnclaimedEnvironment.mockReturnValue(true);
+      mockCreateClaimNonce.mockResolvedValueOnce({ nonce: 'nonce_abc123', alreadyClaimed: false });
+      // Poll returns claimed immediately so the flow completes.
+      mockCreateClaimNonce.mockResolvedValueOnce({ alreadyClaimed: true });
+
+      const claimPromise = runClaim();
+      await vi.advanceTimersByTimeAsync(6_000);
+      await claimPromise;
+
+      const warnCall = vi
+        .mocked(mockUi.log.warn)
+        .mock.calls.find((c) => /permanent|cannot be undone/i.test(String(c[0])));
+      expect(warnCall).toBeDefined();
+      // The permanence warning must fire before the browser is opened.
+      const warnOrder = vi.mocked(mockUi.log.warn).mock.invocationCallOrder[0];
+      const openOrder = vi.mocked(mockOpen).mock.invocationCallOrder[0];
+      expect(warnOrder).toBeLessThan(openOrder);
+    });
+
+    it('refuses claim browser flow in CI mode', async () => {
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'unclaimed',
+        type: 'unclaimed',
+        apiKey: 'sk_test_xxx',
+        clientId: 'client_01ABC',
+        claimToken: 'ct_token',
+      });
+      mockIsUnclaimedEnvironment.mockReturnValue(true);
+      mockCreateClaimNonce.mockResolvedValueOnce({
+        nonce: 'nonce_abc123',
+        alreadyClaimed: false,
+      });
+      mockIsCiMode.mockReturnValue(true);
+
+      await expect(runClaim()).rejects.toThrow('exitWithError');
+
+      expect(mockExitWithError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          code: 'unsupported_in_ci',
+          details: expect.objectContaining({ claimUrl: expect.stringContaining('nonce_abc123') }),
+        }),
+      );
+      expect(mockOpen).not.toHaveBeenCalled();
     });
 
     it('outputs JSON for already-claimed in JSON mode', async () => {
@@ -239,7 +303,7 @@ describe('claim command', () => {
       await claimPromise;
 
       expect(mockSpinner.stop).toHaveBeenCalledWith('Claim timed out');
-      expect(mockClack.log.info).toHaveBeenCalledWith(expect.stringContaining('Complete the claim in your browser'));
+      expect(mockUi.log.info).toHaveBeenCalledWith(expect.stringContaining('Complete the claim in your browser'));
     });
 
     it('continues polling on transient poll errors', async () => {
@@ -315,7 +379,7 @@ describe('claim command', () => {
 
       expect(mockSpinner.stop).toHaveBeenCalledWith('Claim token is invalid or expired.');
       expect(mockMarkEnvironmentClaimed).toHaveBeenCalled();
-      expect(mockClack.log.warn).toHaveBeenCalledWith(expect.stringContaining('workos auth login'));
+      expect(mockUi.log.warn).toHaveBeenCalledWith(expect.stringContaining('workos auth login'));
     });
 
     it('shows connection issues after 3 consecutive poll failures', async () => {
@@ -374,7 +438,7 @@ describe('claim command', () => {
       await claimPromise;
 
       expect(mockSpinner.stop).toHaveBeenCalledWith('Too many connection failures');
-      expect(mockClack.log.error).toHaveBeenCalledWith(expect.stringContaining('Polling failed 10 times'));
+      expect(mockUi.log.error).toHaveBeenCalledWith(expect.stringContaining('Polling failed 10 times'));
       expect(mockMarkEnvironmentClaimed).not.toHaveBeenCalled();
     });
 
@@ -394,16 +458,46 @@ describe('claim command', () => {
       });
       // Poll returns claimed immediately
       mockCreateClaimNonce.mockResolvedValueOnce({ alreadyClaimed: true });
-      // Browser open throws synchronously (open() is called without await)
-      mockOpen.mockImplementationOnce(() => {
-        throw new Error('No browser available');
-      });
+      mockOpen.mockRejectedValueOnce(new Error('No browser available'));
 
       const claimPromise = runClaim();
       await vi.advanceTimersByTimeAsync(6_000);
       await claimPromise;
 
-      expect(mockClack.log.info).toHaveBeenCalledWith(expect.stringContaining('Could not open browser'));
+      expect(mockUi.log.info).toHaveBeenCalledWith(expect.stringContaining('Could not open browser'));
+    });
+
+    it('timeout hint keeps the standalone binary form when npm variables are present', async () => {
+      const NPM_KEYS = ['npm_command', 'npm_execpath', 'npm_config_user_agent'] as const;
+      const saved: Record<string, string | undefined> = {};
+      for (const k of NPM_KEYS) {
+        saved[k] = process.env[k];
+        delete process.env[k];
+      }
+      process.env.npm_command = 'exec';
+      try {
+        mockGetActiveEnvironment.mockReturnValue({
+          name: 'unclaimed',
+          type: 'unclaimed',
+          apiKey: 'sk_test_xxx',
+          clientId: 'client_01ABC',
+          claimToken: 'ct_token',
+        });
+        mockIsUnclaimedEnvironment.mockReturnValue(true);
+        mockCreateClaimNonce.mockResolvedValueOnce({ nonce: 'nonce_abc123', alreadyClaimed: false });
+        mockCreateClaimNonce.mockResolvedValue({ nonce: 'nonce_abc123', alreadyClaimed: false });
+
+        const claimPromise = runClaim();
+        await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 5_000);
+        await claimPromise;
+
+        expect(mockUi.log.info).toHaveBeenCalledWith(expect.stringContaining('workos env list'));
+      } finally {
+        for (const k of NPM_KEYS) {
+          if (saved[k] === undefined) delete process.env[k];
+          else process.env[k] = saved[k];
+        }
+      }
     });
   });
 });

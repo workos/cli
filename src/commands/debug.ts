@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import clack from '../utils/clack.js';
+import ui from '../utils/ui.js';
 import {
   getCredentials,
   saveCredentials,
@@ -17,8 +17,16 @@ import {
   setInsecureConfigStorage,
   diagnoseConfig,
 } from '../lib/config-store.js';
+import {
+  clearPreferences,
+  getPreferencesPath,
+  getTelemetrySource,
+  isNoticeShown,
+  isTelemetryEnabled,
+  isTelemetryOptedOut,
+} from '../lib/preferences.js';
 import { isJsonMode, outputJson, exitWithError } from '../utils/output.js';
-import { isNonInteractiveEnvironment } from '../utils/environment.js';
+import { isPromptAllowed } from '../utils/interaction-mode.js';
 
 function maskSecret(value: string | undefined): string | undefined {
   if (!value) return undefined;
@@ -114,12 +122,21 @@ export async function runDebugState({ showSecrets }: { showSecrets: boolean }): 
   const configSource = determineCredentialSource(configDiagnostics);
   configOutput.source = configSource;
 
+  const telemetryOutput = {
+    enabled: isTelemetryEnabled(),
+    optedOut: isTelemetryOptedOut(),
+    source: getTelemetrySource(),
+    noticeShown: isNoticeShown(),
+  };
+
   const result = {
     credentials: credentialsOutput,
     config: configOutput,
+    telemetry: telemetryOutput,
     storage: {
       credentialsPath: getCredentialsPath(),
       configPath: getConfigPath(),
+      preferencesPath: getPreferencesPath(),
       credentialDiagnostics: diagnostics,
       configDiagnostics,
     },
@@ -161,6 +178,13 @@ export async function runDebugState({ showSecrets }: { showSecrets: boolean }): 
   }
 
   console.log();
+  console.log(chalk.bold('Telemetry'));
+  console.log(`  enabled:  ${telemetryOutput.enabled ? chalk.green('true') : chalk.yellow('false')}`);
+  console.log(`  optedOut: ${telemetryOutput.optedOut ? chalk.yellow('true') : 'false'}`);
+  console.log(`  source:   ${telemetryOutput.source}`);
+  console.log(`  notice:   ${telemetryOutput.noticeShown ? 'shown' : chalk.dim('not shown')}`);
+
+  console.log();
   console.log(chalk.bold('Storage — Credentials'));
   console.log(`  path: ${getCredentialsPath()}`);
   for (const line of diagnostics) {
@@ -173,9 +197,20 @@ export async function runDebugState({ showSecrets }: { showSecrets: boolean }): 
   for (const line of configDiagnostics) {
     console.log(`  ${chalk.dim(line)}`);
   }
+
+  console.log();
+  console.log(chalk.bold('Storage — Preferences'));
+  console.log(`  path: ${getPreferencesPath()}`);
 }
 
 // --- debug reset ---
+
+/** Join names with an Oxford comma: ["a","b","c"] => "a, b, and c". */
+function formatList(items: string[]): string {
+  if (items.length <= 1) return items.join('');
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
+}
 
 export async function runDebugReset({
   force,
@@ -189,26 +224,32 @@ export async function runDebugReset({
   // Both flags = clear both (same as neither)
   const clearCreds = !configOnly || credentialsOnly;
   const clearConf = !credentialsOnly || configOnly;
+  // Preferences (~/.workos/preferences.json) are non-secret local CLI state, so
+  // they ride with the config target. Clearing config returns the CLI to a
+  // fresh-install state, which includes resetting the telemetry preference.
+  const clearPrefs = clearConf;
 
-  const targets = [clearCreds && 'credentials', clearConf && 'config'].filter(Boolean).join(' and ');
+  const targets = formatList(
+    [clearCreds && 'credentials', clearConf && 'config', clearPrefs && 'preferences'].filter(Boolean) as string[],
+  );
 
   if (!force) {
-    if (isNonInteractiveEnvironment()) {
+    if (!isPromptAllowed()) {
       exitWithError({
         code: 'non_interactive_reset',
-        message: 'Use --force to reset in non-interactive mode',
+        message: 'Use --force to reset in agent or CI mode',
       });
     }
 
-    const confirmed = await clack.confirm({
+    const confirmed = await ui.confirm({
       message: `Clear all ${targets}? This cannot be undone.`,
     });
 
-    if (clack.isCancel(confirmed) || !confirmed) {
+    if (ui.isCancel(confirmed) || !confirmed) {
       if (isJsonMode()) {
         outputJson({ cleared: false, cancelled: true });
       } else {
-        clack.log.info('Reset cancelled');
+        ui.log.info('Reset cancelled');
       }
       return;
     }
@@ -216,11 +257,12 @@ export async function runDebugReset({
 
   if (clearCreds) clearCredentials();
   if (clearConf) clearConfig();
+  if (clearPrefs) clearPreferences();
 
   if (isJsonMode()) {
-    outputJson({ cleared: true, credentials: clearCreds, config: clearConf });
+    outputJson({ cleared: true, credentials: clearCreds, config: clearConf, preferences: clearPrefs });
   } else {
-    clack.log.success(`Cleared ${targets}`);
+    ui.log.success(`Cleared ${targets}`);
   }
 }
 
@@ -231,12 +273,21 @@ export async function runDebugSimulate({
   noKeyring,
   unclaimed,
   noAuth,
+  crash = false,
 }: {
   expiredToken: boolean;
   noKeyring: boolean;
   unclaimed: boolean;
   noAuth: boolean;
+  crash?: boolean;
 }): Promise<void> {
+  // Simulate an unexpected crash to exercise the crash-telemetry pipeline
+  // end-to-end. Throws a plain Error (not CliExit) so the bin.ts lifecycle
+  // records a `crash` event with a sanitized stack rather than a handled exit.
+  if (crash) {
+    throw new Error('Simulated crash for telemetry verification');
+  }
+
   // Validate: at least one flag
   if (!expiredToken && !noKeyring && !unclaimed && !noAuth) {
     exitWithError({
@@ -307,7 +358,7 @@ export async function runDebugSimulate({
     outputJson({ simulated: true, actions });
   } else {
     for (const action of actions) {
-      clack.log.success(action);
+      ui.log.success(action);
     }
   }
 }
@@ -320,17 +371,36 @@ interface EnvVarInfo {
   effect: string;
 }
 
-const ENV_VAR_CATALOG: { name: string; effect: string }[] = [
+/**
+ * Catalog of WORKOS_-prefixed environment variables the CLI reads.
+ *
+ * This is the single source of truth for `workos debug env`. A unit test
+ * (env-var-catalog.spec.ts) scans the source for `process.env.WORKOS_*` reads
+ * and fails if any are missing here, so this list can't silently drift.
+ */
+export const ENV_VAR_CATALOG: { name: string; effect: string }[] = [
+  // Credentials
   { name: 'WORKOS_API_KEY', effect: 'Bypasses credential resolution — used directly for API calls' },
+  { name: 'WORKOS_CLIENT_ID', effect: 'WorkOS client ID used during credential resolution' },
+  // Interaction & output
+  { name: 'WORKOS_MODE', effect: 'Controls interaction behavior: human, agent, or CI' },
+  { name: 'WORKOS_AGENT', effect: 'Set to "1" to force agent interaction mode' },
   { name: 'WORKOS_FORCE_TTY', effect: 'Forces human (non-JSON) output mode, even when piped' },
-  { name: 'WORKOS_NO_PROMPT', effect: 'Forces non-interactive/JSON mode' },
+  { name: 'WORKOS_DEBUG', effect: 'Set to "1" to enable verbose debug logging for all commands' },
   { name: 'WORKOS_TELEMETRY', effect: 'Set to "false" to disable telemetry' },
-  { name: 'WORKOS_API_URL', effect: 'Overrides API base URL (default: https://api.workos.com)' },
+  // URLs (WORKOS_API_URL is the single base; gateway + telemetry derive from it)
+  {
+    name: 'WORKOS_API_URL',
+    effect: 'Overrides API base URL; also reroutes the LLM gateway and CLI telemetry endpoints',
+  },
   { name: 'WORKOS_DASHBOARD_URL', effect: 'Overrides dashboard URL (default: https://dashboard.workos.com)' },
   { name: 'WORKOS_AUTHKIT_DOMAIN', effect: 'Overrides AuthKit domain from settings' },
-  { name: 'WORKOS_LLM_GATEWAY_URL', effect: 'Overrides LLM gateway URL from settings' },
-  { name: 'INSTALLER_DEV', effect: 'Enables dev mode — loads .env.local at startup' },
-  { name: 'INSTALLER_DISABLE_PROXY', effect: 'Disables the credential proxy for gateway auth' },
+  { name: 'WORKOS_BASE_URL', effect: 'AuthKit base URL, read during doctor environment checks' },
+  { name: 'WORKOS_REDIRECT_URI', effect: 'OAuth redirect URI, read during doctor environment checks' },
+  { name: 'WORKOS_COOKIE_DOMAIN', effect: 'Session cookie domain, read during doctor environment checks' },
+  // Development
+  { name: 'WORKOS_DEV', effect: 'Enables dev mode — loads .env.local at startup' },
+  { name: 'WORKOS_DISABLE_PROXY', effect: 'Disables the credential proxy for gateway auth' },
 ];
 
 export async function runDebugEnv(): Promise<void> {

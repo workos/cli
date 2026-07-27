@@ -3,8 +3,9 @@ import type { FrameworkConfig } from '../../lib/framework-config.js';
 import type { InstallerOptions } from '../../utils/types.js';
 import { enableDebugLogs } from '../../utils/debug.js';
 import { getPackageVersion } from '../../utils/package-json.js';
-import { getPackageDotJson } from '../../utils/clack-utils.js';
-import clack from '../../utils/clack.js';
+import { getPackageDotJson } from '../../utils/ui-utils.js';
+import { InstallDeclinedError } from '../../lib/installer-errors.js';
+import ui from '../../utils/ui.js';
 import chalk from 'chalk';
 import * as semver from 'semver';
 import { getReactRouterMode, getReactRouterModeName, getReactRouterVersionBucket, ReactRouterMode } from './utils.js';
@@ -99,12 +100,13 @@ export async function run(options: InstallerOptions): Promise<string> {
     if (coercedVersion && semver.lt(coercedVersion, MINIMUM_REACT_ROUTER_VERSION)) {
       const docsUrl = config.metadata.unsupportedVersionDocsUrl ?? config.metadata.docsUrl;
 
-      clack.log.warn(
-        `Sorry: the installer can't help you with React Router ${reactRouterVersion}. Upgrade to React Router ${MINIMUM_REACT_ROUTER_VERSION} or later, or check out the manual setup guide.`,
-      );
-      clack.log.info(`Setup React Router manually: ${chalk.cyan(docsUrl)}`);
-      clack.outro('WorkOS AuthKit installer will see you next time!');
-      return '';
+      const message = `Sorry: the installer can't help you with React Router ${reactRouterVersion}. Upgrade to React Router ${MINIMUM_REACT_ROUTER_VERSION} or later, or check out the manual setup guide.`;
+      ui.log.warn(message);
+      ui.log.info(`Setup React Router manually: ${chalk.cyan(docsUrl)}`);
+      ui.outro('WorkOS AuthKit installer will see you next time!');
+      // Returning normally here used to surface as "Successfully installed"
+      // with exit 0 — machine consumers must see a decline, not a success.
+      throw new InstallDeclinedError(message);
     }
   }
 

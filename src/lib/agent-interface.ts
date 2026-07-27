@@ -4,28 +4,23 @@
  */
 
 import { dirname } from 'path';
-import { getSkillsDir as getSkillsPackageDir } from '@workos/skills';
+import { getSkillsDir as getSkillsPackageDir } from './skills-assets.js';
+import { ensureClaudeCodeExecutable } from './agent-sdk-assets.js';
 import { debug, logInfo, logWarn, logError, initLogFile, getLogFilePath } from '../utils/debug.js';
 import type { InstallerOptions } from '../utils/types.js';
 import { analytics } from '../utils/analytics.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from './constants.js';
 import { LINTING_TOOLS } from './safe-tools.js';
-import { getLlmGatewayUrlFromHost } from '../utils/urls.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
 import { getConfig } from './settings.js';
+import { getLlmGatewayUrl } from '../utils/urls.js';
 import { getCredentials, hasCredentials } from './credentials.js';
 import { ensureValidToken } from './token-refresh.js';
 import type { InstallerEventEmitter } from './events.js';
 import { startCredentialProxy, startClaimTokenProxy, type CredentialProxyHandle } from './credential-proxy.js';
 import { getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
 import { getAuthkitDomain, getCliAuthClientId } from './settings.js';
-import type {
-  SDKMessage,
-  SDKUserMessage,
-  Options as AgentSDKOptions,
-  PermissionResult,
-  query as queryFn,
-} from '@anthropic-ai/claude-agent-sdk';
+import type { SDKMessage, SDKUserMessage, PermissionResult, query as queryFn } from '@anthropic-ai/claude-agent-sdk';
 
 // File content cache for computing edit diffs
 const fileContentCache = new Map<string, string>();
@@ -97,10 +92,10 @@ export interface RetryConfig {
  */
 export type AgentRunConfig = {
   workingDirectory: string;
-  mcpServers: AgentSDKOptions['mcpServers'];
   model: string;
   allowedTools: string[];
   sdkEnv: Record<string, string | undefined>;
+  claudeExecutablePath: string;
 };
 
 /**
@@ -198,9 +193,12 @@ const SAFE_SCRIPTS = [
 
 /**
  * Dangerous shell operators that could allow command injection.
+ * Newlines and carriage returns are included because the shell treats them as
+ * command separators equivalent to `;`, so a payload like `npm install\n<cmd>`
+ * would otherwise smuggle a second command past the allowlist.
  * Note: We handle `2>&1` and `| tail/head` separately as safe patterns.
  */
-const DANGEROUS_OPERATORS = /[;`$()]/;
+const DANGEROUS_OPERATORS = /[;`$()\n\r]/;
 
 /**
  * Check if command is an allowed package manager command.
@@ -254,7 +252,7 @@ export function installerCanUseTool(toolName: string, input: Record<string, unkn
     });
     return {
       behavior: 'deny',
-      message: `Bash command not allowed. Shell operators like ; \` $ ( ) are not permitted.`,
+      message: `Bash command not allowed. Shell operators like ; \` $ ( ) and newlines are not permitted. Run one command per Bash call.`,
     };
   }
 
@@ -375,7 +373,7 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
       analytics.setTag('api_mode', 'direct');
     } else {
       // Gateway mode (existing behavior)
-      const gatewayUrl = getLlmGatewayUrlFromHost();
+      const gatewayUrl = getLlmGatewayUrl();
 
       // Check for unclaimed environment — use claim token auth
       const activeEnv = getActiveEnvironment();
@@ -405,7 +403,7 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
         }
 
         // Check if we have refresh token capability and proxy is not disabled
-        if (creds.refreshToken && process.env.INSTALLER_DISABLE_PROXY !== '1') {
+        if (creds.refreshToken && process.env.WORKOS_DISABLE_PROXY !== '1') {
           // Start credential proxy with lazy refresh
           logInfo('[agent-interface] Starting credential proxy with lazy refresh...');
           const appConfig = getConfig();
@@ -447,7 +445,7 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
               message: `Note: Run \`${formatWorkOSCommand('auth login')}\` to enable extended sessions`,
             });
           } else {
-            logWarn('[agent-interface] Proxy disabled via INSTALLER_DISABLE_PROXY');
+            logWarn('[agent-interface] Proxy disabled via WORKOS_DISABLE_PROXY');
           }
 
           const refreshResult = await ensureValidToken();
@@ -489,18 +487,40 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
       analytics.setTag('api_mode', activeProxyHandle ? 'gateway-proxy' : 'gateway');
     }
 
-    // Configure WorkOS MCP docs server for accessing WorkOS documentation
+    // First run from a compiled binary downloads the pinned agent runtime
+    // (~230MB, one-time, cached under ~/.workos); dev resolves node_modules.
+    let lastReportedPct = -1;
+    const claudeExecutablePath = await ensureClaudeCodeExecutable(
+      ({ receivedBytes, totalBytes }) => {
+        if (!totalBytes) return;
+        const pct = Math.floor((receivedBytes / totalBytes) * 100);
+        if (pct >= lastReportedPct + 25 || (lastReportedPct === -1 && pct === 0)) {
+          lastReportedPct = pct;
+          options.emitter?.emit('status', {
+            message: `Downloading Claude agent runtime (one-time, ${Math.round(totalBytes / 1024 / 1024)}MB): ${pct}%`,
+          });
+        }
+      },
+      () => {
+        // The retry restarts the byte count at 0; reset the throttle so the
+        // fresh attempt's progress isn't suppressed until it re-passes the peak.
+        lastReportedPct = -1;
+        options.emitter?.emit('status', { message: 'Download interrupted; retrying…' });
+      },
+    );
+
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
-      mcpServers: {
-        workos: {
-          command: 'npx',
-          args: ['-y', '@workos/mcp-docs-server'],
-        },
-      },
       model: getConfig().model,
-      allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch'],
+      // Empty on purpose. A tool listed here is auto-approved BEFORE `canUseTool`
+      // (installerCanUseTool) runs, which both defeats the Bash safety gate and
+      // triggers the SDK's CLAUDE_SDK_CAN_USE_TOOL_SHADOWED warning. Leaving this
+      // empty routes every tool call through canUseTool so the gate is
+      // authoritative. Tool *availability* comes from the `tools` preset below,
+      // not from this list.
+      allowedTools: [],
       sdkEnv,
+      claudeExecutablePath,
     };
 
     const configInfo = { workingDirectory: agentRunConfig.workingDirectory, authMode, useMcp: false };
@@ -645,7 +665,6 @@ export async function runAgent(
         model: agentConfig.model,
         cwd: agentConfig.workingDirectory,
         permissionMode: 'acceptEdits',
-        mcpServers: agentConfig.mcpServers,
         env: agentConfig.sdkEnv,
         canUseTool: (toolName, input) => {
           logInfo('canUseTool called:', { toolName, input });
@@ -656,6 +675,7 @@ export async function runAgent(
         tools: { type: 'preset', preset: 'claude_code' },
         allowedTools: agentConfig.allowedTools,
         plugins: [{ type: 'local', path: pluginPath }],
+        pathToClaudeCodeExecutable: agentConfig.claudeExecutablePath,
         // Capture stderr from CLI subprocess for debugging
         stderr: (data: string) => {
           logInfo('CLI stderr:', data);
@@ -841,6 +861,15 @@ function handleSDKMessage(
               }
             }
 
+            // Surface Bash commands (post-permission: this branch only fires for
+            // tool calls that were actually allowed, unlike the canUseTool closure).
+            if (toolName === 'Bash' && input) {
+              const command = input.command as string;
+              if (command) {
+                emitter?.emit('agent:tool', { kind: 'command', detail: command });
+              }
+            }
+
             // Track Read operations for caching file content later
             if (toolName === 'Read' && input && block.id) {
               const filePath = input.file_path as string;
@@ -904,7 +933,13 @@ function handleSDKMessage(
       const isResultError = (message as Record<string, unknown>).is_error === true;
 
       if (isResultError) {
-        const resultText = typeof message.result === 'string' ? message.result : '';
+        const resultRecord = message as unknown as Record<string, unknown>;
+        const resultText =
+          typeof resultRecord.result === 'string'
+            ? resultRecord.result
+            : Array.isArray(resultRecord.errors)
+              ? resultRecord.errors.filter((error): error is string => typeof error === 'string').join('\n')
+              : '';
         logError('Agent result marked as error:', resultText);
 
         // Detect rate limiting (429) — check before 5xx so it gets distinct messaging

@@ -14,9 +14,16 @@ pnpm-debug.log
 
 dist/
 coverage/
+.*.bun-build
+
+# .NET build output
+bin/
+obj/
 
 # Generated
 src/version.ts
+src/generated/skills-manifest.ts
+src/generated/agent-sdk-manifest.ts
 
 .eslintcache
 .vscode/launch.json

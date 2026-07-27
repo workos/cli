@@ -1,9 +1,11 @@
 import Chalk from 'chalk';
 import { homedir } from 'os';
 import { createAgents } from '../commands/install-skill.js';
+import type { InteractionModeSource } from '../utils/interaction-mode.js';
 import type { DoctorReport, Issue } from './types.js';
 import { renderSummaryBox, type SummaryBoxItem } from '../utils/summary-box.js';
 import type { LockExpression } from '../utils/lock-art.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 export interface FormatOptions {
   verbose?: boolean;
@@ -26,7 +28,8 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
     console.log(`   Language:         ${report.language.name}`);
   }
   if (report.language.name === 'JavaScript/TypeScript' || report.language.name === 'Unknown') {
-    console.log(`   Runtime:          Node.js ${report.runtime.nodeVersion}`);
+    const runtime = report.runtime.nodeVersion ? `Node.js ${report.runtime.nodeVersion}` : 'Node.js not detected';
+    console.log(`   Runtime:          ${runtime}`);
   }
   if (report.framework.name) {
     const variant = report.framework.variant ? ` (${report.framework.variant})` : '';
@@ -50,6 +53,32 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
     `   API Key:          ${report.environment.apiKeyConfigured ? Chalk.green('configured') : Chalk.red('not set')}`,
   );
   console.log(`   Base URL:         ${report.environment.baseUrl} ${Chalk.green('✓')}`);
+
+  // Interaction Mode
+  console.log('');
+  console.log('Interaction Mode');
+  console.log(
+    `   Mode:             ${report.interactionMode.mode} (${formatInteractionModeSource(report.interactionMode.source)})`,
+  );
+
+  // Host Execution
+  console.log('');
+  console.log('Host Execution');
+  if (report.hostExecution.mode === 'interactive') {
+    console.log(`   Shell:            ${Chalk.green('✓')} Interactive host shell`);
+  } else if (report.hostExecution.ok) {
+    console.log(`   Shell:            ${Chalk.green('✓')} Agent/CI context, host state reachable`);
+  } else {
+    console.log(`   Shell:            ${Chalk.yellow('!')} Agent/CI context, host state may be unavailable`);
+    for (const failure of report.hostExecution.failures) {
+      const label = failure.label ?? failure.capability;
+      const target = failure.target ? ` (${failure.target})` : '';
+      console.log(`   ${Chalk.yellow('!')} ${label}${target}`);
+      if (options?.verbose) {
+        console.log(`     ${Chalk.dim(failure.detail)}`);
+      }
+    }
+  }
 
   // Connectivity & Credential Validation
   console.log('');
@@ -168,6 +197,21 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
     }
   }
 
+  // MCP Server (per detected coding agent)
+  if (report.mcp) {
+    console.log('');
+    console.log('MCP Server');
+    for (const agent of report.mcp.agents) {
+      if (agent.misconfigured) {
+        console.log(`   ${Chalk.yellow('!')} ${agent.agent}: configured with an unexpected URL`);
+      } else if (agent.installed) {
+        console.log(`   ${Chalk.green('✓')} ${agent.agent}: installed`);
+      } else {
+        console.log(`   ${agent.agent}: ${Chalk.dim('not installed')}`);
+      }
+    }
+  }
+
   // Verbose mode additions
   if (options?.verbose) {
     console.log('');
@@ -228,10 +272,27 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
       expression,
       title,
       items,
-      footer: 'workos doctor --copy | https://workos.com/docs',
+      footer: `${formatWorkOSCommand('doctor --copy')} | https://workos.com/docs`,
     }),
   );
   console.log('');
+}
+
+export function formatInteractionModeSource(source: InteractionModeSource): string {
+  switch (source) {
+    case 'flag':
+      return '--mode';
+    case 'env':
+      return 'WORKOS_MODE';
+    case 'ci_env':
+      return 'CI environment';
+    case 'agent_env':
+      return 'agent environment';
+    case 'non_tty':
+      return 'non-TTY';
+    case 'default':
+      return 'default';
+  }
 }
 
 function formatIssue(issue: Issue): void {

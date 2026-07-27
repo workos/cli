@@ -8,12 +8,13 @@
 
 import chalk from 'chalk';
 import { provisionUnclaimedEnvironment, UnclaimedEnvApiError } from './unclaimed-env-api.js';
-import { getConfig, saveConfig, getActiveEnvironment } from './config-store.js';
+import { getConfig, saveConfig, getActiveEnvironment, freshEnvKey } from './config-store.js';
 import type { CliConfig } from './config-store.js';
 import { writeCredentialsEnv } from './env-writer.js';
 import { logInfo, logError } from '../utils/debug.js';
-import { renderStderrBox } from '../utils/box.js';
-import clack from '../utils/clack.js';
+import { renderStderrNotice } from '../utils/box.js';
+import ui from '../utils/ui.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 export interface UnclaimedEnvProvisionOptions {
   installDir: string;
@@ -52,29 +53,34 @@ export async function tryProvisionUnclaimedEnv(options: UnclaimedEnvProvisionOpt
 
     writeCredentialsEnv(options.installDir, envVars);
 
-    // Save to config store (after .env.local succeeds)
+    // Save to config store (after .env.local succeeds). A fresh key so a repeated
+    // provision never clobbers an earlier env's claim token (unrecoverable — it
+    // lives only in this config).
     const config: CliConfig = getConfig() ?? { environments: {} };
-    config.environments['unclaimed'] = {
-      name: 'unclaimed',
+    const key = freshEnvKey(config, 'unclaimed');
+    config.environments[key] = {
+      name: key,
       type: 'unclaimed',
       apiKey: result.apiKey,
       clientId: result.clientId,
       claimToken: result.claimToken,
     };
-    config.activeEnvironment = 'unclaimed';
+    config.activeEnvironment = key;
     saveConfig(config);
 
     // Verify config persisted — critical for `workos env claim` in a later process
     const readBack = getActiveEnvironment();
     if (!readBack || readBack.type !== 'unclaimed') {
       logError('[unclaimed-env-provision] Config read-back failed after save — claim token may not persist');
-      clack.log.warn('Environment provisioned but config storage may be unreliable. Falling back to login...');
+      ui.log.warn('Environment provisioned but config storage may be unreliable. Falling back to login...');
       return false;
     }
 
     logInfo('[unclaimed-env-provision] Unclaimed environment provisioned and saved');
-    const inner = ` ✓ ${chalk.green('Environment provisioned')} — Run ${chalk.cyan('workos env claim')} to keep it. `;
-    renderStderrBox(inner, chalk.green);
+    renderStderrNotice(
+      `${chalk.green('✓')} ${chalk.bold('Environment provisioned')} ${chalk.dim('— credentials saved to your project')}`,
+      `${chalk.dim('Run')} ${chalk.bold.cyan(formatWorkOSCommand('env claim'))} ${chalk.dim('to link it to your account.')}`,
+    );
 
     return true;
   } catch (error) {
@@ -83,11 +89,11 @@ export async function tryProvisionUnclaimedEnv(options: UnclaimedEnvProvisionOpt
 
     if (error instanceof UnclaimedEnvApiError) {
       if (error.statusCode === 429) {
-        clack.log.warn('WorkOS is busy, falling back to login...');
+        ui.log.warn('WorkOS is busy, falling back to login...');
       }
     } else {
       // Non-API errors (filesystem, keyring) are unexpected — surface to user
-      clack.log.warn(`Could not set up environment: ${message}. Falling back to login...`);
+      ui.log.warn(`Could not set up environment: ${message}. Falling back to login...`);
     }
 
     return false;

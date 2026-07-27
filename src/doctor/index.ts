@@ -4,15 +4,18 @@ import { checkRuntime } from './checks/runtime.js';
 import { checkLanguage } from './checks/language.js';
 import { checkEnvironment } from './checks/environment.js';
 import { checkConnectivity } from './checks/connectivity.js';
+import { checkHostExecution } from './checks/host-execution.js';
 import { checkDashboardSettings, compareRedirectUris } from './checks/dashboard.js';
 import { checkAuthPatterns } from './checks/auth-patterns.js';
 import { checkAiAnalysis } from './checks/ai-analysis.js';
 import { checkSkills } from './checks/skills.js';
+import { checkMcp } from './checks/mcp.js';
 import { refreshWorkOSSkills } from '../commands/install-skill.js';
 import { detectIssues } from './issues.js';
 import { formatReport } from './output.js';
 import { formatReportAsJson } from './json-output.js';
 import { copyToClipboard } from './clipboard.js';
+import { getInteractionMode } from '../utils/interaction-mode.js';
 import Chalk from 'chalk';
 import type { DoctorOptions, DoctorReport, SkillsRefreshResult } from './types.js';
 
@@ -65,18 +68,24 @@ export async function maybeRefreshSkills(
 }
 
 export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
+  const interactionMode = getInteractionMode();
+
   // Environment check first - loads project's .env/.env.local files
   // Must run before connectivity so the resolved base URL is available
   const { info: environment, raw: envRaw } = checkEnvironment(options);
 
   // Run remaining checks concurrently
-  const [sdk, framework, runtime, connectivity, language] = await Promise.all([
+  const [sdk, framework, runtime, connectivity, language, hostExecution, mcpResult] = await Promise.all([
     checkSdk(options),
     checkFramework(options),
     checkRuntime(options),
     checkConnectivity(options, environment.baseUrl ?? 'https://api.workos.com'),
     checkLanguage(options.installDir),
+    checkHostExecution(),
+    checkMcp(),
   ]);
+  // Normalize the check's null (no agents detected) to undefined for the report.
+  const mcp = mcpResult ?? undefined;
 
   let skills = (await checkSkills()) ?? undefined;
 
@@ -93,14 +102,17 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
   const earlyIssues = detectIssues({
     version: DOCTOR_VERSION,
     timestamp: '',
+    interactionMode,
     project: { path: options.installDir, packageManager: runtime.packageManager },
     sdk,
     language,
     runtime,
     framework,
     environment,
+    hostExecution,
     connectivity,
     skills,
+    mcp,
   });
 
   const [dashboardResult, authPatterns, aiAnalysis] = await Promise.all([
@@ -129,6 +141,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
   const partialReport = {
     version: DOCTOR_VERSION,
     timestamp: new Date().toISOString(),
+    interactionMode,
     project: {
       path: options.installDir,
       packageManager: runtime.packageManager,
@@ -138,6 +151,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     runtime,
     framework,
     environment,
+    hostExecution,
     connectivity,
     credentialValidation: dashboardResult.credentialValidation,
     dashboardSettings: dashboardResult.settings ?? undefined,
@@ -147,6 +161,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     aiAnalysis,
     skills,
     skillsRefresh,
+    mcp,
   };
 
   // Detect issues based on (post-refresh) data.

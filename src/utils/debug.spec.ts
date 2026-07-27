@@ -12,8 +12,8 @@ vi.mock('os', async () => {
   return { ...actual, homedir: () => testDir };
 });
 
-// Mock clack to avoid side effects
-vi.mock('./clack.js', () => ({
+// Mock the UI facade
+vi.mock('./ui.js', () => ({
   default: {
     log: { info: vi.fn() },
   },
@@ -60,7 +60,7 @@ describe('debug logging', () => {
       const actual = await vi.importActual('os');
       return { ...actual, homedir: () => testDir };
     });
-    vi.doMock('./clack.js', () => ({
+    vi.doMock('./ui.js', () => ({
       default: { log: { info: vi.fn() } },
     }));
 
@@ -88,13 +88,60 @@ describe('debug logging', () => {
     expect(content).toContain('❌ ERROR: test error');
   });
 
+  it('writes visible warnings to stderr before log initialization', async () => {
+    vi.resetModules();
+    vi.doMock('os', async () => {
+      const actual = await vi.importActual('os');
+      return { ...actual, homedir: () => testDir };
+    });
+    vi.doMock('./ui.js', () => ({
+      default: { log: { info: vi.fn() } },
+    }));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const { getLogFilePath, logVisibleWarn } = await import('./debug.js');
+
+      logVisibleWarn('sandbox warning', 'host shell');
+
+      expect(getLogFilePath()).toBeNull();
+      expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('sandbox warning host shell'));
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('suppresses visible warnings in JSON mode', async () => {
+    vi.resetModules();
+    vi.doMock('os', async () => {
+      const actual = await vi.importActual('os');
+      return { ...actual, homedir: () => testDir };
+    });
+    vi.doMock('./ui.js', () => ({
+      default: { log: { info: vi.fn() } },
+    }));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const { setOutputMode } = await import('./output.js');
+      setOutputMode('json');
+      const { logVisibleWarn } = await import('./debug.js');
+
+      logVisibleWarn('sandbox warning', 'host shell');
+
+      expect(errorSpy).not.toHaveBeenCalled();
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
   it('getLogFilePath returns null before init', async () => {
     vi.resetModules();
     vi.doMock('os', async () => {
       const actual = await vi.importActual('os');
       return { ...actual, homedir: () => testDir };
     });
-    vi.doMock('./clack.js', () => ({
+    vi.doMock('./ui.js', () => ({
       default: { log: { info: vi.fn() } },
     }));
 

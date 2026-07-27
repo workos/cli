@@ -4,6 +4,20 @@ import { join } from 'path';
 import fg from 'fast-glob';
 import type { ValidationResult, ValidationRules, ValidationIssue } from './types.js';
 import { runBuildValidation } from './build-validator.js';
+import { detectPort } from '../port-detection.js';
+import nextjsRules from './rules/nextjs.json' with { type: 'json' };
+import reactRouterRules from './rules/react-router.json' with { type: 'json' };
+import reactRules from './rules/react.json' with { type: 'json' };
+import tanstackStartRules from './rules/tanstack-start.json' with { type: 'json' };
+import vanillaJsRules from './rules/vanilla-js.json' with { type: 'json' };
+
+const RULES_BY_FRAMEWORK: Readonly<Record<string, ValidationRules>> = {
+  nextjs: nextjsRules as ValidationRules,
+  'react-router': reactRouterRules as ValidationRules,
+  react: reactRules as ValidationRules,
+  'tanstack-start': tanstackStartRules as ValidationRules,
+  'vanilla-js': vanillaJsRules as ValidationRules,
+};
 
 export interface ValidateOptions {
   variant?: string;
@@ -52,26 +66,21 @@ export async function validateInstallation(
 }
 
 async function loadRules(framework: string, variant?: string): Promise<ValidationRules | null> {
-  const rulesPath = new URL(`./rules/${framework}.json`, import.meta.url);
-  try {
-    const content = await readFile(rulesPath, 'utf-8');
-    const rules = JSON.parse(content) as ValidationRules;
+  const rules = RULES_BY_FRAMEWORK[framework];
+  if (!rules) return null;
 
-    // Merge variant rules if specified
-    if (variant && rules.variants?.[variant]) {
-      const variantRules = rules.variants[variant];
-      return {
-        ...rules,
-        files: [...rules.files, ...(variantRules.files || [])],
-        packages: [...rules.packages, ...(variantRules.packages || [])],
-        envVars: [...rules.envVars, ...(variantRules.envVars || [])],
-      };
-    }
-
-    return rules;
-  } catch {
-    return null; // No rules for this framework yet
+  // Merge variant rules if specified
+  if (variant && rules.variants?.[variant]) {
+    const variantRules = rules.variants[variant];
+    return {
+      ...rules,
+      files: [...rules.files, ...(variantRules.files || [])],
+      packages: [...rules.packages, ...(variantRules.packages || [])],
+      envVars: [...rules.envVars, ...(variantRules.envVars || [])],
+    };
   }
+
+  return rules;
 }
 
 export async function validatePackages(rules: ValidationRules, projectDir: string): Promise<ValidationIssue[]> {
@@ -251,6 +260,32 @@ export async function validateFrameworkSpecific(framework: string, projectDir: s
 }
 
 /**
+ * Compares the redirect URI's effective port to the detected dev server port,
+ * for local dev hosts only, and records an error-severity issue on mismatch.
+ * Skips production URIs and placeholder hosts like http://test.
+ */
+function validateRedirectUriPort(url: URL, framework: string, projectDir: string, issues: ValidationIssue[]): void {
+  // Only enforce for local dev hosts; skip production URIs and placeholder
+  // hosts like http://test. Node parses IPv6 hostnames with brackets: [::1].
+  const localHosts = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+  if (!localHosts.has(url.hostname)) return;
+
+  const effectivePort = url.port || (url.protocol === 'https:' ? '443' : '80');
+  const detected = detectPort(framework, projectDir);
+
+  if (Number(effectivePort) !== detected) {
+    issues.push({
+      type: 'env',
+      severity: 'error',
+      message: `Redirect URI port :${effectivePort} does not match the detected dev server port :${detected}`,
+      hint:
+        `Update the redirect URI to use port :${detected} in .env.local and the WorkOS dashboard ` +
+        `(redirect URI, CORS origin, homepage URL), or change your dev server to run on port ${effectivePort}.`,
+    });
+  }
+}
+
+/**
  * Validates that the Next.js redirect URI matches an existing callback route.
  *
  * Common failure: .env.local has /auth/callback but route is at /api/auth/callback
@@ -277,6 +312,7 @@ async function validateNextjsRedirectUri(projectDir: string, issues: ValidationI
   try {
     const url = new URL(redirectUri);
     callbackPath = url.pathname;
+    validateRedirectUriPort(url, 'nextjs', projectDir, issues);
   } catch {
     issues.push({
       type: 'env',
@@ -319,7 +355,7 @@ async function validateNextjsRedirectUri(projectDir: string, issues: ValidationI
       const actualPath = '/' + existingRoutes[0].replace(/^(src\/)?app\//, '').replace(/\/route\.(ts|tsx|js|jsx)$/, '');
       hint =
         `Found callback route at ${existingRoutes[0]} but redirect URI points to ${callbackPath}. Either:\n` +
-        `  1. Change NEXT_PUBLIC_WORKOS_REDIRECT_URI to http://localhost:3000${actualPath}\n` +
+        `  1. Change NEXT_PUBLIC_WORKOS_REDIRECT_URI to ${new URL(redirectUri).origin}${actualPath}\n` +
         `  2. Move the route to app/${routePath}/route.ts`;
     }
 
@@ -360,6 +396,7 @@ async function validateReactRouterRedirectUri(projectDir: string, issues: Valida
   try {
     const url = new URL(redirectUri);
     callbackPath = url.pathname;
+    validateRedirectUriPort(url, 'react-router', projectDir, issues);
   } catch {
     issues.push({
       type: 'env',
@@ -418,7 +455,7 @@ async function validateReactRouterRedirectUri(projectDir: string, issues: Valida
           .replace(/\./g, '/');
       hint =
         `Found callback route at ${actualFile} but redirect URI points to ${callbackPath}. Either:\n` +
-        `  1. Change WORKOS_REDIRECT_URI to http://localhost:3000${actualPath}\n` +
+        `  1. Change WORKOS_REDIRECT_URI to ${new URL(redirectUri).origin}${actualPath}\n` +
         `  2. Move the route to app/routes/${dotPath}.tsx`;
     }
 
@@ -458,6 +495,7 @@ async function validateTanstackStartRedirectUri(projectDir: string, issues: Vali
   try {
     const url = new URL(redirectUri);
     callbackPath = url.pathname;
+    validateRedirectUriPort(url, 'tanstack-start', projectDir, issues);
   } catch {
     issues.push({
       type: 'env',
@@ -500,7 +538,7 @@ async function validateTanstackStartRedirectUri(projectDir: string, issues: Vali
           .replace(/\/index$/, '');
       hint =
         `Found callback route at ${actualFile} but redirect URI points to ${callbackPath}. Either:\n` +
-        `  1. Change WORKOS_REDIRECT_URI to http://localhost:3000${actualPath}\n` +
+        `  1. Change WORKOS_REDIRECT_URI to ${new URL(redirectUri).origin}${actualPath}\n` +
         `  2. Move the route to app/routes/${routePath}.tsx`;
     }
 
@@ -741,7 +779,7 @@ async function validateDuplicateEnvVars(projectDir: string, issues: ValidationIs
   // Parse env files into key-value maps
   const parseEnv = (content: string): Map<string, string> => {
     const map = new Map<string, string>();
-    for (const line of content.split('\n')) {
+    for (const line of content.split(/\r?\n/)) {
       const match = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
       if (match) {
         map.set(match[1], match[2].trim());

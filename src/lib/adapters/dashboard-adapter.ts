@@ -1,5 +1,5 @@
 import type { InstallerAdapter, AdapterConfig } from './types.js';
-import type { InstallerEventEmitter, InstallerEvents } from '../events.js';
+import type { InstallerEventEmitter, InstallerEvents, CompletionData } from '../events.js';
 import { renderCompletionSummary } from '../../utils/summary-box.js';
 
 /**
@@ -13,7 +13,7 @@ export class DashboardAdapter implements InstallerAdapter {
   private sendEvent: AdapterConfig['sendEvent'];
   private cleanup: (() => void) | null = null;
   private isStarted = false;
-  private completionData: { success: boolean; summary?: string } | null = null;
+  private completionData: { success: boolean; summary?: string; completion?: CompletionData } | null = null;
 
   constructor(config: AdapterConfig) {
     this.emitter = config.emitter;
@@ -50,6 +50,14 @@ export class DashboardAdapter implements InstallerAdapter {
     this.emitter.on('confirm:response', this.handleConfirmResponse);
     this.emitter.on('credentials:response', this.handleCredentialsResponse);
 
+    // Scaffold (empty-dir): the TUI has no dedicated scaffold prompt yet, so
+    // auto-proceed (the user ran the installer in an empty dir) and surface
+    // progress through the `status` event the Dashboard already renders.
+    this.emitter.on('scaffold:prompt', this.handleScaffoldPrompt);
+    this.emitter.on('scaffold:start', this.handleScaffoldStart);
+    this.emitter.on('scaffold:complete', this.handleScaffoldComplete);
+    this.emitter.on('scaffold:failed', this.handleScaffoldFailed);
+
     // Track completion for post-exit summary
     this.emitter.on('complete', this.handleComplete);
   }
@@ -57,8 +65,8 @@ export class DashboardAdapter implements InstallerAdapter {
   /**
    * Capture completion data for display after exit.
    */
-  private handleComplete = ({ success, summary }: InstallerEvents['complete']): void => {
-    this.completionData = { success, summary };
+  private handleComplete = ({ success, summary, completion }: InstallerEvents['complete']): void => {
+    this.completionData = { success, summary, completion };
   };
 
   async stop(): Promise<void> {
@@ -67,6 +75,10 @@ export class DashboardAdapter implements InstallerAdapter {
     // Unsubscribe from events
     this.emitter.off('confirm:response', this.handleConfirmResponse);
     this.emitter.off('credentials:response', this.handleCredentialsResponse);
+    this.emitter.off('scaffold:prompt', this.handleScaffoldPrompt);
+    this.emitter.off('scaffold:start', this.handleScaffoldStart);
+    this.emitter.off('scaffold:complete', this.handleScaffoldComplete);
+    this.emitter.off('scaffold:failed', this.handleScaffoldFailed);
     this.emitter.off('complete', this.handleComplete);
 
     // Run cleanup (unmount Ink, exit fullscreen)
@@ -75,7 +87,13 @@ export class DashboardAdapter implements InstallerAdapter {
 
     if (this.completionData) {
       console.log();
-      console.log(renderCompletionSummary(this.completionData.success, this.completionData.summary));
+      console.log(
+        renderCompletionSummary(
+          this.completionData.success,
+          this.completionData.summary,
+          this.completionData.completion,
+        ),
+      );
       console.log();
     }
 
@@ -105,5 +123,23 @@ export class DashboardAdapter implements InstallerAdapter {
    */
   private handleCredentialsResponse = ({ apiKey, clientId }: { apiKey: string; clientId: string }): void => {
     this.sendEvent({ type: 'CREDENTIALS_SUBMITTED', apiKey, clientId });
+  };
+
+  // ===== Scaffold (empty-dir) handlers =====
+
+  private handleScaffoldPrompt = (): void => {
+    this.sendEvent({ type: 'SCAFFOLD_CONFIRMED' });
+  };
+
+  private handleScaffoldStart = ({ packageManager }: InstallerEvents['scaffold:start']): void => {
+    this.emitter.emit('status', { message: `Scaffolding a new Next.js app with ${packageManager}...` });
+  };
+
+  private handleScaffoldComplete = (): void => {
+    this.emitter.emit('status', { message: 'Next.js app created' });
+  };
+
+  private handleScaffoldFailed = ({ error }: InstallerEvents['scaffold:failed']): void => {
+    this.emitter.emit('status', { message: `Scaffold failed: ${error}` });
   };
 }

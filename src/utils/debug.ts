@@ -4,7 +4,8 @@ import { homedir } from 'os';
 import chalk from 'chalk';
 import { prepareMessage } from './logging.js';
 import { redactCredentials } from './redact.js';
-import clack from './clack.js';
+import ui from './ui.js';
+import { isJsonMode } from './output.js';
 
 let debugEnabled = false;
 let sessionLogPath: string | null = null;
@@ -61,14 +62,14 @@ export function getLogFilePath(): string | null {
   return sessionLogPath;
 }
 
-function writeLog(level: 'INFO' | 'WARN' | 'ERROR', emoji: string, args: unknown[]): void {
+function writeLog(level: 'INFO' | 'WARN' | 'ERROR', emoji: string, args: unknown[]): string {
   const redactedArgs = args.map((a) => (typeof a === 'object' && a !== null ? redactCredentials(a) : a));
   const msg = redactedArgs.map((a) => prepareMessage(a)).join(' ');
 
   // Write to console if debug enabled
-  if (debugEnabled) {
+  if (debugEnabled && !isJsonMode()) {
     const color = level === 'ERROR' ? chalk.red : level === 'WARN' ? chalk.yellow : chalk.dim;
-    clack.log.info(color(`${emoji} ${msg}`));
+    ui.log.info(color(`${emoji} ${msg}`));
   }
 
   // Write to log file
@@ -80,6 +81,8 @@ function writeLog(level: 'INFO' | 'WARN' | 'ERROR', emoji: string, args: unknown
       // Ignore write failures
     }
   }
+
+  return msg;
 }
 
 export function logInfo(...args: unknown[]): void {
@@ -90,14 +93,25 @@ export function logWarn(...args: unknown[]): void {
   writeLog('WARN', '⚠️ ', args);
 }
 
+export function logVisibleWarn(...args: unknown[]): void {
+  const msg = writeLog('WARN', '⚠️ ', args);
+  if (!debugEnabled && !isJsonMode()) {
+    console.error(chalk.yellow(`⚠️  ${msg}`));
+  }
+}
+
 export function logError(...args: unknown[]): void {
   writeLog('ERROR', '❌', args);
 }
 
 export function debug(...args: unknown[]): void {
-  if (!debugEnabled) return;
+  if (!isDebugEnabled()) return;
   const msg = args.map((a) => prepareMessage(a)).join(' ');
-  clack.log.info(chalk.dim(msg));
+  ui.log.info(chalk.dim(msg));
+}
+
+export function isDebugEnabled(): boolean {
+  return debugEnabled && !isJsonMode();
 }
 
 export function enableDebugLogs(): void {

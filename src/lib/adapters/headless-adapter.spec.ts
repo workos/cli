@@ -144,6 +144,21 @@ describe('HeadlessAdapter', () => {
       expect(mockExit).not.toHaveBeenCalled();
       await adapter.stop();
     });
+
+    it('continues in CI mode without --no-git-check (WORKOS_MODE=ci bridges --ci)', async () => {
+      const adapter = createAdapter({ ci: true });
+      await adapter.start();
+
+      emitter.emit('git:dirty', { files: ['package.json'] });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({
+        type: 'git:decision',
+        action: 'continue',
+      });
+      expect(sendEvent).toHaveBeenCalledWith({ type: 'GIT_CONFIRMED' });
+      expect(mockExit).not.toHaveBeenCalled();
+      await adapter.stop();
+    });
   });
 
   describe('credentials auto-resolution', () => {
@@ -293,6 +308,92 @@ describe('HeadlessAdapter', () => {
     });
   });
 
+  describe('scaffold events', () => {
+    it('streams scaffold:* and flags the completion as scaffolded', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('scaffold:checking', {});
+      emitter.emit('scaffold:start', { packageManager: 'pnpm' });
+      emitter.emit('scaffold:complete', {});
+      emitter.emit('complete', { success: true, summary: 'Installed' });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'scaffold:checking' });
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'scaffold:start', packageManager: 'pnpm' });
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'scaffold:complete' });
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({
+        type: 'complete',
+        success: true,
+        summary: 'Installed',
+        scaffolded: true,
+      });
+      await adapter.stop();
+    });
+
+    it('writes scaffold:failed with the error', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('scaffold:failed', { error: 'create-next-app exited with code 1' });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({
+        type: 'scaffold:failed',
+        error: 'create-next-app exited with code 1',
+      });
+      await adapter.stop();
+    });
+  });
+
+  describe('file operations', () => {
+    it('writes path-only NDJSON for file:write (never content)', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('file:write', { path: 'src/auth.ts', content: 'secret' });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'file:write', path: 'src/auth.ts' });
+      const leakedContent = mockWriteNDJSON.mock.calls.some((c) => c[0] && 'content' in (c[0] as object));
+      expect(leakedContent).toBe(false);
+      await adapter.stop();
+    });
+
+    it('writes path-only NDJSON for file:edit (never content)', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('file:edit', { path: 'src/app.ts', oldContent: 'a', newContent: 'b' });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'file:edit', path: 'src/app.ts' });
+      const leaked = mockWriteNDJSON.mock.calls.some(
+        (c) => c[0] && ('oldContent' in (c[0] as object) || 'newContent' in (c[0] as object)),
+      );
+      expect(leaked).toBe(false);
+      await adapter.stop();
+    });
+
+    it('dedupes consecutive same-path file operations', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('file:edit', { path: 'src/app.ts', oldContent: 'a', newContent: 'b' });
+      emitter.emit('file:edit', { path: 'src/app.ts', oldContent: 'b', newContent: 'c' });
+
+      const editCalls = mockWriteNDJSON.mock.calls.filter((c) => (c[0] as { type?: string })?.type === 'file:edit');
+      expect(editCalls).toHaveLength(1);
+      await adapter.stop();
+    });
+
+    it('writes agent:tool NDJSON for surfaced commands', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('agent:tool', { kind: 'command', detail: 'ls' });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'agent:tool', kind: 'command', detail: 'ls' });
+      await adapter.stop();
+    });
+  });
+
   describe('terminal events', () => {
     it('writes complete event', async () => {
       const adapter = createAdapter();
@@ -304,7 +405,40 @@ describe('HeadlessAdapter', () => {
         type: 'complete',
         success: true,
         summary: 'All done',
+        scaffolded: false,
       });
+      await adapter.stop();
+    });
+
+    it('spreads structured completion fields into the complete event when present', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('complete', {
+        success: true,
+        summary: 'ok',
+        completion: {
+          integration: 'nextjs',
+          devCommand: 'pnpm run dev',
+          url: 'http://localhost:3000',
+          files: ['a.ts'],
+          nextSteps: ['x'],
+          docsUrl: 'https://d',
+          dashboardUrl: 'https://dash',
+        },
+      });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'complete',
+          success: true,
+          integration: 'nextjs',
+          devCommand: 'pnpm run dev',
+          url: 'http://localhost:3000',
+          files: ['a.ts'],
+          nextSteps: ['x'],
+        }),
+      );
       await adapter.stop();
     });
 
@@ -319,6 +453,37 @@ describe('HeadlessAdapter', () => {
         code: 'installer_error',
         message: 'Something broke',
       });
+      await adapter.stop();
+    });
+
+    it('passes a structured decline code through without rewriting the message', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      // "internal_error"-style pattern words in the message must not trigger
+      // the AI-service rewrites when the emitter supplied a code.
+      emitter.emit('error', {
+        message: 'Sorry: the installer cannot help with this framework version.',
+        code: 'unsupported_framework_version',
+      });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({
+        type: 'error',
+        code: 'unsupported_framework_version',
+        message: 'Sorry: the installer cannot help with this framework version.',
+      });
+      await adapter.stop();
+    });
+  });
+
+  describe('staging events', () => {
+    it('forwards the staging:success source onto the NDJSON stream', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('staging:success', { source: 'stored' });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'staging:success', source: 'stored' });
       await adapter.stop();
     });
   });

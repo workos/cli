@@ -106,7 +106,7 @@ describe('AgentExecutor', () => {
     expect(agentRunConfig.model).toBe('test-model');
     expect(agentRunConfig.allowedTools).toContain('Skill');
     expect(agentRunConfig.allowedTools).toContain('Write');
-    expect(agentRunConfig.mcpServers).toHaveProperty('workos');
+    expect(agentRunConfig.mcpServers).toBeUndefined();
     // Direct mode — no gateway URL
     expect(agentRunConfig.sdkEnv.ANTHROPIC_API_KEY).toBe('sk-ant-test');
     expect(agentRunConfig.sdkEnv.ANTHROPIC_BASE_URL).toBeUndefined();

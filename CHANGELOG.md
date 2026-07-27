@@ -4,6 +4,125 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.1](https://github.com/workos/cli/compare/v0.20.0...v0.20.1) (2026-07-26)
+
+
+### Bug Fixes
+
+* detect Bun compiled binary when import.meta.url percent-encodes ~BUN ([#208](https://github.com/workos/cli/issues/208)) ([4c66d6e](https://github.com/workos/cli/commit/4c66d6e255c9b55b600d9fb1c980116679fc9a49))
+
+## [0.20.0](https://github.com/workos/cli/compare/v0.19.0...v0.20.0) (2026-07-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* The npm package no longer exports a library API — `main`/`exports` are gone and it only provides the `workos` binary. Development now requires Bun >= 1.3.0 instead of Node >= 22.11.
+
+### Features
+
+* Add Homebrew channel and install-aware updates ([#196](https://github.com/workos/cli/issues/196)) ([c524855](https://github.com/workos/cli/commit/c5248559cd0c9625a8b40cf29f85abd3efb78135))
+* Ship the CLI as a Bun standalone binary ([#195](https://github.com/workos/cli/issues/195)) ([a5e9b46](https://github.com/workos/cli/commit/a5e9b468cdd62ccf973ae9d1f5046b214cac1d68))
+
+## [0.19.0](https://github.com/workos/cli/compare/v0.18.0...v0.19.0) (2026-07-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* `workos auth login` and `workos install` no longer auto-install skills. Skills + MCP are installed only through the consented setup flow (`workos setup`, or the post-login/install offer on a human TTY). Agent / CI / non-TTY / JSON runs write nothing.
+
+### Features
+
+* add env provision + verify-login commands, fix non-interactive installs (agent/CI), Vite port detection, and misleading command hints ([#192](https://github.com/workos/cli/issues/192)) ([dd20929](https://github.com/workos/cli/commit/dd20929ffeba24d35b0276f7b4336d11a104895a))
+* consent-gated agent setup and flat CLI output ([#200](https://github.com/workos/cli/issues/200)) ([9b0deb8](https://github.com/workos/cli/commit/9b0deb8daca054958f6e28623c3cc970c4a3a68b))
+
+
+### Bug Fixes
+
+* **deps:** bump @workos/openapi-spec to drop tree-sitter chain ([#204](https://github.com/workos/cli/issues/204)) ([7b03394](https://github.com/workos/cli/commit/7b03394593e155d4f3cad5ba9779f4fd7663b683)), closes [#202](https://github.com/workos/cli/issues/202)
+* Extract emulator to @workos/emulate ([#171](https://github.com/workos/cli/issues/171)) ([d20c0ca](https://github.com/workos/cli/commit/d20c0ca29144d2f10949b77a320f147589cdc801))
+
+## [0.18.0](https://github.com/workos/cli/compare/v0.17.1...v0.18.0) (2026-07-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* WORKOS_LLM_GATEWAY_URL and WORKOS_TELEMETRY_URL are removed (derived from WORKOS_API_URL); WORKOS_NO_PROMPT is removed (use WORKOS_MODE=agent); INSTALLER_DEV is renamed to WORKOS_DEV and INSTALLER_DISABLE_PROXY to WORKOS_DISABLE_PROXY.
+
+### Features
+
+* add MCP server install for coding agents (workos mcp) ([#184](https://github.com/workos/cli/issues/184)) ([f040f72](https://github.com/workos/cli/commit/f040f726f5b9ae2077b391596014939482f7dae1))
+* consolidate and rename CLI environment variables ([#180](https://github.com/workos/cli/issues/180)) ([2e0e3ca](https://github.com/workos/cli/commit/2e0e3ca70a7842b4744f6618679e192a62d6f801))
+
+
+### Bug Fixes
+
+* **deps:** update minor and patch updates ([#178](https://github.com/workos/cli/issues/178)) ([496b473](https://github.com/workos/cli/commit/496b473d5bc24e12bc55efe8d9269e122d4b658b))
+
+## [0.17.1](https://github.com/workos/cli/compare/v0.17.0...v0.17.1) (2026-06-08)
+
+
+### Bug Fixes
+
+* gate install success on doctor's auth-pattern security checks ([#175](https://github.com/workos/cli/issues/175)) ([5a50c77](https://github.com/workos/cli/commit/5a50c77d8568333530e6aeca44fa271f3af1f239))
+
+## [0.17.0](https://github.com/workos/cli/compare/v0.16.0...v0.17.0) (2026-06-08)
+
+
+### Features
+
+* scaffold a Next.js app when installing in an empty directory ([#173](https://github.com/workos/cli/issues/173)) ([d96ad16](https://github.com/workos/cli/commit/d96ad161de1af2d91bce9901145616464959f517))
+
+## [0.16.0](https://github.com/workos/cli/compare/v0.15.2...v0.16.0) (2026-06-02)
+
+
+### Features
+
+* add `vault run` for secure secret injection into child processes ([#167](https://github.com/workos/cli/issues/167)) ([c7db4f5](https://github.com/workos/cli/commit/c7db4f5906b372e9fa26032a43ee6b7d21e7b412))
+* CLI telemetry for all commands with centralized lifecycle ([#122](https://github.com/workos/cli/issues/122)) ([25604bd](https://github.com/workos/cli/commit/25604bdb190c86274a4086cf1a08c85de14d89ff))
+* Forward endpoint URL to migrations package ([#165](https://github.com/workos/cli/issues/165)) ([4ef2957](https://github.com/workos/cli/commit/4ef2957b1f3cd574c8852e5025b2631f1c39bb7d))
+* telemetry opt-out command + first-run notice ([#169](https://github.com/workos/cli/issues/169)) ([cb16ebb](https://github.com/workos/cli/commit/cb16ebbacc607592f438b4399cd37cbeb4311926))
+
+## [0.15.2](https://github.com/workos/cli/compare/v0.15.1...v0.15.2) (2026-05-20)
+
+
+### Bug Fixes
+
+* use file URL for dynamic imports to support Windows ([#156](https://github.com/workos/cli/issues/156)) ([6efdbba](https://github.com/workos/cli/commit/6efdbba7fe194dc0a02ec1f0581795a345ac760b))
+
+## [0.15.1](https://github.com/workos/cli/compare/v0.15.0...v0.15.1) (2026-05-14)
+
+
+### Bug Fixes
+
+* Make migrations API key optional ([#153](https://github.com/workos/cli/issues/153)) ([471cc4f](https://github.com/workos/cli/commit/471cc4fac853b89c7de935727fcc6ea1fdb76f0a))
+
+## [0.15.0](https://github.com/workos/cli/compare/v0.14.0...v0.15.0) (2026-05-13)
+
+
+### Features
+
+* add `workos migrations` command ([#149](https://github.com/workos/cli/issues/149)) ([7f5138f](https://github.com/workos/cli/commit/7f5138f949cd0097d964e3265fcca8d62e09c48b))
+
+
+### Bug Fixes
+
+* bump @workos/skills to 0.6.0 ([#151](https://github.com/workos/cli/issues/151)) ([bded17e](https://github.com/workos/cli/commit/bded17e9138e4592ad58994d02c4dbdaaf5e9696))
+
+## [0.14.0](https://github.com/workos/cli/compare/v0.13.4...v0.14.0) (2026-05-12)
+
+
+### Features
+
+* add first-class CLI interaction modes ([#143](https://github.com/workos/cli/issues/143)) ([4a6e8cc](https://github.com/workos/cli/commit/4a6e8cc3e070908673ee133213e49450b9280787))
+* **api:** add generic `workos api` gateway ([#142](https://github.com/workos/cli/issues/142)) ([6cfa55b](https://github.com/workos/cli/commit/6cfa55ba6d768ebbb4cc7ed922ac94037404b412))
+
+## [0.13.4](https://github.com/workos/cli/compare/v0.13.3...v0.13.4) (2026-05-05)
+
+
+### Bug Fixes
+
+* pass port and https flag to WorkOS SDK when base URL requires it ([#140](https://github.com/workos/cli/issues/140)) ([b7909e8](https://github.com/workos/cli/commit/b7909e854c479ebaeb246ce6b42e90150ee5cfad))
+
 ## [0.13.3](https://github.com/workos/cli/compare/v0.13.2...v0.13.3) (2026-04-30)
 
 

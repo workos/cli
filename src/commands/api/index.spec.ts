@@ -1,0 +1,537 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { Catalog } from './catalog.js';
+import type { ApiResponse } from './request.js';
+
+const mockCatalog: Catalog = {
+  endpoints: [
+    {
+      method: 'GET',
+      path: '/users',
+      summary: 'List users',
+      tag: 'Users',
+      operationId: 'listUsers',
+      pathParams: [],
+      queryParams: [],
+      hasRequestBody: false,
+      requestBodyRequired: false,
+    },
+    {
+      method: 'POST',
+      path: '/organizations',
+      summary: 'Create organization',
+      tag: 'Organizations',
+      operationId: 'createOrganization',
+      pathParams: [],
+      queryParams: [],
+      hasRequestBody: true,
+      requestBodyRequired: true,
+    },
+    {
+      method: 'DELETE',
+      path: '/users/{id}',
+      summary: 'Delete user',
+      tag: 'Users',
+      operationId: 'deleteUser',
+      pathParams: [{ name: 'id', description: '', required: true }],
+      queryParams: [],
+      hasRequestBody: false,
+      requestBodyRequired: false,
+    },
+  ],
+  tags: ['Organizations', 'Users'],
+};
+
+const mockApiRequest = vi.fn<(...args: unknown[]) => Promise<ApiResponse>>();
+
+vi.mock('./catalog.js', async () => {
+  const actual = await vi.importActual<typeof import('./catalog.js')>('./catalog.js');
+  return {
+    ...actual,
+    loadCatalog: async () => mockCatalog,
+  };
+});
+
+vi.mock('./request.js', () => ({
+  apiRequest: (...args: unknown[]) => mockApiRequest(...args),
+}));
+
+vi.mock('../../lib/api-key.js', () => ({
+  resolveApiKey: vi.fn(() => 'sk_test'),
+  resolveApiBaseUrl: vi.fn(() => 'https://api.example.com'),
+}));
+
+const mockConfirm = vi.fn();
+const mockIsCancel = vi.fn(() => false);
+vi.mock('../../utils/ui.js', () => ({
+  default: {
+    confirm: (...args: unknown[]) => mockConfirm(...args),
+    isCancel: (...args: unknown[]) => mockIsCancel(...args),
+  },
+}));
+
+const { setOutputMode } = await import('../../utils/output.js');
+const { resetInteractionModeForTests, setInteractionMode } = await import('../../utils/interaction-mode.js');
+const { runApiInteractive, runApiLs, runApiRequest } = await import('./index.js');
+const { CliExit } = await import('../../utils/cli-exit.js');
+
+async function expectExit(promise: Promise<unknown>, code: number): Promise<void> {
+  try {
+    await promise;
+  } catch (err) {
+    if (err instanceof CliExit) {
+      expect(err.exitCode).toBe(code);
+      return;
+    }
+    throw err;
+  }
+  throw new Error(`Expected promise to reject with CliExit(${code}) but it resolved`);
+}
+
+function buildResponse(overrides: Partial<ApiResponse> = {}): ApiResponse {
+  return {
+    status: 200,
+    headers: new Headers(),
+    body: { ok: true },
+    rawBody: '{"ok":true}',
+    ...overrides,
+  };
+}
+
+describe('runApiInteractive', () => {
+  let consoleOutput: string[];
+  let stderrOutput: string[];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetInteractionModeForTests();
+    consoleOutput = [];
+    stderrOutput = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      consoleOutput.push(args.map(String).join(' '));
+    });
+    vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      stderrOutput.push(args.map(String).join(' '));
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    setOutputMode('human');
+  });
+
+  it('prints usage instructions when interaction mode is agent', async () => {
+    setOutputMode('human');
+    setInteractionMode({ mode: 'agent', source: 'env' });
+    await expectExit(runApiInteractive(), 1);
+    expect(stderrOutput.join('\n')).toContain('Interactive API mode requires human mode');
+  });
+
+  it('emits a structured tty_required error in JSON mode when non-interactive', async () => {
+    setOutputMode('json');
+    // JSON mode short-circuits before the TTY check, so the underlying environment doesn't matter.
+    await expectExit(runApiInteractive(), 1);
+    expect(consoleOutput).toEqual([]);
+    const errorLine = stderrOutput.find((line) => {
+      try {
+        const parsed = JSON.parse(line) as { error?: { code?: string } };
+        return parsed.error?.code === 'tty_required';
+      } catch {
+        return false;
+      }
+    });
+    expect(errorLine).toBeDefined();
+  });
+
+  it('refuses to enter interactive mode in JSON mode even when a TTY is present', async () => {
+    setOutputMode('json');
+    // Default interaction mode is human; JSON mode must still short-circuit.
+    await expectExit(runApiInteractive(), 1);
+    expect(consoleOutput).toEqual([]);
+    const errorLine = stderrOutput.find((line) => {
+      try {
+        const parsed = JSON.parse(line) as { error?: { code?: string } };
+        return parsed.error?.code === 'tty_required';
+      } catch {
+        return false;
+      }
+    });
+    expect(errorLine).toBeDefined();
+  });
+
+  describe('command hints route through formatWorkOSCommand', () => {
+    const NPM_KEYS = ['npm_command', 'npm_execpath', 'npm_config_user_agent'] as const;
+    let saved: Record<string, string | undefined>;
+
+    beforeEach(() => {
+      saved = {};
+      for (const k of NPM_KEYS) {
+        saved[k] = process.env[k];
+        delete process.env[k];
+      }
+    });
+
+    afterEach(() => {
+      for (const k of NPM_KEYS) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+    });
+
+    function parseTtyError(): { message?: string; details?: { usage?: string[] } } {
+      const errorLine = stderrOutput.find((line) => {
+        try {
+          return (JSON.parse(line) as { error?: { code?: string } }).error?.code === 'tty_required';
+        } catch {
+          return false;
+        }
+      });
+      expect(errorLine).toBeDefined();
+      return (JSON.parse(errorLine!) as { error: { message?: string; details?: { usage?: string[] } } }).error;
+    }
+
+    it('JSON refusal carries the bare form when not launched via npx', async () => {
+      setOutputMode('json');
+      await expectExit(runApiInteractive(), 1);
+      const error = parseTtyError();
+      expect(error.message).toContain('workos api ls');
+      expect(error.details?.usage).toContain('workos api <endpoint>');
+      expect(error.details?.usage?.some((u) => u.includes('npx'))).toBe(false);
+    });
+
+    it('JSON refusal keeps the standalone binary form when npm variables are present', async () => {
+      process.env.npm_command = 'exec';
+      setOutputMode('json');
+      await expectExit(runApiInteractive(), 1);
+      const error = parseTtyError();
+      expect(error.message).toContain('workos api ls');
+      expect(error.details?.usage).toContain('workos api <endpoint>');
+    });
+  });
+});
+
+describe('runApiLs', () => {
+  let consoleOutput: string[];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetInteractionModeForTests();
+    consoleOutput = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      consoleOutput.push(args.map(String).join(' '));
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    setOutputMode('human');
+  });
+
+  it('lists endpoints grouped by tag in human mode', async () => {
+    setOutputMode('human');
+    await runApiLs();
+    const joined = consoleOutput.join('\n');
+    expect(joined).toContain('Users');
+    expect(joined).toContain('/users');
+    expect(joined).toContain('Organizations');
+    expect(joined).toContain('/organizations');
+  });
+
+  it('filters endpoints by substring (path/tag/summary/operationId)', async () => {
+    setOutputMode('human');
+    await runApiLs('organization');
+    const joined = consoleOutput.join('\n');
+    expect(joined).toContain('/organizations');
+    expect(joined).not.toContain('/users');
+  });
+
+  it('prints a friendly message when no endpoint matches the filter', async () => {
+    setOutputMode('human');
+    await runApiLs('does-not-exist');
+    expect(consoleOutput.some((l) => l.includes('No endpoints matching "does-not-exist"'))).toBe(true);
+  });
+
+  it('emits structured JSON in JSON mode', async () => {
+    setOutputMode('json');
+    await runApiLs('users');
+    expect(consoleOutput).toHaveLength(1);
+    const parsed = JSON.parse(consoleOutput[0]!);
+    expect(parsed.data).toEqual([
+      { method: 'GET', path: '/users', summary: 'List users', tag: 'Users' },
+      { method: 'DELETE', path: '/users/{id}', summary: 'Delete user', tag: 'Users' },
+    ]);
+  });
+});
+
+describe('runApiRequest', () => {
+  let consoleOutput: string[];
+  let stderrOutput: string[];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetInteractionModeForTests();
+    consoleOutput = [];
+    stderrOutput = [];
+    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
+      consoleOutput.push(args.map(String).join(' '));
+    });
+    vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      stderrOutput.push(args.map(String).join(' '));
+    });
+    mockConfirm.mockResolvedValue(true);
+    mockIsCancel.mockReturnValue(false);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    setOutputMode('human');
+  });
+
+  it('prints a human-readable dry-run preview without executing the request', async () => {
+    setOutputMode('human');
+    await runApiRequest('/users', { dryRun: true });
+    expect(mockApiRequest).not.toHaveBeenCalled();
+    const joined = consoleOutput.join('\n');
+    expect(joined).toContain('[dry-run]');
+    expect(joined).toContain('GET https://api.example.com/users');
+  });
+
+  it('emits structured JSON for a dry-run in JSON mode', async () => {
+    setOutputMode('json');
+    await runApiRequest('/users', { dryRun: true });
+    expect(mockApiRequest).not.toHaveBeenCalled();
+    const parsed = JSON.parse(consoleOutput[0]!);
+    expect(parsed).toEqual({
+      dryRun: true,
+      method: 'GET',
+      url: 'https://api.example.com/users',
+    });
+  });
+
+  it('parses --data into the JSON dry-run payload', async () => {
+    setOutputMode('json');
+    await runApiRequest('/organizations', { dryRun: true, data: '{"name":"Acme"}' });
+    const parsed = JSON.parse(consoleOutput[0]!);
+    expect(parsed).toEqual({
+      dryRun: true,
+      method: 'POST',
+      url: 'https://api.example.com/organizations',
+      body: { name: 'Acme' },
+    });
+  });
+
+  it('exits with a structured error in JSON dry-run mode when --data is not valid JSON', async () => {
+    setOutputMode('json');
+    await expectExit(runApiRequest('/organizations', { dryRun: true, data: 'not json' }), 1);
+    const errorLine = stderrOutput.find((line) => {
+      try {
+        const parsed = JSON.parse(line);
+        return parsed?.error?.code === 'invalid_json_body';
+      } catch {
+        return false;
+      }
+    });
+    expect(errorLine).toBeDefined();
+  });
+
+  it('falls back to a raw human-mode preview when --data is not valid JSON', async () => {
+    setOutputMode('human');
+    await runApiRequest('/organizations', { dryRun: true, data: 'not json' });
+    expect(mockApiRequest).not.toHaveBeenCalled();
+    const joined = consoleOutput.join('\n');
+    expect(joined).toContain('[dry-run]');
+    expect(joined).toContain('not json');
+  });
+
+  it('infers POST when a body is provided without an explicit method', async () => {
+    mockApiRequest.mockResolvedValue(buildResponse());
+    await runApiRequest('/organizations', { data: '{"name":"Acme"}', yes: true });
+    expect(mockApiRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'POST', path: '/organizations', body: '{"name":"Acme"}' }),
+    );
+  });
+
+  it('skips confirmation when --yes is set for mutating methods', async () => {
+    mockApiRequest.mockResolvedValue(buildResponse());
+    await runApiRequest('/organizations', { method: 'DELETE', yes: true });
+    expect(mockConfirm).not.toHaveBeenCalled();
+    expect(mockApiRequest).toHaveBeenCalled();
+  });
+
+  it('prompts for confirmation on mutating methods in TTY environments', async () => {
+    mockApiRequest.mockResolvedValue(buildResponse());
+    mockConfirm.mockResolvedValueOnce(true);
+    await runApiRequest('/organizations', { method: 'POST', data: '{}' });
+    expect(mockConfirm).toHaveBeenCalled();
+    expect(mockApiRequest).toHaveBeenCalled();
+  });
+
+  it('aborts when the user declines the confirmation prompt', async () => {
+    mockConfirm.mockResolvedValueOnce(false);
+    await expectExit(runApiRequest('/organizations', { method: 'POST', data: '{}' }), 2);
+    expect(mockApiRequest).not.toHaveBeenCalled();
+  });
+
+  it('exits with code 1 when the response status is >= 400', async () => {
+    mockApiRequest.mockResolvedValue(buildResponse({ status: 404, body: { error: 'not_found' } }));
+    await expectExit(runApiRequest('/users', { yes: true }), 1);
+  });
+
+  it('passes --include through to printResponse', async () => {
+    setOutputMode('human');
+    const headers = new Headers({ 'x-request-id': 'abc' });
+    mockApiRequest.mockResolvedValue(buildResponse({ status: 201, headers }));
+    await runApiRequest('/users', { include: true, yes: true });
+    const joined = consoleOutput.join('\n');
+    expect(joined).toContain('HTTP 201');
+    expect(joined).toContain('x-request-id: abc');
+  });
+
+  it('forwards --api-key to apiRequest', async () => {
+    mockApiRequest.mockResolvedValue(buildResponse());
+    await runApiRequest('/users', { apiKey: 'sk_override', yes: true });
+    expect(mockApiRequest).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'sk_override' }));
+  });
+
+  it('exits with a structured error when --file points at a missing path', async () => {
+    setOutputMode('json');
+    await expectExit(
+      runApiRequest('/organizations', { file: '/tmp/__nonexistent_workos_api_body__.json', yes: true }),
+      1,
+    );
+    const errorLine = stderrOutput.find((line) => {
+      try {
+        const parsed = JSON.parse(line) as { error?: { code?: string; message?: string } };
+        return parsed.error?.code === 'file_read_error';
+      } catch {
+        return false;
+      }
+    });
+    expect(errorLine).toBeDefined();
+    expect(mockApiRequest).not.toHaveBeenCalled();
+  });
+
+  it('treats an empty --data string as a body so method inference does not flip to GET', async () => {
+    mockApiRequest.mockResolvedValue(buildResponse());
+    await runApiRequest('/organizations', { data: '', yes: true });
+    expect(mockApiRequest).toHaveBeenCalledWith(expect.objectContaining({ method: 'POST', body: '' }));
+  });
+
+  it('refuses mutating requests without --yes in agent mode with human output', async () => {
+    setOutputMode('human');
+    setInteractionMode({ mode: 'agent', source: 'env' });
+    await expectExit(runApiRequest('/organizations', { method: 'POST', data: '{}' }), 1);
+    expect(mockApiRequest).not.toHaveBeenCalled();
+    expect(mockConfirm).not.toHaveBeenCalled();
+    expect(stderrOutput.some((l) => l.includes('agent mode require --yes'))).toBe(true);
+  });
+
+  it('exits with confirmation_required in JSON mode when a mutating request lacks --yes', async () => {
+    setOutputMode('json');
+    await expectExit(runApiRequest('/organizations', { method: 'POST', data: '{}' }), 1);
+    expect(mockApiRequest).not.toHaveBeenCalled();
+    expect(mockConfirm).not.toHaveBeenCalled();
+    const errorLine = stderrOutput.find((line) => {
+      try {
+        const parsed = JSON.parse(line) as { error?: { code?: string } };
+        return parsed.error?.code === 'confirmation_required';
+      } catch {
+        return false;
+      }
+    });
+    expect(errorLine).toBeDefined();
+    const parsed = JSON.parse(errorLine!);
+    expect(parsed.error.recovery.hints[0].command).toBe("workos api /organizations --method POST '--data={}' --yes");
+  });
+
+  it('uses equals-form data flags so leading hyphens are preserved in confirmation recovery commands', async () => {
+    setOutputMode('json');
+    await expectExit(runApiRequest('/organizations', { method: 'POST', data: '-x' }), 1);
+    const errorLine = stderrOutput.find((line) => {
+      try {
+        const parsed = JSON.parse(line) as { error?: { code?: string } };
+        return parsed.error?.code === 'confirmation_required';
+      } catch {
+        return false;
+      }
+    });
+    expect(errorLine).toBeDefined();
+    const parsed = JSON.parse(errorLine!);
+    expect(parsed.error.recovery.hints[0].command).toBe('workos api /organizations --method POST --data=-x --yes');
+  });
+
+  it('preserves --file in confirmation recovery commands', async () => {
+    setOutputMode('json');
+    const dir = mkdtempSync(join(tmpdir(), 'workos-api-'));
+    const file = join(dir, 'body.json');
+    writeFileSync(file, '{"name":"Acme"}');
+    try {
+      await expectExit(runApiRequest('/organizations', { method: 'PATCH', file }), 1);
+      const errorLine = stderrOutput.find((line) => {
+        try {
+          const parsed = JSON.parse(line) as { error?: { code?: string } };
+          return parsed.error?.code === 'confirmation_required';
+        } catch {
+          return false;
+        }
+      });
+      expect(errorLine).toBeDefined();
+      const parsed = JSON.parse(errorLine!);
+      expect(parsed.error.recovery.hints[0].command).toBe(
+        `workos api /organizations --method PATCH --file=${file} --yes`,
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('omits confirmation recovery commands for stdin bodies', async () => {
+    setOutputMode('json');
+    const stdinBody = (async function* () {
+      yield Buffer.from('{"name":"Acme"}');
+    })();
+    const originalStdin = process.stdin;
+    Object.defineProperty(process, 'stdin', { value: stdinBody, configurable: true });
+    try {
+      await expectExit(runApiRequest('/organizations', { method: 'POST', file: '-' }), 1);
+    } finally {
+      Object.defineProperty(process, 'stdin', { value: originalStdin, configurable: true });
+    }
+    const errorLine = stderrOutput.find((line) => {
+      try {
+        const parsed = JSON.parse(line) as { error?: { code?: string } };
+        return parsed.error?.code === 'confirmation_required';
+      } catch {
+        return false;
+      }
+    });
+    expect(errorLine).toBeDefined();
+    const parsed = JSON.parse(errorLine!);
+    expect(parsed.error.recovery.hints[0].command).toBeUndefined();
+  });
+
+  it('exits with empty_stdin_body when --file - is used and stdin is empty', async () => {
+    setOutputMode('json');
+    // Replace process.stdin with an async iterator that yields no chunks (EOF immediately).
+    const emptyStdin = (async function* () {})();
+    const originalStdin = process.stdin;
+    Object.defineProperty(process, 'stdin', { value: emptyStdin, configurable: true });
+    try {
+      await expectExit(runApiRequest('/orgs', { file: '-', yes: true }), 1);
+    } finally {
+      Object.defineProperty(process, 'stdin', { value: originalStdin, configurable: true });
+    }
+    expect(mockApiRequest).not.toHaveBeenCalled();
+    const errorLine = stderrOutput.find((line) => {
+      try {
+        const parsed = JSON.parse(line) as { error?: { code?: string } };
+        return parsed.error?.code === 'empty_stdin_body';
+      } catch {
+        return false;
+      }
+    });
+    expect(errorLine).toBeDefined();
+  });
+});

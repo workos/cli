@@ -1,9 +1,10 @@
 import fg from 'fast-glob';
-import { abortIfCancelled } from '../../utils/clack-utils.js';
-import clack from '../../utils/clack.js';
+import { abortIfCancelled } from '../../utils/ui-utils.js';
+import ui from '../../utils/ui.js';
 import { getVersionBucket } from '../../utils/semver.js';
 import type { InstallerOptions } from '../../utils/types.js';
 import { IGNORE_PATTERNS } from '../../lib/constants.js';
+import { isPromptAllowed } from '../../utils/interaction-mode.js';
 
 export function getNextJsVersionBucket(version: string | undefined): string {
   return getVersionBucket(version, 11);
@@ -14,7 +15,17 @@ export enum NextJsRouter {
   PAGES_ROUTER = 'pages-router',
 }
 
-export async function getNextJsRouter({ installDir }: Pick<InstallerOptions, 'installDir'>): Promise<NextJsRouter> {
+export async function getNextJsRouter({
+  installDir,
+  router,
+}: Pick<InstallerOptions, 'installDir' | 'router'>): Promise<NextJsRouter> {
+  // Explicit flag wins over detection (deterministic for agents).
+  if (router) {
+    const chosen = router === 'pages' ? NextJsRouter.PAGES_ROUTER : NextJsRouter.APP_ROUTER;
+    ui.log.info(`Using ${getNextJsRouterName(chosen)} (--router)`);
+    return chosen;
+  }
+
   const pagesMatches = await fg('**/pages/_app.@(ts|tsx|js|jsx)', {
     dot: true,
     cwd: installDir,
@@ -32,17 +43,28 @@ export async function getNextJsRouter({ installDir }: Pick<InstallerOptions, 'in
   const hasAppDir = appMatches.length > 0;
 
   if (hasPagesDir && !hasAppDir) {
-    clack.log.info(`Detected ${getNextJsRouterName(NextJsRouter.PAGES_ROUTER)} 📃`);
+    ui.log.detail(`Detected ${getNextJsRouterName(NextJsRouter.PAGES_ROUTER)}`);
     return NextJsRouter.PAGES_ROUTER;
   }
 
   if (hasAppDir && !hasPagesDir) {
-    clack.log.info(`Detected ${getNextJsRouterName(NextJsRouter.APP_ROUTER)} 📱`);
+    ui.log.detail(`Detected ${getNextJsRouterName(NextJsRouter.APP_ROUTER)}`);
+    return NextJsRouter.APP_ROUTER;
+  }
+
+  // Ambiguous (both app/ and pages/ present, or neither). In non-interactive
+  // mode default to the app router (dominant/new-project case) with a warning
+  // instead of prompting — the --router flag above is the escape hatch.
+  if (!isPromptAllowed()) {
+    ui.log.warn(
+      'Could not determine the Next.js router (both app/ and pages/ present, or neither). ' +
+        'Defaulting to app router. Pass --router app|pages to override.',
+    );
     return NextJsRouter.APP_ROUTER;
   }
 
   const result: NextJsRouter = await abortIfCancelled(
-    clack.select({
+    ui.select({
       message: 'What router are you using?',
       options: [
         {

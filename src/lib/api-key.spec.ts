@@ -39,7 +39,7 @@ vi.mock('node:os', async (importOriginal) => {
 });
 
 const { saveConfig, setInsecureConfigStorage, clearConfig } = await import('./config-store.js');
-const { resolveApiKey, resolveApiBaseUrl } = await import('./api-key.js');
+const { resolveApiKey, resolveOptionalApiKey, resolveApiBaseUrl } = await import('./api-key.js');
 
 describe('api-key', () => {
   const originalEnv = process.env;
@@ -114,6 +114,40 @@ describe('api-key', () => {
         environments: { prod: { name: 'prod', type: 'production', apiKey: 'sk_stored' } },
       });
       expect(resolveApiKey({ apiKey: '' })).toBe('sk_stored');
+    });
+  });
+
+  describe('resolveOptionalApiKey', () => {
+    it('returns --api-key flag over env var and stored key', () => {
+      process.env.WORKOS_API_KEY = 'sk_env_var';
+      saveConfig({
+        activeEnvironment: 'prod',
+        environments: { prod: { name: 'prod', type: 'production', apiKey: 'sk_stored' } },
+      });
+      expect(resolveOptionalApiKey({ apiKey: 'sk_flag' })).toBe('sk_flag');
+    });
+
+    it('returns WORKOS_API_KEY env var when no flag provided', () => {
+      process.env.WORKOS_API_KEY = 'sk_env_var';
+      saveConfig({
+        activeEnvironment: 'prod',
+        environments: { prod: { name: 'prod', type: 'production', apiKey: 'sk_stored' } },
+      });
+      expect(resolveOptionalApiKey()).toBe('sk_env_var');
+    });
+
+    it('returns undefined when no API key is available', () => {
+      mockExitWithError.mockClear();
+      expect(resolveOptionalApiKey()).toBeUndefined();
+      expect(mockExitWithError).not.toHaveBeenCalled();
+    });
+
+    it('returns configured API key when available', () => {
+      saveConfig({
+        activeEnvironment: 'prod',
+        environments: { prod: { name: 'prod', type: 'production', apiKey: 'sk_stored' } },
+      });
+      expect(resolveOptionalApiKey()).toBe('sk_stored');
     });
   });
 

@@ -1,10 +1,14 @@
-import { createEmulator, type EmulatorSeedConfig } from '../emulate/index.js';
+import { createEmulator, type EmulatorSeedConfig } from '@workos/emulate';
 import { resolveDevCommand } from '../lib/dev-command.js';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import chalk from 'chalk';
+import { IS_WINDOWS, SPAWN_OPTS } from '../utils/platform.js';
+import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
+import { exitWithError } from '../utils/output.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 export interface DevArgs {
   port: number;
@@ -15,8 +19,7 @@ export interface DevArgs {
 function loadSeedFile(filePath: string): EmulatorSeedConfig {
   const resolved = resolve(filePath);
   if (!existsSync(resolved)) {
-    console.error(`Seed file not found: ${resolved}`);
-    process.exit(1);
+    exitWithError({ code: 'seed_not_found', message: `Seed file not found: ${resolved}` });
   }
 
   const content = readFileSync(resolved, 'utf-8');
@@ -39,18 +42,9 @@ function autoDetectSeedFile(): EmulatorSeedConfig | null {
 }
 
 /**
- * Build the env vars object to inject into the child process.
- *
- * Sets both the base URL style (`WORKOS_API_BASE_URL`) and the decomposed
- * style (`WORKOS_API_HOSTNAME` + `WORKOS_API_PORT` + `WORKOS_API_HTTPS`)
- * so the emulator works with authkit SDKs (which read the decomposed vars)
- * and direct SDK consumers (which may use the base URL).
- */
-/**
  * Default seed data for `workos dev` so the AuthKit login flow works
- * out of the box. Provides a test user, an organization with a verified
- * domain, and a membership linking the two. Skipped when the user
- * provides `--seed` or a `workos-emulate.config.*` file is auto-detected.
+ * out of the box. Skipped when the user provides `--seed` or a
+ * `workos-emulate.config.*` file is auto-detected.
  */
 export const DEFAULT_DEV_SEED: EmulatorSeedConfig = {
   users: [
@@ -70,6 +64,14 @@ export const DEFAULT_DEV_SEED: EmulatorSeedConfig = {
   ],
 };
 
+/**
+ * Build the env vars object to inject into the child process.
+ *
+ * Sets both the base URL style (`WORKOS_API_BASE_URL`) and the decomposed
+ * style (`WORKOS_API_HOSTNAME` + `WORKOS_API_PORT` + `WORKOS_API_HTTPS`)
+ * so the emulator works with authkit SDKs (which read the decomposed vars)
+ * and direct SDK consumers (which may use the base URL).
+ */
 export function buildDevEnv(emulatorUrl: string, apiKey = 'sk_test_default'): Record<string, string> {
   const url = new URL(emulatorUrl);
   return {
@@ -122,24 +124,27 @@ export async function runDev(argv: DevArgs): Promise<void> {
         ...process.env,
         ...buildDevEnv(emulator.url, emulator.apiKey),
       },
+      ...SPAWN_OPTS,
     });
   } catch {
     console.error(chalk.red(`Failed to start: ${devCmd.command} ${devCmd.args.join(' ')}`));
-    console.error(chalk.dim('Try specifying the command explicitly: workos dev -- <your-command>'));
+    console.error(chalk.dim(`Try specifying the command explicitly: ${formatWorkOSCommand('dev -- <your-command>')}`));
     await emulator.close();
-    process.exit(1);
+    exitWithCode(ExitCode.GENERAL_ERROR);
   }
 
   child.on('error', async (err) => {
     console.error(chalk.red(`Failed to start: ${devCmd.command}`));
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
       console.error(chalk.dim(`Command not found: ${devCmd.command}`));
-      console.error(chalk.dim('Try specifying the command explicitly: workos dev -- <your-command>'));
+      console.error(
+        chalk.dim(`Try specifying the command explicitly: ${formatWorkOSCommand('dev -- <your-command>')}`),
+      );
     } else {
       console.error(chalk.dim(err.message));
     }
     await emulator.close();
-    process.exit(1);
+    exitWithCode(ExitCode.GENERAL_ERROR);
   });
 
   // 5. Signal handling — forward to child, then close emulator
@@ -149,6 +154,9 @@ export async function runDev(argv: DevArgs): Promise<void> {
   };
   process.on('SIGINT', () => shutdown('SIGINT'));
   process.on('SIGTERM', () => shutdown('SIGTERM'));
+  if (IS_WINDOWS) {
+    process.on('SIGBREAK', () => shutdown('SIGINT'));
+  }
 
   // 6. If child exits, close emulator and exit with same code
   child.on('exit', (code) => {

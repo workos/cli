@@ -13,26 +13,22 @@ vi.mock('../lib/workos-client.js', () => ({
   createWorkOSClient: () => ({ sdk: mockSdk }),
 }));
 
-// Mock clack for confirmation prompts
+// Mock the UI facade
 const mockConfirm = vi.fn();
 const mockIsCancel = vi.fn(() => false);
 
-vi.mock('../utils/clack.js', () => ({
+vi.mock('../utils/ui.js', () => ({
   default: {
     confirm: (...args: unknown[]) => mockConfirm(...args),
     isCancel: (...args: unknown[]) => mockIsCancel(...args),
   },
 }));
 
-// Mock environment detection
-vi.mock('../utils/environment.js', () => ({
-  isNonInteractiveEnvironment: vi.fn(() => false),
-}));
-
 const { setOutputMode } = await import('../utils/output.js');
-const { isNonInteractiveEnvironment } = await import('../utils/environment.js');
+const { resetInteractionModeForTests, setInteractionMode } = await import('../utils/interaction-mode.js');
 
 const { runConnectionList, runConnectionGet, runConnectionDelete } = await import('./connection.js');
+const { CliExit } = await import('../utils/cli-exit.js');
 
 const mockConnection = {
   id: 'conn_01ABC',
@@ -51,6 +47,7 @@ describe('connection commands', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resetInteractionModeForTests();
     consoleOutput = [];
     stderrOutput = [];
     vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
@@ -66,6 +63,7 @@ describe('connection commands', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     setOutputMode('human');
+    resetInteractionModeForTests();
   });
 
   describe('runConnectionList', () => {
@@ -144,21 +142,18 @@ describe('connection commands', () => {
       expect(consoleOutput.some((l) => l.includes('cancelled'))).toBe(true);
     });
 
-    it('cancels on clack cancel', async () => {
+    it('cancels on user cancel', async () => {
       mockConfirm.mockResolvedValue(Symbol('cancel'));
       mockIsCancel.mockReturnValue(true);
       await runConnectionDelete('conn_01ABC', {}, 'sk_test');
       expect(mockSdk.sso.deleteConnection).not.toHaveBeenCalled();
     });
 
-    it('requires --force in non-interactive mode', async () => {
-      vi.mocked(isNonInteractiveEnvironment).mockReturnValue(true);
-      const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code) => {
-        throw new Error(`process.exit(${code})`);
-      });
-      await expect(runConnectionDelete('conn_01ABC', {}, 'sk_test')).rejects.toThrow('process.exit(1)');
+    it('requires --force in agent mode', async () => {
+      setInteractionMode({ mode: 'agent', source: 'env' });
+      await expect(runConnectionDelete('conn_01ABC', {}, 'sk_test')).rejects.toThrow(CliExit);
       expect(mockSdk.sso.deleteConnection).not.toHaveBeenCalled();
-      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(mockConfirm).not.toHaveBeenCalled();
     });
   });
 

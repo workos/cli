@@ -4,6 +4,7 @@ import { parse as parseYaml } from 'yaml';
 import type { DomainData } from '@workos-inc/node';
 import { createWorkOSClient, type WorkOSCLIClient } from '../lib/workos-client.js';
 import { outputJson, outputSuccess, isJsonMode, exitWithError } from '../utils/output.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 const STATE_FILE = '.workos-seed-state.json';
 
@@ -92,7 +93,7 @@ export function runSeedInit(): void {
     outputJson({ status: 'ok', message: `Created ${DEFAULT_SEED_FILE}`, file: DEFAULT_SEED_FILE });
   } else {
     console.log(chalk.green(`Created ${DEFAULT_SEED_FILE}`));
-    console.log(chalk.dim('Edit the file, then run: workos seed --file=workos-seed.yml'));
+    console.log(chalk.dim(`Edit the file, then run: ${formatWorkOSCommand('seed --file=workos-seed.yml')}`));
   }
 }
 
@@ -114,15 +115,14 @@ export async function runSeed(
   if (!options.file) {
     return exitWithError({
       code: 'missing_args',
-      message:
-        'Provide a seed file: workos seed --file=workos-seed.yml\nRun workos seed --init to create an example seed file.',
+      message: `Provide a seed file: ${formatWorkOSCommand('seed --file=workos-seed.yml')}\nRun ${formatWorkOSCommand('seed --init')} to create an example seed file.`,
     });
   }
 
   if (!existsSync(options.file)) {
     return exitWithError({
       code: 'file_not_found',
-      message: `Seed file not found: ${options.file}. Create workos-seed.yml or run \`workos seed\` without --file for interactive mode.`,
+      message: `Seed file not found: ${options.file}. Create workos-seed.yml or run \`${formatWorkOSCommand('seed')}\` without --file for interactive mode.`,
     });
   }
 
@@ -235,7 +235,7 @@ export async function runSeed(
     saveState(state);
     exitWithError({
       code: 'seed_failed',
-      message: `Seed failed: ${error instanceof Error ? error.message : 'Unknown error'}. Partial state saved to ${STATE_FILE}. Run \`workos seed --clean\` to tear down.`,
+      message: `Seed failed: ${error instanceof Error ? error.message : 'Unknown error'}. Partial state saved to ${STATE_FILE}. Run \`${formatWorkOSCommand('seed --clean')}\` to tear down.`,
       details: state,
     });
   }

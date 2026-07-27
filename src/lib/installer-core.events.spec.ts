@@ -26,7 +26,13 @@ import { createActor, fromPromise } from 'xstate';
 import { installerMachine } from './installer-core.js';
 import { createEventCapture, compareEventSequences, filterDeterministicEvents } from './installer-core.test-utils.js';
 import type { InstallerOptions } from '../utils/types.js';
-import type { DetectionOutput, GitCheckOutput, AgentOutput, InstallerMachineContext } from './installer-core.types.js';
+import type {
+  DetectionOutput,
+  GitCheckOutput,
+  AgentOutput,
+  InstallerMachineContext,
+  WorkspaceCheckOutput,
+} from './installer-core.types.js';
 
 /**
  * Creates mock actor implementations for testing.
@@ -37,6 +43,13 @@ import type { DetectionOutput, GitCheckOutput, AgentOutput, InstallerMachineCont
 function createMockActors() {
   return {
     checkAuthentication: fromPromise<boolean, { options: InstallerOptions }>(async () => true),
+    // Default: not an empty dir, so the scaffold state falls straight through.
+    checkWorkspace: fromPromise<WorkspaceCheckOutput, { options: InstallerOptions }>(async () => ({
+      scaffoldable: false,
+      packageManager: 'npm',
+      autoScaffold: false,
+    })),
+    runScaffold: fromPromise<void, { context: InstallerMachineContext }>(async () => {}),
     detectIntegration: fromPromise<DetectionOutput, { options: InstallerOptions }>(async () => ({
       integration: 'nextjs',
     })),

@@ -1,5 +1,32 @@
 import { EventEmitter } from 'events';
 
+/**
+ * Structured data describing a successful installation, used to render the
+ * completion summary and enrich the headless `complete` NDJSON event.
+ *
+ * Defined here (not in installer-core.types.ts) to avoid an import cycle:
+ * installer-core.types.ts already imports from this module, so this module
+ * must not import back.
+ */
+export interface CompletionData {
+  /** Integration identifier (e.g. 'nextjs') */
+  integration: string;
+  /** Lockfile-aware dev command, e.g. "pnpm run dev" */
+  devCommand: string;
+  /** App URL with the detected port, e.g. "http://localhost:3000" */
+  url: string;
+  /** Changed files (git-relative), full list — display cap lives in the renderer */
+  files: string[];
+  /** Composed concrete + framework next-step lines */
+  nextSteps: string[];
+  /** Per-framework docs URL */
+  docsUrl: string;
+  /** WorkOS dashboard URL */
+  dashboardUrl: string;
+  /** Optional per-framework "add a sign-in link" snippet */
+  signInSnippet?: string;
+}
+
 export interface InstallerEvents {
   status: { message: string };
   output: { text: string; isError?: boolean };
@@ -11,8 +38,9 @@ export interface InstallerEvents {
   'confirm:response': { id: string; confirmed: boolean };
   'credentials:request': { requiresApiKey: boolean };
   'credentials:response': { apiKey: string; clientId: string };
-  complete: { success: boolean; summary?: string };
-  error: { message: string; stack?: string };
+  complete: { success: boolean; summary?: string; completion?: CompletionData };
+  /** `code` is set for structured declines (e.g. unsupported framework version); absent for unexpected failures. */
+  error: { message: string; stack?: string; code?: string };
 
   'state:enter': { state: string };
   'state:exit': { state: string };
@@ -44,7 +72,7 @@ export interface InstallerEvents {
   'device:error': { message: string };
   // Staging API events
   'staging:fetching': Record<string, never>;
-  'staging:success': Record<string, never>;
+  'staging:success': { source?: 'device' | 'stored' };
   'staging:error': { message: string; statusCode?: number };
   'config:start': Record<string, never>;
   'config:complete': Record<string, never>;
@@ -53,6 +81,8 @@ export interface InstallerEvents {
   'agent:success': { summary?: string };
   'agent:failure': { message: string; stack?: string };
   'agent:retry': { attempt: number; maxRetries: number };
+  // Surfaced agent tool activity (e.g. Bash commands run during install)
+  'agent:tool': { kind: 'command'; detail: string };
 
   'validation:retry:start': { attempt: number };
   'validation:retry:complete': { attempt: number; passed: boolean };
@@ -60,6 +90,15 @@ export interface InstallerEvents {
   'validation:start': { framework: string };
   'validation:issues': { issues: import('./validation/types.js').ValidationIssue[] };
   'validation:complete': { passed: boolean; issueCount: number; durationMs: number };
+
+  // Scaffold events (empty-directory app scaffolding)
+  'scaffold:checking': Record<string, never>;
+  'scaffold:prompt': { packageManager: string };
+  'scaffold:start': { packageManager: string };
+  'scaffold:progress': { text: string };
+  'scaffold:complete': Record<string, never>;
+  'scaffold:failed': { error: string };
+  'scaffold:skipped': Record<string, never>;
 
   // Branch check events
   'branch:checking': Record<string, never>;

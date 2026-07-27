@@ -1,0 +1,244 @@
+import chalk from 'chalk';
+import { readFile } from 'node:fs/promises';
+import { loadCatalog, endpointsByTag } from './catalog.js';
+import { apiRequest } from './request.js';
+import { resolveApiBaseUrl } from '../../lib/api-key.js';
+import { exitWithError, isJsonMode, outputJson } from '../../utils/output.js';
+import { ExitCode, exitWithCode } from '../../utils/exit-codes.js';
+import { isCiMode, isPromptAllowed, getInteractionMode } from '../../utils/interaction-mode.js';
+import { confirmationRecovery, authLoginRecovery, missingArgsRecovery } from '../../utils/recovery-hints.js';
+import { formatWorkOSCommand, formatWorkOSCommandArgs } from '../../utils/command-invocation.js';
+import { colorMethod, printResponse } from './format.js';
+
+export { colorMethod } from './format.js';
+
+export interface ApiCommandOptions {
+  method?: string;
+  data?: string;
+  file?: string;
+  include?: boolean;
+  apiKey?: string;
+  dryRun?: boolean;
+  yes?: boolean;
+}
+
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+export async function runApiInteractive(options?: { apiKey?: string }): Promise<void> {
+  // Interactive mode is inherently human-oriented (interactive prompts, preview text,
+  // etc.). Refuse to enter it whenever JSON output was requested, regardless of
+  // TTY status, so stdout stays machine-readable.
+  if (isJsonMode()) {
+    exitWithError({
+      code: 'tty_required',
+      message: `Interactive mode is not available with --json. Provide an endpoint or use \`${formatWorkOSCommand('api ls')}\`.`,
+      details: {
+        usage: [formatWorkOSCommand('api <endpoint>'), formatWorkOSCommand('api ls [filter]')],
+      },
+    });
+  }
+
+  if (!isPromptAllowed()) {
+    exitWithError({
+      code: 'tty_required',
+      message: `Interactive API mode requires human mode. Usage: ${formatWorkOSCommand('api <endpoint>')} or ${formatWorkOSCommand('api ls [filter]')}. Example: ${formatWorkOSCommand('api /user_management/users')}`,
+    });
+  }
+
+  const { apiInteractive } = await import('./interactive.js');
+  await apiInteractive({ apiKey: options?.apiKey });
+}
+
+export async function runApiLs(filter?: string): Promise<void> {
+  const catalog = await loadCatalog();
+  let endpoints = catalog.endpoints;
+
+  if (filter) {
+    const lower = filter.toLowerCase();
+    endpoints = endpoints.filter(
+      (e) =>
+        e.path.toLowerCase().includes(lower) ||
+        e.tag.toLowerCase().includes(lower) ||
+        e.summary.toLowerCase().includes(lower) ||
+        e.operationId.toLowerCase().includes(lower),
+    );
+  }
+
+  if (isJsonMode()) {
+    outputJson({
+      data: endpoints.map((e) => ({
+        method: e.method,
+        path: e.path,
+        summary: e.summary,
+        tag: e.tag,
+      })),
+    });
+    return;
+  }
+
+  if (endpoints.length === 0) {
+    console.log(filter ? `No endpoints matching "${filter}".` : 'No endpoints found.');
+    return;
+  }
+
+  const grouped = endpointsByTag(endpoints);
+
+  for (const [tag, eps] of grouped) {
+    console.log(`\n${chalk.bold(tag)}`);
+    for (const ep of eps) {
+      const method = colorMethod(ep.method).padEnd(18);
+      console.log(`  ${method} ${ep.path}  ${chalk.dim(ep.summary)}`);
+    }
+  }
+  console.log();
+}
+
+export async function runApiRequest(endpoint: string, options: ApiCommandOptions): Promise<void> {
+  const body = await resolveBody(options);
+  const hasBody = body !== undefined;
+  const method = (options.method ?? (hasBody ? 'POST' : 'GET')).toUpperCase();
+  const baseUrl = resolveApiBaseUrl();
+
+  if (options.dryRun) {
+    if (isJsonMode()) {
+      let parsedBody: unknown;
+      if (hasBody) {
+        try {
+          parsedBody = JSON.parse(body);
+        } catch {
+          exitWithError({ code: 'invalid_json_body', message: 'Request body is not valid JSON.' });
+        }
+      }
+      outputJson({
+        dryRun: true,
+        method,
+        url: `${baseUrl}${normalizePath(endpoint)}`,
+        body: parsedBody,
+      });
+    } else {
+      console.log(`${chalk.dim('[dry-run]')} ${method} ${baseUrl}${normalizePath(endpoint)}`);
+      if (hasBody) prettyPrint(body);
+    }
+    return;
+  }
+
+  if (MUTATING_METHODS.has(method) && !options.yes) {
+    const confirmCommand = buildConfirmationCommand(endpoint, method, options);
+    if (!isPromptAllowed()) {
+      exitWithError({
+        code: 'confirmation_required',
+        message: isCiMode()
+          ? `Mutating requests in CI mode require --yes. Refusing to ${method} ${endpoint}.`
+          : `Mutating requests in agent mode require --yes. Refusing to ${method} ${endpoint}.`,
+        recovery: confirmationRecovery(confirmCommand),
+      });
+    }
+    if (isJsonMode()) {
+      exitWithError({
+        code: 'confirmation_required',
+        message: 'Mutating requests in JSON mode require --yes to keep stdout machine-readable.',
+        recovery: confirmationRecovery(confirmCommand),
+      });
+    }
+    const ui = (await import('../../utils/ui.js')).default;
+    console.log(`\n${chalk.yellow('About to')} ${method} ${endpoint}`);
+    if (hasBody) prettyPrint(body);
+    const ok = await ui.confirm({ message: 'Proceed?' });
+    if (!ok || ui.isCancel(ok)) {
+      exitWithCode(ExitCode.CANCELLED);
+    }
+  }
+
+  const response = await apiRequest({
+    method,
+    path: normalizePath(endpoint),
+    apiKey: options.apiKey,
+    body,
+    baseUrl,
+  });
+
+  printResponse(response, { includeStatus: options.include });
+
+  if (response.status >= 400) {
+    // Give the caller a concrete next step keyed off the status: re-auth for
+    // 401/403, discover endpoints for 404.
+    const recovery =
+      response.status === 401 || response.status === 403
+        ? authLoginRecovery({ mode: getInteractionMode().mode })
+        : response.status === 404
+          ? missingArgsRecovery(
+              formatWorkOSCommand('api ls'),
+              'List available endpoints, then re-run with a valid path.',
+            )
+          : undefined;
+    exitWithError({
+      code: `http_${response.status}`,
+      message: `API request failed with status ${response.status}`,
+      apiContext: { status: response.status },
+      ...(recovery && { recovery }),
+    });
+  }
+}
+
+function normalizePath(path: string): string {
+  if (!path.startsWith('/')) return `/${path}`;
+  return path;
+}
+
+function buildConfirmationCommand(endpoint: string, method: string, options: ApiCommandOptions): string | undefined {
+  if (options.apiKey || options.file === '-') {
+    return undefined;
+  }
+
+  const args = ['api', endpoint, '--method', method];
+  if (options.data !== undefined) {
+    args.push(`--data=${options.data}`);
+  }
+  if (options.file) {
+    args.push(`--file=${options.file}`);
+  }
+  if (options.include) {
+    args.push('--include');
+  }
+  args.push('--yes');
+  return formatWorkOSCommandArgs(args);
+}
+
+async function resolveBody(options: ApiCommandOptions): Promise<string | undefined> {
+  if (options.data !== undefined) return options.data;
+  if (options.file) {
+    if (options.file === '-') {
+      const chunks: Buffer[] = [];
+      for await (const chunk of process.stdin) {
+        chunks.push(chunk);
+      }
+      const stdinBody = Buffer.concat(chunks).toString('utf-8');
+      if (stdinBody.length === 0) {
+        exitWithError({
+          code: 'empty_stdin_body',
+          message:
+            'Reading request body from stdin (--file -) yielded no data. Pipe data into the command or pass --data instead.',
+        });
+      }
+      return stdinBody;
+    }
+    try {
+      return await readFile(options.file, 'utf-8');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      exitWithError({
+        code: 'file_read_error',
+        message: `Could not read request body file "${options.file}": ${message}`,
+      });
+    }
+  }
+  return undefined;
+}
+
+function prettyPrint(jsonString: string): void {
+  try {
+    console.log(JSON.stringify(JSON.parse(jsonString), null, 2));
+  } catch {
+    console.log(jsonString);
+  }
+}

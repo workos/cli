@@ -33,6 +33,7 @@ vi.mock('../lib/workos-client.js', () => ({
 
 const { setOutputMode } = await import('../utils/output.js');
 const { runSeed, runSeedInit } = await import('./seed.js');
+const { CliExit } = await import('../utils/cli-exit.js');
 
 const mockExistsSync = vi.mocked(existsSync);
 const mockReadFileSync = vi.mocked(readFileSync);
@@ -258,37 +259,87 @@ config:
       mockSdk.authorization.createPermission.mockResolvedValue({ slug: 'read-users' });
       mockSdk.authorization.createEnvironmentRole.mockRejectedValue(new Error('Server exploded'));
 
-      const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-      await runSeed({ file: 'workos-seed.yml' }, 'sk_test');
+      await expect(runSeed({ file: 'workos-seed.yml' }, 'sk_test')).rejects.toThrow(CliExit);
 
       // State should be saved with the permission that was created
       expect(mockWriteFileSync).toHaveBeenCalled();
       const stateArg = JSON.parse(mockWriteFileSync.mock.calls[0][1] as string);
       expect(stateArg.permissions.length).toBeGreaterThan(0);
-      expect(mockExit).toHaveBeenCalledWith(1);
     });
 
     it('exits with error when file not found', async () => {
       mockExistsSync.mockReturnValue(false);
 
-      const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-      await runSeed({ file: 'missing.yml' }, 'sk_test');
-      expect(mockExit).toHaveBeenCalledWith(1);
+      await expect(runSeed({ file: 'missing.yml' }, 'sk_test')).rejects.toThrow(CliExit);
     });
 
     it('exits with error when no --file provided', async () => {
-      const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-      await runSeed({}, 'sk_test');
-      expect(mockExit).toHaveBeenCalledWith(1);
+      await expect(runSeed({}, 'sk_test')).rejects.toThrow(CliExit);
     });
 
     it('exits with error on invalid YAML', async () => {
       mockExistsSync.mockReturnValue(true);
       mockReadFileSync.mockReturnValue('{{{{invalid yaml');
 
-      const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-      await runSeed({ file: 'bad.yml' }, 'sk_test');
-      expect(mockExit).toHaveBeenCalledWith(1);
+      await expect(runSeed({ file: 'bad.yml' }, 'sk_test')).rejects.toThrow(CliExit);
+    });
+  });
+
+  describe('command hints route through formatWorkOSCommand', () => {
+    const NPM_KEYS = ['npm_command', 'npm_execpath', 'npm_config_user_agent'] as const;
+    let saved: Record<string, string | undefined>;
+
+    beforeEach(() => {
+      saved = {};
+      for (const k of NPM_KEYS) {
+        saved[k] = process.env[k];
+        delete process.env[k];
+      }
+      process.env.npm_command = 'exec';
+      setOutputMode('json');
+    });
+
+    afterEach(() => {
+      setOutputMode('human');
+      for (const k of NPM_KEYS) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+    });
+
+    function lastErrorMessage(): string {
+      const line = [...consoleErrors].reverse().find((l) => {
+        try {
+          return typeof (JSON.parse(l) as { error?: { message?: string } }).error?.message === 'string';
+        } catch {
+          return false;
+        }
+      });
+      expect(line).toBeDefined();
+      return (JSON.parse(line!) as { error: { message: string } }).error.message;
+    }
+
+    it('missing --file error carries the standalone seed hints', async () => {
+      await expect(runSeed({}, 'sk_test')).rejects.toThrow(CliExit);
+      const message = lastErrorMessage();
+      expect(message).toContain('workos seed --file=workos-seed.yml');
+      expect(message).toContain('workos seed --init');
+    });
+
+    it('file-not-found error carries the standalone seed hint', async () => {
+      mockExistsSync.mockReturnValue(false);
+      await expect(runSeed({ file: 'missing.yml' }, 'sk_test')).rejects.toThrow(CliExit);
+      expect(lastErrorMessage()).toContain('workos seed');
+    });
+
+    it('seed-failed error carries the standalone seed --clean hint', async () => {
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(FULL_SEED_YAML);
+      mockSdk.authorization.createPermission.mockResolvedValue({ slug: 'read-users' });
+      mockSdk.authorization.createEnvironmentRole.mockRejectedValue(new Error('Server exploded'));
+
+      await expect(runSeed({ file: 'workos-seed.yml' }, 'sk_test')).rejects.toThrow(CliExit);
+      expect(lastErrorMessage()).toContain('workos seed --clean');
     });
   });
 
@@ -353,9 +404,7 @@ config:
     it('exits with error when no state file', async () => {
       mockExistsSync.mockReturnValue(false);
 
-      const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-      await runSeed({ clean: true }, 'sk_test');
-      expect(mockExit).toHaveBeenCalledWith(1);
+      await expect(runSeed({ clean: true }, 'sk_test')).rejects.toThrow(CliExit);
     });
   });
 

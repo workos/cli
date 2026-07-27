@@ -1,3 +1,5 @@
+import type { InteractionModeInfo } from '../utils/interaction-mode.js';
+
 export type IssueSeverity = 'error' | 'warning';
 
 export interface Issue {
@@ -34,7 +36,8 @@ export interface FrameworkInfo {
 }
 
 export interface RuntimeInfo {
-  nodeVersion: string;
+  /** Host Node.js version (`node --version`), or null when not installed. */
+  nodeVersion: string | null;
   packageManager: string | null;
   packageManagerVersion: string | null;
 }
@@ -65,6 +68,21 @@ export interface ConnectivityInfo {
   latencyMs: number | null;
   tlsValid: boolean;
   error?: string;
+}
+
+export interface HostExecutionFailure {
+  capability: string;
+  detail: string;
+  operation?: string;
+  target?: string;
+  label?: string;
+}
+
+export interface HostExecutionInfo {
+  mode: 'interactive' | 'non-interactive';
+  ok: boolean;
+  failures: HostExecutionFailure[];
+  warning?: string;
 }
 
 export interface DashboardSettings {
@@ -133,9 +151,27 @@ export interface SkillsRefreshResult {
   skillsInstalled: string[];
 }
 
+export interface McpAgentMcpStatus {
+  /** Display name of the agent (e.g. "Cursor"), mirroring SkillAgentStatus. */
+  agent: string;
+  /** Agent is usable on this machine. */
+  available: boolean;
+  /** The WorkOS MCP server is present in this agent's config. */
+  installed: boolean;
+  /** Cursor only: the entry exists but points at an unexpected URL. */
+  misconfigured?: boolean;
+}
+
+export interface McpInfo {
+  /** The URL the WorkOS MCP server should be configured with. */
+  serverUrl: string;
+  agents: McpAgentMcpStatus[];
+}
+
 export interface DoctorReport {
   version: string;
   timestamp: string;
+  interactionMode: InteractionModeInfo;
   project: {
     path: string;
     packageManager: string | null;
@@ -145,6 +181,7 @@ export interface DoctorReport {
   runtime: RuntimeInfo;
   framework: FrameworkInfo;
   environment: EnvironmentInfo;
+  hostExecution: HostExecutionInfo;
   connectivity: ConnectivityInfo;
   dashboardSettings?: DashboardSettings;
   dashboardError?: string;
@@ -155,6 +192,8 @@ export interface DoctorReport {
   skills?: SkillsInfo;
   /** Present only when `--fix` actually performed a refresh. */
   skillsRefresh?: SkillsRefreshResult;
+  /** MCP server status per detected coding agent. Null (absent) when none detected. */
+  mcp?: McpInfo;
   issues: Issue[];
   summary: {
     errors: number;

@@ -7,9 +7,10 @@ import { refreshAccessToken } from './token-refresh-client.js';
 import { getCliAuthClientId, getAuthkitDomain } from './settings.js';
 import { runLogin } from '../commands/login.js';
 import { logInfo } from '../utils/debug.js';
-import { isNonInteractiveEnvironment } from '../utils/environment.js';
+import { isAgentMode, isCiMode, isPromptAllowed } from '../utils/interaction-mode.js';
 import { exitWithAuthRequired } from '../utils/exit-codes.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
+import { warnIfSandboxed } from './host-probe.js';
 
 export interface EnsureAuthResult {
   /** Whether auth is now valid */
@@ -30,6 +31,23 @@ export interface EnsureAuthResult {
  * @returns Result indicating what actions were taken
  * @throws Error if login fails or refresh fails unexpectedly
  */
+function exitForAuthRequired(message?: string): never {
+  if (isCiMode()) {
+    exitWithAuthRequired(
+      message ?? 'Not authenticated. Set WORKOS_API_KEY or configure credentials before running in CI.',
+    );
+  }
+
+  if (isAgentMode()) {
+    exitWithAuthRequired(
+      message ??
+        `Not authenticated. Run \`${formatWorkOSCommand('auth login')}\` on the host shell or set WORKOS_API_KEY.`,
+    );
+  }
+
+  exitWithAuthRequired(message);
+}
+
 export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
   const result: EnsureAuthResult = {
     authenticated: false,
@@ -37,12 +55,14 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
     tokenRefreshed: false,
   };
 
+  await warnIfSandboxed();
+
   // Case 1: No credentials or invalid credentials
   const creds = getCredentials();
   if (!creds) {
     clearCredentials(); // Clean up any corrupt/empty files
-    if (isNonInteractiveEnvironment()) {
-      exitWithAuthRequired();
+    if (!isPromptAllowed()) {
+      exitForAuthRequired();
     }
     logInfo('[ensure-auth] No valid credentials found, triggering login');
     await runLogin();
@@ -77,9 +97,11 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
       // Refresh failed - check if it's recoverable
       if (refreshResult.errorType === 'invalid_grant') {
         clearCredentials();
-        if (isNonInteractiveEnvironment()) {
-          exitWithAuthRequired(
-            `Session expired. Run \`${formatWorkOSCommand('auth login')}\` in an interactive terminal to re-authenticate.`,
+        if (!isPromptAllowed()) {
+          exitForAuthRequired(
+            isCiMode()
+              ? 'Session expired. Refresh credentials before running in CI, or set WORKOS_API_KEY.'
+              : `Session expired. Run \`${formatWorkOSCommand('auth login')}\` on the host shell or set WORKOS_API_KEY.`,
           );
         }
         logInfo('[ensure-auth] Refresh token expired, triggering login');
@@ -90,9 +112,11 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
       }
 
       // Network or server error - keep credentials intact for retry
-      if (isNonInteractiveEnvironment()) {
-        exitWithAuthRequired(
-          `Authentication refresh failed (${refreshResult.errorType}). Run \`${formatWorkOSCommand('auth login')}\` in an interactive terminal.`,
+      if (!isPromptAllowed()) {
+        exitForAuthRequired(
+          isCiMode()
+            ? `Authentication refresh failed (${refreshResult.errorType}). Refresh credentials before running in CI, or set WORKOS_API_KEY.`
+            : `Authentication refresh failed (${refreshResult.errorType}). Run \`${formatWorkOSCommand('auth login')}\` on the host shell or set WORKOS_API_KEY.`,
         );
       }
       logInfo(`[ensure-auth] Refresh failed (${refreshResult.errorType}), triggering login`);
@@ -105,9 +129,11 @@ export async function ensureAuthenticated(): Promise<EnsureAuthResult> {
 
   // Case 4: No refresh token available — clear stale creds, must login
   clearCredentials();
-  if (isNonInteractiveEnvironment()) {
-    exitWithAuthRequired(
-      `Session expired. Run \`${formatWorkOSCommand('auth login')}\` in an interactive terminal to re-authenticate.`,
+  if (!isPromptAllowed()) {
+    exitForAuthRequired(
+      isCiMode()
+        ? 'Session expired. Refresh credentials before running in CI, or set WORKOS_API_KEY.'
+        : `Session expired. Run \`${formatWorkOSCommand('auth login')}\` on the host shell or set WORKOS_API_KEY.`,
     );
   }
   logInfo('[ensure-auth] No refresh token, triggering login');

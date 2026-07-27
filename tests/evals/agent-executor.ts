@@ -7,6 +7,7 @@ import { getConfig } from '../../src/lib/settings.js';
 import { LatencyTracker } from './latency-tracker.js';
 import { quickCheckValidateAndFormat } from '../../src/lib/validation/quick-checks.js';
 import { runAgent, type AgentRunConfig, type RetryConfig } from '../../src/lib/agent-interface.js';
+import { ensureClaudeCodeExecutable } from '../../src/lib/agent-sdk-assets.js';
 import type { InstallerOptions } from '../../src/utils/types.js';
 import type { ToolCall, LatencyMetrics } from './types.js';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
@@ -127,15 +128,10 @@ export class AgentExecutor {
 
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: this.workDir,
-      mcpServers: {
-        workos: {
-          command: 'npx',
-          args: ['-y', '@workos/mcp-docs-server'],
-        },
-      },
       model: getConfig().model,
       allowedTools: ['Skill', 'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch'],
       sdkEnv,
+      claudeExecutablePath: await ensureClaudeCodeExecutable(),
     };
 
     const installerOptions: InstallerOptions = {

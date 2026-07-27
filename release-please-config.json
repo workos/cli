@@ -6,7 +6,9 @@
       "release-type": "node",
       "bump-minor-pre-major": true,
       "changelog-path": "CHANGELOG.md",
-      "versioning": "default"
+      "versioning": "default",
+      "draft": true,
+      "force-tag-creation": true
     }
   }
 }

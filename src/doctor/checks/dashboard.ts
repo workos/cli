@@ -8,6 +8,39 @@ import type {
 
 const WORKOS_API_URL = 'https://api.workos.com';
 
+/**
+ * Hosts the resolved API key may be sent to as a Bearer credential.
+ *
+ * `baseUrl` is resolved from the project's `.env`/`.env.local`, which is
+ * attacker-controllable: a poisoned repo can commit
+ * `WORKOS_BASE_URL=https://evil.example` while the key comes from the
+ * developer's own secrets. Since the key and the destination originate from
+ * different trust domains, never attach the credential to anything outside
+ * this allowlist.
+ */
+export function isCredentialSafeBaseUrl(baseUrl: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    return false;
+  }
+
+  const host = url.hostname.toLowerCase();
+
+  // Localhost is used for internal WorkOS API development and cannot be pointed
+  // at attacker-controlled infrastructure, so allow it over any scheme.
+  if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+    return true;
+  }
+
+  // Everything else must be an HTTPS WorkOS host. Strip a trailing root-label
+  // dot so a valid FQDN like `api.workos.com.` is still recognized.
+  if (url.protocol !== 'https:') return false;
+  const normalizedHost = host.endsWith('.') ? host.slice(0, -1) : host;
+  return normalizedHost === 'workos.com' || normalizedHost.endsWith('.workos.com');
+}
+
 export async function checkDashboardSettings(
   options: DoctorOptions,
   apiKeyType: 'staging' | 'production' | null,
@@ -27,8 +60,16 @@ export async function checkDashboardSettings(
     return { settings: null, error: 'No API key configured' };
   }
 
+  // Refuse to send the credential to an untrusted base URL. WORKOS_BASE_URL can
+  // be supplied by an attacker-controlled project `.env`, so a non-WorkOS host
+  // would exfiltrate the developer's API key.
+  const baseUrl = raw.baseUrl ?? WORKOS_API_URL;
+  if (!isCredentialSafeBaseUrl(baseUrl)) {
+    return { settings: null, error: `Skipped (untrusted WORKOS_BASE_URL: ${baseUrl})` };
+  }
+
   try {
-    return await fetchDashboardSettings(apiKey, raw.baseUrl);
+    return await fetchDashboardSettings(apiKey, baseUrl);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return { settings: null, error: message };

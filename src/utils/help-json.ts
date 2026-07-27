@@ -7,6 +7,8 @@
  */
 
 import { getVersion } from '../lib/settings.js';
+import { COMMAND_ALIASES } from '../lib/command-aliases.js';
+import { MIGRATIONS_DESCRIPTION } from '../lib/constants.js';
 
 export interface OptionSchema {
   name: string;
@@ -111,6 +113,15 @@ const commands: CommandSchema[] = [
     options: [insecureStorageOpt],
   },
   {
+    name: 'telemetry',
+    description: 'Manage telemetry collection (opt-out, opt-in, status)',
+    commands: [
+      { name: 'opt-out', description: 'Disable telemetry collection (persists across runs)' },
+      { name: 'opt-in', description: 'Re-enable telemetry collection' },
+      { name: 'status', description: 'Show whether telemetry is enabled and why' },
+    ],
+  },
+  {
     name: 'skills',
     description: 'Manage WorkOS skills for coding agents (Claude Code, Codex, Cursor, Goose)',
     commands: [
@@ -171,6 +182,44 @@ const commands: CommandSchema[] = [
             hidden: false,
           },
         ],
+      },
+    ],
+  },
+  {
+    name: 'mcp',
+    description: 'Manage the WorkOS MCP server in coding agents (Claude Code, Codex, Cursor)',
+    commands: [
+      {
+        name: 'install',
+        description: 'Add the WorkOS MCP server to detected coding agents',
+        options: [
+          {
+            name: 'agent',
+            type: 'array',
+            description: 'Target specific agent(s): claude-code, codex, cursor',
+            required: false,
+            alias: 'a',
+            hidden: false,
+          },
+        ],
+      },
+      {
+        name: 'remove',
+        description: 'Remove the WorkOS MCP server from coding agents',
+        options: [
+          {
+            name: 'agent',
+            type: 'array',
+            description: 'Target specific agent(s): claude-code, codex, cursor',
+            required: false,
+            alias: 'a',
+            hidden: false,
+          },
+        ],
+      },
+      {
+        name: 'status',
+        description: 'Show which coding agents have the WorkOS MCP server configured',
       },
     ],
   },
@@ -236,6 +285,31 @@ const commands: CommandSchema[] = [
     ],
   },
   {
+    name: 'verify-login',
+    description:
+      'Verify the AuthKit login loop end-to-end against the active environment (creates and deletes a throwaway user)',
+    options: [
+      insecureStorageOpt,
+      apiKeyOpt,
+      {
+        name: 'client-id',
+        type: 'string',
+        description: 'WorkOS client ID (overrides the active environment)',
+        required: false,
+        hidden: false,
+      },
+      {
+        name: 'method',
+        type: 'string',
+        description: 'Authentication method to verify',
+        required: false,
+        default: 'password',
+        choices: ['password'],
+        hidden: false,
+      },
+    ],
+  },
+  {
     name: 'env',
     description: 'Manage environment configurations (API keys, endpoints, active environment)',
     options: [insecureStorageOpt],
@@ -265,7 +339,8 @@ const commands: CommandSchema[] = [
       },
       {
         name: 'remove',
-        description: 'Remove an environment configuration',
+        description:
+          'Remove an environment from local CLI config (does not delete or unclaim the environment in WorkOS)',
         positionals: [{ name: 'name', type: 'string', description: 'Environment name to remove', required: true }],
       },
       {
@@ -279,7 +354,7 @@ const commands: CommandSchema[] = [
       },
       {
         name: 'claim',
-        description: 'Claim an unclaimed WorkOS environment (link it to your account)',
+        description: 'Claim an unclaimed WorkOS environment — link it to your account (permanent — cannot be undone)',
         options: [
           {
             name: 'json',
@@ -291,6 +366,86 @@ const commands: CommandSchema[] = [
           },
         ],
       },
+      {
+        name: 'provision',
+        description: 'Provision a new unclaimed WorkOS environment (credentials only, no code changes)',
+        options: [
+          {
+            name: 'json',
+            type: 'boolean',
+            description: 'Output provisioned credentials (apiKey, clientId, claimToken) as JSON',
+            required: false,
+            default: false,
+            hidden: false,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    name: 'api',
+    description: 'Make authenticated requests to the WorkOS API',
+    positionals: [
+      {
+        name: 'endpoint',
+        type: 'string',
+        description: "API endpoint path (e.g. /users), or 'ls' to list endpoints",
+        required: false,
+      },
+      { name: 'filter', type: 'string', description: 'Filter keyword (used with ls)', required: false },
+    ],
+    options: [
+      insecureStorageOpt,
+      {
+        name: 'method',
+        type: 'string',
+        description: 'HTTP method (default: GET, or POST if body provided)',
+        required: false,
+        alias: 'X',
+        hidden: false,
+      },
+      { name: 'data', type: 'string', description: 'JSON request body', required: false, alias: 'd', hidden: false },
+      {
+        name: 'file',
+        type: 'string',
+        description: 'Read request body from a file (or - for stdin)',
+        required: false,
+        hidden: false,
+      },
+      {
+        name: 'include',
+        type: 'boolean',
+        description: 'Show response headers',
+        required: false,
+        default: false,
+        alias: 'i',
+        hidden: false,
+      },
+      apiKeyOpt,
+      {
+        name: 'dry-run',
+        type: 'boolean',
+        description: 'Show the request without executing it',
+        required: false,
+        default: false,
+        hidden: false,
+      },
+      {
+        name: 'yes',
+        type: 'boolean',
+        description: 'Skip confirmation for mutating requests',
+        required: false,
+        default: false,
+        alias: 'y',
+        hidden: false,
+      },
+    ],
+    examples: [
+      'workos api ls',
+      'workos api ls users',
+      'workos api /user_management/users',
+      'workos api /organizations -d \'{"name":"Acme"}\'',
+      'workos api /organizations/org_123 -X DELETE',
     ],
   },
   {
@@ -945,29 +1100,61 @@ const commands: CommandSchema[] = [
       { name: 'list', description: 'List vault objects', options: [...paginationOpts] },
       {
         name: 'get',
-        description: 'Get a vault object',
+        description: 'Get a vault object (metadata only; use --decrypt to include value)',
         positionals: [{ name: 'id', type: 'string', description: 'Object ID', required: true }],
+        options: [
+          {
+            name: 'decrypt',
+            type: 'boolean',
+            description: 'Include the decrypted secret value',
+            required: false,
+            default: false,
+            hidden: false,
+          },
+        ],
       },
       {
         name: 'get-by-name',
-        description: 'Get a vault object by name',
+        description: 'Get a vault object by name (metadata only; use --decrypt to include value)',
         positionals: [{ name: 'name', type: 'string', description: 'Object name', required: true }],
+        options: [
+          {
+            name: 'decrypt',
+            type: 'boolean',
+            description: 'Include the decrypted secret value',
+            required: false,
+            default: false,
+            hidden: false,
+          },
+        ],
       },
       {
         name: 'create',
-        description: 'Create a vault object',
+        description: 'Create a vault object (reads value from stdin when --value is omitted or -)',
         options: [
           { name: 'name', type: 'string', description: 'Object name', required: true, hidden: false },
-          { name: 'value', type: 'string', description: 'Secret value', required: true, hidden: false },
-          { name: 'org', type: 'string', description: 'Organization ID', required: false, hidden: false },
+          {
+            name: 'value',
+            type: 'string',
+            description: 'Secret value (omit or use - to read from stdin)',
+            required: false,
+            hidden: false,
+          },
+          { name: 'org', type: 'string', description: 'Organization ID (required)', required: true, hidden: false },
         ],
       },
       {
         name: 'update',
-        description: 'Update a vault object',
+        description: 'Update a vault object (reads value from stdin when --value is omitted or -)',
         positionals: [{ name: 'id', type: 'string', description: 'Object ID', required: true }],
         options: [
-          { name: 'value', type: 'string', description: 'New value', required: true, hidden: false },
+          {
+            name: 'value',
+            type: 'string',
+            description: 'New value (omit or use - to read from stdin)',
+            required: false,
+            hidden: false,
+          },
           { name: 'version-check', type: 'string', description: 'Version check ID', required: false, hidden: false },
         ],
       },
@@ -985,6 +1172,34 @@ const commands: CommandSchema[] = [
         name: 'list-versions',
         description: 'List vault object versions',
         positionals: [{ name: 'id', type: 'string', description: 'Object ID', required: true }],
+      },
+      {
+        name: 'run',
+        description: 'Run a command with Vault secrets injected as environment variables',
+        options: [
+          {
+            name: 'secret',
+            type: 'array',
+            description: 'Map a vault object to an env var: ENV_VAR=vault-name (repeatable)',
+            required: true,
+            hidden: false,
+          },
+          {
+            name: 'env',
+            type: 'string',
+            description: 'Environment name to read API key from (defaults to active)',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'dry-run',
+            type: 'boolean',
+            description: 'Print which secrets would be injected, no fetch',
+            required: false,
+            default: false,
+            hidden: false,
+          },
+        ],
       },
     ],
   },
@@ -1091,6 +1306,24 @@ const commands: CommandSchema[] = [
         description: 'Create an example workos-seed.yml file',
         required: false,
         default: false,
+        hidden: false,
+      },
+    ],
+  },
+  {
+    name: 'setup',
+    description: 'Set up your coding agent (install WorkOS skills + MCP server)',
+    options: [
+      insecureStorageOpt,
+      { name: 'agents', type: 'string', description: 'Comma-separated agent keys', required: false, hidden: false },
+      { name: 'skills-only', type: 'boolean', description: 'Install skills only', required: false, hidden: false },
+      { name: 'mcp-only', type: 'boolean', description: 'Install the MCP server only', required: false, hidden: false },
+      { name: 'yes', type: 'boolean', description: 'Install without prompting', required: false, hidden: false },
+      {
+        name: 'reset',
+        type: 'boolean',
+        description: 'Re-enable automatic setup offers',
+        required: false,
         hidden: false,
       },
     ],
@@ -1244,6 +1477,80 @@ const commands: CommandSchema[] = [
         default: true,
         hidden: false,
       },
+      {
+        name: 'router',
+        type: 'string',
+        description: 'Next.js router to target when detection is ambiguous (app or pages)',
+        required: false,
+        hidden: false,
+      },
+    ],
+  },
+  {
+    name: 'migrations',
+    description: MIGRATIONS_DESCRIPTION,
+    options: [insecureStorageOpt, apiKeyOpt],
+    commands: [
+      {
+        name: 'export',
+        description:
+          'Export identity data from a source provider (or any provider via CSV, e.g. Supabase) into a WorkOS migration package',
+      },
+      { name: 'export-template', description: 'Export a blank CSV template with headers and example rows' },
+      { name: 'import', description: 'Import users from CSV into WorkOS' },
+      { name: 'import-package', description: 'Import a migration package directory' },
+      {
+        name: 'generate-package-template',
+        description: 'Generate an empty migration package skeleton for manual or scripted population',
+      },
+      { name: 'validate', description: 'Validate a WorkOS migration CSV file' },
+      { name: 'validate-package', description: 'Validate a migration package directory against the schema contract' },
+      { name: 'export-auth0', description: 'Export users from Auth0' },
+      { name: 'export-cognito', description: 'Export users from AWS Cognito' },
+      { name: 'merge-passwords', description: 'Merge Auth0 password exports into CSV' },
+      { name: 'transform-clerk', description: 'Transform Clerk CSV to WorkOS format' },
+      { name: 'transform-firebase', description: 'Transform Firebase JSON to WorkOS format' },
+      { name: 'analyze', description: 'Analyze import errors and generate retry plan' },
+      { name: 'enroll-totp', description: 'Enroll TOTP MFA factors' },
+      { name: 'process-roles', description: 'Create roles and assign permissions in WorkOS' },
+      { name: 'wizard', description: 'Guided interactive migration wizard' },
+    ],
+  },
+  {
+    name: 'emulate',
+    description: 'Start a local WorkOS API emulator',
+    options: [
+      {
+        name: 'port',
+        type: 'number',
+        description: 'Port to listen on',
+        required: false,
+        default: 4100,
+        alias: 'p',
+        hidden: false,
+      },
+      {
+        name: 'seed',
+        type: 'string',
+        description: 'Path to seed config file (YAML or JSON)',
+        required: false,
+        alias: 's',
+        hidden: false,
+      },
+      {
+        name: 'interactive',
+        type: 'boolean',
+        description: 'Show login pages for SSO/AuthKit',
+        required: false,
+        default: false,
+        alias: 'i',
+        hidden: false,
+      },
+    ],
+    examples: [
+      'workos emulate',
+      'workos emulate --port 9100 --json',
+      'workos emulate --seed workos-emulate.config.yaml',
     ],
   },
 ];
@@ -1257,6 +1564,14 @@ const globalOptions: OptionSchema[] = [
     default: false,
     hidden: false,
   },
+  {
+    name: 'mode',
+    type: 'string',
+    description: 'Interaction mode: human, coding agent, or CI automation',
+    required: false,
+    choices: ['human', 'agent', 'ci'],
+    hidden: false,
+  },
   { name: 'help', type: 'boolean', description: 'Show help', required: false, alias: 'h', hidden: false },
   { name: 'version', type: 'boolean', description: 'Show version number', required: false, alias: 'v', hidden: false },
 ];
@@ -1267,12 +1582,49 @@ export { commands as commandRegistry, globalOptions as globalOptionRegistry };
 // Public API
 // ---------------------------------------------------------------------------
 
+const helpJsonCommandNames = new Set([
+  ...commands.map((command) => command.name.split(' ')[0]),
+  ...Object.keys(COMMAND_ALIASES),
+]);
+
+/**
+ * Extract the requested command from raw argv before yargs parses --help.
+ *
+ * This intentionally matches only known command names so option values from
+ * global flags like `--mode agent` are not mistaken for commands.
+ */
+export function extractHelpJsonCommand(argv: string[]): string | undefined {
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '--mode') {
+      i += 1;
+      continue;
+    }
+    if (arg.startsWith('--mode=')) {
+      continue;
+    }
+    if (!arg.startsWith('-') && helpJsonCommandNames.has(arg)) {
+      return COMMAND_ALIASES[arg] ?? arg;
+    }
+  }
+  return undefined;
+}
+
 /**
  * Build a machine-readable command tree for --help --json output.
  *
  * @param subcommand - Optional command name to return a subtree for (e.g. "env").
  *                     Returns full tree if omitted or if command not found.
  */
+/**
+ * Top-level command names (first token of each registered command). Used by
+ * telemetry to recognise real commands without trusting arbitrary argv tokens
+ * (so option values / secrets are never recorded as a command name).
+ */
+export function getTopLevelCommandNames(): string[] {
+  return commands.map((c) => c.name.split(' ')[0]);
+}
+
 export function buildCommandTree(subcommand?: string): HelpOutput | CommandSchema {
   if (subcommand) {
     const match = commands.find((c) => c.name === subcommand);

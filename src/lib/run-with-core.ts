@@ -1,41 +1,42 @@
 import { createActor, fromPromise } from 'xstate';
-import open from 'opn';
+import open from 'open';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { installerMachine } from './installer-core.js';
 import { createInstallerEventEmitter } from './events.js';
+import type { CompletionData } from './events.js';
+import { buildCompletionData } from './completion-data.js';
+import { resolveDevCommand } from './dev-command.js';
+import { getConfig as getInstallerSettings } from './settings.js';
 import { CLIAdapter } from './adapters/cli-adapter.js';
 import { DashboardAdapter } from './adapters/dashboard-adapter.js';
 import type { InstallerAdapter } from './adapters/types.js';
 import type { InstallerOptions } from '../utils/types.js';
-import { isNonInteractiveEnvironment } from '../utils/environment.js';
+import { getInteractionMode, isAgentMode, isCiMode } from '../utils/interaction-mode.js';
+import { getOutputMode, isJsonMode, resolveEffectiveOutputMode, setOutputMode } from '../utils/output.js';
 import type {
   InstallerMachineContext,
   DetectionOutput,
   GitCheckOutput,
   AgentOutput,
   BranchCheckOutput,
+  WorkspaceCheckOutput,
 } from './installer-core.types.js';
+import { isScaffoldableEmptyDir, resolvePackageManager, runCreateNextApp } from './scaffold/index.js';
 import type { Integration } from './constants.js';
 import { parseEnvFile } from '../utils/env-parser.js';
 import { enableDebugLogs, initLogFile, logInfo, logError } from '../utils/debug.js';
 
-import {
-  getAccessToken,
-  getCredentials,
-  saveCredentials,
-  getStagingCredentials,
-  saveStagingCredentials,
-} from './credentials.js';
+import { getAccessToken, saveCredentials, getStagingCredentials, saveStagingCredentials } from './credentials.js';
 import { getConfig, saveConfig, getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
 import { checkForEnvFiles, discoverCredentials } from './credential-discovery.js';
 import { requestDeviceCode, pollForToken } from './device-auth.js';
 import { fetchStagingCredentials as fetchStagingCredentialsApi } from './staging-api.js';
 import { getCliAuthClientId, getAuthkitDomain } from './settings.js';
+import { getTelemetryUrl } from '../utils/urls.js';
 import { analytics } from '../utils/analytics.js';
 import { getVersion } from './settings.js';
-import { getLlmGatewayUrlFromHost } from '../utils/urls.js';
-import { isInGitRepo, getUncommittedOrUntrackedFiles } from '../utils/clack-utils.js';
+import { isInGitRepo, getUncommittedOrUntrackedFiles } from '../utils/ui-utils.js';
 import {
   getCurrentBranch,
   isProtectedBranch,
@@ -51,6 +52,7 @@ import { autoConfigureWorkOSEnvironment } from './workos-management.js';
 import { detectPort, getCallbackPath } from './port-detection.js';
 import { writeEnvLocal } from './env-writer.js';
 import { getRegistry } from './registry.js';
+import { observeHostFailure } from './host-probe.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 async function runIntegrationInstallerFn(integration: Integration, options: InstallerOptions): Promise<string> {
@@ -103,7 +105,7 @@ export async function detectSingleIntegration(
   integration: string,
   options: Pick<InstallerOptions, 'installDir'>,
 ): Promise<boolean> {
-  const { getPackageDotJson } = await import('../utils/clack-utils.js');
+  const { getPackageDotJson } = await import('../utils/ui-utils.js');
   const { hasPackageInstalled } = await import('../utils/package-json.js');
   const { existsSync } = await import('node:fs');
   const { join } = await import('node:path');
@@ -186,8 +188,8 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
     installDir: options.installDir,
   });
 
-  // Configure telemetry endpoint (same URL as LLM gateway)
-  const gatewayUrl = getLlmGatewayUrlFromHost();
+  // Configure telemetry endpoint separately from the LLM gateway proxy.
+  const gatewayUrl = getTelemetryUrl();
   analytics.setGatewayUrl(gatewayUrl);
 
   const existingCreds = readExistingCredentials(options.installDir);
@@ -206,8 +208,23 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
     }
   };
 
+  const nonHumanMode = isAgentMode() || isCiMode();
+  if (nonHumanMode && !isJsonMode()) {
+    setOutputMode(resolveEffectiveOutputMode(getOutputMode(), getInteractionMode()));
+  }
+  // Headless (no prompts, structured output) is for MACHINE output only: JSON.
+  // A prompt cannot render into a JSON stream, so any JSON run must be headless.
+  // We deliberately do NOT route a human session with non-TTY stdin here:
+  // headless auto-approves branch/commit/scaffold, and applying those unattended
+  // to a session the user never opted into would violate the "nothing is written
+  // until you confirm" contract. Those sessions keep the CLIAdapter, which now
+  // fails fast with a clear `prompt_unavailable` error on the first prompt
+  // (see CLIAdapter's handler-error catch) instead of hanging or auto-writing.
+  // --dashboard keeps its own adapter even under --json.
+  const headlessMode = isJsonMode() && !options.dashboard;
+
   let adapter: InstallerAdapter;
-  if (isNonInteractiveEnvironment()) {
+  if (headlessMode) {
     const { HeadlessAdapter } = await import('./adapters/headless-adapter.js');
     adapter = new HeadlessAdapter({
       emitter,
@@ -220,6 +237,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         noCommit: augmentedOptions.noCommit,
         createPr: augmentedOptions.createPr,
         noGitCheck: augmentedOptions.noGitCheck,
+        ci: augmentedOptions.ci,
       },
     });
   } else if (options.dashboard) {
@@ -231,9 +249,9 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   const machineWithActors = installerMachine.provide({
     actors: {
       checkAuthentication: fromPromise(async () => {
-        // Check for active environment with credentials (covers unclaimed environments)
+        // Check for active environment with credentials (covers unclaimed environments).
         const activeEnv = getActiveEnvironment();
-        if (activeEnv?.clientId && activeEnv?.apiKey) {
+        if (activeEnv?.apiKey) {
           return true;
         }
 
@@ -244,13 +262,27 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
           throw new Error(`Not authenticated. Run \`${formatWorkOSCommand('auth login')}\` first.`);
         }
 
-        // Set telemetry from existing credentials
-        const creds = getCredentials();
-        if (creds) {
-          analytics.setAccessToken(creds.accessToken);
-          analytics.setDistinctId(creds.userId);
-        }
         return true;
+      }),
+
+      checkWorkspace: fromPromise<WorkspaceCheckOutput, { options: InstallerOptions }>(async ({ input }) => {
+        const scaffoldable = await isScaffoldableEmptyDir(input.options.installDir);
+        const packageManager = resolvePackageManager({
+          pm: input.options.pm,
+          userAgent: process.env.npm_config_user_agent,
+        });
+        // headlessMode is computed above; --scaffold opts in during interactive runs.
+        const autoScaffold = scaffoldable && (headlessMode || !!input.options.scaffold);
+        return { scaffoldable, packageManager, autoScaffold };
+      }),
+
+      runScaffold: fromPromise<void, { context: InstallerMachineContext }>(async ({ input }) => {
+        const { options: installerOptions, packageManager, emitter: ctxEmitter } = input.context;
+        await runCreateNextApp({
+          installDir: installerOptions.installDir,
+          packageManager: packageManager ?? 'npm',
+          emitter: ctxEmitter,
+        });
       }),
 
       detectIntegration: fromPromise<DetectionOutput, { options: InstallerOptions }>(async ({ input }) => {
@@ -317,6 +349,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
             ...installerOptions,
             apiKey: credentials?.apiKey,
             clientId: credentials?.clientId,
+            credentialSource: context.credentialSource,
             emitter: context.emitter,
           };
           const summary = await runIntegrationInstallerFn(integration, agentOptions);
@@ -331,6 +364,33 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
           };
         }
       }),
+
+      buildCompletion: fromPromise<CompletionData | undefined, { context: InstallerMachineContext }>(
+        async ({ input }) => {
+          const { integration, changedFiles, options: installerOptions } = input.context;
+          if (!integration) return undefined;
+          try {
+            const registry = await getRegistry();
+            const mod = registry.get(integration);
+            const cfg = mod?.config;
+            const settings = getInstallerSettings();
+            return await buildCompletionData(
+              { integration, changedFiles, installDir: installerOptions.installDir },
+              {
+                resolveDevCommand,
+                detectPort,
+                docsUrl: cfg?.metadata.docsUrl ?? settings.documentation.workosDocsUrl,
+                dashboardUrl: settings.documentation.dashboardUrl,
+                frameworkNextSteps: cfg?.ui.getOutroNextSteps?.({}) ?? [],
+                signInSnippet: cfg?.ui.getSignInSnippet?.({}),
+              },
+            );
+          } catch {
+            // Degrade to the static fallback box rather than blocking completion.
+            return undefined;
+          }
+        },
+      ),
 
       // Credential discovery actors
       detectEnvFiles: fromPromise(async ({ input }) => {
@@ -369,9 +429,14 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
 
         // Open browser
         try {
-          const { default: openFn } = await import('opn');
-          await openFn(deviceAuth.verification_uri_complete);
-        } catch {
+          const { default: openFn } = await import('open');
+          await openFn(deviceAuth.verification_uri_complete, { wait: false });
+        } catch (error) {
+          observeHostFailure('browser-launch', error, {
+            operation: 'open',
+            target: deviceAuth.verification_uri_complete,
+            label: 'installer device auth browser',
+          });
           // User can open manually
         }
 
@@ -493,7 +558,13 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         inspectUrl = msg;
         console.log = originalLog;
         console.log(`Opening XState inspector: ${inspectUrl}`);
-        void open(inspectUrl);
+        void open(inspectUrl).catch((error: unknown) => {
+          observeHostFailure('browser-launch', error, {
+            operation: 'open',
+            target: inspectUrl,
+            label: 'XState inspector browser',
+          });
+        });
       } else {
         originalLog.apply(console, args);
       }
@@ -514,8 +585,8 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
 
   await adapter.start();
 
-  // Start telemetry session
-  const mode = isNonInteractiveEnvironment() ? 'headless' : augmentedOptions.dashboard ? 'tui' : 'cli';
+  analytics.configureAuthFromAvailableSources();
+  const mode = headlessMode ? 'headless' : augmentedOptions.dashboard ? 'tui' : 'cli';
   analytics.sessionStart(mode, getVersion());
 
   let installerStatus: 'success' | 'error' | 'cancelled' = 'success';
@@ -558,6 +629,20 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
     throw error;
   } finally {
     process.off('SIGINT', handleSigint);
+    // Record the detected framework so session.end carries it (and the API can
+    // tag install metrics by integration). Known only after detection runs, so
+    // it's read from the final machine snapshot here; absent if the session
+    // aborted before detection.
+    const finalContext = actor?.getSnapshot().context;
+    const detectedIntegration = finalContext?.integration;
+    if (detectedIntegration) {
+      analytics.setTag('installer.integration', detectedIntegration);
+    }
+    // Record whether the empty-dir flow scaffolded a new app, so session.end
+    // carries it for adoption + scaffold-failure tracking.
+    if (finalContext?.scaffolded) {
+      analytics.setTag('scaffolded', true);
+    }
     await analytics.shutdown(installerStatus);
     await adapter.stop();
   }

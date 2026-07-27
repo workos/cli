@@ -1,12 +1,35 @@
 import { describe, it, expect, vi } from 'vitest';
 
-vi.mock('../lib/settings.js', () => ({
-  getVersion: vi.fn(() => '0.7.3'),
-}));
+vi.mock('../lib/settings.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/settings.js')>();
+  return { ...actual, getVersion: vi.fn(() => '0.7.3') };
+});
 
-const { buildCommandTree, commandRegistry } = await import('./help-json.js');
+const { buildCommandTree, commandRegistry, extractHelpJsonCommand } = await import('./help-json.js');
 
 describe('help-json', () => {
+  describe('extractHelpJsonCommand()', () => {
+    it('extracts a direct command', () => {
+      expect(extractHelpJsonCommand(['doctor', '--help', '--json'])).toBe('doctor');
+    });
+
+    it('skips --mode values before the command', () => {
+      expect(extractHelpJsonCommand(['--mode', 'agent', 'doctor', '--help', '--json'])).toBe('doctor');
+    });
+
+    it('skips --mode= values before the command', () => {
+      expect(extractHelpJsonCommand(['--mode=agent', 'doctor', '--help', '--json'])).toBe('doctor');
+    });
+
+    it('returns undefined when only global flags are present', () => {
+      expect(extractHelpJsonCommand(['--mode', 'agent', '--help', '--json'])).toBeUndefined();
+    });
+
+    it('resolves command aliases', () => {
+      expect(extractHelpJsonCommand(['org', '--help', '--json'])).toBe('organization');
+    });
+  });
+
   describe('buildCommandTree() — full tree', () => {
     it('returns root with name "workos"', () => {
       const tree = buildCommandTree();
@@ -34,6 +57,7 @@ describe('help-json', () => {
           'auth status',
           'skills',
           'doctor',
+          'verify-login',
           'env',
           'organization',
           'user',
@@ -57,6 +81,15 @@ describe('help-json', () => {
       expect(jsonOpt!.default).toBe(false);
     });
 
+    it('includes global interaction mode option with choices', () => {
+      const tree = buildCommandTree();
+      const opts = (tree as { options: { name: string; type: string; choices?: string[] }[] }).options;
+      const modeOpt = opts.find((o) => o.name === 'mode');
+      expect(modeOpt).toBeDefined();
+      expect(modeOpt!.type).toBe('string');
+      expect(modeOpt!.choices).toEqual(['human', 'agent', 'ci']);
+    });
+
     it('output is valid JSON-serializable', () => {
       const tree = buildCommandTree();
       const json = JSON.stringify(tree);
@@ -69,7 +102,7 @@ describe('help-json', () => {
       const tree = buildCommandTree('env');
       expect(tree.name).toBe('env');
       const subNames = tree.commands!.map((c) => c.name);
-      expect(subNames).toEqual(expect.arrayContaining(['add', 'remove', 'switch', 'list']));
+      expect(subNames).toEqual(expect.arrayContaining(['add', 'remove', 'switch', 'list', 'claim', 'provision']));
     });
 
     it('returns organization subtree with CRUD subcommands', () => {
@@ -90,6 +123,36 @@ describe('help-json', () => {
       const tree = buildCommandTree('nonexistent');
       expect(tree).toHaveProperty('name', 'workos');
       expect(tree).toHaveProperty('version');
+    });
+  });
+
+  describe('accurate command copy', () => {
+    it('migrations description advertises the generic-CSV / Supabase path', () => {
+      const tree = buildCommandTree('migrations');
+      expect(tree.name).toBe('migrations');
+      expect(tree.description).toMatch(/CSV/i);
+      expect(tree.description).toMatch(/Supabase/i);
+    });
+
+    it('migrations subcommands include the discoverable export entry point', () => {
+      const tree = buildCommandTree('migrations');
+      const subNames = tree.commands!.map((c) => c.name);
+      expect(subNames).toContain('export');
+      // process-roles is the name the package actually registers (not process-role-definitions)
+      expect(subNames).toContain('process-roles');
+      expect(subNames).not.toContain('process-role-definitions');
+    });
+
+    it('env remove description states it is local-only', () => {
+      const env = buildCommandTree('env');
+      const remove = env.commands!.find((c) => c.name === 'remove');
+      expect(remove!.description).toMatch(/local/i);
+    });
+
+    it('env claim description states the action is permanent', () => {
+      const env = buildCommandTree('env');
+      const claim = env.commands!.find((c) => c.name === 'claim');
+      expect(claim!.description).toMatch(/permanent/i);
     });
   });
 

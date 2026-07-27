@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { logWarn } from '../utils/debug.js';
+import { observeHostFailure } from './host-probe.js';
 
 export interface StagingCache {
   clientId: string;
@@ -25,6 +26,24 @@ export interface Credentials {
   email?: string;
   staging?: StagingCache;
   refreshToken?: string;
+}
+
+/**
+ * A stored blob missing required fields (partial write, older schema) must
+ * read as logged-out: consumers assume accessToken/expiresAt/userId exist,
+ * and an invalid object otherwise crashes every authenticated command —
+ * `new Date(undefined).toISOString()` throws — bricking the CLI until the
+ * entry is manually deleted.
+ */
+function isValidCredentials(value: unknown): value is Credentials {
+  const creds = value as Credentials | null;
+  return (
+    typeof creds === 'object' &&
+    creds !== null &&
+    typeof creds.accessToken === 'string' &&
+    Number.isFinite(creds.expiresAt) &&
+    typeof creds.userId === 'string'
+  );
 }
 
 const SERVICE_NAME = 'workos-cli';
@@ -53,10 +72,21 @@ function fileExists(): boolean {
 
 function readFromFile(): Credentials | null {
   if (!fileExists()) return null;
+  const filePath = getCredentialsPath();
   try {
-    const content = fs.readFileSync(getCredentialsPath(), 'utf-8');
-    return JSON.parse(content);
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const parsed: unknown = JSON.parse(content);
+    if (!isValidCredentials(parsed)) {
+      logWarn('[credential-store] file: stored credentials are missing required fields; treating as logged out');
+      return null;
+    }
+    return parsed;
   } catch (error) {
+    observeHostFailure('home-fs', error, {
+      operation: 'read',
+      target: filePath,
+      label: 'credential fallback file',
+    });
     logWarn('Failed to read credentials file:', error);
     return null;
   }
@@ -64,17 +94,37 @@ function readFromFile(): Credentials | null {
 
 function writeToFile(creds: Credentials): void {
   const dir = getCredentialsDir();
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const filePath = getCredentialsPath();
+  try {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    }
+    fs.writeFileSync(filePath, JSON.stringify(creds, null, 2), {
+      mode: 0o600,
+    });
+  } catch (error) {
+    observeHostFailure('home-fs', error, {
+      operation: 'write',
+      target: filePath,
+      label: 'credential fallback file',
+    });
+    throw error;
   }
-  fs.writeFileSync(getCredentialsPath(), JSON.stringify(creds, null, 2), {
-    mode: 0o600,
-  });
 }
 
 function deleteFile(): void {
+  const filePath = getCredentialsPath();
   if (fileExists()) {
-    fs.unlinkSync(getCredentialsPath());
+    try {
+      fs.unlinkSync(filePath);
+    } catch (error) {
+      observeHostFailure('home-fs', error, {
+        operation: 'delete',
+        target: filePath,
+        label: 'credential fallback file',
+      });
+      throw error;
+    }
   }
 }
 
@@ -90,10 +140,20 @@ function readFromKeyring(): Credentials | null {
       logWarn('[credential-store] keyring: entry exists but data is null/empty');
       return null;
     }
-    return JSON.parse(data);
+    const parsed: unknown = JSON.parse(data);
+    if (!isValidCredentials(parsed)) {
+      logWarn('[credential-store] keyring: stored credentials are missing required fields; treating as logged out');
+      return null;
+    }
+    return parsed;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logWarn(`[credential-store] keyring read failed: ${msg}`);
+    observeHostFailure('keychain', error, {
+      operation: 'read',
+      target: `${SERVICE_NAME}/${ACCOUNT_NAME}`,
+      label: 'credential keychain entry',
+    });
     return null;
   }
 }
@@ -106,6 +166,11 @@ function writeToKeyring(creds: Credentials): boolean {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logWarn(`[credential-store] keyring write failed: ${msg}`);
+    observeHostFailure('keychain', error, {
+      operation: 'write',
+      target: `${SERVICE_NAME}/${ACCOUNT_NAME}`,
+      label: 'credential keychain entry',
+    });
     return false;
   }
 }
@@ -118,6 +183,11 @@ function deleteFromKeyring(): void {
     const msg = error instanceof Error ? error.message : String(error);
     if (!msg.includes('not found') && !msg.includes('No such')) {
       logWarn('Failed to delete from keyring:', error);
+      observeHostFailure('keychain', error, {
+        operation: 'delete',
+        target: `${SERVICE_NAME}/${ACCOUNT_NAME}`,
+        label: 'credential keychain entry',
+      });
     }
   }
 }
@@ -133,10 +203,14 @@ function showFallbackWarning(): void {
 }
 
 export function hasCredentials(): boolean {
+  // Validate rather than just probing for a file/entry: a malformed blob must
+  // read as logged-out here too, so this never disagrees with getCredentials().
+  // (readFrom* both run isValidCredentials; avoids getCredentials()'s keyring
+  // migration side effect.)
   if (forceInsecureStorage) {
-    return fileExists();
+    return readFromFile() !== null;
   }
-  return readFromKeyring() !== null || fileExists();
+  return readFromKeyring() !== null || readFromFile() !== null;
 }
 
 export function getCredentials(): Credentials | null {

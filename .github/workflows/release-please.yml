@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+# id-token: write is not used by this workflow directly, but the caller's
+# token permissions cap what the called release.yml may request — its
+# publish-npm job needs id-token: write for npm trusted publishing (OIDC).
+# Without it here, the whole run fails at startup with a workflow-file error.
 permissions:
   contents: write
   pull-requests: write
@@ -17,7 +21,7 @@ jobs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # 5.0.0
         id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -28,3 +32,6 @@ jobs:
     uses: ./.github/workflows/release.yml
     with:
       tag_name: ${{ needs.release-please.outputs.tag_name }}
+    # Called workflows receive no secrets by default; publish-homebrew needs
+    # secrets.SDK_BOT_PRIVATE_KEY to push the formula to workos/homebrew-tap.
+    secrets: inherit

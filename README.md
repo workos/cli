@@ -4,18 +4,51 @@ WorkOS CLI for installing AuthKit integrations and managing WorkOS resources.
 
 ## Installation
 
-```bash
-# Run the installer directly with npx (recommended)
-npx workos@latest install
+The CLI is distributed as a standalone executable from GitHub Releases. It does not require Node.js, Bun, or an npm installation. The first agent-driven command (e.g. `workos install`) performs a one-time, checksum-verified download of the Claude agent runtime (~230 MB, cached under `~/.workos`).
 
-# Or install globally
-npm install -g workos
-workos install
+Homebrew (macOS and Linux):
+
+```bash
+brew install workos/tap/workos
 ```
 
-`npx workos@latest install` is recommended because it bypasses stale global shims and older shell-resolved binaries.
-If a global install reports `unknown command "install"`, run the npx command above or reinstall globally and clear your
-shell command cache.
+macOS and Linux (direct download):
+
+```bash
+case "$(uname -m)" in
+  arm64|aarch64) arch=arm64 ;;
+  x86_64) arch=x64 ;;
+  *) echo "Unsupported architecture: $(uname -m)"; exit 1 ;;
+esac
+case "$(uname -s)" in
+  Darwin) os=darwin ;;
+  Linux) os=linux ;;
+  *) echo "Unsupported operating system: $(uname -s)"; exit 1 ;;
+esac
+libc=""
+if [ "$os" = "linux" ] && ldd --version 2>&1 | grep -qi musl; then libc="-musl"; fi
+curl -fL "https://github.com/workos/cli/releases/latest/download/workos-${os}-${arch}${libc}" -o workos
+# Alpine only: the musl build needs the C++ runtime: apk add libstdc++ libgcc
+chmod +x workos
+sudo mv workos /usr/local/bin/workos
+```
+
+Windows (PowerShell):
+
+```powershell
+$arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
+Invoke-WebRequest "https://github.com/workos/cli/releases/latest/download/workos-windows-$arch.exe" -OutFile workos.exe
+```
+
+Move `workos.exe` to a directory on your `PATH`, then run `workos install`. (If you already have Node.js, the npm install below works on Windows too.)
+
+npm (thin launcher that installs the same prebuilt binary for your platform):
+
+```bash
+npm install -g workos
+# or run without installing:
+npx workos@latest install
+```
 
 ## Features
 
@@ -23,6 +56,7 @@ shell command cache.
 - **AI-Powered:** Uses Claude to intelligently adapt to your project structure
 - **Security-First:** Masks API keys, redacts from logs, saves to .env.local
 - **Smart Detection:** Auto-detects framework, package manager, router type
+- **Greenfield Scaffolding:** Run in an empty directory to scaffold a new Next.js app (via `create-next-app`) before wiring AuthKit
 - **Live Documentation:** Fetches latest SDK docs from WorkOS and GitHub
 - **Full Integration:** Creates routes, middleware, environment vars, and UI
 - **Agent & CI Ready:** Non-TTY auto-detection, JSON output, structured errors, headless installer with NDJSON streaming
@@ -81,6 +115,12 @@ Resource Management:
   api-key                Manage per-org API keys
   org-domain             Manage organization domains
 
+Migrations:
+  migrations             Migrate users and SSO connections into WorkOS
+
+Local Development:
+  emulate                Start a local WorkOS API emulator
+
 Workflows:
   seed                   Declarative resource provisioning from YAML
   setup-org              One-shot organization onboarding
@@ -97,7 +137,7 @@ When you run `workos install` without credentials, the CLI automatically provisi
 
 ```bash
 # Install with zero setup — environment provisioned automatically
-npx workos@latest install
+workos install
 
 # Check your environment
 workos env list
@@ -196,38 +236,30 @@ Inspects a directory's sync state, user/group counts, recent events, and detects
 workos debug-sync directory_01ABC123
 ```
 
-<!-- UNRELEASED: Local Development (emulator) — hidden until beta testing is complete.
-     To restore, uncomment this section and re-enable the `emulate` and `dev` commands
-     in src/bin.ts and src/utils/help-json.ts.
+### Migrations
 
-### Local Development
-
-Test your WorkOS integration locally without hitting the live API. The emulator provides a full in-memory WorkOS API replacement with all major endpoints.
-
-#### `workos dev` — One command to start everything
-
-The fastest way to develop locally. Starts the emulator and your app together, auto-detecting your framework and injecting the right environment variables.
+Migrate users and SSO connections from other identity providers into WorkOS. The `migrations` namespace passes through to `@workos/migrations`.
 
 ```bash
-# Auto-detects framework (Next.js, Vite, Remix, SvelteKit, etc.) and dev command
-workos dev
+# Interactive migration wizard
+workos migrations wizard
 
-# Override the dev command
-workos dev -- npx vite --port 5173
+# Export a blank CSV template
+workos migrations export-template saml_connections --output saml_connections.csv
+workos migrations export-template oidc_connections --output oidc_connections.csv
 
-# Custom emulator port and seed data
-workos dev --port 8080 --seed workos-emulate.config.yaml
+# Export from Auth0
+workos migrations export-auth0 --domain your-tenant.auth0.com --client-id <id> --client-secret <secret>
+
+# Import users from CSV
+workos migrations import --csv users.csv
 ```
 
-Your app receives these environment variables automatically:
+Run `workos migrations --help` for all available subcommands.
 
-- `WORKOS_API_BASE_URL` — points to the local emulator (e.g. `http://localhost:4100`)
-- `WORKOS_API_KEY` — `sk_test_default`
-- `WORKOS_CLIENT_ID` — `client_emulate`
+### Local Emulation
 
-#### `workos emulate` — Standalone emulator
-
-Run the emulator on its own for CI, test suites, or when you want manual control.
+Start a local WorkOS API emulator. The command is backed by [`@workos/emulate`](https://github.com/workos/emulate); the standalone package binary is `workos-emulate`.
 
 ```bash
 # Start with defaults (port 4100)
@@ -235,124 +267,13 @@ workos emulate
 
 # CI-friendly: JSON output, custom port
 workos emulate --port 9100 --json
-# → {"url":"http://localhost:9100","port":9100,"apiKey":"sk_test_default","health":"http://localhost:9100/health"}
 
 # Pre-load seed data
 workos emulate --seed workos-emulate.config.yaml
+
+# Show login pages for SSO/AuthKit browser testing
+workos emulate --interactive
 ```
-
-The emulator supports `GET /health` for readiness polling and shuts down cleanly on Ctrl+C.
-
-#### Seed configuration
-
-Create a `workos-emulate.config.yaml` (auto-detected) or pass `--seed <path>`:
-
-```yaml
-users:
-  - email: alice@acme.com
-    first_name: Alice
-    password: test123
-    email_verified: true
-
-organizations:
-  - name: Acme Corp
-    domains:
-      - domain: acme.com
-        state: verified
-    memberships:
-      - user_id: <user_id>
-        role: admin
-
-connections:
-  - name: Acme SSO
-    organization: Acme Corp
-    connection_type: GenericSAML
-    domains: [acme.com]
-
-roles:
-  - slug: admin
-    name: Admin
-    permissions: [posts:read, posts:write]
-
-permissions:
-  - slug: posts:read
-    name: Read Posts
-  - slug: posts:write
-    name: Write Posts
-
-webhookEndpoints:
-  - url: http://localhost:3000/webhooks
-    events: [user.created, organization.updated]
-```
-
-#### Programmatic API
-
-Use the emulator directly in test suites without the CLI:
-
-```typescript
-import { createEmulator } from 'workos/emulate';
-
-const emulator = await createEmulator({
-  port: 0, // random available port
-  seed: {
-    users: [{ email: 'test@example.com', password: 'secret' }],
-  },
-});
-
-// Use emulator.url as your WORKOS_API_BASE_URL
-const res = await fetch(`${emulator.url}/user_management/users`, {
-  headers: { Authorization: 'Bearer sk_test_default' },
-});
-
-// Reset between tests (clears data, re-applies seed)
-emulator.reset();
-
-// Clean up
-await emulator.close();
-```
-
-#### Emulated endpoints
-
-The emulator covers the full WorkOS API surface (~84% of OpenAPI spec endpoints). Run `pnpm check:coverage <openapi-spec>` to see exact coverage.
-
-| Endpoint Group           | Routes                                                                                                                                                                 |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Organizations            | CRUD, external_id lookup, domain management                                                                                                                            |
-| Users                    | CRUD, email uniqueness, password management                                                                                                                            |
-| Organization memberships | CRUD, role assignment, deactivate/reactivate                                                                                                                           |
-| Organization domains     | CRUD, verification                                                                                                                                                     |
-| SSO connections          | CRUD, domain-based lookup                                                                                                                                              |
-| SSO flow                 | Authorize, token exchange, profile, JWKS, SSO logout                                                                                                                   |
-| AuthKit                  | OAuth authorize (login_hint, multi-user), authenticate (7 grant types incl. refresh_token, MFA TOTP, org selection, device code), PKCE, sealed sessions, impersonation |
-| Sessions                 | List, revoke, logout redirect, JWKS per client                                                                                                                         |
-| Email verification       | Send code, confirm                                                                                                                                                     |
-| Password reset           | Create token, confirm                                                                                                                                                  |
-| Magic auth               | Create code                                                                                                                                                            |
-| Auth factors             | TOTP enrollment, delete                                                                                                                                                |
-| MFA challenges           | Create challenge, verify code                                                                                                                                          |
-| Invitations              | CRUD, accept, revoke, resend, get by token                                                                                                                             |
-| Config                   | Redirect URIs, CORS origins, JWT template                                                                                                                              |
-| User features            | Authorized apps, connected accounts, data providers                                                                                                                    |
-| Widgets                  | Token generation                                                                                                                                                       |
-| Authorization (RBAC)     | Environment roles, org roles (priority ordering), permissions, role-permission management                                                                              |
-| Authorization (FGA)      | Resources CRUD, permission checks, role assignments                                                                                                                    |
-| Directory Sync           | List/get/delete directories, users, groups                                                                                                                             |
-| Audit Logs               | Actions, schemas, events, exports, org config/retention                                                                                                                |
-| Feature Flags            | List/get, enable/disable, targets, org/user evaluations                                                                                                                |
-| Connect                  | Applications CRUD, client secrets                                                                                                                                      |
-| Data Integrations        | OAuth authorize + token exchange                                                                                                                                       |
-| Radar                    | Attempts list/get, allow/deny lists                                                                                                                                    |
-| API Keys                 | Validate, delete, list by org                                                                                                                                          |
-| Portal                   | Generate admin portal links                                                                                                                                            |
-| Legacy MFA               | Enroll/get/delete factors, challenge/verify                                                                                                                            |
-| Webhook Endpoints        | CRUD with auto-generated secrets, secret masking                                                                                                                       |
-| Events                   | Paginated event stream with type filtering                                                                                                                             |
-| Event Bus                | Auto-emits events on entity CRUD via collection hooks, fire-and-forget webhook delivery with HMAC signatures                                                           |
-| Pipes                    | Connection CRUD, mock `getAccessToken()`                                                                                                                               |
-
-JWT tokens include `role` and `permissions` claims for org-scoped sessions. All list endpoints support cursor pagination (`before`, `after`, `limit`, `order`). Error responses match the WorkOS format (`{ message, code, errors }`).
-
-END UNRELEASED -->
 
 ### Environment Management
 
@@ -512,13 +433,14 @@ workos portal generate-link --intent <intent> --org <orgId> [--return-url] [--su
 
 ```bash
 workos vault list [--limit]
-workos vault get <id>
-workos vault get-by-name <name>
-workos vault create --name <name> --value <secret> [--org <orgId>]
-workos vault update <id> --value <secret> [--version-check]
+workos vault get <id> [--decrypt]
+workos vault get-by-name <name> [--decrypt]
+workos vault create --name <name> --org <orgId> [--value <secret>]   # omit --value to read from stdin
+workos vault update <id> [--value <secret>] [--version-check]        # omit --value to read from stdin
 workos vault delete <id>
 workos vault describe <id>
 workos vault list-versions <id>
+workos vault run --secret ENV_VAR=vault-name [...] [--env <name>] [--dry-run] -- <command>
 ```
 
 #### api-key
@@ -545,12 +467,13 @@ workos org-domain delete <id>
 workos install [options]
 
   --direct, -D            Use your own Anthropic API key (bypass llm-gateway)
-  --integration <name>    Framework: nextjs, react, react-router, tanstack-start, vanilla-js, sveltekit, node, python, ruby, go, dotnet, kotlin, elixir, php-laravel, php
   --api-key <key>         WorkOS API key (required in non-interactive mode)
   --client-id <id>        WorkOS client ID (required in non-interactive mode)
   --redirect-uri <uri>    Custom redirect URI
   --homepage-url <url>    Custom homepage URL
   --install-dir <path>    Installation directory
+  --scaffold              Scaffold a new Next.js app when run in an empty directory
+  --pm <manager>          Package manager for the scaffolded app: npm, pnpm, yarn, bun
   --no-validate           Skip post-installation validation
   --no-branch             Skip branch creation (use current branch)
   --no-commit             Skip auto-commit after installation
@@ -560,17 +483,19 @@ workos install [options]
   --debug                 Enable verbose logging
 ```
 
+**Empty directories:** Running `workos install` in an empty directory scaffolds a new Next.js app with `create-next-app` (App Router, TypeScript, Tailwind, `src/`) and then wires AuthKit into it. This only happens when the directory is empty or contains nothing but VCS/editor metadata (`.git`, `.gitignore`, `LICENSE`, `.idea`, and similar). Any project file — including a `README.md` or a `package.json` — opts out, and the installer treats the directory as an existing project. Interactive runs confirm first (default yes); non-interactive/headless runs (or `--scaffold`) scaffold automatically and report `"scaffolded": true`. The package manager is resolved from how you invoked the CLI (`npm_config_user_agent`) unless you pass `--pm`.
+
 ## Examples
 
 ```bash
 # Interactive (recommended)
-npx workos@latest install
+workos install
 
-# Specify framework
-npx workos@latest install --integration react-router
+# Greenfield: scaffold a new Next.js app + AuthKit in an empty directory
+mkdir my-app && cd my-app && workos install
 
 # With visual dashboard (experimental)
-npx workos@latest dashboard
+workos dashboard
 
 # JSON output (explicit)
 workos org list --json --api-key sk_test_xxx
@@ -584,7 +509,18 @@ workos --help --json | jq '.commands[].name'
 
 ## Scripting & Automation
 
-The CLI auto-detects non-TTY environments (piped output, CI, coding agents) and switches to machine-friendly behavior. No flags required — just pipe it.
+The CLI separates **output mode** from **interaction mode**:
+
+- `--json` (or non-TTY auto-detection) controls **output formatting** only.
+- `--mode human|agent|ci` (or `WORKOS_MODE=...`) controls **interaction behavior** — prompts, browser launch, host trust, destructive confirmation.
+
+For coding agents, set both axes explicitly:
+
+```bash
+WORKOS_MODE=agent workos doctor --json --skip-ai
+```
+
+The CLI also auto-detects non-TTY environments (piped output, CI, coding agents) and falls back to machine-friendly defaults. No flags are required — just pipe it — but explicit mode is recommended for agents.
 
 ### JSON Output
 
@@ -604,6 +540,30 @@ Errors go to stderr as structured JSON:
 workos org list 2>&1
 # → { "error": { "code": "no_api_key", "message": "No API key configured..." } }
 ```
+
+### Agent Mode
+
+When a coding agent drives the CLI, set agent mode explicitly so behavior is deterministic regardless of TTY:
+
+```bash
+WORKOS_MODE=agent workos doctor --json --skip-ai
+WORKOS_MODE=agent workos install --api-key ... --client-id ...
+```
+
+In agent mode the CLI:
+
+- Never prompts. Missing required arguments fail with structured errors instead of opening prompts.
+- Treats browser launch as best-effort. Auth flows always print the manual URL and code.
+- Probes host capabilities (home directory, keychain, browser launch). Host failures emit a `HOST_EXECUTION_UNTRUSTED` issue from `workos doctor` so agents can recognize sandboxed runs.
+- Requires explicit confirmation flags (e.g. `--yes`, `--force`) for destructive operations.
+
+In `ci` mode the CLI additionally refuses browser-based auth flows and prefers terse failures over recovery handoff text.
+
+Mode resolution notes:
+
+- `WORKOS_MODE=agent` sets agent interaction behavior and forces JSON output. (This replaces the removed `WORKOS_NO_PROMPT` alias.)
+- `WORKOS_FORCE_TTY=1` forces human **output** mode but does not change interaction mode.
+- Non-TTY without an explicit mode still defaults output to JSON and interaction to agent.
 
 ### Headless Installer
 
@@ -632,8 +592,8 @@ workos install --api-key sk_test_xxx --client-id client_xxx --no-commit 2>/dev/n
 | ------------------------ | --------------------------------------------------------- |
 | `WORKOS_API_KEY`         | API key for management commands (bypasses stored config)  |
 | `WORKOS_API_BASE_URL`    | Override API base URL (set automatically by `workos dev`) |
-| `WORKOS_NO_PROMPT=1`     | Force non-interactive mode + JSON output                  |
-| `WORKOS_FORCE_TTY=1`     | Force interactive mode even when piped                    |
+| `WORKOS_MODE`            | Interaction mode: `human`, `agent`, or `ci`               |
+| `WORKOS_FORCE_TTY=1`     | Force human (non-JSON) **output** mode even when piped    |
 | `WORKOS_TELEMETRY=false` | Disable telemetry                                         |
 
 ### Command Discovery
@@ -679,13 +639,13 @@ The CLI uses WorkOS Connect OAuth device flow for authentication:
 
 ```bash
 # Login (opens browser for authentication)
-npx workos@latest auth login
+workos auth login
 
 # Check current auth status
-npx workos@latest auth status
+workos auth status
 
 # Logout (clears stored credentials)
-npx workos@latest auth logout
+workos auth logout
 ```
 
 OAuth credentials are stored in the system keychain (with `~/.workos/credentials.json` fallback). Access tokens are not persisted long-term for security - users re-authenticate when tokens expire.
@@ -703,17 +663,18 @@ OAuth credentials are stored in the system keychain (with `~/.workos/credentials
 
 ## Telemetry
 
-The installer collects anonymous usage telemetry to help improve the product:
+The CLI collects anonymous usage telemetry to help improve the product:
 
-- Session outcome (success/error/cancelled)
-- Framework detected
-- Duration and step timing
-- Token usage (for capacity planning)
+- **Command events** -- command name, duration, success/failure, termination reason, and which flags were used (for telemetry-enabled commands; `install` and `dashboard` use session events instead)
+- **Session events** -- framework detected, step timing, token usage (installer only)
+- **Crash events** -- sanitized error type and stack trace (no secrets, truncated to 4KB)
 
-No code, credentials, or personal data is collected. Disable with:
+Environment fingerprint (OS, Node version, shell, CI detection) is included on all events. No code, credentials, or personal data is collected.
+
+Disable with:
 
 ```bash
-WORKOS_TELEMETRY=false npx workos@latest install
+WORKOS_TELEMETRY=false workos <command>
 ```
 
 ## Logs
@@ -733,14 +694,14 @@ See [DEVELOPMENT.md](./DEVELOPMENT.md) for development setup.
 Build:
 
 ```bash
-pnpm build
+bun run build
 ```
 
 Run locally:
 
 ```bash
-pnpm dev  # Watch mode
-./dist/bin.js --help
+bun run dev  # Watch mode
+./dist/workos --help
 ```
 
 ## License

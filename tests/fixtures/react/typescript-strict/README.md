@@ -18,7 +18,7 @@ This fixture has the strictest TypeScript configuration. It tests whether the ag
 
 ## Success Criteria
 
-- [ ] `pnpm build` passes with zero type errors
+- [ ] `bun run build` passes with zero type errors
 - [ ] Generated code has proper types
 - [ ] No implicit any errors
 - [ ] No unused variable errors

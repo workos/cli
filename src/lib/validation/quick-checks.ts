@@ -3,6 +3,7 @@ import { readFile } from 'fs/promises';
 import { join } from 'path';
 import type { QuickCheckResult, QuickChecksOutput, ValidationIssue } from './types.js';
 import { detectBuildCommand, detectPackageManager, parseBuildErrors } from './build-validator.js';
+import { SPAWN_OPTS } from '../../utils/platform.js';
 
 const DEFAULT_TYPECHECK_TIMEOUT_MS = 30_000;
 const DEFAULT_BUILD_TIMEOUT_MS = 60_000;
@@ -224,6 +225,7 @@ function spawnCommand(
     const proc = spawn(command, args, {
       cwd,
       timeout: timeoutMs,
+      ...SPAWN_OPTS,
     });
 
     let stdout = '';

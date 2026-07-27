@@ -54,7 +54,7 @@ export async function scanEnvFile(filePath: string): Promise<{ clientId?: string
   const content = await fs.readFile(filePath, 'utf-8');
 
   // Filter out commented lines before matching
-  const lines = content.split('\n');
+  const lines = content.split(/\r?\n/);
   const uncommentedContent = lines.filter((line) => !line.trim().startsWith('#')).join('\n');
 
   const clientIdMatch = uncommentedContent.match(WORKOS_CLIENT_ID_PATTERN);

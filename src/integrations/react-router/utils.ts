@@ -1,11 +1,12 @@
 import { major } from 'semver';
 import fg from 'fast-glob';
-import { abortIfCancelled, getPackageDotJson } from '../../utils/clack-utils.js';
-import clack from '../../utils/clack.js';
+import { abortIfCancelled, getPackageDotJson } from '../../utils/ui-utils.js';
+import ui from '../../utils/ui.js';
 import { getVersionBucket } from '../../utils/semver.js';
 import type { InstallerOptions } from '../../utils/types.js';
 import { IGNORE_PATTERNS } from '../../lib/constants.js';
 import { getPackageVersion } from '../../utils/package-json.js';
+import { isPromptAllowed } from '../../utils/interaction-mode.js';
 import chalk from 'chalk';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -77,6 +78,18 @@ async function hasDeclarativeRouter({ installDir }: Pick<InstallerOptions, 'inst
   return false;
 }
 
+/**
+ * Non-interactive runs cannot answer the mode prompt, so warn and fall back to
+ * the most common mode instead of aborting.
+ */
+function defaultModeNonInteractive(): ReactRouterMode {
+  ui.log.warn(
+    'Could not determine the React Router mode. Defaulting to v7 Framework mode. ' +
+      'Run in an interactive terminal to choose a different mode.',
+  );
+  return ReactRouterMode.V7_FRAMEWORK;
+}
+
 export async function getReactRouterMode(options: InstallerOptions): Promise<ReactRouterMode> {
   const { installDir } = options;
 
@@ -85,9 +98,10 @@ export async function getReactRouterMode(options: InstallerOptions): Promise<Rea
     getPackageVersion('react-router-dom', packageJson) || getPackageVersion('react-router', packageJson);
 
   if (!reactRouterVersion) {
-    clack.log.info(`Learn more about React Router modes: ${chalk.cyan('https://reactrouter.com/start/modes')}`);
+    if (!isPromptAllowed()) return defaultModeNonInteractive();
+    ui.log.info(`Learn more about React Router modes: ${chalk.cyan('https://reactrouter.com/start/modes')}`);
     const result: ReactRouterMode = await abortIfCancelled(
-      clack.select({
+      ui.select({
         message: 'What React Router version and mode are you using?',
         options: [
           { label: 'React Router v6', value: ReactRouterMode.V6 },
@@ -105,32 +119,33 @@ export async function getReactRouterMode(options: InstallerOptions): Promise<Rea
   const majorVersion = coercedVersion ? major(coercedVersion) : null;
 
   if (majorVersion === 6) {
-    clack.log.info('Detected React Router v6');
+    ui.log.info('Detected React Router v6');
     return ReactRouterMode.V6;
   }
 
   if (majorVersion === 7) {
     const hasConfig = await hasReactRouterConfig({ installDir });
     if (hasConfig) {
-      clack.log.info('Detected React Router v7 - Framework mode');
+      ui.log.info('Detected React Router v7 - Framework mode');
       return ReactRouterMode.V7_FRAMEWORK;
     }
 
     const hasDataMode = await hasCreateBrowserRouter({ installDir });
     if (hasDataMode) {
-      clack.log.info('Detected React Router v7 - Data mode');
+      ui.log.info('Detected React Router v7 - Data mode');
       return ReactRouterMode.V7_DATA;
     }
 
     const hasDeclarative = await hasDeclarativeRouter({ installDir });
     if (hasDeclarative) {
-      clack.log.info('Detected React Router v7 - Declarative mode');
+      ui.log.info('Detected React Router v7 - Declarative mode');
       return ReactRouterMode.V7_DECLARATIVE;
     }
 
-    clack.log.info(`Learn more about React Router modes: ${chalk.cyan('https://reactrouter.com/start/modes')}`);
+    if (!isPromptAllowed()) return defaultModeNonInteractive();
+    ui.log.info(`Learn more about React Router modes: ${chalk.cyan('https://reactrouter.com/start/modes')}`);
     const result: ReactRouterMode = await abortIfCancelled(
-      clack.select({
+      ui.select({
         message: 'What React Router v7 mode are you using?',
         options: [
           { label: 'Framework mode', value: ReactRouterMode.V7_FRAMEWORK },
@@ -143,9 +158,10 @@ export async function getReactRouterMode(options: InstallerOptions): Promise<Rea
     return result;
   }
 
-  clack.log.info(`Learn more about React Router modes: ${chalk.cyan('https://reactrouter.com/start/modes')}`);
+  if (!isPromptAllowed()) return defaultModeNonInteractive();
+  ui.log.info(`Learn more about React Router modes: ${chalk.cyan('https://reactrouter.com/start/modes')}`);
   const result: ReactRouterMode = await abortIfCancelled(
-    clack.select({
+    ui.select({
       message: 'What React Router version and mode are you using?',
       options: [
         { label: 'React Router v6', value: ReactRouterMode.V6 },
