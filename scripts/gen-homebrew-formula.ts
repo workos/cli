@@ -61,17 +61,15 @@ for (const platform of PLATFORMS) {
   shas.set(platform.asset, await sha256(platform.asset));
 }
 
-// One `on_arm`/`on_intel` stanza; each pins the URL + sha and installs the raw
-// binary (named after the URL's basename) as `workos`.
+// One `on_arm`/`on_intel` stanza; each pins only the URL + sha. `install` is
+// deliberately NOT defined in here: RuboCop's Sorbet/BlockMethodDefinition
+// (enforced by `brew style` since Homebrew 6.0) rejects `def` inside a block,
+// so a single class-level `def install` globs whichever asset was downloaded.
 function stanza(cpu: 'arm' | 'intel', asset: string): string {
   return [
     `    on_${cpu} do`,
     `      url "${DOWNLOAD_BASE}/${asset}"`,
     `      sha256 "${shas.get(asset)}"`,
-    '',
-    '      def install',
-    `        bin.install "${asset}" => "workos"`,
-    '      end',
     '    end',
   ].join('\n');
 }
@@ -96,6 +94,14 @@ ${macos.map((p) => stanza(p.cpu, p.asset)).join('\n')}
 
   on_linux do
 ${linux.map((p) => stanza(p.cpu, p.asset)).join('\n')}
+  end
+
+  # Exactly one of the four assets above is downloaded, so the glob resolves to
+  # that platform's binary; matches Formula/workos-emulate.rb in the same tap.
+  def install
+    binary = Dir["workos-*"].first
+    odie "No workos-* binary in the staging directory" if binary.nil?
+    bin.install binary => "workos"
   end
 
   test do
