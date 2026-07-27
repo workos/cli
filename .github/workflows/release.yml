@@ -326,14 +326,18 @@ jobs:
         env:
           TAG_NAME: ${{ inputs.tag_name }}
         run: |
-          cp ../dist/homebrew/workos.rb workos.rb
+          # The tap keeps every formula under Formula/. Homebrew resolves a
+          # non-official tap's formula dir to the first existing entry of
+          # [Formula/, HomebrewFormula/, <root>], so a root-level workos.rb
+          # would be silently ignored once Formula/ exists.
+          cp ../dist/homebrew/workos.rb Formula/workos.rb
           # --porcelain reports untracked (first release) and modified alike.
-          if [ -z "$(git status --porcelain -- workos.rb)" ]; then
+          if [ -z "$(git status --porcelain -- Formula/workos.rb)" ]; then
             echo "workos.rb already up to date for $TAG_NAME"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add workos.rb
+          git add Formula/workos.rb
           git commit -m "workos ${TAG_NAME#v}"
           git push
