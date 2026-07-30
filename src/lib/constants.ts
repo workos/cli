@@ -45,6 +45,7 @@ export const OAUTH_PORT = settings.legacy.oauthPort;
  */
 export const MCP_SERVER_NAME = 'workos';
 export const MCP_SERVER_URL = 'https://mcp.workos.com/mcp';
+export const MCP_DOCS_URL = 'https://workos.com/docs/mcp';
 
 /**
  * Shared description for the `migrations` command, referenced by both the yargs

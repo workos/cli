@@ -9,6 +9,7 @@ import {
   type McpAgentKey,
   type McpClientResult,
 } from '../lib/mcp-clients.js';
+import { MCP_DOCS_URL, MCP_SERVER_URL } from '../lib/constants.js';
 
 /**
  * `workos mcp install | remove | status` handlers.
@@ -58,7 +59,8 @@ function reportResults(message: string, results: McpClientResult[]): void {
     outputSuccess(message, { agents: results });
   } else {
     for (const r of results) {
-      const line = `${r.displayName}: ${MCP_OUTCOME_LABELS[r.outcome]}`;
+      const scope = r.configuration ? ` (${r.configuration.scope} scope)` : '';
+      const line = `${r.displayName}: ${MCP_OUTCOME_LABELS[r.outcome]}${scope}`;
       if (r.outcome === 'failed') {
         ui.log.error(r.error ? `${line} — ${r.error}` : line);
       } else if (r.outcome === 'installed' || r.outcome === 'removed' || r.outcome === 'already-installed') {
@@ -67,10 +69,26 @@ function reportResults(message: string, results: McpClientResult[]): void {
         ui.log.info(line);
       }
     }
+    reportRecovery(results);
   }
 
   if (results.some((r) => r.outcome === 'failed')) {
     exitWithCode(ExitCode.GENERAL_ERROR);
+  }
+}
+
+function reportRecovery(results: McpClientResult[]): void {
+  for (const result of results) {
+    if (!result.recovery || !result.configuration) continue;
+    if (result.configuration.authentication === 'action-required') {
+      ui.log.warn(`${result.displayName}: configuration was written, but OAuth did not complete in this process.`);
+    } else {
+      ui.log.info(`${result.displayName}: configuration does not prove that OAuth is complete.`);
+    }
+    for (const hint of result.recovery.hints) {
+      ui.log.hint(hint.command ? `${hint.description}: ${hint.command}` : hint.description);
+    }
+    ui.log.hint(`Setup and recovery guide: ${result.recovery.docsUrl}`);
   }
 }
 
@@ -110,8 +128,21 @@ export async function runMcpStatus(): Promise<void> {
   const agents = await Promise.all(
     clients.map(async (client) => {
       const available = await client.isAvailable();
-      const installed = available ? await client.isInstalled() : false;
-      return { agent: client.key, displayName: client.displayName, available, installed };
+      const configured = available ? await client.isInstalled() : false;
+      const configuredUrl = configured ? await client.getConfiguredUrl() : null;
+      const endpointValid = configuredUrl === null ? null : configuredUrl === MCP_SERVER_URL;
+      const authentication = client.key === 'codex' && configured ? 'not-verified' : null;
+      return {
+        agent: client.key,
+        displayName: client.displayName,
+        available,
+        configured,
+        // Retained for compatibility with existing JSON consumers.
+        installed: configured,
+        configuredUrl,
+        endpointValid,
+        authentication,
+      };
     }),
   );
 
@@ -121,7 +152,17 @@ export async function runMcpStatus(): Promise<void> {
   }
 
   outputTable(
-    [{ header: 'Agent' }, { header: 'Available' }, { header: 'Installed' }],
-    agents.map((a) => [a.displayName, a.available ? 'yes' : 'no', a.installed ? 'yes' : 'no']),
+    [{ header: 'Agent' }, { header: 'Available' }, { header: 'Configured' }, { header: 'Authentication' }],
+    agents.map((a) => [
+      a.displayName,
+      a.available ? 'yes' : 'no',
+      a.configured ? 'yes' : 'no',
+      a.configured ? (a.authentication ?? 'client-managed') : '—',
+    ]),
   );
+
+  if (agents.some((agent) => agent.authentication === 'not-verified')) {
+    ui.log.hint(`Codex OAuth is not verified by this command. Run: codex mcp login workos`);
+    ui.log.hint(`Setup and recovery guide: ${MCP_DOCS_URL}`);
+  }
 }

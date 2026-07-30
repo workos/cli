@@ -181,7 +181,8 @@ export function detectIssues(report: Omit<DoctorReport, 'issues' | 'summary'>): 
 
   // MCP server URL drift — warn ONLY when a configured entry points at an
   // unexpected URL. Absent MCP is never an issue: the user may have declined
-  // the offer, and doctor reports state without judging.
+  // the offer, and doctor reports state without judging. Authentication remains
+  // client-managed and is not inferred from configuration presence.
   if (report.mcp) {
     const misconfigured = report.mcp.agents.filter((a) => a.misconfigured);
     if (misconfigured.length > 0) {

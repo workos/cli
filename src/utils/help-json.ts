@@ -191,7 +191,7 @@ const commands: CommandSchema[] = [
     commands: [
       {
         name: 'install',
-        description: 'Add the WorkOS MCP server to detected coding agents',
+        description: 'Configure the WorkOS MCP server in detected coding agents',
         options: [
           {
             name: 'agent',

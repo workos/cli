@@ -17,7 +17,7 @@ vi.mock('../utils/ui.js', () => {
   };
   return {
     default: {
-      log: { info: record, success: record, error: record, warn: record, step: record, message: record },
+      log: { info: record, success: record, error: record, warn: record, hint: record, step: record, message: record },
     },
   };
 });
@@ -200,9 +200,22 @@ describe('Claude Code client', () => {
 describe('Codex client', () => {
   const codex = () => clientByKey('codex');
 
-  it('add maps a clean exit to installed', async () => {
+  it('add maps a clean exit to configured with unverified OAuth metadata', async () => {
     mockExec(() => ({ status: 0 }));
-    expect((await codex().add()).outcome).toBe('installed');
+    const result = await codex().add();
+    expect(result).toMatchObject({
+      outcome: 'installed',
+      configuration: { scope: 'user', authentication: 'unknown' },
+      recovery: {
+        docsUrl: 'https://workos.com/docs/mcp',
+        hints: expect.arrayContaining([
+          expect.objectContaining({
+            command: 'codex mcp login workos',
+            hostShellRequired: true,
+          }),
+        ]),
+      },
+    });
   });
 
   it('add maps a version gap (unknown --url) to failed', async () => {
@@ -212,7 +225,7 @@ describe('Codex client', () => {
     expect(res.error).toContain('--url');
   });
 
-  it('add reports installed when a non-zero exit still persisted the server (OAuth-flow timeout)', async () => {
+  it('add reports configured with host action required when OAuth times out after persistence', async () => {
     // Codex writes the config, then its post-add OAuth flow blocks and times
     // out with a non-zero status — but `mcp list` proves the server landed.
     mockExec((_c, args) => {
@@ -220,7 +233,10 @@ describe('Codex client', () => {
       if (args.includes('list')) return { status: 0, stdout: 'workos  https://mcp.workos.com/mcp  enabled' };
       return { status: 0 };
     });
-    expect((await codex().add()).outcome).toBe('installed');
+    expect(await codex().add()).toMatchObject({
+      outcome: 'installed',
+      configuration: { scope: 'user', authentication: 'action-required' },
+    });
   });
 
   it('add stays failed on a non-zero exit when the server did NOT land', async () => {
@@ -238,6 +254,28 @@ describe('Codex client', () => {
       stdout: 'Name    Url\ngithub  https://api.github\nworkos  https://mcp.workos.com/mcp   enabled',
     }));
     expect(await codex().isInstalled()).toBe(true);
+  });
+
+  it('reads the effective Codex MCP URL from get --json', async () => {
+    mockExec((_c, args) => {
+      if (args.includes('get')) {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            name: 'workos',
+            transport: { type: 'streamable_http', url: 'https://mcp.workos.com/mcp' },
+          }),
+        };
+      }
+      return { status: 0 };
+    });
+
+    expect(await codex().getConfiguredUrl()).toBe('https://mcp.workos.com/mcp');
+  });
+
+  it('returns null when Codex get output is unavailable or malformed', async () => {
+    mockExec(() => ({ status: 0, stdout: 'not-json' }));
+    expect(await codex().getConfiguredUrl()).toBeNull();
   });
 
   it('remove maps "No MCP server named" (exit 0) to not-installed', async () => {
@@ -330,6 +368,9 @@ describe('runMcpInstall / runMcpRemove (human mode)', () => {
     expect(joined).toContain('Claude Code');
     expect(joined).toContain('Codex');
     expect(joined).toContain('Cursor');
+    expect(joined).toContain('Codex: configured (user scope)');
+    expect(joined).toContain('codex mcp login workos');
+    expect(joined).toContain('https://workos.com/docs/mcp');
   });
 
   it('prints the no-agents message and exits 0 when none are detected', async () => {
@@ -421,7 +462,7 @@ describe('JSON output mode', () => {
     expect(output.data.agents[0].outcome).toBe('removed');
   });
 
-  it('runMcpStatus emits { data: { agents: [...] } } with availability + install flags', async () => {
+  it('runMcpStatus distinguishes configured state while retaining the legacy installed flag', async () => {
     makeDir('.cursor');
     writeCursorConfig('{ "mcpServers": { "workos": { "url": "https://w" } } }');
     mockExec((_c, args) => (args[0] === '--version' ? { status: 1 } : { status: 0 }));
@@ -429,8 +470,14 @@ describe('JSON output mode', () => {
     const output = JSON.parse(consoleOutput[0]);
     expect(output.data.agents).toHaveLength(3);
     const cursor = output.data.agents.find((a: { agent: string }) => a.agent === 'cursor');
-    expect(cursor).toMatchObject({ agent: 'cursor', displayName: 'Cursor', available: true, installed: true });
+    expect(cursor).toMatchObject({
+      agent: 'cursor',
+      displayName: 'Cursor',
+      available: true,
+      configured: true,
+      installed: true,
+    });
     const claude = output.data.agents.find((a: { agent: string }) => a.agent === 'claude-code');
-    expect(claude).toMatchObject({ available: false, installed: false });
+    expect(claude).toMatchObject({ available: false, configured: false, installed: false });
   });
 });

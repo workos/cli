@@ -224,15 +224,28 @@ function reportResults(skills: SkillSummary | null, mcp: McpClientResult[]): voi
       ui.log.success(`${skills.count} ${word} installed for ${skills.agents.join(', ')}`);
     }
     for (const r of mcp) {
-      const line = `MCP server: ${r.displayName} — ${MCP_OUTCOME_LABELS[r.outcome]}`;
+      const scope = r.configuration ? ` (${r.configuration.scope} scope)` : '';
+      const line = `MCP server: ${r.displayName} — ${MCP_OUTCOME_LABELS[r.outcome]}${scope}`;
       if (r.outcome === 'failed') {
         ui.log.error(r.error ? `${line} (${r.error})` : line);
       } else {
         ui.log.success(line);
       }
     }
-    if (mcp.some((r) => r.outcome === 'installed' || r.outcome === 'already-installed')) {
-      ui.log.hint('Your agent will authorize WorkOS via OAuth on first MCP use.');
+    for (const result of mcp) {
+      if (!result.recovery || !result.configuration) continue;
+      if (result.configuration.authentication === 'action-required') {
+        ui.log.hint(`${result.displayName} configuration was written, but OAuth still requires host-shell action.`);
+      } else {
+        ui.log.hint(`${result.displayName} configuration does not prove that OAuth is complete.`);
+      }
+      for (const hint of result.recovery.hints) {
+        ui.log.hint(hint.command ? `${hint.description}: ${hint.command}` : hint.description);
+      }
+      ui.log.hint(`Setup and recovery guide: ${result.recovery.docsUrl}`);
+    }
+    if (mcp.some((r) => (r.outcome === 'installed' || r.outcome === 'already-installed') && r.recovery === undefined)) {
+      ui.log.hint('Complete WorkOS OAuth in your agent before using the MCP server.');
     }
   }
 

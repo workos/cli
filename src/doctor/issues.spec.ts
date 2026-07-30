@@ -97,7 +97,8 @@ describe('detectIssues', () => {
       const report = baseReport() as DoctorReport;
       report.mcp = {
         serverUrl: 'https://mcp.workos.com/mcp',
-        agents: [{ agent: 'Cursor', available: true, installed: true, misconfigured: true }],
+        docsUrl: 'https://workos.com/docs/mcp',
+        agents: [{ agent: 'Cursor', available: true, configured: true, installed: true, misconfigured: true }],
       };
       return report;
     }
@@ -125,7 +126,7 @@ describe('detectIssues', () => {
     beforeEach(clearNpmEnv);
     afterEach(restoreNpmEnv);
 
-    it('adds no issue when MCP is absent or merely not installed', () => {
+    it('adds no issue when MCP is absent or merely not configured', () => {
       const report = baseReport();
       // No mcp field at all.
       expect(detectIssues(report).some((i) => i.code === 'MCP_MISCONFIGURED')).toBe(false);
@@ -133,9 +134,10 @@ describe('detectIssues', () => {
       // Detected agents, none misconfigured (some simply lack the server).
       report.mcp = {
         serverUrl: 'https://mcp.workos.com/mcp',
+        docsUrl: 'https://workos.com/docs/mcp',
         agents: [
-          { agent: 'Claude Code', available: true, installed: false },
-          { agent: 'Cursor', available: true, installed: true, misconfigured: false },
+          { agent: 'Claude Code', available: true, configured: false, installed: false },
+          { agent: 'Cursor', available: true, configured: true, installed: true, misconfigured: false },
         ],
       };
       expect(detectIssues(report).some((i) => i.code === 'MCP_MISCONFIGURED')).toBe(false);
@@ -145,9 +147,10 @@ describe('detectIssues', () => {
       const report = baseReport();
       report.mcp = {
         serverUrl: 'https://mcp.workos.com/mcp',
+        docsUrl: 'https://workos.com/docs/mcp',
         agents: [
-          { agent: 'Claude Code', available: true, installed: true },
-          { agent: 'Cursor', available: true, installed: true, misconfigured: true },
+          { agent: 'Claude Code', available: true, configured: true, installed: true },
+          { agent: 'Cursor', available: true, configured: true, installed: true, misconfigured: true },
         ],
       };
 
