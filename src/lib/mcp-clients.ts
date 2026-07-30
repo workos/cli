@@ -223,6 +223,27 @@ function createCliClient(config: {
     return parseConfiguredUrl(res.stdout);
   }
 
+  /**
+   * An entry under our name exists — but is it ours? Both `add` paths that
+   * infer success from an existing entry (a collision, and a non-zero exit
+   * whose write may still have landed) have to answer this, or they report a
+   * stale definition from an earlier install as freshly configured.
+   *
+   * Returns null when the entry can be treated as ours: either the endpoint
+   * matches, or the client exposes no way to ask (Claude Code), where the
+   * listed name is the best evidence available. Otherwise returns the reason
+   * it can't be — a mismatch, or an answer we couldn't read, which for an
+   * introspectable client is not a yes.
+   */
+  async function staleEntryReason(): Promise<string | null> {
+    if (!canReadConfiguredUrl) return null;
+    const configuredUrl = await readConfiguredUrl();
+    if (configuredUrl === MCP_SERVER_URL) return null;
+    return configuredUrl === null
+      ? `could not read the effective ${MCP_SERVER_NAME} endpoint to confirm it`
+      : `"${MCP_SERVER_NAME}" still points at ${configuredUrl} (expected ${MCP_SERVER_URL})`;
+  }
+
   return {
     key,
     displayName,
@@ -238,9 +259,12 @@ function createCliClient(config: {
     async add() {
       const res = await execFileNoThrow(binary, addArgs, { timeout: EXEC_TIMEOUT_MS });
       if (res.status === 0) return result('installed', undefined, 'unknown');
-      // Idempotent: an "already exists" collision is a success, not a failure.
+      // Idempotent: an "already exists" collision is a success, not a failure —
+      // but only once the colliding entry is confirmed to be ours.
       const combined = `${res.stdout}\n${res.stderr}`.toLowerCase();
       if (combined.includes('already exists') || combined.includes('already configured')) {
+        const stale = await staleEntryReason();
+        if (stale) return result('failed', `${binary} mcp add found an existing entry and ${stale}`);
         return result('already-installed', undefined, 'unknown');
       }
       // A non-zero exit doesn't always mean the write failed: Codex persists the
@@ -249,23 +273,9 @@ function createCliClient(config: {
       // status. Confirm against the actual config before declaring failure —
       // more robust than matching each client's success wording.
       if (await checkInstalled()) {
-        // Presence of the name alone isn't proof our write landed: a stale
-        // entry from an earlier install survives a genuinely failed add and
-        // would otherwise be reported as freshly configured. So the name is
-        // only sufficient for a client that can't be asked anything better
-        // (Claude Code). For a client that CAN report its effective endpoint,
-        // "configured" has to be earned — a mismatch means the old definition
-        // is still in place, and an unreadable answer is not a yes. Both stay
-        // failed rather than claiming a write we never confirmed.
-        const configuredUrl = await readConfiguredUrl();
-        if (configuredUrl === MCP_SERVER_URL || !canReadConfiguredUrl) {
-          return result('installed', undefined, 'action-required');
-        }
-        const detail =
-          configuredUrl === null
-            ? `could not read the effective ${MCP_SERVER_NAME} endpoint to confirm it`
-            : `"${MCP_SERVER_NAME}" still points at ${configuredUrl} (expected ${MCP_SERVER_URL})`;
-        return result('failed', `${binary} mcp add failed and ${detail}`);
+        const stale = await staleEntryReason();
+        if (stale) return result('failed', `${binary} mcp add failed and ${stale}`);
+        return result('installed', undefined, 'action-required');
       }
       // Otherwise a real failure — an old client lacking `--transport http` /
       // `--url`, a bad invocation, etc. Reported, never thrown.

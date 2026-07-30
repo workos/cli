@@ -261,6 +261,46 @@ describe('Codex client', () => {
     });
   });
 
+  it('add rejects an "already exists" collision that points at a stale endpoint', async () => {
+    // A name collision only counts as idempotent success if the entry we
+    // collided with is actually ours.
+    mockExec((_c, args) => {
+      if (args.includes('add')) return { status: 1, stderr: "MCP server 'workos' already exists" };
+      if (args.includes('get')) {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            name: 'workos',
+            transport: { type: 'streamable_http', url: 'https://stale.example/mcp' },
+          }),
+        };
+      }
+      return { status: 0 };
+    });
+
+    const res = await codex().add();
+    expect(res.outcome).toBe('failed');
+    expect(res.error).toContain('https://stale.example/mcp');
+  });
+
+  it('add accepts an "already exists" collision at the intended endpoint', async () => {
+    mockExec((_c, args) => {
+      if (args.includes('add')) return { status: 1, stderr: "MCP server 'workos' already exists" };
+      if (args.includes('get')) {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            name: 'workos',
+            transport: { type: 'streamable_http', url: 'https://mcp.workos.com/mcp' },
+          }),
+        };
+      }
+      return { status: 0 };
+    });
+
+    expect((await codex().add()).outcome).toBe('already-installed');
+  });
+
   it('add stays failed when the surviving endpoint cannot be read back', async () => {
     // Codex can be asked for its effective endpoint, so a `get` we can't parse
     // is an unverified claim, not a success — the entry may still be stale.
