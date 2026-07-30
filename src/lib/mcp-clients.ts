@@ -212,6 +212,13 @@ function createCliClient(config: {
     return listHasServer(res.stdout, MCP_SERVER_NAME);
   }
 
+  async function readConfiguredUrl(): Promise<string | null> {
+    if (!getUrlArgs || !parseConfiguredUrl) return null;
+    const res = await execFileNoThrow(binary, getUrlArgs, { timeout: EXEC_TIMEOUT_MS });
+    if (res.status !== 0) return null;
+    return parseConfiguredUrl(res.stdout);
+  }
+
   return {
     key,
     displayName,
@@ -223,12 +230,7 @@ function createCliClient(config: {
       return res.status === 0;
     },
     isInstalled: checkInstalled,
-    async getConfiguredUrl() {
-      if (!getUrlArgs || !parseConfiguredUrl) return null;
-      const res = await execFileNoThrow(binary, getUrlArgs, { timeout: EXEC_TIMEOUT_MS });
-      if (res.status !== 0) return null;
-      return parseConfiguredUrl(res.stdout);
-    },
+    getConfiguredUrl: readConfiguredUrl,
     async add() {
       const res = await execFileNoThrow(binary, addArgs, { timeout: EXEC_TIMEOUT_MS });
       if (res.status === 0) return result('installed', undefined, 'unknown');
@@ -242,7 +244,23 @@ function createCliClient(config: {
       // callback available here) until our timeout kills it with a non-zero
       // status. Confirm against the actual config before declaring failure —
       // more robust than matching each client's success wording.
-      if (await checkInstalled()) return result('installed', undefined, 'action-required');
+      if (await checkInstalled()) {
+        // Presence of the name alone isn't proof our write landed: a stale
+        // entry from an earlier install survives a genuinely failed add and
+        // would otherwise be reported as freshly configured. When the client
+        // can report its effective endpoint, a mismatch is decisive — the add
+        // failed and the old definition is still in place. A null reading
+        // (client can't introspect, or `get` failed) is not contradicting
+        // evidence, so it keeps the name-only interpretation.
+        const configuredUrl = await readConfiguredUrl();
+        if (configuredUrl !== null && configuredUrl !== MCP_SERVER_URL) {
+          return result(
+            'failed',
+            `${binary} mcp add failed and "${MCP_SERVER_NAME}" still points at ${configuredUrl} (expected ${MCP_SERVER_URL})`,
+          );
+        }
+        return result('installed', undefined, 'action-required');
+      }
       // Otherwise a real failure — an old client lacking `--transport http` /
       // `--url`, a bad invocation, etc. Reported, never thrown.
       return result('failed', excerpt(res.stderr || res.stdout));

@@ -239,6 +239,52 @@ describe('Codex client', () => {
     });
   });
 
+  it('add stays failed when a stale entry survives the failed add at the wrong endpoint', async () => {
+    // The name is present, but it belongs to an older definition — the add
+    // never applied our endpoint, so this must not read as freshly configured.
+    mockExec((_c, args) => {
+      if (args.includes('add')) return { status: 1, stderr: 'boom' };
+      if (args.includes('list')) return { status: 0, stdout: 'workos  https://stale.example/mcp  enabled' };
+      if (args.includes('get')) {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            name: 'workos',
+            transport: { type: 'streamable_http', url: 'https://stale.example/mcp' },
+          }),
+        };
+      }
+      return { status: 0 };
+    });
+
+    const res = await codex().add();
+    expect(res.outcome).toBe('failed');
+    expect(res.error).toContain('https://stale.example/mcp');
+    expect(res.error).toContain('https://mcp.workos.com/mcp');
+  });
+
+  it('add reports configured when the surviving entry matches the intended endpoint', async () => {
+    mockExec((_c, args) => {
+      if (args.includes('add')) return { status: 1, stdout: 'timed out waiting for authentication' };
+      if (args.includes('list')) return { status: 0, stdout: 'workos  https://mcp.workos.com/mcp  enabled' };
+      if (args.includes('get')) {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            name: 'workos',
+            transport: { type: 'streamable_http', url: 'https://mcp.workos.com/mcp' },
+          }),
+        };
+      }
+      return { status: 0 };
+    });
+
+    expect(await codex().add()).toMatchObject({
+      outcome: 'installed',
+      configuration: { scope: 'user', authentication: 'action-required' },
+    });
+  });
+
   it('add stays failed on a non-zero exit when the server did NOT land', async () => {
     mockExec((_c, args) => {
       if (args.includes('add')) return { status: 1, stderr: 'boom' };
