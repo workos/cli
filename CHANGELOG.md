@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.2](https://github.com/workos/cli/compare/v0.20.1...v0.20.2) (2026-07-27)
+
+
+### Bug Fixes
+
+* block newlines in installer Bash allowlist ([#198](https://github.com/workos/cli/issues/198)) ([7929803](https://github.com/workos/cli/commit/792980385778d9d7c0f54611a7743668ad87199f))
+* **deps:** update minor and patch updates ([#194](https://github.com/workos/cli/issues/194)) ([b9b1704](https://github.com/workos/cli/commit/b9b1704e35c7c2357f7aace6dc6f5af512be0f66))
+* **release:** hoist install out of the formula's on_arm blocks ([#212](https://github.com/workos/cli/issues/212)) ([6550742](https://github.com/workos/cli/commit/6550742940ce1b6e571db9834e962a3fec7eb027))
+* **release:** write the tap formula to Formula/workos.rb ([f4a104e](https://github.com/workos/cli/commit/f4a104e413d2a7c3ddfc54979d85d3de0851d53a))
+* restrict workos doctor credential base URL to trusted hosts ([#199](https://github.com/workos/cli/issues/199)) ([fc4f424](https://github.com/workos/cli/commit/fc4f424a7bcb7fc3faff20ddf5ccfaeb3007f6ad))
+
 ## [0.20.1](https://github.com/workos/cli/compare/v0.20.0...v0.20.1) (2026-07-26)
 
 
