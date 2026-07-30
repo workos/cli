@@ -10,13 +10,20 @@ vi.mock('../../lib/mcp-clients.js', () => ({
 const { MCP_DOCS_URL, MCP_SERVER_URL } = await import('../../lib/constants.js');
 const { checkMcp } = await import('./mcp.js');
 
-function fakeClient(key: string, displayName: string, configured: boolean, configuredUrl: string | null = null) {
+function fakeClient(
+  key: string,
+  displayName: string,
+  configured: boolean,
+  configuredUrl: string | null = null,
+  authenticationVerifiable = false,
+) {
   return {
     key,
     displayName,
     isAvailable: vi.fn(() => Promise.resolve(true)),
     isInstalled: vi.fn(() => Promise.resolve(configured)),
     getConfiguredUrl: vi.fn(() => Promise.resolve(configuredUrl)),
+    authenticationVerifiable,
     add: vi.fn(),
     remove: vi.fn(),
   };
@@ -43,7 +50,14 @@ describe('checkMcp', () => {
       serverUrl: MCP_SERVER_URL,
       docsUrl: MCP_DOCS_URL,
       agents: [
-        { agent: 'Claude Code', available: true, configured: true, installed: true, misconfigured: false },
+        {
+          agent: 'Claude Code',
+          available: true,
+          configured: true,
+          installed: true,
+          misconfigured: false,
+          authentication: 'not-verified',
+        },
         { agent: 'Codex', available: true, configured: false, installed: false },
       ],
     });
@@ -60,6 +74,7 @@ describe('checkMcp', () => {
       configured: true,
       installed: true,
       misconfigured: true,
+      authentication: 'not-verified',
     });
   });
 
@@ -89,7 +104,7 @@ describe('checkMcp', () => {
     expect(cursor.getConfiguredUrl).not.toHaveBeenCalled();
   });
 
-  it('validates the Codex URL and marks OAuth as not verified', async () => {
+  it('validates the URL and marks OAuth not verified for any unverifiable client', async () => {
     detectResult = [fakeClient('codex', 'Codex', true, 'https://wrong.example.com/mcp')];
 
     const result = await checkMcp();
@@ -104,6 +119,24 @@ describe('checkMcp', () => {
     });
   });
 
+  it('omits the caveat for a client that can report its own OAuth state', async () => {
+    // The annotation is driven by the client capability, not by its name — a
+    // client that grows a real signal is exempt without touching this check.
+    detectResult = [fakeClient('claude-code', 'Claude Code', true, MCP_SERVER_URL, true)];
+
+    const result = await checkMcp();
+
+    expect(result!.agents[0].authentication).toBeUndefined();
+  });
+
+  it('never annotates a client that is not configured', async () => {
+    detectResult = [fakeClient('codex', 'Codex', false)];
+
+    const result = await checkMcp();
+
+    expect(result!.agents[0].authentication).toBeUndefined();
+  });
+
   it('handles the mixed matrix: one configured, one missing, one misconfigured', async () => {
     detectResult = [
       fakeClient('claude-code', 'Claude Code', true),
@@ -114,9 +147,23 @@ describe('checkMcp', () => {
     const result = await checkMcp();
 
     expect(result!.agents).toEqual([
-      { agent: 'Claude Code', available: true, configured: true, installed: true, misconfigured: false },
+      {
+        agent: 'Claude Code',
+        available: true,
+        configured: true,
+        installed: true,
+        misconfigured: false,
+        authentication: 'not-verified',
+      },
       { agent: 'Codex', available: true, configured: false, installed: false },
-      { agent: 'Cursor', available: true, configured: true, installed: true, misconfigured: true },
+      {
+        agent: 'Cursor',
+        available: true,
+        configured: true,
+        installed: true,
+        misconfigured: true,
+        authentication: 'not-verified',
+      },
     ]);
   });
 });

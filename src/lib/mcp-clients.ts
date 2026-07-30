@@ -91,6 +91,19 @@ export interface McpClientTarget {
   isInstalled(): Promise<boolean>;
   /** Effective configured URL when the client exposes it, otherwise null. */
   getConfiguredUrl(): Promise<string | null>;
+  /**
+   * Whether this CLI can observe the client's OAuth state. False for every
+   * client today: credentials live inside each client and we never read them, so
+   * a present server definition proves nothing about authentication.
+   *
+   * It lives on the target rather than being inferred from `key` so callers can
+   * report the caveat without knowing which client they hold, and so a client
+   * that grows a usable signal (Claude Code's `mcp list` already prints a
+   * per-entry connection state) flips to true here alone.
+   */
+  readonly authenticationVerifiable: boolean;
+  /** Client-specific next steps when authentication needs attention. */
+  readonly recovery?: McpRecovery;
   add(): Promise<McpClientResult>;
   remove(): Promise<McpClientResult>;
 }
@@ -256,6 +269,8 @@ function createCliClient(config: {
     },
     isInstalled: checkInstalled,
     getConfiguredUrl: readConfiguredUrl,
+    authenticationVerifiable: false,
+    ...(recovery ? { recovery } : {}),
     async add() {
       const res = await execFileNoThrow(binary, addArgs, { timeout: EXEC_TIMEOUT_MS });
       if (res.status === 0) return result('installed', undefined, 'unknown');
@@ -376,6 +391,7 @@ function createCursorClient(): McpClientTarget {
       }
     },
     getConfiguredUrl: getCursorConfiguredUrl,
+    authenticationVerifiable: false,
     async add() {
       const path = configPath();
       try {

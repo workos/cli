@@ -577,8 +577,55 @@ describe('JSON output mode', () => {
       available: true,
       configured: true,
       installed: true,
+      // Cursor's OAuth is no more verifiable than Codex's, so it carries the
+      // same caveat — the annotation follows the capability, not the agent name.
+      authentication: 'not-verified',
     });
     const claude = output.data.agents.find((a: { agent: string }) => a.agent === 'claude-code');
-    expect(claude).toMatchObject({ available: false, configured: false, installed: false });
+    expect(claude).toMatchObject({
+      available: false,
+      configured: false,
+      installed: false,
+      authentication: null,
+    });
+  });
+});
+
+describe('runMcpStatus (human mode)', () => {
+  it('names every unverified client and takes recovery commands from the client', async () => {
+    makeDir('.codex');
+    makeDir('.cursor');
+    writeCursorConfig('{ "mcpServers": { "workos": { "url": "https://mcp.workos.com/mcp" } } }');
+    mockExec((_c, args) => {
+      if (args[0] === '--version') return { status: 0 };
+      if (args.includes('list')) return { status: 0, stdout: 'workos  https://mcp.workos.com/mcp  enabled' };
+      if (args.includes('get')) {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            name: 'workos',
+            transport: { type: 'streamable_http', url: 'https://mcp.workos.com/mcp' },
+          }),
+        };
+      }
+      return { status: 0 };
+    });
+
+    await runMcpStatus();
+
+    const joined = uiLogs.join('\n');
+    expect(joined).toContain('OAuth is managed by');
+    expect(joined).toContain('Codex');
+    expect(joined).toContain('Cursor');
+    expect(joined).toContain('codex mcp login workos');
+    expect(joined).toContain('https://workos.com/docs/mcp');
+  });
+
+  it('prints no OAuth caveat when nothing is configured', async () => {
+    mockExec((_c, args) => (args[0] === '--version' ? { status: 1 } : { status: 0 }));
+
+    await runMcpStatus();
+
+    expect(uiLogs.join('\n')).not.toContain('OAuth is managed by');
   });
 });

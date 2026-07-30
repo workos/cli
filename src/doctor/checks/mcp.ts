@@ -14,6 +14,11 @@ import type { McpInfo, McpAgentMcpStatus } from '../types.js';
  * offer. URL drift ("misconfigured") is detected when a client exposes its
  * effective URL; issues.ts derives a warning from it. Per-agent shell-outs
  * carry the 10s timeout from the client library, keeping doctor fast.
+ *
+ * A configured entry is annotated `not-verified` whenever the client cannot
+ * report its OAuth state — a client capability, never a hardcoded agent name,
+ * so the caveat is applied uniformly instead of singling out the one client we
+ * happen to have written recovery steps for.
  */
 export async function checkMcp(): Promise<McpInfo | null> {
   const clients = await detectMcpClients();
@@ -31,9 +36,7 @@ export async function checkMcp(): Promise<McpInfo | null> {
       if (configured) {
         const url = await client.getConfiguredUrl();
         status.misconfigured = url !== null && url !== MCP_SERVER_URL;
-      }
-      if (client.key === 'codex' && configured) {
-        status.authentication = 'not-verified';
+        if (!client.authenticationVerifiable) status.authentication = 'not-verified';
       }
       return status;
     }),

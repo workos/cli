@@ -8,6 +8,7 @@ import {
   MCP_OUTCOME_LABELS,
   type McpAgentKey,
   type McpClientResult,
+  type McpRecovery,
 } from '../lib/mcp-clients.js';
 import { MCP_DOCS_URL, MCP_SERVER_URL } from '../lib/constants.js';
 
@@ -77,7 +78,18 @@ function reportResults(message: string, results: McpClientResult[]): void {
   }
 }
 
+/**
+ * Print a client's own recovery steps. Every command string comes from the
+ * client library, so no caller here spells out an agent's CLI invocation.
+ */
+function printRecoveryHints(recovery: McpRecovery): void {
+  for (const hint of recovery.hints) {
+    ui.log.hint(hint.command ? `${hint.description}: ${hint.command}` : hint.description);
+  }
+}
+
 function reportRecovery(results: McpClientResult[]): void {
+  const docsUrls = new Set<string>();
   for (const result of results) {
     if (!result.recovery || !result.configuration) continue;
     if (result.configuration.authentication === 'action-required') {
@@ -85,10 +97,11 @@ function reportRecovery(results: McpClientResult[]): void {
     } else {
       ui.log.info(`${result.displayName}: configuration does not prove that OAuth is complete.`);
     }
-    for (const hint of result.recovery.hints) {
-      ui.log.hint(hint.command ? `${hint.description}: ${hint.command}` : hint.description);
-    }
-    ui.log.hint(`Setup and recovery guide: ${result.recovery.docsUrl}`);
+    printRecoveryHints(result.recovery);
+    docsUrls.add(result.recovery.docsUrl);
+  }
+  for (const url of docsUrls) {
+    ui.log.hint(`Setup and recovery guide: ${url}`);
   }
 }
 
@@ -125,26 +138,32 @@ export async function runMcpStatus(): Promise<void> {
   // availability + install flags, so `createMcpClients()` — not
   // `detectMcpClients()` — is the right source here.
   const clients = createMcpClients();
-  const agents = await Promise.all(
+  const probed = await Promise.all(
     clients.map(async (client) => {
       const available = await client.isAvailable();
       const configured = available ? await client.isInstalled() : false;
       const configuredUrl = configured ? await client.getConfiguredUrl() : null;
       const endpointValid = configuredUrl === null ? null : configuredUrl === MCP_SERVER_URL;
-      const authentication = client.key === 'codex' && configured ? 'not-verified' : null;
+      // A client that cannot report its OAuth state gets the caveat, whichever
+      // client it is — the CLI never reads agent credentials.
+      const authentication = configured && !client.authenticationVerifiable ? 'not-verified' : null;
       return {
-        agent: client.key,
-        displayName: client.displayName,
-        available,
-        configured,
-        // Retained for compatibility with existing JSON consumers.
-        installed: configured,
-        configuredUrl,
-        endpointValid,
-        authentication,
+        client,
+        status: {
+          agent: client.key,
+          displayName: client.displayName,
+          available,
+          configured,
+          // Retained for compatibility with existing JSON consumers.
+          installed: configured,
+          configuredUrl,
+          endpointValid,
+          authentication,
+        },
       };
     }),
   );
+  const agents = probed.map((p) => p.status);
 
   if (isJsonMode()) {
     outputJson({ data: { agents } });
@@ -161,8 +180,21 @@ export async function runMcpStatus(): Promise<void> {
     ]),
   );
 
-  if (agents.some((agent) => agent.authentication === 'not-verified')) {
-    ui.log.hint(`Codex OAuth is not verified by this command. Run: codex mcp login workos`);
-    ui.log.hint(`Setup and recovery guide: ${MCP_DOCS_URL}`);
+  const unverified = probed.filter((p) => p.status.authentication === 'not-verified');
+  if (unverified.length === 0) return;
+
+  ui.log.hint(
+    `OAuth is managed by ${unverified.map((p) => p.client.displayName).join(', ')} and is not verified by this command.`,
+  );
+  const docsUrls = new Set<string>();
+  for (const { client } of unverified) {
+    if (!client.recovery) continue;
+    printRecoveryHints(client.recovery);
+    docsUrls.add(client.recovery.docsUrl);
+  }
+  // Clients without their own recovery steps still get the canonical guide.
+  if (docsUrls.size === 0) docsUrls.add(MCP_DOCS_URL);
+  for (const url of docsUrls) {
+    ui.log.hint(`Setup and recovery guide: ${url}`);
   }
 }

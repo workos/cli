@@ -97,7 +97,7 @@ Commands:
 
 `workos setup` installs WorkOS skills and configures the MCP server only after consent. Use `workos skills list` to check skill status, `workos mcp status` to check whether the server definition is configured, or `workos doctor --fix` to refresh stale skills.
 
-MCP configuration and OAuth authentication are separate states. For Codex, complete or refresh OAuth with `codex mcp login workos` in your normal host shell. The WorkOS CLI does not inspect Codex credentials and cannot prove that OAuth is usable. See the [WorkOS MCP setup and recovery guide](https://workos.com/docs/mcp) for user-global and trusted-project-only configuration.
+MCP configuration and OAuth authentication are separate states. The WorkOS CLI never inspects a coding agent's credentials, so "configured" means the server definition is in place — it cannot prove that OAuth is usable in any agent. Each agent owns its own OAuth; with Codex, for example, complete or refresh it with `codex mcp login workos` in your normal host shell. See the [WorkOS MCP setup and recovery guide](https://workos.com/docs/mcp) for user-global and trusted-project-only configuration.
 
 Resource Management:
   organization (org)     Manage organizations
