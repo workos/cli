@@ -168,6 +168,19 @@ describe('Claude Code client', () => {
     expect(res.error).toContain('--transport');
   });
 
+  it('add falls back to name-only presence for a client that cannot report its endpoint', async () => {
+    // Claude Code exposes no endpoint introspection, so the listed name is the
+    // best evidence available — it keeps the benefit of the doubt that a
+    // Codex-style unreadable endpoint does not get.
+    mockExec((_c, args) => {
+      if (args.includes('add')) return { status: 1, stderr: 'boom' };
+      if (args.includes('list')) return { status: 0, stdout: 'workos: https://mcp.workos.com/mcp (HTTP) - Connected' };
+      return { status: 0 };
+    });
+
+    expect((await claude().add()).outcome).toBe('installed');
+  });
+
   it('isInstalled matches the workos: list line', async () => {
     mockExec(() => ({
       status: 0,
@@ -231,12 +244,36 @@ describe('Codex client', () => {
     mockExec((_c, args) => {
       if (args.includes('add')) return { status: 1, stdout: "Added global MCP server 'workos'." };
       if (args.includes('list')) return { status: 0, stdout: 'workos  https://mcp.workos.com/mcp  enabled' };
+      if (args.includes('get')) {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            name: 'workos',
+            transport: { type: 'streamable_http', url: 'https://mcp.workos.com/mcp' },
+          }),
+        };
+      }
       return { status: 0 };
     });
     expect(await codex().add()).toMatchObject({
       outcome: 'installed',
       configuration: { scope: 'user', authentication: 'action-required' },
     });
+  });
+
+  it('add stays failed when the surviving endpoint cannot be read back', async () => {
+    // Codex can be asked for its effective endpoint, so a `get` we can't parse
+    // is an unverified claim, not a success — the entry may still be stale.
+    mockExec((_c, args) => {
+      if (args.includes('add')) return { status: 1, stderr: 'boom' };
+      if (args.includes('list')) return { status: 0, stdout: 'workos  https://mcp.workos.com/mcp  enabled' };
+      if (args.includes('get')) return { status: 1, stderr: 'unknown flag --json' };
+      return { status: 0 };
+    });
+
+    const res = await codex().add();
+    expect(res.outcome).toBe('failed');
+    expect(res.error).toContain('could not read');
   });
 
   it('add stays failed when a stale entry survives the failed add at the wrong endpoint', async () => {
@@ -261,28 +298,6 @@ describe('Codex client', () => {
     expect(res.outcome).toBe('failed');
     expect(res.error).toContain('https://stale.example/mcp');
     expect(res.error).toContain('https://mcp.workos.com/mcp');
-  });
-
-  it('add reports configured when the surviving entry matches the intended endpoint', async () => {
-    mockExec((_c, args) => {
-      if (args.includes('add')) return { status: 1, stdout: 'timed out waiting for authentication' };
-      if (args.includes('list')) return { status: 0, stdout: 'workos  https://mcp.workos.com/mcp  enabled' };
-      if (args.includes('get')) {
-        return {
-          status: 0,
-          stdout: JSON.stringify({
-            name: 'workos',
-            transport: { type: 'streamable_http', url: 'https://mcp.workos.com/mcp' },
-          }),
-        };
-      }
-      return { status: 0 };
-    });
-
-    expect(await codex().add()).toMatchObject({
-      outcome: 'installed',
-      configuration: { scope: 'user', authentication: 'action-required' },
-    });
   });
 
   it('add stays failed on a non-zero exit when the server did NOT land', async () => {

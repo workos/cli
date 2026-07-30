@@ -212,6 +212,10 @@ function createCliClient(config: {
     return listHasServer(res.stdout, MCP_SERVER_NAME);
   }
 
+  /** Whether this client exposes its effective endpoint at all — the difference
+   * between "answered null" (unreadable) and "was never askable". */
+  const canReadConfiguredUrl = Boolean(getUrlArgs && parseConfiguredUrl);
+
   async function readConfiguredUrl(): Promise<string | null> {
     if (!getUrlArgs || !parseConfiguredUrl) return null;
     const res = await execFileNoThrow(binary, getUrlArgs, { timeout: EXEC_TIMEOUT_MS });
@@ -247,19 +251,21 @@ function createCliClient(config: {
       if (await checkInstalled()) {
         // Presence of the name alone isn't proof our write landed: a stale
         // entry from an earlier install survives a genuinely failed add and
-        // would otherwise be reported as freshly configured. When the client
-        // can report its effective endpoint, a mismatch is decisive — the add
-        // failed and the old definition is still in place. A null reading
-        // (client can't introspect, or `get` failed) is not contradicting
-        // evidence, so it keeps the name-only interpretation.
+        // would otherwise be reported as freshly configured. So the name is
+        // only sufficient for a client that can't be asked anything better
+        // (Claude Code). For a client that CAN report its effective endpoint,
+        // "configured" has to be earned — a mismatch means the old definition
+        // is still in place, and an unreadable answer is not a yes. Both stay
+        // failed rather than claiming a write we never confirmed.
         const configuredUrl = await readConfiguredUrl();
-        if (configuredUrl !== null && configuredUrl !== MCP_SERVER_URL) {
-          return result(
-            'failed',
-            `${binary} mcp add failed and "${MCP_SERVER_NAME}" still points at ${configuredUrl} (expected ${MCP_SERVER_URL})`,
-          );
+        if (configuredUrl === MCP_SERVER_URL || !canReadConfiguredUrl) {
+          return result('installed', undefined, 'action-required');
         }
-        return result('installed', undefined, 'action-required');
+        const detail =
+          configuredUrl === null
+            ? `could not read the effective ${MCP_SERVER_NAME} endpoint to confirm it`
+            : `"${MCP_SERVER_NAME}" still points at ${configuredUrl} (expected ${MCP_SERVER_URL})`;
+        return result('failed', `${binary} mcp add failed and ${detail}`);
       }
       // Otherwise a real failure — an old client lacking `--transport http` /
       // `--url`, a bad invocation, etc. Reported, never thrown.
