@@ -156,15 +156,21 @@ export interface McpAgentMcpStatus {
   agent: string;
   /** Agent is usable on this machine. */
   available: boolean;
-  /** The WorkOS MCP server is present in this agent's config. */
+  /** The WorkOS MCP server definition is present in this agent's effective config. */
+  configured: boolean;
+  /** Legacy JSON field retained for compatibility; equivalent to configured. */
   installed: boolean;
-  /** Cursor only: the entry exists but points at an unexpected URL. */
+  /** The entry exists but points at an unexpected URL. */
   misconfigured?: boolean;
+  /** Client-managed authentication cannot be verified without accessing credentials. */
+  authentication?: 'not-verified';
 }
 
 export interface McpInfo {
   /** The URL the WorkOS MCP server should be configured with. */
   serverUrl: string;
+  /** Canonical setup and recovery documentation. */
+  docsUrl: string;
   agents: McpAgentMcpStatus[];
 }
 

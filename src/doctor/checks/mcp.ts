@@ -1,5 +1,5 @@
-import { detectMcpClients, getCursorConfiguredUrl } from '../../lib/mcp-clients.js';
-import { MCP_SERVER_URL } from '../../lib/constants.js';
+import { detectMcpClients } from '../../lib/mcp-clients.js';
+import { MCP_DOCS_URL, MCP_SERVER_URL } from '../../lib/constants.js';
 import type { McpInfo, McpAgentMcpStatus } from '../types.js';
 
 /**
@@ -11,9 +11,14 @@ import type { McpInfo, McpAgentMcpStatus } from '../types.js';
  * touch MCP in this phase).
  *
  * Absent MCP is deliberately NOT an issue: the user may have declined the
- * offer. Only Cursor exposes a readable config, so URL drift ("misconfigured")
- * is detected for Cursor alone; issues.ts derives a warning from it. Per-agent
- * shell-outs carry the 10s timeout from the client library, keeping doctor fast.
+ * offer. URL drift ("misconfigured") is detected when a client exposes its
+ * effective URL; issues.ts derives a warning from it. Per-agent shell-outs
+ * carry the 10s timeout from the client library, keeping doctor fast.
+ *
+ * A configured entry is annotated `not-verified` whenever the client cannot
+ * report its OAuth state — a client capability, never a hardcoded agent name,
+ * so the caveat is applied uniformly instead of singling out the one client we
+ * happen to have written recovery steps for.
  */
 export async function checkMcp(): Promise<McpInfo | null> {
   const clients = await detectMcpClients();
@@ -21,18 +26,21 @@ export async function checkMcp(): Promise<McpInfo | null> {
 
   const agents = await Promise.all(
     clients.map(async (client): Promise<McpAgentMcpStatus> => {
-      const installed = await client.isInstalled();
-      const status: McpAgentMcpStatus = { agent: client.displayName, available: true, installed };
-      // Cursor is the only client whose config we can read, so it's the only
-      // one we can flag for URL drift. A missing/unreadable URL (null) is not
-      // "unexpected" — only a present-but-different URL counts.
-      if (client.key === 'cursor' && installed) {
-        const url = await getCursorConfiguredUrl();
+      const configured = await client.isInstalled();
+      const status: McpAgentMcpStatus = {
+        agent: client.displayName,
+        available: true,
+        configured,
+        installed: configured,
+      };
+      if (configured) {
+        const url = await client.getConfiguredUrl();
         status.misconfigured = url !== null && url !== MCP_SERVER_URL;
+        if (!client.authenticationVerifiable) status.authentication = 'not-verified';
       }
       return status;
     }),
   );
 
-  return { serverUrl: MCP_SERVER_URL, agents };
+  return { serverUrl: MCP_SERVER_URL, docsUrl: MCP_DOCS_URL, agents };
 }

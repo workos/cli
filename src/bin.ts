@@ -473,7 +473,7 @@ async function runCli(): Promise<void> {
       registerSubcommand(
         yargs,
         'install',
-        'Add the WorkOS MCP server to detected coding agents',
+        'Configure the WorkOS MCP server in detected coding agents',
         (y) =>
           y.option('agent', {
             alias: 'a',

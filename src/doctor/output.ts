@@ -204,11 +204,15 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
     for (const agent of report.mcp.agents) {
       if (agent.misconfigured) {
         console.log(`   ${Chalk.yellow('!')} ${agent.agent}: configured with an unexpected URL`);
-      } else if (agent.installed) {
-        console.log(`   ${Chalk.green('✓')} ${agent.agent}: installed`);
+      } else if (agent.configured) {
+        const authentication = agent.authentication === 'not-verified' ? ' (OAuth not verified)' : '';
+        console.log(`   ${Chalk.green('✓')} ${agent.agent}: configured${authentication}`);
       } else {
-        console.log(`   ${agent.agent}: ${Chalk.dim('not installed')}`);
+        console.log(`   ${agent.agent}: ${Chalk.dim('not configured')}`);
       }
+    }
+    if (report.mcp.agents.some((agent) => agent.authentication === 'not-verified')) {
+      console.log(`   ${Chalk.dim('Recovery:')} ${report.mcp.docsUrl}`);
     }
   }
 

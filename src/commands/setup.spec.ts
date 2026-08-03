@@ -54,10 +54,10 @@ vi.mock('../lib/mcp-clients.js', () => ({
   detectMcpClients: vi.fn(),
   MCP_AGENT_KEYS: ['claude-code', 'codex', 'cursor'],
   MCP_OUTCOME_LABELS: {
-    installed: 'installed',
-    'already-installed': 'already installed',
+    installed: 'configured',
+    'already-installed': 'already configured',
     removed: 'removed',
-    'not-installed': 'not installed',
+    'not-installed': 'not configured',
     skipped: 'skipped',
     failed: 'failed',
   },
@@ -327,6 +327,36 @@ describe('runSetup — command trigger', () => {
     expect(detectAgents).not.toHaveBeenCalled();
     expect(refreshWorkOSSkills).not.toHaveBeenCalled();
     expect(target.add).toHaveBeenCalledOnce();
+  });
+
+  it('reports structured Codex OAuth recovery after configuration', async () => {
+    const target = mcpTarget({
+      key: 'codex',
+      displayName: 'Codex',
+      add: vi.fn(async () => ({
+        agent: 'codex',
+        displayName: 'Codex',
+        outcome: 'installed',
+        configuration: { scope: 'user', authentication: 'action-required' },
+        recovery: {
+          docsUrl: 'https://workos.com/docs/mcp',
+          hints: [
+            {
+              description: 'Complete or refresh WorkOS OAuth in your normal host shell',
+              command: 'codex mcp login workos',
+              hostShellRequired: true,
+            },
+          ],
+        },
+      })),
+    });
+    vi.mocked(detectMcpClients).mockResolvedValue([target as any]);
+
+    await runSetup({ trigger: 'command', mcpOnly: true, assumeYes: true });
+
+    expect(ui.log.success).toHaveBeenCalledWith('MCP server: Codex — configured (user scope)');
+    expect(ui.log.hint).toHaveBeenCalledWith(expect.stringContaining('codex mcp login workos'));
+    expect(ui.log.hint).toHaveBeenCalledWith(expect.stringContaining('https://workos.com/docs/mcp'));
   });
 
   it('rejects unknown --agents values', async () => {

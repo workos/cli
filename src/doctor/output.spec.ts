@@ -85,4 +85,34 @@ describe('doctor output', () => {
 
     log.mockRestore();
   });
+
+  it('reports MCP configuration separately from unverified Codex OAuth', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    formatReport(
+      report({
+        mcp: {
+          serverUrl: 'https://mcp.workos.com/mcp',
+          docsUrl: 'https://workos.com/docs/mcp',
+          agents: [
+            {
+              agent: 'Codex',
+              available: true,
+              configured: true,
+              installed: true,
+              authentication: 'not-verified',
+            },
+          ],
+        },
+      }),
+    );
+
+    const output = log.mock.calls.map((call) => String(call[0])).join('\n');
+    expect(output).toContain('Codex: configured (OAuth not verified)');
+    expect(output).toContain('Recovery:');
+    expect(output).toContain('https://workos.com/docs/mcp');
+    expect(output).not.toContain('Codex: installed');
+
+    log.mockRestore();
+  });
 });
