@@ -149,12 +149,14 @@ export interface Spinner {
 
 /**
  * The currently-running spinner, if any. A prompt pauses it before opening so
- * the 80ms redraw interval can't overwrite the question (see withPrompt).
+ * the 80ms redraw interval can't overwrite the question (see withPrompt), and
+ * start() retires it so two spinner intervals can never run at once.
  * Internal — not part of the public Spinner surface.
  */
 interface PausableSpinner {
   pause: () => void;
   resume: () => void;
+  retire: () => void;
 }
 let activeSpinner: PausableSpinner | null = null;
 
@@ -163,6 +165,14 @@ function spinner(): Spinner {
   let timer: ReturnType<typeof setInterval> | undefined;
   let frame = 0;
   let text = '';
+  // True from start() until stop()/clear()/retire(). Guards every write, so a
+  // stale handle can never scribble over its successor's output (AUTH-6732:
+  // an overwritten spinner handle used to leave its 80ms interval running,
+  // redrawing over later prompts).
+  let active = false;
+  // True while a prompt has borrowed the terminal (see withPrompt). A paused
+  // spinner owns no line, so retiring it must not erase the prompt's.
+  let paused = false;
   const isTty = Boolean(process.stdout.isTTY) && !dashboardMode;
   const render = () => {
     process.stdout.write(`\r${INDENT}${dim(SPINNER_FRAMES[(frame = (frame + 1) % SPINNER_FRAMES.length)])} ${text}`);
@@ -176,14 +186,29 @@ function spinner(): Spinner {
       timer = setInterval(render, 80);
     }
   };
+  const halt = () => {
+    if (timer) {
+      clearInterval(timer);
+      timer = undefined;
+    }
+  };
   const handle: Spinner & PausableSpinner = {
     start(message = '') {
       text = message;
       if (dashboardMode) return;
       if (isTty) {
+        // Single-spinner invariant: a new spinner retires whatever is on screen
+        // first, so an orphaned interval can never overwrite later output (or a
+        // prompt). Retire, not stop — whether the old phase deserves a final ✓
+        // line is the caller's decision (stop it explicitly first if so).
+        const prev = activeSpinner;
+        if (prev && prev !== handle) prev.retire();
+        active = true;
+        paused = false;
         tick();
         activeSpinner = handle;
       } else {
+        active = true;
         line(`${dim('…')} ${text}`);
       }
     },
@@ -191,10 +216,10 @@ function spinner(): Spinner {
       text = message;
     },
     stop(message?: string, code = 0) {
-      if (timer) {
-        clearInterval(timer);
-        timer = undefined;
-      }
+      if (!active) return;
+      active = false;
+      paused = false;
+      halt();
       if (activeSpinner === handle) activeSpinner = null;
       if (dashboardMode) return;
       clearLine();
@@ -205,10 +230,10 @@ function spinner(): Spinner {
     // a failed step being cleared before a prompt), and deregister so a prompt
     // doesn't resume it.
     clear() {
-      if (timer) {
-        clearInterval(timer);
-        timer = undefined;
-      }
+      if (!active) return;
+      active = false;
+      paused = false;
+      halt();
       if (activeSpinner === handle) activeSpinner = null;
       if (dashboardMode) return;
       clearLine();
@@ -217,16 +242,28 @@ function spinner(): Spinner {
     // line and halts the redraw interval; resume restarts it. stop() is NOT
     // called, so activeSpinner stays registered across the prompt.
     pause() {
-      if (timer) {
-        clearInterval(timer);
-        timer = undefined;
-      }
+      if (!active || paused) return;
+      paused = true;
+      halt();
       clearLine();
     },
     resume() {
+      if (!active || !paused) return;
+      paused = false;
       // Only resume if this handle is still the active spinner — never resurrect
       // a spinner that was stopped or cleared while the prompt was open.
       if (activeSpinner === handle && !dashboardMode) tick();
+    },
+    // Retire on replacement (start() of another spinner): halt + deregister
+    // without a final line. Like clear(), but skips the erase when paused —
+    // the prompt owns the line then.
+    retire() {
+      if (!active) return;
+      active = false;
+      halt();
+      if (activeSpinner === handle) activeSpinner = null;
+      if (!paused) clearLine();
+      paused = false;
     },
   };
   return handle;

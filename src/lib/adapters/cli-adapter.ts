@@ -142,6 +142,7 @@ export class CLIAdapter implements InstallerAdapter {
     this.subscribe('config:complete', this.handleConfigComplete);
     this.subscribe('agent:start', this.handleAgentStart);
     this.subscribe('agent:progress', this.handleAgentProgress);
+    this.subscribe('agent:success', this.handleAgentSuccess);
     // Persistent, append-only log of file operations + tool calls above the spinner.
     this.subscribe('file:write', this.handleFileWrite);
     this.subscribe('file:edit', this.handleFileEdit);
@@ -209,6 +210,20 @@ export class CLIAdapter implements InstallerAdapter {
       this.spinner.stop(message, code);
       this.spinner = null;
     }
+  }
+
+  /**
+   * Start a fresh spinner for a new phase, clearing any previous handle first.
+   * ui.spinner() enforces the same single-spinner invariant globally (start()
+   * retires the active spinner), but clearing here additionally keeps
+   * this.spinner honest: it never points at a handle whose phase already ended
+   * (AUTH-6732 — an overwritten handle left its interval redrawing over the
+   * next prompt).
+   */
+  private startSpinner(message: string): void {
+    this.spinner?.clear();
+    this.spinner = ui.spinner();
+    this.spinner.start(message);
   }
 
   /** Debug logging - only outputs when debug mode is enabled */
@@ -313,8 +328,7 @@ export class CLIAdapter implements InstallerAdapter {
     console.log(`  ${chalk.cyan(verificationUri)}`);
     console.log(`\nEnter code: ${chalk.bold(userCode)}\n`);
 
-    this.spinner = ui.spinner();
-    this.spinner.start('Waiting for authentication...');
+    this.startSpinner('Waiting for authentication...');
   };
 
   private handleDeviceSuccess = (): void => {
@@ -322,11 +336,8 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handleStagingFetching = (): void => {
-    if (this.spinner) {
-      this.spinner.stop('Authenticated');
-    }
-    this.spinner = ui.spinner();
-    this.spinner.start('Fetching your WorkOS credentials...');
+    this.stopSpinner('Authenticated');
+    this.startSpinner('Fetching your WorkOS credentials...');
   };
 
   private handleStagingSuccess = ({ source }: InstallerEvents['staging:success']): void => {
@@ -450,10 +461,20 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handleAgentStart = (): void => {
-    this.spinner = ui.spinner();
-    this.spinner.start(this.lastAgentMessage);
+    this.startSpinner(this.lastAgentMessage);
     // No setInterval: ui animates its own frames, and the old 2s reset
     // clobbered the current phase text set by handleAgentProgress.
+  };
+
+  /**
+   * The agent phase is over — finalize its spinner. Integrations that run
+   * validation emit validation:start (which stops it first); this covers the
+   * ones that don't (Ruby, or any run with --no-validate), so the spinner
+   * never outlives its phase into the post-install commit/PR prompts
+   * (AUTH-6732). Failure paths are already finalized by handleError/handleComplete.
+   */
+  private handleAgentSuccess = (): void => {
+    this.stopSpinner('Agent completed');
   };
 
   private handleAgentProgress = ({ step, detail }: InstallerEvents['agent:progress']): void => {
@@ -473,8 +494,7 @@ export class CLIAdapter implements InstallerAdapter {
     this.spinner = null;
     render();
     if (wasRunning) {
-      this.spinner = ui.spinner();
-      this.spinner.start(this.lastAgentMessage);
+      this.startSpinner(this.lastAgentMessage);
     }
   }
 
@@ -614,8 +634,7 @@ export class CLIAdapter implements InstallerAdapter {
 
   private handleScaffoldStart = ({ packageManager }: InstallerEvents['scaffold:start']): void => {
     this.scaffoldPackageManager = packageManager;
-    this.spinner = ui.spinner();
-    this.spinner.start(`Scaffolding a new Next.js app with ${packageManager} (this can take a minute)...`);
+    this.startSpinner(`Scaffolding a new Next.js app with ${packageManager} (this can take a minute)...`);
   };
 
   // create-next-app output is verbose; surface it only under --debug and keep
@@ -683,8 +702,7 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handleCommitGenerating = (): void => {
-    this.spinner = ui.spinner();
-    this.spinner.start('Generating commit message...');
+    this.startSpinner('Generating commit message...');
   };
 
   private handleCommitSuccess = ({ message }: InstallerEvents['postinstall:commit:success']): void => {
@@ -711,16 +729,14 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handlePrGenerating = (): void => {
-    this.spinner = ui.spinner();
-    this.spinner.start('Generating PR description...');
+    this.startSpinner('Generating PR description...');
   };
 
   private handlePrPushing = (): void => {
     if (this.spinner) {
       this.spinner.message('Pushing to remote...');
     } else {
-      this.spinner = ui.spinner();
-      this.spinner.start('Pushing to remote...');
+      this.startSpinner('Pushing to remote...');
     }
   };
 

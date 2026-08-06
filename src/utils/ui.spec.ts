@@ -196,6 +196,117 @@ describe('prompt coordination (withPrompt)', () => {
   });
 });
 
+describe('spinner coordination (AUTH-6732)', () => {
+  let stdoutTtyDesc: PropertyDescriptor | undefined;
+  let writeSpy: ReturnType<typeof vi.spyOn>;
+  let logSpy: ReturnType<typeof vi.spyOn>;
+
+  const writes = () => writeSpy.mock.calls.map((c) => String(c[0]));
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // Spinners only animate on a TTY; stub it so the redraw interval runs.
+    stdoutTtyDesc = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');
+    Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true });
+    writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    writeSpy.mockRestore();
+    logSpy.mockRestore();
+    if (stdoutTtyDesc) Object.defineProperty(process.stdout, 'isTTY', stdoutTtyDesc);
+    else delete (process.stdout as { isTTY?: boolean }).isTTY;
+  });
+
+  it('starting a new spinner retires the previous one (no orphaned interval)', () => {
+    const a = ui.spinner();
+    a.start('phase A');
+    vi.advanceTimersByTime(240);
+    expect(writes().some((w) => w.includes('phase A'))).toBe(true);
+
+    writeSpy.mockClear();
+    const b = ui.spinner();
+    b.start('phase B');
+    vi.advanceTimersByTime(240);
+
+    const after = writes();
+    expect(after.some((w) => w.includes('phase A'))).toBe(false);
+    expect(after.some((w) => w.includes('phase B'))).toBe(true);
+    b.stop('done');
+  });
+
+  it('a retired spinner handle goes inert — stop()/clear() print nothing', () => {
+    const a = ui.spinner();
+    a.start('phase A');
+    const b = ui.spinner();
+    b.start('phase B'); // retires A
+
+    writeSpy.mockClear();
+    logSpy.mockClear();
+    a.stop('should not print');
+    a.clear();
+    a.message('should not render');
+    vi.advanceTimersByTime(240);
+
+    expect(writes().every((w) => !w.includes('should not'))).toBe(true);
+    expect(logSpy).not.toHaveBeenCalled();
+    // The live spinner is untouched and keeps animating.
+    expect(writes().some((w) => w.includes('phase B'))).toBe(true);
+    b.stop('done');
+  });
+
+  it('a prompt pauses the active spinner and resumes it after the answer', async () => {
+    const s = ui.spinner();
+    s.start('Working');
+    vi.advanceTimersByTime(160);
+    expect(writes().some((w) => w.includes('Working'))).toBe(true);
+
+    let framesDuringPrompt = 0;
+    writeSpy.mockClear();
+    vi.mocked(inquirer.confirm).mockImplementationOnce(async () => {
+      // While the prompt awaits input, the spinner's 80ms redraw must not fire.
+      vi.advanceTimersByTime(500);
+      framesDuringPrompt = writes().filter((w) => w.includes('Working')).length;
+      return true;
+    });
+
+    await ui.confirm({ message: 'ok?' });
+    expect(framesDuringPrompt).toBe(0);
+
+    writeSpy.mockClear();
+    vi.advanceTimersByTime(240);
+    expect(writes().some((w) => w.includes('Working'))).toBe(true);
+    s.stop('done');
+  });
+
+  it('replacing the spinner mid-prompt does not erase the prompt, and the old spinner stays dead', async () => {
+    const a = ui.spinner();
+    a.start('Working');
+
+    let erasesAtReplace = 0;
+    vi.mocked(inquirer.confirm).mockImplementationOnce(async () => {
+      writeSpy.mockClear();
+      const b = ui.spinner();
+      b.start('Next phase'); // retires the paused "Working" spinner
+      erasesAtReplace = writes().filter((w) => w.includes('\x1b[2K')).length;
+      b.stop('done');
+      return true;
+    });
+
+    await ui.confirm({ message: 'ok?' });
+    // A paused spinner owns no line — retiring it must not wipe the prompt's.
+    expect(erasesAtReplace).toBe(0);
+
+    // The prompt's resume() must not resurrect the retired spinner.
+    writeSpy.mockClear();
+    vi.advanceTimersByTime(500);
+    expect(writes().every((w) => !w.includes('Working'))).toBe(true);
+  });
+});
+
 describe('dashboard mode suppresses output', () => {
   let logSpy: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {

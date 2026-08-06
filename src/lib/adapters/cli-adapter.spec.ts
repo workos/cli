@@ -364,6 +364,70 @@ describe('CLIAdapter', () => {
     });
   });
 
+  describe('spinner lifecycle (AUTH-6732)', () => {
+    type SpinnerMock = {
+      start: ReturnType<typeof vi.fn>;
+      stop: ReturnType<typeof vi.fn>;
+      message: ReturnType<typeof vi.fn>;
+      clear: ReturnType<typeof vi.fn>;
+    };
+    const makeSpinnerMock = (): SpinnerMock => ({
+      start: vi.fn(),
+      stop: vi.fn(),
+      message: vi.fn(),
+      clear: vi.fn(),
+    });
+
+    it('stops the agent spinner on agent:success so it cannot outlive the agent phase', async () => {
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+      const spinnerMock = makeSpinnerMock();
+      vi.mocked(ui.default.spinner).mockImplementation(() => spinnerMock as never);
+
+      emitter.emit('agent:start', {});
+      emitter.emit('agent:success', { summary: 'done' });
+
+      expect(spinnerMock.stop).toHaveBeenCalledWith('Agent completed', 0);
+    });
+
+    it('starting a new phase spinner clears the previous handle instead of orphaning it', async () => {
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+      // A fresh handle per ui.spinner() call, so each phase gets its own.
+      vi.mocked(ui.default.spinner).mockImplementation(() => makeSpinnerMock() as never);
+
+      emitter.emit('agent:start', {});
+      emitter.emit('postinstall:commit:generating', {});
+
+      const handles = vi.mocked(ui.default.spinner).mock.results.map((r) => r.value as SpinnerMock);
+      expect(handles).toHaveLength(2);
+      // The agent spinner was cleared (not just abandoned with a live interval)
+      // before the commit spinner started.
+      expect(handles[0].clear).toHaveBeenCalled();
+      expect(handles[0].start).not.toHaveBeenCalledWith('Generating commit message...');
+      expect(handles[1].start).toHaveBeenCalledWith('Generating commit message...');
+    });
+
+    it('a post-install prompt after agent:success has no stale spinner to resurrect', async () => {
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+      const spinnerMock = makeSpinnerMock();
+      vi.mocked(ui.default.spinner).mockImplementation(() => spinnerMock as never);
+      vi.mocked(ui.default.confirm).mockResolvedValue(false);
+
+      emitter.emit('agent:start', {});
+      emitter.emit('agent:success', { summary: 'done' });
+      emitter.emit('postinstall:commit:prompt', {});
+      await new Promise((r) => setTimeout(r, 10));
+
+      // Exactly one stop (agent:success); the prompt did not restart or re-stop
+      // a stale agent spinner, and no new spinner was created for the prompt.
+      expect(spinnerMock.stop).toHaveBeenCalledTimes(1);
+      expect(spinnerMock.start).toHaveBeenCalledTimes(1);
+      expect(sendEvent).toHaveBeenCalledWith({ type: 'COMMIT_DECLINED' });
+    });
+  });
+
   describe('staging success copy', () => {
     it('device path announces a fresh environment without "retrieved"', async () => {
       await adapter.start();
