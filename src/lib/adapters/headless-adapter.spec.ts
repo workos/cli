@@ -254,60 +254,6 @@ describe('HeadlessAdapter', () => {
     });
   });
 
-  describe('commit auto-resolution', () => {
-    it('auto-commits by default', async () => {
-      const adapter = createAdapter();
-      await adapter.start();
-
-      emitter.emit('postinstall:commit:prompt', {});
-
-      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'commit:auto' });
-      expect(sendEvent).toHaveBeenCalledWith({ type: 'COMMIT_APPROVED' });
-      await adapter.stop();
-    });
-
-    it('skips commit with --no-commit flag', async () => {
-      const adapter = createAdapter({ noCommit: true });
-      await adapter.start();
-
-      emitter.emit('postinstall:commit:prompt', {});
-
-      expect(mockWriteNDJSON).toHaveBeenCalledWith({
-        type: 'commit:skipped',
-        reason: '--no-commit flag',
-      });
-      expect(sendEvent).toHaveBeenCalledWith({ type: 'COMMIT_DECLINED' });
-      await adapter.stop();
-    });
-  });
-
-  describe('PR auto-resolution', () => {
-    it('skips PR by default', async () => {
-      const adapter = createAdapter();
-      await adapter.start();
-
-      emitter.emit('postinstall:pr:prompt', {});
-
-      expect(mockWriteNDJSON).toHaveBeenCalledWith({
-        type: 'pr:skipped',
-        reason: '--create-pr not set',
-      });
-      expect(sendEvent).toHaveBeenCalledWith({ type: 'PR_DECLINED' });
-      await adapter.stop();
-    });
-
-    it('creates PR with --create-pr flag', async () => {
-      const adapter = createAdapter({ createPr: true });
-      await adapter.start();
-
-      emitter.emit('postinstall:pr:prompt', {});
-
-      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'pr:creating' });
-      expect(sendEvent).toHaveBeenCalledWith({ type: 'PR_APPROVED' });
-      await adapter.stop();
-    });
-  });
-
   describe('scaffold events', () => {
     it('streams scaffold:* and flags the completion as scaffolded', async () => {
       const adapter = createAdapter();

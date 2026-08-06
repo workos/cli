@@ -46,6 +46,7 @@ describe('buildCompletionData', () => {
     expect(data.files).toHaveLength(2);
     expect(data.nextSteps[0]).toContain('pnpm run dev');
     expect(data.nextSteps[1]).toContain('http://localhost:3000');
+    expect(data.nextSteps.at(-1)).toContain('git status');
     expect(data.docsUrl).toBe('https://d');
     expect(data.dashboardUrl).toBe('https://dash');
     expect(data.integration).toBe('nextjs');
@@ -60,7 +61,7 @@ describe('buildCompletionData', () => {
     expect(data.url).toBe('http://localhost:8080');
   });
 
-  it('handles empty changedFiles (--no-commit shape) without throwing', async () => {
+  it('handles empty changedFiles without throwing (and adds no review step)', async () => {
     writePackageJson({ scripts: { dev: 'next dev' }, dependencies: { next: '15.0.0' } });
 
     const data = await buildCompletionData({ integration: 'nextjs', changedFiles: [], installDir }, baseDeps);
@@ -68,6 +69,7 @@ describe('buildCompletionData', () => {
     expect(data.files).toEqual([]);
     expect(data.nextSteps[0]).toContain('start your dev server');
     expect(data.nextSteps[1]).toContain('test authentication');
+    expect(data.nextSteps.some((s) => /git status/.test(s))).toBe(false);
   });
 
   it('drops the generic "start dev server" framework step but keeps others', async () => {

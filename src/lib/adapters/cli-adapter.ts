@@ -164,17 +164,6 @@ export class CLIAdapter implements InstallerAdapter {
 
     // Post-install events
     this.subscribe('postinstall:changes', this.handlePostInstallChanges);
-    this.subscribe('postinstall:commit:prompt', this.handleCommitPrompt);
-    this.subscribe('postinstall:commit:generating', this.handleCommitGenerating);
-    this.subscribe('postinstall:commit:success', this.handleCommitSuccess);
-    this.subscribe('postinstall:commit:failed', this.handleCommitFailed);
-    this.subscribe('postinstall:pr:prompt', this.handlePrPrompt);
-    this.subscribe('postinstall:pr:generating', this.handlePrGenerating);
-    this.subscribe('postinstall:pr:pushing', this.handlePrPushing);
-    this.subscribe('postinstall:pr:success', this.handlePrSuccess);
-    this.subscribe('postinstall:pr:failed', this.handlePrFailed);
-    this.subscribe('postinstall:push:failed', this.handlePushFailed);
-    this.subscribe('postinstall:manual', this.handleManualInstructions);
   }
 
   async stop(): Promise<void> {
@@ -666,81 +655,6 @@ export class CLIAdapter implements InstallerAdapter {
   // ===== Post-install Event Handlers =====
 
   private handlePostInstallChanges = ({ files }: InstallerEvents['postinstall:changes']): void => {
-    this.debugLog(`Post-install: ${files.length} changed files detected`);
-  };
-
-  private handleCommitPrompt = async (): Promise<void> => {
-    const confirmed = await this.withPromptActive(() =>
-      ui.confirm({
-        message: 'Commit the changes?',
-        initialValue: true,
-      }),
-    );
-
-    this.sendEvent({
-      type: ui.isCancel(confirmed) || !confirmed ? 'COMMIT_DECLINED' : 'COMMIT_APPROVED',
-    });
-  };
-
-  private handleCommitGenerating = (): void => {
-    this.spinner = ui.spinner();
-    this.spinner.start('Generating commit message...');
-  };
-
-  private handleCommitSuccess = ({ message }: InstallerEvents['postinstall:commit:success']): void => {
-    this.stopSpinner('Committed');
-    ui.log.success(`Committed: ${chalk.dim(message)}`);
-  };
-
-  private handleCommitFailed = ({ error }: InstallerEvents['postinstall:commit:failed']): void => {
-    this.stopSpinner('Commit failed');
-    ui.log.error(`Commit failed: ${error}`);
-  };
-
-  private handlePrPrompt = async (): Promise<void> => {
-    const confirmed = await this.withPromptActive(() =>
-      ui.confirm({
-        message: 'Create a pull request?',
-        initialValue: true,
-      }),
-    );
-
-    this.sendEvent({
-      type: ui.isCancel(confirmed) || !confirmed ? 'PR_DECLINED' : 'PR_APPROVED',
-    });
-  };
-
-  private handlePrGenerating = (): void => {
-    this.spinner = ui.spinner();
-    this.spinner.start('Generating PR description...');
-  };
-
-  private handlePrPushing = (): void => {
-    if (this.spinner) {
-      this.spinner.message('Pushing to remote...');
-    } else {
-      this.spinner = ui.spinner();
-      this.spinner.start('Pushing to remote...');
-    }
-  };
-
-  private handlePrSuccess = ({ url }: InstallerEvents['postinstall:pr:success']): void => {
-    this.stopSpinner('PR created');
-    ui.log.success(`Pull request created: ${chalk.cyan(url)}`);
-  };
-
-  private handlePrFailed = ({ error }: InstallerEvents['postinstall:pr:failed']): void => {
-    this.stopSpinner('PR creation failed');
-    ui.log.error(`PR creation failed: ${error}`);
-  };
-
-  private handlePushFailed = ({ error }: InstallerEvents['postinstall:push:failed']): void => {
-    this.stopSpinner('Push failed');
-    ui.log.error(`Push failed: ${error}`);
-  };
-
-  private handleManualInstructions = ({ instructions }: InstallerEvents['postinstall:manual']): void => {
-    ui.log.info('GitHub CLI not found. Manual steps:');
-    console.log(chalk.dim(instructions));
+    this.debugLog(`Post-install: ${files.length} changed files detected (left uncommitted)`);
   };
 }

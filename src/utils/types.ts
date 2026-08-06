@@ -87,19 +87,9 @@ export type InstallerOptions = {
   noValidate?: boolean;
 
   /**
-   * Skip post-install commit and PR workflow
-   */
-  noCommit?: boolean;
-
-  /**
    * Skip branch creation (continue on current branch)
    */
   noBranch?: boolean;
-
-  /**
-   * Auto-create pull request after installation
-   */
-  createPr?: boolean;
 
   /**
    * Skip git dirty working tree check

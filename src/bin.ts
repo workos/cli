@@ -210,16 +210,6 @@ const installerOptions = {
     describe: 'Create a new branch for changes (use --no-branch to skip)',
     type: 'boolean' as const,
   },
-  commit: {
-    default: true,
-    describe: 'Auto-commit after installation (use --no-commit to skip)',
-    type: 'boolean' as const,
-  },
-  'create-pr': {
-    default: false,
-    describe: 'Auto-create pull request after installation',
-    type: 'boolean' as const,
-  },
   'git-check': {
     default: true,
     describe: 'Check for dirty working tree (use --no-git-check to skip)',

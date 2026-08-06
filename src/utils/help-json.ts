@@ -1442,22 +1442,6 @@ const commands: CommandSchema[] = [
         hidden: false,
       },
       {
-        name: 'commit',
-        type: 'boolean',
-        description: 'Auto-commit after installation (use --no-commit to skip)',
-        required: false,
-        default: true,
-        hidden: false,
-      },
-      {
-        name: 'create-pr',
-        type: 'boolean',
-        description: 'Auto-create pull request after installation',
-        required: false,
-        default: false,
-        hidden: false,
-      },
-      {
         name: 'git-check',
         type: 'boolean',
         description: 'Check for dirty working tree (use --no-git-check to skip)',

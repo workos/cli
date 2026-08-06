@@ -54,7 +54,12 @@ export async function buildCompletionData(ctx: CompletionContext, deps: Completi
     devCommand,
     url,
     files,
-    nextSteps: [...concrete, ...framework],
+    nextSteps: [
+      ...concrete,
+      ...framework,
+      // The installer never commits — leave the review/commit step explicit.
+      ...(files.length > 0 ? ['Review the changes (`git status`) and commit when ready'] : []),
+    ],
     docsUrl: deps.docsUrl,
     dashboardUrl: deps.dashboardUrl,
     signInSnippet: deps.signInSnippet,

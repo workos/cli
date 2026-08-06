@@ -480,8 +480,6 @@ workos install [options]
   --pm <manager>          Package manager for the scaffolded app: npm, pnpm, yarn, bun
   --no-validate           Skip post-installation validation
   --no-branch             Skip branch creation (use current branch)
-  --no-commit             Skip auto-commit after installation
-  --create-pr             Auto-create pull request after installation
   --no-git-check          Skip git dirty working tree check
   --force-install         Force install packages even if peer dependency checks fail
   --debug                 Enable verbose logging
@@ -574,7 +572,7 @@ Mode resolution notes:
 In non-TTY, the installer streams progress as NDJSON (one JSON object per line):
 
 ```bash
-workos install --api-key sk_test_xxx --client-id client_xxx --no-commit 2>/dev/null
+workos install --api-key sk_test_xxx --client-id client_xxx 2>/dev/null
 # → {"type":"detection:complete","integration":"nextjs","timestamp":"..."}
 # → {"type":"agent:start","timestamp":"..."}
 # → {"type":"agent:progress","message":"...","timestamp":"..."}
