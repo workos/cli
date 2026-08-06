@@ -15,6 +15,11 @@
  * The consent contract is the whole point: nothing is written to a coding agent
  * unless the user says yes (or passes --yes). This replaces the auto-install
  * that a customer called "prompt injection malware".
+ *
+ * AUTH-6734 policy: never install silently. The consent prompt defaults to No,
+ * so an absent-minded Enter (or any non-answer) installs nothing; the only ways
+ * anything lands are an explicit "yes" at the prompt or an explicit flag
+ * (`workos setup --yes`, `workos skills install`, `workos mcp install`).
  */
 
 import { homedir } from 'node:os';
@@ -144,7 +149,9 @@ export async function runSetup(opts: RunSetupOptions): Promise<void> {
         `scaffold auth and manage WorkOS resources. Nothing is written until you confirm.`,
     );
 
-    const answer = await ui.confirm({ message: 'Set up now?', initialValue: true });
+    // Default MUST stay No (AUTH-6734): installation is opt-in only, so the
+    // default answer — what an impatient Enter produces — installs nothing.
+    const answer = await ui.confirm({ message: 'Set up now?', initialValue: false });
     // Cancel (ctrl-c) is not a decline — skip silently and ask again next time,
     // but record it so the cut-off is observable in telemetry.
     if (isCancel(answer)) {
@@ -154,7 +161,7 @@ export async function runSetup(opts: RunSetupOptions): Promise<void> {
     if (!answer) {
       if (!isCommand) recordSetupDeclined();
       emitSetupEvent(opts.trigger, startedAt, 'declined', { skills: [], mcpInstalled: [], mcpFailed: [] });
-      ui.log.hint(`No problem. Run \`${formatWorkOSCommand('setup')}\` anytime.`);
+      printManualInstallInstructions(wantSkills, wantMcp);
       return;
     }
   }
@@ -207,6 +214,24 @@ async function installAndReport(
   });
 
   reportResults(skillResult ? { agents: skillAgentNames, count: skillResult.skills.length } : null, mcpResults);
+}
+
+/**
+ * A decline is the safe default, not a dead end (AUTH-6734): always leave the
+ * exact manual-install commands behind so opting in later is self-serve.
+ * Scoped to what the offer actually covered (--skills-only / --mcp-only).
+ */
+function printManualInstallInstructions(wantSkills: boolean, wantMcp: boolean): void {
+  ui.log.hint('Nothing was installed. To install later, run any of:');
+  if (wantSkills && wantMcp) {
+    ui.log.hint(`  ${formatWorkOSCommand('setup')}           skills + MCP server`);
+  }
+  if (wantSkills) {
+    ui.log.hint(`  ${formatWorkOSCommand('skills install')}  skills only`);
+  }
+  if (wantMcp) {
+    ui.log.hint(`  ${formatWorkOSCommand('mcp install')}     MCP server only`);
+  }
 }
 
 interface SkillSummary {
