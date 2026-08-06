@@ -83,7 +83,7 @@ Get your credentials from [dashboard.workos.com](https://dashboard.workos.com):
 
 ## CLI Options
 
-````bash
+```bash
 workos [command]
 
 Commands:
@@ -94,6 +94,7 @@ Commands:
   skills                 Manage WorkOS skills for coding agents (install, uninstall, list)
   mcp                    Manage the WorkOS MCP server in coding agents
   setup                  Set up WorkOS skills and the MCP server
+```
 
 **Nothing is installed into your coding agents without explicit opt-in.** The CLI never silently writes skills or MCP configuration into `~/.claude`, `~/.cursor`, etc. After `workos login` or `workos install`, an interactive session may offer to set up your agents — the prompt defaults to **No**, and declining (or running non-interactively) installs nothing. To opt in at any time:
 
@@ -102,46 +103,46 @@ workos setup            # interactive setup (skills + MCP server)
 workos setup --yes      # non-interactive opt-in
 workos skills install   # skills only
 workos mcp install      # MCP server only
-````
+```
 
 Use `workos skills list` to check skill status, `workos mcp status` to check whether the server definition is configured, or `workos doctor --fix` to refresh stale skills you previously installed.
 
 MCP configuration and OAuth authentication are separate states. The WorkOS CLI never inspects a coding agent's credentials, so "configured" means the server definition is in place — it cannot prove that OAuth is usable in any agent. Each agent owns its own OAuth; with Codex, for example, complete or refresh it with `codex mcp login workos` in your normal host shell. See the [WorkOS MCP setup and recovery guide](https://workos.com/docs/mcp) for user-global and trusted-project-only configuration.
 
+```text
 Resource Management:
-organization (org) Manage organizations
-user Manage users
-role Manage roles (RBAC)
-permission Manage permissions (RBAC)
-membership Manage organization memberships
-invitation Manage user invitations
-session Manage user sessions
-connection Manage SSO connections
-directory Manage directory sync
-event Query events
-audit-log Manage audit logs
-feature-flag Manage feature flags
-webhook Manage webhooks
-config Manage redirect URIs, CORS, homepage URL
-portal Generate Admin Portal links
-vault Manage encrypted secrets
-api-key Manage per-org API keys
-org-domain Manage organization domains
+  organization (org)     Manage organizations
+  user                   Manage users
+  role                   Manage roles (RBAC)
+  permission             Manage permissions (RBAC)
+  membership             Manage organization memberships
+  invitation             Manage user invitations
+  session                Manage user sessions
+  connection             Manage SSO connections
+  directory              Manage directory sync
+  event                  Query events
+  audit-log              Manage audit logs
+  feature-flag           Manage feature flags
+  webhook                Manage webhooks
+  config                 Manage redirect URIs, CORS, homepage URL
+  portal                 Generate Admin Portal links
+  vault                  Manage encrypted secrets
+  api-key                Manage per-org API keys
+  org-domain             Manage organization domains
 
 Migrations:
-migrations Migrate users and SSO connections into WorkOS
+  migrations             Migrate users and SSO connections into WorkOS
 
 Local Development:
-emulate Start a local WorkOS API emulator
+  emulate                Start a local WorkOS API emulator
 
 Workflows:
-seed Declarative resource provisioning from YAML
-setup-org One-shot organization onboarding
-onboard-user Send invitation and assign role
-debug-sso Diagnose SSO connection issues
-debug-sync Diagnose directory sync issues
-
-````
+  seed                   Declarative resource provisioning from YAML
+  setup-org              One-shot organization onboarding
+  onboard-user           Send invitation and assign role
+  debug-sso              Diagnose SSO connection issues
+  debug-sync             Diagnose directory sync issues
+```
 
 All management commands support `--json` for structured output (auto-enabled in non-TTY) and `--api-key` to override the active environment's key.
 
@@ -159,7 +160,7 @@ workos env list
 
 # Claim the environment to link it to your WorkOS account
 workos env claim
-````
+```
 
 Management commands work on unclaimed environments with a warning reminding you to claim.
 
