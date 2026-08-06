@@ -88,6 +88,8 @@ describe('workos-management', () => {
 
       expect(outcome).not.toBeNull();
       expect(outcome!.apiKey).toBe('sk_test_123');
+      // No recovery happened, so no replacement clientId is surfaced
+      expect(outcome!.clientId).toBeUndefined();
       expect(outcome!.results.homepageUrl).toEqual({ success: true });
       expect(mockFetch).toHaveBeenCalledTimes(3);
       expect(mockUi.log.success).toHaveBeenCalledWith('WorkOS dashboard configured');
@@ -111,7 +113,7 @@ describe('workos-management', () => {
       mockFetch.mockResolvedValueOnce(UNAUTHORIZED()).mockResolvedValueOnce(UNAUTHORIZED()).mockResolvedValueOnce(OK());
       // Second round: everything succeeds with the fresh key
       mockFetch.mockResolvedValue(OK());
-      const onUnauthorized = vi.fn().mockResolvedValue('sk_fresh');
+      const onUnauthorized = vi.fn().mockResolvedValue({ apiKey: 'sk_fresh' });
 
       const outcome = await autoConfigureWorkOSEnvironment('sk_stale', 'nextjs', 3000, { onUnauthorized });
 
@@ -119,9 +121,28 @@ describe('workos-management', () => {
       expect(onUnauthorized).toHaveBeenCalledWith(1);
       expect(outcome).not.toBeNull();
       expect(outcome!.apiKey).toBe('sk_fresh');
+      // Pasted-key style recovery carries no clientId
+      expect(outcome!.clientId).toBeUndefined();
       // The retry used the fresh key
       const lastCall = mockFetch.mock.calls.at(-1)!;
       expect(lastCall[1].headers.Authorization).toBe('Bearer sk_fresh');
+    });
+
+    it('propagates the paired clientId when re-auth recovers into a different environment', async () => {
+      // First round 401s; retry succeeds with credentials from a DIFFERENT environment
+      mockFetch.mockResolvedValueOnce(UNAUTHORIZED()).mockResolvedValueOnce(UNAUTHORIZED()).mockResolvedValueOnce(OK());
+      mockFetch.mockResolvedValue(OK());
+      const onUnauthorized = vi.fn().mockResolvedValue({ apiKey: 'sk_other_env', clientId: 'client_other_env' });
+
+      const outcome = await autoConfigureWorkOSEnvironment('sk_stale', 'nextjs', 3000, { onUnauthorized });
+
+      expect(outcome).not.toBeNull();
+      expect(outcome!.apiKey).toBe('sk_other_env');
+      // The clientId paired with the new key must surface so callers don't
+      // mix the new key with the original environment's client ID.
+      expect(outcome!.clientId).toBe('client_other_env');
+      const lastCall = mockFetch.mock.calls.at(-1)!;
+      expect(lastCall[1].headers.Authorization).toBe('Bearer sk_other_env');
     });
 
     it('falls back to specific manual instructions when the user declines recovery', async () => {
@@ -149,7 +170,7 @@ describe('workos-management', () => {
       mockFetch.mockResolvedValue(UNAUTHORIZED());
       const onUnauthorized = vi
         .fn()
-        .mockResolvedValueOnce('sk_fresh') // first recovery: retry
+        .mockResolvedValueOnce({ apiKey: 'sk_fresh' }) // first recovery: retry
         .mockResolvedValueOnce(null); // second prompt: decline
 
       const outcome = await autoConfigureWorkOSEnvironment('sk_stale', 'nextjs', 3000, { onUnauthorized });
@@ -163,7 +184,10 @@ describe('workos-management', () => {
     it('bounds recovery loops (no infinite retries when every key 401s)', async () => {
       mockFetch.mockResolvedValue(UNAUTHORIZED());
       // Distinct key per recovery so the same-key guard doesn't short-circuit.
-      const onUnauthorized = vi.fn().mockResolvedValueOnce('sk_new_1').mockResolvedValueOnce('sk_new_2');
+      const onUnauthorized = vi
+        .fn()
+        .mockResolvedValueOnce({ apiKey: 'sk_new_1' })
+        .mockResolvedValueOnce({ apiKey: 'sk_new_2' });
 
       const outcome = await autoConfigureWorkOSEnvironment('sk_stale', 'nextjs', 3000, { onUnauthorized });
 
@@ -175,7 +199,7 @@ describe('workos-management', () => {
 
     it('does not retry when recovery returns the same key', async () => {
       mockFetch.mockResolvedValue(UNAUTHORIZED());
-      const onUnauthorized = vi.fn().mockResolvedValue('sk_stale');
+      const onUnauthorized = vi.fn().mockResolvedValue({ apiKey: 'sk_stale' });
 
       const outcome = await autoConfigureWorkOSEnvironment('sk_stale', 'nextjs', 3000, { onUnauthorized });
 
@@ -197,7 +221,7 @@ describe('workos-management', () => {
 
     it('does not attempt recovery for non-401 errors', async () => {
       mockFetch.mockResolvedValue(mockResponse(500, { message: 'Internal Server Error' }));
-      const onUnauthorized = vi.fn().mockResolvedValue('sk_fresh');
+      const onUnauthorized = vi.fn().mockResolvedValue({ apiKey: 'sk_fresh' });
 
       const outcome = await autoConfigureWorkOSEnvironment('sk_test_123', 'nextjs', 3000, { onUnauthorized });
 
@@ -243,12 +267,18 @@ describe('workos-management', () => {
       expect(await promptForUnauthorizedRecovery()).toBeNull();
     });
 
-    it('returns the entered key when the user pastes a new API key', async () => {
+    it('returns the entered key with no clientId (and a pairing warning) when the user pastes a new API key', async () => {
       mockIsPromptAllowed.mockReturnValue(true);
       mockSelect.mockResolvedValue('apikey');
       mockPassword.mockResolvedValue('  sk_pasted  ');
 
-      expect(await promptForUnauthorizedRecovery()).toBe('sk_pasted');
+      const recovered = await promptForUnauthorizedRecovery();
+      expect(recovered).toEqual({ apiKey: 'sk_pasted' });
+      expect(recovered!.clientId).toBeUndefined();
+      // The pasted key's environment is unknown — the user is warned that the
+      // existing client ID may no longer match.
+      const warnings = mockUi.log.warn.mock.calls.map((c) => String(c[0]));
+      expect(warnings.some((m) => m.includes('client ID') && m.includes('may no longer match'))).toBe(true);
     });
 
     it('re-authenticates and returns fresh staging credentials', async () => {
@@ -258,7 +288,9 @@ describe('workos-management', () => {
       mockGetAccessToken.mockReturnValue('oauth-token');
       mockFetchStagingCredentials.mockResolvedValue({ clientId: 'client_new', apiKey: 'sk_new' });
 
-      expect(await promptForUnauthorizedRecovery()).toBe('sk_new');
+      // Both credentials surface — the fresh key may belong to a different
+      // environment, so the paired clientId must travel with it.
+      expect(await promptForUnauthorizedRecovery()).toEqual({ apiKey: 'sk_new', clientId: 'client_new' });
       expect(mockFetchStagingCredentials).toHaveBeenCalledWith('oauth-token');
       expect(mockSaveStagingCredentials).toHaveBeenCalledWith({ clientId: 'client_new', apiKey: 'sk_new' });
     });

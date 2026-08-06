@@ -91,12 +91,14 @@ export async function run(options: InstallerOptions): Promise<string> {
     integration: config.metadata.integration,
   });
 
-  // apiKey is mutable: dashboard-config 401 recovery may swap in a fresh key.
-  const { apiKey: initialApiKey, clientId } = await getOrAskForWorkOSCredentials(
+  // apiKey/clientId are mutable: dashboard-config 401 recovery may swap in a
+  // fresh credential pair from a different environment.
+  const { apiKey: initialApiKey, clientId: initialClientId } = await getOrAskForWorkOSCredentials(
     options,
     config.environment.requiresApiKey,
   );
   let apiKey = initialApiKey;
+  let clientId = initialClientId;
 
   // Auto-configure WorkOS environment (redirect URI, CORS, homepage)
   const callerHandledConfig = Boolean(options.apiKey || options.clientId);
@@ -106,7 +108,10 @@ export async function run(options: InstallerOptions): Promise<string> {
       homepageUrl: options.homepageUrl,
       redirectUri: options.redirectUri,
     });
-    if (outcome) apiKey = outcome.apiKey;
+    if (outcome) {
+      apiKey = outcome.apiKey;
+      if (outcome.clientId) clientId = outcome.clientId;
+    }
   }
 
   // Build prompt — credentials are passed via prompt context since .NET doesn't use .env.local

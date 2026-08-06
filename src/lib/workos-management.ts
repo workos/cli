@@ -29,6 +29,25 @@ export interface AutoConfigOutcome {
    * env files / hand it to the agent, not the rejected one.
    */
   apiKey: string;
+  /**
+   * The client ID paired with the recovered API key. Only present when 401
+   * recovery re-authenticated and fetched a fresh credential pair — the new
+   * key may belong to a DIFFERENT environment than the original client ID,
+   * so callers must use this clientId when present to avoid mixing
+   * credentials from two environments. Undefined for pasted keys (the
+   * pasted key's environment is unknown).
+   */
+  clientId?: string;
+}
+
+/**
+ * Credentials returned by a 401 recovery hook. `clientId` is present only
+ * when recovery re-authenticated and provisioned a fresh credential pair;
+ * a pasted API key carries no clientId because its environment is unknown.
+ */
+export interface RecoveredCredentials {
+  apiKey: string;
+  clientId?: string;
 }
 
 /**
@@ -148,12 +167,12 @@ export interface AutoConfigOptions {
   /**
    * Recovery hook invoked when the WorkOS API rejects the API key with
    * 401 Unauthorized. Should re-authenticate (or collect a fresh key) and
-   * return the replacement API key; return null to decline recovery.
+   * return the replacement credentials; return null to decline recovery.
    * Invoked at most MAX_UNAUTHORIZED_RECOVERIES times per call, then the
    * manual-setup instructions are shown. Defaults to an interactive prompt
    * (human TTY only); pass explicitly in tests or non-standard flows.
    */
-  onUnauthorized?: (attempt: number) => Promise<string | null>;
+  onUnauthorized?: (attempt: number) => Promise<RecoveredCredentials | null>;
 }
 
 /**
@@ -163,7 +182,7 @@ export interface AutoConfigOptions {
  * prompting isn't possible (agent/CI/JSON/dashboard modes), or when re-auth
  * fails to produce a working key.
  */
-export async function promptForUnauthorizedRecovery(): Promise<string | null> {
+export async function promptForUnauthorizedRecovery(): Promise<RecoveredCredentials | null> {
   if (!isPromptAllowed() || isDashboardMode()) return null;
 
   const choice = await ui.select<'reauth' | 'apikey' | 'manual'>({
@@ -194,7 +213,13 @@ export async function promptForUnauthorizedRecovery(): Promise<string | null> {
       message: 'Enter your WorkOS API Key',
       validate: (v) => (v.trim() ? undefined : 'API Key is required'),
     });
-    return isCancel(value) ? null : value.trim();
+    if (isCancel(value)) return null;
+    // The pasted key may belong to a different environment than the client
+    // ID already collected — we can't know, so warn instead of guessing.
+    ui.log.warn(
+      'If this key belongs to a different WorkOS environment, your existing client ID may no longer match — verify WORKOS_CLIENT_ID after install.',
+    );
+    return { apiKey: value.trim() };
   }
 
   // Re-authenticate: refresh/login via the OAuth device flow, then pull fresh
@@ -213,7 +238,10 @@ export async function promptForUnauthorizedRecovery(): Promise<string | null> {
     const staging = await fetchStagingCredentials(token);
     saveStagingCredentials(staging);
     ui.log.success('Re-authenticated with WorkOS');
-    return staging.apiKey;
+    // Surface BOTH credentials: re-auth may have selected a different
+    // WorkOS account/environment, and the new API key is only valid when
+    // paired with the client ID from the same environment.
+    return { apiKey: staging.apiKey, clientId: staging.clientId };
   } catch (error) {
     ui.log.warn(`Re-authentication failed: ${error instanceof Error ? error.message : String(error)}`);
     return null;
@@ -272,6 +300,10 @@ export async function autoConfigureWorkOSEnvironment(
   ui.log.step('Configuring WorkOS dashboard settings...');
 
   let currentApiKey = apiKey;
+  // Only set when recovery re-authenticated — the fresh key may belong to a
+  // different environment than the original client ID, so it must travel
+  // with its paired clientId.
+  let recoveredClientId: string | undefined;
   let recoveryAttempts = 0;
 
   while (true) {
@@ -312,7 +344,7 @@ export async function autoConfigureWorkOSEnvironment(
         { key: 'Homepage URL', value: homepageUrlValue, status: 'updated', statusKind: 'ok' },
       ]);
 
-      return { results, apiKey: currentApiKey };
+      return { results, apiKey: currentApiKey, clientId: recoveredClientId };
     } catch (error) {
       // 401 — offer re-auth + retry before giving up. Bounded by
       // MAX_UNAUTHORIZED_RECOVERIES; declining also ends the loop.
@@ -321,23 +353,24 @@ export async function autoConfigureWorkOSEnvironment(
         const recover = options.onUnauthorized ?? promptForUnauthorizedRecovery;
         recoveryAttempts++;
 
-        let freshApiKey: string | null = null;
+        let recovered: RecoveredCredentials | null = null;
         try {
-          freshApiKey = await recover(recoveryAttempts);
+          recovered = await recover(recoveryAttempts);
         } catch (recoveryError) {
           ui.log.warn(
             `Credential recovery failed: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`,
           );
         }
 
-        if (freshApiKey && freshApiKey !== currentApiKey) {
+        if (recovered?.apiKey && recovered.apiKey !== currentApiKey) {
           analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
             action: 'workos environment auto-config retry after re-auth',
             integration,
             attempt: recoveryAttempts,
           });
           ui.log.step('Retrying WorkOS dashboard configuration...');
-          currentApiKey = freshApiKey;
+          currentApiKey = recovered.apiKey;
+          recoveredClientId = recovered.clientId;
           continue;
         }
         // Declined (or recovery produced no new key) → manual instructions below.
