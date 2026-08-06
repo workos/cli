@@ -1442,6 +1442,13 @@ const commands: CommandSchema[] = [
         hidden: false,
       },
       {
+        name: 'commit',
+        type: 'boolean',
+        description: 'Deprecated: no-op flag, the installer never commits changes',
+        required: false,
+        hidden: false,
+      },
+      {
         name: 'git-check',
         type: 'boolean',
         description: 'Check for dirty working tree (use --no-git-check to skip)',
