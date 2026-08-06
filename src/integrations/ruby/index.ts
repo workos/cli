@@ -78,19 +78,22 @@ export async function run(options: InstallerOptions): Promise<string> {
   });
 
   // Get WorkOS credentials
-  const { apiKey, clientId: _clientId } = await getOrAskForWorkOSCredentials(
+  // apiKey is mutable: dashboard-config 401 recovery may swap in a fresh key.
+  const { apiKey: initialApiKey, clientId: _clientId } = await getOrAskForWorkOSCredentials(
     options,
     config.environment.requiresApiKey,
   );
+  let apiKey = initialApiKey;
 
   // Auto-configure WorkOS environment (redirect URI, CORS, homepage) if not already done
   const callerHandledConfig = Boolean(options.apiKey || options.clientId);
   if (!callerHandledConfig && apiKey) {
     const port = 3000; // Rails default
-    await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, port, {
+    const outcome = await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, port, {
       homepageUrl: options.homepageUrl,
       redirectUri: options.redirectUri,
     });
+    if (outcome) apiKey = outcome.apiKey;
   }
 
   // Build prompt for the agent

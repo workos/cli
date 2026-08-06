@@ -320,17 +320,21 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         const redirectUri = installerOptions.redirectUri || `http://localhost:${port}${callbackPath}`;
 
         const requiresApiKey = ['nextjs', 'tanstack-start', 'react-router'].includes(integration);
-        if (credentials.apiKey && requiresApiKey) {
-          await autoConfigureWorkOSEnvironment(credentials.apiKey, integration, port, {
+        // Mutable: dashboard-config 401 recovery may swap in a fresh key.
+        let apiKey = credentials.apiKey;
+        if (apiKey && requiresApiKey) {
+          const outcome = await autoConfigureWorkOSEnvironment(apiKey, integration, port, {
             homepageUrl: installerOptions.homepageUrl,
             redirectUri: installerOptions.redirectUri,
           });
+          // If 401 recovery re-authenticated, write the key that worked.
+          if (outcome) apiKey = outcome.apiKey;
         }
 
         const redirectUriKey = integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
 
         writeEnvLocal(installerOptions.installDir, {
-          ...(credentials.apiKey ? { WORKOS_API_KEY: credentials.apiKey } : {}),
+          ...(apiKey ? { WORKOS_API_KEY: apiKey } : {}),
           WORKOS_CLIENT_ID: credentials.clientId,
           [redirectUriKey]: redirectUri,
         });
