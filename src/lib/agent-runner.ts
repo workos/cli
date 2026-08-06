@@ -55,8 +55,15 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
     integration: config.metadata.integration,
   });
 
-  // Get WorkOS credentials (API key optional for client-only SDKs)
-  const { apiKey, clientId } = await getOrAskForWorkOSCredentials(options, config.environment.requiresApiKey);
+  // Get WorkOS credentials (API key optional for client-only SDKs).
+  // apiKey/clientId are mutable: dashboard-config 401 recovery may swap in a
+  // fresh credential pair from a different environment.
+  const { apiKey: initialApiKey, clientId: initialClientId } = await getOrAskForWorkOSCredentials(
+    options,
+    config.environment.requiresApiKey,
+  );
+  let apiKey = initialApiKey;
+  let clientId = initialClientId;
 
   // Check if caller (state machine) already configured WorkOS environment
   // If credentials were passed via options, the caller handled config+env writing
@@ -66,10 +73,17 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
   // Skip if caller already handled this (prevents duplicate dashboard config output)
   if (!callerHandledConfig && apiKey && config.environment.requiresApiKey) {
     const port = detectPort(config.metadata.integration, options.installDir);
-    await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, port, {
+    const outcome = await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, port, {
       homepageUrl: options.homepageUrl,
       redirectUri: options.redirectUri,
     });
+    // If 401 recovery re-authenticated, continue with the credentials that
+    // worked. Use the recovered clientId when present — the new key may
+    // belong to a different environment than the original client ID.
+    if (outcome) {
+      apiKey = outcome.apiKey;
+      if (outcome.clientId) clientId = outcome.clientId;
+    }
   }
 
   // Gather framework-specific context (e.g., Next.js router, React Native platform)

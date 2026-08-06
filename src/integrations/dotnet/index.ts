@@ -91,16 +91,27 @@ export async function run(options: InstallerOptions): Promise<string> {
     integration: config.metadata.integration,
   });
 
-  const { apiKey, clientId } = await getOrAskForWorkOSCredentials(options, config.environment.requiresApiKey);
+  // apiKey/clientId are mutable: dashboard-config 401 recovery may swap in a
+  // fresh credential pair from a different environment.
+  const { apiKey: initialApiKey, clientId: initialClientId } = await getOrAskForWorkOSCredentials(
+    options,
+    config.environment.requiresApiKey,
+  );
+  let apiKey = initialApiKey;
+  let clientId = initialClientId;
 
   // Auto-configure WorkOS environment (redirect URI, CORS, homepage)
   const callerHandledConfig = Boolean(options.apiKey || options.clientId);
   if (!callerHandledConfig && apiKey) {
     const port = 5000; // ASP.NET Core default HTTP port
-    await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, port, {
+    const outcome = await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, port, {
       homepageUrl: options.homepageUrl,
       redirectUri: options.redirectUri,
     });
+    if (outcome) {
+      apiKey = outcome.apiKey;
+      if (outcome.clientId) clientId = outcome.clientId;
+    }
   }
 
   // Build prompt — credentials are passed via prompt context since .NET doesn't use .env.local

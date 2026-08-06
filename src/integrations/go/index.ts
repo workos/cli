@@ -126,16 +126,27 @@ export async function run(options: InstallerOptions): Promise<string> {
   });
 
   // Get WorkOS credentials
-  const { apiKey, clientId } = await getOrAskForWorkOSCredentials(options, config.environment.requiresApiKey);
+  // apiKey/clientId are mutable: dashboard-config 401 recovery may swap in a
+  // fresh credential pair from a different environment.
+  const { apiKey: initialApiKey, clientId: initialClientId } = await getOrAskForWorkOSCredentials(
+    options,
+    config.environment.requiresApiKey,
+  );
+  let apiKey = initialApiKey;
+  let clientId = initialClientId;
 
   // Auto-configure WorkOS environment (redirect URI, CORS)
   const callerHandledConfig = Boolean(options.apiKey || options.clientId);
   if (!callerHandledConfig && apiKey) {
     const redirectUri = options.redirectUri || `http://localhost:${GO_DEFAULT_PORT}${GO_CALLBACK_PATH}`;
-    await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, GO_DEFAULT_PORT, {
+    const outcome = await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, GO_DEFAULT_PORT, {
       homepageUrl: options.homepageUrl,
       redirectUri,
     });
+    if (outcome) {
+      apiKey = outcome.apiKey;
+      if (outcome.clientId) clientId = outcome.clientId;
+    }
   }
 
   // Gather Go-specific context

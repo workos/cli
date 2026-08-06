@@ -320,18 +320,32 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         const redirectUri = installerOptions.redirectUri || `http://localhost:${port}${callbackPath}`;
 
         const requiresApiKey = ['nextjs', 'tanstack-start', 'react-router'].includes(integration);
-        if (credentials.apiKey && requiresApiKey) {
-          await autoConfigureWorkOSEnvironment(credentials.apiKey, integration, port, {
+        // Mutable: dashboard-config 401 recovery may swap in a fresh credential pair.
+        let apiKey = credentials.apiKey;
+        let clientId = credentials.clientId;
+        if (apiKey && requiresApiKey) {
+          const outcome = await autoConfigureWorkOSEnvironment(apiKey, integration, port, {
             homepageUrl: installerOptions.homepageUrl,
             redirectUri: installerOptions.redirectUri,
           });
+          // If 401 recovery re-authenticated, use the credentials that worked —
+          // the recovered key may belong to a different environment than the
+          // original client ID, so adopt the recovered clientId when present.
+          if (outcome) {
+            apiKey = outcome.apiKey;
+            if (outcome.clientId) clientId = outcome.clientId;
+            // Write back to the shared machine context so the later runAgent
+            // step hands the agent the working credentials, not the rejected key.
+            credentials.apiKey = apiKey;
+            credentials.clientId = clientId;
+          }
         }
 
         const redirectUriKey = integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
 
         writeEnvLocal(installerOptions.installDir, {
-          ...(credentials.apiKey ? { WORKOS_API_KEY: credentials.apiKey } : {}),
-          WORKOS_CLIENT_ID: credentials.clientId,
+          ...(apiKey ? { WORKOS_API_KEY: apiKey } : {}),
+          WORKOS_CLIENT_ID: clientId,
           [redirectUriKey]: redirectUri,
         });
       }),
