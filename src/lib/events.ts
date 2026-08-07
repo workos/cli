@@ -111,19 +111,6 @@ export interface InstallerEvents {
   // Post-install events
   'postinstall:changes': { files: string[] };
   'postinstall:nochanges': Record<string, never>;
-  'postinstall:commit:prompt': Record<string, never>;
-  'postinstall:commit:generating': Record<string, never>;
-  'postinstall:commit:committing': { message: string };
-  'postinstall:commit:success': { message: string };
-  'postinstall:commit:failed': { error: string };
-  'postinstall:pr:prompt': Record<string, never>;
-  'postinstall:pr:generating': Record<string, never>;
-  'postinstall:pr:pushing': Record<string, never>;
-  'postinstall:pr:creating': Record<string, never>;
-  'postinstall:pr:success': { url: string };
-  'postinstall:pr:failed': { error: string };
-  'postinstall:push:failed': { error: string };
-  'postinstall:manual': { instructions: string };
 }
 
 export type InstallerEventName = keyof InstallerEvents;

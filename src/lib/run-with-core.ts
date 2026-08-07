@@ -43,11 +43,7 @@ import {
   createBranch as createGitBranch,
   branchExists,
 } from '../utils/git-utils.js';
-import { detectChanges, stageAndCommit, pushBranch as pushGitBranch, createPullRequest } from './post-install.js';
-import {
-  generateCommitMessage as generateCommitMessageAi,
-  generatePrDescription as generatePrDescriptionAi,
-} from './ai-content.js';
+import { detectChanges } from './post-install.js';
 import { autoConfigureWorkOSEnvironment } from './workos-management.js';
 import { detectPort, getCallbackPath } from './port-detection.js';
 import { writeEnvLocal } from './env-writer.js';
@@ -234,8 +230,6 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         apiKey: augmentedOptions.apiKey,
         clientId: augmentedOptions.clientId,
         noBranch: augmentedOptions.noBranch,
-        noCommit: augmentedOptions.noCommit,
-        createPr: augmentedOptions.createPr,
         noGitCheck: augmentedOptions.noGitCheck,
         ci: augmentedOptions.ci,
       },
@@ -517,31 +511,6 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
       // Post-install actors
       detectChanges: fromPromise<{ hasChanges: boolean; files: string[] }, void>(async () => {
         return detectChanges();
-      }),
-
-      generateCommitMessage: fromPromise<string, { integration: string; files: string[]; direct?: boolean }>(
-        async ({ input }) => {
-          return generateCommitMessageAi(input.integration, input.files, { direct: input.direct });
-        },
-      ),
-
-      commitChanges: fromPromise<void, { message: string; cwd: string }>(async ({ input }) => {
-        stageAndCommit(input.message, input.cwd);
-      }),
-
-      generatePrDescription: fromPromise<
-        string,
-        { integration: string; files: string[]; commitMessage: string; direct?: boolean }
-      >(async ({ input }) => {
-        return generatePrDescriptionAi(input.integration, input.files, input.commitMessage, { direct: input.direct });
-      }),
-
-      pushBranch: fromPromise<void, { cwd: string }>(async ({ input }) => {
-        pushGitBranch(input.cwd);
-      }),
-
-      createPr: fromPromise<string, { title: string; body: string; cwd: string }>(async ({ input }) => {
-        return createPullRequest(input.title, input.body, input.cwd);
       }),
     },
   });

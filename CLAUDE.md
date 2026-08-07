@@ -15,7 +15,7 @@ WorkOS CLI for installing AuthKit integrations and managing WorkOS resources (or
 - **Auth**: Exits code 4 instead of opening browser. Requires prior `workos auth login` or `WORKOS_API_KEY` env var.
 - **Errors**: Structured JSON to stderr: `{ "error": { "code": "...", "message": "..." } }`
 - **Exit codes**: 0=success, 1=error, 2=cancelled, 4=auth required (follows `gh` CLI convention)
-- **Headless flags**: `--no-branch`, `--no-commit`, `--create-pr`, `--no-git-check`. CI mode (`WORKOS_MODE=ci`) auto-continues past a dirty tree without `--no-git-check`; agent mode requires the flag.
+- **Headless flags**: `--no-branch`, `--no-git-check`. CI mode (`WORKOS_MODE=ci`) auto-continues past a dirty tree without `--no-git-check`; agent mode requires the flag. The installer never commits or opens PRs — changes are left uncommitted for review.
 
 ## Tech Constraints
 

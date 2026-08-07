@@ -11,8 +11,6 @@ export interface HeadlessOptions {
   apiKey?: string;
   clientId?: string;
   noBranch?: boolean;
-  noCommit?: boolean;
-  createPr?: boolean;
   noGitCheck?: boolean;
   /** CI mode (WORKOS_MODE=ci, or --ci when headless): pipelines never stop for a dirty tree. */
   ci?: boolean;
@@ -98,16 +96,8 @@ export class HeadlessAdapter implements InstallerAdapter {
     this.subscribe('branch:prompt', this.handleBranchPrompt);
     this.subscribe('branch:created', this.handleBranchCreated);
 
-    // Post-install — auto-resolve
+    // Post-install
     this.subscribe('postinstall:changes', this.handlePostInstallChanges);
-    this.subscribe('postinstall:commit:prompt', this.handleCommitPrompt);
-    this.subscribe('postinstall:commit:success', this.handleCommitSuccess);
-    this.subscribe('postinstall:commit:failed', this.handleCommitFailed);
-    this.subscribe('postinstall:pr:prompt', this.handlePrPrompt);
-    this.subscribe('postinstall:pr:success', this.handlePrSuccess);
-    this.subscribe('postinstall:pr:failed', this.handlePrFailed);
-    this.subscribe('postinstall:push:failed', this.handlePushFailed);
-    this.subscribe('postinstall:manual', this.handleManualInstructions);
 
     // Terminal events
     this.subscribe('complete', this.handleComplete);
@@ -339,54 +329,10 @@ export class HeadlessAdapter implements InstallerAdapter {
     writeNDJSON({ type: 'branch:created', name: branch });
   };
 
-  // ===== Post-install (auto-resolve) =====
+  // ===== Post-install =====
 
   private handlePostInstallChanges = ({ files }: InstallerEvents['postinstall:changes']): void => {
     writeNDJSON({ type: 'postinstall:changes', files, count: files.length });
-  };
-
-  private handleCommitPrompt = (): void => {
-    if (this.options.noCommit) {
-      writeNDJSON({ type: 'commit:skipped', reason: '--no-commit flag' });
-      this.sendEvent({ type: 'COMMIT_DECLINED' });
-    } else {
-      writeNDJSON({ type: 'commit:auto' });
-      this.sendEvent({ type: 'COMMIT_APPROVED' });
-    }
-  };
-
-  private handleCommitSuccess = ({ message }: InstallerEvents['postinstall:commit:success']): void => {
-    writeNDJSON({ type: 'commit:created', message });
-  };
-
-  private handleCommitFailed = ({ error }: InstallerEvents['postinstall:commit:failed']): void => {
-    writeNDJSON({ type: 'commit:failed', error });
-  };
-
-  private handlePrPrompt = (): void => {
-    if (this.options.createPr) {
-      writeNDJSON({ type: 'pr:creating' });
-      this.sendEvent({ type: 'PR_APPROVED' });
-    } else {
-      writeNDJSON({ type: 'pr:skipped', reason: '--create-pr not set' });
-      this.sendEvent({ type: 'PR_DECLINED' });
-    }
-  };
-
-  private handlePrSuccess = ({ url }: InstallerEvents['postinstall:pr:success']): void => {
-    writeNDJSON({ type: 'pr:created', url });
-  };
-
-  private handlePrFailed = ({ error }: InstallerEvents['postinstall:pr:failed']): void => {
-    writeNDJSON({ type: 'pr:failed', error });
-  };
-
-  private handlePushFailed = ({ error }: InstallerEvents['postinstall:push:failed']): void => {
-    writeNDJSON({ type: 'push:failed', error });
-  };
-
-  private handleManualInstructions = ({ instructions }: InstallerEvents['postinstall:manual']): void => {
-    writeNDJSON({ type: 'postinstall:manual', instructions });
   };
 
   // ===== Terminal Events =====

@@ -1444,17 +1444,8 @@ const commands: CommandSchema[] = [
       {
         name: 'commit',
         type: 'boolean',
-        description: 'Auto-commit after installation (use --no-commit to skip)',
+        description: 'Deprecated: no-op flag, the installer never commits changes',
         required: false,
-        default: true,
-        hidden: false,
-      },
-      {
-        name: 'create-pr',
-        type: 'boolean',
-        description: 'Auto-create pull request after installation',
-        required: false,
-        default: false,
         hidden: false,
       },
       {

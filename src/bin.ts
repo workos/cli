@@ -30,7 +30,9 @@ import {
   outputError,
   exitWithError,
 } from './utils/output.js';
-import ui, { PromptUnavailableError } from './utils/ui.js';
+import ui, { PromptUnavailableError, pill } from './utils/ui.js';
+import { renderStderrNotice } from './utils/box.js';
+import chalk from 'chalk';
 import { registerSubcommand } from './utils/register-subcommand.js';
 import { installCrashReporter, sanitizeMessage } from './utils/crash-reporter.js';
 import { installStoreForward, recoverPendingEvents } from './utils/telemetry-store-forward.js';
@@ -211,13 +213,10 @@ const installerOptions = {
     type: 'boolean' as const,
   },
   commit: {
-    default: true,
-    describe: 'Auto-commit after installation (use --no-commit to skip)',
-    type: 'boolean' as const,
-  },
-  'create-pr': {
-    default: false,
-    describe: 'Auto-create pull request after installation',
+    // Deprecated no-op kept for backward compatibility: the installer never
+    // commits, but scripts that still pass --commit/--no-commit must not fail
+    // strict parsing. No default so usage is detectable (undefined = absent).
+    describe: 'Deprecated: no-op flag, the installer never commits changes',
     type: 'boolean' as const,
   },
   'git-check': {
@@ -241,6 +240,20 @@ const installerOptions = {
     type: 'string' as const,
   },
 };
+
+/**
+ * Warn (stderr, so JSON stdout stays clean) when a script passes the removed
+ * --commit/--no-commit flags. They are accepted as no-ops for backward
+ * compatibility only.
+ */
+function warnIfDeprecatedCommitFlag(argv: { commit?: boolean }): void {
+  if (argv.commit === undefined) return;
+  const flag = argv.commit ? '--commit' : '--no-commit';
+  renderStderrNotice(
+    `${pill('WARN', 'warn')}  ${chalk.bold(`Deprecated flag: ${flag}`)} ${chalk.dim('— accepted as a no-op.')}`,
+    chalk.dim('The installer never commits changes; review and commit manually when ready.'),
+  );
+}
 
 // Check for updates (blocks up to 500ms, skip in JSON/non-human modes to keep machine streams clean)
 if (!isJsonMode() && isPromptAllowed()) await checkForUpdates();
@@ -2542,6 +2555,7 @@ async function runCli(): Promise<void> {
       (yargs) => yargs.options(installerOptions),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
+        warnIfDeprecatedCommitFlag(argv);
         await resolveInstallCredentials(argv.apiKey, argv.installDir, argv.skipAuth, ensureAuthenticated);
         const { handleInstall } = await import('./commands/install.js');
         await handleInstall(argv);
@@ -2754,6 +2768,7 @@ async function runCli(): Promise<void> {
       (yargs) => yargs.options(installerOptions),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
+        warnIfDeprecatedCommitFlag(argv);
         await resolveInstallCredentials(argv.apiKey, argv.installDir, argv.skipAuth, ensureAuthenticated);
         const { handleInstall } = await import('./commands/install.js');
         await handleInstall({ ...argv, dashboard: true });

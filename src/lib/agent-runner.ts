@@ -194,8 +194,8 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
     // Block success: an error-severity security finding that survived the
     // self-correction retries fails the install rather than shipping silently.
     // Throwing routes through the state machine's error state (success: false,
-    // non-zero exit) and skips the commit/PR steps, leaving the insecure code
-    // uncommitted for the user to inspect.
+    // non-zero exit), leaving the insecure code uncommitted for the user to
+    // inspect.
     if (security.blocking.length > 0) {
       analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
         action: 'security gate blocked install',

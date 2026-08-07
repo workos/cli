@@ -50,14 +50,8 @@ export interface InstallerMachineContext {
   currentBranch?: string;
   /** Whether current branch is protected */
   isProtectedBranch?: boolean;
-  /** Files changed during agent execution (for post-install) */
+  /** Files changed during agent execution (listed in the completion summary; left uncommitted) */
   changedFiles?: string[];
-  /** AI-generated commit message */
-  commitMessage?: string;
-  /** AI-generated PR description */
-  prDescription?: string;
-  /** URL of created PR */
-  prUrl?: string;
   /** Summary message from agent execution */
   agentSummary?: string;
   /** Whether the install directory is empty and can be scaffolded into */
@@ -101,12 +95,7 @@ export type InstallerMachineEvent =
   // Branch check events
   | { type: 'BRANCH_CREATE' }
   | { type: 'BRANCH_CONTINUE' }
-  | { type: 'BRANCH_CANCEL' }
-  // Post-install events
-  | { type: 'COMMIT_APPROVED' }
-  | { type: 'COMMIT_DECLINED' }
-  | { type: 'PR_APPROVED' }
-  | { type: 'PR_DECLINED' };
+  | { type: 'BRANCH_CANCEL' };
 
 /**
  * Output from the detection actor.
