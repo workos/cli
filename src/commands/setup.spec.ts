@@ -203,6 +203,15 @@ describe('runSetup — automatic triggers (login/install)', () => {
     expect(prefs.recordSetupCompleted).not.toHaveBeenCalled();
   });
 
+  it('defaults the consent prompt to No (AUTH-6734: install is explicit opt-in)', async () => {
+    detectSome();
+    vi.mocked(ui.confirm).mockResolvedValue(false);
+
+    await runSetup({ trigger: 'login' });
+
+    expect(ui.confirm).toHaveBeenCalledWith(expect.objectContaining({ initialValue: false }));
+  });
+
   it('records an absolute decline and installs nothing on "no"', async () => {
     detectSome();
     vi.mocked(ui.confirm).mockResolvedValue(false);
@@ -212,6 +221,19 @@ describe('runSetup — automatic triggers (login/install)', () => {
     expect(prefs.recordSetupDeclined).toHaveBeenCalledOnce();
     expect(refreshWorkOSSkills).not.toHaveBeenCalled();
     expect(prefs.recordSetupCompleted).not.toHaveBeenCalled();
+  });
+
+  it('prints manual-install instructions when the user declines', async () => {
+    detectSome();
+    vi.mocked(ui.confirm).mockResolvedValue(false);
+
+    await runSetup({ trigger: 'login' });
+
+    const hints = vi.mocked(ui.log.hint).mock.calls.map(([msg]) => String(msg));
+    expect(hints.some((m) => m.includes('Nothing was installed'))).toBe(true);
+    expect(hints.some((m) => m.includes('workos setup'))).toBe(true);
+    expect(hints.some((m) => m.includes('workos skills install'))).toBe(true);
+    expect(hints.some((m) => m.includes('workos mcp install'))).toBe(true);
   });
 
   it('treats cancel (ctrl-c) as skip — no decline recorded, but emits a cancelled event', async () => {
@@ -305,6 +327,17 @@ describe('runSetup — command trigger', () => {
     await runSetup({ trigger: 'command' });
 
     expect(prefs.recordSetupDeclined).not.toHaveBeenCalled();
+  });
+
+  it('scopes the decline instructions to what was offered', async () => {
+    vi.mocked(detectAgents).mockReturnValue([claudeAgent as any]);
+    vi.mocked(ui.confirm).mockResolvedValue(false);
+
+    await runSetup({ trigger: 'command', skillsOnly: true });
+
+    const hints = vi.mocked(ui.log.hint).mock.calls.map(([msg]) => String(msg));
+    expect(hints.some((m) => m.includes('workos skills install'))).toBe(true);
+    expect(hints.some((m) => m.includes('workos mcp install'))).toBe(false);
   });
 
   it('skillsOnly skips MCP detection/install', async () => {

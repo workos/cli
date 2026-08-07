@@ -94,11 +94,22 @@ Commands:
   skills                 Manage WorkOS skills for coding agents (install, uninstall, list)
   mcp                    Manage the WorkOS MCP server in coding agents
   setup                  Set up WorkOS skills and the MCP server
+```
 
-`workos setup` installs WorkOS skills and configures the MCP server only after consent. Use `workos skills list` to check skill status, `workos mcp status` to check whether the server definition is configured, or `workos doctor --fix` to refresh stale skills.
+**Nothing is installed into your coding agents without explicit opt-in.** The CLI never silently writes skills or MCP configuration into `~/.claude`, `~/.cursor`, etc. After `workos login` or `workos install`, an interactive session may offer to set up your agents — the prompt defaults to **No**, and declining (or running non-interactively) installs nothing. To opt in at any time:
+
+```bash
+workos setup            # interactive setup (skills + MCP server)
+workos setup --yes      # non-interactive opt-in
+workos skills install   # skills only
+workos mcp install      # MCP server only
+```
+
+Use `workos skills list` to check skill status, `workos mcp status` to check whether the server definition is configured, or `workos doctor --fix` to refresh stale skills you previously installed.
 
 MCP configuration and OAuth authentication are separate states. The WorkOS CLI never inspects a coding agent's credentials, so "configured" means the server definition is in place — it cannot prove that OAuth is usable in any agent. Each agent owns its own OAuth; with Codex, for example, complete or refresh it with `codex mcp login workos` in your normal host shell. See the [WorkOS MCP setup and recovery guide](https://workos.com/docs/mcp) for user-global and trusted-project-only configuration.
 
+```text
 Resource Management:
   organization (org)     Manage organizations
   user                   Manage users
