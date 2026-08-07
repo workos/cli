@@ -364,6 +364,62 @@ describe('CLIAdapter', () => {
     });
   });
 
+  describe('error rendering', () => {
+    async function renderError(message: string): Promise<string> {
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('error', { message, stack: undefined });
+
+      return [...vi.mocked(ui.default.log.error).mock.calls, ...vi.mocked(ui.default.log.info).mock.calls]
+        .map((c) => String(c[0]))
+        .join('\n');
+    }
+
+    // The gateway's generic 500 fires for deterministic request failures too, so
+    // this is the interactive copy the reporter hit: four more minutes, same 500.
+    it('does not advise waiting for the gateway generic 500', async () => {
+      const output = await renderError(
+        'API Error: 500 {"error":{"type":"internal_error","message":"An unexpected error occurred"}}',
+      );
+
+      expect(output).not.toMatch(/temporarily unavailable/i);
+      expect(output).not.toMatch(/few minutes|try again shortly|wait a minute/i);
+      expect(output).toMatch(/could not complete this request/i);
+    });
+
+    // installer-core re-emits runAgent's already-rendered message, so the
+    // adapter classifies our own copy on the real path — not the raw SDK text.
+    it('keeps the deterministic copy when handed an already-rendered message', async () => {
+      const output = await renderError(
+        'The AI service could not complete this request. The same request is likely to fail the same way, so waiting will not help. Re-run with --debug to see the underlying error.',
+      );
+
+      expect(output).not.toMatch(/temporarily unavailable/i);
+
+      // The headline must be re-derived, not echoed: a pass-through of the
+      // already-rendered string would put all three sentences in log.error.
+      const ui = await import('../../utils/ui.js');
+      expect(vi.mocked(ui.default.log.error).mock.calls[0]?.[0]).toBe(
+        'The AI service could not complete this request.',
+      );
+    });
+
+    it('still shows the transient copy for a real 503', async () => {
+      const output = await renderError('API Error: 503 Service Unavailable');
+
+      expect(output).toMatch(/temporarily unavailable/i);
+      expect(output).toMatch(/few minutes/i);
+    });
+
+    it('renders the raw message when nothing matches', async () => {
+      const output = await renderError('Something broke');
+
+      expect(output).toMatch(/Something broke/);
+      expect(output).toMatch(/--debug/);
+    });
+  });
+
   describe('staging success copy', () => {
     it('device path announces a fresh environment without "retrieved"', async () => {
       await adapter.start();

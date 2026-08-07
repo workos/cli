@@ -1424,6 +1424,17 @@ const commands: CommandSchema[] = [
         default: false,
         hidden: false,
       },
+      // Distinct from --force-install above: this one overrides the
+      // "AuthKit is already installed" preflight guard, and the guard's own
+      // error tells agents to pass it, so it has to be discoverable here.
+      {
+        name: 'force',
+        type: 'boolean',
+        description: 'Continue even if AuthKit is already installed in this project',
+        required: false,
+        default: false,
+        hidden: false,
+      },
       {
         name: 'dashboard',
         type: 'boolean',

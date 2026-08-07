@@ -20,6 +20,7 @@ import type { InstallerEventEmitter } from './events.js';
 import { startCredentialProxy, startClaimTokenProxy, type CredentialProxyHandle } from './credential-proxy.js';
 import { getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
 import { getAuthkitDomain, getCliAuthClientId } from './settings.js';
+import { classifyAgentFailure, formatAgentFailure } from './failure-classifier.js';
 import type { SDKMessage, SDKUserMessage, PermissionResult, query as queryFn } from '@anthropic-ai/claude-agent-sdk';
 
 // File content cache for computing edit diffs
@@ -57,6 +58,9 @@ const SERVICE_UNAVAILABLE_PREFIX = '__SERVICE_UNAVAILABLE__';
 
 /** Internal prefix used to tag rate-limit errors from handleSDKMessage */
 const RATE_LIMITED_PREFIX = '__RATE_LIMITED__';
+
+/** Internal prefix used to tag failures that will recur on every retry */
+const DETERMINISTIC_PREFIX = '__DETERMINISTIC__';
 
 /**
  * Error types that can be returned from agent execution.
@@ -716,7 +720,7 @@ export async function runAgent(
         logError('AI service unavailable:', detail);
         return {
           error: AgentErrorType.SERVICE_UNAVAILABLE,
-          errorMessage: 'The AI service is temporarily unavailable. Please try again in a few minutes.',
+          errorMessage: formatAgentFailure('service_outage', detail),
         };
       }
       if (sdkError.startsWith(RATE_LIMITED_PREFIX)) {
@@ -724,7 +728,18 @@ export async function runAgent(
         logError('AI service rate-limited:', detail);
         return {
           error: AgentErrorType.SERVICE_UNAVAILABLE,
-          errorMessage: 'The AI service is currently rate-limited. Please wait a minute and try again.',
+          errorMessage: formatAgentFailure('rate_limited', detail),
+        };
+      }
+      if (sdkError.startsWith(DETERMINISTIC_PREFIX)) {
+        const detail = sdkError.slice(DETERMINISTIC_PREFIX.length);
+        // A gateway 500 is not automatically an outage: its generic branch also
+        // fires for request-shape failures, which recur on every attempt. Say so
+        // instead of sending the user round another four-minute run.
+        logError('Agent failure will recur on retry:', detail);
+        return {
+          error: AgentErrorType.EXECUTION_ERROR,
+          errorMessage: formatAgentFailure('deterministic', detail),
         };
       }
       logError('Agent SDK error:', sdkError);
@@ -942,16 +957,19 @@ function handleSDKMessage(
               : '';
         logError('Agent result marked as error:', resultText);
 
-        // Detect rate limiting (429) — check before 5xx so it gets distinct messaging
-        if (/\b429\b/.test(resultText) || /rate.limit/i.test(resultText)) {
-          return `${RATE_LIMITED_PREFIX}${resultText}`;
+        // One shared classifier owns the transient-vs-deterministic decision
+        // (failure-classifier.ts). This only maps its verdict onto the prefix
+        // protocol runAgent reads back below.
+        switch (classifyAgentFailure(resultText)) {
+          case 'rate_limited':
+            return `${RATE_LIMITED_PREFIX}${resultText}`;
+          case 'service_outage':
+            return `${SERVICE_UNAVAILABLE_PREFIX}${resultText}`;
+          case 'deterministic':
+            return `${DETERMINISTIC_PREFIX}${resultText}`;
+          default:
+            return resultText || 'Agent execution failed';
         }
-
-        // Detect service unavailability (API 500, upstream outage)
-        if (/\b50[0-9]\b/.test(resultText) || /server_error|internal_error|overloaded/.test(resultText)) {
-          return `${SERVICE_UNAVAILABLE_PREFIX}${resultText}`;
-        }
-        return resultText || 'Agent execution failed';
       }
 
       if (message.subtype === 'success') {

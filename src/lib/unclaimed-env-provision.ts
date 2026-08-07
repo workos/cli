@@ -37,6 +37,22 @@ export async function tryProvisionUnclaimedEnv(options: UnclaimedEnvProvisionOpt
   try {
     logInfo('[unclaimed-env-provision] Attempting unclaimed environment provisioning');
 
+    // No-clobber invariant, enforced by the function that does the writing:
+    // never overwrite credentials the project already has. Keyed on credentials
+    // only (never on AuthKit detection) so `install --force` still works.
+    // Checked before provisioning so no environment is created then abandoned.
+    const { readProjectEnvCredentials, resolveProjectEnvPath } = await import('./project-env.js');
+    const projectEnv = readProjectEnvCredentials(options.installDir);
+    if (projectEnv.apiKey) {
+      logInfo('[unclaimed-env-provision] Refusing to provision: project env already has WORKOS_API_KEY');
+      // Name the file the key was actually found in, not the file we would have
+      // written: the key can live in any of `ENV_FILE_NAMES`, and pointing at the
+      // write target sends people to edit a file that may not even exist.
+      const envPath = projectEnv.apiKeyPath ?? resolveProjectEnvPath(options.installDir);
+      ui.log.warn(`${envPath} already has WORKOS_API_KEY — not provisioning a new environment.`);
+      return false;
+    }
+
     const result = await provisionUnclaimedEnvironment();
 
     // Write .env.local first — if this fails, config stays clean (no orphan entries)

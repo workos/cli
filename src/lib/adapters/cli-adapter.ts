@@ -6,7 +6,7 @@ import chalk from 'chalk';
 import { getConfig } from '../settings.js';
 import { ProgressTracker } from '../progress-tracker.js';
 import { renderCompletionSummary, renderBrandMark } from '../../utils/summary-box.js';
-import { formatWorkOSCommand } from '../../utils/command-invocation.js';
+import { classifyAgentFailure, describeAgentFailure } from '../failure-classifier.js';
 
 /**
  * CLI adapter that renders wizard events via ui.
@@ -555,41 +555,16 @@ export class CLIAdapter implements InstallerAdapter {
     this.stopSpinner('Failed', 1);
 
     // Rewrite raw API/SDK errors into user-friendly messages with a next step.
-    // Matching is word-boundary / code-based so 'author' doesn't read as 'auth'
-    // and 'Module not found' doesn't read as a missing-directory error.
-    const isServiceError =
-      /\b50[0-9]\b/.test(message) || /server_error|internal_error|overloaded|service.*unavailable/i.test(message);
-    const isRateLimit = /\b429\b/.test(message) || /\brate.?limit/i.test(message);
-    const isNetworkError = /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|fetch failed/i.test(message);
-    const isProcessExit = /process exited with code/i.test(message);
-    const isAuthError = /\b(401|403|unauthorized|forbidden|authentication|authorization)\b/i.test(message);
-    const isMissingPath = /\bENOENT\b/.test(message);
+    // The verdict comes from the shared classifier so this path cannot drift
+    // from the headless adapter or from runAgent's own error message.
+    const { headline, detail } = describeAgentFailure(classifyAgentFailure(message));
 
-    if (isServiceError) {
-      ui.log.error('The AI service is temporarily unavailable.');
-      ui.log.info('This is usually resolved within a few minutes. Please try again shortly.');
-    } else if (isRateLimit) {
-      ui.log.error('The AI service is currently rate-limited.');
-      ui.log.info('Please wait a minute and try again.');
-    } else if (isNetworkError) {
-      ui.log.error('Could not connect to the AI service.');
-      ui.log.info('Check your internet connection and try again.');
-    } else if (isProcessExit) {
-      ui.log.error('The AI agent process exited unexpectedly.');
-      ui.log.info('Try running again. If this persists, run with --debug for details.');
-    } else if (isAuthError) {
-      ui.log.error('Authentication failed.');
-      ui.log.info(`Try running: ${formatWorkOSCommand('auth logout')} && ${formatWorkOSCommand('install')}`);
-    } else if (isMissingPath) {
-      ui.log.error(message);
-      ui.log.info('Make sure you are running this in your project directory.');
-    } else {
-      // Unknown error: still give the user somewhere to go next.
-      ui.log.error(message);
-      ui.log.info(
+    ui.log.error(headline ?? message);
+    ui.log.info(
+      // No specific advice for this kind: still give the user somewhere to go next.
+      detail ??
         `Re-run with ${chalk.cyan('--debug')} for details, or report it at ${chalk.cyan('https://github.com/workos/cli/issues')}`,
-      );
-    }
+    );
 
     if (stack && this.debug) {
       this.debugLog(stack);
