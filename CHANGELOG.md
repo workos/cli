@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.0](https://github.com/workos/cli/compare/v0.20.2...v0.21.0) (2026-08-07)
+
+
+### ⚠ BREAKING CHANGES
+
+* `workos install` now stops in a project that already has an AuthKit SDK installed. Pass `--force` to continue.
+* the automatic setup offer after login/install now defaults to No; pressing Enter at the prompt declines instead of installing. Non-interactive contexts remain untouched (nothing is ever installed without --yes).
+
+### AUTH-6734
+
+* make skill/MCP install explicit opt-in ([#218](https://github.com/workos/cli/issues/218)) ([8d4a1dc](https://github.com/workos/cli/commit/8d4a1dc98b38b0de7bcc89a975d71997cea9c229))
+
+
+### Features
+
+* stop the installer from clobbering configured AuthKit projects ([#205](https://github.com/workos/cli/issues/205)) ([04896f6](https://github.com/workos/cli/commit/04896f6742d3ffd11e5e58b7b6ed3fbd61b769d0))
+
+
+### Bug Fixes
+
+* **mcp:** distinguish MCP configuration from OAuth authentication ([#214](https://github.com/workos/cli/issues/214)) ([d6ce322](https://github.com/workos/cli/commit/d6ce322bfc5789549b03058c3ef77520ba24e43a))
+
 ## [0.20.2](https://github.com/workos/cli/compare/v0.20.1...v0.20.2) (2026-07-27)
 
 
