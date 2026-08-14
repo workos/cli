@@ -132,6 +132,46 @@ describe('workos-client', () => {
     });
   });
 
+  describe('connections', () => {
+    it('create calls POST /connections with body', async () => {
+      const mockConnection = { object: 'connection', id: 'conn_123', organization_id: 'org_123' };
+      mockRequest.mockResolvedValue(mockConnection);
+
+      const client = createWorkOSClient('sk_test_123', 'https://api.workos.com');
+      const result = await client.connections.create({ organization_id: 'org_123', connection_type: 'OktaSAML' });
+
+      expect(mockRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'POST',
+          path: '/connections',
+          apiKey: 'sk_test_123',
+          baseUrl: 'https://api.workos.com',
+          body: { organization_id: 'org_123', connection_type: 'OktaSAML' },
+        }),
+      );
+      expect(result).toBe(mockConnection);
+    });
+
+    it('update calls PATCH /connections/:id with encoded id and body', async () => {
+      const mockConnection = { object: 'connection', id: 'conn_123', organization_id: 'org_123' };
+      mockRequest.mockResolvedValue(mockConnection);
+
+      const client = createWorkOSClient('sk_test_123', 'https://api.workos.com');
+      const result = await client.connections.update('conn 123/x', { name: 'Updated' });
+
+      expect(mockRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'PATCH',
+          path: '/connections/conn%20123%2Fx',
+          apiKey: 'sk_test_123',
+          baseUrl: 'https://api.workos.com',
+          body: { name: 'Updated' },
+        }),
+      );
+      expect(result).toBe(mockConnection);
+    });
+  });
+
   describe('homepageUrl', () => {
     it('set calls correct path with body', async () => {
       mockRequest.mockResolvedValue(null);
