@@ -285,20 +285,22 @@ describe('connection commands', () => {
       expect(output.data.id).toBe('conn_01ABC');
     });
 
-    it('runConnectionCreate outputs the raw connection', async () => {
+    it('runConnectionCreate outputs the success envelope with the connection', async () => {
       mockConnections.create.mockResolvedValue(mockApiConnection);
       await runConnectionCreate({ org: 'org_123' }, 'sk_test');
       const output = JSON.parse(consoleOutput[0]);
-      expect(output.id).toBe('conn_01ABC');
-      expect(output.connection_type).toBe('GenericSAML');
+      expect(output.status).toBe('ok');
+      expect(output.data.id).toBe('conn_01ABC');
+      expect(output.data.connection_type).toBe('GenericSAML');
     });
 
-    it('runConnectionUpdate outputs the raw connection', async () => {
+    it('runConnectionUpdate outputs the success envelope with the connection', async () => {
       mockConnections.update.mockResolvedValue(mockApiConnection);
       await runConnectionUpdate('conn_01ABC', { name: 'Renamed' }, 'sk_test');
       const output = JSON.parse(consoleOutput[0]);
-      expect(output.id).toBe('conn_01ABC');
-      expect(output.external_id).toBe('legacy-42');
+      expect(output.status).toBe('ok');
+      expect(output.data.id).toBe('conn_01ABC');
+      expect(output.data.external_id).toBe('legacy-42');
     });
   });
 });

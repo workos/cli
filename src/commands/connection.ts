@@ -167,10 +167,6 @@ export async function runConnectionCreate(
 
   try {
     const connection = await client.connections.create(body);
-    if (isJsonMode()) {
-      outputJson(connection);
-      return;
-    }
     outputSuccess('Created connection', connection);
   } catch (error) {
     handleApiError(error);
@@ -196,10 +192,6 @@ export async function runConnectionUpdate(
 
   try {
     const connection = await client.connections.update(id, body);
-    if (isJsonMode()) {
-      outputJson(connection);
-      return;
-    }
     outputSuccess('Updated connection', connection);
   } catch (error) {
     handleApiError(error);
