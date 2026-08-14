@@ -391,8 +391,12 @@ workos session revoke <sessionId> [--yes]
 ```bash
 workos connection list [--org] [--type] [--limit]
 workos connection get <id>
+workos connection create --org <orgId> [--name] [--external-id] [--type] [--data <json>] [--file <path|->]
+workos connection update <id> [--name] [--external-id] [--type] [--data <json>] [--file <path|->]
 workos connection delete <id> [--force]
 ```
+
+`connections` is accepted as an alias for `connection`. For `create` and `update`, pass nested fields such as `saml_options`, `oidc_options`, and `attribute_maps` as a JSON body via `--data`, `--file <path>`, or `--file -` (stdin); field flags override matching top-level JSON fields. Creating and updating connections requires the Connections API migration capabilities to be enabled for your team.
 
 #### directory
 

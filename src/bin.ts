@@ -2077,7 +2077,7 @@ async function runCli(): Promise<void> {
       );
       return yargs.demandCommand(1, 'Please specify a session subcommand').strict();
     })
-    .command('connection', 'Manage SSO connections (read/delete)', (yargs) => {
+    .command(['connection', 'connections'], 'Manage SSO connections', (yargs) => {
       yargs.options({ ...insecureStorageOption, 'api-key': { type: 'string' as const, describe: 'WorkOS API key' } });
       registerSubcommand(
         yargs,
@@ -2122,6 +2122,69 @@ async function runCli(): Promise<void> {
           const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
           const { runConnectionGet } = await import('./commands/connection.js');
           await runConnectionGet(argv.id, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
+        },
+      );
+      registerSubcommand(
+        yargs,
+        'create',
+        'Create a connection',
+        (y) =>
+          y.options({
+            org: { type: 'string', describe: 'Organization ID' },
+            name: { type: 'string', describe: 'Connection name' },
+            'external-id': { type: 'string', describe: 'Customer-owned identifier' },
+            type: { type: 'string', describe: 'Connection type (e.g. GenericSAML, GenericOIDC)' },
+            data: { type: 'string', describe: 'JSON request body' },
+            file: { type: 'string', describe: 'Read JSON request body from a file, or - for stdin' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runConnectionCreate } = await import('./commands/connection.js');
+          await runConnectionCreate(
+            {
+              org: argv.org,
+              name: argv.name,
+              externalId: argv.externalId,
+              type: argv.type,
+              data: argv.data,
+              file: argv.file,
+            },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
+        },
+      );
+      registerSubcommand(
+        yargs,
+        'update <id>',
+        'Update a connection',
+        (y) =>
+          y.positional('id', { type: 'string', demandOption: true }).options({
+            name: { type: 'string', describe: 'Connection name' },
+            'external-id': { type: 'string', describe: 'Customer-owned identifier' },
+            type: { type: 'string', describe: 'Connection type (e.g. GenericSAML, GenericOIDC)' },
+            data: { type: 'string', describe: 'JSON request body' },
+            file: { type: 'string', describe: 'Read JSON request body from a file, or - for stdin' },
+          }),
+        async (argv) => {
+          await applyInsecureStorage(argv.insecureStorage);
+
+          const { resolveApiKey, resolveApiBaseUrl } = await import('./lib/api-key.js');
+          const { runConnectionUpdate } = await import('./commands/connection.js');
+          await runConnectionUpdate(
+            argv.id,
+            {
+              name: argv.name,
+              externalId: argv.externalId,
+              type: argv.type,
+              data: argv.data,
+              file: argv.file,
+            },
+            resolveApiKey({ apiKey: argv.apiKey }),
+            resolveApiBaseUrl(),
+          );
         },
       );
       registerSubcommand(

@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import chalk from 'chalk';
 import type { ConnectionType } from '@workos-inc/node';
 import { createWorkOSClient } from '../lib/workos-client.js';
@@ -70,6 +71,136 @@ export async function runConnectionList(
     );
 
     printPaginationFooter(result.listMetadata);
+  } catch (error) {
+    handleApiError(error);
+  }
+}
+
+export interface ConnectionBodyOptions {
+  org?: string;
+  name?: string;
+  externalId?: string;
+  type?: string;
+  data?: string;
+  file?: string;
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+async function resolveConnectionBody(options: ConnectionBodyOptions): Promise<Record<string, unknown>> {
+  let body: Record<string, unknown> = {};
+
+  let raw: string | undefined;
+  if (options.data !== undefined) {
+    raw = options.data;
+  } else if (options.file) {
+    if (options.file === '-') {
+      const chunks: Buffer[] = [];
+      for await (const chunk of process.stdin) {
+        chunks.push(chunk);
+      }
+      raw = Buffer.concat(chunks).toString('utf-8');
+      if (raw.length === 0) {
+        exitWithError({
+          code: 'empty_stdin_body',
+          message:
+            'Reading request body from stdin (--file -) yielded no data. Pipe data into the command or pass --data instead.',
+        });
+      }
+    } else {
+      try {
+        raw = await readFile(options.file, 'utf-8');
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        exitWithError({
+          code: 'file_read_error',
+          message: `Could not read request body file "${options.file}": ${message}`,
+        });
+      }
+    }
+  }
+
+  if (raw !== undefined) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      exitWithError({
+        code: 'invalid_json_body',
+        message: 'Request body must be valid JSON.',
+      });
+    }
+    if (!isJsonObject(parsed)) {
+      exitWithError({
+        code: 'invalid_json_body',
+        message: 'Request body must be a JSON object.',
+      });
+    }
+    body = { ...parsed };
+  }
+
+  if (options.org !== undefined) body.organization_id = options.org;
+  if (options.name !== undefined) body.name = options.name;
+  if (options.externalId !== undefined) body.external_id = options.externalId;
+  if (options.type !== undefined) body.connection_type = options.type;
+
+  return body;
+}
+
+export async function runConnectionCreate(
+  options: ConnectionBodyOptions,
+  apiKey: string,
+  baseUrl?: string,
+): Promise<void> {
+  const body = await resolveConnectionBody(options);
+
+  if (typeof body.organization_id !== 'string' || body.organization_id.length === 0) {
+    exitWithError({
+      code: 'missing_organization_id',
+      message: 'An organization ID is required. Pass --org or include organization_id in the JSON body.',
+    });
+  }
+
+  const client = createWorkOSClient(apiKey, baseUrl);
+
+  try {
+    const connection = await client.connections.create(body);
+    if (isJsonMode()) {
+      outputJson(connection);
+      return;
+    }
+    outputSuccess('Created connection', connection);
+  } catch (error) {
+    handleApiError(error);
+  }
+}
+
+export async function runConnectionUpdate(
+  id: string,
+  options: ConnectionBodyOptions,
+  apiKey: string,
+  baseUrl?: string,
+): Promise<void> {
+  const body = await resolveConnectionBody(options);
+
+  if (Object.keys(body).length === 0) {
+    exitWithError({
+      code: 'empty_update_body',
+      message: 'Nothing to update. Pass at least one field flag, or a JSON body via --data or --file.',
+    });
+  }
+
+  const client = createWorkOSClient(apiKey, baseUrl);
+
+  try {
+    const connection = await client.connections.update(id, body);
+    if (isJsonMode()) {
+      outputJson(connection);
+      return;
+    }
+    outputSuccess('Updated connection', connection);
   } catch (error) {
     handleApiError(error);
   }

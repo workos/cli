@@ -22,6 +22,19 @@ export interface AuditLogRetention {
   retention_period_in_days: number;
 }
 
+export interface SsoConnection {
+  object: 'connection';
+  id: string;
+  organization_id: string;
+  name: string;
+  connection_type: string;
+  state: string;
+  external_id?: string | null;
+  created_at: string;
+  updated_at: string;
+  [key: string]: unknown;
+}
+
 export interface WorkOSCLIClient {
   sdk: WorkOS;
   redirectUris: {
@@ -37,6 +50,10 @@ export interface WorkOSCLIClient {
     listActions(): Promise<WorkOSListResponse<AuditLogAction>>;
     getSchema(action: string): Promise<unknown>;
     getRetention(orgId: string): Promise<AuditLogRetention>;
+  };
+  connections: {
+    create(body: Record<string, unknown>): Promise<SsoConnection>;
+    update(id: string, body: Record<string, unknown>): Promise<SsoConnection>;
   };
 }
 
@@ -141,6 +158,27 @@ export function createWorkOSClient(apiKey?: string, baseUrl?: string): WorkOSCLI
           path: `/organizations/${encodeURIComponent(orgId)}/audit_logs_retention`,
           apiKey: key,
           baseUrl: base,
+        });
+      },
+    },
+
+    connections: {
+      async create(body: Record<string, unknown>) {
+        return workosRequest<SsoConnection>({
+          method: 'POST',
+          path: '/connections',
+          apiKey: key,
+          baseUrl: base,
+          body,
+        });
+      },
+      async update(id: string, body: Record<string, unknown>) {
+        return workosRequest<SsoConnection>({
+          method: 'PATCH',
+          path: `/connections/${encodeURIComponent(id)}`,
+          apiKey: key,
+          baseUrl: base,
+          body,
         });
       },
     },

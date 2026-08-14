@@ -6,7 +6,7 @@
 const DEFAULT_BASE_URL = 'https://api.workos.com';
 
 export interface WorkOSRequestOptions {
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   path: string;
   apiKey: string;
   baseUrl?: string;
@@ -55,7 +55,7 @@ export async function workosRequest<T>(options: WorkOSRequestOptions): Promise<T
 
   const fetchOptions: RequestInit = { method, headers };
 
-  if (body && (method === 'POST' || method === 'PUT')) {
+  if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
     headers['Content-Type'] = 'application/json';
     fetchOptions.body = JSON.stringify(body);
   }

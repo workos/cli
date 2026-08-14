@@ -1390,7 +1390,7 @@ const commands: CommandSchema[] = [
   },
   {
     name: 'connection',
-    description: 'Manage SSO connections (read/delete)',
+    description: 'Manage SSO connections',
     options: [insecureStorageOpt, apiKeyOpt],
     commands: [
       {
@@ -1406,6 +1406,66 @@ const commands: CommandSchema[] = [
         name: 'get',
         description: 'Get a connection',
         positionals: [{ name: 'id', type: 'string', description: 'Connection ID', required: true }],
+      },
+      {
+        name: 'create',
+        description: 'Create a connection',
+        options: [
+          { name: 'org', type: 'string', description: 'Organization ID', required: false, hidden: false },
+          { name: 'name', type: 'string', description: 'Connection name', required: false, hidden: false },
+          {
+            name: 'external-id',
+            type: 'string',
+            description: 'Customer-owned identifier',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'type',
+            type: 'string',
+            description: 'Connection type (e.g. GenericSAML, GenericOIDC)',
+            required: false,
+            hidden: false,
+          },
+          { name: 'data', type: 'string', description: 'JSON request body', required: false, hidden: false },
+          {
+            name: 'file',
+            type: 'string',
+            description: 'Read JSON request body from a file, or - for stdin',
+            required: false,
+            hidden: false,
+          },
+        ],
+      },
+      {
+        name: 'update',
+        description: 'Update a connection',
+        positionals: [{ name: 'id', type: 'string', description: 'Connection ID', required: true }],
+        options: [
+          { name: 'name', type: 'string', description: 'Connection name', required: false, hidden: false },
+          {
+            name: 'external-id',
+            type: 'string',
+            description: 'Customer-owned identifier',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'type',
+            type: 'string',
+            description: 'Connection type (e.g. GenericSAML, GenericOIDC)',
+            required: false,
+            hidden: false,
+          },
+          { name: 'data', type: 'string', description: 'JSON request body', required: false, hidden: false },
+          {
+            name: 'file',
+            type: 'string',
+            description: 'Read JSON request body from a file, or - for stdin',
+            required: false,
+            hidden: false,
+          },
+        ],
       },
       {
         name: 'delete',
