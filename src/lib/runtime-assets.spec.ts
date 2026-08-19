@@ -75,6 +75,9 @@ describe('pickHighestSatisfying', () => {
       versions: {
         '1.0.0': { dist: { tarball: 'https://example.invalid/1.0.0.tgz', integrity: 'sha512-x' } },
         '1.5.0': { dist: {} },
+        '1.6.0': {
+          dist: { tarball: 'https://example.invalid/1.6.0.tgz', integrity: 'sha1-2jmj7l5rSw0yVb/vlWAYkK/YBwk=' },
+        },
       },
     };
     expect(pickHighestSatisfying(withoutDist, '^1.0.0')?.version).toBe('1.0.0');
@@ -250,6 +253,26 @@ describe('loadRuntimeDep', () => {
     const mod = await loadRuntimeDep(DEP, { cacheRoot });
 
     expect(mod?.marker).toBe('previously-verified');
+  });
+
+  it('does not retry the download within the TTL after an install failure', async () => {
+    // Transition-period shape: the published tarball has no bundle entry yet.
+    const tarball = makeTarball([['package/README.md', Buffer.from('no bundle here\n')]]);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(metadata({ '1.6.0': { integrity: sri(tarball) } })))
+      .mockResolvedValueOnce(bytesResponse(tarball));
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await loadRuntimeDep(DEP, { cacheRoot })).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    // Next invocation inside the TTL: no metadata refetch, no tarball retry.
+    const secondFetch = vi.fn().mockRejectedValue(new Error('network must not be touched'));
+    vi.stubGlobal('fetch', secondFetch);
+
+    expect(await loadRuntimeDep(DEP, { cacheRoot })).toBeNull();
+    expect(secondFetch).not.toHaveBeenCalled();
   });
 
   it('does nothing at all when WORKOS_RUNTIME_DEPS=0', async () => {

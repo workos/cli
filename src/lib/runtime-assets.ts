@@ -56,7 +56,11 @@ type ResolvedVersion = {
   integrity: string;
 };
 
-type ResolutionCache = ResolvedVersion & { fetchedAt: number };
+type ResolutionCache = ResolvedVersion & {
+  fetchedAt: number;
+  /** A download/install of this version failed; don't retry until the TTL expires. */
+  installFailed?: boolean;
+};
 
 /** Shape of the npm registry's abbreviated ("install") package metadata. */
 export type AbbreviatedPackument = {
@@ -89,7 +93,8 @@ export function pickHighestSatisfying(metadata: AbbreviatedPackument, range: str
       valid(version) !== null &&
       !info?.deprecated &&
       typeof info?.dist?.tarball === 'string' &&
-      typeof info?.dist?.integrity === 'string'
+      typeof info?.dist?.integrity === 'string' &&
+      sha512Digests(info.dist.integrity).length > 0
     );
   });
   const version = maxSatisfying(candidates, range);
@@ -98,21 +103,26 @@ export function pickHighestSatisfying(metadata: AbbreviatedPackument, range: str
   return { version, tarballUrl: dist.tarball, integrity: dist.integrity };
 }
 
+/** The sha512 digests in an SRI integrity string — the only algorithm we verify. */
+function sha512Digests(integrity: string): string[] {
+  return integrity
+    .split(/\s+/)
+    .map((entry) => /^sha512-([A-Za-z0-9+/=]+)$/.exec(entry)?.[1])
+    .filter((digest): digest is string => digest !== undefined);
+}
+
 /**
  * Verify npm's SRI integrity string (sha512 over the raw tarball bytes).
  * Throws on mismatch or when no sha512 hash is present — weaker algorithms
  * (old sha1-only packages) are treated as unverifiable. Exported for tests.
  */
 export function verifySriIntegrity(data: Buffer, integrity: string): void {
-  const sha512Digests = integrity
-    .split(/\s+/)
-    .map((entry) => /^sha512-([A-Za-z0-9+/=]+)$/.exec(entry)?.[1])
-    .filter((digest): digest is string => digest !== undefined);
-  if (sha512Digests.length === 0) {
+  const digests = sha512Digests(integrity);
+  if (digests.length === 0) {
     throw new Error(`No sha512 hash in integrity string ${JSON.stringify(integrity)}`);
   }
   const actual = createHash('sha512').update(data).digest('base64');
-  if (!sha512Digests.includes(actual)) {
+  if (!digests.includes(actual)) {
     throw new Error(`Integrity mismatch: expected ${integrity}, got sha512-${actual}`);
   }
 }
@@ -139,7 +149,7 @@ function entryPath(cacheDir: string, version: string, dep: RuntimeDep): string {
   return join(cacheDir, version, installedFileName(dep.files[0], true));
 }
 
-function readResolutionCache(cacheDir: string, range: string): ResolvedVersion | null {
+function readResolutionCache(cacheDir: string, range: string): (ResolvedVersion & { installFailed?: boolean }) | null {
   try {
     const parsed = JSON.parse(readFileSync(join(cacheDir, RESOLUTION_FILENAME), 'utf8')) as Partial<ResolutionCache>;
     if (
@@ -156,13 +166,18 @@ function readResolutionCache(cacheDir: string, range: string): ResolvedVersion |
     if (age < 0 || age >= RESOLUTION_TTL_MS) return null;
     // The baked range may have moved since the resolution was cached (CLI update).
     if (valid(parsed.version) === null || !satisfies(parsed.version, range)) return null;
-    return { version: parsed.version, tarballUrl: parsed.tarballUrl, integrity: parsed.integrity };
+    return {
+      version: parsed.version,
+      tarballUrl: parsed.tarballUrl,
+      integrity: parsed.integrity,
+      ...(parsed.installFailed === true ? { installFailed: true } : {}),
+    };
   } catch {
     return null;
   }
 }
 
-function writeResolutionCache(cacheDir: string, resolved: ResolvedVersion): void {
+function writeResolutionCache(cacheDir: string, resolved: ResolvedVersion & { installFailed?: boolean }): void {
   // Best-effort: a failed cache write only costs a refetch next run.
   try {
     mkdirSync(cacheDir, { recursive: true, mode: 0o700 });
@@ -312,13 +327,18 @@ export async function loadRuntimeDep(
     if (resolved) {
       try {
         const bundlePath = entryPath(cacheDir, resolved.version, dep);
-        if (!existsSync(bundlePath)) {
+        if (existsSync(bundlePath)) return await importBundle(bundlePath);
+        if (!resolved.installFailed) {
           await downloadBundle(dep, resolved, join(cacheDir, resolved.version));
           cleanupStaleVersions(cacheDir, resolved.version);
+          return await importBundle(bundlePath);
         }
-        return await importBundle(bundlePath);
       } catch (error) {
         logWarn(`Runtime bundle install for ${dep.npmPackage}@${resolved.version} failed:`, error);
+        // Remember the failure so every invocation inside the TTL window
+        // doesn't re-download a tarball that can't install (e.g. the package
+        // hasn't published a bundle yet). Retried after the TTL expires.
+        writeResolutionCache(cacheDir, { ...resolved, installFailed: true });
       }
     }
 
