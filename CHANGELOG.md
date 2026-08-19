@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.1](https://github.com/workos/cli/compare/v0.21.0...v0.21.1) (2026-08-19)
+
+
+### Bug Fixes
+
+* **auth:** stop repeated macOS keychain password prompts ([#225](https://github.com/workos/cli/issues/225)) ([d8f1fbc](https://github.com/workos/cli/commit/d8f1fbc80a1e1cc50e026dc224529e282eee5cf8))
+* **deps:** update minor and patch updates ([#223](https://github.com/workos/cli/issues/223)) ([fcb26ce](https://github.com/workos/cli/commit/fcb26ce7d68e2e4b52537082ab86f5c3e72a3407))
+
 ## [0.21.0](https://github.com/workos/cli/compare/v0.20.2...v0.21.0) (2026-08-07)
 
 
