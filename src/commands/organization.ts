@@ -96,7 +96,15 @@ function shapeOrganization(org: OrganizationNode) {
     usersCount: org.usersCount ?? null,
     allowProfilesOutsideOrganization: org.allowProfilesOutsideOrganization ?? null,
     externalId: org.externalId ?? null,
-    domains: (org.domains ?? []).map((d) => ({ id: d.id ?? null, domain: d.domain, state: d.state ?? null })),
+    // The dashboard API returns PascalCase domain states (`Verified`), but the
+    // CLI contract is lowercase — `parseDomainArgs` only accepts `verified`/
+    // `pending`, and the REST shape emitted lowercase. Normalize so input and
+    // output round-trip.
+    domains: (org.domains ?? []).map((d) => ({
+      id: d.id ?? null,
+      domain: d.domain,
+      state: d.state ? d.state.toLowerCase() : null,
+    })),
     metadata: org.metadata ?? [],
   };
 }
