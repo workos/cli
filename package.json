@@ -92,7 +92,8 @@
     "eval:show": "bun run ./tests/evals/index.ts show",
     "gen:routes": "bun run ./scripts/gen-routes.ts",
     "catalog:vendor": "bun run ./scripts/vendor-catalog.ts",
-    "check:coverage": "bun run ./scripts/check-coverage.ts"
+    "check:coverage": "bun run ./scripts/check-coverage.ts",
+    "justification:check": "bun run ./scripts/check-justification.ts"
   },
   "author": "WorkOS",
   "license": "MIT"
