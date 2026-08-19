@@ -2,12 +2,7 @@ import { existsSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AGENT_SDK_TARGET, AGENT_SDK_VERSION } from '../generated/agent-sdk-manifest.js';
 import { makeTarball } from './__test-helpers__/npm-tarball-fixtures.js';
-import {
-  downloadTarball,
-  ensureClaudeCodeExecutable,
-  extractTarEntry,
-  isBunVirtualFsUrl,
-} from './agent-sdk-assets.js';
+import { downloadTarball, ensureClaudeCodeExecutable, extractTarEntry, isBunVirtualFsUrl } from './agent-sdk-assets.js';
 
 describe('isBunVirtualFsUrl', () => {
   it('detects the POSIX compiled-binary virtual filesystem', () => {
