@@ -24,7 +24,16 @@ export class DarwinSecurityEntry {
   constructor(
     private readonly service: string,
     private readonly account: string,
-  ) {}
+  ) {
+    // service/account are interpolated into a `security -i` command line
+    // (double-quoted). Current callers pass module constants; reject anything
+    // that could break the interactive parser if a future caller doesn't.
+    for (const v of [service, account]) {
+      if (!/^[\w.-]+$/.test(v)) {
+        throw new Error(`invalid keychain service/account: ${JSON.stringify(v)}`);
+      }
+    }
+  }
 
   getPassword(): string | null {
     const r = spawnSync(SECURITY, ['find-generic-password', '-s', this.service, '-a', this.account, '-w'], {

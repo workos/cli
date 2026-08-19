@@ -10,6 +10,7 @@
  */
 
 import { Entry } from '@napi-rs/keyring';
+import { DarwinSecurityEntry } from './darwin-keychain.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -58,9 +59,18 @@ let fallbackWarningShown = false;
 let forceInsecureStorage = false;
 let migrationAttempted = false;
 
+/**
+ * In-process cache — same rationale as credential-store: getConfig() is
+ * called several times per run, and each uncached keyring read is a separate
+ * keychain ACL check (one password dialog per read on an untrusted binary).
+ * undefined = not loaded yet.
+ */
+let cachedConfig: CliConfig | null | undefined;
+
 export function setInsecureConfigStorage(value: boolean): void {
   forceInsecureStorage = value;
   migrationAttempted = false;
+  cachedConfig = undefined;
 }
 
 function getConfigDir(): string {
@@ -128,7 +138,19 @@ function deleteFile(): void {
   }
 }
 
-function getKeyringEntry(): Entry {
+interface KeyringEntry {
+  getPassword(): string | null;
+  setPassword(password: string): void;
+  deletePassword(): void;
+}
+
+function getKeyringEntry(): KeyringEntry {
+  // Same backend selection as credential-store: on macOS go through
+  // /usr/bin/security so keychain trust survives across ad-hoc-signed
+  // releases. See darwin-keychain.ts.
+  if (process.platform === 'darwin') {
+    return new DarwinSecurityEntry(SERVICE_NAME, ACCOUNT_NAME);
+  }
   return new Entry(SERVICE_NAME, ACCOUNT_NAME);
 }
 
@@ -193,10 +215,18 @@ function showFallbackWarning(): void {
 }
 
 export function getConfig(): CliConfig | null {
-  if (forceInsecureStorage) return readFromFile();
+  if (cachedConfig !== undefined) return cachedConfig;
+
+  if (forceInsecureStorage) {
+    cachedConfig = readFromFile();
+    return cachedConfig;
+  }
 
   const keyringConfig = readFromKeyring();
-  if (keyringConfig) return keyringConfig;
+  if (keyringConfig) {
+    cachedConfig = keyringConfig;
+    return keyringConfig;
+  }
 
   const fileConfig = readFromFile();
   if (fileConfig) {
@@ -204,18 +234,25 @@ export function getConfig(): CliConfig | null {
       migrationAttempted = true;
       writeToKeyring(fileConfig);
     }
+    cachedConfig = fileConfig;
     return fileConfig;
   }
 
+  cachedConfig = null;
   return null;
 }
 
 export function saveConfig(config: CliConfig): void {
-  if (forceInsecureStorage) return writeToFile(config);
+  if (forceInsecureStorage) {
+    writeToFile(config);
+    cachedConfig = config;
+    return;
+  }
 
   if (!writeToKeyring(config)) {
     showFallbackWarning();
     writeToFile(config);
+    cachedConfig = config;
     return;
   }
 
@@ -225,12 +262,14 @@ export function saveConfig(config: CliConfig): void {
     logWarn('Keyring write succeeded but read-back failed — falling back to file');
     writeToFile(config);
   }
+  cachedConfig = config;
 }
 
 export function clearConfig(): void {
   deleteFromKeyring();
   deleteFile();
   migrationAttempted = false;
+  cachedConfig = undefined;
 }
 
 export function getActiveEnvironment(): EnvironmentConfig | null {
