@@ -7,6 +7,7 @@
  */
 
 import { Entry } from '@napi-rs/keyring';
+import { DarwinSecurityEntry } from './darwin-keychain.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -53,9 +54,20 @@ let fallbackWarningShown = false;
 let forceInsecureStorage = false;
 let migrationAttempted = false;
 
+/**
+ * In-process cache: a single CLI run reads credentials from many call sites
+ * (auth, telemetry, token refresh, ...). Each uncached keyring read is a
+ * separate keychain ACL check — on macOS with an untrusted binary that means
+ * one password dialog PER READ. Cache the first result; saves keep it
+ * coherent (all refresh paths write through saveCredentials in-process).
+ * undefined = not loaded yet.
+ */
+let cachedCreds: Credentials | null | undefined;
+
 export function setInsecureStorage(value: boolean): void {
   forceInsecureStorage = value;
   migrationAttempted = false;
+  cachedCreds = undefined;
 }
 
 function getCredentialsDir(): string {
@@ -128,7 +140,20 @@ function deleteFile(): void {
   }
 }
 
-function getKeyringEntry(): Entry {
+interface KeyringEntry {
+  getPassword(): string | null;
+  setPassword(password: string): void;
+  deletePassword(): void;
+}
+
+function getKeyringEntry(): KeyringEntry {
+  // On macOS, go through /usr/bin/security (stable Apple-signed binary)
+  // instead of the native binding: the ad-hoc-signed CLI binary changes
+  // signature every release, so native keychain access prompts per version.
+  // See darwin-keychain.ts; revert once releases are Developer ID signed.
+  if (process.platform === 'darwin') {
+    return new DarwinSecurityEntry(SERVICE_NAME, ACCOUNT_NAME);
+  }
   return new Entry(SERVICE_NAME, ACCOUNT_NAME);
 }
 
@@ -207,17 +232,33 @@ export function hasCredentials(): boolean {
   // read as logged-out here too, so this never disagrees with getCredentials().
   // (readFrom* both run isValidCredentials; avoids getCredentials()'s keyring
   // migration side effect.)
+  if (cachedCreds !== undefined) return cachedCreds !== null;
   if (forceInsecureStorage) {
     return readFromFile() !== null;
   }
-  return readFromKeyring() !== null || readFromFile() !== null;
+  const keyringCreds = readFromKeyring();
+  if (keyringCreds) {
+    // Safe to cache: getCredentials() would return this without migrating.
+    // A file-only hit is NOT cached so its migration still runs there.
+    cachedCreds = keyringCreds;
+    return true;
+  }
+  return readFromFile() !== null;
 }
 
 export function getCredentials(): Credentials | null {
-  if (forceInsecureStorage) return readFromFile();
+  if (cachedCreds !== undefined) return cachedCreds;
+
+  if (forceInsecureStorage) {
+    cachedCreds = readFromFile();
+    return cachedCreds;
+  }
 
   const keyringCreds = readFromKeyring();
-  if (keyringCreds) return keyringCreds;
+  if (keyringCreds) {
+    cachedCreds = keyringCreds;
+    return keyringCreds;
+  }
 
   const fileCreds = readFromFile();
   if (fileCreds) {
@@ -225,25 +266,33 @@ export function getCredentials(): Credentials | null {
       migrationAttempted = true;
       writeToKeyring(fileCreds);
     }
+    cachedCreds = fileCreds;
     return fileCreds;
   }
 
+  cachedCreds = null;
   return null;
 }
 
 export function saveCredentials(creds: Credentials): void {
-  if (forceInsecureStorage) return writeToFile(creds);
+  if (forceInsecureStorage) {
+    writeToFile(creds);
+    cachedCreds = creds;
+    return;
+  }
 
   if (!writeToKeyring(creds)) {
     showFallbackWarning();
     writeToFile(creds);
   }
+  cachedCreds = creds;
 }
 
 export function clearCredentials(): void {
   deleteFromKeyring();
   deleteFile();
   migrationAttempted = false;
+  cachedCreds = undefined;
 }
 
 export function updateTokens(accessToken: string, expiresAt: number, refreshToken?: string): void {
