@@ -234,15 +234,14 @@ async function downloadBundle(dep: RuntimeDep, resolved: ResolvedVersion, versio
   // The tarball-wide sha512 covers every extracted file in one check.
   verifySriIntegrity(tarball, resolved.integrity);
   // Extract everything up front so a missing entry aborts before any writes.
-  const extracted = dep.files.map((file, index) => ({
+  const [entry, ...sidecars] = dep.files.map((file, index) => ({
     // npm tarballs prefix all entries with `package/`.
     bytes: extractTarEntry(tarball, `package/${file}`, MAX_BUNDLE_UNCOMPRESSED_BYTES),
     installedName: installedFileName(file, index === 0),
-    isEntry: index === 0,
   }));
 
   mkdirSync(versionDir, { recursive: true, mode: 0o700 });
-  for (const file of [...extracted.filter((f) => !f.isEntry), ...extracted.filter((f) => f.isEntry)]) {
+  for (const file of [...sidecars, entry]) {
     atomicWriteFile(join(versionDir, file.installedName), file.bytes);
   }
 }
@@ -354,11 +353,6 @@ export async function loadRuntimeDep(
 }
 
 const moduleCache = new Map<RuntimeDepName, Record<string, unknown> | null>();
-
-/** @internal */
-export function _resetRuntimeAssetsForTesting(): void {
-  moduleCache.clear();
-}
 
 /**
  * Load the runtime-downloaded bundle for a manifest dep, memoized per process.

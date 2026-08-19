@@ -1,7 +1,7 @@
 import { gzipSync } from 'node:zlib';
 
 /** Build a minimal ustar header for a regular-file entry. */
-export function tarHeader(name: string, size: number): Buffer {
+function tarHeader(name: string, size: number): Buffer {
   const header = Buffer.alloc(512);
   header.write(name, 0, 'utf8');
   header.write(`${size.toString(8).padStart(11, '0')}\0`, 124, 'utf8');
