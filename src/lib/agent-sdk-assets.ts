@@ -55,12 +55,22 @@ function runtimeTarget(): string {
 }
 
 /**
+ * Whether a module URL points into a Bun compiled binary's virtual filesystem:
+ * `/$bunfs/` on POSIX, `B:\~BUN\` on Windows — which import.meta.url surfaces
+ * with the tilde percent-encoded (`file:///B:/%7EBUN/root/…`). Exported for
+ * tests.
+ */
+export function isBunVirtualFsUrl(url: string): boolean {
+  return url.includes('$bunfs') || url.includes('~BUN') || url.includes('%7EBUN');
+}
+
+/**
  * Running from a compiled binary: the module graph lives in Bun's virtual
  * filesystem. Shared with runtime-assets.ts, which gates runtime bundle
  * downloads the same way.
  */
 export function isCompiledBinary(): boolean {
-  return import.meta.url.includes('$bunfs') || import.meta.url.includes('~BUN');
+  return isBunVirtualFsUrl(import.meta.url);
 }
 
 function agentSdkCacheRoot(): string {

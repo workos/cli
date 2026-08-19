@@ -191,7 +191,7 @@ const commands: CommandSchema[] = [
     commands: [
       {
         name: 'install',
-        description: 'Add the WorkOS MCP server to detected coding agents',
+        description: 'Configure the WorkOS MCP server in detected coding agents',
         options: [
           {
             name: 'agent',
@@ -1299,6 +1299,24 @@ const commands: CommandSchema[] = [
     ],
   },
   {
+    name: 'setup',
+    description: 'Set up your coding agent (install WorkOS skills + MCP server)',
+    options: [
+      insecureStorageOpt,
+      { name: 'agents', type: 'string', description: 'Comma-separated agent keys', required: false, hidden: false },
+      { name: 'skills-only', type: 'boolean', description: 'Install skills only', required: false, hidden: false },
+      { name: 'mcp-only', type: 'boolean', description: 'Install the MCP server only', required: false, hidden: false },
+      { name: 'yes', type: 'boolean', description: 'Install without prompting', required: false, hidden: false },
+      {
+        name: 'reset',
+        type: 'boolean',
+        description: 'Re-enable automatic setup offers',
+        required: false,
+        hidden: false,
+      },
+    ],
+  },
+  {
     name: 'setup-org',
     description: 'One-shot organization onboarding',
     positionals: [{ name: 'name', type: 'string', description: 'Organization name', required: true }],
@@ -1402,6 +1420,17 @@ const commands: CommandSchema[] = [
         name: 'force-install',
         type: 'boolean',
         description: 'Force install packages even if peer dependency checks fail',
+        required: false,
+        default: false,
+        hidden: false,
+      },
+      // Distinct from --force-install above: this one overrides the
+      // "AuthKit is already installed" preflight guard, and the guard's own
+      // error tells agents to pass it, so it has to be discoverable here.
+      {
+        name: 'force',
+        type: 'boolean',
+        description: 'Continue even if AuthKit is already installed in this project',
         required: false,
         default: false,
         hidden: false,

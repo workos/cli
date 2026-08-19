@@ -33,7 +33,9 @@ describe('no Skill tool references in integrations', () => {
 describe('allowedTools does not include Skill', () => {
   it('agent-interface.ts should not list Skill in allowedTools', () => {
     const content = readFileSync(join(import.meta.dirname, '..', 'lib', 'agent-interface.ts'), 'utf-8');
-    const match = content.match(/allowedTools:\s*\[([^\]]+)\]/);
+    // `[^\]]*` (not `+`) so an intentionally-empty `allowedTools: []` still
+    // matches — the point is only that Skill is never auto-approved here.
+    const match = content.match(/allowedTools:\s*\[([^\]]*)\]/);
     expect(match).toBeTruthy();
     expect(match![1]).not.toContain("'Skill'");
   });

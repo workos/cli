@@ -8,7 +8,7 @@ import { enableDebugLogs } from '../../utils/debug.js';
 import { analytics } from '../../utils/analytics.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from '../../lib/constants.js';
 import { initializeAgent, runAgent } from '../../lib/agent-interface.js';
-import { getOrAskForWorkOSCredentials } from '../../utils/clack-utils.js';
+import { getOrAskForWorkOSCredentials } from '../../utils/ui-utils.js';
 import { autoConfigureWorkOSEnvironment } from '../../lib/workos-management.js';
 import { validateInstallation } from '../../lib/validation/index.js';
 import { parseEnvFile } from '../../utils/env-parser.js';

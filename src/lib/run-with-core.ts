@@ -1,7 +1,5 @@
 import { createActor, fromPromise } from 'xstate';
 import open from 'open';
-import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
 import { installerMachine } from './installer-core.js';
 import { createInstallerEventEmitter } from './events.js';
 import type { CompletionData } from './events.js';
@@ -24,7 +22,7 @@ import type {
 } from './installer-core.types.js';
 import { isScaffoldableEmptyDir, resolvePackageManager, runCreateNextApp } from './scaffold/index.js';
 import type { Integration } from './constants.js';
-import { parseEnvFile } from '../utils/env-parser.js';
+import { readProjectEnvCredentials } from './project-env.js';
 import { enableDebugLogs, initLogFile, logInfo, logError } from '../utils/debug.js';
 
 import { getAccessToken, saveCredentials, getStagingCredentials, saveStagingCredentials } from './credentials.js';
@@ -36,7 +34,7 @@ import { getCliAuthClientId, getAuthkitDomain } from './settings.js';
 import { getTelemetryUrl } from '../utils/urls.js';
 import { analytics } from '../utils/analytics.js';
 import { getVersion } from './settings.js';
-import { isInGitRepo, getUncommittedOrUntrackedFiles } from '../utils/clack-utils.js';
+import { isInGitRepo, getUncommittedOrUntrackedFiles } from '../utils/ui-utils.js';
 import {
   getCurrentBranch,
   isProtectedBranch,
@@ -64,24 +62,6 @@ async function runIntegrationInstallerFn(integration: Integration, options: Inst
   return mod.run(options);
 }
 
-function readExistingCredentials(installDir: string): { apiKey?: string; clientId?: string } {
-  const envPath = join(installDir, '.env.local');
-  if (!existsSync(envPath)) {
-    return {};
-  }
-
-  try {
-    const content = readFileSync(envPath, 'utf-8');
-    const envVars = parseEnvFile(content);
-    return {
-      apiKey: envVars.WORKOS_API_KEY || undefined,
-      clientId: envVars.WORKOS_CLIENT_ID || undefined,
-    };
-  } catch {
-    return {};
-  }
-}
-
 async function detectIntegrationFn(options: Pick<InstallerOptions, 'installDir'>): Promise<Integration | undefined> {
   const registry = await getRegistry();
   const configs = registry.detectionOrder();
@@ -105,7 +85,7 @@ export async function detectSingleIntegration(
   integration: string,
   options: Pick<InstallerOptions, 'installDir'>,
 ): Promise<boolean> {
-  const { getPackageDotJson } = await import('../utils/clack-utils.js');
+  const { getPackageDotJson } = await import('../utils/ui-utils.js');
   const { hasPackageInstalled } = await import('../utils/package-json.js');
   const { existsSync } = await import('node:fs');
   const { join } = await import('node:path');
@@ -192,7 +172,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   const gatewayUrl = getTelemetryUrl();
   analytics.setGatewayUrl(gatewayUrl);
 
-  const existingCreds = readExistingCredentials(options.installDir);
+  const existingCreds = readProjectEnvCredentials(options.installDir);
   const augmentedOptions: InstallerOptions = {
     ...options,
     apiKey: options.apiKey || existingCreds.apiKey,
@@ -212,7 +192,16 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   if (nonHumanMode && !isJsonMode()) {
     setOutputMode(resolveEffectiveOutputMode(getOutputMode(), getInteractionMode()));
   }
-  const headlessMode = nonHumanMode && isJsonMode();
+  // Headless (no prompts, structured output) is for MACHINE output only: JSON.
+  // A prompt cannot render into a JSON stream, so any JSON run must be headless.
+  // We deliberately do NOT route a human session with non-TTY stdin here:
+  // headless auto-approves branch/commit/scaffold, and applying those unattended
+  // to a session the user never opted into would violate the "nothing is written
+  // until you confirm" contract. Those sessions keep the CLIAdapter, which now
+  // fails fast with a clear `prompt_unavailable` error on the first prompt
+  // (see CLIAdapter's handler-error catch) instead of hanging or auto-writing.
+  // --dashboard keeps its own adapter even under --json.
+  const headlessMode = isJsonMode() && !options.dashboard;
 
   let adapter: InstallerAdapter;
   if (headlessMode) {

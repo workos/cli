@@ -1,13 +1,16 @@
-import clack from '../utils/clack.js';
+import ui from '../utils/ui.js';
 import { outputSuccess, outputJson, outputTable, exitWithError, isJsonMode } from '../utils/output.js';
 import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
 import {
   createMcpClients,
   detectMcpClients,
   MCP_AGENT_KEYS,
+  MCP_OUTCOME_LABELS,
   type McpAgentKey,
   type McpClientResult,
+  type McpRecovery,
 } from '../lib/mcp-clients.js';
+import { MCP_DOCS_URL, MCP_SERVER_URL } from '../lib/constants.js';
 
 /**
  * `workos mcp install | remove | status` handlers.
@@ -21,16 +24,6 @@ import {
 export interface McpCommandOptions {
   agent?: string[];
 }
-
-/** Human phrasing for each outcome (JSON mode emits the raw `outcome` value). */
-const OUTCOME_LABEL: Record<McpClientResult['outcome'], string> = {
-  installed: 'installed',
-  'already-installed': 'already installed',
-  removed: 'removed',
-  'not-installed': 'not installed',
-  skipped: 'skipped',
-  failed: 'failed',
-};
 
 /**
  * Validate `--agent` values against known keys. Unknown values exit with a
@@ -54,7 +47,7 @@ function reportNoAgents(): void {
   if (isJsonMode()) {
     outputSuccess('No supported coding agents detected', { agents: [] });
   } else {
-    clack.log.info('No supported coding agents detected (looked for Claude Code, Codex, Cursor).');
+    ui.log.info('No supported coding agents detected (looked for Claude Code, Codex, Cursor).');
   }
 }
 
@@ -67,19 +60,48 @@ function reportResults(message: string, results: McpClientResult[]): void {
     outputSuccess(message, { agents: results });
   } else {
     for (const r of results) {
-      const line = `${r.displayName}: ${OUTCOME_LABEL[r.outcome]}`;
+      const scope = r.configuration ? ` (${r.configuration.scope} scope)` : '';
+      const line = `${r.displayName}: ${MCP_OUTCOME_LABELS[r.outcome]}${scope}`;
       if (r.outcome === 'failed') {
-        clack.log.error(r.error ? `${line} — ${r.error}` : line);
+        ui.log.error(r.error ? `${line} — ${r.error}` : line);
       } else if (r.outcome === 'installed' || r.outcome === 'removed' || r.outcome === 'already-installed') {
-        clack.log.success(line);
+        ui.log.success(line);
       } else {
-        clack.log.info(line);
+        ui.log.info(line);
       }
     }
+    reportRecovery(results);
   }
 
   if (results.some((r) => r.outcome === 'failed')) {
     exitWithCode(ExitCode.GENERAL_ERROR);
+  }
+}
+
+/**
+ * Print a client's own recovery steps. Every command string comes from the
+ * client library, so no caller here spells out an agent's CLI invocation.
+ */
+function printRecoveryHints(recovery: McpRecovery): void {
+  for (const hint of recovery.hints) {
+    ui.log.hint(hint.command ? `${hint.description}: ${hint.command}` : hint.description);
+  }
+}
+
+function reportRecovery(results: McpClientResult[]): void {
+  const docsUrls = new Set<string>();
+  for (const result of results) {
+    if (!result.recovery || !result.configuration) continue;
+    if (result.configuration.authentication === 'action-required') {
+      ui.log.warn(`${result.displayName}: configuration was written, but OAuth did not complete in this process.`);
+    } else {
+      ui.log.info(`${result.displayName}: configuration does not prove that OAuth is complete.`);
+    }
+    printRecoveryHints(result.recovery);
+    docsUrls.add(result.recovery.docsUrl);
+  }
+  for (const url of docsUrls) {
+    ui.log.hint(`Setup and recovery guide: ${url}`);
   }
 }
 
@@ -116,13 +138,32 @@ export async function runMcpStatus(): Promise<void> {
   // availability + install flags, so `createMcpClients()` — not
   // `detectMcpClients()` — is the right source here.
   const clients = createMcpClients();
-  const agents = await Promise.all(
+  const probed = await Promise.all(
     clients.map(async (client) => {
       const available = await client.isAvailable();
-      const installed = available ? await client.isInstalled() : false;
-      return { agent: client.key, displayName: client.displayName, available, installed };
+      const configured = available ? await client.isInstalled() : false;
+      const configuredUrl = configured ? await client.getConfiguredUrl() : null;
+      const endpointValid = configuredUrl === null ? null : configuredUrl === MCP_SERVER_URL;
+      // A client that cannot report its OAuth state gets the caveat, whichever
+      // client it is — the CLI never reads agent credentials.
+      const authentication = configured && !client.authenticationVerifiable ? 'not-verified' : null;
+      return {
+        client,
+        status: {
+          agent: client.key,
+          displayName: client.displayName,
+          available,
+          configured,
+          // Retained for compatibility with existing JSON consumers.
+          installed: configured,
+          configuredUrl,
+          endpointValid,
+          authentication,
+        },
+      };
     }),
   );
+  const agents = probed.map((p) => p.status);
 
   if (isJsonMode()) {
     outputJson({ data: { agents } });
@@ -130,7 +171,30 @@ export async function runMcpStatus(): Promise<void> {
   }
 
   outputTable(
-    [{ header: 'Agent' }, { header: 'Available' }, { header: 'Installed' }],
-    agents.map((a) => [a.displayName, a.available ? 'yes' : 'no', a.installed ? 'yes' : 'no']),
+    [{ header: 'Agent' }, { header: 'Available' }, { header: 'Configured' }, { header: 'Authentication' }],
+    agents.map((a) => [
+      a.displayName,
+      a.available ? 'yes' : 'no',
+      a.configured ? 'yes' : 'no',
+      a.configured ? (a.authentication ?? 'client-managed') : '—',
+    ]),
   );
+
+  const unverified = probed.filter((p) => p.status.authentication === 'not-verified');
+  if (unverified.length === 0) return;
+
+  ui.log.hint(
+    `OAuth is managed by ${unverified.map((p) => p.client.displayName).join(', ')} and is not verified by this command.`,
+  );
+  const docsUrls = new Set<string>();
+  for (const { client } of unverified) {
+    if (!client.recovery) continue;
+    printRecoveryHints(client.recovery);
+    docsUrls.add(client.recovery.docsUrl);
+  }
+  // Clients without their own recovery steps still get the canonical guide.
+  if (docsUrls.size === 0) docsUrls.add(MCP_DOCS_URL);
+  for (const url of docsUrls) {
+    ui.log.hint(`Setup and recovery guide: ${url}`);
+  }
 }

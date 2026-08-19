@@ -12,8 +12,8 @@ import { getConfig, saveConfig, getActiveEnvironment, freshEnvKey } from './conf
 import type { CliConfig } from './config-store.js';
 import { writeCredentialsEnv } from './env-writer.js';
 import { logInfo, logError } from '../utils/debug.js';
-import { renderStderrBox } from '../utils/box.js';
-import clack from '../utils/clack.js';
+import { renderStderrNotice } from '../utils/box.js';
+import ui from '../utils/ui.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 export interface UnclaimedEnvProvisionOptions {
@@ -36,6 +36,22 @@ export interface UnclaimedEnvProvisionOptions {
 export async function tryProvisionUnclaimedEnv(options: UnclaimedEnvProvisionOptions): Promise<boolean> {
   try {
     logInfo('[unclaimed-env-provision] Attempting unclaimed environment provisioning');
+
+    // No-clobber invariant, enforced by the function that does the writing:
+    // never overwrite credentials the project already has. Keyed on credentials
+    // only (never on AuthKit detection) so `install --force` still works.
+    // Checked before provisioning so no environment is created then abandoned.
+    const { readProjectEnvCredentials, resolveProjectEnvPath } = await import('./project-env.js');
+    const projectEnv = readProjectEnvCredentials(options.installDir);
+    if (projectEnv.apiKey) {
+      logInfo('[unclaimed-env-provision] Refusing to provision: project env already has WORKOS_API_KEY');
+      // Name the file the key was actually found in, not the file we would have
+      // written: the key can live in any of `ENV_FILE_NAMES`, and pointing at the
+      // write target sends people to edit a file that may not even exist.
+      const envPath = projectEnv.apiKeyPath ?? resolveProjectEnvPath(options.installDir);
+      ui.log.warn(`${envPath} already has WORKOS_API_KEY — not provisioning a new environment.`);
+      return false;
+    }
 
     const result = await provisionUnclaimedEnvironment();
 
@@ -72,13 +88,15 @@ export async function tryProvisionUnclaimedEnv(options: UnclaimedEnvProvisionOpt
     const readBack = getActiveEnvironment();
     if (!readBack || readBack.type !== 'unclaimed') {
       logError('[unclaimed-env-provision] Config read-back failed after save — claim token may not persist');
-      clack.log.warn('Environment provisioned but config storage may be unreliable. Falling back to login...');
+      ui.log.warn('Environment provisioned but config storage may be unreliable. Falling back to login...');
       return false;
     }
 
     logInfo('[unclaimed-env-provision] Unclaimed environment provisioned and saved');
-    const inner = ` ✓ ${chalk.green('Environment provisioned')} — Run ${chalk.cyan(formatWorkOSCommand('env claim'))} to keep it. `;
-    renderStderrBox(inner, chalk.green);
+    renderStderrNotice(
+      `${chalk.green('✓')} ${chalk.bold('Environment provisioned')} ${chalk.dim('— credentials saved to your project')}`,
+      `${chalk.dim('Run')} ${chalk.bold.cyan(formatWorkOSCommand('env claim'))} ${chalk.dim('to link it to your account.')}`,
+    );
 
     return true;
   } catch (error) {
@@ -87,11 +105,11 @@ export async function tryProvisionUnclaimedEnv(options: UnclaimedEnvProvisionOpt
 
     if (error instanceof UnclaimedEnvApiError) {
       if (error.statusCode === 429) {
-        clack.log.warn('WorkOS is busy, falling back to login...');
+        ui.log.warn('WorkOS is busy, falling back to login...');
       }
     } else {
       // Non-API errors (filesystem, keyring) are unexpected — surface to user
-      clack.log.warn(`Could not set up environment: ${message}. Falling back to login...`);
+      ui.log.warn(`Could not set up environment: ${message}. Falling back to login...`);
     }
 
     return false;

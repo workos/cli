@@ -9,8 +9,8 @@ vi.mock('../utils/debug.js', () => ({
   logError: vi.fn(),
 }));
 
-// Mock clack
-const mockClack = {
+// Mock the UI facade
+const mockUi = {
   log: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -19,7 +19,7 @@ const mockClack = {
     success: vi.fn(),
   },
 };
-vi.mock('../utils/clack.js', () => ({ default: mockClack }));
+vi.mock('../utils/ui.js', () => ({ default: mockUi }));
 
 // Mock config-store — track calls
 const mockGetConfig = vi.fn();
@@ -50,7 +50,7 @@ vi.mock('./unclaimed-env-api.js', () => ({
 
 // Mock box utility
 vi.mock('../utils/box.js', () => ({
-  renderStderrBox: vi.fn(),
+  renderStderrNotice: vi.fn(),
 }));
 
 const { tryProvisionUnclaimedEnv } = await import('./unclaimed-env-provision.js');
@@ -198,11 +198,11 @@ describe('unclaimed-env-provision', () => {
 
     it('shows provisioning message to user', async () => {
       mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
-      const { renderStderrBox } = await import('../utils/box.js');
+      const { renderStderrNotice } = await import('../utils/box.js');
 
       await tryProvisionUnclaimedEnv({ installDir: testDir });
 
-      expect(renderStderrBox).toHaveBeenCalled();
+      expect(renderStderrNotice).toHaveBeenCalled();
     });
 
     it('returns false when config read-back fails after save', async () => {
@@ -214,7 +214,7 @@ describe('unclaimed-env-provision', () => {
 
       expect(result).toBe(false);
       expect(mockSaveConfig).toHaveBeenCalled();
-      expect(mockClack.log.warn).toHaveBeenCalledWith(expect.stringContaining('config storage may be unreliable'));
+      expect(mockUi.log.warn).toHaveBeenCalledWith(expect.stringContaining('config storage may be unreliable'));
     });
 
     it('returns false on API failure (network error)', async () => {
@@ -235,7 +235,7 @@ describe('unclaimed-env-provision', () => {
       const result = await tryProvisionUnclaimedEnv({ installDir: testDir });
 
       expect(result).toBe(false);
-      expect(mockClack.log.warn).toHaveBeenCalledWith(expect.stringContaining('falling back to login'));
+      expect(mockUi.log.warn).toHaveBeenCalledWith(expect.stringContaining('falling back to login'));
     });
 
     it('returns false on API failure (server error)', async () => {
@@ -244,6 +244,66 @@ describe('unclaimed-env-provision', () => {
       const result = await tryProvisionUnclaimedEnv({ installDir: testDir });
 
       expect(result).toBe(false);
+    });
+
+    // Write-site enforcement of the no-clobber invariant: whatever the caller
+    // did or did not check, the function that writes refuses to overwrite
+    // credentials the project already has.
+    describe('refuses when the project env file already has WORKOS_API_KEY', () => {
+      it('returns false and never calls the provisioning API (JS project, .env.local)', async () => {
+        writeFileSync(join(testDir, 'package.json'), '{}');
+        writeFileSync(join(testDir, '.env.local'), 'WORKOS_API_KEY=sk_existing\nWORKOS_CLIENT_ID=client_existing\n');
+
+        const result = await tryProvisionUnclaimedEnv({ installDir: testDir });
+
+        expect(result).toBe(false);
+        expect(mockProvisionUnclaimedEnvironment).not.toHaveBeenCalled();
+        expect(mockSaveConfig).not.toHaveBeenCalled();
+        // The existing credentials are still byte-for-byte intact.
+        expect(readFileSync(join(testDir, '.env.local'), 'utf-8')).toBe(
+          'WORKOS_API_KEY=sk_existing\nWORKOS_CLIENT_ID=client_existing\n',
+        );
+        expect(mockUi.log.warn).toHaveBeenCalledWith(expect.stringContaining('already has WORKOS_API_KEY'));
+      });
+
+      it('returns false for a non-JS project whose .env already has a key', async () => {
+        writeFileSync(join(testDir, '.env'), 'WORKOS_API_KEY=sk_existing\n');
+
+        const result = await tryProvisionUnclaimedEnv({ installDir: testDir });
+
+        expect(result).toBe(false);
+        expect(mockProvisionUnclaimedEnvironment).not.toHaveBeenCalled();
+        expect(readFileSync(join(testDir, '.env'), 'utf-8')).toBe('WORKOS_API_KEY=sk_existing\n');
+      });
+
+      // The write target and the file holding the key are not the same thing: a
+      // JS project writes `.env.local`, but the key may already sit in `.env`.
+      // Naming the write target would send the user to edit the wrong file.
+      it('names the file the key was found in, not the file it would have written', async () => {
+        writeFileSync(join(testDir, 'package.json'), '{}');
+        writeFileSync(join(testDir, '.env'), 'WORKOS_API_KEY=sk_existing\n');
+
+        const result = await tryProvisionUnclaimedEnv({ installDir: testDir });
+
+        expect(result).toBe(false);
+        expect(mockUi.log.warn).toHaveBeenCalledWith(
+          `${join(testDir, '.env')} already has WORKOS_API_KEY — not provisioning a new environment.`,
+        );
+      });
+
+      it('still provisions when the env file exists without a WorkOS key', async () => {
+        writeFileSync(join(testDir, 'package.json'), '{}');
+        writeFileSync(join(testDir, '.env.local'), 'DATABASE_URL=postgres://localhost/dev\n');
+        mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
+
+        const result = await tryProvisionUnclaimedEnv({ installDir: testDir });
+
+        expect(result).toBe(true);
+        expect(mockProvisionUnclaimedEnvironment).toHaveBeenCalled();
+        const content = readFileSync(join(testDir, '.env.local'), 'utf-8');
+        expect(content).toContain('DATABASE_URL=postgres://localhost/dev');
+        expect(content).toContain('WORKOS_API_KEY=sk_test_oneshot');
+      });
     });
 
     it('writes redirect URI to .env.local when provided (JS project)', async () => {

@@ -30,7 +30,7 @@ import {
   outputError,
   exitWithError,
 } from './utils/output.js';
-import clack from './utils/clack.js';
+import ui, { PromptUnavailableError } from './utils/ui.js';
 import { registerSubcommand } from './utils/register-subcommand.js';
 import { installCrashReporter, sanitizeMessage } from './utils/crash-reporter.js';
 import { installStoreForward, recoverPendingEvents } from './utils/telemetry-store-forward.js';
@@ -130,6 +130,20 @@ const insecureStorageOption = {
   'insecure-storage': {
     default: false,
     describe: 'Store credentials in plaintext file instead of system keyring',
+    type: 'boolean' as const,
+  },
+} as const;
+
+/**
+ * Shared override for the "AuthKit is already installed" preflight guard.
+ *
+ * Distinct from `--force-install` below, which only relaxes peer-dependency
+ * checks during package installation.
+ */
+const forceOption = {
+  force: {
+    default: false,
+    describe: 'Continue even if AuthKit is already installed in this project',
     type: 'boolean' as const,
   },
 } as const;
@@ -240,6 +254,7 @@ const installerOptions = {
     describe: 'Next.js router to target when detection is ambiguous (app or pages)',
     type: 'string' as const,
   },
+  ...forceOption,
 };
 
 // Check for updates (blocks up to 500ms, skip in JSON/non-human modes to keep machine streams clean)
@@ -300,8 +315,9 @@ async function runCli(): Promise<void> {
     })
     .middleware(async (argv) => {
       // Warn about unclaimed environments before management commands.
-      // Excluded: auth/claim/install/dashboard handle their own credential flows;
-      // skills/doctor/env/debug are utility commands where the warning is unnecessary.
+      // Excluded: auth/claim/install/setup/dashboard handle their own credential
+      // or onboarding flows; skills/doctor/env/debug are utility commands where
+      // the warning is unnecessary.
       const command = String(argv._?.[0] ?? '');
       if (
         [
@@ -311,6 +327,7 @@ async function runCli(): Promise<void> {
           'env',
           'claim',
           'install',
+          'setup',
           'debug',
           'internal',
           'dashboard',
@@ -323,37 +340,6 @@ async function runCli(): Promise<void> {
         return;
       await applyInsecureStorage(argv.insecureStorage as boolean | undefined);
       await maybeWarnUnclaimed();
-    })
-    .middleware(async (argv) => {
-      // One-time MCP banner (lowest-priority startup notice — runs after the
-      // telemetry notice + unclaimed warning so they win the one-per-run slot).
-      // Skip commands that manage MCP/agents directly or where the nudge is
-      // noise, mirroring + extending maybeWarnUnclaimed's list. Self-guarded and
-      // never throws.
-      const command = String(argv._?.[0] ?? '');
-      if (
-        [
-          'mcp',
-          'install',
-          'doctor',
-          'skills',
-          'auth',
-          'env',
-          'claim',
-          'debug',
-          'internal',
-          'dashboard',
-          'emulate',
-          'dev',
-          'migrations',
-          'telemetry',
-          'completion',
-          '',
-        ].includes(command)
-      )
-        return;
-      const { maybeShowMcpNotice } = await import('./lib/mcp-notice.js');
-      await maybeShowMcpNotice();
     })
     .command('auth', 'Manage authentication (login, logout, status)', (yargs) => {
       yargs.options(insecureStorageOption);
@@ -502,7 +488,7 @@ async function runCli(): Promise<void> {
       registerSubcommand(
         yargs,
         'install',
-        'Add the WorkOS MCP server to detected coding agents',
+        'Configure the WorkOS MCP server in detected coding agents',
         (y) =>
           y.option('agent', {
             alias: 'a',
@@ -2449,6 +2435,36 @@ async function runCli(): Promise<void> {
       },
     )
     .command(
+      'setup',
+      'Set up your coding agent (install WorkOS skills + MCP server)',
+      (yargs) =>
+        yargs.options({
+          ...insecureStorageOption,
+          agents: { type: 'string', describe: 'Comma-separated agent keys (claude-code, codex, cursor, goose)' },
+          'skills-only': { type: 'boolean', describe: 'Install skills only (skip the MCP server)' },
+          'mcp-only': { type: 'boolean', describe: 'Install the MCP server only (skip skills)' },
+          yes: { type: 'boolean', alias: 'y', describe: 'Install without prompting' },
+          reset: { type: 'boolean', describe: 'Re-enable automatic setup offers after a decline' },
+        }),
+      async (argv) => {
+        await applyInsecureStorage(argv.insecureStorage as boolean | undefined);
+        const { runSetup } = await import('./commands/setup.js');
+        await runSetup({
+          trigger: 'command',
+          agents: argv.agents
+            ? String(argv.agents)
+                .split(',')
+                .map((a) => a.trim())
+                .filter(Boolean)
+            : undefined,
+          skillsOnly: argv.skillsOnly as boolean | undefined,
+          mcpOnly: argv.mcpOnly as boolean | undefined,
+          assumeYes: argv.yes as boolean | undefined,
+          reset: argv.reset as boolean | undefined,
+        });
+      },
+    )
+    .command(
       'setup-org <name>',
       'One-shot organization onboarding (create org, domain, roles, portal link)',
       (yargs) =>
@@ -2541,6 +2557,11 @@ async function runCli(): Promise<void> {
       (yargs) => yargs.options(installerOptions),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
+        // MUST run before credential resolution below: that provisions a WorkOS
+        // environment and writes its credentials into the project's env file,
+        // so a guard placed after it is no guard at all.
+        const preflight = await import('./lib/preflight-authkit.js');
+        await preflight.assertNoExistingAuthKit({ installDir: argv.installDir ?? process.cwd(), force: argv.force });
         await resolveInstallCredentials(argv.apiKey, argv.installDir, argv.skipAuth, ensureAuthenticated);
         const { handleInstall } = await import('./commands/install.js');
         await handleInstall(argv);
@@ -2753,6 +2774,9 @@ async function runCli(): Promise<void> {
       (yargs) => yargs.options(installerOptions),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
+        // Guard first, before credential resolution — see the `install` handler above.
+        const preflight = await import('./lib/preflight-authkit.js');
+        await preflight.assertNoExistingAuthKit({ installDir: argv.installDir ?? process.cwd(), force: argv.force });
         await resolveInstallCredentials(argv.apiKey, argv.installDir, argv.skipAuth, ensureAuthenticated);
         const { handleInstall } = await import('./commands/install.js');
         await handleInstall({ ...argv, dashboard: true });
@@ -2761,7 +2785,9 @@ async function runCli(): Promise<void> {
     .command(
       ['$0'],
       'WorkOS AuthKit CLI',
-      (yargs) => yargs.options(insecureStorageOption),
+      // `--force` must be registered here too: this parser is .strict(), so
+      // `npx workos --force` would die as an unknown argument otherwise.
+      (yargs) => yargs.options({ ...insecureStorageOption, ...forceOption }),
       async (argv) => {
         // Non-human modes: emit machine-readable command tree (JSON) or the
         // fully-configured parser help (human non-TTY edge) instead of prompting.
@@ -2776,15 +2802,19 @@ async function runCli(): Promise<void> {
         }
 
         // TTY: ask if user wants to run installer
-        const shouldInstall = await clack.confirm({
+        const shouldInstall = await ui.confirm({
           message: 'Run the AuthKit installer?',
         });
 
-        if (clack.isCancel(shouldInstall) || !shouldInstall) {
+        if (ui.isCancel(shouldInstall) || !shouldInstall) {
           return;
         }
 
         await applyInsecureStorage(argv.insecureStorage);
+        // After the confirm above (two prompts back to back is worse UX), but
+        // still before credential resolution touches the project.
+        const preflight = await import('./lib/preflight-authkit.js');
+        await preflight.assertNoExistingAuthKit({ installDir: process.cwd(), force: argv.force });
         await resolveInstallCredentials(undefined, undefined, false, ensureAuthenticated);
 
         const { handleInstall } = await import('./commands/install.js');
@@ -2829,6 +2859,16 @@ async function runCli(): Promise<void> {
           apiContext: error.context?.apiContext,
         },
       };
+    } else if (error instanceof PromptUnavailableError) {
+      // A prompt was attempted where the user can't answer (--json, or non-TTY
+      // stdin) on a direct command. Not a crash — surface a clear, structured
+      // error with its own code so scripts and telemetry can distinguish it.
+      process.exitCode = 1;
+      commandOutcome = {
+        success: false,
+        options: { flags, reason: 'validation_error', errorCode: 'prompt_unavailable' },
+      };
+      outputError({ code: 'prompt_unavailable', message: error.message });
     } else {
       // Unexpected error (crash)
       process.exitCode = 1;

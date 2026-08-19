@@ -1,6 +1,7 @@
 import { lt, valid } from 'semver';
 import { yellow, dim } from '../utils/logging.js';
 import { getVersion } from './settings.js';
+import { upgradeNotice } from './install-method.js';
 
 // The web endpoint redirects to …/releases/tag/v{version} and, unlike
 // api.github.com, is not subject to the anonymous 60-requests/hour/IP rate
@@ -42,7 +43,7 @@ export async function checkForUpdates(): Promise<void> {
     if (lt(currentVersion, latestVersion)) {
       hasWarned = true;
       yellow(`Update available: ${currentVersion} → ${latestVersion}`);
-      dim('Download: https://github.com/workos/cli/releases/latest');
+      dim(upgradeNotice());
       console.log();
     }
   } catch {

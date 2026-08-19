@@ -19,6 +19,9 @@ const mockKeyring = new Map<string, string>();
 // Track whether keyring is "available" for this test
 let keyringAvailable = true;
 
+// Count backend reads so cache behavior is assertable
+let keyringReads = 0;
+
 // Mock @napi-rs/keyring BEFORE importing credential-store
 vi.mock('@napi-rs/keyring', () => ({
   Entry: class MockEntry {
@@ -32,6 +35,45 @@ vi.mock('@napi-rs/keyring', () => ({
     }
 
     getPassword(): string | null {
+      keyringReads++;
+      if (!keyringAvailable && this.account !== '__probe__') {
+        throw new Error('Keyring not available');
+      }
+      return mockKeyring.get(this.key) ?? null;
+    }
+
+    setPassword(password: string): void {
+      if (!keyringAvailable) {
+        throw new Error('Keyring not available');
+      }
+      mockKeyring.set(this.key, password);
+    }
+
+    deletePassword(): void {
+      if (!keyringAvailable && mockKeyring.has(this.key)) {
+        throw new Error('Keyring not available');
+      }
+      mockKeyring.delete(this.key);
+    }
+  },
+}));
+
+// On darwin, credential-store routes through DarwinSecurityEntry instead of
+// the native Entry. Back it with the SAME map + availability flag so every
+// test behaves identically on all platforms.
+vi.mock('./darwin-keychain.js', () => ({
+  DarwinSecurityEntry: class MockDarwinSecurityEntry {
+    private key: string;
+
+    constructor(
+      service: string,
+      private account: string,
+    ) {
+      this.key = `${service}:${account}`;
+    }
+
+    getPassword(): string | null {
+      keyringReads++;
       if (!keyringAvailable && this.account !== '__probe__') {
         throw new Error('Keyring not available');
       }
@@ -85,9 +127,10 @@ describe('credential-store', () => {
     installerDir = join(testDir, '.workos');
     credentialsFile = join(installerDir, 'credentials.json');
 
-    // Reset state
+    // Reset state (setInsecureStorage also resets the in-process cache)
     mockKeyring.clear();
     keyringAvailable = true;
+    keyringReads = 0;
     setInsecureStorage(false);
   });
 
@@ -308,6 +351,46 @@ describe('credential-store', () => {
 
     it('throws when no credentials exist', () => {
       expect(() => updateTokens('token', Date.now())).toThrow('No existing credentials to update');
+    });
+  });
+
+  describe('in-process cache', () => {
+    it('reads the keyring at most once per process for repeated getCredentials calls', () => {
+      saveCredentials(validCreds);
+      keyringReads = 0;
+
+      getCredentials();
+      getCredentials();
+      hasCredentials();
+      getCredentials();
+
+      expect(keyringReads).toBeLessThanOrEqual(1);
+    });
+
+    it('caches the logged-out state too', () => {
+      getCredentials();
+      keyringReads = 0;
+
+      expect(getCredentials()).toBeNull();
+      expect(keyringReads).toBe(0);
+    });
+
+    it('saveCredentials updates the cache without a fresh read', () => {
+      saveCredentials(validCreds);
+      const updated = { ...validCreds, accessToken: 'token456' };
+      saveCredentials(updated);
+
+      keyringReads = 0;
+      expect(getCredentials()?.accessToken).toBe('token456');
+      expect(keyringReads).toBe(0);
+    });
+
+    it('clearCredentials invalidates the cache', () => {
+      saveCredentials(validCreds);
+      expect(getCredentials()).not.toBeNull();
+
+      clearCredentials();
+      expect(getCredentials()).toBeNull();
     });
   });
 

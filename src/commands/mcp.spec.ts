@@ -8,16 +8,16 @@ vi.mock('../utils/exec-file.js', () => ({
   execFileNoThrow: vi.fn(),
 }));
 
-// clack.log writes to the raw stdout/stderr streams (not console.*), so capture
+// ui.log writes to the raw stdout/stderr streams (not console.*), so capture
 // its human-mode output through a module mock instead of a console spy.
-const { clackLogs } = vi.hoisted(() => ({ clackLogs: [] as string[] }));
-vi.mock('../utils/clack.js', () => {
+const { uiLogs } = vi.hoisted(() => ({ uiLogs: [] as string[] }));
+vi.mock('../utils/ui.js', () => {
   const record = (msg: unknown) => {
-    clackLogs.push(String(msg));
+    uiLogs.push(String(msg));
   };
   return {
     default: {
-      log: { info: record, success: record, error: record, warn: record, step: record, message: record },
+      log: { info: record, success: record, error: record, warn: record, hint: record, step: record, message: record },
     },
   };
 });
@@ -66,7 +66,7 @@ let consoleOutput: string[];
 
 beforeEach(() => {
   vi.clearAllMocks();
-  clackLogs.length = 0;
+  uiLogs.length = 0;
   testHome = mkdtempSync(join(tmpdir(), 'mcp-test-'));
   vi.mocked(homedir).mockReturnValue(testHome);
   // Default: every shell-out succeeds (overridden per test).
@@ -168,6 +168,19 @@ describe('Claude Code client', () => {
     expect(res.error).toContain('--transport');
   });
 
+  it('add falls back to name-only presence for a client that cannot report its endpoint', async () => {
+    // Claude Code exposes no endpoint introspection, so the listed name is the
+    // best evidence available — it keeps the benefit of the doubt that a
+    // Codex-style unreadable endpoint does not get.
+    mockExec((_c, args) => {
+      if (args.includes('add')) return { status: 1, stderr: 'boom' };
+      if (args.includes('list')) return { status: 0, stdout: 'workos: https://mcp.workos.com/mcp (HTTP) - Connected' };
+      return { status: 0 };
+    });
+
+    expect((await claude().add()).outcome).toBe('installed');
+  });
+
   it('isInstalled matches the workos: list line', async () => {
     mockExec(() => ({
       status: 0,
@@ -200,9 +213,22 @@ describe('Claude Code client', () => {
 describe('Codex client', () => {
   const codex = () => clientByKey('codex');
 
-  it('add maps a clean exit to installed', async () => {
+  it('add maps a clean exit to configured with unverified OAuth metadata', async () => {
     mockExec(() => ({ status: 0 }));
-    expect((await codex().add()).outcome).toBe('installed');
+    const result = await codex().add();
+    expect(result).toMatchObject({
+      outcome: 'installed',
+      configuration: { scope: 'user', authentication: 'unknown' },
+      recovery: {
+        docsUrl: 'https://workos.com/docs/mcp',
+        hints: expect.arrayContaining([
+          expect.objectContaining({
+            command: 'codex mcp login workos',
+            hostShellRequired: true,
+          }),
+        ]),
+      },
+    });
   });
 
   it('add maps a version gap (unknown --url) to failed', async () => {
@@ -212,15 +238,106 @@ describe('Codex client', () => {
     expect(res.error).toContain('--url');
   });
 
-  it('add reports installed when a non-zero exit still persisted the server (OAuth-flow timeout)', async () => {
+  it('add reports configured with host action required when OAuth times out after persistence', async () => {
     // Codex writes the config, then its post-add OAuth flow blocks and times
     // out with a non-zero status — but `mcp list` proves the server landed.
     mockExec((_c, args) => {
       if (args.includes('add')) return { status: 1, stdout: "Added global MCP server 'workos'." };
       if (args.includes('list')) return { status: 0, stdout: 'workos  https://mcp.workos.com/mcp  enabled' };
+      if (args.includes('get')) {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            name: 'workos',
+            transport: { type: 'streamable_http', url: 'https://mcp.workos.com/mcp' },
+          }),
+        };
+      }
       return { status: 0 };
     });
-    expect((await codex().add()).outcome).toBe('installed');
+    expect(await codex().add()).toMatchObject({
+      outcome: 'installed',
+      configuration: { scope: 'user', authentication: 'action-required' },
+    });
+  });
+
+  it('add rejects an "already exists" collision that points at a stale endpoint', async () => {
+    // A name collision only counts as idempotent success if the entry we
+    // collided with is actually ours.
+    mockExec((_c, args) => {
+      if (args.includes('add')) return { status: 1, stderr: "MCP server 'workos' already exists" };
+      if (args.includes('get')) {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            name: 'workos',
+            transport: { type: 'streamable_http', url: 'https://stale.example/mcp' },
+          }),
+        };
+      }
+      return { status: 0 };
+    });
+
+    const res = await codex().add();
+    expect(res.outcome).toBe('failed');
+    expect(res.error).toContain('https://stale.example/mcp');
+  });
+
+  it('add accepts an "already exists" collision at the intended endpoint', async () => {
+    mockExec((_c, args) => {
+      if (args.includes('add')) return { status: 1, stderr: "MCP server 'workos' already exists" };
+      if (args.includes('get')) {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            name: 'workos',
+            transport: { type: 'streamable_http', url: 'https://mcp.workos.com/mcp' },
+          }),
+        };
+      }
+      return { status: 0 };
+    });
+
+    expect((await codex().add()).outcome).toBe('already-installed');
+  });
+
+  it('add stays failed when the surviving endpoint cannot be read back', async () => {
+    // Codex can be asked for its effective endpoint, so a `get` we can't parse
+    // is an unverified claim, not a success — the entry may still be stale.
+    mockExec((_c, args) => {
+      if (args.includes('add')) return { status: 1, stderr: 'boom' };
+      if (args.includes('list')) return { status: 0, stdout: 'workos  https://mcp.workos.com/mcp  enabled' };
+      if (args.includes('get')) return { status: 1, stderr: 'unknown flag --json' };
+      return { status: 0 };
+    });
+
+    const res = await codex().add();
+    expect(res.outcome).toBe('failed');
+    expect(res.error).toContain('could not read');
+  });
+
+  it('add stays failed when a stale entry survives the failed add at the wrong endpoint', async () => {
+    // The name is present, but it belongs to an older definition — the add
+    // never applied our endpoint, so this must not read as freshly configured.
+    mockExec((_c, args) => {
+      if (args.includes('add')) return { status: 1, stderr: 'boom' };
+      if (args.includes('list')) return { status: 0, stdout: 'workos  https://stale.example/mcp  enabled' };
+      if (args.includes('get')) {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            name: 'workos',
+            transport: { type: 'streamable_http', url: 'https://stale.example/mcp' },
+          }),
+        };
+      }
+      return { status: 0 };
+    });
+
+    const res = await codex().add();
+    expect(res.outcome).toBe('failed');
+    expect(res.error).toContain('https://stale.example/mcp');
+    expect(res.error).toContain('https://mcp.workos.com/mcp');
   });
 
   it('add stays failed on a non-zero exit when the server did NOT land', async () => {
@@ -238,6 +355,28 @@ describe('Codex client', () => {
       stdout: 'Name    Url\ngithub  https://api.github\nworkos  https://mcp.workos.com/mcp   enabled',
     }));
     expect(await codex().isInstalled()).toBe(true);
+  });
+
+  it('reads the effective Codex MCP URL from get --json', async () => {
+    mockExec((_c, args) => {
+      if (args.includes('get')) {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            name: 'workos',
+            transport: { type: 'streamable_http', url: 'https://mcp.workos.com/mcp' },
+          }),
+        };
+      }
+      return { status: 0 };
+    });
+
+    expect(await codex().getConfiguredUrl()).toBe('https://mcp.workos.com/mcp');
+  });
+
+  it('returns null when Codex get output is unavailable or malformed', async () => {
+    mockExec(() => ({ status: 0, stdout: 'not-json' }));
+    expect(await codex().getConfiguredUrl()).toBeNull();
   });
 
   it('remove maps "No MCP server named" (exit 0) to not-installed', async () => {
@@ -326,17 +465,20 @@ describe('runMcpInstall / runMcpRemove (human mode)', () => {
     makeDir('.cursor');
     mockExec(() => ({ status: 0 }));
     await runMcpInstall();
-    const joined = clackLogs.join('\n');
+    const joined = uiLogs.join('\n');
     expect(joined).toContain('Claude Code');
     expect(joined).toContain('Codex');
     expect(joined).toContain('Cursor');
+    expect(joined).toContain('Codex: configured (user scope)');
+    expect(joined).toContain('codex mcp login workos');
+    expect(joined).toContain('https://workos.com/docs/mcp');
   });
 
   it('prints the no-agents message and exits 0 when none are detected', async () => {
     mockExec((_c, args) => (args[0] === '--version' ? { status: 1 } : { status: 0 }));
     const exit = await captureExit(() => runMcpInstall());
     expect(exit).toBeUndefined();
-    expect(clackLogs.join('\n')).toContain('No supported coding agents detected');
+    expect(uiLogs.join('\n')).toContain('No supported coding agents detected');
   });
 
   it('exits 1 when any agent fails, after emitting the full matrix', async () => {
@@ -349,7 +491,7 @@ describe('runMcpInstall / runMcpRemove (human mode)', () => {
     });
     const exit = await captureExit(() => runMcpInstall());
     expect(exit?.exitCode).toBe(1);
-    const joined = clackLogs.join('\n');
+    const joined = uiLogs.join('\n');
     expect(joined).toContain('Claude Code');
     expect(joined).toContain('Cursor');
   });
@@ -421,7 +563,7 @@ describe('JSON output mode', () => {
     expect(output.data.agents[0].outcome).toBe('removed');
   });
 
-  it('runMcpStatus emits { data: { agents: [...] } } with availability + install flags', async () => {
+  it('runMcpStatus distinguishes configured state while retaining the legacy installed flag', async () => {
     makeDir('.cursor');
     writeCursorConfig('{ "mcpServers": { "workos": { "url": "https://w" } } }');
     mockExec((_c, args) => (args[0] === '--version' ? { status: 1 } : { status: 0 }));
@@ -429,8 +571,61 @@ describe('JSON output mode', () => {
     const output = JSON.parse(consoleOutput[0]);
     expect(output.data.agents).toHaveLength(3);
     const cursor = output.data.agents.find((a: { agent: string }) => a.agent === 'cursor');
-    expect(cursor).toMatchObject({ agent: 'cursor', displayName: 'Cursor', available: true, installed: true });
+    expect(cursor).toMatchObject({
+      agent: 'cursor',
+      displayName: 'Cursor',
+      available: true,
+      configured: true,
+      installed: true,
+      // Cursor's OAuth is no more verifiable than Codex's, so it carries the
+      // same caveat — the annotation follows the capability, not the agent name.
+      authentication: 'not-verified',
+    });
     const claude = output.data.agents.find((a: { agent: string }) => a.agent === 'claude-code');
-    expect(claude).toMatchObject({ available: false, installed: false });
+    expect(claude).toMatchObject({
+      available: false,
+      configured: false,
+      installed: false,
+      authentication: null,
+    });
+  });
+});
+
+describe('runMcpStatus (human mode)', () => {
+  it('names every unverified client and takes recovery commands from the client', async () => {
+    makeDir('.codex');
+    makeDir('.cursor');
+    writeCursorConfig('{ "mcpServers": { "workos": { "url": "https://mcp.workos.com/mcp" } } }');
+    mockExec((_c, args) => {
+      if (args[0] === '--version') return { status: 0 };
+      if (args.includes('list')) return { status: 0, stdout: 'workos  https://mcp.workos.com/mcp  enabled' };
+      if (args.includes('get')) {
+        return {
+          status: 0,
+          stdout: JSON.stringify({
+            name: 'workos',
+            transport: { type: 'streamable_http', url: 'https://mcp.workos.com/mcp' },
+          }),
+        };
+      }
+      return { status: 0 };
+    });
+
+    await runMcpStatus();
+
+    const joined = uiLogs.join('\n');
+    expect(joined).toContain('OAuth is managed by');
+    expect(joined).toContain('Codex');
+    expect(joined).toContain('Cursor');
+    expect(joined).toContain('codex mcp login workos');
+    expect(joined).toContain('https://workos.com/docs/mcp');
+  });
+
+  it('prints no OAuth caveat when nothing is configured', async () => {
+    mockExec((_c, args) => (args[0] === '--version' ? { status: 1 } : { status: 0 }));
+
+    await runMcpStatus();
+
+    expect(uiLogs.join('\n')).not.toContain('OAuth is managed by');
   });
 });

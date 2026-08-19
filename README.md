@@ -6,7 +6,13 @@ WorkOS CLI for installing AuthKit integrations and managing WorkOS resources.
 
 The CLI is distributed as a standalone executable from GitHub Releases. It does not require Node.js, Bun, or an npm installation. The first agent-driven command (e.g. `workos install`) performs a one-time, checksum-verified download of the Claude agent runtime (~230 MB, cached under `~/.workos`).
 
-macOS and Linux:
+Homebrew (macOS and Linux):
+
+```bash
+brew install workos/tap/workos
+```
+
+macOS and Linux (direct download):
 
 ```bash
 case "$(uname -m)" in
@@ -34,7 +40,7 @@ $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
 Invoke-WebRequest "https://github.com/workos/cli/releases/latest/download/workos-windows-$arch.exe" -OutFile workos.exe
 ```
 
-Move `workos.exe` to a directory on your `PATH`, then run `workos install`.
+Move `workos.exe` to a directory on your `PATH`, then run `workos install`. (If you already have Node.js, the npm install below works on Windows too.)
 
 npm (thin launcher that installs the same prebuilt binary for your platform):
 
@@ -86,9 +92,24 @@ Commands:
   env                    Manage environment configurations (add, remove, switch, list, claim)
   doctor                 Diagnose WorkOS integration issues
   skills                 Manage WorkOS skills for coding agents (install, uninstall, list)
+  mcp                    Manage the WorkOS MCP server in coding agents
+  setup                  Set up WorkOS skills and the MCP server
+```
 
-Skills auto-install to detected coding agents on `workos install` and `workos auth login`. Use `workos skills list` to check status, `workos doctor` to detect stale skills, or `workos doctor --fix` to refresh them in place (constrained to `workos/` and `workos-widgets/`).
+**Nothing is installed into your coding agents without explicit opt-in.** The CLI never silently writes skills or MCP configuration into `~/.claude`, `~/.cursor`, etc. After `workos login` or `workos install`, an interactive session may offer to set up your agents — the prompt defaults to **No**, and declining (or running non-interactively) installs nothing. To opt in at any time:
 
+```bash
+workos setup            # interactive setup (skills + MCP server)
+workos setup --yes      # non-interactive opt-in
+workos skills install   # skills only
+workos mcp install      # MCP server only
+```
+
+Use `workos skills list` to check skill status, `workos mcp status` to check whether the server definition is configured, or `workos doctor --fix` to refresh stale skills you previously installed.
+
+MCP configuration and OAuth authentication are separate states. The WorkOS CLI never inspects a coding agent's credentials, so "configured" means the server definition is in place — it cannot prove that OAuth is usable in any agent. Each agent owns its own OAuth; with Codex, for example, complete or refresh it with `codex mcp login workos` in your normal host shell. See the [WorkOS MCP setup and recovery guide](https://workos.com/docs/mcp) for user-global and trusted-project-only configuration.
+
+```text
 Resource Management:
   organization (org)     Manage organizations
   user                   Manage users

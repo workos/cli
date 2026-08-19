@@ -3,7 +3,7 @@ import { EnvironmentProvider } from '../EnvironmentProvider.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { InstallerOptions } from '../../../utils/types.js';
-import clack from '../../../utils/clack.js';
+import ui from '../../../utils/ui.js';
 import chalk from 'chalk';
 import { analytics } from '../../../utils/analytics.js';
 import { SPAWN_OPTS } from '../../../utils/platform.js';
@@ -116,7 +116,7 @@ export class VercelEnvironmentProvider extends EnvironmentProvider {
     const results: Record<string, boolean> = {};
 
     for (const [key, value] of Object.entries(vars)) {
-      const spinner = clack.spinner();
+      const spinner = ui.spinner();
 
       spinner.start(`Uploading ${chalk.cyan(key)} to ${this.name}...`);
       await Promise.all(this.environments.map((environment) => this.uploadEnvironmentVariable(key, value, environment)))

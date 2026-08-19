@@ -1,5 +1,5 @@
 import chalk from 'chalk';
-import clack from '../utils/clack.js';
+import ui from '../utils/ui.js';
 import { getConfig, saveConfig, isUnclaimedEnvironment, freshEnvKey } from '../lib/config-store.js';
 import type { CliConfig } from '../lib/config-store.js';
 import { outputSuccess, outputJson, exitWithError, isJsonMode } from '../utils/output.js';
@@ -53,30 +53,30 @@ export async function runEnvAdd(options: {
     });
   } else {
     // Interactive mode
-    const nameResult = await clack.text({
+    const nameResult = await ui.text({
       message: 'Enter a name for the environment (e.g., production, sandbox, local)',
       validate: (value) => validateEnvName(value),
     });
-    if (clack.isCancel(nameResult)) exitWithCode(ExitCode.CANCELLED);
+    if (ui.isCancel(nameResult)) exitWithCode(ExitCode.CANCELLED);
     name = nameResult;
 
-    const typeResult = await clack.select({
+    const typeResult = await ui.select({
       message: 'Select the environment type',
       options: [
         { value: 'production', label: 'Production' },
         { value: 'sandbox', label: 'Sandbox' },
       ],
     });
-    if (clack.isCancel(typeResult)) exitWithCode(ExitCode.CANCELLED);
+    if (ui.isCancel(typeResult)) exitWithCode(ExitCode.CANCELLED);
 
-    const apiKeyResult = await clack.password({
+    const apiKeyResult = await ui.password({
       message: 'Enter the API key for this environment',
       validate: (value) => {
         if (!value) return 'API key is required';
         return undefined;
       },
     });
-    if (clack.isCancel(apiKeyResult)) exitWithCode(ExitCode.CANCELLED);
+    if (ui.isCancel(apiKeyResult)) exitWithCode(ExitCode.CANCELLED);
     apiKey = apiKeyResult;
 
     const config = getOrCreateConfig();
@@ -95,9 +95,9 @@ export async function runEnvAdd(options: {
     }
 
     saveConfig(config);
-    clack.log.success(`Environment ${chalk.bold(name)} added`);
+    ui.log.success(`Environment ${chalk.bold(name)} added`);
     if (isFirst) {
-      clack.log.info(`Set as active environment`);
+      ui.log.info(`Set as active environment`);
     }
     return;
   }
@@ -177,17 +177,17 @@ export async function runEnvProvision(): Promise<void> {
     return;
   }
 
-  clack.log.success('Provisioned a new WorkOS environment');
+  ui.log.success('Provisioned a new WorkOS environment');
   console.log('');
   console.log(`  ${chalk.dim('API key')}     ${result.apiKey}`);
   console.log(`  ${chalk.dim('Client ID')}   ${result.clientId}`);
   console.log(`  ${chalk.dim('AuthKit')}     ${result.authkitDomain}`);
   console.log('');
-  clack.log.info(
+  ui.log.info(
     `Set as active environment (${key}). Run \`${formatWorkOSCommand('env claim')}\` to link it to your account (permanent).`,
   );
   if (key !== 'unclaimed') {
-    clack.log.info(`Your earlier unclaimed environment(s) are kept. See \`${formatWorkOSCommand('env list')}\`.`);
+    ui.log.info(`Your earlier unclaimed environment(s) are kept. See \`${formatWorkOSCommand('env list')}\`.`);
   }
 }
 
@@ -212,7 +212,7 @@ export async function runEnvRemove(name: string): Promise<void> {
   delete config.environments[name];
 
   if (!isJsonMode()) {
-    clack.log.warn(
+    ui.log.warn(
       wasUnclaimed
         ? `Removed only the local CLI config for "${name}". This environment was unclaimed — its claim token lived only here, so it can no longer be claimed.`
         : `Removed only the local CLI config for "${name}". The environment still exists in WorkOS.`,
@@ -223,7 +223,7 @@ export async function runEnvRemove(name: string): Promise<void> {
     const remaining = Object.keys(config.environments);
     config.activeEnvironment = remaining.length > 0 ? remaining[0] : undefined;
     if (config.activeEnvironment && !isJsonMode()) {
-      clack.log.info(`Active environment switched to ${chalk.bold(config.activeEnvironment)}`);
+      ui.log.info(`Active environment switched to ${chalk.bold(config.activeEnvironment)}`);
     }
   }
 
@@ -260,11 +260,11 @@ export async function runEnvSwitch(name?: string): Promise<void> {
       return { value: key, label };
     });
 
-    const selected = await clack.select({
+    const selected = await ui.select({
       message: 'Select an environment',
       options,
     });
-    if (clack.isCancel(selected)) exitWithCode(ExitCode.CANCELLED);
+    if (ui.isCancel(selected)) exitWithCode(ExitCode.CANCELLED);
     name = selected as string;
   }
 
@@ -290,7 +290,7 @@ export async function runEnvList(): Promise<void> {
     if (isJsonMode()) {
       outputJson({ data: [] });
     } else {
-      clack.log.info(`No environments configured. Run \`${formatWorkOSCommand('env add')}\` to get started.`);
+      ui.log.info(`No environments configured. Run \`${formatWorkOSCommand('env add')}\` to get started.`);
     }
     return;
   }

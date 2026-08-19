@@ -2,6 +2,20 @@ import type { InstallerAdapter, AdapterConfig } from './types.js';
 import type { InstallerEventEmitter, InstallerEvents } from '../events.js';
 import { writeNDJSON } from '../../utils/ndjson.js';
 import { ExitCode } from '../../utils/exit-codes.js';
+import { classifyAgentFailure, formatAgentFailure, type AgentFailureKind } from '../failure-classifier.js';
+
+/**
+ * Structured `code` emitted per failure kind. These are part of the NDJSON
+ * contract, so the existing codes must not be renamed; kinds without a
+ * dedicated code stay on `installer_error` and stream the raw message.
+ */
+const ERROR_CODES: Partial<Record<AgentFailureKind, string>> = {
+  service_outage: 'service_unavailable',
+  rate_limited: 'rate_limited',
+  deterministic: 'deterministic_error',
+  network: 'network_error',
+  process_exit: 'process_error',
+};
 
 /**
  * Options controlling headless adapter behavior.
@@ -412,33 +426,26 @@ export class HeadlessAdapter implements InstallerAdapter {
   };
 
   private handleError = ({ message, stack, code: declineCode }: InstallerEvents['error']): void => {
-    const isServiceError =
-      /\b50[0-9]\b/.test(message) || /server_error|internal_error|overloaded|service.*unavailable/i.test(message);
-    const isRateLimit = /\b429\b/.test(message) || /rate.limit/i.test(message);
-    const isNetworkError = /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|fetch failed/i.test(message);
-    const isProcessExit = /process exited with code/i.test(message);
-
-    let code = declineCode ?? 'installer_error';
-    let displayMessage = message;
-
+    // A structured decline (e.g. unsupported framework version) is already
+    // user-facing — don't rewrite it as an AI-service failure.
     if (declineCode) {
-      // A structured decline (e.g. unsupported framework version) is already
-      // user-facing — don't rewrite it as an AI-service failure.
-    } else if (isServiceError) {
-      code = 'service_unavailable';
-      displayMessage = 'The AI service is temporarily unavailable. Please try again in a few minutes.';
-    } else if (isRateLimit) {
-      code = 'rate_limited';
-      displayMessage = 'The AI service is currently rate-limited. Please wait a minute and try again.';
-    } else if (isNetworkError) {
-      code = 'network_error';
-      displayMessage = 'Could not connect to the AI service. Check your internet connection and try again.';
-    } else if (isProcessExit) {
-      code = 'process_error';
-      displayMessage = 'The AI agent process exited unexpectedly. Try running again with --debug for details.';
+      writeNDJSON({ type: 'error', code: declineCode, message });
+      this.debugLog(stack ?? '');
+      return;
     }
 
-    writeNDJSON({ type: 'error', code, message: displayMessage });
+    // The verdict comes from the shared classifier so JSON consumers and the
+    // interactive path cannot disagree about whether a retry is worth trying.
+    const kind = classifyAgentFailure(message);
+    const code = ERROR_CODES[kind];
+
+    writeNDJSON({
+      type: 'error',
+      code: code ?? 'installer_error',
+      // Kinds with no dedicated code keep streaming the raw message — JSON
+      // consumers depend on it where we have nothing better to say.
+      message: code ? formatAgentFailure(kind, message) : message,
+    });
     this.debugLog(stack ?? '');
   };
 }

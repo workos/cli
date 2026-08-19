@@ -15,6 +15,14 @@ vi.mock('./settings.js', () => ({
   getVersion: vi.fn(() => '0.3.0'),
 }));
 
+// Pin the upgrade line so the assertion below doesn't depend on the ambient
+// execPath of whatever runs the tests (which may itself live under Homebrew's
+// Cellar or a node_modules dir). detectInstallMethod is exercised directly in
+// install-method.spec.ts.
+vi.mock('./install-method.js', () => ({
+  upgradeNotice: vi.fn(() => 'Download: https://github.com/workos/cli/releases/latest'),
+}));
+
 const { checkForUpdates, _resetWarningState } = await import('./version-check.js');
 const { yellow, dim } = await import('../utils/logging.js');
 

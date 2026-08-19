@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 // Mock config-store
 const mockGetActiveEnvironment = vi.fn();
@@ -20,18 +23,35 @@ vi.mock('./unclaimed-env-provision.js', () => ({
   tryProvisionUnclaimedEnv: (...args: unknown[]) => mockTryProvisionUnclaimedEnv(...args),
 }));
 
+// Mock the UI facade — the no-clobber branch now explains itself out loud.
+const mockUi = {
+  log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), step: vi.fn(), success: vi.fn(), hint: vi.fn() },
+};
+vi.mock('../utils/ui.js', () => ({ default: mockUi }));
+
 const { resolveInstallCredentials } = await import('./resolve-install-credentials.js');
+const { setOutputMode } = await import('../utils/output.js');
 
 describe('resolveInstallCredentials', () => {
   const mockAuthenticate = vi.fn();
   const originalEnv = process.env.WORKOS_API_KEY;
+  // The default install dir is process.cwd(), and credential resolution now
+  // reads the project's env file. Point cwd at an empty dir so these specs
+  // don't depend on whatever .env.local happens to sit in the repo root.
+  let emptyCwd: string;
+  let cwdSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.WORKOS_API_KEY;
+    emptyCwd = mkdtempSync(join(tmpdir(), 'resolve-install-credentials-cwd-'));
+    cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(emptyCwd);
   });
 
   afterEach(() => {
+    cwdSpy.mockRestore();
+    setOutputMode('human');
+    rmSync(emptyCwd, { recursive: true, force: true });
     if (originalEnv !== undefined) {
       process.env.WORKOS_API_KEY = originalEnv;
     } else {
@@ -145,5 +165,150 @@ describe('resolveInstallCredentials', () => {
     await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
 
     expect(mockTryProvisionUnclaimedEnv).toHaveBeenCalledWith({ installDir: process.cwd() });
+  });
+
+  // Provisioning writes credentials into the project's env file. If a key is
+  // already there, provisioning would clobber it — the reported data-loss bug.
+  describe('project env file already has credentials', () => {
+    let projectDir: string;
+
+    beforeEach(() => {
+      projectDir = mkdtempSync(join(tmpdir(), 'resolve-install-credentials-test-'));
+      mockGetActiveEnvironment.mockReturnValue(null);
+      mockTryProvisionUnclaimedEnv.mockResolvedValue(true);
+    });
+
+    afterEach(() => {
+      rmSync(projectDir, { recursive: true, force: true });
+    });
+
+    it('skips provisioning and falls back to login when .env.local has WORKOS_API_KEY (JS project)', async () => {
+      writeFileSync(join(projectDir, 'package.json'), '{}');
+      writeFileSync(join(projectDir, '.env.local'), 'WORKOS_API_KEY=sk_a\nWORKOS_CLIENT_ID=client_a\n');
+
+      await resolveInstallCredentials(undefined, projectDir, undefined, mockAuthenticate);
+
+      expect(mockTryProvisionUnclaimedEnv).not.toHaveBeenCalled();
+      expect(mockAuthenticate).toHaveBeenCalled();
+    });
+
+    it('skips provisioning when .env has WORKOS_API_KEY and there is no package.json (non-JS project)', async () => {
+      writeFileSync(join(projectDir, '.env'), 'WORKOS_API_KEY=sk_a\n');
+
+      await resolveInstallCredentials(undefined, projectDir, undefined, mockAuthenticate);
+
+      expect(mockTryProvisionUnclaimedEnv).not.toHaveBeenCalled();
+      expect(mockAuthenticate).toHaveBeenCalled();
+    });
+
+    it('does not authenticate when skipAuth is set and the project env already has a key', async () => {
+      writeFileSync(join(projectDir, 'package.json'), '{}');
+      writeFileSync(join(projectDir, '.env.local'), 'WORKOS_API_KEY=sk_a\n');
+
+      await resolveInstallCredentials(undefined, projectDir, true, mockAuthenticate);
+
+      expect(mockTryProvisionUnclaimedEnv).not.toHaveBeenCalled();
+      expect(mockAuthenticate).not.toHaveBeenCalled();
+    });
+
+    it('provisions when .env.local exists but carries no WorkOS keys', async () => {
+      writeFileSync(join(projectDir, 'package.json'), '{}');
+      writeFileSync(join(projectDir, '.env.local'), 'DATABASE_URL=postgres://localhost/dev\n');
+
+      await resolveInstallCredentials(undefined, projectDir, undefined, mockAuthenticate);
+
+      expect(mockTryProvisionUnclaimedEnv).toHaveBeenCalledWith({ installDir: projectDir });
+      expect(mockAuthenticate).not.toHaveBeenCalled();
+    });
+
+    it('provisions when the project has no env file at all', async () => {
+      writeFileSync(join(projectDir, 'package.json'), '{}');
+
+      await resolveInstallCredentials(undefined, projectDir, undefined, mockAuthenticate);
+
+      expect(mockTryProvisionUnclaimedEnv).toHaveBeenCalledWith({ installDir: projectDir });
+    });
+
+    // The read side must cover every file the CLI itself treats as a credential
+    // source (credential-discovery.ts), not just the write target. `.env.local`
+    // outranks `.env` in Next.js/Vite/Remix/SvelteKit, so provisioning here would
+    // point the app at an empty throwaway env while the real key sits in `.env`.
+    it('refuses to provision when a JS project keeps its key in .env and has no .env.local', async () => {
+      writeFileSync(join(projectDir, 'package.json'), '{}');
+      writeFileSync(join(projectDir, '.env'), 'WORKOS_API_KEY=sk_real\n');
+
+      await resolveInstallCredentials(undefined, projectDir, undefined, mockAuthenticate);
+
+      expect(mockTryProvisionUnclaimedEnv).not.toHaveBeenCalled();
+      expect(mockAuthenticate).toHaveBeenCalled();
+    });
+
+    it('refuses to provision when the key is in .env.development.local', async () => {
+      writeFileSync(join(projectDir, 'package.json'), '{}');
+      writeFileSync(join(projectDir, '.env.development.local'), 'WORKOS_API_KEY=sk_real\n');
+
+      await resolveInstallCredentials(undefined, projectDir, undefined, mockAuthenticate);
+
+      expect(mockTryProvisionUnclaimedEnv).not.toHaveBeenCalled();
+      expect(mockAuthenticate).toHaveBeenCalled();
+    });
+
+    it('refuses to provision when the key is in .env.development', async () => {
+      writeFileSync(join(projectDir, 'package.json'), '{}');
+      writeFileSync(join(projectDir, '.env.development'), 'WORKOS_API_KEY=sk_real\n');
+
+      await resolveInstallCredentials(undefined, projectDir, undefined, mockAuthenticate);
+
+      expect(mockTryProvisionUnclaimedEnv).not.toHaveBeenCalled();
+      expect(mockAuthenticate).toHaveBeenCalled();
+    });
+
+    // `export`-prefixed and indented lines are common in env files people `source`.
+    it('refuses to provision for `export WORKOS_API_KEY=` syntax with leading whitespace', async () => {
+      writeFileSync(join(projectDir, 'package.json'), '{}');
+      writeFileSync(join(projectDir, '.env.local'), '  export WORKOS_API_KEY="sk_real"\n');
+
+      await resolveInstallCredentials(undefined, projectDir, undefined, mockAuthenticate);
+
+      expect(mockTryProvisionUnclaimedEnv).not.toHaveBeenCalled();
+      expect(mockAuthenticate).toHaveBeenCalled();
+    });
+
+    it('still provisions when no env file anywhere carries a WorkOS key', async () => {
+      writeFileSync(join(projectDir, 'package.json'), '{}');
+      writeFileSync(join(projectDir, '.env.local'), 'DATABASE_URL=postgres://localhost/dev\n');
+      writeFileSync(join(projectDir, '.env.development'), '# WORKOS_API_KEY=sk_commented_out\n');
+      writeFileSync(join(projectDir, '.env'), 'NEXT_PUBLIC_URL=http://localhost:3000\n');
+
+      await resolveInstallCredentials(undefined, projectDir, undefined, mockAuthenticate);
+
+      expect(mockTryProvisionUnclaimedEnv).toHaveBeenCalledWith({ installDir: projectDir });
+      expect(mockAuthenticate).not.toHaveBeenCalled();
+    });
+
+    // Exit 4 from the login that follows is byte-identical to a provisioning
+    // network failure, so the refusal has to say why out loud.
+    it('tells the user the existing key was found and kept, naming the file it is in', async () => {
+      writeFileSync(join(projectDir, 'package.json'), '{}');
+      writeFileSync(join(projectDir, '.env'), 'WORKOS_API_KEY=sk_real\n');
+
+      await resolveInstallCredentials(undefined, projectDir, undefined, mockAuthenticate);
+
+      const printed = mockUi.log.info.mock.calls.map((call) => String(call[0])).join('\n');
+      // The file the key actually lives in, not the write target (.env.local here).
+      expect(printed).toContain(`${join(projectDir, '.env')} already has WORKOS_API_KEY`);
+      expect(printed).toContain('Signing you in');
+    });
+
+    it('stays silent in JSON mode so the machine-readable stream is not corrupted', async () => {
+      writeFileSync(join(projectDir, 'package.json'), '{}');
+      writeFileSync(join(projectDir, '.env.local'), 'WORKOS_API_KEY=sk_real\n');
+      setOutputMode('json');
+
+      await resolveInstallCredentials(undefined, projectDir, undefined, mockAuthenticate);
+
+      expect(mockUi.log.info).not.toHaveBeenCalled();
+      expect(mockAuthenticate).toHaveBeenCalled();
+    });
   });
 });

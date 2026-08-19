@@ -3,7 +3,7 @@ import { join } from 'path';
 import { access, mkdir, readFile, writeFile } from 'fs/promises';
 import * as jsonc from 'jsonc-parser';
 import { execFileNoThrow } from '../utils/exec-file.js';
-import { MCP_SERVER_NAME, MCP_SERVER_URL } from './constants.js';
+import { MCP_DOCS_URL, MCP_SERVER_NAME, MCP_SERVER_URL } from './constants.js';
 
 /**
  * Client-writer library for the WorkOS MCP server.
@@ -40,12 +40,46 @@ export type McpAgentKey = 'claude-code' | 'codex' | 'cursor';
 
 export type McpOutcome = 'installed' | 'already-installed' | 'removed' | 'not-installed' | 'skipped' | 'failed';
 
+/**
+ * Human phrasing for each outcome. The existing JSON values are retained for
+ * compatibility, but "installed" means the server definition is configured;
+ * it does not prove that client-managed OAuth completed successfully.
+ */
+export const MCP_OUTCOME_LABELS: Record<McpOutcome, string> = {
+  installed: 'configured',
+  'already-installed': 'already configured',
+  removed: 'removed',
+  'not-installed': 'not configured',
+  skipped: 'skipped',
+  failed: 'failed',
+};
+
+export type McpAuthenticationState = 'unknown' | 'action-required';
+
+export interface McpRecoveryHint {
+  description: string;
+  command?: string;
+  hostShellRequired?: boolean;
+}
+
+export interface McpRecovery {
+  docsUrl: string;
+  hints: McpRecoveryHint[];
+}
+
 export interface McpClientResult {
   agent: McpAgentKey;
   displayName: string;
   outcome: McpOutcome;
   /** stderr/message excerpt when `outcome === 'failed'`. */
   error?: string;
+  /** Configuration metadata for clients whose authentication is managed separately. */
+  configuration?: {
+    scope: 'user' | 'project' | 'unknown';
+    authentication: McpAuthenticationState;
+  };
+  /** Safe next steps that do not expose or inspect client-managed credentials. */
+  recovery?: McpRecovery;
 }
 
 export interface McpClientTarget {
@@ -55,6 +89,21 @@ export interface McpClientTarget {
   isAvailable(): Promise<boolean>;
   /** The WorkOS server is present in this client's config. */
   isInstalled(): Promise<boolean>;
+  /** Effective configured URL when the client exposes it, otherwise null. */
+  getConfiguredUrl(): Promise<string | null>;
+  /**
+   * Whether this CLI can observe the client's OAuth state. False for every
+   * client today: credentials live inside each client and we never read them, so
+   * a present server definition proves nothing about authentication.
+   *
+   * It lives on the target rather than being inferred from `key` so callers can
+   * report the caveat without knowing which client they hold, and so a client
+   * that grows a usable signal (Claude Code's `mcp list` already prints a
+   * per-entry connection state) flips to true here alone.
+   */
+  readonly authenticationVerifiable: boolean;
+  /** Client-specific next steps when authentication needs attention. */
+  readonly recovery?: McpRecovery;
   add(): Promise<McpClientResult>;
   remove(): Promise<McpClientResult>;
 }
@@ -79,6 +128,39 @@ function excerpt(raw: string): string {
   const firstLine = text.split('\n').find((l) => l.trim().length > 0) ?? text;
   return firstLine.trim().slice(0, 300);
 }
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseCodexConfiguredUrl(stdout: string): string | null {
+  try {
+    const parsed: unknown = JSON.parse(stdout);
+    if (!isRecord(parsed) || !isRecord(parsed.transport)) return null;
+    return typeof parsed.transport.url === 'string' ? parsed.transport.url : null;
+  } catch {
+    return null;
+  }
+}
+
+const CODEX_RECOVERY: McpRecovery = {
+  docsUrl: MCP_DOCS_URL,
+  hints: [
+    {
+      description: 'Confirm that Codex discovered the intended server definition',
+      command: `codex mcp get ${MCP_SERVER_NAME}`,
+    },
+    {
+      description: 'Complete or refresh WorkOS OAuth in your normal host shell',
+      command: `codex mcp login ${MCP_SERVER_NAME}`,
+      hostShellRequired: true,
+    },
+    {
+      description: 'Verify the WorkOS endpoint and OAuth authentication type',
+      command: 'codex mcp list',
+    },
+  ],
+};
 
 /**
  * Does a CLI `mcp list` output contain our server?
@@ -110,19 +192,69 @@ function createCliClient(config: {
   configDir: string;
   addArgs: string[];
   removeArgs: string[];
+  getUrlArgs?: string[];
+  parseConfiguredUrl?: (stdout: string) => string | null;
+  configuredScope?: 'user' | 'project' | 'unknown';
+  recovery?: McpRecovery;
 }): McpClientTarget {
-  const { key, displayName, binary, configDir, addArgs, removeArgs } = config;
-  const result = (outcome: McpOutcome, error?: string): McpClientResult => ({
+  const {
+    key,
+    displayName,
+    binary,
+    configDir,
+    addArgs,
+    removeArgs,
+    getUrlArgs,
+    parseConfiguredUrl,
+    configuredScope,
+    recovery,
+  } = config;
+  const result = (outcome: McpOutcome, error?: string, authentication?: McpAuthenticationState): McpClientResult => ({
     agent: key,
     displayName,
     outcome,
     ...(error ? { error } : {}),
+    ...(authentication && configuredScope
+      ? { configuration: { scope: configuredScope, authentication }, recovery }
+      : {}),
   });
 
   async function checkInstalled(): Promise<boolean> {
     const res = await execFileNoThrow(binary, ['mcp', 'list'], { timeout: EXEC_TIMEOUT_MS });
     if (res.status !== 0) return false;
     return listHasServer(res.stdout, MCP_SERVER_NAME);
+  }
+
+  /** Whether this client exposes its effective endpoint at all — the difference
+   * between "answered null" (unreadable) and "was never askable". */
+  const canReadConfiguredUrl = Boolean(getUrlArgs && parseConfiguredUrl);
+
+  async function readConfiguredUrl(): Promise<string | null> {
+    if (!getUrlArgs || !parseConfiguredUrl) return null;
+    const res = await execFileNoThrow(binary, getUrlArgs, { timeout: EXEC_TIMEOUT_MS });
+    if (res.status !== 0) return null;
+    return parseConfiguredUrl(res.stdout);
+  }
+
+  /**
+   * An entry under our name exists — but is it ours? Both `add` paths that
+   * infer success from an existing entry (a collision, and a non-zero exit
+   * whose write may still have landed) have to answer this, or they report a
+   * stale definition from an earlier install as freshly configured.
+   *
+   * Returns null when the entry can be treated as ours: either the endpoint
+   * matches, or the client exposes no way to ask (Claude Code), where the
+   * listed name is the best evidence available. Otherwise returns the reason
+   * it can't be — a mismatch, or an answer we couldn't read, which for an
+   * introspectable client is not a yes.
+   */
+  async function staleEntryReason(): Promise<string | null> {
+    if (!canReadConfiguredUrl) return null;
+    const configuredUrl = await readConfiguredUrl();
+    if (configuredUrl === MCP_SERVER_URL) return null;
+    return configuredUrl === null
+      ? `could not read the effective ${MCP_SERVER_NAME} endpoint to confirm it`
+      : `"${MCP_SERVER_NAME}" still points at ${configuredUrl} (expected ${MCP_SERVER_URL})`;
   }
 
   return {
@@ -136,20 +268,30 @@ function createCliClient(config: {
       return res.status === 0;
     },
     isInstalled: checkInstalled,
+    getConfiguredUrl: readConfiguredUrl,
+    authenticationVerifiable: false,
+    ...(recovery ? { recovery } : {}),
     async add() {
       const res = await execFileNoThrow(binary, addArgs, { timeout: EXEC_TIMEOUT_MS });
-      if (res.status === 0) return result('installed');
-      // Idempotent: an "already exists" collision is a success, not a failure.
+      if (res.status === 0) return result('installed', undefined, 'unknown');
+      // Idempotent: an "already exists" collision is a success, not a failure —
+      // but only once the colliding entry is confirmed to be ours.
       const combined = `${res.stdout}\n${res.stderr}`.toLowerCase();
       if (combined.includes('already exists') || combined.includes('already configured')) {
-        return result('already-installed');
+        const stale = await staleEntryReason();
+        if (stale) return result('failed', `${binary} mcp add found an existing entry and ${stale}`);
+        return result('already-installed', undefined, 'unknown');
       }
       // A non-zero exit doesn't always mean the write failed: Codex persists the
       // server config and THEN starts an OAuth flow that blocks (no browser /
       // callback available here) until our timeout kills it with a non-zero
       // status. Confirm against the actual config before declaring failure —
       // more robust than matching each client's success wording.
-      if (await checkInstalled()) return result('installed');
+      if (await checkInstalled()) {
+        const stale = await staleEntryReason();
+        if (stale) return result('failed', `${binary} mcp add failed and ${stale}`);
+        return result('installed', undefined, 'action-required');
+      }
       // Otherwise a real failure — an old client lacking `--transport http` /
       // `--url`, a bad invocation, etc. Reported, never thrown.
       return result('failed', excerpt(res.stderr || res.stdout));
@@ -187,6 +329,10 @@ function createCodexClient(): McpClientTarget {
     configDir: '.codex',
     addArgs: ['mcp', 'add', MCP_SERVER_NAME, '--url', MCP_SERVER_URL],
     removeArgs: ['mcp', 'remove', MCP_SERVER_NAME],
+    getUrlArgs: ['mcp', 'get', MCP_SERVER_NAME, '--json'],
+    parseConfiguredUrl: parseCodexConfiguredUrl,
+    configuredScope: 'user',
+    recovery: CODEX_RECOVERY,
   });
 }
 
@@ -244,6 +390,8 @@ function createCursorClient(): McpClientTarget {
         return false;
       }
     },
+    getConfiguredUrl: getCursorConfiguredUrl,
+    authenticationVerifiable: false,
     async add() {
       const path = configPath();
       try {
@@ -295,10 +443,11 @@ export function createMcpClients(): McpClientTarget[] {
  * The URL the WorkOS server is configured with in Cursor's `~/.cursor/mcp.json`,
  * or null when the file/entry is absent, unreadable, or unparseable.
  *
- * Cursor is the only client whose config we read directly (the CLI clients don't
- * expose per-entry URLs), so this powers doctor's URL-drift ("misconfigured")
- * check without a second jsonc reader duplicating the config schema. Read-only
- * and never throws — a problem reading just yields null.
+ * This powers Cursor's URL-drift ("misconfigured") check without a second jsonc
+ * reader duplicating the config schema. Codex exposes its effective URL through
+ * `codex mcp get`; Claude Code does not currently expose a machine-readable
+ * per-entry URL here. Read-only and never throws — a problem reading just yields
+ * null.
  */
 export async function getCursorConfiguredUrl(): Promise<string | null> {
   try {

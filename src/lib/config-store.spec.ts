@@ -60,6 +60,40 @@ vi.mock('@napi-rs/keyring', () => ({
   },
 }));
 
+// On darwin, config-store routes through DarwinSecurityEntry instead of the
+// native Entry. Back it with the SAME map + availability flag so every test
+// behaves identically on all platforms.
+vi.mock('./darwin-keychain.js', () => ({
+  DarwinSecurityEntry: class MockDarwinSecurityEntry {
+    private key: string;
+
+    constructor(service: string, account: string) {
+      this.key = `${service}:${account}`;
+    }
+
+    getPassword(): string | null {
+      if (!keyringAvailable) {
+        throw new Error('Keyring not available');
+      }
+      return mockKeyring.get(this.key) ?? null;
+    }
+
+    setPassword(password: string): void {
+      if (!keyringAvailable) {
+        throw new Error('Keyring not available');
+      }
+      mockKeyring.set(this.key, password);
+    }
+
+    deletePassword(): void {
+      if (!keyringAvailable && mockKeyring.has(this.key)) {
+        throw new Error('Keyring not available');
+      }
+      mockKeyring.delete(this.key);
+    }
+  },
+}));
+
 // Mock os.homedir BEFORE importing config-store module
 vi.mock('node:os', async (importOriginal) => {
   const original = await importOriginal<typeof import('node:os')>();
@@ -176,6 +210,9 @@ describe('config-store', () => {
     it('returns null for corrupted file', () => {
       saveConfig(sampleConfig);
       writeFileSync(configFile, 'not valid json');
+      // External corruption is only observable from a fresh process —
+      // config reads are cached in-process. Reset to simulate one.
+      setInsecureConfigStorage(true);
       expect(getConfig()).toBeNull();
     });
   });

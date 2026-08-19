@@ -1,13 +1,12 @@
 import { runInstaller } from '../run.js';
 import type { InstallerArgs } from '../run.js';
-import clack from '../utils/clack.js';
+import ui from '../utils/ui.js';
 import { exitWithError, isJsonMode } from '../utils/output.js';
 import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
 import { isCiMode } from '../utils/interaction-mode.js';
 import type { ArgumentsCamelCase } from 'yargs';
-import { autoInstallSkills } from './install-skill.js';
 import { InstallDeclinedError } from '../lib/installer-errors.js';
-import { maybeOfferMcpInstall } from '../lib/mcp-notice.js';
+import { maybeRunSetupAfter } from './setup.js';
 
 /**
  * Handle install command execution.
@@ -33,17 +32,10 @@ export async function handleInstall(argv: ArgumentsCamelCase<InstallerArgs>): Pr
 
   try {
     await runInstaller(options);
-    const skillResult = await autoInstallSkills();
-    if (skillResult && !isJsonMode()) {
-      const skillWord = skillResult.skills.length === 1 ? 'skill' : 'skills';
-      clack.log.info(
-        `Installed ${skillResult.skills.length} WorkOS ${skillWord} for ${skillResult.agents.join(', ')}. Your coding agent now has up-to-date WorkOS guidance.`,
-      );
-    }
 
-    // Offer to connect the user's coding agent to WorkOS via MCP. Self-gating
+    // One consented moment offers skills + MCP together. Self-gating
     // (human/TTY-only, decline-respecting) and best-effort — never fails install.
-    await maybeOfferMcpInstall({ entryPoint: 'install-flow' });
+    await maybeRunSetupAfter('install');
   } catch (err) {
     if (err instanceof InstallDeclinedError) {
       // The integration already printed actionable guidance; exit non-zero
@@ -68,7 +60,7 @@ export async function handleInstall(argv: ArgumentsCamelCase<InstallerArgs>): Pr
       console.error(err.stack);
     }
     if (logPath) {
-      clack.log.info(`Debug logs: ${logPath}`);
+      ui.log.info(`Debug logs: ${logPath}`);
     }
     exitWithCode(ExitCode.GENERAL_ERROR);
   }
