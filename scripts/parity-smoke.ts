@@ -54,6 +54,10 @@ const MAIN_DIR = path.resolve(BRANCH_DIR, '../main');
 const ENV_ID = process.env.PARITY_ENV_ID;
 const MUTATE = process.argv.includes('--mutate');
 const SEED = process.argv.includes('--seed');
+// Invitations are seeded separately because sending one attempts real email
+// delivery. The address used is @example.com (RFC 2606 reserved, black-holed),
+// and the invitation is revoked during cleanup, but it stays opt-in.
+const INVITE = process.argv.includes('--invite');
 
 if (!existsSync(path.join(MAIN_DIR, 'src/bin.ts'))) {
   console.error(`main checkout not found: ${MAIN_DIR}/src/bin.ts`);
@@ -96,7 +100,11 @@ function binFor(dir: string): { cmd: string; args: string[] } {
   return { cmd: 'bun', args: [path.join(dir, 'src/bin.ts')] };
 }
 
-interface RunResult { rc: number; stdout: string; stderr: string; }
+interface RunResult {
+  rc: number;
+  stdout: string;
+  stderr: string;
+}
 function run(dir: string, cliArgs: string[]): Promise<RunResult> {
   const { cmd, args } = binFor(dir);
   return new Promise((resolve) => {
@@ -105,8 +113,12 @@ function run(dir: string, cliArgs: string[]): Promise<RunResult> {
     const p = spawn(cmd, [...args, ...cliArgs], { cwd: NEUTRAL_CWD, env: childEnv, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
-    p.stdout.on('data', (d) => { stdout += d; });
-    p.stderr.on('data', (d) => { stderr += d; });
+    p.stdout.on('data', (d) => {
+      stdout += d;
+    });
+    p.stderr.on('data', (d) => {
+      stderr += d;
+    });
     p.on('error', (err) => resolve({ rc: -1, stdout, stderr: String(err) }));
     p.on('close', (rc) => resolve({ rc: rc ?? 0, stdout, stderr }));
   });
@@ -126,10 +138,24 @@ const shortErr = (s: string): string => s.split('\n').filter(Boolean).slice(0, 2
 // --- value normalization ---------------------------------------------------------
 // Volatile or timing-dependent keys are never compared.
 const VOLATILE = new Set([
-  'createdAt', 'created_at', 'updatedAt', 'updated_at',
-  'lastSignedInAt', 'last_signed_in_at', 'emailVerifiedAt', 'email_verified_at',
-  'occurredAt', 'occurred_at', 'expiresAt', 'expires_at', 'timestamp',
-  'before', 'after', 'listMetadata', 'list_metadata', 'pagination',
+  'createdAt',
+  'created_at',
+  'updatedAt',
+  'updated_at',
+  'lastSignedInAt',
+  'last_signed_in_at',
+  'emailVerifiedAt',
+  'email_verified_at',
+  'occurredAt',
+  'occurred_at',
+  'expiresAt',
+  'expires_at',
+  'timestamp',
+  'before',
+  'after',
+  'listMetadata',
+  'list_metadata',
+  'pagination',
 ]);
 
 function normalize(v: unknown): unknown {
@@ -145,7 +171,8 @@ function normalize(v: unknown): unknown {
   return v;
 }
 function cmp(a: unknown, b: unknown): number {
-  const ka = JSON.stringify(a); const kb = JSON.stringify(b);
+  const ka = JSON.stringify(a);
+  const kb = JSON.stringify(b);
   return ka < kb ? -1 : ka > kb ? 1 : 0;
 }
 const canon = (v: unknown): string => JSON.stringify(normalize(v));
@@ -174,11 +201,17 @@ function entityOf(out: any): any {
 function findId(out: any, prefix: string): string | undefined {
   if (typeof out === 'string') return out.startsWith(`${prefix}_`) ? out : undefined;
   if (Array.isArray(out)) {
-    for (const v of out) { const r = findId(v, prefix); if (r) return r; }
+    for (const v of out) {
+      const r = findId(v, prefix);
+      if (r) return r;
+    }
     return undefined;
   }
   if (out && typeof out === 'object') {
-    for (const k of Object.keys(out)) { const r = findId(out[k], prefix); if (r) return r; }
+    for (const k of Object.keys(out)) {
+      const r = findId(out[k], prefix);
+      if (r) return r;
+    }
   }
   return undefined;
 }
@@ -192,8 +225,10 @@ function findId(out: any, prefix: string): string | undefined {
 // all enum values to lowercase via utils/output-conventions, so a casing-only
 // difference is a bug, not an accepted divergence, and must fail the run.
 const ACCEPTED: Record<string, string> = {
-  'role.type': 'vocabulary: branch emits environment/organization; REST emitted EnvironmentRole/OrganizationRole. The redundant Role suffix is dropped.',
-  'webhook.state': 'vocabulary: branch emits active; REST emitted enabled. Aligned with session\'s active/expired/revoked.',
+  'role.type':
+    'vocabulary: branch emits environment/organization; REST emitted EnvironmentRole/OrganizationRole. The redundant Role suffix is dropped.',
+  'webhook.state':
+    "vocabulary: branch emits active; REST emitted enabled. Aligned with session's active/expired/revoked.",
   'invitation.organization': 'structural: branch nests {id,name}; REST emitted a flat organizationId',
   'user.identities': 'structural: branch nests curated identities and renames status->state; REST shape differs',
   'feature-flag.enabled': 'semantic: branch derives from the active environment state; REST exposed a flat flag',
@@ -209,8 +244,17 @@ const ALIAS: Record<string, Record<string, string>> = {
   invitation: { email: 'email' },
 };
 
-interface FieldDiff { key: string; branch: unknown; main: unknown; }
-interface RowCompare { diffs: FieldDiff[]; accepted: FieldDiff[]; branchOnly: string[]; mainOnly: string[]; }
+interface FieldDiff {
+  key: string;
+  branch: unknown;
+  main: unknown;
+}
+interface RowCompare {
+  diffs: FieldDiff[];
+  accepted: FieldDiff[];
+  branchOnly: string[];
+  mainOnly: string[];
+}
 
 const isPlainObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -230,19 +274,23 @@ function projectShared(b: any, m: any): [any, any] {
     const byId = b.every((x) => isPlainObject(x) && x.id) && m.every((x) => isPlainObject(x) && x.id);
     const bs = byId ? [...b].sort((x, y) => cmp(x.id, y.id)) : [...b].sort(cmp);
     const ms = byId ? [...m].sort((x, y) => cmp(x.id, y.id)) : [...m].sort(cmp);
-    const pb: any[] = []; const pm: any[] = [];
+    const pb: any[] = [];
+    const pm: any[] = [];
     for (let i = 0; i < bs.length; i++) {
       const [x, y] = projectShared(bs[i], ms[i]);
-      pb.push(x); pm.push(y);
+      pb.push(x);
+      pm.push(y);
     }
     return [pb, pm];
   }
   if (isPlainObject(b) && isPlainObject(m)) {
-    const pb: Record<string, unknown> = {}; const pm: Record<string, unknown> = {};
+    const pb: Record<string, unknown> = {};
+    const pm: Record<string, unknown> = {};
     for (const k of Object.keys(b)) {
       if (VOLATILE.has(k) || !(k in m)) continue;
       const [x, y] = projectShared(b[k], m[k]);
-      pb[k] = x; pm[k] = y;
+      pb[k] = x;
+      pm[k] = y;
     }
     return [pb, pm];
   }
@@ -258,7 +306,10 @@ function compareEntity(cmd: string, b: any, m: any): RowCompare {
   for (const k of Object.keys(b)) {
     if (VOLATILE.has(k)) continue;
     const mk = k in m ? k : ALIAS[cmd]?.[k];
-    if (!mk || !(mk in m)) { branchOnly.push(k); continue; }
+    if (!mk || !(mk in m)) {
+      branchOnly.push(k);
+      continue;
+    }
     aliased.add(mk);
     const [pb, pm] = projectShared(b[k], m[mk]);
     if (canon(pb) !== canon(pm)) {
@@ -289,17 +340,58 @@ interface ListCheck {
   idKey: string;
   /** `get` subcommand, if the command has one. */
   get?: { sub: string; argFrom: string };
+  /**
+   * Set when the two planes page in different sort orders, so a bounded `--limit`
+   * window legitimately returns different rows. Exact-set matching would be
+   * comparing the newest N against the oldest N. Instead: require a non-empty
+   * overlap and compare every field on the rows that DO appear on both.
+   */
+  orderDiverges?: { note: string };
 }
 
 const LISTS: ListCheck[] = [
-  { cmd: 'organization', label: 'organization', args: ['organization', 'list', '--json'], idKey: 'id', get: { sub: 'get', argFrom: 'id' } },
+  {
+    cmd: 'organization',
+    label: 'organization',
+    args: ['organization', 'list', '--json'],
+    idKey: 'id',
+    get: { sub: 'get', argFrom: 'id' },
+  },
   { cmd: 'user', label: 'user', args: ['user', 'list', '--json'], idKey: 'id', get: { sub: 'get', argFrom: 'id' } },
   { cmd: 'role', label: 'role', args: ['role', 'list', '--json'], idKey: 'slug', get: { sub: 'get', argFrom: 'slug' } },
-  { cmd: 'permission', label: 'permission', args: ['permission', 'list', '--json'], idKey: 'slug', get: { sub: 'get', argFrom: 'slug' } },
-  { cmd: 'invitation', label: 'invitation', args: ['invitation', 'list', '--json'], idKey: 'id', get: { sub: 'get', argFrom: 'id' } },
-  { cmd: 'feature-flag', label: 'feature-flag', args: ['feature-flag', 'list', '--json'], idKey: 'slug', get: { sub: 'get', argFrom: 'slug' } },
+  {
+    cmd: 'permission',
+    label: 'permission',
+    args: ['permission', 'list', '--json'],
+    idKey: 'slug',
+    get: { sub: 'get', argFrom: 'slug' },
+  },
+  {
+    cmd: 'invitation',
+    label: 'invitation',
+    args: ['invitation', 'list', '--json'],
+    idKey: 'id',
+    get: { sub: 'get', argFrom: 'id' },
+  },
+  {
+    cmd: 'feature-flag',
+    label: 'feature-flag',
+    args: ['feature-flag', 'list', '--json'],
+    idKey: 'slug',
+    get: { sub: 'get', argFrom: 'slug' },
+  },
   { cmd: 'webhook', label: 'webhook', args: ['webhook', 'list', '--json'], idKey: 'id' },
-  { cmd: 'event', label: 'event', args: ['event', 'list', '--events', 'user.created', '--json'], idKey: 'id' },
+  // organization.created and user.created both fire during --seed/--mutate, so
+  // this has real rows to compare rather than empty-vs-empty.
+  {
+    cmd: 'event',
+    label: 'event',
+    args: ['event', 'list', '--events', 'organization.created,user.created', '--limit', '100', '--json'],
+    idKey: 'id',
+    orderDiverges: {
+      note: 'GraphQL returns events newest-first; REST returned oldest-first. A bounded --limit window therefore covers opposite ends of the feed.',
+    },
+  },
 ];
 
 const NEW_ONLY = [
@@ -312,23 +404,46 @@ const NEW_ONLY = [
 
 // --- reporting -------------------------------------------------------------------
 type Status = 'PASS' | 'FAIL' | 'AUTH' | 'SKIP' | 'INFO';
-interface Row { kind: string; label: string; status: Status; detail: string; }
+interface Row {
+  kind: string;
+  label: string;
+  status: Status;
+  detail: string;
+}
 const rows: Row[] = [];
 const notes: string[] = [];
-const C = { green: '\x1b[32m', red: '\x1b[31m', yellow: '\x1b[33m', cyan: '\x1b[36m', dim: '\x1b[2m', reset: '\x1b[0m' };
-const push = (kind: string, label: string, status: Status, detail: string) => rows.push({ kind, label, status, detail });
+const C = {
+  green: '\x1b[32m',
+  red: '\x1b[31m',
+  yellow: '\x1b[33m',
+  cyan: '\x1b[36m',
+  dim: '\x1b[2m',
+  reset: '\x1b[0m',
+};
+const push = (kind: string, label: string, status: Status, detail: string) =>
+  rows.push({ kind, label, status, detail });
 
 // --- checks ----------------------------------------------------------------------
 async function checkControl(c: { label: string; args: string[] }): Promise<void> {
   const [b, m] = await Promise.all([run(BRANCH_DIR, c.args), run(MAIN_DIR, c.args)]);
   if (b.rc === 4 || m.rc === 4) return push('CONTROL', c.label, 'AUTH', `branch rc=${b.rc}, main rc=${m.rc}`);
   if (b.rc !== 0 || m.rc !== 0) {
-    return push('CONTROL', c.label, 'FAIL', `exit branch=${b.rc} main=${m.rc} ${shortErr(b.stderr)}${shortErr(m.stderr)}`);
+    return push(
+      'CONTROL',
+      c.label,
+      'FAIL',
+      `exit branch=${b.rc} main=${m.rc} ${shortErr(b.stderr)}${shortErr(m.stderr)}`,
+    );
   }
-  const jb = parseJson(b.stdout); const jm = parseJson(m.stdout);
+  const jb = parseJson(b.stdout);
+  const jm = parseJson(m.stdout);
   if (jb === undefined || jm === undefined) return push('CONTROL', c.label, 'FAIL', 'invalid JSON on one side');
-  push('CONTROL', c.label, canon(jb) === canon(jm) ? 'PASS' : 'FAIL',
-    canon(jb) === canon(jm) ? 'shape+data equal' : 'normalized output differs');
+  push(
+    'CONTROL',
+    c.label,
+    canon(jb) === canon(jm) ? 'PASS' : 'FAIL',
+    canon(jb) === canon(jm) ? 'shape+data equal' : 'normalized output differs',
+  );
 }
 
 /** Returns the branch list items so the GET phase can source identifiers. */
@@ -336,15 +451,23 @@ async function checkList(c: ListCheck): Promise<any[] | undefined> {
   const args = [...c.args, ...envArgs()];
   const mainArgs = c.args; // main takes no --environment-id
   const [b, m] = await Promise.all([run(BRANCH_DIR, args), run(MAIN_DIR, mainArgs)]);
-  if (b.rc === 4 || m.rc === 4) { push('LIST', c.label, 'AUTH', `branch rc=${b.rc}, main rc=${m.rc}`); return undefined; }
+  if (b.rc === 4 || m.rc === 4) {
+    push('LIST', c.label, 'AUTH', `branch rc=${b.rc}, main rc=${m.rc}`);
+    return undefined;
+  }
   if (b.rc !== 0 || m.rc !== 0) {
     push('LIST', c.label, 'FAIL', `exit branch=${b.rc} main=${m.rc} ${shortErr(b.stderr)}${shortErr(m.stderr)}`);
     return undefined;
   }
-  const jb = parseJson(b.stdout); const jm = parseJson(m.stdout);
-  if (jb === undefined || jm === undefined) { push('LIST', c.label, 'FAIL', 'invalid JSON on one side'); return undefined; }
+  const jb = parseJson(b.stdout);
+  const jm = parseJson(m.stdout);
+  if (jb === undefined || jm === undefined) {
+    push('LIST', c.label, 'FAIL', 'invalid JSON on one side');
+    return undefined;
+  }
 
-  const bi = itemsOf(jb); const mi = itemsOf(jm);
+  const bi = itemsOf(jb);
+  const mi = itemsOf(jm);
   if (bi.length === 0 && mi.length === 0) {
     push('LIST', c.label, 'SKIP', 'both sides empty — proves the call works, proves nothing about data');
     return bi;
@@ -353,42 +476,77 @@ async function checkList(c: ListCheck): Promise<any[] | undefined> {
   const mIds = new Set(mi.map((i) => i?.[c.idKey]));
   const onlyB = [...bIds].filter((x) => !mIds.has(x));
   const onlyM = [...mIds].filter((x) => !bIds.has(x));
-  if (onlyB.length || onlyM.length) {
-    push('LIST', c.label, 'FAIL',
-      `entity sets differ (branch ${bi.length}, main ${mi.length}; only-branch=${JSON.stringify(onlyB).slice(0, 60)} only-main=${JSON.stringify(onlyM).slice(0, 60)})`);
+  if (c.orderDiverges) {
+    const shared = [...bIds].filter((x) => mIds.has(x));
+    notes.push(`${C.cyan}INFO${C.reset} ${c.cmd} ordering: ${c.orderDiverges.note}`);
+    if (shared.length === 0) {
+      push(
+        'LIST',
+        c.label,
+        'SKIP',
+        `no overlap between the two windows (branch ${bi.length}, main ${mi.length}); widen --limit to compare rows`,
+      );
+      return bi;
+    }
+    // Fall through and compare only the shared rows.
+  } else if (onlyB.length || onlyM.length) {
+    push(
+      'LIST',
+      c.label,
+      'FAIL',
+      `entity sets differ (branch ${bi.length}, main ${mi.length}; only-branch=${JSON.stringify(onlyB).slice(0, 60)} only-main=${JSON.stringify(onlyM).slice(0, 60)})`,
+    );
     return bi;
   }
   // Same entity set: compare every shared field, row by row.
-  let unexpected = 0; let acceptedN = 0;
-  const seenBranchOnly = new Set<string>(); const seenMainOnly = new Set<string>();
+  let unexpected = 0;
+  let acceptedN = 0;
+  const seenBranchOnly = new Set<string>();
+  const seenMainOnly = new Set<string>();
+  let comparedRows = 0;
   for (const bRow of bi) {
     const mRow = mi.find((x) => x?.[c.idKey] === bRow?.[c.idKey]);
     if (!mRow) continue;
+    comparedRows++;
     const r = compareEntity(c.cmd, bRow, mRow);
     unexpected += r.diffs.length;
     acceptedN += r.accepted.length;
     r.branchOnly.forEach((k) => seenBranchOnly.add(k));
     r.mainOnly.forEach((k) => seenMainOnly.add(k));
     for (const d of r.diffs) {
-      notes.push(`${C.red}FAIL${C.reset} ${c.cmd}.${d.key}: branch=${JSON.stringify(d.branch)} main=${JSON.stringify(d.main)}`);
+      notes.push(
+        `${C.red}FAIL${C.reset} ${c.cmd}.${d.key}: branch=${JSON.stringify(d.branch)} main=${JSON.stringify(d.main)}`,
+      );
     }
     for (const d of r.accepted) {
-      notes.push(`${C.cyan}INFO${C.reset} ${c.cmd}.${d.key} (accepted): branch=${JSON.stringify(d.branch)} main=${JSON.stringify(d.main)}`);
+      notes.push(
+        `${C.cyan}INFO${C.reset} ${c.cmd}.${d.key} (accepted): branch=${JSON.stringify(d.branch)} main=${JSON.stringify(d.main)}`,
+      );
     }
   }
   const extras = [
     seenBranchOnly.size ? `branch-only keys: ${[...seenBranchOnly].join(',')}` : '',
     seenMainOnly.size ? `dropped: ${[...seenMainOnly].join(',')}` : '',
     acceptedN ? `${acceptedN} accepted diff(s)` : '',
-  ].filter(Boolean).join('; ');
-  push('LIST', c.label, unexpected === 0 ? 'PASS' : 'FAIL',
-    `${bi.length} row(s) matched, every shared field compared${extras ? ` — ${extras}` : ''}${unexpected ? ` — ${unexpected} UNEXPECTED diff(s)` : ''}`);
+  ]
+    .filter(Boolean)
+    .join('; ');
+  const scope = c.orderDiverges
+    ? `${comparedRows} overlapping row(s) compared (windows differ by sort order)`
+    : `${comparedRows} row(s) matched, every shared field compared`;
+  push(
+    'LIST',
+    c.label,
+    unexpected === 0 ? 'PASS' : 'FAIL',
+    `${scope}${extras ? ` — ${extras}` : ''}${unexpected ? ` — ${unexpected} UNEXPECTED diff(s)` : ''}`,
+  );
   return bi;
 }
 
 async function checkGet(c: ListCheck, branchItems: any[] | undefined): Promise<void> {
   if (!c.get) return push('GET', c.label, 'SKIP', 'no get subcommand on either side');
-  if (!branchItems || branchItems.length === 0) return push('GET', c.label, 'SKIP', 'no row available to source an identifier');
+  if (!branchItems || branchItems.length === 0)
+    return push('GET', c.label, 'SKIP', 'no row available to source an identifier');
   const ident = branchItems[0]?.[c.get.argFrom];
   if (!ident) return push('GET', c.label, 'SKIP', `list row has no ${c.get.argFrom}`);
 
@@ -400,14 +558,21 @@ async function checkGet(c: ListCheck, branchItems: any[] | undefined): Promise<v
   if (b.rc !== 0 || m.rc !== 0) {
     return push('GET', c.label, 'FAIL', `exit branch=${b.rc} main=${m.rc} ${shortErr(b.stderr)}${shortErr(m.stderr)}`);
   }
-  const be = entityOf(parseJson(b.stdout)); const me = entityOf(parseJson(m.stdout));
+  const be = entityOf(parseJson(b.stdout));
+  const me = entityOf(parseJson(m.stdout));
   if (!be || !me) return push('GET', c.label, 'FAIL', 'could not unwrap entity from one side');
   const r = compareEntity(c.cmd, be, me);
   for (const d of r.diffs) {
-    notes.push(`${C.red}FAIL${C.reset} ${c.cmd} get .${d.key}: branch=${JSON.stringify(d.branch)} main=${JSON.stringify(d.main)}`);
+    notes.push(
+      `${C.red}FAIL${C.reset} ${c.cmd} get .${d.key}: branch=${JSON.stringify(d.branch)} main=${JSON.stringify(d.main)}`,
+    );
   }
-  push('GET', c.label, r.diffs.length === 0 ? 'PASS' : 'FAIL',
-    `${c.get.argFrom}=${String(ident).slice(0, 28)} — every shared field compared${r.accepted.length ? `; ${r.accepted.length} accepted` : ''}${r.diffs.length ? `; ${r.diffs.length} UNEXPECTED` : ''}`);
+  push(
+    'GET',
+    c.label,
+    r.diffs.length === 0 ? 'PASS' : 'FAIL',
+    `${c.get.argFrom}=${String(ident).slice(0, 28)} — every shared field compared${r.accepted.length ? `; ${r.accepted.length} accepted` : ''}${r.diffs.length ? `; ${r.diffs.length} UNEXPECTED` : ''}`,
+  );
 }
 
 /**
@@ -420,20 +585,23 @@ async function checkWriteRoundTrip(from: 'branch' | 'main'): Promise<void> {
   const creator = from === 'branch' ? BRANCH_DIR : MAIN_DIR;
   const reader = from === 'branch' ? MAIN_DIR : BRANCH_DIR;
 
-  const createArgs = from === 'branch'
-    ? ['organization', 'create', name, '--json', ...envArgs()]
-    : ['organization', 'create', name, '--json'];
+  const createArgs =
+    from === 'branch'
+      ? ['organization', 'create', name, '--json', ...envArgs()]
+      : ['organization', 'create', name, '--json'];
   const c = await run(creator, createArgs);
   if (c.rc !== 0) return push('WRITE', label, 'FAIL', `create failed rc=${c.rc} ${shortErr(c.stderr)}`);
   const orgId = findId(parseJson(c.stdout), 'org');
   if (!orgId) return push('WRITE', label, 'FAIL', 'could not extract org id from create output');
 
   try {
-    const readArgs = reader === BRANCH_DIR
-      ? ['organization', 'get', orgId, '--json', ...envArgs()]
-      : ['organization', 'get', orgId, '--json'];
+    const readArgs =
+      reader === BRANCH_DIR
+        ? ['organization', 'get', orgId, '--json', ...envArgs()]
+        : ['organization', 'get', orgId, '--json'];
     const r = await run(reader, readArgs);
-    if (r.rc !== 0) return push('WRITE', label, 'FAIL', `read-back failed rc=${r.rc} ${shortErr(r.stderr)} (org ${orgId})`);
+    if (r.rc !== 0)
+      return push('WRITE', label, 'FAIL', `read-back failed rc=${r.rc} ${shortErr(r.stderr)} (org ${orgId})`);
     const ent = entityOf(parseJson(r.stdout));
     if (!ent) return push('WRITE', label, 'FAIL', `read-back returned no entity (org ${orgId})`);
     if (ent.id !== orgId) return push('WRITE', label, 'FAIL', `read-back id mismatch: ${ent.id} != ${orgId}`);
@@ -441,11 +609,13 @@ async function checkWriteRoundTrip(from: 'branch' | 'main'): Promise<void> {
     push('WRITE', label, 'PASS', `${orgId} written on one plane, read identically on the other`);
   } finally {
     // Branch requires --yes; main takes no confirmation flag.
-    const delArgs = creator === BRANCH_DIR
-      ? ['organization', 'delete', orgId, '--yes', '--json', ...envArgs()]
-      : ['organization', 'delete', orgId, '--json'];
+    const delArgs =
+      creator === BRANCH_DIR
+        ? ['organization', 'delete', orgId, '--yes', '--json', ...envArgs()]
+        : ['organization', 'delete', orgId, '--json'];
     const d = await run(creator, delArgs);
-    if (d.rc !== 0) notes.push(`${C.yellow}WARN${C.reset} cleanup failed for ${orgId} (rc=${d.rc}) — delete it by hand`);
+    if (d.rc !== 0)
+      notes.push(`${C.yellow}WARN${C.reset} cleanup failed for ${orgId} (rc=${d.rc}) — delete it by hand`);
     // Deletes do not land on both planes simultaneously. Without a settle, the
     // next run's list phase can see the row on one plane and not the other and
     // report a spurious entity-set divergence.
@@ -459,33 +629,112 @@ async function checkWriteRoundTrip(from: 'branch' | 'main'): Promise<void> {
  * which doubles as a write-path exercise: both planes then read what GraphQL
  * wrote. Returns a cleanup thunk.
  *
- * Only permission and webhook are seedable: `user` and `feature-flag` have no
- * create subcommand on either side, `invitation send` delivers a real email,
- * and events are emitted by activity rather than created directly.
+ * `feature-flag` is the one command that cannot be seeded at all: there is no
+ * create subcommand on either side AND no POST /feature-flags REST endpoint, so
+ * a flag can only come into existence through the dashboard UI.
+ *
+ * `user` has no CLI create either, but POST /user_management/users exists, so it
+ * is seeded through `workos api`. Events need no seeding of their own: creating
+ * an organization and a user emits organization.created and user.created.
  */
 async function seed(): Promise<() => Promise<void>> {
   const ts = Date.now();
   const cleanups: Array<() => Promise<void>> = [];
 
   const pslug = `parity-seed-${ts}`;
-  const p = await run(BRANCH_DIR, ['permission', 'create', '--slug', pslug, '--name', `Parity Seed ${ts}`, '--yes', '--json', ...envArgs()]);
+  const p = await run(BRANCH_DIR, [
+    'permission',
+    'create',
+    '--slug',
+    pslug,
+    '--name',
+    `Parity Seed ${ts}`,
+    '--yes',
+    '--json',
+    ...envArgs(),
+  ]);
   if (p.rc === 0) {
     notes.push(`${C.dim}seeded permission ${pslug}${C.reset}`);
-    cleanups.push(async () => { await run(BRANCH_DIR, ['permission', 'delete', pslug, '--yes', '--json', ...envArgs()]); });
+    cleanups.push(async () => {
+      await run(BRANCH_DIR, ['permission', 'delete', pslug, '--yes', '--json', ...envArgs()]);
+    });
   } else {
     notes.push(`${C.yellow}WARN${C.reset} seed permission failed: ${shortErr(p.stderr)}`);
   }
 
-  const w = await run(BRANCH_DIR, ['webhook', 'create', '--url', `https://example.com/parity-${ts}`, '--events', 'dsync.user.created', '--json', ...envArgs()]);
+  const w = await run(BRANCH_DIR, [
+    'webhook',
+    'create',
+    '--url',
+    `https://example.com/parity-${ts}`,
+    '--events',
+    'dsync.user.created',
+    '--json',
+    ...envArgs(),
+  ]);
   const wid = findId(parseJson(w.stdout), 'we');
   if (w.rc === 0 && wid) {
     notes.push(`${C.dim}seeded webhook ${wid}${C.reset}`);
-    cleanups.push(async () => { await run(BRANCH_DIR, ['webhook', 'delete', wid, '--yes', '--json', ...envArgs()]); });
+    cleanups.push(async () => {
+      await run(BRANCH_DIR, ['webhook', 'delete', wid, '--yes', '--json', ...envArgs()]);
+    });
   } else {
     notes.push(`${C.yellow}WARN${C.reset} seed webhook failed: ${shortErr(w.stderr)}`);
   }
 
-  await new Promise((r) => setTimeout(r, 1500));
+  // No CLI `user create` on either plane, so seed over raw REST. This also
+  // emits a user.created event for the event check.
+  const email = `parity-seed-${ts}@example.com`;
+  const u = await run(BRANCH_DIR, [
+    'api',
+    '/user_management/users',
+    '--method',
+    'POST',
+    '--data',
+    JSON.stringify({ email, password: `Parity-Seed-${ts}!aB9`, email_verified: true }),
+    '--yes',
+  ]);
+  const uid = findId(parseJson(u.stdout), 'user');
+  if (u.rc === 0 && uid) {
+    notes.push(`${C.dim}seeded user ${uid}${C.reset}`);
+    cleanups.push(async () => {
+      await run(BRANCH_DIR, ['api', `/user_management/users/${uid}`, '--method', 'DELETE', '--yes']);
+    });
+  } else {
+    notes.push(`${C.yellow}WARN${C.reset} seed user failed: ${shortErr(u.stderr)}`);
+  }
+
+  if (INVITE) {
+    const inviteEmail = `parity-invite-${ts}@example.com`;
+    const inv = await run(BRANCH_DIR, [
+      'api',
+      '/user_management/invitations',
+      '--method',
+      'POST',
+      '--data',
+      JSON.stringify({ email: inviteEmail }),
+      '--yes',
+    ]);
+    const invId = findId(parseJson(inv.stdout), 'invitation');
+    if (inv.rc === 0 && invId) {
+      notes.push(`${C.dim}seeded invitation ${invId}${C.reset}`);
+      cleanups.push(async () => {
+        await run(BRANCH_DIR, ['api', `/user_management/invitations/${invId}/revoke`, '--method', 'POST', '--yes']);
+        // Sending an invitation also creates a pending USER record, and revoking
+        // the invitation does not remove it. Without this the run leaks one user
+        // per invocation, which then pollutes the next run's user comparison.
+        const found = await run(BRANCH_DIR, ['api', `/user_management/users?email=${encodeURIComponent(inviteEmail)}`]);
+        const orphan = findId(parseJson(found.stdout), 'user');
+        if (orphan) await run(BRANCH_DIR, ['api', `/user_management/users/${orphan}`, '--method', 'DELETE', '--yes']);
+      });
+    } else {
+      notes.push(`${C.yellow}WARN${C.reset} seed invitation failed: ${shortErr(inv.stderr)}`);
+    }
+  } else {
+    notes.push(`${C.dim}invitation not seeded (pass --invite; it attempts real email delivery)${C.reset}`);
+  }
+
+  await new Promise((r) => setTimeout(r, 2500));
   return async () => {
     for (const c of cleanups) await c();
     await new Promise((r) => setTimeout(r, 1500));
@@ -502,11 +751,15 @@ async function checkNew(c: { label: string; args: string[] }): Promise<void> {
 
 // --- run -------------------------------------------------------------------------
 console.log(`parity-smoke  branch=${BRANCH_DIR}`);
-console.log(`              main=${MAIN_DIR}${ENV_ID ? `  env=${ENV_ID}` : ''}${MUTATE ? '  [--mutate]' : ''}${SEED ? '  [--seed]' : ''}`);
+console.log(
+  `              main=${MAIN_DIR}${ENV_ID ? `  env=${ENV_ID}` : ''}${MUTATE ? '  [--mutate]' : ''}${SEED ? '  [--seed]' : ''}`,
+);
 console.log(`              cwd=${NEUTRAL_CWD} (isolated so no worktree .env.local loads)`);
 console.log(`              api key source: ${API_KEY_SOURCE}\n`);
 if (API_KEY_SOURCE === 'NONE') {
-  console.log(`${C.yellow}no WORKOS_API_KEY resolved; REST-plane commands will fail or fall back to stored config${C.reset}\n`);
+  console.log(
+    `${C.yellow}no WORKOS_API_KEY resolved; REST-plane commands will fail or fall back to stored config${C.reset}\n`,
+  );
 }
 
 await Promise.all(CONTROL.map(checkControl));
@@ -519,15 +772,24 @@ await Promise.all(CONTROL.map(checkControl));
     run(BRANCH_DIR, ['organization', 'list', '--json', ...envArgs()]),
     run(MAIN_DIR, ['organization', 'list', '--json']),
   ]);
-  const bi = itemsOf(parseJson(b.stdout)); const mi = itemsOf(parseJson(m.stdout));
+  const bi = itemsOf(parseJson(b.stdout));
+  const mi = itemsOf(parseJson(m.stdout));
   const bIds = new Set(bi.map((i: any) => i?.id));
   const overlap = mi.filter((i: any) => bIds.has(i?.id)).length;
   if (bi.length === 0 || mi.length === 0) {
-    push('PREFLIGHT', 'same-environment', 'SKIP',
-      `cannot confirm alignment: branch has ${bi.length} org(s), main has ${mi.length}. Empty comparisons below prove nothing.`);
+    push(
+      'PREFLIGHT',
+      'same-environment',
+      'SKIP',
+      `cannot confirm alignment: branch has ${bi.length} org(s), main has ${mi.length}. Empty comparisons below prove nothing.`,
+    );
   } else if (overlap === 0) {
-    push('PREFLIGHT', 'same-environment', 'FAIL',
-      `branch and main see DISJOINT organizations (${bi.length} vs ${mi.length}, 0 shared). Different environments — every result below is meaningless. Align WORKOS_API_KEY with the session's active env.`);
+    push(
+      'PREFLIGHT',
+      'same-environment',
+      'FAIL',
+      `branch and main see DISJOINT organizations (${bi.length} vs ${mi.length}, 0 shared). Different environments — every result below is meaningless. Align WORKOS_API_KEY with the session's active env.`,
+    );
     console.log(`${C.red}aborting: planes are on different environments${C.reset}`);
     for (const r of rows) console.log(`  ${r.status} ${r.kind} ${r.label} ${r.detail}`);
     process.exit(1);
@@ -538,7 +800,11 @@ await Promise.all(CONTROL.map(checkControl));
 
 const unseed = SEED ? await seed() : undefined;
 const listItems = new Map<string, any[] | undefined>();
-await Promise.all(LISTS.map(async (c) => { listItems.set(c.cmd, await checkList(c)); }));
+await Promise.all(
+  LISTS.map(async (c) => {
+    listItems.set(c.cmd, await checkList(c));
+  }),
+);
 await Promise.all(LISTS.map((c) => checkGet(c, listItems.get(c.cmd))));
 await Promise.all(NEW_ONLY.map(checkNew));
 if (MUTATE) {
@@ -557,8 +823,16 @@ for (const kind of order) {
   if (!group.length) continue;
   console.log(`${C.dim}${kind}${C.reset}`);
   for (const r of group) {
-    const color = r.status === 'PASS' ? C.green : r.status === 'FAIL' ? C.red
-      : r.status === 'AUTH' ? C.yellow : r.status === 'INFO' ? C.cyan : C.dim;
+    const color =
+      r.status === 'PASS'
+        ? C.green
+        : r.status === 'FAIL'
+          ? C.red
+          : r.status === 'AUTH'
+            ? C.yellow
+            : r.status === 'INFO'
+              ? C.cyan
+              : C.dim;
     console.log(`  ${color}${r.status.padEnd(4)}${C.reset}  ${r.label.padEnd(w)}  ${C.dim}${r.detail}${C.reset}`);
   }
 }
@@ -569,5 +843,7 @@ if (notes.length) {
 
 const n = (s: Status) => rows.filter((r) => r.status === s).length;
 const nfail = n('FAIL');
-console.log(`\n${nfail === 0 ? C.green : C.red}${n('PASS')} pass, ${nfail} fail, ${n('AUTH')} auth, ${n('SKIP')} skip${C.reset}`);
+console.log(
+  `\n${nfail === 0 ? C.green : C.red}${n('PASS')} pass, ${nfail} fail, ${n('AUTH')} auth, ${n('SKIP')} skip${C.reset}`,
+);
 process.exit(nfail === 0 ? 0 : 1);
