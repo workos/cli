@@ -24,7 +24,21 @@
  */
 
 /**
- * Normalize a backend enum value to the CLI's lowercase convention.
+ * Normalize a backend enum value to the CLI's convention: lowercase, with
+ * snake_case for multiword values.
+ *
+ * A blanket `.toLowerCase()` would mangle the multiword PascalCase the backend
+ * uses (`UserRegistration` -> `userregistration`). Splitting on case boundaries
+ * first keeps those readable and greppable (`user_registration`). Every value
+ * the migrated commands emit today is single-word, so this is a no-op for them;
+ * it exists so the first multiword enum to enter the surface does not ship
+ * mangled. output-conventions.spec.ts asserts that against the real catalog.
+ *
+ * Runs of capitals with no internal lowercase (`SOME`, `ADFSSAML`) stay one
+ * token, since there is no reliable way to split an acronym.
+ *
+ * Idempotent: feeding it already-converted output returns that output, which is
+ * what makes `enumIn(enumOut(x)) === enumOut(x)` hold.
  *
  * Empty string collapses to null alongside null/undefined: an absent enum and a
  * blank one mean the same thing to a consumer, and `""` in a `state` field is
@@ -32,7 +46,10 @@
  */
 export function enumOut(value: string | null | undefined): string | null {
   if (value === null || value === undefined || value === '') return null;
-  return value.toLowerCase();
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+    .toLowerCase();
 }
 
 /**

@@ -6,7 +6,35 @@ describe('enumOut', () => {
     expect(enumOut('Verified')).toBe('verified');
     expect(enumOut('PENDING')).toBe('pending');
     expect(enumOut('Active')).toBe('active');
-    expect(enumOut('EnvironmentRole')).toBe('environmentrole');
+  });
+
+  it('snake_cases multiword values instead of running them together', () => {
+    expect(enumOut('UserRegistration')).toBe('user_registration');
+    expect(enumOut('GenericHttps')).toBe('generic_https');
+    expect(enumOut('AdpOidc')).toBe('adp_oidc');
+    expect(enumOut('GoogleCloudStorage')).toBe('google_cloud_storage');
+  });
+
+  it('keeps acronym runs as one token, having no reliable way to split them', () => {
+    expect(enumOut('SOME')).toBe('some');
+    expect(enumOut('ADFSSAML')).toBe('adfssaml');
+  });
+
+  it('is idempotent, so converted output survives a second pass', () => {
+    for (const v of ['Active', 'UserRegistration', 'SOME', 'GenericHttps']) {
+      const once = enumOut(v)!;
+      expect(enumOut(once)).toBe(once);
+    }
+  });
+
+  it('is a no-op for every value the migrated commands emit today', () => {
+    // Observed against the live API. If one of these ever changes, the parity
+    // harness and the JSON snapshots should both fail before users notice.
+    const emitted = ['Active', 'Verified', 'Pending', 'Environment', 'Organization', 'Standard', 'Dns', 'Manual'];
+    for (const v of emitted) {
+      expect(enumOut(v)).toBe(v.toLowerCase());
+      expect(enumOut(v)).not.toContain('_');
+    }
   });
 
   it('passes through values already in convention', () => {
