@@ -594,7 +594,7 @@ All commands produce structured JSON when piped or with `--json`:
 
 ```bash
 workos org list | jq .
-# → { "data": [...], "list_metadata": { "before": null, "after": "..." } }
+# → { "organizations": [...], "pagination": { "before": null, "after": "..." } }
 
 workos env list --json
 # → { "data": [{ "name": "prod", "type": "production", "active": true, ... }] }
