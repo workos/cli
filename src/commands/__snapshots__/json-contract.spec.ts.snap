@@ -1,0 +1,371 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`migrated commands --json contract > pins the complete public --json contract for every migrated command 1`] = `
+{
+  "event.list": {
+    "events": [
+      {
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "data": {
+          "directory_id": "dir_1",
+        },
+        "event": "dsync.user.created",
+        "id": "event_1",
+        "updatedAt": "2026-01-01T00:00:00.000Z",
+      },
+    ],
+    "pagination": {
+      "after": "cursor_a",
+      "before": null,
+    },
+  },
+  "feature-flag.get": {
+    "flag": {
+      "accessType": "some",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "defaultEnabled": true,
+      "description": "Beta feature",
+      "enabled": false,
+      "id": "flag_1",
+      "name": "Beta",
+      "organizationTargets": [
+        {
+          "id": "org_1",
+          "name": "FooCorp",
+        },
+      ],
+      "slug": "beta",
+      "tags": [
+        "beta-wave",
+      ],
+      "updatedAt": "2026-02-01T00:00:00.000Z",
+      "userTargets": [
+        {
+          "email": "a@example.com",
+          "id": "user_1",
+        },
+      ],
+    },
+  },
+  "feature-flag.list": {
+    "flags": [
+      {
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "description": "Beta feature",
+        "enabled": false,
+        "id": "flag_1",
+        "name": "Beta",
+        "slug": "beta",
+        "updatedAt": "2026-02-01T00:00:00.000Z",
+      },
+    ],
+    "pagination": {
+      "after": "cursor_a",
+      "before": null,
+    },
+  },
+  "invitation.get": {
+    "invitation": {
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "email": "jane@example.com",
+      "id": "invite_1",
+      "organization": {
+        "id": "org_1",
+        "name": "FooCorp",
+      },
+      "state": "pending",
+    },
+  },
+  "invitation.list": {
+    "invitations": [
+      {
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "email": "jane@example.com",
+        "id": "invite_1",
+        "organization": {
+          "id": "org_1",
+          "name": "FooCorp",
+        },
+        "state": "pending",
+      },
+    ],
+    "pagination": {
+      "after": "cursor_a",
+      "before": null,
+    },
+  },
+  "membership.get": {
+    "membership": {
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "directoryUserId": null,
+      "id": "om_1",
+      "organizationId": "org_1",
+      "role": "member",
+      "roles": [
+        "member",
+      ],
+      "state": "active",
+      "type": "standard",
+      "updatedAt": "2026-02-01T00:00:00.000Z",
+      "userId": "user_1",
+    },
+  },
+  "membership.list": {
+    "memberships": [
+      {
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "directoryUserId": null,
+        "id": "om_1",
+        "organizationId": "org_1",
+        "role": "member",
+        "roles": [
+          "member",
+        ],
+        "state": "active",
+        "type": "standard",
+        "updatedAt": "2026-02-01T00:00:00.000Z",
+        "userId": "user_1",
+      },
+    ],
+    "pagination": {
+      "after": null,
+      "before": null,
+    },
+  },
+  "org-domain.get": {
+    "domain": {
+      "domain": "example.com",
+      "domainCaptureEnabled": false,
+      "id": "org_domain_1",
+      "organizationId": "org_1",
+      "state": "verified",
+      "subdomain": null,
+      "verificationContent": "workos-verify=abc123",
+      "verificationStrategy": "dns",
+    },
+  },
+  "organization.get": {
+    "organization": {
+      "allowProfilesOutsideOrganization": false,
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "domains": [
+        {
+          "domain": "foo.com",
+          "id": "dom_1",
+          "state": "verified",
+        },
+      ],
+      "externalId": null,
+      "id": "org_1",
+      "metadata": {
+        "team": "blue",
+      },
+      "name": "FooCorp",
+      "usersCount": 3,
+    },
+  },
+  "organization.list": {
+    "organizations": [
+      {
+        "allowProfilesOutsideOrganization": false,
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "domains": [
+          {
+            "domain": "foo.com",
+            "id": "dom_1",
+            "state": "verified",
+          },
+        ],
+        "externalId": null,
+        "id": "org_1",
+        "metadata": {
+          "team": "blue",
+        },
+        "name": "FooCorp",
+        "usersCount": 3,
+      },
+    ],
+    "pagination": {
+      "after": "cursor_a",
+      "before": null,
+    },
+  },
+  "permission.get": {
+    "permission": {
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "description": "Read user records",
+      "id": "perm_1",
+      "name": "Read users",
+      "slug": "users:read",
+      "system": false,
+      "updatedAt": "2026-02-01T00:00:00.000Z",
+    },
+  },
+  "permission.list": {
+    "permissions": [
+      {
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "description": "Read user records",
+        "id": "perm_1",
+        "name": "Read users",
+        "slug": "users:read",
+        "system": false,
+        "updatedAt": "2026-02-01T00:00:00.000Z",
+      },
+    ],
+  },
+  "role.get": {
+    "role": {
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "description": "Administrator",
+      "id": "role_env",
+      "name": "Admin",
+      "permissions": [
+        "users:read",
+      ],
+      "slug": "admin",
+      "type": "environment",
+      "updatedAt": "2026-02-01T00:00:00.000Z",
+    },
+  },
+  "role.list": {
+    "roles": [
+      {
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "description": "Administrator",
+        "id": "role_env",
+        "name": "Admin",
+        "permissions": [
+          "users:read",
+        ],
+        "slug": "admin",
+        "type": "environment",
+        "updatedAt": "2026-02-01T00:00:00.000Z",
+      },
+    ],
+  },
+  "session.list": {
+    "pagination": {
+      "after": "cursor_a",
+      "before": null,
+    },
+    "sessions": [
+      {
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "endedAt": null,
+        "expiresAt": "2026-03-01T00:00:00.000Z",
+        "id": "session_1",
+        "impersonator": null,
+        "ipAddress": "203.0.113.7",
+        "organization": {
+          "id": "org_1",
+          "name": "FooCorp",
+        },
+        "provider": "Password",
+        "state": "active",
+        "updatedAt": "2026-01-02T00:00:00.000Z",
+        "userAgent": "Mozilla/5.0",
+      },
+    ],
+  },
+  "user.get": {
+    "user": {
+      "authenticationFactors": [
+        {
+          "id": "auth_factor_1",
+          "lastVerifiedAt": "2026-02-02T00:00:00.000Z",
+        },
+      ],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "email": "jane@example.com",
+      "emailVerifiedAt": "2026-01-02T00:00:00.000Z",
+      "externalId": null,
+      "firstName": "Jane",
+      "hasPassword": true,
+      "id": "user_1",
+      "identities": [
+        {
+          "id": "ident_1",
+          "organization": {
+            "id": "org_1",
+            "name": "FooCorp",
+          },
+          "roles": [
+            {
+              "id": "role_1",
+              "name": "member",
+            },
+          ],
+          "state": "active",
+        },
+      ],
+      "lastName": "Doe",
+      "lastSignedInAt": "2026-02-01T00:00:00.000Z",
+      "locale": "en-US",
+      "metadata": {
+        "team": "blue",
+      },
+      "profilePictureUrl": null,
+      "sessionCount": 4,
+    },
+  },
+  "user.list": {
+    "pagination": {
+      "after": "cursor_a",
+      "before": null,
+    },
+    "users": [
+      {
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "email": "jane@example.com",
+        "emailVerifiedAt": "2026-01-02T00:00:00.000Z",
+        "externalId": null,
+        "firstName": "Jane",
+        "hasPassword": true,
+        "id": "user_1",
+        "identities": [
+          {
+            "id": "ident_1",
+            "organization": {
+              "id": "org_1",
+              "name": "FooCorp",
+            },
+            "roles": [
+              {
+                "id": "role_1",
+                "name": "member",
+              },
+            ],
+            "state": "active",
+          },
+        ],
+        "lastName": "Doe",
+        "lastSignedInAt": "2026-02-01T00:00:00.000Z",
+        "locale": "en-US",
+        "metadata": {
+          "team": "blue",
+        },
+        "profilePictureUrl": null,
+        "sessionCount": 4,
+      },
+    ],
+  },
+  "webhook.list": {
+    "pagination": {
+      "after": "cursor_a",
+      "before": null,
+    },
+    "webhookEndpoints": [
+      {
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "events": [
+          "dsync.user.created",
+        ],
+        "id": "we_1",
+        "state": "active",
+        "url": "https://example.com/hook",
+      },
+    ],
+  },
+}
+`;
