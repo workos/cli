@@ -101,8 +101,8 @@ const ORG_NODE = {
   usersCount: 3,
   allowProfilesOutsideOrganization: false,
   externalId: null,
-  metadata: [],
-  domains: [{ id: 'dom_1', domain: 'foo.com', state: 'verified' }],
+  metadata: [{ key: 'team', value: 'blue' }],
+  domains: [{ id: 'dom_1', domain: 'foo.com', state: 'Verified' }],
   // Internal fields the curated shape must drop:
   seeded: false,
   stripeCustomerId: 'cus_internal',
@@ -162,6 +162,10 @@ describe('organization command', () => {
         1,
       );
       expect(err.context?.errorCode).toBe('invalid_argument');
+    });
+
+    it('accepts mixed-case state and normalizes it to lowercase', () => {
+      expect(parseDomainArgs(['foo.com:Verified'])).toEqual([{ domain: 'foo.com', state: 'verified' }]);
     });
   });
 
@@ -234,7 +238,9 @@ describe('organization command', () => {
       expect(Object.keys(out)).toEqual(['organizations', 'pagination']);
       expect(Object.keys(out.organizations[0])).toEqual(ORGANIZATION_SHAPE_KEYS);
       expect(out.organizations[0]).not.toHaveProperty('stripeCustomerId');
+      // Backend emits TitleCase `Verified`; the contract emits it lowercase.
       expect(out.organizations[0].domains[0]).toEqual({ id: 'dom_1', domain: 'foo.com', state: 'verified' });
+      expect(out.organizations[0].metadata).toEqual({ team: 'blue' });
       expect(out.pagination).toEqual({ before: null, after: 'cursor_a' });
     });
   });

@@ -193,10 +193,10 @@ describe('org-domain command', () => {
       expect(out.domain).toEqual({
         id: 'org_domain_1',
         domain: 'example.com',
-        state: 'Verified',
+        state: 'verified',
         organizationId: 'org_1',
         subdomain: null,
-        verificationStrategy: 'Dns',
+        verificationStrategy: 'dns',
         verificationContent: 'workos-verify=abc123',
         domainCaptureEnabled: false,
       });
@@ -226,7 +226,7 @@ describe('org-domain command', () => {
       expect(out).toContain('example.com');
       // Pin the added-as-verified divergence copy: the printed state is the
       // loudness mechanism for the REST→dashboard create divergence.
-      expect(out).toContain('state: Verified');
+      expect(out).toContain('state: verified');
     });
 
     it('errors domain_in_use when another organization holds the domain', async () => {
@@ -274,9 +274,9 @@ describe('org-domain command', () => {
       expect(out.domain).toMatchObject({
         id: 'org_domain_1',
         domain: 'example.com',
-        state: 'Verified',
+        state: 'verified',
         organizationId: 'org_1',
-        verificationStrategy: 'Manual',
+        verificationStrategy: 'manual',
       });
     });
   });
@@ -308,7 +308,7 @@ describe('org-domain command', () => {
       const out = JSON.parse(consoleOutput[0]);
       expect(Object.keys(out)).toEqual(['domain']);
       expect(Object.keys(out.domain)).toEqual(ORG_DOMAIN_SHAPE_KEYS);
-      expect(out.domain).toMatchObject({ id: 'org_domain_1', state: 'Pending', organizationId: null });
+      expect(out.domain).toMatchObject({ id: 'org_domain_1', state: 'pending', organizationId: null });
     });
   });
 

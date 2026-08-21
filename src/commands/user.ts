@@ -24,6 +24,7 @@ import { runEnvScopedOperation } from '../lib/dashboard-operation.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
 import { normalizeOrder, printDetailFields, printPaginationFooter } from '../utils/resource-command.js';
 import { formatTable } from '../utils/table.js';
+import { enumOut, metadataToMap } from '../utils/output-conventions.js';
 
 interface IdentityNode {
   id: string;
@@ -69,10 +70,10 @@ function shapeUser(user: UserNode) {
     locale: user.locale ?? null,
     externalId: user.externalId ?? null,
     profilePictureUrl: user.profilePictureUrl ?? null,
-    metadata: user.metadata ?? [],
+    metadata: metadataToMap(user.metadata),
     identities: (user.identities?.data ?? []).map((identity) => ({
       id: identity.id,
-      status: identity.status ?? null,
+      state: enumOut(identity.status),
       organization: identity.organization
         ? { id: identity.organization.id, name: identity.organization.name ?? null }
         : null,

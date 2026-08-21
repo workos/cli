@@ -190,7 +190,7 @@ describe('invitation command', () => {
       expect(out.invitations[0]).toEqual({
         id: 'invite_1',
         email: 'jane@example.com',
-        state: 'Pending',
+        state: 'pending',
         createdAt: '2026-01-01T00:00:00.000Z',
         organization: { id: 'org_1', name: 'FooCorp' },
       });

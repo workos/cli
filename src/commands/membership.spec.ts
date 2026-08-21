@@ -94,7 +94,7 @@ const MEMBERSHIP_SHAPE_KEYS = [
   'id',
   'userId',
   'organizationId',
-  'status',
+  'state',
   'type',
   'role',
   'roles',
@@ -219,6 +219,7 @@ describe('membership command', () => {
         id: 'om_1',
         userId: 'user_1',
         organizationId: 'org_1',
+        state: 'active',
         role: 'member',
         roles: ['member'],
       });
@@ -287,7 +288,13 @@ describe('membership command', () => {
       const out = JSON.parse(raw);
       expect(Object.keys(out)).toEqual(['membership']);
       expect(Object.keys(out.membership)).toEqual(MEMBERSHIP_SHAPE_KEYS);
-      expect(out.membership).toMatchObject({ id: 'om_1', userId: 'user_1', organizationId: 'org_1' });
+      expect(out.membership).toMatchObject({
+        id: 'om_1',
+        userId: 'user_1',
+        organizationId: 'org_1',
+        state: 'active',
+        type: 'standard',
+      });
     });
 
     it('errors not_found when the membership does not exist', async () => {

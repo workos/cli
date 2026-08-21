@@ -48,7 +48,7 @@ interface SessionNode {
  * Map the state variant to a clean status word. Never echo the raw typename —
  * it carries internal naming.
  */
-const SESSION_STATUS: Record<string, string> = {
+const SESSION_STATE: Record<string, string> = {
   UserlandSessionIssued: 'active',
   UserlandSessionExpired: 'expired',
   UserlandSessionRevoked: 'revoked',
@@ -63,7 +63,7 @@ function shapeSession(session: SessionNode) {
   const state = session.state ?? null;
   return {
     id: session.id,
-    status: state?.__typename ? (SESSION_STATUS[state.__typename] ?? null) : null,
+    state: state?.__typename ? (SESSION_STATE[state.__typename] ?? null) : null,
     createdAt: session.createdAt ?? null,
     updatedAt: session.updatedAt ?? null,
     expiresAt: state?.expiresAt ?? null,
@@ -132,7 +132,7 @@ export async function runSessionList(userId: string, options: SessionListOptions
 
   const rows = sessions.map((s) => [
     s.id,
-    s.status ?? chalk.dim('-'),
+    s.state ?? chalk.dim('-'),
     s.userAgent ?? chalk.dim('-'),
     s.ipAddress ?? chalk.dim('-'),
     s.createdAt ?? chalk.dim('-'),

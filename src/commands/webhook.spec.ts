@@ -204,7 +204,7 @@ describe('webhook command', () => {
         id: 'we_123',
         url: 'https://example.com/hook',
         events: ['dsync.user.created'],
-        state: 'Active',
+        state: 'active',
         createdAt: '2024-01-01T00:00:00Z',
       });
     });

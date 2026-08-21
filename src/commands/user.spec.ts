@@ -112,7 +112,7 @@ const USER_NODE = {
   locale: 'en-US',
   externalId: null,
   profilePictureUrl: null,
-  metadata: [],
+  metadata: [{ key: 'team', value: 'blue' }],
   identities: {
     data: [
       {
@@ -189,9 +189,11 @@ describe('user command', () => {
       expect(Object.keys(out)).toEqual(['user']);
       expect(Object.keys(out.user)).toEqual([...USER_SHAPE_KEYS, 'authenticationFactors']);
       expect(out.user).not.toHaveProperty('googleOauthProfile');
+      expect(out.user.metadata).toEqual({ team: 'blue' });
+      // Backend emits `status: 'Active'`; the contract renames to `state` and lowercases.
       expect(out.user.identities[0]).toEqual({
         id: 'ident_1',
-        status: 'Active',
+        state: 'active',
         organization: { id: 'org_1', name: 'FooCorp' },
         roles: [{ id: 'role_1', name: 'member' }],
       });

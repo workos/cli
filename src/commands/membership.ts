@@ -32,6 +32,7 @@ import { confirmDestructive, requireConfirmationFlag } from '../catalog/confirm.
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
 import { formatTable } from '../utils/table.js';
 import { normalizeOrder, printDetailFields, printPaginationFooter } from '../utils/resource-command.js';
+import { enumOut } from '../utils/output-conventions.js';
 
 /**
  * `role`/`roles` come back as unselected scalars on the membership record but
@@ -78,8 +79,8 @@ function shapeMembership(membership: MembershipNode) {
     id: membership.id,
     userId: membership.userlandUserId ?? null,
     organizationId: membership.organizationId ?? null,
-    status: membership.status ?? null,
-    type: membership.type ?? null,
+    state: enumOut(membership.status),
+    type: enumOut(membership.type),
     role: normalizeRoleValue(membership.role),
     roles: normalizeRolesValue(membership.roles),
     directoryUserId: membership.directoryUserId ?? null,
@@ -96,7 +97,7 @@ function renderMembershipTable(memberships: ShapedMembership[]): void {
     m.userId ?? chalk.dim('-'),
     m.organizationId ?? chalk.dim('-'),
     m.role ?? (m.roles.length > 0 ? m.roles.join(', ') : chalk.dim('-')),
-    m.status ?? chalk.dim('-'),
+    m.state ?? chalk.dim('-'),
     m.createdAt ?? chalk.dim('-'),
   ]);
   console.log(
@@ -273,7 +274,7 @@ export async function runMembershipGet(id: string, options: MembershipGetOptions
     ['User ID', membership.userId],
     ['Org ID', membership.organizationId],
     ['Role', membership.role ?? (membership.roles.length > 0 ? membership.roles.join(', ') : null)],
-    ['Status', membership.status],
+    ['Status', membership.state],
     ['Created', membership.createdAt],
   ];
   printDetailFields(fields);

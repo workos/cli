@@ -21,6 +21,7 @@ import chalk from 'chalk';
 import { runEnvScopedOperation } from '../lib/dashboard-operation.js';
 import { confirmDestructive } from '../catalog/confirm.js';
 import { isJsonMode, outputJson, outputSuccess } from '../utils/output.js';
+import { enumOut } from '../utils/output-conventions.js';
 import { formatTable } from '../utils/table.js';
 import { printPaginationFooter } from '../utils/resource-command.js';
 
@@ -42,7 +43,7 @@ function shapeWebhookEndpoint(endpoint: WebhookEndpointNode) {
     id: endpoint.id ?? null,
     url: endpoint.endpointUrl ?? null,
     events: endpoint.events ?? [],
-    state: endpoint.state ?? null,
+    state: enumOut(endpoint.state),
     createdAt: endpoint.createdAt ?? null,
   };
 }

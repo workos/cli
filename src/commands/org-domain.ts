@@ -27,6 +27,7 @@ import { runEnvScopedOperation } from '../lib/dashboard-operation.js';
 import { confirmDestructive } from '../catalog/confirm.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
 import { printDetailFields } from '../utils/resource-command.js';
+import { enumOut } from '../utils/output-conventions.js';
 
 /**
  * `get <id>` scans one page of organizations (each carrying its domains) — a
@@ -54,10 +55,10 @@ function shapeOrgDomain(domain: OrgDomainNode, organizationId: string | null) {
   return {
     id: domain.id ?? null,
     domain: domain.domain ?? null,
-    state: domain.state ?? null,
+    state: enumOut(domain.state),
     organizationId,
     subdomain: domain.subdomain ?? null,
-    verificationStrategy: domain.verificationStrategy ?? null,
+    verificationStrategy: enumOut(domain.verificationStrategy),
     verificationContent: domain.verificationContent ?? null,
     domainCaptureEnabled: domain.domainCaptureEnabled ?? null,
   };

@@ -21,6 +21,7 @@
 import chalk from 'chalk';
 import { runEnvScopedOperation } from '../lib/dashboard-operation.js';
 import { isJsonMode, outputJson, exitWithError } from '../utils/output.js';
+import { enumOut } from '../utils/output-conventions.js';
 
 /**
  * CLI intent grammar (frozen REST values) → backing enum names. `audit_logs`
@@ -60,7 +61,7 @@ function shapePortalSetupLink(link: PortalSetupLinkNode) {
     id: link.id ?? null,
     link: link.url ?? null,
     intents: (link.intents ?? []).map((intent) => INTENT_REVERSE_MAP[intent] ?? intent),
-    state: link.state ?? null,
+    state: enumOut(link.state),
     expiresAt: link.expiresAt ?? null,
   };
 }

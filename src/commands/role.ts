@@ -35,6 +35,7 @@ import { runEnvScopedOperation, executeDashboardOperation } from '../lib/dashboa
 import { getOperation } from '../catalog/operation.js';
 import { confirmDestructive, requireConfirmationFlag } from '../catalog/confirm.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
+import { enumOut } from '../utils/output-conventions.js';
 import { printDetailFields } from '../utils/resource-command.js';
 import { formatTable } from '../utils/table.js';
 
@@ -61,7 +62,7 @@ function shapeRole(role: RoleNode) {
     slug: role.slug,
     name: role.name,
     description: role.description ?? null,
-    type: role.type ?? null,
+    type: enumOut(role.type),
     permissions: (role.permissions ?? []).map((permission) => permission.slug),
     createdAt: role.createdAt ?? null,
     updatedAt: role.updatedAt ?? null,
@@ -123,7 +124,7 @@ async function requireRoleBySlug(
  * environment-wide. Refuse loudly instead.
  */
 function requireOrgScopedRole(role: RoleNode, slug: string, orgId: string): void {
-  if (role.type !== 'Organization') {
+  if (enumOut(role.type) !== 'organization') {
     exitWithError({
       code: 'invalid_argument',
       message:

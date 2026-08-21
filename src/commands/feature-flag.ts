@@ -31,6 +31,7 @@ import { resolveEnvironmentTarget } from '../lib/environment-target.js';
 import { executeDashboardOperation } from '../lib/dashboard-operation.js';
 import { getOperation } from '../catalog/operation.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
+import { enumOut } from '../utils/output-conventions.js';
 import { normalizeOrder, printDetailFields, printPaginationFooter } from '../utils/resource-command.js';
 import { formatTable } from '../utils/table.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
@@ -83,7 +84,7 @@ function shapeFlagDetail(flag: FlagNode, environmentId: string) {
   return {
     ...shapeFlag(flag, environmentId),
     defaultEnabled: state?.defaultEnabled ?? false,
-    accessType: state?.accessType ?? null,
+    accessType: enumOut(state?.accessType),
     organizationTargets: (state?.organizations ?? []).map((org) => ({ id: org.id, name: org.name ?? null })),
     userTargets: (state?.users ?? []).map((user) => ({ id: user.id, email: user.email ?? null })),
     tags: (flag.tags ?? []).map((tag) => tag.name ?? tag.id),
@@ -282,7 +283,7 @@ async function executeFlagEnvironmentUpdate(
         flagEnvironmentId: state.id,
         flagEnabled: overrides.flagEnabled ?? state.flagEnabled ?? false,
         defaultEnabled: state.defaultEnabled ?? false,
-        accessType: state.accessType ?? 'NONE',
+        accessType: enumOut(state.accessType) ?? 'none',
         organizationIds: overrides.organizationIds ?? (state.organizations ?? []).map((org) => org.id),
         userIds: overrides.userIds ?? (state.users ?? []).map((user) => user.id),
       },

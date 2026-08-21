@@ -25,6 +25,7 @@ import { runEnvScopedOperation } from '../lib/dashboard-operation.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
 import { normalizeOrder, printDetailFields, printPaginationFooter } from '../utils/resource-command.js';
 import { formatTable } from '../utils/table.js';
+import { enumOut, enumIn, metadataToMap } from '../utils/output-conventions.js';
 
 const DOMAIN_STATES = ['verified', 'pending'] as const;
 type DomainState = (typeof DOMAIN_STATES)[number];
@@ -38,11 +39,11 @@ export interface ParsedDomain {
 export function parseDomainArgs(args: string[]): ParsedDomain[] {
   return args.map((arg) => {
     const parts = arg.split(':');
-    const state = parts[1] || 'verified';
-    if (!(DOMAIN_STATES as readonly string[]).includes(state)) {
+    const state = parts[1] ? enumIn(parts[1]) : 'verified';
+    if (!(DOMAIN_STATES as readonly string[]).includes(state as string)) {
       exitWithError({
         code: 'invalid_argument',
-        message: `Invalid domain state "${state}" for "${parts[0]}". Allowed states: ${DOMAIN_STATES.join(', ')}.`,
+        message: `Invalid domain state "${parts[1]}" for "${parts[0]}". Allowed states: ${DOMAIN_STATES.join(', ')}.`,
       });
     }
     return { domain: parts[0], state: state as DomainState };
@@ -96,16 +97,15 @@ function shapeOrganization(org: OrganizationNode) {
     usersCount: org.usersCount ?? null,
     allowProfilesOutsideOrganization: org.allowProfilesOutsideOrganization ?? null,
     externalId: org.externalId ?? null,
-    // The dashboard API returns PascalCase domain states (`Verified`), but the
-    // CLI contract is lowercase — `parseDomainArgs` only accepts `verified`/
-    // `pending`, and the REST shape emitted lowercase. Normalize so input and
-    // output round-trip.
+    // Domain states follow the shared `--json` convention: enum values are
+    // emitted lowercase (see output-conventions.ts) so input and output
+    // round-trip.
     domains: (org.domains ?? []).map((d) => ({
       id: d.id ?? null,
       domain: d.domain,
-      state: d.state ? d.state.toLowerCase() : null,
+      state: enumOut(d.state),
     })),
-    metadata: org.metadata ?? [],
+    metadata: metadataToMap(org.metadata),
   };
 }
 

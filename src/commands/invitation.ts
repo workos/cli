@@ -30,6 +30,7 @@ import { getOperation } from '../catalog/operation.js';
 import { runEnvScopedOperation, executeDashboardOperation } from '../lib/dashboard-operation.js';
 import { confirmDestructive } from '../catalog/confirm.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
+import { enumOut } from '../utils/output-conventions.js';
 import { formatTable } from '../utils/table.js';
 import { printDetailFields, printPaginationFooter } from '../utils/resource-command.js';
 
@@ -56,7 +57,7 @@ function shapeInvitation(invitation: InvitationNode) {
   return {
     id: invitation.id,
     email: invitation.inviteeEmail ?? null,
-    state: invitation.state ?? null,
+    state: enumOut(invitation.state),
     createdAt: invitation.createdAt ?? null,
     organization: invitation.organization
       ? { id: invitation.organization.id, name: invitation.organization.name ?? null }

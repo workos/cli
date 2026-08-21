@@ -84,7 +84,7 @@ async function expectExit(promise: Promise<unknown>, code: number): Promise<CliE
 /** The authoritative curated session JSON shape (documented contract). */
 const SESSION_SHAPE_KEYS = [
   'id',
-  'status',
+  'state',
   'createdAt',
   'updatedAt',
   'expiresAt',
@@ -229,14 +229,14 @@ describe('session command', () => {
       expect(Object.keys(out.sessions[0])).toEqual(SESSION_SHAPE_KEYS);
       expect(out.sessions[0]).toMatchObject({
         id: 'session_1',
-        status: 'active',
+        state: 'active',
         expiresAt: '2026-03-01T00:00:00.000Z',
         endedAt: null,
         organization: { id: 'org_1', name: 'FooCorp' },
       });
       expect(out.sessions[1]).toMatchObject({
         id: 'session_2',
-        status: 'revoked',
+        state: 'revoked',
         endedAt: '2026-02-01T00:00:00.000Z',
       });
       expect(out.pagination).toEqual({ before: null, after: 'cursor_a' });

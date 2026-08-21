@@ -197,7 +197,7 @@ describe('portal command', () => {
         id: 'portal_setup_link_1',
         link: 'https://setup.workos.com/abc',
         intents: ['sso'],
-        state: 'Active',
+        state: 'active',
         expiresAt: '2026-08-01T00:00:00Z',
       });
     });

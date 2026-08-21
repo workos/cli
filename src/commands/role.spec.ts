@@ -261,7 +261,7 @@ describe('role command', () => {
       });
       const out = consoleOutput.join('\n');
       expect(out).toContain('admin');
-      expect(out).toContain('Environment');
+      expect(out).toContain('environment');
     });
 
     it('lists organization roles via the org list operation with --org', async () => {
@@ -286,7 +286,7 @@ describe('role command', () => {
       expect(Object.keys(out.roles[0])).toEqual(ROLE_SHAPE_KEYS);
       expect(out.roles[0]).toMatchObject({
         slug: 'admin',
-        type: 'Environment',
+        type: 'environment',
         permissions: ['users:read'],
       });
     });
