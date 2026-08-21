@@ -187,14 +187,16 @@ function findId(out: any, prefix: string): string | undefined {
 // Field-level differences that are intentional per the branch specs. Reported as
 // INFO so they stay visible, never as FAIL. Anything NOT listed here that differs
 // is a real regression.
+// Every entry is a DELIBERATE vocabulary or structural curation, documented in
+// the migration guide. Enum CASING is deliberately absent: the CLI normalizes
+// all enum values to lowercase via utils/output-conventions, so a casing-only
+// difference is a bug, not an accepted divergence, and must fail the run.
 const ACCEPTED: Record<string, string> = {
-  'role.type': 'branch emits Environment/Organization; REST emitted EnvironmentRole/OrganizationRole (role.spec.ts asserts short form)',
-  'invitation.state': 'branch emits TitleCase Pending; REST emitted lowercase pending (invitation.spec.ts asserts TitleCase)',
-  'invitation.organization': 'branch nests {id,name}; REST emitted flat organizationId',
-  'webhook.state': 'branch emits TitleCase Active; REST emitted lowercase (webhook.spec.ts asserts TitleCase)',
-  'user.identities': 'branch nests curated identities; REST shape differs',
-  'feature-flag.enabled': 'branch derives from the active environment state; REST exposed a flat flag',
-  'organization.metadata': 'TYPE CHANGE: branch emits an array of {key,value}; REST emitted an object map. `.metadata.foo` no longer resolves.',
+  'role.type': 'vocabulary: branch emits environment/organization; REST emitted EnvironmentRole/OrganizationRole. The redundant Role suffix is dropped.',
+  'webhook.state': 'vocabulary: branch emits active; REST emitted enabled. Aligned with session\'s active/expired/revoked.',
+  'invitation.organization': 'structural: branch nests {id,name}; REST emitted a flat organizationId',
+  'user.identities': 'structural: branch nests curated identities and renames status->state; REST shape differs',
+  'feature-flag.enabled': 'semantic: branch derives from the active environment state; REST exposed a flat flag',
 };
 
 /**
