@@ -590,6 +590,10 @@ The CLI also auto-detects non-TTY environments (piped output, CI, coding agents)
 
 ### JSON Output
 
+> **Upgrading?** The resource commands moved to the dashboard GraphQL API and
+> their `--json` shapes changed in one breaking release. See
+> [MIGRATION.md](MIGRATION.md) for the old-to-new field table and `jq` snippets.
+
 All commands produce structured JSON when piped or with `--json`:
 
 ```bash
