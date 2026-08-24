@@ -24,9 +24,10 @@
  *              is the actual claim the migration makes.
  *   NEW      — branch-only commands. Exit 0 + valid JSON on the branch binary.
  *
- * Not covered: user has no create subcommand on either side (no round-trip
- * possible); session/webhook/event have no `get`; org-domain has `get` but no
- * `list`, so no id source; portal generate-link and config are mutation-only.
+ * Live parity gaps: feature flags cannot be seeded outside the dashboard;
+ * session requires a real login; webhook/event have no `get`; org-domain has
+ * `get` but no list from which to source an id; portal/config are mutation-only.
+ * Their complete JSON contracts are pinned by json-contract.spec.ts.
  *
  * Prereqs:
  *   1. From this branch: `workos auth login` (dashboard OAuth session).
@@ -38,6 +39,8 @@
  *   bun run scripts/parity-smoke.ts                    # read-only
  *   bun run scripts/parity-smoke.ts --seed             # + seed fixtures so lists are non-empty
  *   bun run scripts/parity-smoke.ts --seed --mutate    # + cross-plane write round-trip
+ *   bun run scripts/parity-smoke.ts --seed --invite --mutate --strict
+ *                                                     # release gate
  *
  * Env: PARITY_BRANCH_BIN, PARITY_MAIN_BIN (default: bun <dir>/src/bin.ts),
  *      PARITY_ENV_ID (pins --environment-id on branch commands).
@@ -54,10 +57,19 @@ const MAIN_DIR = path.resolve(BRANCH_DIR, '../main');
 const ENV_ID = process.env.PARITY_ENV_ID;
 const MUTATE = process.argv.includes('--mutate');
 const SEED = process.argv.includes('--seed');
+const STRICT = process.argv.includes('--strict');
 // Invitations are seeded separately because sending one attempts real email
 // delivery. The address used is @example.com (RFC 2606 reserved, black-holed),
 // and the invitation is revoked during cleanup, but it stays opt-in.
 const INVITE = process.argv.includes('--invite');
+
+if (STRICT) {
+  const missing = [!SEED && '--seed', !INVITE && '--invite', !MUTATE && '--mutate'].filter(Boolean);
+  if (missing.length) {
+    console.error(`--strict requires ${missing.join(', ')}`);
+    process.exit(2);
+  }
+}
 
 if (!existsSync(path.join(MAIN_DIR, 'src/bin.ts'))) {
   console.error(`main checkout not found: ${MAIN_DIR}/src/bin.ts`);
@@ -105,6 +117,7 @@ interface RunResult {
   stdout: string;
   stderr: string;
 }
+const COMMAND_TIMEOUT_MS = 60_000;
 function run(dir: string, cliArgs: string[]): Promise<RunResult> {
   const { cmd, args } = binFor(dir);
   return new Promise((resolve) => {
@@ -113,14 +126,27 @@ function run(dir: string, cliArgs: string[]): Promise<RunResult> {
     const p = spawn(cmd, [...args, ...cliArgs], { cwd: NEUTRAL_CWD, env: childEnv, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
+    let settled = false;
+    const finish = (result: RunResult) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+    const timer = setTimeout(() => {
+      p.kill('SIGKILL');
+      finish({ rc: -1, stdout, stderr: `${stderr}\ncommand timed out after ${COMMAND_TIMEOUT_MS / 1000}s` });
+    }, COMMAND_TIMEOUT_MS);
     p.stdout.on('data', (d) => {
       stdout += d;
     });
     p.stderr.on('data', (d) => {
       stderr += d;
     });
-    p.on('error', (err) => resolve({ rc: -1, stdout, stderr: String(err) }));
-    p.on('close', (rc) => resolve({ rc: rc ?? 0, stdout, stderr }));
+    p.on('error', (err) => finish({ rc: -1, stdout, stderr: String(err) }));
+    p.on('close', (rc, signal) =>
+      finish({ rc: rc ?? -1, stdout, stderr: signal ? `${stderr}\nterminated by ${signal}` : stderr }),
+    );
   });
 }
 
@@ -177,8 +203,9 @@ function cmp(a: unknown, b: unknown): number {
 }
 const canon = (v: unknown): string => JSON.stringify(normalize(v));
 
-function itemsOf(out: any): any[] {
+function itemsOf(out: any, key?: string): any[] {
   if (out && typeof out === 'object') {
+    if (key) return Array.isArray(out[key]) ? out[key] : [];
     if (Array.isArray(out.data)) return out.data;
     for (const k of Object.keys(out)) if (Array.isArray(out[k])) return out[k];
   }
@@ -243,6 +270,38 @@ const ALIAS: Record<string, Record<string, string>> = {
   webhook: { url: 'endpoint_url', state: 'status' },
   invitation: { email: 'email' },
 };
+
+// Top-level curation that is already documented and snapshot-pinned. In strict
+// mode, any NEW branch-only or main-only key fails instead of being waved
+// through as an informational shape difference.
+const EXPECTED_BRANCH_ONLY: Record<string, string[]> = {
+  organization: ['usersCount'],
+  user: ['authenticationFactors', 'hasPassword', 'identities', 'sessionCount'],
+  invitation: ['organization'],
+};
+const EXPECTED_MAIN_ONLY: Record<string, string[]> = {
+  organization: ['object'],
+  user: ['emailVerified', 'lastSignInAt', 'object'],
+  role: ['object', 'resourceTypeSlug'],
+  permission: ['object', 'resourceTypeSlug'],
+  invitation: [
+    'acceptInvitationUrl',
+    'acceptedAt',
+    'acceptedUserId',
+    'inviterUserId',
+    'object',
+    'organizationId',
+    'revokedAt',
+    'token',
+  ],
+  webhook: ['object', 'secret'],
+  event: ['context'],
+};
+
+function unexpectedCuration(cmd: string, side: 'branch' | 'main', keys: Iterable<string>): string[] {
+  const expected = new Set((side === 'branch' ? EXPECTED_BRANCH_ONLY : EXPECTED_MAIN_ONLY)[cmd] ?? []);
+  return [...keys].filter((key) => !expected.has(key));
+}
 
 interface FieldDiff {
   key: string;
@@ -336,6 +395,8 @@ interface ListCheck {
   cmd: string;
   label: string;
   args: string[];
+  /** Branch envelope key; main's REST envelope always uses `data`. */
+  listKey: string;
   /** id/slug key used to match rows across sides and to feed the GET check. */
   idKey: string;
   /** `get` subcommand, if the command has one. */
@@ -354,15 +415,31 @@ const LISTS: ListCheck[] = [
     cmd: 'organization',
     label: 'organization',
     args: ['organization', 'list', '--json'],
+    listKey: 'organizations',
     idKey: 'id',
     get: { sub: 'get', argFrom: 'id' },
   },
-  { cmd: 'user', label: 'user', args: ['user', 'list', '--json'], idKey: 'id', get: { sub: 'get', argFrom: 'id' } },
-  { cmd: 'role', label: 'role', args: ['role', 'list', '--json'], idKey: 'slug', get: { sub: 'get', argFrom: 'slug' } },
+  {
+    cmd: 'user',
+    label: 'user',
+    args: ['user', 'list', '--json'],
+    listKey: 'users',
+    idKey: 'id',
+    get: { sub: 'get', argFrom: 'id' },
+  },
+  {
+    cmd: 'role',
+    label: 'role',
+    args: ['role', 'list', '--json'],
+    listKey: 'roles',
+    idKey: 'slug',
+    get: { sub: 'get', argFrom: 'slug' },
+  },
   {
     cmd: 'permission',
     label: 'permission',
     args: ['permission', 'list', '--json'],
+    listKey: 'permissions',
     idKey: 'slug',
     get: { sub: 'get', argFrom: 'slug' },
   },
@@ -370,6 +447,7 @@ const LISTS: ListCheck[] = [
     cmd: 'invitation',
     label: 'invitation',
     args: ['invitation', 'list', '--json'],
+    listKey: 'invitations',
     idKey: 'id',
     get: { sub: 'get', argFrom: 'id' },
   },
@@ -377,16 +455,24 @@ const LISTS: ListCheck[] = [
     cmd: 'feature-flag',
     label: 'feature-flag',
     args: ['feature-flag', 'list', '--json'],
+    listKey: 'flags',
     idKey: 'slug',
     get: { sub: 'get', argFrom: 'slug' },
   },
-  { cmd: 'webhook', label: 'webhook', args: ['webhook', 'list', '--json'], idKey: 'id' },
+  {
+    cmd: 'webhook',
+    label: 'webhook',
+    args: ['webhook', 'list', '--json'],
+    listKey: 'webhookEndpoints',
+    idKey: 'id',
+  },
   // organization.created and user.created both fire during --seed/--mutate, so
   // this has real rows to compare rather than empty-vs-empty.
   {
     cmd: 'event',
     label: 'event',
     args: ['event', 'list', '--events', 'organization.created,user.created', '--limit', '100', '--json'],
+    listKey: 'events',
     idKey: 'id',
     orderDiverges: {
       note: 'GraphQL returns events newest-first; REST returned oldest-first. A bounded --limit window therefore covers opposite ends of the feed.',
@@ -422,6 +508,15 @@ const C = {
 };
 const push = (kind: string, label: string, status: Status, detail: string) =>
   rows.push({ kind, label, status, detail });
+
+/** Poll eventual cross-plane state for up to 15 seconds. */
+async function eventually(check: () => Promise<boolean>): Promise<boolean> {
+  for (let attempt = 0; attempt < 15; attempt++) {
+    if (await check()) return true;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  return false;
+}
 
 // --- checks ----------------------------------------------------------------------
 async function checkControl(c: { label: string; args: string[] }): Promise<void> {
@@ -466,7 +561,7 @@ async function checkList(c: ListCheck): Promise<any[] | undefined> {
     return undefined;
   }
 
-  const bi = itemsOf(jb);
+  const bi = itemsOf(jb, c.listKey);
   const mi = itemsOf(jm);
   if (bi.length === 0 && mi.length === 0) {
     push('LIST', c.label, 'SKIP', 'both sides empty — proves the call works, proves nothing about data');
@@ -524,6 +619,15 @@ async function checkList(c: ListCheck): Promise<any[] | undefined> {
       );
     }
   }
+  if (STRICT) {
+    const unexpectedBranchOnly = unexpectedCuration(c.cmd, 'branch', seenBranchOnly);
+    const unexpectedMainOnly = unexpectedCuration(c.cmd, 'main', seenMainOnly);
+    for (const key of unexpectedBranchOnly)
+      notes.push(`${C.red}FAIL${C.reset} ${c.cmd}: unexpected branch-only key ${key}`);
+    for (const key of unexpectedMainOnly)
+      notes.push(`${C.red}FAIL${C.reset} ${c.cmd}: unexpected main-only key ${key}`);
+    unexpected += unexpectedBranchOnly.length + unexpectedMainOnly.length;
+  }
   const extras = [
     seenBranchOnly.size ? `branch-only keys: ${[...seenBranchOnly].join(',')}` : '',
     seenMainOnly.size ? `dropped: ${[...seenMainOnly].join(',')}` : '',
@@ -562,6 +666,10 @@ async function checkGet(c: ListCheck, branchItems: any[] | undefined): Promise<v
   const me = entityOf(parseJson(m.stdout));
   if (!be || !me) return push('GET', c.label, 'FAIL', 'could not unwrap entity from one side');
   const r = compareEntity(c.cmd, be, me);
+  const unexpectedShape = STRICT
+    ? [...unexpectedCuration(c.cmd, 'branch', r.branchOnly), ...unexpectedCuration(c.cmd, 'main', r.mainOnly)]
+    : [];
+  for (const key of unexpectedShape) notes.push(`${C.red}FAIL${C.reset} ${c.cmd} get: unexpected one-sided key ${key}`);
   for (const d of r.diffs) {
     notes.push(
       `${C.red}FAIL${C.reset} ${c.cmd} get .${d.key}: branch=${JSON.stringify(d.branch)} main=${JSON.stringify(d.main)}`,
@@ -570,8 +678,8 @@ async function checkGet(c: ListCheck, branchItems: any[] | undefined): Promise<v
   push(
     'GET',
     c.label,
-    r.diffs.length === 0 ? 'PASS' : 'FAIL',
-    `${c.get.argFrom}=${String(ident).slice(0, 28)} — every shared field compared${r.accepted.length ? `; ${r.accepted.length} accepted` : ''}${r.diffs.length ? `; ${r.diffs.length} UNEXPECTED` : ''}`,
+    r.diffs.length === 0 && unexpectedShape.length === 0 ? 'PASS' : 'FAIL',
+    `${c.get.argFrom}=${String(ident).slice(0, 28)} — every shared field compared${r.accepted.length ? `; ${r.accepted.length} accepted` : ''}${r.diffs.length + unexpectedShape.length ? `; ${r.diffs.length + unexpectedShape.length} UNEXPECTED` : ''}`,
   );
 }
 
@@ -614,12 +722,27 @@ async function checkWriteRoundTrip(from: 'branch' | 'main'): Promise<void> {
         ? ['organization', 'delete', orgId, '--yes', '--json', ...envArgs()]
         : ['organization', 'delete', orgId, '--json'];
     const d = await run(creator, delArgs);
-    if (d.rc !== 0)
-      notes.push(`${C.yellow}WARN${C.reset} cleanup failed for ${orgId} (rc=${d.rc}) — delete it by hand`);
-    // Deletes do not land on both planes simultaneously. Without a settle, the
-    // next run's list phase can see the row on one plane and not the other and
-    // report a spurious entity-set divergence.
-    await new Promise((r) => setTimeout(r, 1500));
+    if (d.rc !== 0) {
+      push('CLEANUP', label, 'FAIL', `delete failed for ${orgId} (rc=${d.rc})`);
+    } else {
+      // Deletes replicate between planes asynchronously. Poll rather than
+      // treating a normal delay as a leak.
+      const absent = await eventually(async () => {
+        const [branchList, mainList] = await Promise.all([
+          run(BRANCH_DIR, ['organization', 'list', '--json', ...envArgs()]),
+          run(MAIN_DIR, ['organization', 'list', '--json']),
+        ]);
+        return [branchList, mainList].every(
+          (result) => result.rc === 0 && !itemsOf(parseJson(result.stdout)).some((org) => org.id === orgId),
+        );
+      });
+      push(
+        'CLEANUP',
+        label,
+        absent ? 'PASS' : 'FAIL',
+        absent ? `${orgId} absent on both planes` : `${orgId} still exists or could not be verified after 15s`,
+      );
+    }
   }
 }
 
@@ -654,12 +777,13 @@ async function seed(): Promise<() => Promise<void>> {
     ...envArgs(),
   ]);
   if (p.rc === 0) {
+    push('SEED', 'permission', 'PASS', pslug);
     notes.push(`${C.dim}seeded permission ${pslug}${C.reset}`);
     cleanups.push(async () => {
       await run(BRANCH_DIR, ['permission', 'delete', pslug, '--yes', '--json', ...envArgs()]);
     });
   } else {
-    notes.push(`${C.yellow}WARN${C.reset} seed permission failed: ${shortErr(p.stderr)}`);
+    push('SEED', 'permission', 'FAIL', `create failed rc=${p.rc} ${shortErr(p.stderr)}`);
   }
 
   const w = await run(BRANCH_DIR, [
@@ -674,12 +798,13 @@ async function seed(): Promise<() => Promise<void>> {
   ]);
   const wid = findId(parseJson(w.stdout), 'we');
   if (w.rc === 0 && wid) {
+    push('SEED', 'webhook', 'PASS', wid);
     notes.push(`${C.dim}seeded webhook ${wid}${C.reset}`);
     cleanups.push(async () => {
       await run(BRANCH_DIR, ['webhook', 'delete', wid, '--yes', '--json', ...envArgs()]);
     });
   } else {
-    notes.push(`${C.yellow}WARN${C.reset} seed webhook failed: ${shortErr(w.stderr)}`);
+    push('SEED', 'webhook', 'FAIL', `create failed rc=${w.rc} ${shortErr(w.stderr)}`);
   }
 
   // No CLI `user create` on either plane, so seed over raw REST. This also
@@ -696,12 +821,13 @@ async function seed(): Promise<() => Promise<void>> {
   ]);
   const uid = findId(parseJson(u.stdout), 'user');
   if (u.rc === 0 && uid) {
+    push('SEED', 'user', 'PASS', uid);
     notes.push(`${C.dim}seeded user ${uid}${C.reset}`);
     cleanups.push(async () => {
       await run(BRANCH_DIR, ['api', `/user_management/users/${uid}`, '--method', 'DELETE', '--yes']);
     });
   } else {
-    notes.push(`${C.yellow}WARN${C.reset} seed user failed: ${shortErr(u.stderr)}`);
+    push('SEED', 'user', 'FAIL', `create failed rc=${u.rc} ${shortErr(u.stderr)}`);
   }
 
   if (INVITE) {
@@ -717,6 +843,7 @@ async function seed(): Promise<() => Promise<void>> {
     ]);
     const invId = findId(parseJson(inv.stdout), 'invitation');
     if (inv.rc === 0 && invId) {
+      push('SEED', 'invitation', 'PASS', invId);
       notes.push(`${C.dim}seeded invitation ${invId}${C.reset}`);
       cleanups.push(async () => {
         await run(BRANCH_DIR, ['api', `/user_management/invitations/${invId}/revoke`, '--method', 'POST', '--yes']);
@@ -728,7 +855,7 @@ async function seed(): Promise<() => Promise<void>> {
         if (orphan) await run(BRANCH_DIR, ['api', `/user_management/users/${orphan}`, '--method', 'DELETE', '--yes']);
       });
     } else {
-      notes.push(`${C.yellow}WARN${C.reset} seed invitation failed: ${shortErr(inv.stderr)}`);
+      push('SEED', 'invitation', 'FAIL', `create failed rc=${inv.rc} ${shortErr(inv.stderr)}`);
     }
   } else {
     notes.push(`${C.dim}invitation not seeded (pass --invite; it attempts real email delivery)${C.reset}`);
@@ -736,9 +863,82 @@ async function seed(): Promise<() => Promise<void>> {
 
   await new Promise((r) => setTimeout(r, 2500));
   return async () => {
-    for (const c of cleanups) await c();
-    await new Promise((r) => setTimeout(r, 1500));
+    for (const c of [...cleanups].reverse()) await c();
+    // A successful delete command is not enough: read the resources back and
+    // prove no active fixture remains. Revoked invitations intentionally stay
+    // as audit records, so their final state is checked rather than requiring
+    // the row to disappear.
+    const clean = await eventually(async () => {
+      const [permission, webhook, user, invitation] = await Promise.all([
+        run(BRANCH_DIR, ['permission', 'list', '--json', ...envArgs()]),
+        run(BRANCH_DIR, ['webhook', 'list', '--json', ...envArgs()]),
+        run(BRANCH_DIR, ['user', 'list', '--json', ...envArgs()]),
+        run(BRANCH_DIR, ['invitation', 'list', '--json', ...envArgs()]),
+      ]);
+      const results = [permission, webhook, user, invitation];
+      if (results.some((result) => result.rc !== 0 || parseJson(result.stdout) === undefined)) return false;
+      if ([permission, webhook, user].some((result) => result.stdout.includes(String(ts)))) return false;
+      const seededInvitation = itemsOf(parseJson(invitation.stdout)).find((row) =>
+        JSON.stringify(row).includes(String(ts)),
+      );
+      return !seededInvitation || seededInvitation.state === 'revoked';
+    });
+    push(
+      'CLEANUP',
+      'seed fixtures',
+      clean ? 'PASS' : 'FAIL',
+      clean ? `no active resource contains marker ${ts}` : `active resource containing marker ${ts} remains after 15s`,
+    );
   };
+}
+
+async function checkEventPagination(): Promise<void> {
+  const base = ['event', 'list', '--events', 'organization.created,user.created', '--limit', '3', '--json'];
+  let firstRun: RunResult | undefined;
+  let first: any;
+  let firstRows: any[] = [];
+  let cursor: string | undefined;
+  const ready = await eventually(async () => {
+    firstRun = await run(BRANCH_DIR, [...base, ...envArgs()]);
+    if (firstRun.rc !== 0) return true;
+    first = parseJson(firstRun.stdout);
+    firstRows = itemsOf(first);
+    cursor = first?.pagination?.after;
+    return firstRows.length > 0 && Boolean(cursor);
+  });
+  if (firstRun?.rc === 4) return push('PAGINATION', 'event', 'AUTH', 'auth required');
+  if (firstRun?.rc !== 0) return push('PAGINATION', 'event', 'FAIL', `page 1 exit ${firstRun?.rc ?? -1}`);
+  if (!ready || !cursor) {
+    return push(
+      'PAGINATION',
+      'event',
+      STRICT ? 'FAIL' : 'SKIP',
+      `page 1 has ${firstRows.length} row(s) and ${cursor ? 'a' : 'no'} next cursor after 15s`,
+    );
+  }
+
+  const secondRun = await run(BRANCH_DIR, [...base, '--after', cursor, ...envArgs()]);
+  if (secondRun.rc !== 0) return push('PAGINATION', 'event', 'FAIL', `page 2 exit ${secondRun.rc}`);
+  const second = parseJson(secondRun.stdout);
+  const secondRows = itemsOf(second);
+  if (secondRows.length === 0) return push('PAGINATION', 'event', 'FAIL', 'next cursor returned an empty page');
+
+  const firstIds = new Set(firstRows.map((row) => row.id));
+  const overlap = secondRows.filter((row) => firstIds.has(row.id));
+  const oldestFirstPage = firstRows
+    .map((row) => row.createdAt)
+    .filter(Boolean)
+    .sort()[0];
+  const newestSecondPage = secondRows
+    .map((row) => row.createdAt)
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+  if (overlap.length) return push('PAGINATION', 'event', 'FAIL', `${overlap.length} row(s) repeated on page 2`);
+  if (!oldestFirstPage || !newestSecondPage || newestSecondPage > oldestFirstPage) {
+    return push('PAGINATION', 'event', 'FAIL', 'page 2 moves forward in time');
+  }
+  push('PAGINATION', 'event', 'PASS', `${firstRows.length} + ${secondRows.length} distinct rows; page 2 is not newer`);
 }
 
 async function checkNew(c: { label: string; args: string[] }): Promise<void> {
@@ -752,7 +952,7 @@ async function checkNew(c: { label: string; args: string[] }): Promise<void> {
 // --- run -------------------------------------------------------------------------
 console.log(`parity-smoke  branch=${BRANCH_DIR}`);
 console.log(
-  `              main=${MAIN_DIR}${ENV_ID ? `  env=${ENV_ID}` : ''}${MUTATE ? '  [--mutate]' : ''}${SEED ? '  [--seed]' : ''}`,
+  `              main=${MAIN_DIR}${ENV_ID ? `  env=${ENV_ID}` : ''}${MUTATE ? '  [--mutate]' : ''}${SEED ? '  [--seed]' : ''}${INVITE ? '  [--invite]' : ''}${STRICT ? '  [--strict]' : ''}`,
 );
 console.log(`              cwd=${NEUTRAL_CWD} (isolated so no worktree .env.local loads)`);
 console.log(`              api key source: ${API_KEY_SOURCE}\n`);
@@ -760,6 +960,7 @@ if (API_KEY_SOURCE === 'NONE') {
   console.log(
     `${C.yellow}no WORKOS_API_KEY resolved; REST-plane commands will fail or fall back to stored config${C.reset}\n`,
   );
+  if (STRICT) process.exit(2);
 }
 
 await Promise.all(CONTROL.map(checkControl));
@@ -772,29 +973,45 @@ await Promise.all(CONTROL.map(checkControl));
     run(BRANCH_DIR, ['organization', 'list', '--json', ...envArgs()]),
     run(MAIN_DIR, ['organization', 'list', '--json']),
   ]);
-  const bi = itemsOf(parseJson(b.stdout));
-  const mi = itemsOf(parseJson(m.stdout));
-  const bIds = new Set(bi.map((i: any) => i?.id));
-  const overlap = mi.filter((i: any) => bIds.has(i?.id)).length;
-  if (bi.length === 0 || mi.length === 0) {
-    push(
-      'PREFLIGHT',
-      'same-environment',
-      'SKIP',
-      `cannot confirm alignment: branch has ${bi.length} org(s), main has ${mi.length}. Empty comparisons below prove nothing.`,
-    );
-  } else if (overlap === 0) {
-    push(
-      'PREFLIGHT',
-      'same-environment',
-      'FAIL',
-      `branch and main see DISJOINT organizations (${bi.length} vs ${mi.length}, 0 shared). Different environments — every result below is meaningless. Align WORKOS_API_KEY with the session's active env.`,
-    );
-    console.log(`${C.red}aborting: planes are on different environments${C.reset}`);
+  if (b.rc === 4 || m.rc === 4) {
+    push('PREFLIGHT', 'same-environment', 'AUTH', `branch rc=${b.rc}, main rc=${m.rc}`);
+  } else if (b.rc !== 0 || m.rc !== 0) {
+    push('PREFLIGHT', 'same-environment', 'FAIL', `branch rc=${b.rc}, main rc=${m.rc}`);
+  } else {
+    const parsedBranch = parseJson(b.stdout);
+    const parsedMain = parseJson(m.stdout);
+    if (parsedBranch === undefined || parsedMain === undefined) {
+      push('PREFLIGHT', 'same-environment', 'FAIL', 'invalid organization JSON on one side');
+    } else {
+      const bi = itemsOf(parsedBranch);
+      const mi = itemsOf(parsedMain);
+      const bIds = new Set(bi.map((i: any) => i?.id));
+      const mIds = new Set(mi.map((i: any) => i?.id));
+      const sameIds = bIds.size === mIds.size && [...bIds].every((id) => mIds.has(id));
+      if (bi.length === 0 || mi.length === 0) {
+        push(
+          'PREFLIGHT',
+          'same-environment',
+          'SKIP',
+          `cannot confirm alignment: branch has ${bi.length} org(s), main has ${mi.length}.`,
+        );
+      } else if (!sameIds) {
+        push(
+          'PREFLIGHT',
+          'same-environment',
+          'FAIL',
+          `organization sets differ (branch ${bi.length}, main ${mi.length}); comparisons would be meaningless`,
+        );
+      } else {
+        push('PREFLIGHT', 'same-environment', 'PASS', `${bIds.size} identical organization id(s) on both planes`);
+      }
+    }
+  }
+  const preflight = rows.find((row) => row.kind === 'PREFLIGHT');
+  if (preflight?.status !== 'PASS') {
+    console.log(`${C.red}aborting: could not prove both planes use the same environment${C.reset}`);
     for (const r of rows) console.log(`  ${r.status} ${r.kind} ${r.label} ${r.detail}`);
     process.exit(1);
-  } else {
-    push('PREFLIGHT', 'same-environment', 'PASS', `${overlap} organization(s) visible on both planes`);
   }
 }
 
@@ -813,11 +1030,12 @@ if (MUTATE) {
 } else {
   push('WRITE', 'cross-plane round-trip', 'SKIP', 're-run with --mutate to exercise the write path');
 }
+await checkEventPagination();
 if (unseed) await unseed();
 
 // --- report ----------------------------------------------------------------------
 const w = Math.max(...rows.map((r) => r.label.length), 20);
-const order = ['PREFLIGHT', 'CONTROL', 'LIST', 'GET', 'WRITE', 'NEW'];
+const order = ['PREFLIGHT', 'SEED', 'CONTROL', 'LIST', 'GET', 'PAGINATION', 'WRITE', 'NEW', 'CLEANUP'];
 for (const kind of order) {
   const group = rows.filter((r) => r.kind === kind);
   if (!group.length) continue;
@@ -843,7 +1061,19 @@ if (notes.length) {
 
 const n = (s: Status) => rows.filter((r) => r.status === s).length;
 const nfail = n('FAIL');
+const allowedStrictSkip = (row: Row) =>
+  (row.kind === 'GET' &&
+    ['webhook', 'event'].includes(row.label) &&
+    row.detail === 'no get subcommand on either side') ||
+  (row.kind === 'LIST' && row.label === 'feature-flag' && row.detail.startsWith('both sides empty')) ||
+  (row.kind === 'GET' && row.label === 'feature-flag' && row.detail === 'no row available to source an identifier');
+const unexpectedSkips = STRICT ? rows.filter((row) => row.status === 'SKIP' && !allowedStrictSkip(row)) : [];
+const blocked = nfail > 0 || (STRICT && (n('AUTH') > 0 || unexpectedSkips.length > 0));
+if (unexpectedSkips.length) {
+  console.log(`${C.red}strict: ${unexpectedSkips.length} unexpected skip(s):${C.reset}`);
+  for (const row of unexpectedSkips) console.log(`  ${row.kind} ${row.label}: ${row.detail}`);
+}
 console.log(
-  `\n${nfail === 0 ? C.green : C.red}${n('PASS')} pass, ${nfail} fail, ${n('AUTH')} auth, ${n('SKIP')} skip${C.reset}`,
+  `\n${blocked ? C.red : C.green}${n('PASS')} pass, ${nfail} fail, ${n('AUTH')} auth, ${n('SKIP')} skip${STRICT ? ` (${unexpectedSkips.length} unexpected)` : ''}${C.reset}`,
 );
-process.exit(nfail === 0 ? 0 : 1);
+process.exit(blocked ? 1 : 0);
