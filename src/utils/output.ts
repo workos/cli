@@ -7,6 +7,7 @@
  */
 
 import chalk from 'chalk';
+import { writeSync } from 'node:fs';
 import { CliExit } from './cli-exit.js';
 import { resolveErrorCode } from './exit-codes.js';
 import { formatTable, type TableColumn } from './table.js';
@@ -62,6 +63,39 @@ export function isJsonMode(): boolean {
 /** Write structured JSON to stdout (one line, no pretty-print). */
 export function outputJson(data: unknown): void {
   console.log(JSON.stringify(data));
+}
+
+/**
+ * Write structured JSON straight to fd 1, synchronously.
+ *
+ * Writes to a piped stdout are asynchronous and buffered, so a payload larger
+ * than the 64KiB pipe buffer loses its tail when the process exits before the
+ * buffer drains. The `--help --json` command tree is ~70KiB, so
+ * `workos --help --json | jq` emitted truncated, unparseable JSON with no
+ * error at all. `writeSync` returns only once the bytes are handed off, so
+ * nothing is left pending at exit.
+ *
+ * Reserved for the command tree. Ordinary `outputJson` stays on `console.log`:
+ * every other payload is far below the pipe buffer, and the specs capture JSON
+ * output by spying on `console.log`.
+ *
+ * EAGAIN on a non-blocking pipe is retried rather than thrown, so a slow reader
+ * cannot turn into a lost payload. EPIPE is swallowed (the reader went away,
+ * e.g. `| head`).
+ */
+export function outputJsonSync(data: unknown): void {
+  const buf = Buffer.from(`${JSON.stringify(data)}\n`, 'utf8');
+  let offset = 0;
+  while (offset < buf.length) {
+    try {
+      offset += writeSync(1, buf, offset, buf.length - offset);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'EAGAIN') continue;
+      if (code === 'EPIPE') return;
+      throw err;
+    }
+  }
 }
 
 /** Write a success result — chalk in human mode, JSON in json mode. */

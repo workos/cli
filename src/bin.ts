@@ -26,7 +26,7 @@ import {
   resolveOutputMode,
   setOutputMode,
   isJsonMode,
-  outputJson,
+  outputJsonSync,
   outputError,
   outputApiBaseUrlIndicator,
   exitWithError,
@@ -116,11 +116,12 @@ try {
 if (hasJsonFlag && (rawArgs.includes('--help') || rawArgs.includes('-h'))) {
   const { buildCommandTree, extractHelpJsonCommand } = await import('./utils/help-json.js');
   const command = extractHelpJsonCommand(rawArgs);
-  outputJson(buildCommandTree(command));
-  // Writes to a piped stdout are asynchronous: exiting immediately truncates
-  // anything past the 64KiB pipe buffer (the full command tree is larger).
-  // Queue an empty write and exit only once everything before it has flushed.
-  await new Promise<void>((resolve) => process.stdout.write('', () => resolve()));
+  // outputJsonSync, not outputJson: the tree is ~70KiB and an async write to a
+  // pipe loses everything past the 64KiB buffer when the process exits. The
+  // previous guard here queued an empty write and awaited its callback, which
+  // does not wait for console.log's already-buffered data and so still
+  // truncated.
+  outputJsonSync(buildCommandTree(command));
   process.exit(0);
 }
 
@@ -3320,7 +3321,8 @@ async function runCli(): Promise<void> {
         if (!isPromptAllowed()) {
           if (isJsonMode()) {
             const { buildCommandTree } = await import('./utils/help-json.js');
-            outputJson(buildCommandTree());
+            // Same 64KiB pipe-buffer truncation as the --help --json intercept.
+            outputJsonSync(buildCommandTree());
           } else {
             parser.showHelp();
           }
