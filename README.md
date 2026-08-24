@@ -567,7 +567,7 @@ workos dashboard
 workos org list --json
 
 # Pipe-friendly (auto-detects non-TTY)
-workos org list | jq '.data[].name'
+workos org list | jq '.organizations[].name'
 
 # Machine-readable command discovery
 workos --help --json | jq '.commands[].name'
