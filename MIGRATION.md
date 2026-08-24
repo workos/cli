@@ -28,17 +28,17 @@ migration is not another user-visible break. Two rules of that contract:
 
 ## Breaking changes at a glance
 
-| Change | Old | New | Affected commands |
-| --- | --- | --- | --- |
-| List envelope | `{ "data": [...], "list_metadata": {...} }` | `{ "<resource>": [...], "pagination": {...} }` | all list views |
-| `metadata` encoding | object map `{"team":"blue"}` (array of pairs during prerelease) | object map `{"team":"blue"}` | organization, user |
-| Lifecycle key | `status` | `state` | user identities, membership, session |
-| Enum casing | mixed (`Pending`, `Active`, `Verified`, `SOME`) | lowercase (`pending`, `active`, `verified`, `some`) | invitation, webhook, org-domain, membership, role, feature-flag |
-| `role.type` | `EnvironmentRole` / `OrganizationRole` | `environment` / `organization` | role |
-| `webhook.state` | `enabled` | `active` | webhook |
-| `invitation.organization` | flat `organizationId` string | nested `{ "id", "name" }` object | invitation |
-| `feature-flag.enabled` | flat flag value | derived from the active environment's state | feature-flag |
-| Internal fields | present (`stripeCustomerId`, `resourceTypeId`, request context, ...) | dropped | all |
+| Change                    | Old                                                                  | New                                                 | Affected commands                                               |
+| ------------------------- | -------------------------------------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------- |
+| List envelope             | `{ "data": [...], "list_metadata": {...} }`                          | `{ "<resource>": [...], "pagination": {...} }`      | all list views                                                  |
+| `metadata` encoding       | object map `{"team":"blue"}` (array of pairs during prerelease)      | object map `{"team":"blue"}`                        | organization, user                                              |
+| Lifecycle key             | `status`                                                             | `state`                                             | user identities, membership, session                            |
+| Enum casing               | mixed (`Pending`, `Active`, `Verified`, `SOME`)                      | lowercase (`pending`, `active`, `verified`, `some`) | invitation, webhook, org-domain, membership, role, feature-flag |
+| `role.type`               | `EnvironmentRole` / `OrganizationRole`                               | `environment` / `organization`                      | role                                                            |
+| `webhook.state`           | `enabled`                                                            | `active`                                            | webhook                                                         |
+| `invitation.organization` | flat `organizationId` string                                         | nested `{ "id", "name" }` object                    | invitation                                                      |
+| `feature-flag.enabled`    | flat flag value                                                      | derived from the active environment's state         | feature-flag                                                    |
+| Internal fields           | present (`stripeCustomerId`, `resourceTypeId`, request context, ...) | dropped                                             | all                                                             |
 
 ## metadata (silent failure - read this first)
 
@@ -54,7 +54,7 @@ Why this section is called out: during the GraphQL prerelease, `metadata` was
 briefly emitted as GraphQL's array-of-pairs transport form:
 
 ```json
-{ "metadata": [ { "key": "team", "value": "blue" } ] }
+{ "metadata": [{ "key": "team", "value": "blue" }] }
 ```
 
 That form **fails silently**. `jq '.metadata.team'` returns empty rather than
@@ -96,15 +96,15 @@ workos organization create foo.com:Verified
 
 Old -> new values (from the `feat!` commit body):
 
-| Field | Old | New |
-| --- | --- | --- |
-| `invitation.state` | `Pending` | `pending` |
-| `webhook.state` | `Active`* | `active` |
-| `org-domain.state` | `Verified` | `verified` |
-| `org-domain.verificationStrategy` | `Dns` / `Manual` | `dns` / `manual` |
+| Field                                  | Old                   | New                   |
+| -------------------------------------- | --------------------- | --------------------- |
+| `invitation.state`                     | `Pending`             | `pending`             |
+| `webhook.state`                        | `Active`*             | `active`              |
+| `org-domain.state`                     | `Verified`            | `verified`            |
+| `org-domain.verificationStrategy`      | `Dns` / `Manual`      | `dns` / `manual`      |
 | `membership.state` / `membership.type` | `Active` / `Standard` | `active` / `standard` |
-| `role.type` | `Environment`* | `environment` |
-| `feature-flag.accessType` | `SOME` | `some` |
+| `role.type`                            | `Environment`*        | `environment`         |
+| `feature-flag.accessType`              | `SOME`                | `some`                |
 
 \* See [Deliberate differences from REST](#deliberate-differences-from-the-old-rest-output):
 the REST plane used different vocabulary for `webhook.state` (`enabled`) and
@@ -126,11 +126,11 @@ jq 'select((.state | ascii_downcase) == "pending")'
 The lifecycle key is `state` on every resource, never `status`. This affects
 three places that previously used `status`:
 
-| Command | Old | New |
-| --- | --- | --- |
+| Command         | Old                    | New                   |
+| --------------- | ---------------------- | --------------------- |
 | user identities | `.identities[].status` | `.identities[].state` |
-| membership | `.status` | `.state` |
-| session | `.status` | `.state` |
+| membership      | `.status`              | `.state`              |
+| session         | `.status`              | `.state`              |
 
 ```bash
 # Old
@@ -157,7 +157,7 @@ New:
   "usersCount": 3,
   "allowProfilesOutsideOrganization": false,
   "externalId": null,
-  "domains": [ { "id": "dom_1", "domain": "foo.com", "state": "verified" } ],
+  "domains": [{ "id": "dom_1", "domain": "foo.com", "state": "verified" }],
   "metadata": { "team": "blue" }
 }
 ```
@@ -193,7 +193,7 @@ New:
       "id": "ident_1",
       "state": "active",
       "organization": { "id": "org_1", "name": "FooCorp" },
-      "roles": [ { "id": "role_1", "name": "member" } ]
+      "roles": [{ "id": "role_1", "name": "member" }]
     }
   ]
 }
@@ -369,9 +369,9 @@ jq -r '.events[] | select(.event == "dsync.user.created") | .id'
 
 **Sort order reversed. This one changes which rows you get, not just their shape.**
 
-| | old (REST) | new (GraphQL) |
-| --- | --- | --- |
-| `event list` order | oldest first | newest first |
+|                                 | old (REST)           | new (GraphQL)             |
+| ------------------------------- | -------------------- | ------------------------- |
+| `event list` order              | oldest first         | newest first              |
 | `event list --limit 10` returns | the 10 oldest events | the 10 most recent events |
 
 If you took the first element to mean "the latest event", it now means the
@@ -406,8 +406,8 @@ New (`get` detail):
   "enabled": false,
   "defaultEnabled": true,
   "accessType": "some",
-  "organizationTargets": [ { "id": "org_1", "name": "FooCorp" } ],
-  "userTargets": [ { "id": "user_1", "email": "a@example.com" } ],
+  "organizationTargets": [{ "id": "org_1", "name": "FooCorp" }],
+  "userTargets": [{ "id": "user_1", "email": "a@example.com" }],
   "tags": []
 }
 ```
@@ -524,13 +524,13 @@ These are intentional curations, declared in the `ACCEPTED` map of
 `scripts/parity-smoke.ts`. They are not bugs, and the parity smoke reports them
 as INFO, not FAIL.
 
-| Field | REST | Now | Reason |
-| --- | --- | --- | --- |
-| `role.type` | `EnvironmentRole` / `OrganizationRole` | `environment` / `organization` | Drops the redundant `Role` suffix. |
-| `webhook.state` | `enabled` | `active` | Aligns webhook lifecycle with session's `active`/`expired`/`revoked` vocabulary. |
-| `invitation.organization` | flat `organizationId` | nested `{ id, name }` | Structural: consistent with other nested org references. |
-| `user.identities` | different shape, `status` key | curated identities, `status` -> `state` | Structural + lifecycle-key rename. |
-| `feature-flag.enabled` | flat flag | derived from the active environment's state | Flag state is per-environment server-side; the CLI reports the active environment. |
+| Field                     | REST                                   | Now                                         | Reason                                                                             |
+| ------------------------- | -------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `role.type`               | `EnvironmentRole` / `OrganizationRole` | `environment` / `organization`              | Drops the redundant `Role` suffix.                                                 |
+| `webhook.state`           | `enabled`                              | `active`                                    | Aligns webhook lifecycle with session's `active`/`expired`/`revoked` vocabulary.   |
+| `invitation.organization` | flat `organizationId`                  | nested `{ id, name }`                       | Structural: consistent with other nested org references.                           |
+| `user.identities`         | different shape, `status` key          | curated identities, `status` -> `state`     | Structural + lifecycle-key rename.                                                 |
+| `feature-flag.enabled`    | flat flag                              | derived from the active environment's state | Flag state is per-environment server-side; the CLI reports the active environment. |
 
 Enum casing is deliberately absent from `ACCEPTED`: the CLI lowercases all enum
 values, so a casing-only difference is treated as a bug that must fail the
