@@ -621,6 +621,33 @@ workos env --help --json          # Subcommand tree
 workos organization --help --json # With positionals and option types
 ```
 
+### Shell Completion
+
+Generate autocompletion scripts for your shell:
+
+```bash
+# Bash — current session
+eval "$(workos completion bash)"
+
+# Bash — permanent
+workos completion bash > /etc/bash_completion.d/workos
+
+# Zsh — current session
+eval "$(workos completion zsh)"
+
+# Zsh — permanent
+mkdir -p ~/.zfunc
+workos completion zsh > ~/.zfunc/_workos
+# Add to ~/.zshrc: fpath=(~/.zfunc $fpath); autoload -Uz compinit && compinit
+
+# Fish — auto-discovered
+mkdir -p ~/.config/fish/completions
+workos completion fish > ~/.config/fish/completions/workos.fish
+
+# PowerShell — current session
+workos completion powershell | Out-String | Invoke-Expression
+```
+
 ## Authentication
 
 The CLI uses WorkOS Connect OAuth device flow for authentication:
