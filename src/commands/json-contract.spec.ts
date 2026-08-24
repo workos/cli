@@ -363,7 +363,7 @@ describe('migrated commands --json contract', () => {
     respondWith({ webhookEndpoints: { data: [ENDPOINT_NODE], listMetadata: { before: null, after: 'cursor_a' } } });
     contract['webhook.list'] = await render(() => runWebhookList({}));
 
-    respondWith({ environment: { events: { data: [EVENT_NODE], listMetadata: { before: null, after: 'cursor_a' } } } });
+    respondWith({ environment: { events: { data: [EVENT_NODE], listMetadata: { before: 'cursor_a', after: null } } } });
     contract['event.list'] = await render(() => runEventList({ events: ['dsync.user.created'] }));
 
     respondWith({ userlandUserOrganizationMemberships: { organizationMemberships: [MEMBERSHIP_NODE] } });

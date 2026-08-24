@@ -13,8 +13,10 @@
  *   snapshot re-vendor can restore the flag.)
  * - `--events` stays required (frozen grammar) even though the backing filter
  *   is optional server-side.
- * - The listing keeps the single-page default; `--after`/`--limit` map onto the
- *   operation's cursor pagination exactly.
+ * - The listing keeps the single-page default. GraphQL returns events
+ *   newest-first and names its forward (older-page) cursor `before`; the CLI
+ *   keeps REST's `--after` grammar and maps that cursor in both directions so
+ *   `--after` still means "next page" to a caller.
  */
 
 import chalk from 'chalk';
@@ -69,7 +71,10 @@ export async function runEventList(options: EventListOptions): Promise<void> {
   }>('environmentEvents', options, (environmentId) => ({
     environmentId,
     names: options.events,
-    ...(options.after ? { after: options.after } : {}),
+    // The GraphQL connection is newest-first. Its `before` cursor advances to
+    // older rows, which is the CLI's next page and therefore the cursor exposed
+    // as `after` in the public contract inherited from REST.
+    ...(options.after ? { before: options.after } : {}),
     ...(options.rangeStart ? { rangeStart: options.rangeStart } : {}),
     ...(options.rangeEnd ? { rangeEnd: options.rangeEnd } : {}),
     ...(options.limit !== undefined ? { limit: options.limit } : {}),
@@ -81,8 +86,12 @@ export async function runEventList(options: EventListOptions): Promise<void> {
 
   const events = (data.environment.events?.data ?? []).map(shapeEvent);
   const pagination = {
-    before: data.environment.events?.listMetadata?.before ?? null,
-    after: data.environment.events?.listMetadata?.after ?? null,
+    // Swap the wire names so callers can continue feeding the returned `after`
+    // cursor back through `--after` to reach the next page. Exposing the raw
+    // GraphQL names made page one return only `before`, a flag the CLI does not
+    // accept, so older pages were unreachable.
+    before: data.environment.events?.listMetadata?.after ?? null,
+    after: data.environment.events?.listMetadata?.before ?? null,
   };
 
   if (isJsonMode()) {

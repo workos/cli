@@ -386,9 +386,12 @@ workos event list --events user.created --limit 1 | jq -r '.data[0].id'
 workos event list --events user.created --limit 1 | jq -r '.events[0].id'
 ```
 
-If you page through events with `--limit` and expect to walk forward in time,
-invert your logic. If you were paginating to the end of the feed just to reach
-recent events, you can now drop that entirely and read from the top.
+`--after` still requests the next page, but "next" now moves toward older
+events because the feed starts with the newest. Treat cursors as opaque and do
+not reuse a cursor saved by the REST version after upgrading.
+
+If you were paginating to the end of the REST feed just to reach recent events,
+you can now drop that work and read from the first page.
 
 ### feature-flag
 

@@ -142,10 +142,31 @@ describe('event command', () => {
         variables: {
           environmentId: 'env_profile',
           names: ['user.created', 'user.updated'],
-          after: 'cursor_a',
+          before: 'cursor_a',
           rangeStart: '2026-01-01',
           rangeEnd: '2026-02-01',
           limit: 5,
+        },
+        environmentId: 'env_profile',
+      });
+    });
+
+    it('feeds the public after cursor into GraphQL before so the next older page is reachable', async () => {
+      setOutputMode('json');
+      respondWith(eventsPayload([EVENT_NODE], { before: 'cursor_next', after: null }));
+
+      await runEventList({ events: ['user.created'] });
+      const first = JSON.parse(consoleOutput.at(-1)!);
+      expect(first.pagination).toEqual({ before: null, after: 'cursor_next' });
+
+      consoleOutput.length = 0;
+      await runEventList({ events: ['user.created'], after: first.pagination.after });
+      expect(mockGraphqlRequest).toHaveBeenLastCalledWith(expect.stringContaining('environmentEvents'), {
+        token: 'tok_123',
+        variables: {
+          environmentId: 'env_profile',
+          names: ['user.created'],
+          before: 'cursor_next',
         },
         environmentId: 'env_profile',
       });
@@ -175,7 +196,8 @@ describe('event command', () => {
 
     it('--json emits the documented curated shape (drops internal context/metadata)', async () => {
       setOutputMode('json');
-      respondWith(eventsPayload([EVENT_NODE], { before: null, after: 'cursor_a' }));
+      // Wire `before` is the next older page because GraphQL is newest-first.
+      respondWith(eventsPayload([EVENT_NODE], { before: 'cursor_a', after: null }));
       await runEventList({ events: ['dsync.user.created'] });
       const raw = consoleOutput[0];
       expect(raw).not.toMatch(/graphql|userland|list_metadata/i);
@@ -193,9 +215,11 @@ describe('event command', () => {
     });
 
     it('renders pagination cursors in human mode', async () => {
-      respondWith(eventsPayload([EVENT_NODE], { before: 'cursor_b', after: 'cursor_a' }));
+      respondWith(eventsPayload([EVENT_NODE], { before: 'cursor_next', after: 'cursor_previous' }));
       await runEventList({ events: ['dsync.user.created'] });
-      expect(consoleOutput.some((l) => l.includes('Before: cursor_b') && l.includes('After: cursor_a'))).toBe(true);
+      expect(consoleOutput.some((l) => l.includes('Before: cursor_previous') && l.includes('After: cursor_next'))).toBe(
+        true,
+      );
     });
   });
 
