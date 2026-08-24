@@ -41,7 +41,14 @@ const { runEventList } = await import('./event.js');
 
 const TEAM_ENVIRONMENTS_PAYLOAD = {
   currentTeam: {
-    projectsV2: [{ environments: [{ id: 'env_profile', name: 'Sandbox', sandbox: true, clientId: null }] }],
+    projectsV2: [
+      {
+        environments: [
+          { id: 'env_profile', name: 'Sandbox', sandbox: true, clientId: null },
+          { id: 'env_flag', name: 'Override', sandbox: true, clientId: null },
+        ],
+      },
+    ],
   },
 };
 
@@ -113,10 +120,10 @@ describe('event command', () => {
   });
 
   describe('list', () => {
-    it('lists events with the environment threaded as variable AND header (read: no pre-validation fetch)', async () => {
+    it('validates the environment, then lists events with it as variable and header', async () => {
       respondWith(eventsPayload([EVENT_NODE]));
       await runEventList({ events: ['dsync.user.created'] });
-      expect(mockGraphqlRequest).toHaveBeenCalledTimes(1);
+      expect(mockGraphqlRequest).toHaveBeenCalledTimes(2);
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('environmentEvents'), {
         token: 'tok_123',
         variables: { environmentId: 'env_profile', names: ['dsync.user.created'] },
@@ -136,7 +143,7 @@ describe('event command', () => {
         rangeEnd: '2026-02-01',
         limit: 5,
       });
-      expect(mockGraphqlRequest).toHaveBeenCalledTimes(1);
+      expect(mockGraphqlRequest).toHaveBeenCalledTimes(2);
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('environmentEvents'), {
         token: 'tok_123',
         variables: {

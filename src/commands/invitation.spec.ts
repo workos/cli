@@ -130,10 +130,10 @@ describe('invitation command', () => {
   });
 
   describe('list', () => {
-    it('lists env-wide with the environment as variable AND header (read: no pre-validation)', async () => {
+    it('validates the environment, then lists env-wide with it as variable and header', async () => {
       respondWith({ userlandUserInvites: { data: [INVITE_NODE], listMetadata: { before: null, after: null } } });
       await runInvitationList({});
-      expect(mockGraphqlRequest).toHaveBeenCalledTimes(1);
+      expect(mockGraphqlRequest).toHaveBeenCalledTimes(2);
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('userlandUserInvites'), {
         token: 'tok_123',
         variables: { environmentId: 'env_profile' },
@@ -223,7 +223,7 @@ describe('invitation command', () => {
     it('scans one capped page and renders the match', async () => {
       respondWith({ userlandUserInvites: { data: [INVITE_NODE], listMetadata: { before: null, after: null } } });
       await runInvitationGet('invite_1');
-      expect(mockGraphqlRequest).toHaveBeenCalledTimes(1);
+      expect(mockGraphqlRequest).toHaveBeenCalledTimes(2);
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('userlandUserInvites'), {
         token: 'tok_123',
         variables: { environmentId: 'env_profile', limit: INVITATION_GET_SCAN_LIMIT },

@@ -17,13 +17,11 @@
  * join against the team's environments → one-time picker (human mode) →
  * structured `environment_unresolved` error.
  *
- * Staleness tactic: **mutations pre-validate, reads trust.** A mutation
- * validates the effective ID against a fresh fetch of the team's environments
- * (one extra round trip on writes only); an unrecognized ID exits with
- * `environment_stale` before any operation request is issued. Reads use the
- * stored ID directly — worst case a read errors server-side or returns empty,
- * but nothing is ever written to the wrong environment. Whenever the team's
- * environments are fetched anyway, the active profile is opportunistically
+ * Every effective ID is validated against a fresh fetch of the team's
+ * environments before the operation runs. The server silently falls back to
+ * production for an unknown header, so trusting a stale ID is unsafe even for
+ * reads: it can return real production data instead of an error. Whenever the
+ * team's environments are fetched, the active profile is opportunistically
  * healed via its clientId join.
  */
 
@@ -40,7 +38,7 @@ import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
 export interface EnvironmentTargetOptions {
   /** `--environment-id` flag value (or an explicit positional target). */
   flagValue?: string;
-  /** Mutations pre-validate the effective ID; reads trust stored state. */
+  /** Retained so call sites can describe their operation kind; all targets validate. */
   forMutation: boolean;
 }
 
@@ -137,15 +135,9 @@ export async function resolveEnvironmentTarget(
 ): Promise<EnvironmentTarget> {
   const flagValue = options.flagValue?.trim() || undefined;
 
-  // Fast paths — reads trust explicit/stored state with no extra round trip.
-  if (!options.forMutation) {
-    if (flagValue) return { environmentId: flagValue, source: 'flag' };
-    const profile = getActiveEnvironment();
-    if (profile?.environmentId) return { environmentId: profile.environmentId, source: 'profile' };
-  }
-
-  // Everything past here needs the team's environment list (pre-validation,
-  // clientId join, or the picker).
+  // Every path needs the team's environment list. The dashboard server treats
+  // an unknown environment header as "use production", so a stale read target
+  // is just as unsafe as a stale mutation target.
   let environments: TeamEnvironment[];
   try {
     environments = await fetchTeamEnvironments(token);

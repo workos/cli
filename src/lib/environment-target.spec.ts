@@ -104,11 +104,20 @@ describe('resolveEnvironmentTarget', () => {
   });
 
   describe('flag precedence', () => {
-    it('returns the flag value for reads without any fetch', async () => {
+    it('validates a flag-supplied ID on reads', async () => {
       seedProfile({ environmentId: 'env_stored' });
+      mockGraphqlRequest.mockResolvedValue(teamData([{ id: 'env_flag' }]));
       const target = await resolveEnvironmentTarget('tok', { flagValue: 'env_flag', forMutation: false });
       expect(target).toEqual({ environmentId: 'env_flag', source: 'flag' });
-      expect(mockGraphqlRequest).not.toHaveBeenCalled();
+      expect(mockGraphqlRequest).toHaveBeenCalledTimes(1);
+    });
+
+    it('exits environment_stale for a flag-supplied ID unknown to the team on reads', async () => {
+      mockGraphqlRequest.mockResolvedValue(teamData([{ id: 'env_other' }]));
+      await expect(
+        resolveEnvironmentTarget('tok', { flagValue: 'env_typo', forMutation: false }),
+      ).rejects.toMatchObject({ name: 'CliExit', context: { errorCode: 'environment_stale' } });
+      expect(mockGraphqlRequest).toHaveBeenCalledTimes(1);
     });
 
     it('validates a flag-supplied ID on mutations (valid case)', async () => {
@@ -130,18 +139,22 @@ describe('resolveEnvironmentTarget', () => {
   });
 
   describe('stored profile ID', () => {
-    it('trusts the stored ID for reads without any fetch', async () => {
+    it('validates the stored ID on reads', async () => {
       seedProfile({ environmentId: 'env_stored' });
+      mockGraphqlRequest.mockResolvedValue(teamData([{ id: 'env_stored' }]));
       const target = await resolveEnvironmentTarget('tok', { forMutation: false });
       expect(target).toEqual({ environmentId: 'env_stored', source: 'profile' });
-      expect(mockGraphqlRequest).not.toHaveBeenCalled();
+      expect(mockGraphqlRequest).toHaveBeenCalledTimes(1);
     });
 
-    it('proceeds with a stale stored ID on reads (documented trade-off: no fetch, no error)', async () => {
+    it('exits environment_stale for a stale stored ID on reads', async () => {
       seedProfile({ environmentId: 'env_deleted' });
-      const target = await resolveEnvironmentTarget('tok', { forMutation: false });
-      expect(target.environmentId).toBe('env_deleted');
-      expect(mockGraphqlRequest).not.toHaveBeenCalled();
+      mockGraphqlRequest.mockResolvedValue(teamData([{ id: 'env_live' }]));
+      await expect(resolveEnvironmentTarget('tok', { forMutation: false })).rejects.toMatchObject({
+        name: 'CliExit',
+        context: { errorCode: 'environment_stale' },
+      });
+      expect(mockGraphqlRequest).toHaveBeenCalledTimes(1);
     });
 
     it('pre-validates the stored ID on mutations (valid case)', async () => {

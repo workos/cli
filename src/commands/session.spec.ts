@@ -52,7 +52,14 @@ const { runSessionList, runSessionRevoke } = await import('./session.js');
 
 const TEAM_ENVIRONMENTS_PAYLOAD = {
   currentTeam: {
-    projectsV2: [{ environments: [{ id: 'env_profile', name: 'Sandbox', sandbox: true, clientId: null }] }],
+    projectsV2: [
+      {
+        environments: [
+          { id: 'env_profile', name: 'Sandbox', sandbox: true, clientId: null },
+          { id: 'env_flag', name: 'Override', sandbox: true, clientId: null },
+        ],
+      },
+    ],
   },
 };
 
@@ -141,7 +148,7 @@ describe('session command', () => {
   });
 
   describe('list', () => {
-    it('lists sessions with the environment header (read: no pre-validation fetch)', async () => {
+    it('validates the environment, then lists sessions with its header', async () => {
       respondWith({
         userlandUser: {
           id: 'user_1',
@@ -149,7 +156,7 @@ describe('session command', () => {
         },
       });
       await runSessionList('user_1', {});
-      expect(mockGraphqlRequest).toHaveBeenCalledTimes(1);
+      expect(mockGraphqlRequest).toHaveBeenCalledTimes(2);
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('userlandSessions'), {
         token: 'tok_123',
         variables: { userId: 'user_1' },

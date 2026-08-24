@@ -215,8 +215,9 @@ describe('feature-flag command', () => {
       await runFeatureFlagList({});
       const docs = mockGraphqlRequest.mock.calls.map((call) => String(call[0]));
       expect(docs[0]).toContain('teamProjectsV2');
-      expect(docs[1]).toContain('flagsForProject');
-      expect(mockGraphqlRequest.mock.calls[1][1]).toEqual({
+      expect(docs[1]).toContain('teamProjectsV2');
+      expect(docs[2]).toContain('flagsForProject');
+      expect(mockGraphqlRequest.mock.calls[2][1]).toEqual({
         token: 'tok_123',
         variables: { projectId: 'proj_1' },
         environmentId: 'env_profile',
@@ -231,7 +232,7 @@ describe('feature-flag command', () => {
     it('maps pagination flags to catalog variables', async () => {
       respondWith({ list: { flagsForProject: { data: [], listMetadata: { before: null, after: null } } } });
       await runFeatureFlagList({ limit: 5, after: 'cursor_a', order: 'desc' });
-      expect(mockGraphqlRequest.mock.calls[1][1]).toEqual({
+      expect(mockGraphqlRequest.mock.calls[2][1]).toEqual({
         token: 'tok_123',
         variables: { projectId: 'proj_1', limit: 5, after: 'cursor_a', order: 'Desc' },
         environmentId: 'env_profile',
@@ -279,7 +280,7 @@ describe('feature-flag command', () => {
     it('fetches by slug within the derived project', async () => {
       respondWith({ flagBySlug: { flagBySlug: FLAG_NODE } });
       await runFeatureFlagGet('beta');
-      expect(mockGraphqlRequest.mock.calls[1][1]).toEqual({
+      expect(mockGraphqlRequest.mock.calls[2][1]).toEqual({
         token: 'tok_123',
         variables: { projectId: 'proj_1', slug: 'beta' },
         environmentId: 'env_profile',

@@ -18,10 +18,10 @@ import type { CatalogOperation, ManagementCatalog } from './catalog-types.js';
  * Environment-scoped operations resolve their target through
  * `resolveEnvironmentTarget()` (src/lib/environment-target.ts) and thread the
  * resolved ID into `dashboardGraphqlRequest({ environmentId })`; the operation's
- * `kind` ('query' | 'mutation', on {@link CatalogOperation}) drives the
- * resolver's `forMutation` pre-validation. Team-scoped operations deliberately
- * pass no `environmentId`. Never bypass the resolver for an environment-scoped
- * call — a missing header silently targets the team's production environment.
+ * resolver validates the ID against the caller's current team before every
+ * environment-scoped request. Team-scoped operations deliberately pass no
+ * `environmentId`. Never bypass the resolver: a missing or unknown header
+ * silently targets the team's production environment.
  */
 
 // Name → operation indexes, one per catalog instance (loadManagementCatalog

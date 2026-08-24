@@ -253,7 +253,7 @@ describe('role command', () => {
     it('lists environment roles with the environment as variable and header', async () => {
       respondWith({ envList: ENV_LIST });
       await runRoleList({});
-      expect(mockGraphqlRequest).toHaveBeenCalledTimes(1);
+      expect(mockGraphqlRequest).toHaveBeenCalledTimes(2);
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('rolesForEnvironment'), {
         token: 'tok_123',
         variables: { id: 'env_profile' },
@@ -310,7 +310,7 @@ describe('role command', () => {
     it('resolves through the org list with --org', async () => {
       respondWith({ orgList: ORG_LIST });
       await runRoleGet('org-admin', { org: 'org_1' });
-      expect(requestedDocs()[0]).toContain('rolesForOrganization');
+      expect(requestedDocs()[1]).toContain('rolesForOrganization');
       expect(consoleOutput.join('\n')).toContain('org-admin');
     });
 

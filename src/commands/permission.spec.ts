@@ -193,7 +193,7 @@ describe('permission command', () => {
     it('lists permissions with the environment as variable and header', async () => {
       respondWith({ list: LIST_PAYLOAD });
       await runPermissionList({});
-      expect(mockGraphqlRequest).toHaveBeenCalledTimes(1);
+      expect(mockGraphqlRequest).toHaveBeenCalledTimes(2);
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('permissionsForEnvironment'), {
         token: 'tok_123',
         variables: { id: 'env_profile' },

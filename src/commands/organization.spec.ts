@@ -53,7 +53,14 @@ const { runOrgCreate, runOrgUpdate, runOrgGet, runOrgList, runOrgDelete, parseDo
 
 const TEAM_ENVIRONMENTS_PAYLOAD = {
   currentTeam: {
-    projectsV2: [{ environments: [{ id: 'env_profile', name: 'Sandbox', sandbox: true, clientId: null }] }],
+    projectsV2: [
+      {
+        environments: [
+          { id: 'env_profile', name: 'Sandbox', sandbox: true, clientId: null },
+          { id: 'env_flag', name: 'Override', sandbox: true, clientId: null },
+        ],
+      },
+    ],
   },
 };
 
@@ -178,10 +185,10 @@ describe('organization command', () => {
       expect(out).toContain('foo.com');
     });
 
-    it('sends the resolved environment as variable AND header (read: no pre-validation fetch)', async () => {
+    it('validates the environment, then sends it as variable and header', async () => {
       respondWith({ organizations: { data: [], listMetadata: { before: null, after: null } } });
       await runOrgList({});
-      expect(mockGraphqlRequest).toHaveBeenCalledTimes(1);
+      expect(mockGraphqlRequest).toHaveBeenCalledTimes(2);
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('organizations'), {
         token: 'tok_123',
         variables: { environmentId: 'env_profile' },

@@ -53,7 +53,14 @@ const { runOrgDomainGet, runOrgDomainCreate, runOrgDomainVerify, runOrgDomainDel
 
 const TEAM_ENVIRONMENTS_PAYLOAD = {
   currentTeam: {
-    projectsV2: [{ environments: [{ id: 'env_profile', name: 'Sandbox', sandbox: true, clientId: null }] }],
+    projectsV2: [
+      {
+        environments: [
+          { id: 'env_profile', name: 'Sandbox', sandbox: true, clientId: null },
+          { id: 'env_flag', name: 'Override', sandbox: true, clientId: null },
+        ],
+      },
+    ],
   },
 };
 
@@ -131,7 +138,7 @@ describe('org-domain command', () => {
   });
 
   describe('get (capped client-side scan)', () => {
-    it('finds a domain in the organizations page with the environment header (read: no pre-validation fetch)', async () => {
+    it('validates the environment, then finds the domain in the organizations page', async () => {
       respondWith({
         organizations: {
           data: [
@@ -142,7 +149,7 @@ describe('org-domain command', () => {
         },
       });
       await runOrgDomainGet('org_domain_1', {});
-      expect(mockGraphqlRequest).toHaveBeenCalledTimes(1);
+      expect(mockGraphqlRequest).toHaveBeenCalledTimes(2);
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('organizations'), {
         token: 'tok_123',
         variables: { environmentId: 'env_profile', limit: ORG_DOMAIN_GET_SCAN_LIMIT },

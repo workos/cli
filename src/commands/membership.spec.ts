@@ -161,7 +161,7 @@ describe('membership command', () => {
     it('lists by user with the environment header (no pagination variables)', async () => {
       respondWith({ userlandUserOrganizationMemberships: { organizationMemberships: [MEMBERSHIP_NODE] } });
       await runMembershipList({ user: 'user_1' });
-      expect(mockGraphqlRequest).toHaveBeenCalledTimes(1);
+      expect(mockGraphqlRequest).toHaveBeenCalledTimes(2);
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('userlandUserOrganizationMemberships'), {
         token: 'tok_123',
         variables: { userlandUserId: 'user_1' },

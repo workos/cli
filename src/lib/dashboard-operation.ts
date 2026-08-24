@@ -28,11 +28,7 @@ type Variables = Record<string, unknown>;
 export interface EnvScopedOptions {
   /** `--environment-id` override; defaults from the active profile. */
   environmentId?: string;
-  /**
-   * Override the resolver's pre-validation default (`op.kind === 'mutation'`).
-   * Read-then-mutate flows pass `true` on their reads so the environment is
-   * validated once for the whole invocation.
-   */
+  /** Operation-kind hint retained for read-then-mutate callers. All targets validate. */
   forMutation?: boolean;
 }
 

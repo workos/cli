@@ -52,7 +52,14 @@ const { runWebhookList, runWebhookCreate, runWebhookDelete } = await import('./w
 
 const TEAM_ENVIRONMENTS_PAYLOAD = {
   currentTeam: {
-    projectsV2: [{ environments: [{ id: 'env_profile', name: 'Sandbox', sandbox: true, clientId: null }] }],
+    projectsV2: [
+      {
+        environments: [
+          { id: 'env_profile', name: 'Sandbox', sandbox: true, clientId: null },
+          { id: 'env_flag', name: 'Override', sandbox: true, clientId: null },
+        ],
+      },
+    ],
   },
 };
 
@@ -118,12 +125,12 @@ describe('webhook command', () => {
   });
 
   describe('list', () => {
-    it('lists endpoints with the environment variable + header (read: no pre-validation fetch)', async () => {
+    it('validates the environment, then lists endpoints with its variable and header', async () => {
       respondWith({
         webhookEndpoints: { data: [ENDPOINT_NODE], listMetadata: { before: null, after: null } },
       });
       await runWebhookList({});
-      expect(mockGraphqlRequest).toHaveBeenCalledTimes(1);
+      expect(mockGraphqlRequest).toHaveBeenCalledTimes(2);
       expect(mockGraphqlRequest).toHaveBeenCalledWith(expect.stringContaining('webhookEndpoints'), {
         token: 'tok_123',
         variables: { environmentId: 'env_profile' },
