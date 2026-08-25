@@ -158,7 +158,7 @@ function describeCredentialProvenance(apiKey: string): string {
   if (!activeEnv || activeEnv.apiKey !== apiKey) return SUPPLIED_KEY_PROVENANCE;
 
   if (isUnclaimedEnvironment(activeEnv)) {
-    return `a new unclaimed environment (${activeEnv.name}) — run \`${formatWorkOSCommand('env claim')}\` to keep it`;
+    return `a new unclaimed environment (${activeEnv.name}) — run \`${formatWorkOSCommand('profile claim')}\` to keep it`;
   }
 
   return `your active environment (${activeEnv.name})`;

@@ -268,7 +268,7 @@ describe('workos-management', () => {
       const value = rowFor('Environment').value;
       expect(value).toContain('unclaimed');
       expect(value).toContain('unclaimed-2');
-      expect(value).toContain('env claim');
+      expect(value).toContain('profile claim');
     });
 
     it('names a claimed active environment', async () => {
@@ -278,7 +278,7 @@ describe('workos-management', () => {
 
       const value = rowFor('Environment').value;
       expect(value).toBe('your active environment (sandbox)');
-      expect(value).not.toContain('env claim');
+      expect(value).not.toContain('profile claim');
     });
 
     it('falls back to the supplied-key wording with no active environment', async () => {
@@ -299,7 +299,7 @@ describe('workos-management', () => {
       const value = rowFor('Environment').value;
       expect(value).toBe('the API key supplied to this run');
       expect(value).not.toContain('unclaimed-2');
-      expect(value).not.toContain('env claim');
+      expect(value).not.toContain('profile claim');
     });
 
     it('does not name a claimed stored environment whose key did not do the writes', async () => {

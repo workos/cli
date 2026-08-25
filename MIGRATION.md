@@ -26,6 +26,17 @@ migration is not another user-visible break. Two rules of that contract:
 > confirmed; those are flagged inline and listed under
 > [Unconfirmed facts](#unconfirmed-facts).
 
+## Command rename: `workos env` → `workos profile`
+
+The local credential-profile commands (`env add/remove/switch/list/provision/claim`)
+are now `workos profile ...`. The old name collided with the new
+`workos environment` command (dashboard environments), and the two are
+different things: a *profile* is an API key + settings stored on your machine;
+an *environment* is the server-side WorkOS environment it targets.
+
+`workos env ...` keeps working as an alias — no script changes required. Only
+the canonical name in help text, hints, and telemetry changed.
+
 ## Breaking changes at a glance
 
 | Change                    | Old                                                                  | New                                                 | Affected commands                                               |

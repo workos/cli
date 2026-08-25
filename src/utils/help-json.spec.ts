@@ -58,7 +58,7 @@ describe('help-json', () => {
           'skills',
           'doctor',
           'verify-login',
-          'env',
+          'profile',
           'organization',
           'user',
           'install',
@@ -99,8 +99,8 @@ describe('help-json', () => {
 
   describe('buildCommandTree() — subcommand subtrees', () => {
     it('returns env subtree with subcommands', () => {
-      const tree = buildCommandTree('env');
-      expect(tree.name).toBe('env');
+      const tree = buildCommandTree('profile');
+      expect(tree.name).toBe('profile');
       const subNames = tree.commands!.map((c) => c.name);
       expect(subNames).toEqual(expect.arrayContaining(['add', 'remove', 'switch', 'list', 'claim', 'provision']));
     });
@@ -144,13 +144,13 @@ describe('help-json', () => {
     });
 
     it('env remove description states it is local-only', () => {
-      const env = buildCommandTree('env');
+      const env = buildCommandTree('profile');
       const remove = env.commands!.find((c) => c.name === 'remove');
       expect(remove!.description).toMatch(/local/i);
     });
 
     it('env claim description states the action is permanent', () => {
-      const env = buildCommandTree('env');
+      const env = buildCommandTree('profile');
       const claim = env.commands!.find((c) => c.name === 'claim');
       expect(claim!.description).toMatch(/permanent/i);
     });
@@ -158,7 +158,7 @@ describe('help-json', () => {
 
   describe('positional schemas', () => {
     it('env add has optional positionals', () => {
-      const env = buildCommandTree('env');
+      const env = buildCommandTree('profile');
       const add = env.commands!.find((c) => c.name === 'add');
       expect(add).toBeDefined();
       expect(add!.positionals).toBeDefined();
@@ -168,7 +168,7 @@ describe('help-json', () => {
     });
 
     it('env remove has required positional', () => {
-      const env = buildCommandTree('env');
+      const env = buildCommandTree('profile');
       const remove = env.commands!.find((c) => c.name === 'remove');
       expect(remove!.positionals![0].required).toBe(true);
     });

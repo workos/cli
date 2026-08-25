@@ -47,7 +47,7 @@ export async function runEnvAdd(options: {
     exitWithError({
       code: 'missing_args',
       message: isAgentMode()
-        ? `Name and API key required in agent mode. Example: ${formatWorkOSCommand('env add staging sk_test_xxx --client-id client_xxx')}`
+        ? `Name and API key required in agent mode. Example: ${formatWorkOSCommand('profile add staging sk_test_xxx --client-id client_xxx')}`
         : isCiMode()
           ? 'Name and API key required in CI mode.'
           : 'Name and API key required when prompting is unavailable.',
@@ -139,7 +139,7 @@ export async function runEnvAdd(options: {
  * Calls the low-level `provisionUnclaimedEnvironment()` directly (no auth, no
  * code-gen). Credentials are delivered on stdout (JSON is the agent credential
  * channel) and persisted locally as an unclaimed env so a follow-up
- * `env claim` works. NEVER writes to the project directory or any `.env` file,
+ * `profile claim` works. NEVER writes to the project directory or any `.env` file,
  * and NEVER falls back to an interactive login on failure.
  */
 export async function runEnvProvision(): Promise<void> {
@@ -193,10 +193,10 @@ export async function runEnvProvision(): Promise<void> {
   console.log(`  ${chalk.dim('AuthKit')}     ${result.authkitDomain}`);
   console.log('');
   ui.log.info(
-    `Set as active environment (${key}). Run \`${formatWorkOSCommand('env claim')}\` to link it to your account (permanent).`,
+    `Set as active environment (${key}). Run \`${formatWorkOSCommand('profile claim')}\` to link it to your account (permanent).`,
   );
   if (key !== 'unclaimed') {
-    ui.log.info(`Your earlier unclaimed environment(s) are kept. See \`${formatWorkOSCommand('env list')}\`.`);
+    ui.log.info(`Your earlier unclaimed environment(s) are kept. See \`${formatWorkOSCommand('profile list')}\`.`);
   }
 }
 
@@ -205,7 +205,7 @@ export async function runEnvRemove(name: string): Promise<void> {
   if (!config || Object.keys(config.environments).length === 0) {
     exitWithError({
       code: 'no_environments',
-      message: `No environments configured. Run \`${formatWorkOSCommand('env add')}\` to get started.`,
+      message: `No environments configured. Run \`${formatWorkOSCommand('profile add')}\` to get started.`,
     });
   }
 
@@ -250,7 +250,7 @@ export async function runEnvSwitch(name?: string): Promise<void> {
   if (!config || Object.keys(config.environments).length === 0) {
     exitWithError({
       code: 'no_environments',
-      message: `No environments configured. Run \`${formatWorkOSCommand('env add')}\` to get started.`,
+      message: `No environments configured. Run \`${formatWorkOSCommand('profile add')}\` to get started.`,
     });
   }
 
@@ -266,7 +266,8 @@ export async function runEnvSwitch(name?: string): Promise<void> {
       if (env.type === 'sandbox') label += ` [Sandbox]`;
       if (env.endpoint) label += ` [${env.endpoint}]`;
       if (key === config.activeEnvironment) label += chalk.green(' (active)');
-      return { value: key, label };
+      const environment = env.environmentName ?? env.environmentId;
+      return { value: key, label, ...(environment && { hint: environment }) };
     });
 
     const selected = await ui.select({
@@ -307,7 +308,7 @@ export async function runEnvList(): Promise<void> {
     if (isJsonMode()) {
       outputJson({ data: [] });
     } else {
-      ui.log.info(`No environments configured. Run \`${formatWorkOSCommand('env add')}\` to get started.`);
+      ui.log.info(`No environments configured. Run \`${formatWorkOSCommand('profile add')}\` to get started.`);
     }
     return;
   }
@@ -326,6 +327,8 @@ export async function runEnvList(): Promise<void> {
       endpoint: env.endpoint ?? null,
       hasApiKey: !!env.apiKey,
       hasClientId: !!env.clientId,
+      environmentId: env.environmentId ?? null,
+      environmentName: env.environmentName ?? null,
     }));
     outputJson({ data, override });
     return;
@@ -336,12 +339,14 @@ export async function runEnvList(): Promise<void> {
   const nameW =
     Math.max(6, ...entries.map(([k, env]) => k.length + (isUnclaimedEnvironment(env) ? ' (unclaimed)'.length : 0))) + 2;
   const typeW = 12;
+  const endpointW = Math.max(8, ...entries.map(([, env]) => (env.endpoint ?? 'default').length)) + 2;
 
   const header = [
     chalk.yellow('  '),
     chalk.yellow('Name'.padEnd(nameW)),
     chalk.yellow('Type'.padEnd(typeW)),
-    chalk.yellow('Endpoint'),
+    chalk.yellow('Endpoint'.padEnd(endpointW)),
+    chalk.yellow('Environment'),
   ].join('  ');
 
   const separator = chalk.dim('─'.repeat(header.length));
@@ -354,16 +359,24 @@ export async function runEnvList(): Promise<void> {
     const marker = isActive ? chalk.green('▸ ') : '  ';
     const unclaimed = isUnclaimedEnvironment(env);
     const displayName = unclaimed ? `${key} ${chalk.yellow('(unclaimed)')}` : key;
-    const name = isActive ? chalk.green(displayName.padEnd(nameW)) : displayName.padEnd(nameW);
+    // Pad by VISIBLE length: displayName may carry ANSI color codes, which
+    // padEnd would count as width and skew every column after Name.
+    const visibleLength = key.length + (unclaimed ? ' (unclaimed)'.length : 0);
+    const padding = ' '.repeat(Math.max(0, nameW - visibleLength));
+    const name = (isActive ? chalk.green(displayName) : displayName) + padding;
     const type = unclaimed ? 'Unclaimed' : env.type === 'sandbox' ? 'Sandbox' : 'Production';
-    const endpoint = env.endpoint || chalk.dim('default');
+    const endpointRaw = (env.endpoint ?? 'default').padEnd(endpointW);
+    const endpoint = env.endpoint ? endpointRaw : chalk.dim(endpointRaw);
+    // Name-first: the dashboard name is what users recognize; fall back to
+    // the raw ID for profiles resolved before names were stored.
+    const environment = env.environmentName ?? env.environmentId ?? chalk.dim('—');
 
-    console.log([marker, name, type.padEnd(typeW), endpoint].join('  '));
+    console.log([marker, name, type.padEnd(typeW), endpoint, environment].join('  '));
   }
 
   if (hasUnclaimed) {
     console.log('');
-    console.log(chalk.dim(`  Run \`${formatWorkOSCommand('env claim')}\` to keep this environment.`));
+    console.log(chalk.dim(`  Run \`${formatWorkOSCommand('profile claim')}\` to keep this environment.`));
   }
 
   if (override) {

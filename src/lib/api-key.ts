@@ -23,7 +23,7 @@ export function resolveApiKey(options?: ApiKeyOptions): string {
 
   exitWithError({
     code: 'no_api_key',
-    message: `No API key configured. Run \`${formatWorkOSCommand('env add')}\` to configure an environment, or set WORKOS_API_KEY.`,
+    message: `No API key configured. Run \`${formatWorkOSCommand('profile add')}\` to configure an environment, or set WORKOS_API_KEY.`,
   });
 }
 

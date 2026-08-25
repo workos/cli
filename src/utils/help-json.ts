@@ -159,9 +159,25 @@ const commands: CommandSchema[] = [
   },
   {
     name: 'environment',
-    description: 'Manage WorkOS environments (create, rename) on the dashboard account plane',
+    description: 'Manage WorkOS environments (list, use, create, rename) on the dashboard account plane',
     options: [insecureStorageOpt],
     commands: [
+      {
+        name: 'list',
+        description: "List the current team's environments",
+      },
+      {
+        name: 'use',
+        description: 'Point the active environment profile at a team environment',
+        positionals: [
+          {
+            name: 'environmentId',
+            type: 'string',
+            description: 'Environment ID to target (see `environment list`); omit to pick interactively',
+            required: false,
+          },
+        ],
+      },
       {
         name: 'create',
         description: 'Create a sandbox or production environment',
@@ -767,8 +783,8 @@ const commands: CommandSchema[] = [
     ],
   },
   {
-    name: 'env',
-    description: 'Manage environment configurations (API keys, endpoints, active environment)',
+    name: 'profile',
+    description: 'Manage local environment profiles (API keys, endpoints, active profile)',
     options: [insecureStorageOpt],
     commands: [
       {

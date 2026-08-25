@@ -98,7 +98,7 @@ async function resolveRunApiKey(envName: string | undefined, flagApiKey?: string
   if (!env || !env.apiKey) {
     exitWithError({
       code: 'env_not_found',
-      message: `Environment '${envName}' not found or has no API key. Run '${formatWorkOSCommand('env list')}' to see available environments.`,
+      message: `Environment '${envName}' not found or has no API key. Run '${formatWorkOSCommand('profile list')}' to see available environments.`,
     });
   }
   return env.apiKey;

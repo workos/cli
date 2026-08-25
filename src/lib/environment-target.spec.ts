@@ -181,7 +181,7 @@ describe('resolveEnvironmentTarget', () => {
       await expect(resolveEnvironmentTarget('tok', { forMutation: true })).rejects.toThrow(CliExit);
       const err = errorSpy.mock.calls.map((c) => c.map(String).join(' ')).join('\n');
       expect(err).toContain('--environment-id');
-      expect(err).toContain('env switch');
+      expect(err).toContain('profile switch');
       expect(err).not.toMatch(/graphql/i);
     });
 
@@ -264,7 +264,7 @@ describe('resolveEnvironmentTarget', () => {
       expect(ui.select).not.toHaveBeenCalled();
       const err = errorSpy.mock.calls.map((c) => c.map(String).join(' ')).join('\n');
       expect(err).toContain('--environment-id');
-      expect(err).toContain('env switch');
+      expect(err).toContain('profile switch');
       expect(err).not.toMatch(/graphql/i);
     });
   });

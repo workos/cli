@@ -19,6 +19,9 @@ import type { CommandJustification } from './manifest-types.js';
  */
 const MANIFEST: CommandJustification[] = [
   // --- environment ---
+  // (`environment list` / `environment use` ride the shared `teamProjectsV2`
+  // read curated as `project list` — the manifest is one command noun per op,
+  // so composite/local commands like these and `whoami` have no entry.)
   {
     command: 'environment create',
     mapsTo: 'createEnvironment',

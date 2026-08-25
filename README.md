@@ -157,11 +157,11 @@ When you run `workos install` without credentials, the CLI automatically provisi
 workos install
 
 # Check your environment
-workos env list
+workos profile list
 # Shows: unclaimed (unclaimed) ← active
 
 # Claim the environment to link it to your WorkOS account
-workos env claim
+workos profile claim
 ```
 
 Management commands work on unclaimed environments with a warning reminding you to claim.
@@ -295,10 +295,10 @@ workos emulate --interactive
 ### Environment Management
 
 ```bash
-workos env add [name] [apiKey]   # Add environment (interactive if no args)
-workos env remove <name>         # Remove an environment
-workos env switch [name]         # Switch active environment
-workos env list                  # List environments with active indicator
+workos profile add [name] [apiKey]   # Add environment (interactive if no args)
+workos profile remove <name>         # Remove an environment
+workos profile switch [name]         # Switch active environment
+workos profile list                  # List environments with active indicator
 ```
 
 API keys are stored in the system keychain via `@napi-rs/keyring`, with a JSON file fallback at `~/.workos/config.json`.
@@ -307,7 +307,7 @@ API keys are stored in the system keychain via `@napi-rs/keyring`, with a JSON f
 
 All resource commands follow the same pattern: `workos <resource> <action> [args] [--options]`.
 
-Most resource commands — organization, user, role, permission, membership, invitation, session, event, feature-flag, org-domain, portal, webhook, config, authkit, branding — authenticate with your WorkOS dashboard session from `workos auth login` and target the active environment (see `workos env`). Pass `--environment-id <id>` on any of them to target a different environment for a single invocation. Access tokens refresh automatically while the session is valid, so a logged-in machine keeps working headlessly; a dead session exits with code 4.
+Most resource commands — organization, user, role, permission, membership, invitation, session, event, feature-flag, org-domain, portal, webhook, config, authkit, branding — authenticate with your WorkOS dashboard session from `workos auth login` and target the active environment (see `workos profile`). Pass `--environment-id <id>` on any of them to target a different environment for a single invocation. Access tokens refresh automatically while the session is valid, so a logged-in machine keeps working headlessly; a dead session exits with code 4.
 
 The remaining commands (`connection`, `directory`, `audit-log`, `api-key`, `vault`) still use the REST plane, as does the raw escape hatch `workos api`. Those resolve an API key via: `--api-key` flag → `WORKOS_API_KEY` env var → active environment's stored key.
 
@@ -600,7 +600,7 @@ All commands produce structured JSON when piped or with `--json`:
 workos org list | jq .
 # → { "organizations": [...], "pagination": { "before": null, "after": "..." } }
 
-workos env list --json
+workos profile list --json
 # → { "data": [{ "name": "prod", "type": "production", "active": true, ... }] }
 ```
 
@@ -675,7 +675,7 @@ Agents can introspect available commands:
 
 ```bash
 workos --help --json              # Full command tree
-workos env --help --json          # Subcommand tree
+workos profile --help --json          # Subcommand tree
 workos organization --help --json # With positionals and option types
 ```
 

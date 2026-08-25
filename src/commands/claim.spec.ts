@@ -491,7 +491,7 @@ describe('claim command', () => {
         await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 5_000);
         await claimPromise;
 
-        expect(mockUi.log.info).toHaveBeenCalledWith(expect.stringContaining('workos env list'));
+        expect(mockUi.log.info).toHaveBeenCalledWith(expect.stringContaining('workos profile list'));
       } finally {
         for (const k of NPM_KEYS) {
           if (saved[k] === undefined) delete process.env[k];

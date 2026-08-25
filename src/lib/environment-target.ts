@@ -21,8 +21,8 @@
  * environments before the operation runs. The server silently falls back to
  * production for an unknown header, so trusting a stale ID is unsafe even for
  * reads: it can return real production data instead of an error. Whenever the
- * team's environments are fetched, the active profile is opportunistically
- * healed via its clientId join.
+ * team's environments are fetched, stored profiles are opportunistically
+ * healed via their clientId joins.
  */
 
 import ui from '../utils/ui.js';
@@ -47,7 +47,7 @@ export interface EnvironmentTarget {
   source: 'flag' | 'profile' | 'picker';
 }
 
-interface TeamEnvironment {
+export interface TeamEnvironment {
   id: string;
   name: string | null;
   sandbox?: boolean | null;
@@ -62,7 +62,7 @@ interface TeamProjectsData {
 
 /** The two remedies every unresolved/stale message must name. */
 function remedies(): string {
-  return `Pass --environment-id, or run \`${formatWorkOSCommand('env switch')}\` to select an environment.`;
+  return `Pass --environment-id, or run \`${formatWorkOSCommand('profile switch')}\` to select an environment.`;
 }
 
 /**
@@ -71,7 +71,7 @@ function remedies(): string {
  * whether that is fatal (`resolveEnvironmentTarget`) or best-effort
  * (`tryResolveProfileEnvironmentId`).
  */
-async function fetchTeamEnvironments(token: string): Promise<TeamEnvironment[]> {
+export async function fetchTeamEnvironments(token: string): Promise<TeamEnvironment[]> {
   const op = getOperation('teamProjectsV2');
   const data = await dashboardGraphqlRequest<TeamProjectsData>(resolveExecutableDocument(op), { token });
   const projects = data.currentTeam?.projectsV2 ?? [];
@@ -80,23 +80,25 @@ async function fetchTeamEnvironments(token: string): Promise<TeamEnvironment[]> 
 
 /**
  * Opportunistic healing: whenever the team's environments are fetched anyway,
- * re-join the active profile's clientId and persist the environment ID if it
- * changed (e.g. the environment was recreated). Profiles without a clientId
- * are never touched. Note: a picker choice persisted onto a clientId-bearing
- * profile (the foreign-profile fall-through, where the join missed) could be
- * overridden here if that clientId later appears in the team's list — the
- * join is then the fresher truth for this team, so that override is desired.
+ * re-join every clientId-bearing profile and persist the environment ID and
+ * name if they changed (e.g. the environment was recreated or renamed).
+ * Profiles without a clientId are never touched. Note: a picker choice
+ * persisted onto a clientId-bearing profile (the foreign-profile fall-through,
+ * where the join missed) could be overridden here if that clientId later
+ * appears in the team's list — the join is then the fresher truth for this
+ * team, so that override is desired.
  *
- * Takes the already-read config: every caller has one in hand, and the store
- * read is keyring IPC.
+ * Writes only happen on change (`setProfileEnvironmentId` no-ops otherwise),
+ * so a steady-state heal never churns the keyring. Takes the already-read
+ * config: every caller has one in hand, and the store read is keyring IPC.
  */
-function healActiveProfile(config: CliConfig | null, environments: TeamEnvironment[]): void {
-  if (!config?.activeEnvironment) return;
-  const profile = config.environments[config.activeEnvironment];
-  if (!profile?.clientId) return;
-  const match = environments.find((env) => env.clientId === profile.clientId);
-  if (!match) return;
-  setProfileEnvironmentId(config.activeEnvironment, match.id);
+export function healProfiles(config: CliConfig | null, environments: TeamEnvironment[]): void {
+  if (!config) return;
+  for (const [key, profile] of Object.entries(config.environments)) {
+    if (!profile.clientId) continue;
+    const match = environments.find((env) => env.clientId === profile.clientId);
+    if (match) setProfileEnvironmentId(key, match.id, match.name);
+  }
 }
 
 function exitStale(environmentId: string): never {
@@ -108,7 +110,7 @@ function exitStale(environmentId: string): never {
   });
 }
 
-async function promptForEnvironment(environments: TeamEnvironment[]): Promise<string | null> {
+export async function promptForEnvironment(environments: TeamEnvironment[]): Promise<string | null> {
   const choice = await ui.select({
     message: 'Select the WorkOS environment to target',
     options: environments.map((env) => ({
@@ -163,12 +165,12 @@ export async function resolveEnvironmentTarget(
   }
 
   // One store read serves healing and the picker-persist branch below; only
-  // the post-heal profile re-read needs fresher state than this snapshot.
+  // the post-heal active-profile re-read needs fresher state than this snapshot.
   const config = getConfig();
 
   // Heal before validating: a stale stored ID whose profile clientId still
   // joins to a live environment is silently repaired instead of erroring.
-  healActiveProfile(config, environments);
+  healProfiles(config, environments);
 
   if (flagValue) {
     // An explicit-but-mistyped ID hitting the server's silent fallback on a
@@ -197,7 +199,8 @@ export async function resolveEnvironmentTarget(
     // Healing never changes which profile is active, so the earlier config
     // snapshot is still authoritative for the profile name.
     if (config?.activeEnvironment) {
-      setProfileEnvironmentId(config.activeEnvironment, choice);
+      const chosen = environments.find((env) => env.id === choice);
+      setProfileEnvironmentId(config.activeEnvironment, choice, chosen?.name);
     }
     return { environmentId: choice, source: 'picker' };
   }
@@ -242,7 +245,7 @@ export async function tryResolveProfileEnvironmentId(
     if (profile.clientId) {
       const match = environments.find((env) => env.clientId === profile.clientId);
       if (match) {
-        setProfileEnvironmentId(envKey, match.id);
+        setProfileEnvironmentId(envKey, match.id, match.name);
         return true;
       }
       // A clientId that joins nothing usually means a foreign profile (an API
@@ -253,7 +256,8 @@ export async function tryResolveProfileEnvironmentId(
     if (options.allowPicker && isPromptAllowed()) {
       const choice = await promptForEnvironment(environments);
       if (choice === null) return false; // cancel skips resolution, never aborts the caller
-      setProfileEnvironmentId(envKey, choice);
+      const chosen = environments.find((env) => env.id === choice);
+      setProfileEnvironmentId(envKey, choice, chosen?.name);
       return true;
     }
 
