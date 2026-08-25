@@ -337,6 +337,23 @@ describe('env commands', () => {
       logSpy.mockRestore();
     });
 
+    it('shows the dashboard environment name in the table, falling back to the ID', async () => {
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      await runEnvAdd({ name: 'legacy', apiKey: 'sk_live_def' });
+      const config = getConfig()!;
+      config.environments.prod.environmentId = 'environment_123';
+      config.environments.prod.environmentName = 'Production';
+      config.environments.legacy.environmentId = 'environment_456';
+      saveConfig(config);
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      await runEnvList();
+      const lines = logSpy.mock.calls.map((c) => c.map(String).join(' '));
+      expect(lines.some((l) => l.includes('Environment'))).toBe(true);
+      expect(lines.some((l) => l.includes('prod') && l.includes('Production'))).toBe(true);
+      expect(lines.some((l) => l.includes('legacy') && l.includes('environment_456'))).toBe(true);
+      logSpy.mockRestore();
+    });
+
     it('does not print an override annotation when no env var is set', async () => {
       await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -470,7 +487,7 @@ describe('env commands', () => {
       await runEnvProvision();
 
       expect(consoleOutput.join('\n')).toContain('sk_test_x');
-      expect(ui.log.info).toHaveBeenCalledWith(expect.stringContaining('env claim'));
+      expect(ui.log.info).toHaveBeenCalledWith(expect.stringContaining('profile claim'));
     });
   });
 
@@ -571,6 +588,21 @@ describe('env commands', () => {
       expect(output.data[0].active).toBe(true);
       expect(output.data[1].name).toBe('sandbox');
       expect(output.data[1].active).toBe(false);
+      expect(output.data[0].environmentId).toBeNull();
+      expect(output.data[0].environmentName).toBeNull();
+    });
+
+    it('runEnvList includes the stored environmentId and environmentName per profile', async () => {
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      const config = getConfig()!;
+      config.environments.prod.environmentId = 'environment_123';
+      config.environments.prod.environmentName = 'Production';
+      saveConfig(config);
+      consoleOutput = [];
+      await runEnvList();
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.data[0].environmentId).toBe('environment_123');
+      expect(output.data[0].environmentName).toBe('Production');
     });
 
     it('runEnvList outputs empty data array when no environments', async () => {
@@ -619,14 +651,14 @@ describe('env commands', () => {
 
     it('runEnvList empty hint uses the bare command when not launched via npx', async () => {
       await runEnvList();
-      expect(ui.log.info).toHaveBeenCalledWith(expect.stringContaining('workos env add'));
+      expect(ui.log.info).toHaveBeenCalledWith(expect.stringContaining('workos profile add'));
       expect(ui.log.info).not.toHaveBeenCalledWith(expect.stringContaining('npx workos@latest'));
     });
 
     it('runEnvList empty hint keeps the standalone binary form when npm variables are present', async () => {
       process.env.npm_command = 'exec';
       await runEnvList();
-      expect(ui.log.info).toHaveBeenCalledWith(expect.stringContaining('workos env add'));
+      expect(ui.log.info).toHaveBeenCalledWith(expect.stringContaining('workos profile add'));
     });
 
     it('unclaimed-table footer keeps the standalone binary form when npm variables are present', async () => {
@@ -648,7 +680,7 @@ describe('env commands', () => {
         out.push(args.map(String).join(' '));
       });
       await runEnvList();
-      expect(out.join('\n')).toContain('workos env claim');
+      expect(out.join('\n')).toContain('workos profile claim');
     });
 
     it('runEnvSwitch no-envs JSON error keeps the standalone binary form with npm variables present', async () => {
@@ -659,7 +691,7 @@ describe('env commands', () => {
       try {
         await expect(runEnvSwitch('anything')).rejects.toThrow(CliExit);
         const parsed = JSON.parse(String(errorSpy.mock.calls[0][0]));
-        expect(parsed.error.message).toContain('workos env add');
+        expect(parsed.error.message).toContain('workos profile add');
       } finally {
         errorSpy.mockRestore();
         setOutputMode('human');

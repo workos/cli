@@ -138,7 +138,7 @@ export async function runVerifyLogin(options: VerifyLoginOptions): Promise<void>
       code: 'missing_client_id',
       message:
         `No client ID for the active environment. Pass --client-id, or configure one via ` +
-        `\`${formatWorkOSCommand('env add --client-id <id>')}\`.`,
+        `\`${formatWorkOSCommand('profile add --client-id <id>')}\`.`,
     });
   }
 

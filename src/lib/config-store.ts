@@ -24,6 +24,13 @@ interface BaseEnvironmentConfig {
    * never silently falls back to the team's production environment.
    */
   environmentId?: string;
+  /**
+   * The dashboard environment's display name, captured at resolution time.
+   * Cosmetic only — `environmentId` is the identity — but it lets local
+   * commands show the same name the dashboard does without a network call.
+   * Refreshed by the same resolution paths that maintain `environmentId`.
+   */
+  environmentName?: string;
 }
 
 export interface ClaimedEnvironmentConfig extends BaseEnvironmentConfig {
@@ -101,11 +108,14 @@ export function setActiveEnvironment(name: string): void {
  * and opportunistic healing). No-op when the profile does not exist or already
  * stores the same ID — healing must never churn the keyring with no-op writes.
  */
-export function setProfileEnvironmentId(envKey: string, environmentId: string): void {
+export function setProfileEnvironmentId(envKey: string, environmentId: string, environmentName?: string | null): void {
   const config = getConfig();
   const profile = config?.environments[envKey];
-  if (!config || !profile || profile.environmentId === environmentId) return;
+  if (!config || !profile) return;
+  const nameUnchanged = environmentName === undefined || profile.environmentName === (environmentName ?? undefined);
+  if (profile.environmentId === environmentId && nameUnchanged) return;
   profile.environmentId = environmentId;
+  if (environmentName !== undefined) profile.environmentName = environmentName ?? undefined;
   saveConfig(config);
 }
 
@@ -185,6 +195,7 @@ export function markEnvironmentClaimed(): void {
       ...(env.ownerEmail && { ownerEmail: env.ownerEmail }),
       ...(env.ownerUserId && { ownerUserId: env.ownerUserId }),
       ...(env.environmentId && { environmentId: env.environmentId }),
+      ...(env.environmentName && { environmentName: env.environmentName }),
     };
 
     if (oldKey !== newKey) {

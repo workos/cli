@@ -117,7 +117,7 @@ async function resolveProjectId(token: string, environmentId: string): Promise<s
       code: 'environment_stale',
       message:
         `Environment "${environmentId}" was not found in your WorkOS team — it may have been deleted or recreated. ` +
-        `Pass --environment-id, or run \`${formatWorkOSCommand('env switch')}\` to select an environment.`,
+        `Pass --environment-id, or run \`${formatWorkOSCommand('profile switch')}\` to select an environment.`,
     });
   }
   return project.id;

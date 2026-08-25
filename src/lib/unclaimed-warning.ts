@@ -64,7 +64,7 @@ export async function warnIfUnclaimed(): Promise<void> {
     if (!isJsonMode()) {
       renderStderrNotice(
         `${pill('WARN', 'warn')}  ${chalk.bold('Unclaimed environment')} ${chalk.dim('— not linked to your account')}`,
-        `${chalk.dim('Run')} ${chalk.bold.cyan(formatWorkOSCommand('env claim'))} ${chalk.dim('to save it — its credentials live only on this machine.')}`,
+        `${chalk.dim('Run')} ${chalk.bold.cyan(formatWorkOSCommand('profile claim'))} ${chalk.dim('to save it — its credentials live only on this machine.')}`,
       );
       // Claim the one-notice-per-run slot so the lower-priority MCP banner defers.
       markStartupNoticeShown();

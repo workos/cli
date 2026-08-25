@@ -143,14 +143,14 @@ export async function runClaim(): Promise<void> {
     }
 
     spinner.stop('Claim timed out');
-    ui.log.info(`Complete the claim in your browser, then run \`${formatWorkOSCommand('env list')}\` to verify.`);
+    ui.log.info(`Complete the claim in your browser, then run \`${formatWorkOSCommand('profile list')}\` to verify.`);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     logError('[claim] Error:', message);
     exitWithError({
       code: 'claim_failed',
       message: `Could not claim this environment: ${message}`,
-      recovery: networkRetryRecovery({ command: formatWorkOSCommand('env claim') }),
+      recovery: networkRetryRecovery({ command: formatWorkOSCommand('profile claim') }),
     });
   }
 }

@@ -251,7 +251,7 @@ export async function runLogin(): Promise<void> {
           }
         } else {
           ui.log.warn(
-            `Logged in as ${account.email ?? account.userId}, but the active environment "${provision.priorEnvName}" belongs to a different account (${priorLabel}). Keeping it active. Run \`${formatWorkOSCommand('env switch')}\` to change environments.`,
+            `Logged in as ${account.email ?? account.userId}, but the active environment "${provision.priorEnvName}" belongs to a different account (${priorLabel}). Keeping it active. Run \`${formatWorkOSCommand('profile switch')}\` to change environments.`,
           );
         }
       }
@@ -259,10 +259,10 @@ export async function runLogin(): Promise<void> {
       if (active) {
         ui.log.success(`Now using: ${active.name} (${active.type}) — ${account.email ?? account.userId}`);
       } else {
-        ui.log.info(chalk.dim(`Run \`${formatWorkOSCommand('env add')}\` to configure an environment manually`));
+        ui.log.info(chalk.dim(`Run \`${formatWorkOSCommand('profile add')}\` to configure an environment manually`));
       }
     } else {
-      ui.log.info(chalk.dim(`Run \`${formatWorkOSCommand('env add')}\` to configure an environment manually`));
+      ui.log.info(chalk.dim(`Run \`${formatWorkOSCommand('profile add')}\` to configure an environment manually`));
     }
 
     await maybeRunSetupAfter('login');

@@ -22,18 +22,54 @@ vi.mock('../lib/dashboard-graphql.js', async (importActual) => {
 // The resolver's own matrix lives in environment-target.spec.ts; commands only
 // need to prove they thread its output into the request (variable + header).
 const mockResolveEnvironmentTarget = vi.fn();
+const mockPromptForEnvironment = vi.fn();
 vi.mock('../lib/environment-target.js', async (importActual) => {
   const actual = await importActual<typeof import('../lib/environment-target.js')>();
   return {
     ...actual,
     resolveEnvironmentTarget: (...args: unknown[]) => mockResolveEnvironmentTarget(...args),
+    promptForEnvironment: (...args: unknown[]) => mockPromptForEnvironment(...args),
+  };
+});
+
+// `use` writes the choice to the local profile; keep the store in-memory.
+const mockGetConfig = vi.fn();
+const mockSetProfileEnvironmentId = vi.fn();
+vi.mock('../lib/config-store.js', async (importActual) => {
+  const actual = await importActual<typeof import('../lib/config-store.js')>();
+  return {
+    ...actual,
+    getConfig: () => mockGetConfig(),
+    setProfileEnvironmentId: (...args: unknown[]) => mockSetProfileEnvironmentId(...args),
   };
 });
 
 const { setOutputMode } = await import('../utils/output.js');
 const { DashboardGraphqlError } = await import('../lib/dashboard-graphql.js');
 const { CliExit } = await import('../utils/cli-exit.js');
-const { runEnvironmentCreate, runEnvironmentRename } = await import('./environment.js');
+const { runEnvironmentCreate, runEnvironmentRename, runEnvironmentList, runEnvironmentUse } =
+  await import('./environment.js');
+
+const TEAM_DATA = {
+  currentTeam: {
+    projectsV2: [
+      {
+        name: 'P1',
+        environments: [
+          { id: 'env_targeted', name: 'Staging', sandbox: true },
+          { id: 'env_2', name: 'Prod', sandbox: false },
+        ],
+      },
+    ],
+  },
+};
+
+const ACTIVE_CONFIG = {
+  activeEnvironment: 'staging',
+  environments: {
+    staging: { name: 'staging', type: 'sandbox', apiKey: 'sk_test_x', environmentId: 'env_targeted' },
+  },
+};
 
 describe('environment command', () => {
   let consoleOutput: string[];
@@ -45,6 +81,7 @@ describe('environment command', () => {
       environmentId: opts.flagValue ?? 'env_profile',
       source: opts.flagValue ? 'flag' : 'profile',
     }));
+    mockGetConfig.mockReturnValue(ACTIVE_CONFIG);
     consoleOutput = [];
     vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
       consoleOutput.push(args.map(String).join(' '));
@@ -150,6 +187,84 @@ describe('environment command', () => {
       await runEnvironmentRename({ environmentId: 'env_1', name: 'Renamed' });
       const out = JSON.parse(consoleOutput[0]);
       expect(out.environment.name).toBe('Renamed');
+    });
+  });
+
+  describe('list', () => {
+    it('flattens projects into environments and marks the one the active profile targets', async () => {
+      mockGraphqlRequest.mockResolvedValue(TEAM_DATA);
+      await runEnvironmentList();
+      const out = consoleOutput.join('\n');
+      expect(out).toContain('Staging');
+      expect(out).toContain('env_targeted');
+      expect(out).toContain('P1');
+      expect(out).toMatch(/▸\s+Staging/);
+    });
+
+    it('heals stored profiles from the fetched list', async () => {
+      mockGetConfig.mockReturnValue({
+        activeEnvironment: 'staging',
+        environments: { staging: { name: 'staging', type: 'sandbox', apiKey: 'k', clientId: 'client_2' } },
+      });
+      mockGraphqlRequest.mockResolvedValue({
+        currentTeam: {
+          projectsV2: [
+            { name: 'P1', environments: [{ id: 'env_2', name: 'Prod', sandbox: false, clientId: 'client_2' }] },
+          ],
+        },
+      });
+      await runEnvironmentList();
+      expect(mockSetProfileEnvironmentId).toHaveBeenCalledWith('staging', 'env_2', 'Prod');
+    });
+
+    it('outputs JSON in json mode', async () => {
+      setOutputMode('json');
+      mockGraphqlRequest.mockResolvedValue(TEAM_DATA);
+      await runEnvironmentList();
+      const out = JSON.parse(consoleOutput[0]);
+      expect(out.environments).toHaveLength(2);
+      expect(out.environments[0]).toEqual({
+        id: 'env_targeted',
+        name: 'Staging',
+        sandbox: true,
+        project: 'P1',
+        targeted: true,
+      });
+      expect(out.environments[1].targeted).toBe(false);
+    });
+  });
+
+  describe('use', () => {
+    it('persists an explicit environment ID onto the active profile', async () => {
+      mockGraphqlRequest.mockResolvedValue(TEAM_DATA);
+      await runEnvironmentUse('env_2');
+      expect(mockSetProfileEnvironmentId).toHaveBeenCalledWith('staging', 'env_2', 'Prod');
+      expect(consoleOutput.join('\n')).toContain('Prod');
+    });
+
+    it('rejects an unknown environment ID without writing', async () => {
+      mockGraphqlRequest.mockResolvedValue(TEAM_DATA);
+      await expect(runEnvironmentUse('env_nope')).rejects.toMatchObject({
+        name: 'CliExit',
+        context: { errorCode: 'not_found' },
+      });
+      expect(mockSetProfileEnvironmentId).not.toHaveBeenCalled();
+    });
+
+    it('persists the picker choice when no ID is given', async () => {
+      mockGraphqlRequest.mockResolvedValue(TEAM_DATA);
+      mockPromptForEnvironment.mockResolvedValue('env_2');
+      await runEnvironmentUse();
+      expect(mockSetProfileEnvironmentId).toHaveBeenCalledWith('staging', 'env_2', 'Prod');
+    });
+
+    it('exits when there is no active profile', async () => {
+      mockGetConfig.mockReturnValue({ environments: {} });
+      await expect(runEnvironmentUse('env_2')).rejects.toMatchObject({
+        name: 'CliExit',
+        context: { errorCode: 'no_active_environment' },
+      });
+      expect(mockGraphqlRequest).not.toHaveBeenCalled();
     });
   });
 });

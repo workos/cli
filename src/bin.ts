@@ -287,7 +287,7 @@ async function runCli(): Promise<void> {
     .scriptName('workos')
     .parserConfiguration({ 'populate--': true })
     .exitProcess(false)
-    .fail((msg, err) => {
+    .fail((msg, err, failedParser) => {
       if (err instanceof CliExit) throw err;
       // yargs runs its demand/strict validation before dispatching middleware,
       // so the command-name middleware below has not run yet and commandName is
@@ -300,6 +300,15 @@ async function runCli(): Promise<void> {
         commandName = resolveCommandNameFromRawArgs(rawArgs);
       }
       if (msg) {
+        // Human mode: show contextual usage (the failing command's subtree)
+        // before the error, like every other CLI. Help goes to STDOUT ('log'):
+        // per clig.dev help is output, not messaging — and Bun paints all
+        // console.error output red, which must only apply to the error line.
+        // JSON mode keeps the structured error as the only output.
+        if (!isJsonMode()) {
+          failedParser?.showHelp('log');
+          console.log('');
+        }
         outputError({ code: 'invalid_usage', message: msg });
       }
       throw new CliExit(ExitCode.GENERAL_ERROR, { reason: 'validation_error' });
@@ -344,8 +353,9 @@ async function runCli(): Promise<void> {
     .middleware(async (argv) => {
       // Warn about unclaimed environments before management commands.
       // Excluded: auth/claim/install/setup/dashboard handle their own credential
-      // or onboarding flows; skills/doctor/env/debug are utility commands where
-      // the warning is unnecessary.
+      // or onboarding flows; skills/doctor/profile/debug are utility commands
+      // where the warning is unnecessary. Both the canonical name and its
+      // alias are listed — this matches argv._[0], the token as typed.
       const command = String(argv._?.[0] ?? '');
       if (
         [
@@ -353,6 +363,7 @@ async function runCli(): Promise<void> {
           'whoami',
           'skills',
           'doctor',
+          'profile',
           'env',
           'claim',
           'install',
@@ -421,47 +432,76 @@ async function runCli(): Promise<void> {
         await runWhoami({ environmentId: argv.environmentId as string | undefined });
       },
     )
-    .command('environment', 'Manage WorkOS environments (create, rename) on the dashboard account plane', (yargs) => {
-      yargs.options(insecureStorageOption);
-      registerSubcommand(
-        yargs,
-        'create <name>',
-        'Create a sandbox or production environment',
-        (y) =>
-          y
-            .positional('name', { type: 'string', demandOption: true, describe: 'Environment name' })
-            .option('sandbox', { type: 'boolean', default: false, describe: 'Create a sandbox environment' })
-            .option('environment-id', {
+    .command(
+      'environment',
+      'Manage WorkOS environments (list, use, create, rename) on the dashboard account plane',
+      (yargs) => {
+        yargs.options(insecureStorageOption);
+        registerSubcommand(
+          yargs,
+          'list',
+          "List the current team's environments",
+          (y) => y,
+          async () => {
+            const { runEnvironmentList } = await import('./commands/environment.js');
+            await runEnvironmentList();
+          },
+        );
+        registerSubcommand(
+          yargs,
+          'use [environmentId]',
+          'Point the active environment profile at a team environment',
+          (y) =>
+            y.positional('environmentId', {
               type: 'string',
-              describe:
-                'Environment ID whose project receives the new environment (defaults to the active environment)',
+              describe: 'Environment ID to target (see `environment list`); omit to pick interactively',
             }),
-        async (argv) => {
-          await applyInsecureStorage(argv.insecureStorage);
-          const { runEnvironmentCreate } = await import('./commands/environment.js');
-          await runEnvironmentCreate({
-            name: argv.name,
-            sandbox: Boolean(argv.sandbox),
-            environmentId: argv.environmentId as string | undefined,
-          });
-        },
-      );
-      registerSubcommand(
-        yargs,
-        'rename <environmentId> <name>',
-        'Rename an environment',
-        (y) =>
-          y
-            .positional('environmentId', { type: 'string', demandOption: true, describe: 'Environment ID' })
-            .positional('name', { type: 'string', demandOption: true, describe: 'New environment name' }),
-        async (argv) => {
-          await applyInsecureStorage(argv.insecureStorage);
-          const { runEnvironmentRename } = await import('./commands/environment.js');
-          await runEnvironmentRename({ environmentId: argv.environmentId, name: argv.name });
-        },
-      );
-      return yargs.demandCommand(1, 'Please specify an environment subcommand').strict();
-    })
+          async (argv) => {
+            await applyInsecureStorage(argv.insecureStorage);
+            const { runEnvironmentUse } = await import('./commands/environment.js');
+            await runEnvironmentUse(argv.environmentId);
+          },
+        );
+        registerSubcommand(
+          yargs,
+          'create <name>',
+          'Create a sandbox or production environment',
+          (y) =>
+            y
+              .positional('name', { type: 'string', demandOption: true, describe: 'Environment name' })
+              .option('sandbox', { type: 'boolean', default: false, describe: 'Create a sandbox environment' })
+              .option('environment-id', {
+                type: 'string',
+                describe:
+                  'Environment ID whose project receives the new environment (defaults to the active environment)',
+              }),
+          async (argv) => {
+            await applyInsecureStorage(argv.insecureStorage);
+            const { runEnvironmentCreate } = await import('./commands/environment.js');
+            await runEnvironmentCreate({
+              name: argv.name,
+              sandbox: Boolean(argv.sandbox),
+              environmentId: argv.environmentId as string | undefined,
+            });
+          },
+        );
+        registerSubcommand(
+          yargs,
+          'rename <environmentId> <name>',
+          'Rename an environment',
+          (y) =>
+            y
+              .positional('environmentId', { type: 'string', demandOption: true, describe: 'Environment ID' })
+              .positional('name', { type: 'string', demandOption: true, describe: 'New environment name' }),
+          async (argv) => {
+            await applyInsecureStorage(argv.insecureStorage);
+            const { runEnvironmentRename } = await import('./commands/environment.js');
+            await runEnvironmentRename({ environmentId: argv.environmentId, name: argv.name });
+          },
+        );
+        return yargs.demandCommand(1, 'Please specify an environment subcommand').strict();
+      },
+    )
     .command('project', 'Manage WorkOS projects (create, rename, list) on the dashboard account plane', (yargs) => {
       yargs.options(insecureStorageOption);
       registerSubcommand(
@@ -1077,7 +1117,7 @@ async function runCli(): Promise<void> {
       },
     )
     // NOTE: When adding commands here, also update src/utils/help-json.ts
-    .command('env', 'Manage environment configurations (API keys, endpoints, active environment)', (yargs) => {
+    .command(['profile', 'env'], 'Manage local environment profiles (API keys, endpoints, active profile)', (yargs) => {
       yargs.options(insecureStorageOption);
       registerSubcommand(
         yargs,
@@ -1120,7 +1160,7 @@ async function runCli(): Promise<void> {
           if (!argv.name && !isPromptAllowed()) {
             exitWithError({
               code: 'missing_args',
-              message: `Environment name required. Usage: ${formatWorkOSCommand('env switch <name>')}`,
+              message: `Environment name required. Usage: ${formatWorkOSCommand('profile switch <name>')}`,
             });
           }
           await applyInsecureStorage(argv.insecureStorage);
@@ -1161,7 +1201,7 @@ async function runCli(): Promise<void> {
           await runEnvProvision();
         },
       );
-      return yargs.demandCommand(1, 'Please specify an env subcommand').strict();
+      return yargs.demandCommand(1, 'Please specify a profile subcommand').strict();
     })
     .command(
       'api [endpoint] [filter]',
@@ -3064,7 +3104,7 @@ async function runCli(): Promise<void> {
         await runDebugSync(argv.directoryId, resolveApiKey({ apiKey: argv.apiKey }), resolveApiBaseUrl());
       },
     )
-    // Alias — canonical command is `workos env claim`
+    // Alias — canonical command is `workos profile claim`
     .command(
       'claim',
       'Claim an unclaimed WorkOS environment — link it to your account (permanent — cannot be undone)',
@@ -3324,7 +3364,9 @@ async function runCli(): Promise<void> {
             // Same 64KiB pipe-buffer truncation as the --help --json intercept.
             outputJsonSync(buildCommandTree());
           } else {
-            parser.showHelp();
+            // 'log' = stdout: help is output (clig.dev), and Bun would paint
+            // the default console.error sink red.
+            parser.showHelp('log');
           }
           return;
         }

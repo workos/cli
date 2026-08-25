@@ -84,7 +84,7 @@ export async function tryProvisionUnclaimedEnv(options: UnclaimedEnvProvisionOpt
     config.activeEnvironment = key;
     saveConfig(config);
 
-    // Verify config persisted — critical for `workos env claim` in a later process
+    // Verify config persisted — critical for `workos profile claim` in a later process
     const readBack = getActiveEnvironment();
     if (!readBack || readBack.type !== 'unclaimed') {
       logError('[unclaimed-env-provision] Config read-back failed after save — claim token may not persist');
@@ -95,7 +95,7 @@ export async function tryProvisionUnclaimedEnv(options: UnclaimedEnvProvisionOpt
     logInfo('[unclaimed-env-provision] Unclaimed environment provisioned and saved');
     renderStderrNotice(
       `${chalk.green('✓')} ${chalk.bold('Environment provisioned')} ${chalk.dim('— credentials saved to your project')}`,
-      `${chalk.dim('Run')} ${chalk.bold.cyan(formatWorkOSCommand('env claim'))} ${chalk.dim('to link it to your account.')}`,
+      `${chalk.dim('Run')} ${chalk.bold.cyan(formatWorkOSCommand('profile claim'))} ${chalk.dim('to link it to your account.')}`,
     );
 
     return true;
