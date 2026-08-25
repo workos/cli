@@ -125,6 +125,8 @@ Resource Management:
   feature-flag           Manage feature flags
   webhook                Manage webhooks
   config                 Manage redirect URIs, CORS, homepage URL
+  authkit                Manage AuthKit app config (redirect URIs, CORS, logout URIs)
+  branding               Manage branding images (logo, icon, favicon)
   portal                 Generate Admin Portal links
   vault                  Manage encrypted secrets
   api-key                Manage per-org API keys
@@ -144,7 +146,7 @@ Workflows:
   debug-sync             Diagnose directory sync issues
 ```
 
-All management commands support `--json` for structured output (auto-enabled in non-TTY) and `--api-key` to override the active environment's key.
+All management commands support `--json` for structured output (auto-enabled in non-TTY). Still-REST commands (`connection`, `directory`, `audit-log`, `api-key`, `vault`, `workos api`, and the workflow/debug commands) also accept `--api-key` to override the active environment's key; the other resource commands authenticate with your `workos auth login` session (see [Resource Management](#resource-management)).
 
 ### Unclaimed Environments
 
@@ -303,7 +305,11 @@ API keys are stored in the system keychain via `@napi-rs/keyring`, with a JSON f
 
 ### Resource Management
 
-All resource commands follow the same pattern: `workos <resource> <action> [args] [--options]`. API keys resolve via: `--api-key` flag → `WORKOS_API_KEY` env var → active environment's stored key.
+All resource commands follow the same pattern: `workos <resource> <action> [args] [--options]`.
+
+Most resource commands — organization, user, role, permission, membership, invitation, session, event, feature-flag, org-domain, portal, webhook, config, authkit, branding — authenticate with your WorkOS dashboard session from `workos auth login` and target the active environment (see `workos env`). Pass `--environment-id <id>` on any of them to target a different environment for a single invocation. Access tokens refresh automatically while the session is valid, so a logged-in machine keeps working headlessly; a dead session exits with code 4.
+
+The remaining commands (`connection`, `directory`, `audit-log`, `api-key`, `vault`) still use the REST plane, as does the raw escape hatch `workos api`. Those resolve an API key via: `--api-key` flag → `WORKOS_API_KEY` env var → active environment's stored key.
 
 #### organization
 
@@ -312,68 +318,72 @@ workos organization create <name> [domain:state ...]
 workos organization update <orgId> <name> [domain] [state]
 workos organization get <orgId>
 workos organization list [--domain] [--limit] [--before] [--after] [--order]
-workos organization delete <orgId>
+workos organization delete <orgId> [--yes]
 ```
 
 #### user
 
 ```bash
 workos user get <userId>
-workos user list [--email] [--organization] [--limit]
-workos user update <userId> [--first-name] [--last-name] [--email-verified] [--password] [--external-id]
-workos user delete <userId>
+workos user list [--email] [--limit] [--before] [--after] [--order]
+workos user update <userId> [--first-name] [--last-name] [--email] [--locale] [--external-id]
+workos user delete <userId> [--yes]
 ```
 
 #### role
 
+Role mutations change the privilege surface; non-interactive callers must pass `--yes`.
+
 ```bash
 workos role list [--org <orgId>]
 workos role get <slug> [--org <orgId>]
-workos role create --slug <slug> --name <name> [--org <orgId>]
-workos role update <slug> [--name] [--description] [--org <orgId>]
-workos role delete <slug> --org <orgId>
-workos role set-permissions <slug> --permissions <slugs> [--org <orgId>]
-workos role add-permission <slug> <permissionSlug> [--org <orgId>]
-workos role remove-permission <slug> <permissionSlug> --org <orgId>
+workos role create --slug <slug> --name <name> [--description] [--org <orgId>] [--yes]
+workos role update <slug> [--name] [--description] [--org <orgId>] [--yes]
+workos role delete <slug> --org <orgId> [--yes]
+workos role set-permissions <slug> --permissions <slugs> [--org <orgId>] [--yes]
+workos role add-permission <slug> <permissionSlug> [--org <orgId>] [--yes]
+workos role remove-permission <slug> <permissionSlug> --org <orgId> [--yes]
 ```
 
 #### permission
 
 ```bash
-workos permission list [--limit]
+workos permission list
 workos permission get <slug>
-workos permission create --slug <slug> --name <name> [--description]
-workos permission update <slug> [--name] [--description]
-workos permission delete <slug>
+workos permission create --slug <slug> --name <name> [--description] [--yes]
+workos permission update <slug> [--name] [--description] [--yes]
+workos permission delete <slug> [--yes]
 ```
 
 #### membership
 
+`--org` and `--user` are mutually exclusive on `list`; pagination flags apply to `--org` listings only.
+
 ```bash
-workos membership list [--org] [--user] [--limit]
+workos membership list (--org <orgId> | --user <userId>) [--limit] [--before] [--after] [--order]
 workos membership get <id>
 workos membership create --org <orgId> --user <userId> [--role]
-workos membership update <id> [--role]
-workos membership delete <id>
-workos membership deactivate <id>
+workos membership update <id> [--role] [--yes]
+workos membership delete <id> [--yes]
+workos membership deactivate <id> [--yes]
 workos membership reactivate <id>
 ```
 
 #### invitation
 
 ```bash
-workos invitation list [--org] [--email] [--limit]
+workos invitation list [--org] [--email] [--limit] [--before] [--after]
 workos invitation get <id>
 workos invitation send --email <email> [--org] [--role] [--expires-in-days]
-workos invitation revoke <id>
+workos invitation revoke <id> [--yes]
 workos invitation resend <id>
 ```
 
 #### session
 
 ```bash
-workos session list <userId> [--limit]
-workos session revoke <sessionId>
+workos session list <userId> [--limit] [--before] [--after]
+workos session revoke <sessionId> [--yes]
 ```
 
 #### connection
@@ -397,7 +407,7 @@ workos directory list-groups --directory <id> [--limit]
 #### event
 
 ```bash
-workos event list --events <types> [--org] [--range-start] [--range-end] [--limit]
+workos event list --events <types> [--range-start] [--range-end] [--after] [--limit]
 ```
 
 #### audit-log
@@ -414,7 +424,7 @@ workos audit-log get-retention <orgId>
 #### feature-flag
 
 ```bash
-workos feature-flag list [--limit]
+workos feature-flag list [--limit] [--before] [--after] [--order]
 workos feature-flag get <slug>
 workos feature-flag enable <slug>
 workos feature-flag disable <slug>
@@ -427,7 +437,7 @@ workos feature-flag remove-target <slug> <targetId>
 ```bash
 workos webhook list
 workos webhook create --url <endpoint> --events <types>
-workos webhook delete <id>
+workos webhook delete <id> [--yes]
 ```
 
 #### config
@@ -438,11 +448,52 @@ workos config cors add <origin>
 workos config homepage-url set <url>
 ```
 
+`config` adds a single entry to a list. To replace a whole list, use `authkit` below.
+
+#### authkit
+
+Per-environment AuthKit app configuration. Unlike `config`, these setters replace the entire list, and each accepts `--dry-run` to validate without saving.
+
+```bash
+workos authkit redirect-uris list [--limit]
+workos authkit redirect-uris set --uri <uri> [--uri <uri> ...] [--default <uri>] [--dry-run]
+workos authkit cors get
+workos authkit cors set --origin <origin> [--origin <origin> ...] [--dry-run]
+workos authkit logout-uris list [--limit]
+workos authkit logout-uris set --uri <uri> [--uri <uri> ...] [--default <uri>] [--dry-run]
+```
+
+Wildcard web origins are rejected — an accepted `*` would allow every browser origin, which is equivalent to disabling CORS.
+
+#### branding
+
+The logo, icon, and favicon an environment renders, each with a light and dark variant. Branding is not AuthKit-only: the same record drives hosted AuthKit pages and transactional emails.
+
+```bash
+workos branding get
+workos branding set <slot> <file>
+workos branding set [--logo] [--logo-dark] [--icon] [--icon-dark] [--favicon] [--favicon-dark]
+```
+
+Slots are `logo`, `logo-dark`, `icon`, `icon-dark`, `favicon`, and `favicon-dark`. Set one image positionally, or several at once with the matching flags — the two forms cannot be combined in a single invocation.
+
+```bash
+# One image
+workos branding set icon ./icon.png
+
+# Several at once
+workos branding set --logo ./logo.png --logo-dark ./logo-dark.png --favicon ./favicon.ico
+```
+
+Images must be under 400 KB each and one of `.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`, `.webp`, `.avif`, or `.ico`. Only the images you name are changed; the rest are left as they are. There is no way to clear an image from the CLI — upload a replacement instead.
+
 #### portal
 
 ```bash
-workos portal generate-link --intent <intent> --org <orgId> [--return-url] [--success-url]
+workos portal generate-link --intent <intent> --org <orgId>
 ```
+
+Supported intents: `sso`, `dsync`, `log_streams`, `domain_verification`, `certificate_renewal`. Generating a link expires prior links of the same intent.
 
 #### vault
 
@@ -473,7 +524,7 @@ workos api-key delete <id>
 workos org-domain get <id>
 workos org-domain create <domain> --org <orgId>
 workos org-domain verify <id>
-workos org-domain delete <id>
+workos org-domain delete <id> [--yes]
 ```
 
 ### Installer Options
@@ -512,11 +563,11 @@ mkdir my-app && cd my-app && workos install
 # With visual dashboard (experimental)
 workos dashboard
 
-# JSON output (explicit)
-workos org list --json --api-key sk_test_xxx
+# JSON output (explicit; requires a prior `workos auth login`)
+workos org list --json
 
 # Pipe-friendly (auto-detects non-TTY)
-workos org list --api-key sk_test_xxx | jq '.data[].name'
+workos org list | jq '.organizations[].name'
 
 # Machine-readable command discovery
 workos --help --json | jq '.commands[].name'
@@ -539,11 +590,15 @@ The CLI also auto-detects non-TTY environments (piped output, CI, coding agents)
 
 ### JSON Output
 
+> **Upgrading?** The resource commands moved to the dashboard GraphQL API and
+> their `--json` shapes changed in one breaking release. See
+> [MIGRATION.md](MIGRATION.md) for the old-to-new field table and `jq` snippets.
+
 All commands produce structured JSON when piped or with `--json`:
 
 ```bash
-workos org list --api-key sk_test_xxx | jq .
-# → { "data": [...], "list_metadata": { "before": null, "after": "..." } }
+workos org list | jq .
+# → { "organizations": [...], "pagination": { "before": null, "after": "..." } }
 
 workos env list --json
 # → { "data": [{ "name": "prod", "type": "production", "active": true, ... }] }
@@ -552,8 +607,8 @@ workos env list --json
 Errors go to stderr as structured JSON:
 
 ```bash
-workos org list 2>&1
-# → { "error": { "code": "no_api_key", "message": "No API key configured..." } }
+workos org list 2>&1   # not logged in → exit code 4
+# → { "error": { "code": "auth_required", "message": "Not logged in..." } }
 ```
 
 ### Agent Mode
@@ -603,13 +658,16 @@ workos install --api-key sk_test_xxx --client-id client_xxx --no-commit 2>/dev/n
 
 ### Environment Variables
 
-| Variable                 | Effect                                                    |
-| ------------------------ | --------------------------------------------------------- |
-| `WORKOS_API_KEY`         | API key for management commands (bypasses stored config)  |
-| `WORKOS_API_BASE_URL`    | Override API base URL (set automatically by `workos dev`) |
-| `WORKOS_MODE`            | Interaction mode: `human`, `agent`, or `ci`               |
-| `WORKOS_FORCE_TTY=1`     | Force human (non-JSON) **output** mode even when piped    |
-| `WORKOS_TELEMETRY=false` | Disable telemetry                                         |
+| Variable                 | Effect                                                                                                                                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `WORKOS_API_KEY`         | API key for `workos api`, the still-REST commands (connection, directory, audit-log, api-key, vault), and workflow/debug commands. Resource commands use the `workos auth login` session instead |
+| `WORKOS_API_URL`         | Override the API base URL for all CLI commands (e.g. a local API)                                                                                                                                |
+| `WORKOS_API_BASE_URL`    | Accepted alias for `WORKOS_API_URL` (what `workos dev` sets)                                                                                                                                     |
+| `WORKOS_MODE`            | Interaction mode: `human`, `agent`, or `ci`                                                                                                                                                      |
+| `WORKOS_FORCE_TTY=1`     | Force human (non-JSON) **output** mode even when piped                                                                                                                                           |
+| `WORKOS_TELEMETRY=false` | Disable telemetry                                                                                                                                                                                |
+
+> `WORKOS_API_URL` controls where the **CLI's own** commands (`workos user`, `workos api`, etc.) send requests — set it to point the CLI at a locally-running API. This is distinct from `workos dev`, which sets API vars for your **app's** dev process so it talks to the in-process emulator.
 
 ### Command Discovery
 

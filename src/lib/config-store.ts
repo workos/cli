@@ -17,6 +17,13 @@ interface BaseEnvironmentConfig {
   ownerEmail?: string;
   /** User ID of the account that owns this environment. Stamped alongside ownerEmail. */
   ownerUserId?: string;
+  /**
+   * The WorkOS dashboard environment ID this profile targets (`environment_...`).
+   * Resolved by `resolveEnvironmentTarget()` (clientId join or explicit pick) and
+   * sent as the environment header on dashboard-plane requests so the server
+   * never silently falls back to the team's production environment.
+   */
+  environmentId?: string;
 }
 
 export interface ClaimedEnvironmentConfig extends BaseEnvironmentConfig {
@@ -84,6 +91,21 @@ export function setActiveEnvironment(name: string): void {
   const config = getConfig();
   if (!config || !config.environments[name]) return;
   config.activeEnvironment = name;
+  saveConfig(config);
+}
+
+/**
+ * Persist a resolved dashboard environment ID onto a stored profile.
+ *
+ * Setter used by environment-target resolution (clientId join, picker persist,
+ * and opportunistic healing). No-op when the profile does not exist or already
+ * stores the same ID — healing must never churn the keyring with no-op writes.
+ */
+export function setProfileEnvironmentId(envKey: string, environmentId: string): void {
+  const config = getConfig();
+  const profile = config?.environments[envKey];
+  if (!config || !profile || profile.environmentId === environmentId) return;
+  profile.environmentId = environmentId;
   saveConfig(config);
 }
 
@@ -162,6 +184,7 @@ export function markEnvironmentClaimed(): void {
       ...(env.endpoint && { endpoint: env.endpoint }),
       ...(env.ownerEmail && { ownerEmail: env.ownerEmail }),
       ...(env.ownerUserId && { ownerUserId: env.ownerUserId }),
+      ...(env.environmentId && { environmentId: env.environmentId }),
     };
 
     if (oldKey !== newKey) {

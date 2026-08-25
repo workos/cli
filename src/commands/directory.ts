@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import { createWorkOSClient } from '../lib/workos-client.js';
 import { formatTable } from '../utils/table.js';
+import { printPaginationFooter } from '../utils/resource-command.js';
 import { outputSuccess, outputJson, isJsonMode, exitWithError } from '../utils/output.js';
 import { createApiErrorHandler } from '../lib/api-error-handler.js';
 import { isCiMode, isPromptAllowed } from '../utils/interaction-mode.js';
@@ -61,14 +62,7 @@ export async function runDirectoryList(options: DirectoryListOptions, apiKey: st
       ),
     );
 
-    const { before, after } = result.listMetadata;
-    if (before && after) {
-      console.log(chalk.dim(`Before: ${before}  After: ${after}`));
-    } else if (before) {
-      console.log(chalk.dim(`Before: ${before}`));
-    } else if (after) {
-      console.log(chalk.dim(`After: ${after}`));
-    }
+    printPaginationFooter(result.listMetadata);
   } catch (error) {
     handleApiError(error);
   }
@@ -177,14 +171,7 @@ export async function runDirectoryListUsers(
       ),
     );
 
-    const { before, after } = result.listMetadata;
-    if (before && after) {
-      console.log(chalk.dim(`Before: ${before}  After: ${after}`));
-    } else if (before) {
-      console.log(chalk.dim(`Before: ${before}`));
-    } else if (after) {
-      console.log(chalk.dim(`After: ${after}`));
-    }
+    printPaginationFooter(result.listMetadata);
   } catch (error) {
     handleApiError(error);
   }
@@ -226,14 +213,7 @@ export async function runDirectoryListGroups(
 
     console.log(formatTable([{ header: 'ID' }, { header: 'Name' }, { header: 'Created' }], rows));
 
-    const { before, after } = result.listMetadata;
-    if (before && after) {
-      console.log(chalk.dim(`Before: ${before}  After: ${after}`));
-    } else if (before) {
-      console.log(chalk.dim(`Before: ${before}`));
-    } else if (after) {
-      console.log(chalk.dim(`After: ${after}`));
-    }
+    printPaginationFooter(result.listMetadata);
   } catch (error) {
     handleApiError(error);
   }

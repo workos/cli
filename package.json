@@ -89,7 +89,9 @@
     "eval:diff": "bun run ./tests/evals/index.ts diff",
     "eval:prune": "bun run ./tests/evals/index.ts prune",
     "eval:logs": "bun run ./tests/evals/index.ts logs",
-    "eval:show": "bun run ./tests/evals/index.ts show"
+    "eval:show": "bun run ./tests/evals/index.ts show",
+    "catalog:vendor": "bun run ./scripts/vendor-catalog.ts",
+    "justification:check": "bun run ./scripts/check-justification.ts"
   },
   "author": "WorkOS",
   "license": "MIT"

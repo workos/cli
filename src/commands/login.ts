@@ -16,6 +16,7 @@ import { isAgentMode, isCiMode, isPromptAllowed } from '../utils/interaction-mod
 import { ExitCode, exitWithAuthRequired, exitWithCode } from '../utils/exit-codes.js';
 import { requestDeviceCode, pollForToken, DeviceAuthTimeoutError } from '../lib/device-auth.js';
 import { observeHostFailure } from '../lib/host-probe.js';
+import { tryResolveProfileEnvironmentId } from '../lib/environment-target.js';
 
 /**
  * Result of a post-login staging provision. Carries enough context for
@@ -221,6 +222,14 @@ export async function runLogin(): Promise<void> {
 
     const account = { email: result.email, userId: result.userId };
     const provision = await provisionStagingEnvironment(result.accessToken, account);
+
+    // Best-effort: stamp the provisioned profile with its dashboard environment
+    // ID (clientId join) so dashboard-plane commands target Staging instead of
+    // hitting the server's production fallback. Non-fatal — same posture as
+    // provisionStagingEnvironment; resolution defers to first use on failure.
+    if (provision.provisioned && provision.envName) {
+      await tryResolveProfileEnvironmentId(provision.envName, { token: result.accessToken });
+    }
 
     if (isJsonMode()) {
       outputJson({

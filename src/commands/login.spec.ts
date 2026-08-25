@@ -73,6 +73,18 @@ vi.mock('../utils/analytics.js', () => ({
   analytics: { capture: vi.fn(), captureException: vi.fn() },
 }));
 
+// Best-effort environment resolution after provisioning — behavior is covered
+// in environment-target.spec.ts; here we only assert the wiring (and keep the
+// real resolver from issuing network requests).
+const mockTryResolveProfileEnvironmentId = vi.fn();
+vi.mock('../lib/environment-target.js', async (importActual) => {
+  const actual = await importActual<typeof import('../lib/environment-target.js')>();
+  return {
+    ...actual,
+    tryResolveProfileEnvironmentId: (...args: unknown[]) => mockTryResolveProfileEnvironmentId(...args),
+  };
+});
+
 vi.mock('../utils/output.js', () => ({
   isJsonMode: vi.fn(() => false),
   exitWithError: vi.fn(),
@@ -124,6 +136,7 @@ describe('login', () => {
       email: 'user@example.com',
       refreshToken: 'refresh_token',
     });
+    mockTryResolveProfileEnvironmentId.mockResolvedValue(false);
   });
 
   afterEach(() => {
@@ -392,6 +405,24 @@ describe('login', () => {
       const nowUsing = successSpy.mock.calls.map((c) => String(c[0])).find((m) => m.includes('Now using'));
       expect(nowUsing).toBeDefined();
       expect(nowUsing).toContain('user@example.com');
+    });
+
+    it('attempts best-effort environment resolution for the provisioned staging profile', async () => {
+      setInteractionMode({ mode: 'human', source: 'env' });
+      mockFetchStagingCredentials.mockResolvedValue({ clientId: 'client_user', apiKey: 'sk_test_user' });
+
+      await runLogin();
+
+      expect(mockTryResolveProfileEnvironmentId).toHaveBeenCalledWith('staging', { token: 'access_token' });
+    });
+
+    it('skips environment resolution when provisioning failed', async () => {
+      setInteractionMode({ mode: 'human', source: 'env' });
+      mockFetchStagingCredentials.mockRejectedValue(new Error('provisioning down'));
+
+      await runLogin();
+
+      expect(mockTryResolveProfileEnvironmentId).not.toHaveBeenCalled();
     });
 
     it('switches the active env when the user confirms on a cross-account login', async () => {

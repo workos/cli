@@ -391,7 +391,12 @@ export const ENV_VAR_CATALOG: { name: string; effect: string }[] = [
   // URLs (WORKOS_API_URL is the single base; gateway + telemetry derive from it)
   {
     name: 'WORKOS_API_URL',
-    effect: 'Overrides API base URL; also reroutes the LLM gateway and CLI telemetry endpoints',
+    effect:
+      'Overrides the API base URL for all CLI commands (default: https://api.workos.com); also reroutes the LLM gateway and CLI telemetry endpoints',
+  },
+  {
+    name: 'WORKOS_API_BASE_URL',
+    effect: 'Accepted alias for WORKOS_API_URL (what `workos dev` sets)',
   },
   { name: 'WORKOS_DASHBOARD_URL', effect: 'Overrides dashboard URL (default: https://dashboard.workos.com)' },
   { name: 'WORKOS_AUTHKIT_DOMAIN', effect: 'Overrides AuthKit domain from settings' },

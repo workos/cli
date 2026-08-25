@@ -1,23 +1,18 @@
 /**
- * Unified WorkOS client for CLI commands.
+ * Unified WorkOS client for the still-REST CLI commands.
  *
  * Wraps @workos-inc/node SDK for documented endpoints and extends with
- * raw-fetch methods for undocumented/write-only endpoints (webhooks, redirect URIs, etc.).
- * Commands import one client; they don't care whether a method is SDK-backed or raw fetch.
+ * raw-fetch methods for undocumented/write-only endpoints (redirect URIs,
+ * CORS origins, audit-log metadata). Commands import one client; they don't
+ * care whether a method is SDK-backed or raw fetch.
+ *
+ * Migrated resource commands (organization, user, ... — see CLAUDE.md) no
+ * longer use this client; they run on the dashboard session plane.
  */
 
 import { WorkOS } from '@workos-inc/node';
 import { workosRequest, type WorkOSListResponse } from './workos-api.js';
 import { resolveApiKey, resolveApiBaseUrl } from './api-key.js';
-
-export interface WebhookEndpoint {
-  id: string;
-  endpoint_url: string;
-  events: string[];
-  secret?: string;
-  created_at: string;
-  updated_at: string;
-}
 
 export interface AuditLogAction {
   action: string;
@@ -29,11 +24,6 @@ export interface AuditLogRetention {
 
 export interface WorkOSCLIClient {
   sdk: WorkOS;
-  webhooks: {
-    list(): Promise<WorkOSListResponse<WebhookEndpoint>>;
-    create(endpointUrl: string, events: string[]): Promise<WebhookEndpoint>;
-    delete(id: string): Promise<void>;
-  };
   redirectUris: {
     add(uri: string): Promise<{ success: boolean; alreadyExists: boolean }>;
   };
@@ -69,34 +59,6 @@ export function createWorkOSClient(apiKey?: string, baseUrl?: string): WorkOSCLI
 
   return {
     sdk,
-
-    webhooks: {
-      async list() {
-        return workosRequest<WorkOSListResponse<WebhookEndpoint>>({
-          method: 'GET',
-          path: '/webhook_endpoints',
-          apiKey: key,
-          baseUrl: base,
-        });
-      },
-      async create(endpointUrl: string, events: string[]) {
-        return workosRequest<WebhookEndpoint>({
-          method: 'POST',
-          path: '/webhook_endpoints',
-          apiKey: key,
-          baseUrl: base,
-          body: { endpoint_url: endpointUrl, events },
-        });
-      },
-      async delete(id: string) {
-        await workosRequest<null>({
-          method: 'DELETE',
-          path: `/webhook_endpoints/${id}`,
-          apiKey: key,
-          baseUrl: base,
-        });
-      },
-    },
 
     redirectUris: {
       async add(uri: string) {

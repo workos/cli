@@ -35,6 +35,17 @@ vi.mock('../lib/unclaimed-env-api.js', async (importOriginal) => {
 // Guard: runEnvProvision must NEVER write project .env files.
 vi.mock('../lib/env-writer.js', () => ({ writeCredentialsEnv: vi.fn() }));
 
+// Best-effort dashboard environment resolution — full behavior is covered in
+// environment-target.spec.ts; here we only assert the add/switch wiring.
+const mockTryResolveProfileEnvironmentId = vi.fn();
+vi.mock('../lib/environment-target.js', async (importActual) => {
+  const actual = await importActual<typeof import('../lib/environment-target.js')>();
+  return {
+    ...actual,
+    tryResolveProfileEnvironmentId: (...args: unknown[]) => mockTryResolveProfileEnvironmentId(...args),
+  };
+});
+
 let testDir: string;
 
 vi.mock('node:os', async (importOriginal) => {
@@ -63,7 +74,11 @@ describe('env commands', () => {
     testDir = mkdtempSync(join(tmpdir(), 'env-cmd-test-'));
     setInsecureConfigStorage(true);
     resetInteractionModeForTests();
+    delete process.env.WORKOS_API_URL;
+    delete process.env.WORKOS_API_BASE_URL;
     vi.clearAllMocks();
+    // Default: logged out — resolution defers to first dashboard-command use.
+    mockTryResolveProfileEnvironmentId.mockResolvedValue(false);
   });
 
   afterEach(() => {
@@ -126,6 +141,18 @@ describe('env commands', () => {
       setInteractionMode({ mode: 'ci', source: 'env' });
       await expect(runEnvAdd({ name: 'prod' })).rejects.toThrow(CliExit);
       expect(ui.text).not.toHaveBeenCalled();
+    });
+
+    it('attempts best-effort dashboard environment resolution for the new profile', async () => {
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      expect(mockTryResolveProfileEnvironmentId).toHaveBeenCalledWith('prod', { allowPicker: true });
+    });
+
+    it('never blocks profile creation when resolution defers (logged out)', async () => {
+      mockTryResolveProfileEnvironmentId.mockResolvedValue(false);
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      // The profile write must land regardless of the resolution outcome.
+      expect(getConfig()?.environments.prod).toBeDefined();
     });
 
     it('does not include placeholder commands in missing-args recovery metadata', async () => {
@@ -223,6 +250,31 @@ describe('env commands', () => {
       await expect(runEnvSwitch('anything')).rejects.toThrow(CliExit);
     });
 
+    it('attempts resolution when switching to a profile lacking an environmentId', async () => {
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      await runEnvAdd({ name: 'sandbox', apiKey: 'sk_test_abc' });
+      mockTryResolveProfileEnvironmentId.mockClear();
+      await runEnvSwitch('sandbox');
+      expect(mockTryResolveProfileEnvironmentId).toHaveBeenCalledWith('sandbox', { allowPicker: true });
+    });
+
+    it('skips resolution when the target profile already stores an environmentId', async () => {
+      saveConfig({
+        activeEnvironment: 'prod',
+        environments: {
+          prod: { name: 'prod', type: 'production', apiKey: 'sk_live_abc' },
+          sandbox: {
+            name: 'sandbox',
+            type: 'sandbox',
+            apiKey: 'sk_test_abc',
+            environmentId: 'env_already',
+          },
+        },
+      });
+      await runEnvSwitch('sandbox');
+      expect(mockTryResolveProfileEnvironmentId).not.toHaveBeenCalled();
+    });
+
     it('warns when WORKOS_API_KEY env var is set', async () => {
       const original = process.env.WORKOS_API_KEY;
       process.env.WORKOS_API_KEY = 'sk_test_override';
@@ -269,6 +321,29 @@ describe('env commands', () => {
     it('does not throw when environments exist', async () => {
       await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
       await expect(runEnvList()).resolves.not.toThrow();
+    });
+
+    it('prints an env-var override annotation when WORKOS_API_URL is set', async () => {
+      process.env.WORKOS_API_URL = 'http://localhost:7777';
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      await runEnvList();
+      const lines = logSpy.mock.calls.map((c) => c.map(String).join(' '));
+      expect(
+        lines.some(
+          (l) => l.includes('Override:') && l.includes('WORKOS_API_URL') && l.includes('http://localhost:7777'),
+        ),
+      ).toBe(true);
+      logSpy.mockRestore();
+    });
+
+    it('does not print an override annotation when no env var is set', async () => {
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      await runEnvList();
+      const lines = logSpy.mock.calls.map((c) => c.map(String).join(' '));
+      expect(lines.some((l) => l.includes('Override:'))).toBe(false);
+      logSpy.mockRestore();
     });
   });
 
@@ -502,6 +577,23 @@ describe('env commands', () => {
       await runEnvList();
       const output = JSON.parse(consoleOutput[0]);
       expect(output.data).toEqual([]);
+    });
+
+    it('runEnvList includes an override field when WORKOS_API_URL is set', async () => {
+      process.env.WORKOS_API_URL = 'http://localhost:7777';
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      consoleOutput = [];
+      await runEnvList();
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.override).toEqual({ baseUrl: 'http://localhost:7777', via: 'WORKOS_API_URL' });
+    });
+
+    it('runEnvList override field is null when no env var is set', async () => {
+      await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
+      consoleOutput = [];
+      await runEnvList();
+      const output = JSON.parse(consoleOutput[0]);
+      expect(output.override).toBeNull();
     });
   });
 

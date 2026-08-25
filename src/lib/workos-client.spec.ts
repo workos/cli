@@ -46,64 +46,12 @@ describe('workos-client', () => {
       expect(client.sdk.baseURL).toBe('https://api.workos.com');
     });
 
-    it('exposes sdk, webhooks, redirectUris, corsOrigins, homepageUrl', () => {
+    it('exposes sdk, redirectUris, corsOrigins, homepageUrl', () => {
       const client = createWorkOSClient('sk_test_123');
       expect(client.sdk).toBeDefined();
-      expect(client.webhooks).toBeDefined();
       expect(client.redirectUris).toBeDefined();
       expect(client.corsOrigins).toBeDefined();
       expect(client.homepageUrl).toBeDefined();
-    });
-  });
-
-  describe('webhooks', () => {
-    it('list calls correct path', async () => {
-      const mockData = { data: [], list_metadata: { before: null, after: null } };
-      mockRequest.mockResolvedValue(mockData);
-
-      const client = createWorkOSClient('sk_test_123', 'https://api.workos.com');
-      const result = await client.webhooks.list();
-
-      expect(mockRequest).toHaveBeenCalledWith(
-        expect.objectContaining({
-          method: 'GET',
-          path: '/webhook_endpoints',
-          apiKey: 'sk_test_123',
-          baseUrl: 'https://api.workos.com',
-        }),
-      );
-      expect(result).toBe(mockData);
-    });
-
-    it('create calls correct path with body', async () => {
-      const mockEndpoint = { id: 'we_123', url: 'https://example.com/hook', events: ['user.created'] };
-      mockRequest.mockResolvedValue(mockEndpoint);
-
-      const client = createWorkOSClient('sk_test_123', 'https://api.workos.com');
-      const result = await client.webhooks.create('https://example.com/hook', ['user.created']);
-
-      expect(mockRequest).toHaveBeenCalledWith(
-        expect.objectContaining({
-          method: 'POST',
-          path: '/webhook_endpoints',
-          body: { endpoint_url: 'https://example.com/hook', events: ['user.created'] },
-        }),
-      );
-      expect(result).toBe(mockEndpoint);
-    });
-
-    it('delete calls correct path', async () => {
-      mockRequest.mockResolvedValue(null);
-
-      const client = createWorkOSClient('sk_test_123', 'https://api.workos.com');
-      await client.webhooks.delete('we_123');
-
-      expect(mockRequest).toHaveBeenCalledWith(
-        expect.objectContaining({
-          method: 'DELETE',
-          path: '/webhook_endpoints/we_123',
-        }),
-      );
     });
   });
 

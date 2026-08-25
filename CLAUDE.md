@@ -12,10 +12,37 @@ WorkOS CLI for installing AuthKit integrations and managing WorkOS resources (or
 ## Non-TTY Behavior
 
 - **Output**: Auto-switches to JSON when piped or `--json` flag. `WORKOS_FORCE_TTY=1` overrides.
-- **Auth**: Exits code 4 instead of opening browser. Requires prior `workos auth login` or `WORKOS_API_KEY` env var.
+- **Auth**: Exits code 4 instead of opening browser. Resource commands (organization, user, role, permission, membership, invitation, session, event, feature-flag, org-domain, portal, webhook, config) use the dashboard session from a prior `workos auth login`; expired access tokens refresh silently while the stored refresh token is valid, so only a truly dead session exits 4. `WORKOS_API_KEY` applies only to `workos api` and the still-REST commands (`connection`, `directory`, `audit-log`, `api-key`, `vault`, plus the workflow/debug commands `seed`, `setup-org`, `onboard-user`, `verify-login`, `debug-sso`, `debug-sync`, `migrations`).
 - **Errors**: Structured JSON to stderr: `{ "error": { "code": "...", "message": "..." } }`
 - **Exit codes**: 0=success, 1=error, 2=cancelled, 4=auth required (follows `gh` CLI convention)
 - **Headless flags**: `--no-branch`, `--no-commit`, `--create-pr`, `--no-git-check`. CI mode (`WORKOS_MODE=ci`) auto-continues past a dirty tree without `--no-git-check`; agent mode requires the flag.
+
+## JSON Output Conventions
+
+`--json` output is a public API: users script against it with jq and in CI. The
+backend's vocabulary is an implementation detail and must never leak through
+untranslated, or the next backend migration becomes another user-visible break.
+Route every enum and metadata field through `src/utils/output-conventions.ts`
+rather than hand-normalizing per command.
+
+- **Keys are camelCase.**
+- **Enum values are lowercase.** Backends emit assorted casings (`Verified`,
+  `PENDING`, `Active`); the CLI emits one convention. Use `enumOut()`.
+- **Enum input is case-insensitive.** Whatever the CLI prints for a field it
+  accepts for that field ("forgiving in, canonical out"). Use `enumIn()`.
+- **`state` is the lifecycle-state key** on every resource, not `status`.
+- **`metadata` is an object map**, not GraphQL's array of pairs, so
+  `.metadata.foo` resolves in jq. Use `metadataToMap()`.
+- **Internal/backend-only fields are dropped** from curated shapes.
+
+When a spec mocks a backend response, feed it the backend's real casing
+(`'Verified'`) and assert the lowercase output. A mock that feeds already-correct
+values never exercises the normalization, which is exactly how a casing bug
+shipped once already.
+
+`scripts/parity-smoke.ts` compares this branch against `../main` and fails on any
+unexpected field divergence. Its `ACCEPTED` map lists deliberate curations only;
+a casing-only difference appearing there is a bug, not an accepted divergence.
 
 ## Tech Constraints
 

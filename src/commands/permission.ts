@@ -1,134 +1,310 @@
+/**
+ * `workos permission` — RBAC permission management on the dashboard account
+ * plane.
+ *
+ * Migrated from the API-key REST SDK (graphql-resource-migration Phase 5): the
+ * subcommand surface (list/get/create/update/delete) is unchanged, but every
+ * operation now runs catalog-backed dashboard operations with the user's OAuth
+ * bearer. Output shapes are new curated shapes (approved breaking change); the
+ * authoritative examples live in `permission.spec.ts`.
+ *
+ * Backend divergences from REST (all loud, none faked):
+ * - The list operation has NO pagination or ordering variables, so the
+ *   `--limit/--before/--after/--order` flags are removed (it returns the
+ *   environment's full permission set).
+ * - The mutations are ID-keyed while the frozen grammar is slug-keyed, so
+ *   update/delete first resolve the slug via the list operation.
+ * - The update mutation REQUIRES a name and CLEARS the description when it is
+ *   omitted, so updates read-merge-write the current name/description.
+ * - System permissions are immutable server-side; update/delete refuse them
+ *   loudly before issuing the mutation.
+ *
+ * Safety posture per the manifest: `delete` is destructive →
+ * `confirmDestructive` (prompt, or --yes); create/update are privilege-surface
+ * changes → `require-flag` (non-interactive callers must pass --yes).
+ */
+
 import chalk from 'chalk';
-import { createWorkOSClient } from '../lib/workos-client.js';
+import { requireCommandToken } from '../lib/command-auth.js';
+import { resolveEnvironmentTarget } from '../lib/environment-target.js';
+import { runEnvScopedOperation, executeDashboardOperation } from '../lib/dashboard-operation.js';
+import { getOperation } from '../catalog/operation.js';
+import { confirmDestructive, requireConfirmationFlag } from '../catalog/confirm.js';
+import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
+import { printDetailFields } from '../utils/resource-command.js';
 import { formatTable } from '../utils/table.js';
-import { outputSuccess, outputJson, isJsonMode } from '../utils/output.js';
-import { createApiErrorHandler } from '../lib/api-error-handler.js';
 
-const handleApiError = createApiErrorHandler('Permission');
-
-export interface PermissionListOptions {
-  limit?: number;
-  before?: string;
-  after?: string;
-  order?: string;
+interface PermissionNode {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  system?: boolean | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
 }
 
-export async function runPermissionList(
-  options: PermissionListOptions,
-  apiKey: string,
-  baseUrl?: string,
-): Promise<void> {
-  const client = createWorkOSClient(apiKey, baseUrl);
+/**
+ * The curated permission shape — the `--json` contract for every subcommand.
+ * camelCase, stable keys, no internal fields; see permission.spec.ts for the
+ * authoritative example.
+ */
+function shapePermission(permission: PermissionNode) {
+  return {
+    id: permission.id,
+    slug: permission.slug,
+    name: permission.name,
+    description: permission.description ?? null,
+    system: permission.system ?? false,
+    createdAt: permission.createdAt ?? null,
+    updatedAt: permission.updatedAt ?? null,
+  };
+}
 
-  try {
-    const result = await client.sdk.authorization.listPermissions({
-      limit: options.limit,
-      before: options.before,
-      after: options.after,
-      order: options.order as 'asc' | 'desc' | undefined,
+/** Fetch the environment's full permission set (the op is unpaginated). */
+async function fetchPermissions(token: string, environmentId: string): Promise<PermissionNode[]> {
+  const op = getOperation('permissions');
+  const data = await executeDashboardOperation<{
+    permissionsForEnvironment: { permissions: PermissionNode[] } | null;
+  }>(op, { token, variables: { id: environmentId }, environmentId });
+  return data.permissionsForEnvironment?.permissions ?? [];
+}
+
+/** Resolve a slug within the environment's permission list, or exit not_found. */
+async function requirePermissionBySlug(token: string, environmentId: string, slug: string): Promise<PermissionNode> {
+  const permissions = await fetchPermissions(token, environmentId);
+  const permission = permissions.find((candidate) => candidate.slug === slug);
+  if (!permission) {
+    exitWithError({ code: 'not_found', message: `Permission "${slug}" was not found in this environment.` });
+  }
+  return permission;
+}
+
+/** System permissions are immutable server-side — refuse before the mutation. */
+function refuseSystemPermission(permission: PermissionNode, slug: string, action: string): void {
+  if (permission.system) {
+    exitWithError({
+      code: 'invalid_argument',
+      message: `Permission "${slug}" is a system permission and cannot be ${action}.`,
     });
-
-    if (isJsonMode()) {
-      outputJson({ data: result.data, listMetadata: result.listMetadata });
-      return;
-    }
-
-    if (result.data.length === 0) {
-      console.log('No permissions found.');
-      return;
-    }
-
-    const rows = result.data.map((perm) => [
-      perm.slug,
-      perm.name,
-      perm.description || chalk.dim('-'),
-      new Date(perm.createdAt).toLocaleDateString(),
-    ]);
-
-    console.log(
-      formatTable([{ header: 'Slug' }, { header: 'Name' }, { header: 'Description' }, { header: 'Created' }], rows),
-    );
-
-    const { before, after } = result.listMetadata;
-    if (before && after) {
-      console.log(chalk.dim(`Before: ${before}  After: ${after}`));
-    } else if (before) {
-      console.log(chalk.dim(`Before: ${before}`));
-    } else if (after) {
-      console.log(chalk.dim(`After: ${after}`));
-    }
-  } catch (error) {
-    handleApiError(error);
   }
 }
 
-export async function runPermissionGet(slug: string, apiKey: string, baseUrl?: string): Promise<void> {
-  const client = createWorkOSClient(apiKey, baseUrl);
-
-  try {
-    const permission = await client.sdk.authorization.getPermission(slug);
-    outputJson(permission);
-  } catch (error) {
-    handleApiError(error);
-  }
+export interface PermissionEnvironmentOptions {
+  /** `--environment-id` override; defaults from the active profile. */
+  environmentId?: string;
 }
 
-export interface PermissionCreateOptions {
+export async function runPermissionList(options: PermissionEnvironmentOptions = {}): Promise<void> {
+  const token = await requireCommandToken();
+
+  // Environment-scoped read: the op takes the resolved ID as a variable and it
+  // rides as the environment header.
+  const { environmentId } = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: false,
+  });
+
+  const permissions = (await fetchPermissions(token, environmentId)).map(shapePermission);
+
+  if (isJsonMode()) {
+    outputJson({ permissions });
+    return;
+  }
+  if (permissions.length === 0) {
+    console.log('No permissions found.');
+    return;
+  }
+
+  const rows = permissions.map((permission) => [
+    permission.slug,
+    permission.name,
+    permission.description ?? chalk.dim('-'),
+    permission.createdAt ?? chalk.dim('-'),
+  ]);
+  console.log(
+    formatTable([{ header: 'Slug' }, { header: 'Name' }, { header: 'Description' }, { header: 'Created' }], rows),
+  );
+}
+
+export async function runPermissionGet(slug: string, options: PermissionEnvironmentOptions = {}): Promise<void> {
+  const token = await requireCommandToken();
+
+  const { environmentId } = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: false,
+  });
+
+  const permission = shapePermission(await requirePermissionBySlug(token, environmentId, slug));
+
+  if (isJsonMode()) {
+    outputJson({ permission });
+    return;
+  }
+
+  const fields: Array<[string, unknown]> = [
+    ['Slug', permission.slug],
+    ['Name', permission.name],
+    ['Description', permission.description],
+    ['System', permission.system ? 'yes' : null],
+    ['Created', permission.createdAt],
+  ];
+  printDetailFields(fields);
+}
+
+export interface PermissionCreateOptions extends PermissionEnvironmentOptions {
   slug: string;
   name: string;
   description?: string;
+  yes?: boolean;
+  json?: boolean;
 }
 
-export async function runPermissionCreate(
-  options: PermissionCreateOptions,
-  apiKey: string,
-  baseUrl?: string,
-): Promise<void> {
-  const client = createWorkOSClient(apiKey, baseUrl);
+export async function runPermissionCreate(options: PermissionCreateOptions): Promise<void> {
+  // require-flag: expands the privilege surface; non-interactive callers must pass --yes.
+  await requireConfirmationFlag(options, { action: `create permission ${options.slug}` });
 
-  try {
-    const permission = await client.sdk.authorization.createPermission({
+  // Environment-scoped mutation: pre-validated resolved target as header (the
+  // create input carries no environment field — the header IS the scope).
+  const { data } = await runEnvScopedOperation<{
+    createPermission:
+      | { __typename: 'PermissionCreated'; permission: PermissionNode }
+      | { __typename: 'PermissionAlreadyExists'; slug: string }
+      | { __typename: 'PermissionSlugInvalid'; slug: string }
+      | { __typename: 'EnvironmentNotFound'; environmentId: string };
+  }>('createPermission', options, {
+    input: {
       slug: options.slug,
       name: options.name,
-      ...(options.description && { description: options.description }),
-    });
-    outputSuccess('Created permission', permission);
-  } catch (error) {
-    handleApiError(error);
+      ...(options.description !== undefined ? { description: options.description } : {}),
+    },
+  });
+
+  const result = data.createPermission;
+  if (result.__typename === 'PermissionAlreadyExists') {
+    exitWithError({ code: 'already_exists', message: `A permission with slug "${options.slug}" already exists.` });
   }
+  if (result.__typename === 'PermissionSlugInvalid') {
+    exitWithError({ code: 'invalid_argument', message: `"${options.slug}" is not a valid permission slug.` });
+  }
+  if (result.__typename === 'EnvironmentNotFound') {
+    exitWithError({ code: 'not_found', message: 'The target environment was not found.' });
+  }
+  if (result.__typename !== 'PermissionCreated' || !('permission' in result)) {
+    exitWithError({ code: 'unexpected_result', message: `Could not create permission "${options.slug}".` });
+  }
+
+  const permission = shapePermission(result.permission);
+  if (isJsonMode()) {
+    outputJson({ permission });
+    return;
+  }
+  outputSuccess(`Created permission ${chalk.bold(permission.slug)}`);
 }
 
-export interface PermissionUpdateOptions {
+export interface PermissionUpdateOptions extends PermissionEnvironmentOptions {
   name?: string;
   description?: string;
+  yes?: boolean;
+  json?: boolean;
 }
 
-export async function runPermissionUpdate(
-  slug: string,
-  options: PermissionUpdateOptions,
-  apiKey: string,
-  baseUrl?: string,
-): Promise<void> {
-  const client = createWorkOSClient(apiKey, baseUrl);
-
-  try {
-    const permission = await client.sdk.authorization.updatePermission(slug, {
-      ...(options.name !== undefined && { name: options.name }),
-      ...(options.description !== undefined && { description: options.description }),
-    });
-    outputSuccess('Updated permission', permission);
-  } catch (error) {
-    handleApiError(error);
+export async function runPermissionUpdate(slug: string, options: PermissionUpdateOptions = {}): Promise<void> {
+  if (options.name === undefined && options.description === undefined) {
+    exitWithError({ code: 'missing_argument', message: 'Nothing to update. Pass --name and/or --description.' });
   }
+
+  // require-flag: a privilege-surface change; non-interactive callers must pass --yes.
+  await requireConfirmationFlag(options, { action: `update permission ${slug}` });
+
+  const token = await requireCommandToken();
+  const op = getOperation('updatePermission');
+
+  // Environment-scoped mutation: pre-validated resolved target as header.
+  const { environmentId } = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: op.kind === 'mutation',
+  });
+
+  // The mutation is ID-keyed AND requires the full name/description (an
+  // omitted description would be cleared) — resolve and merge first.
+  const existing = await requirePermissionBySlug(token, environmentId, slug);
+  refuseSystemPermission(existing, slug, 'modified');
+  const description = options.description ?? existing.description ?? undefined;
+
+  const data = await executeDashboardOperation<{
+    updatePermission:
+      | { __typename: 'PermissionUpdated'; permission: PermissionNode }
+      | { __typename: 'PermissionNotFound'; permissionId: string };
+  }>(op, {
+    token,
+    variables: {
+      input: {
+        permissionId: existing.id,
+        name: options.name ?? existing.name,
+        ...(description !== undefined ? { description } : {}),
+      },
+    },
+    environmentId,
+  });
+
+  const result = data.updatePermission;
+  if (result.__typename === 'PermissionNotFound') {
+    exitWithError({ code: 'not_found', message: `Permission "${slug}" was not found in this environment.` });
+  }
+  if (result.__typename !== 'PermissionUpdated' || !('permission' in result)) {
+    exitWithError({ code: 'unexpected_result', message: `Could not update permission "${slug}".` });
+  }
+
+  const permission = shapePermission(result.permission);
+  if (isJsonMode()) {
+    outputJson({ permission });
+    return;
+  }
+  outputSuccess(`Updated permission ${chalk.bold(permission.slug)}`);
 }
 
-export async function runPermissionDelete(slug: string, apiKey: string, baseUrl?: string): Promise<void> {
-  const client = createWorkOSClient(apiKey, baseUrl);
+export interface PermissionDeleteOptions extends PermissionEnvironmentOptions {
+  yes?: boolean;
+  json?: boolean;
+}
 
-  try {
-    await client.sdk.authorization.deletePermission(slug);
-    outputSuccess('Deleted permission', { slug });
-  } catch (error) {
-    handleApiError(error);
+export async function runPermissionDelete(slug: string, options: PermissionDeleteOptions = {}): Promise<void> {
+  // Destructive per the manifest: removes the permission from every role using it.
+  await confirmDestructive(options, {
+    action: `delete permission ${slug} — this permanently removes it from every role that uses it`,
+  });
+
+  const token = await requireCommandToken();
+  const op = getOperation('deletePermission');
+
+  // Environment-scoped mutation: pre-validated resolved target as header.
+  const { environmentId } = await resolveEnvironmentTarget(token, {
+    flagValue: options.environmentId,
+    forMutation: op.kind === 'mutation',
+  });
+
+  const existing = await requirePermissionBySlug(token, environmentId, slug);
+  refuseSystemPermission(existing, slug, 'deleted');
+
+  const data = await executeDashboardOperation<{
+    deletePermission:
+      | { __typename: 'PermissionDeleted'; permissionId: string }
+      | { __typename: 'PermissionNotFound'; permissionId: string }
+      | { __typename: 'EnvironmentNotFound'; environmentId: string };
+  }>(op, { token, variables: { input: { permissionId: existing.id } }, environmentId });
+
+  const result = data.deletePermission;
+  if (result.__typename === 'PermissionNotFound' || result.__typename === 'EnvironmentNotFound') {
+    exitWithError({ code: 'not_found', message: `Permission "${slug}" was not found in this environment.` });
   }
+  if (result.__typename !== 'PermissionDeleted') {
+    exitWithError({ code: 'unexpected_result', message: `Could not delete permission "${slug}".` });
+  }
+
+  if (isJsonMode()) {
+    outputJson({ deleted: slug });
+    return;
+  }
+  outputSuccess(`Deleted permission ${chalk.bold(slug)}`);
 }

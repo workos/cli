@@ -26,6 +26,8 @@ const ALLOWLIST = new Set<string>([
   'utils/help-json.ts :: workos api', // examples array (mirrors bin.ts)
   'commands/seed.ts :: workos seed', // SEED_TEMPLATE persisted-file comment
   'emulate/workos/index.ts :: workos seed', // prose error label, not a runnable command
+  'commands/whoami.ts :: workos user', // "workos user:" display label for the WorkOS user ID, not a command hint
+  'commands/debug.ts :: workos dev', // prose in an env-var effect description, not a runnable hint
 ]);
 
 async function discover(): Promise<Set<string>> {

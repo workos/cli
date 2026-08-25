@@ -1,0 +1,248 @@
+/**
+ * `workos team` — account-plane dashboard-team lifecycle.
+ *
+ * These manage the WorkOS *dashboard team* (the account's members, invites, and
+ * team-wide settings), via the dashboard account plane with the user's OAuth
+ * bearer — the same gated capability `whoami` uses. Safety posture per the
+ * manifest:
+ * - `team remove` is destructive → `confirmDestructive` (prompt, or --yes).
+ * - `team change-role` / `team set-mfa` are `require-flag` → non-interactive
+ *   callers must pass --yes (privilege / security-posture changes).
+ *
+ * Every operation here is team-scoped: none consults the environment context,
+ * so no environment header is sent (see `src/lib/environment-target.ts`).
+ */
+
+import chalk from 'chalk';
+import { runTeamScopedOperation } from '../lib/dashboard-operation.js';
+import { confirmDestructive, requireConfirmationFlag } from '../catalog/confirm.js';
+import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
+import { formatTable } from '../utils/table.js';
+
+/** Dashboard team roles, mirroring the catalog `UsersOrganizationsRole` enum. */
+export const TEAM_ROLES = ['ADMIN', 'MEMBER', 'MEMBER_SANDBOX', 'SUPPORT', 'SUPPORT_VIEWER'] as const;
+export type TeamRole = (typeof TEAM_ROLES)[number];
+
+function normalizeRole(role: string): TeamRole {
+  const upper = role.toUpperCase();
+  if (!(TEAM_ROLES as readonly string[]).includes(upper)) {
+    exitWithError({
+      code: 'invalid_role',
+      message: `Invalid role "${role}". Allowed roles: ${TEAM_ROLES.join(', ')}.`,
+    });
+  }
+  return upper as TeamRole;
+}
+
+interface MembershipNode {
+  id: string;
+  role: string | null;
+  state: string | null;
+  isInvitationExpired?: boolean | null;
+  user: { id: string; name: string | null; email: string | null } | null;
+}
+
+export async function runTeamMembers(): Promise<void> {
+  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
+  const { data } = await runTeamScopedOperation<{ currentTeam: { memberships: MembershipNode[] } | null }>(
+    'teamMemberships',
+  );
+
+  const memberships = data.currentTeam?.memberships ?? [];
+  if (isJsonMode()) {
+    outputJson({ members: memberships });
+    return;
+  }
+
+  if (memberships.length === 0) {
+    console.log('No team members found.');
+    return;
+  }
+
+  const rows = memberships.map((m) => [
+    m.id,
+    m.user?.email ?? chalk.dim('(no email)'),
+    m.user?.name ?? chalk.dim('—'),
+    m.role ?? chalk.dim('—'),
+    m.state ?? chalk.dim('—'),
+  ]);
+  console.log(
+    formatTable(
+      [{ header: 'Membership ID' }, { header: 'Email' }, { header: 'Name' }, { header: 'Role' }, { header: 'State' }],
+      rows,
+    ),
+  );
+}
+
+export interface TeamInviteOptions {
+  email: string;
+  role: string;
+  firstName?: string;
+  lastName?: string;
+}
+
+export async function runTeamInvite(options: TeamInviteOptions): Promise<void> {
+  const role = normalizeRole(options.role);
+
+  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
+  const { data } = await runTeamScopedOperation<{
+    inviteUserToTeam:
+      | { __typename: 'UserInvitedToTeam'; invitedMember: MembershipNode }
+      | { __typename: 'UserAlreadyBelongsToCurrentTeam'; email: string }
+      | { __typename: 'UserAlreadyBelongsToAnotherTeam'; email: string };
+  }>('inviteUserToTeam', {
+    input: {
+      user: {
+        email: options.email,
+        role,
+        ...(options.firstName ? { firstName: options.firstName } : {}),
+        ...(options.lastName ? { lastName: options.lastName } : {}),
+      },
+    },
+  });
+
+  const result = data.inviteUserToTeam;
+  if (result.__typename === 'UserAlreadyBelongsToCurrentTeam') {
+    exitWithError({ code: 'already_member', message: `${options.email} already belongs to this team.` });
+  }
+  if (result.__typename === 'UserAlreadyBelongsToAnotherTeam') {
+    exitWithError({ code: 'belongs_to_another_team', message: `${options.email} already belongs to another team.` });
+  }
+  if (result.__typename !== 'UserInvitedToTeam' || !('invitedMember' in result)) {
+    exitWithError({ code: 'unexpected_result', message: `Could not invite ${options.email}.` });
+  }
+
+  const member = result.invitedMember;
+  if (isJsonMode()) {
+    outputJson({ member });
+    return;
+  }
+  outputSuccess(`Invited ${chalk.bold(options.email)} as ${member.role ?? role}`);
+  console.log(chalk.dim(`  membership id: ${member.id}`));
+}
+
+export interface TeamChangeRoleOptions {
+  membershipId: string;
+  role: string;
+  yes?: boolean;
+  json?: boolean;
+}
+
+export async function runTeamChangeRole(options: TeamChangeRoleOptions): Promise<void> {
+  const role = normalizeRole(options.role);
+  // require-flag: a privilege change; non-interactive callers must pass --yes.
+  await requireConfirmationFlag(options, { action: `change the role of ${options.membershipId} to ${role}` });
+
+  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
+  const { data } = await runTeamScopedOperation<{ changeRole: { id: string; role: string | null } }>('changeRole', {
+    usersOrganizationsId: options.membershipId,
+    role,
+  });
+
+  if (isJsonMode()) {
+    outputJson({ member: data.changeRole });
+    return;
+  }
+  outputSuccess(`Changed role of ${chalk.bold(options.membershipId)} to ${data.changeRole.role ?? role}`);
+}
+
+export interface TeamRemoveOptions {
+  membershipId: string;
+  yes?: boolean;
+  json?: boolean;
+}
+
+export async function runTeamRemove(options: TeamRemoveOptions): Promise<void> {
+  // Destructive: revokes the member's access. Prompt (or require --yes).
+  await confirmDestructive(options, { action: `remove member ${options.membershipId} from the team` });
+
+  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
+  await runTeamScopedOperation('removeUserFromTeam', { usersOrganizationsId: options.membershipId });
+
+  if (isJsonMode()) {
+    outputJson({ removed: options.membershipId });
+    return;
+  }
+  outputSuccess(`Removed member ${chalk.bold(options.membershipId)} from the team`);
+}
+
+export interface TeamResendInviteOptions {
+  membershipId: string;
+}
+
+export async function runTeamResendInvite(options: TeamResendInviteOptions): Promise<void> {
+  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
+  const { data } = await runTeamScopedOperation<{ resendDashboardInvite: { __typename: string } }>(
+    'resendDashboardInvite',
+    { input: { teamMembershipId: options.membershipId } },
+  );
+
+  const result = data.resendDashboardInvite;
+  if (result.__typename === 'DashboardInviteNotFound') {
+    exitWithError({ code: 'not_found', message: `No dashboard invite found for ${options.membershipId}.` });
+  }
+  if (result.__typename === 'DashboardInviteNotExpired') {
+    exitWithError({
+      code: 'invite_not_expired',
+      message: `The invite for ${options.membershipId} has not expired; nothing to resend.`,
+    });
+  }
+
+  if (isJsonMode()) {
+    outputJson({ resent: options.membershipId });
+    return;
+  }
+  outputSuccess(`Resent invite for ${chalk.bold(options.membershipId)}`);
+}
+
+export interface TeamUpdateOptions {
+  name: string;
+}
+
+export async function runTeamUpdate(options: TeamUpdateOptions): Promise<void> {
+  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
+  const { data } = await runTeamScopedOperation<{
+    updateTeamDetails:
+      | { __typename: 'TeamDetailsUpdated'; team: { id: string; name: string | null } }
+      | { __typename: 'InvalidTeamName'; team: { id: string } };
+  }>('updateTeamDetails', { input: { name: options.name } });
+
+  const result = data.updateTeamDetails;
+  if (result.__typename === 'InvalidTeamName') {
+    exitWithError({ code: 'invalid_team_name', message: `"${options.name}" is not a valid team name.` });
+  }
+  if (result.__typename !== 'TeamDetailsUpdated' || !('team' in result)) {
+    exitWithError({ code: 'unexpected_result', message: 'Could not update the team.' });
+  }
+
+  const team = result.team;
+  if (isJsonMode()) {
+    outputJson({ team });
+    return;
+  }
+  outputSuccess(`Renamed team to ${chalk.bold(team.name ?? team.id)}`);
+}
+
+export interface TeamSetMfaOptions {
+  required: boolean;
+  yes?: boolean;
+  json?: boolean;
+}
+
+export async function runTeamSetMfa(options: TeamSetMfaOptions): Promise<void> {
+  // require-flag: a security-posture change; non-interactive callers must pass --yes.
+  await requireConfirmationFlag(options, {
+    action: `set MFA requirement to ${options.required ? 'required' : 'not required'}`,
+  });
+
+  // Team-scoped operation: deliberately NO environment header (see environment-target.ts).
+  const { data } = await runTeamScopedOperation<{
+    updateTeamMfaRequirement: { __typename: string; team?: { id: string; isMfaRequired?: boolean | null } };
+  }>('updateTeamMfaRequirement', { input: { requireMfa: options.required } });
+
+  if (isJsonMode()) {
+    outputJson({ team: data.updateTeamMfaRequirement.team ?? null, requireMfa: options.required });
+    return;
+  }
+  outputSuccess(`MFA is now ${chalk.bold(options.required ? 'required' : 'not required')} for the team`);
+}
