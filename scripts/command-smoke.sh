@@ -11,10 +11,12 @@
 # POSIX sh only: this runs in debian-slim and Alpine containers (no bash)
 # and under Git Bash on the Windows runners.
 #
-# When WORKOS_API_KEY is provided, an authenticated section also runs: list
-# plus a create → get → delete round-trip against that environment. CI passes
-# a dedicated staging-environment key; fork PRs receive no secrets and skip
-# it. The offline contract checks always run with the key withheld, so the
+# When WORKOS_API_KEY is provided, an authenticated section also runs: a list
+# against a still-REST resource command (migrated resource commands take the
+# dashboard session and refuse API keys) plus a create → get → delete
+# organization round-trip through `workos api`, the raw-REST escape hatch.
+# CI passes a dedicated staging-environment key; fork PRs receive no secrets
+# and skip it. The offline contract checks always run with the key withheld, so the
 # exit-4 assertion stays deterministic.
 #
 # Usage: [WORKOS_API_KEY=sk_...] sh command-smoke.sh /path/to/workos
@@ -52,7 +54,7 @@ cleanup() {
   # Never orphan the round-trip organization in the shared staging
   # environment, even when a check between create and delete fails.
   if [ -n "$ORG_ID" ] && [ "$org_deleted" -eq 0 ]; then
-    WORKOS_API_KEY="$SMOKE_API_KEY" "$BIN" organization delete "$ORG_ID" --insecure-storage >/dev/null 2>&1 || true
+    WORKOS_API_KEY="$SMOKE_API_KEY" "$BIN" api "/organizations/$ORG_ID" -X DELETE -y --insecure-storage >/dev/null 2>&1 || true
   fi
   rm -rf "$SANDBOX"
 }
@@ -113,43 +115,47 @@ if [ -n "$SMOKE_API_KEY" ]; then
   # On failure, surface the CLI's structured stderr error — it never
   # contains key material (keys are masked in all output).
   err_file="$SANDBOX/stderr"
-  out=$(WORKOS_API_KEY="$SMOKE_API_KEY" "$BIN" organization list --json --insecure-storage 2>"$err_file")
+  out=$(WORKOS_API_KEY="$SMOKE_API_KEY" "$BIN" connection list --json --insecure-storage 2>"$err_file")
   code=$?
   case "$out" in
     *'"data"'*) json_ok=1 ;;
     *) json_ok=0 ;;
   esac
-  if [ "$code" -eq 0 ] && [ "$json_ok" -eq 1 ]; then pass "authenticated organization list exits 0 with data"; else fail "authenticated organization list (exit $code): $(cat "$err_file")"; fi
+  if [ "$code" -eq 0 ] && [ "$json_ok" -eq 1 ]; then pass "authenticated connection list exits 0 with data"; else fail "authenticated connection list (exit $code): $(cat "$err_file")"; fi
 
+  # The write round-trip goes through `workos api`: organization is on the
+  # dashboard plane now, and every other still-REST create needs an org id
+  # this script can no longer mint. `api` pretty-prints, hence the space-
+  # tolerant id parse. -y because mutating api calls refuse otherwise.
   ORG_NAME="cli-smoke-$$-$(date +%s)"
-  out=$(WORKOS_API_KEY="$SMOKE_API_KEY" "$BIN" organization create "$ORG_NAME" --json --insecure-storage 2>"$err_file")
+  out=$(WORKOS_API_KEY="$SMOKE_API_KEY" "$BIN" api /organizations -d "{\"name\":\"$ORG_NAME\"}" -y --insecure-storage 2>"$err_file")
   code=$?
   # Org ids are org_<alphanumeric>; the closing-quote anchor keeps nested
   # org_domain_* ids from matching.
-  ORG_ID=$(printf '%s' "$out" | sed -n 's/.*"id":"\(org_[A-Za-z0-9]*\)".*/\1/p')
+  ORG_ID=$(printf '%s' "$out" | sed -n 's/.*"id": *"\(org_[A-Za-z0-9]*\)".*/\1/p')
   if [ "$code" -eq 0 ] && [ -n "$ORG_ID" ]; then
     org_deleted=0
-    pass "organization create returns an id ($ORG_ID)"
+    pass "api organization create returns an id ($ORG_ID)"
   else
-    fail "organization create (exit $code): $out $(cat "$err_file")"
+    fail "api organization create (exit $code): $out $(cat "$err_file")"
   fi
 
   if [ -n "$ORG_ID" ]; then
-    out=$(WORKOS_API_KEY="$SMOKE_API_KEY" "$BIN" organization get "$ORG_ID" --json --insecure-storage 2>"$err_file")
+    out=$(WORKOS_API_KEY="$SMOKE_API_KEY" "$BIN" api "/organizations/$ORG_ID" --insecure-storage 2>"$err_file")
     code=$?
     case "$out" in
       *"$ORG_NAME"*) json_ok=1 ;;
       *) json_ok=0 ;;
     esac
-    if [ "$code" -eq 0 ] && [ "$json_ok" -eq 1 ]; then pass "organization get returns the created organization"; else fail "organization get (exit $code)"; fi
+    if [ "$code" -eq 0 ] && [ "$json_ok" -eq 1 ]; then pass "api organization get returns the created organization"; else fail "api organization get (exit $code)"; fi
 
-    WORKOS_API_KEY="$SMOKE_API_KEY" "$BIN" organization delete "$ORG_ID" --json --insecure-storage >/dev/null 2>&1
+    WORKOS_API_KEY="$SMOKE_API_KEY" "$BIN" api "/organizations/$ORG_ID" -X DELETE -y --insecure-storage >/dev/null 2>&1
     code=$?
     if [ "$code" -eq 0 ]; then
       org_deleted=1
-      pass "organization delete cleans up"
+      pass "api organization delete cleans up"
     else
-      fail "organization delete (exit $code) — cleanup trap will retry"
+      fail "api organization delete (exit $code) — cleanup trap will retry"
     fi
   fi
 else
