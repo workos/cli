@@ -52,12 +52,24 @@ export interface TeamEnvironment {
   name: string | null;
   sandbox?: boolean | null;
   clientId?: string | null;
+  /** Owning project's name. Environment names are only unique per project. */
+  projectName?: string | null;
 }
 
 interface TeamProjectsData {
   currentTeam: {
-    projectsV2: Array<{ environments: TeamEnvironment[] | null }> | null;
+    projectsV2: Array<{ name: string | null; environments: TeamEnvironment[] | null }> | null;
   } | null;
+}
+
+/**
+ * "Project > Environment" when the project is known. Teams can hold multiple
+ * projects and environment names are only unique per project, so a bare
+ * "Staging" is ambiguous the moment two projects both have one.
+ */
+export function formatEnvironmentLabel(env: Pick<TeamEnvironment, 'id' | 'name' | 'projectName'>): string {
+  const name = env.name ?? env.id;
+  return env.projectName ? `${env.projectName} > ${name}` : name;
 }
 
 /** The two remedies every unresolved/stale message must name. */
@@ -75,7 +87,9 @@ export async function fetchTeamEnvironments(token: string): Promise<TeamEnvironm
   const op = getOperation('teamProjectsV2');
   const data = await dashboardGraphqlRequest<TeamProjectsData>(resolveExecutableDocument(op), { token });
   const projects = data.currentTeam?.projectsV2 ?? [];
-  return projects.flatMap((project) => project.environments ?? []);
+  return projects.flatMap((project) =>
+    (project.environments ?? []).map((env) => ({ ...env, projectName: project.name })),
+  );
 }
 
 /**
@@ -97,7 +111,7 @@ export function healProfiles(config: CliConfig | null, environments: TeamEnviron
   for (const [key, profile] of Object.entries(config.environments)) {
     if (!profile.clientId) continue;
     const match = environments.find((env) => env.clientId === profile.clientId);
-    if (match) setProfileEnvironmentId(key, match.id, match.name);
+    if (match) setProfileEnvironmentId(key, match.id, match.name, match.projectName);
   }
 }
 
@@ -115,7 +129,7 @@ export async function promptForEnvironment(environments: TeamEnvironment[]): Pro
     message: 'Select the WorkOS environment to target',
     options: environments.map((env) => ({
       value: env.id,
-      label: `${env.name ?? env.id}${env.sandbox ? ' [Sandbox]' : ''}`,
+      label: `${formatEnvironmentLabel(env)}${env.sandbox ? ' [Sandbox]' : ''}`,
       hint: env.id,
     })),
   });
@@ -200,7 +214,7 @@ export async function resolveEnvironmentTarget(
     // snapshot is still authoritative for the profile name.
     if (config?.activeEnvironment) {
       const chosen = environments.find((env) => env.id === choice);
-      setProfileEnvironmentId(config.activeEnvironment, choice, chosen?.name);
+      setProfileEnvironmentId(config.activeEnvironment, choice, chosen?.name, chosen?.projectName);
     }
     return { environmentId: choice, source: 'picker' };
   }
@@ -245,7 +259,7 @@ export async function tryResolveProfileEnvironmentId(
     if (profile.clientId) {
       const match = environments.find((env) => env.clientId === profile.clientId);
       if (match) {
-        setProfileEnvironmentId(envKey, match.id, match.name);
+        setProfileEnvironmentId(envKey, match.id, match.name, match.projectName);
         return true;
       }
       // A clientId that joins nothing usually means a foreign profile (an API
@@ -257,7 +271,7 @@ export async function tryResolveProfileEnvironmentId(
       const choice = await promptForEnvironment(environments);
       if (choice === null) return false; // cancel skips resolution, never aborts the caller
       const chosen = environments.find((env) => env.id === choice);
-      setProfileEnvironmentId(envKey, choice, chosen?.name);
+      setProfileEnvironmentId(envKey, choice, chosen?.name, chosen?.projectName);
       return true;
     }
 

@@ -50,7 +50,9 @@ vi.mock('node:os', async (importOriginal) => {
 });
 
 const { getConfig, saveConfig, setInsecureConfigStorage, clearConfig } = await import('./config-store.js');
-const { resolveEnvironmentTarget, tryResolveProfileEnvironmentId } = await import('./environment-target.js');
+const { resolveEnvironmentTarget, tryResolveProfileEnvironmentId, formatEnvironmentLabel } = await import(
+  './environment-target.js'
+);
 const { DashboardGraphqlError } = await import('./dashboard-graphql.js');
 const { setInteractionMode, resetInteractionModeForTests } = await import('../utils/interaction-mode.js');
 const { CliExit } = await import('../utils/cli-exit.js');
@@ -407,5 +409,18 @@ describe('tryResolveProfileEnvironmentId', () => {
   it('reports false for a missing profile key', async () => {
     await expect(tryResolveProfileEnvironmentId('missing')).resolves.toBe(false);
     expect(mockGraphqlRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe('formatEnvironmentLabel', () => {
+  it('prefixes the project name — environment names are only unique per project', () => {
+    expect(formatEnvironmentLabel({ id: 'env_1', name: 'Staging', projectName: 'My Project' })).toBe(
+      'My Project > Staging',
+    );
+  });
+
+  it('falls back to the bare name, then the id', () => {
+    expect(formatEnvironmentLabel({ id: 'env_1', name: 'Staging', projectName: null })).toBe('Staging');
+    expect(formatEnvironmentLabel({ id: 'env_1', name: null, projectName: null })).toBe('env_1');
   });
 });

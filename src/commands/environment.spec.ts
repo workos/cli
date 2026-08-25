@@ -214,7 +214,7 @@ describe('environment command', () => {
         },
       });
       await runEnvironmentList();
-      expect(mockSetProfileEnvironmentId).toHaveBeenCalledWith('staging', 'env_2', 'Prod');
+      expect(mockSetProfileEnvironmentId).toHaveBeenCalledWith('staging', 'env_2', 'Prod', 'P1');
     });
 
     it('outputs JSON in json mode', async () => {
@@ -238,7 +238,7 @@ describe('environment command', () => {
     it('persists an explicit environment ID onto the active profile', async () => {
       mockGraphqlRequest.mockResolvedValue(TEAM_DATA);
       await runEnvironmentUse('env_2');
-      expect(mockSetProfileEnvironmentId).toHaveBeenCalledWith('staging', 'env_2', 'Prod');
+      expect(mockSetProfileEnvironmentId).toHaveBeenCalledWith('staging', 'env_2', 'Prod', 'P1');
       expect(consoleOutput.join('\n')).toContain('Prod');
     });
 
@@ -255,7 +255,7 @@ describe('environment command', () => {
       mockGraphqlRequest.mockResolvedValue(TEAM_DATA);
       mockPromptForEnvironment.mockResolvedValue('env_2');
       await runEnvironmentUse();
-      expect(mockSetProfileEnvironmentId).toHaveBeenCalledWith('staging', 'env_2', 'Prod');
+      expect(mockSetProfileEnvironmentId).toHaveBeenCalledWith('staging', 'env_2', 'Prod', 'P1');
     });
 
     it('exits when there is no active profile', async () => {
