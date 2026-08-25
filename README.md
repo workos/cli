@@ -396,7 +396,7 @@ workos connection update <id> [--name] [--external-id] [--type] [--data <json>] 
 workos connection delete <id> [--force]
 ```
 
-`connections` is accepted as an alias for `connection`. For `create` and `update`, pass nested fields such as `saml_options`, `oidc_options`, and `attribute_maps` as a JSON body via `--data`, `--file <path>`, or `--file -` (stdin); field flags override matching top-level JSON fields. Creating and updating connections requires the Connections API migration capabilities to be enabled for your team.
+`connections` is accepted as an alias for `connection`. For `create` and `update`, pass nested fields such as `saml_options`, `oidc_options`, and `attribute_maps` as a JSON body via `--data`, `--file <path>`, or `--file -` (stdin); field flags override matching top-level JSON fields. Creating and updating connections requires the Connections API migration capabilities to be enabled for your team — contact [WorkOS support](mailto:support@workos.com) to enable them.
 
 #### directory
 
