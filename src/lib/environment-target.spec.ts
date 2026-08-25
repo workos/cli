@@ -50,9 +50,8 @@ vi.mock('node:os', async (importOriginal) => {
 });
 
 const { getConfig, saveConfig, setInsecureConfigStorage, clearConfig } = await import('./config-store.js');
-const { resolveEnvironmentTarget, tryResolveProfileEnvironmentId, formatEnvironmentLabel } = await import(
-  './environment-target.js'
-);
+const { resolveEnvironmentTarget, tryResolveProfileEnvironmentId, formatEnvironmentLabel } =
+  await import('./environment-target.js');
 const { DashboardGraphqlError } = await import('./dashboard-graphql.js');
 const { setInteractionMode, resetInteractionModeForTests } = await import('../utils/interaction-mode.js');
 const { CliExit } = await import('../utils/cli-exit.js');
