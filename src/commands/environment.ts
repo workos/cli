@@ -86,7 +86,12 @@ export async function runEnvironmentList(): Promise<void> {
     env.projectName ?? '—',
     env.sandbox ? 'Sandbox' : 'Production',
   ]);
-  console.log(formatTable([{ header: '' }, { header: 'Name' }, { header: 'ID' }, { header: 'Project' }, { header: 'Type' }], rows));
+  console.log(
+    formatTable(
+      [{ header: '' }, { header: 'Name' }, { header: 'ID' }, { header: 'Project' }, { header: 'Type' }],
+      rows,
+    ),
+  );
 
   const profileName = getConfig()?.activeEnvironment;
   if (targetedId && profileName) {

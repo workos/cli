@@ -47,9 +47,8 @@ vi.mock('../lib/config-store.js', async (importActual) => {
 const { setOutputMode } = await import('../utils/output.js');
 const { DashboardGraphqlError } = await import('../lib/dashboard-graphql.js');
 const { CliExit } = await import('../utils/cli-exit.js');
-const { runEnvironmentCreate, runEnvironmentRename, runEnvironmentList, runEnvironmentUse } = await import(
-  './environment.js'
-);
+const { runEnvironmentCreate, runEnvironmentRename, runEnvironmentList, runEnvironmentUse } =
+  await import('./environment.js');
 
 const TEAM_DATA = {
   currentTeam: {
@@ -209,7 +208,9 @@ describe('environment command', () => {
       });
       mockGraphqlRequest.mockResolvedValue({
         currentTeam: {
-          projectsV2: [{ name: 'P1', environments: [{ id: 'env_2', name: 'Prod', sandbox: false, clientId: 'client_2' }] }],
+          projectsV2: [
+            { name: 'P1', environments: [{ id: 'env_2', name: 'Prod', sandbox: false, clientId: 'client_2' }] },
+          ],
         },
       });
       await runEnvironmentList();

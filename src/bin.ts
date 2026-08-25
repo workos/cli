@@ -430,72 +430,76 @@ async function runCli(): Promise<void> {
         await runWhoami({ environmentId: argv.environmentId as string | undefined });
       },
     )
-    .command('environment', 'Manage WorkOS environments (list, use, create, rename) on the dashboard account plane', (yargs) => {
-      yargs.options(insecureStorageOption);
-      registerSubcommand(
-        yargs,
-        'list',
-        "List the current team's environments",
-        (y) => y,
-        async () => {
-          const { runEnvironmentList } = await import('./commands/environment.js');
-          await runEnvironmentList();
-        },
-      );
-      registerSubcommand(
-        yargs,
-        'use [environmentId]',
-        'Point the active environment profile at a team environment',
-        (y) =>
-          y.positional('environmentId', {
-            type: 'string',
-            describe: 'Environment ID to target (see `environment list`); omit to pick interactively',
-          }),
-        async (argv) => {
-          await applyInsecureStorage(argv.insecureStorage);
-          const { runEnvironmentUse } = await import('./commands/environment.js');
-          await runEnvironmentUse(argv.environmentId);
-        },
-      );
-      registerSubcommand(
-        yargs,
-        'create <name>',
-        'Create a sandbox or production environment',
-        (y) =>
-          y
-            .positional('name', { type: 'string', demandOption: true, describe: 'Environment name' })
-            .option('sandbox', { type: 'boolean', default: false, describe: 'Create a sandbox environment' })
-            .option('environment-id', {
+    .command(
+      'environment',
+      'Manage WorkOS environments (list, use, create, rename) on the dashboard account plane',
+      (yargs) => {
+        yargs.options(insecureStorageOption);
+        registerSubcommand(
+          yargs,
+          'list',
+          "List the current team's environments",
+          (y) => y,
+          async () => {
+            const { runEnvironmentList } = await import('./commands/environment.js');
+            await runEnvironmentList();
+          },
+        );
+        registerSubcommand(
+          yargs,
+          'use [environmentId]',
+          'Point the active environment profile at a team environment',
+          (y) =>
+            y.positional('environmentId', {
               type: 'string',
-              describe:
-                'Environment ID whose project receives the new environment (defaults to the active environment)',
+              describe: 'Environment ID to target (see `environment list`); omit to pick interactively',
             }),
-        async (argv) => {
-          await applyInsecureStorage(argv.insecureStorage);
-          const { runEnvironmentCreate } = await import('./commands/environment.js');
-          await runEnvironmentCreate({
-            name: argv.name,
-            sandbox: Boolean(argv.sandbox),
-            environmentId: argv.environmentId as string | undefined,
-          });
-        },
-      );
-      registerSubcommand(
-        yargs,
-        'rename <environmentId> <name>',
-        'Rename an environment',
-        (y) =>
-          y
-            .positional('environmentId', { type: 'string', demandOption: true, describe: 'Environment ID' })
-            .positional('name', { type: 'string', demandOption: true, describe: 'New environment name' }),
-        async (argv) => {
-          await applyInsecureStorage(argv.insecureStorage);
-          const { runEnvironmentRename } = await import('./commands/environment.js');
-          await runEnvironmentRename({ environmentId: argv.environmentId, name: argv.name });
-        },
-      );
-      return yargs.demandCommand(1, 'Please specify an environment subcommand').strict();
-    })
+          async (argv) => {
+            await applyInsecureStorage(argv.insecureStorage);
+            const { runEnvironmentUse } = await import('./commands/environment.js');
+            await runEnvironmentUse(argv.environmentId);
+          },
+        );
+        registerSubcommand(
+          yargs,
+          'create <name>',
+          'Create a sandbox or production environment',
+          (y) =>
+            y
+              .positional('name', { type: 'string', demandOption: true, describe: 'Environment name' })
+              .option('sandbox', { type: 'boolean', default: false, describe: 'Create a sandbox environment' })
+              .option('environment-id', {
+                type: 'string',
+                describe:
+                  'Environment ID whose project receives the new environment (defaults to the active environment)',
+              }),
+          async (argv) => {
+            await applyInsecureStorage(argv.insecureStorage);
+            const { runEnvironmentCreate } = await import('./commands/environment.js');
+            await runEnvironmentCreate({
+              name: argv.name,
+              sandbox: Boolean(argv.sandbox),
+              environmentId: argv.environmentId as string | undefined,
+            });
+          },
+        );
+        registerSubcommand(
+          yargs,
+          'rename <environmentId> <name>',
+          'Rename an environment',
+          (y) =>
+            y
+              .positional('environmentId', { type: 'string', demandOption: true, describe: 'Environment ID' })
+              .positional('name', { type: 'string', demandOption: true, describe: 'New environment name' }),
+          async (argv) => {
+            await applyInsecureStorage(argv.insecureStorage);
+            const { runEnvironmentRename } = await import('./commands/environment.js');
+            await runEnvironmentRename({ environmentId: argv.environmentId, name: argv.name });
+          },
+        );
+        return yargs.demandCommand(1, 'Please specify an environment subcommand').strict();
+      },
+    )
     .command('project', 'Manage WorkOS projects (create, rename, list) on the dashboard account plane', (yargs) => {
       yargs.options(insecureStorageOption);
       registerSubcommand(

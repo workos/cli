@@ -108,11 +108,7 @@ export function setActiveEnvironment(name: string): void {
  * and opportunistic healing). No-op when the profile does not exist or already
  * stores the same ID — healing must never churn the keyring with no-op writes.
  */
-export function setProfileEnvironmentId(
-  envKey: string,
-  environmentId: string,
-  environmentName?: string | null,
-): void {
+export function setProfileEnvironmentId(envKey: string, environmentId: string, environmentName?: string | null): void {
   const config = getConfig();
   const profile = config?.environments[envKey];
   if (!config || !profile) return;
