@@ -353,8 +353,9 @@ async function runCli(): Promise<void> {
     .middleware(async (argv) => {
       // Warn about unclaimed environments before management commands.
       // Excluded: auth/claim/install/setup/dashboard handle their own credential
-      // or onboarding flows; skills/doctor/env/debug are utility commands where
-      // the warning is unnecessary.
+      // or onboarding flows; skills/doctor/profile/debug are utility commands
+      // where the warning is unnecessary. Both the canonical name and its
+      // alias are listed — this matches argv._[0], the token as typed.
       const command = String(argv._?.[0] ?? '');
       if (
         [
@@ -362,6 +363,7 @@ async function runCli(): Promise<void> {
           'whoami',
           'skills',
           'doctor',
+          'profile',
           'env',
           'claim',
           'install',
