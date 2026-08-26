@@ -899,7 +899,10 @@ export const installerMachine = setup({
           invoke: {
             id: 'fetchStagingCredentials',
             src: 'fetchStagingCredentials',
-            input: ({ context }) => ({ installDir: context.options.installDir, envScanConsent: context.envScanConsent }),
+            input: ({ context }) => ({
+              installDir: context.options.installDir,
+              envScanConsent: context.envScanConsent,
+            }),
             onDone: {
               target: '#installer.configuring',
               actions: [
