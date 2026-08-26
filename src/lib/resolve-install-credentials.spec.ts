@@ -6,9 +6,13 @@ import { join } from 'node:path';
 // Mock config-store
 const mockGetActiveEnvironment = vi.fn();
 const mockIsUnclaimedEnvironment = vi.fn();
+const mockGetConfig = vi.fn();
+const mockSetActiveEnvironment = vi.fn();
 vi.mock('./config-store.js', () => ({
   getActiveEnvironment: (...args: unknown[]) => mockGetActiveEnvironment(...args),
   isUnclaimedEnvironment: (...args: unknown[]) => mockIsUnclaimedEnvironment(...args),
+  getConfig: () => mockGetConfig(),
+  setActiveEnvironment: (...args: unknown[]) => mockSetActiveEnvironment(...args),
 }));
 
 // Mock credentials
@@ -24,8 +28,12 @@ vi.mock('./unclaimed-env-provision.js', () => ({
 }));
 
 // Mock the UI facade — the no-clobber branch now explains itself out loud.
+const CANCEL = Symbol('cancel');
+const mockSelect = vi.fn();
 const mockUi = {
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), step: vi.fn(), success: vi.fn(), hint: vi.fn() },
+  select: (...args: unknown[]) => mockSelect(...args),
+  isCancel: (value: unknown) => value === CANCEL,
 };
 vi.mock('../utils/ui.js', () => ({ default: mockUi }));
 
@@ -43,6 +51,7 @@ describe('resolveInstallCredentials', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetConfig.mockReturnValue(null);
     delete process.env.WORKOS_API_KEY;
     emptyCwd = mkdtempSync(join(tmpdir(), 'resolve-install-credentials-cwd-'));
     cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(emptyCwd);
@@ -309,6 +318,94 @@ describe('resolveInstallCredentials', () => {
 
       expect(mockUi.log.info).not.toHaveBeenCalled();
       expect(mockAuthenticate).toHaveBeenCalled();
+    });
+  });
+
+  describe('environment picker', () => {
+    const twoProfiles = {
+      activeEnvironment: 'staging-3',
+      environments: {
+        staging: {
+          name: 'staging',
+          type: 'sandbox',
+          apiKey: 'sk_test_a',
+          environmentName: 'test12',
+          projectName: "Nick's Team's Project",
+        },
+        'staging-3': {
+          name: 'staging-3',
+          type: 'sandbox',
+          apiKey: 'sk_test_b',
+          environmentName: 'Staging',
+          projectName: 'cli-branding-smoke',
+        },
+      },
+    };
+
+    beforeEach(() => {
+      mockGetActiveEnvironment.mockReturnValue(twoProfiles.environments['staging-3']);
+      mockIsUnclaimedEnvironment.mockReturnValue(false);
+      mockGetAccessToken.mockReturnValue('token_x');
+    });
+
+    it('prompts with project-prefixed labels and persists a different choice', async () => {
+      mockGetConfig.mockReturnValue(twoProfiles);
+      mockSelect.mockResolvedValue('staging');
+
+      await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+
+      const call = mockSelect.mock.calls[0][0] as {
+        options: Array<{ value: string; label: string }>;
+        initialValue: string;
+      };
+      expect(call.initialValue).toBe('staging-3');
+      expect(call.options.map((o) => o.label)).toEqual([
+        "staging — Nick's Team's Project > test12",
+        'staging-3 — cli-branding-smoke > Staging (active)',
+      ]);
+      expect(mockSetActiveEnvironment).toHaveBeenCalledWith('staging');
+    });
+
+    it('keeps the active profile without a config write when it is re-chosen', async () => {
+      mockGetConfig.mockReturnValue(twoProfiles);
+      mockSelect.mockResolvedValue('staging-3');
+
+      await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+
+      expect(mockSetActiveEnvironment).not.toHaveBeenCalled();
+    });
+
+    it('never prompts with a single keyed profile', async () => {
+      mockGetConfig.mockReturnValue({
+        activeEnvironment: 'staging-3',
+        environments: { 'staging-3': twoProfiles.environments['staging-3'] },
+      });
+
+      await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+
+      expect(mockSelect).not.toHaveBeenCalled();
+    });
+
+    it('never prompts in non-interactive modes', async () => {
+      const { setInteractionMode, resetInteractionModeForTests } = await import('../utils/interaction-mode.js');
+      setInteractionMode({ mode: 'agent', source: 'env' });
+      try {
+        mockGetConfig.mockReturnValue(twoProfiles);
+        await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+        expect(mockSelect).not.toHaveBeenCalled();
+      } finally {
+        resetInteractionModeForTests();
+      }
+    });
+
+    it('cancel cancels the install (exit 2)', async () => {
+      mockGetConfig.mockReturnValue(twoProfiles);
+      mockSelect.mockResolvedValue(CANCEL);
+
+      await expect(resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate)).rejects.toMatchObject({
+        exitCode: 2,
+      });
+      expect(mockSetActiveEnvironment).not.toHaveBeenCalled();
     });
   });
 });

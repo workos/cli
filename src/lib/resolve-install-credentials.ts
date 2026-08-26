@@ -8,6 +8,52 @@
  * - Logged-in user: API key + OAuth token (credential proxy handles gateway)
  * - Direct mode: not handled here (resolved in agent-interface.ts via ANTHROPIC_API_KEY)
  */
+import type { EnvironmentConfig } from './config-store.js';
+
+/**
+ * When several stored profiles could serve this install, ask which WorkOS
+ * environment to use instead of silently taking the active one — profile
+ * names like 'staging-3' say nothing about which dashboard environment they
+ * target, and installs write the chosen credentials into the project.
+ *
+ * Never prompts for: explicit keys (handled before this runs), non-interactive
+ * modes, or configs with fewer than two keyed profiles. Choosing persists via
+ * setActiveEnvironment so the installer and every later command agree; cancel
+ * cancels the install (exit 2), matching the installer's other prompts.
+ */
+async function maybePickInstallEnvironment(activeEnv: EnvironmentConfig | null): Promise<EnvironmentConfig | null> {
+  const { isPromptAllowed } = await import('../utils/interaction-mode.js');
+  if (!isPromptAllowed()) return activeEnv;
+
+  const { getConfig, getActiveEnvironment, setActiveEnvironment } = await import('./config-store.js');
+  const config = getConfig();
+  if (!config) return activeEnv;
+  const candidates = Object.entries(config.environments).filter(([, env]) => env.apiKey);
+  if (candidates.length < 2) return activeEnv;
+
+  const ui = (await import('../utils/ui.js')).default;
+  const { ExitCode, exitWithCode } = await import('../utils/exit-codes.js');
+
+  const choice = await ui.select({
+    message: 'Which WorkOS environment should this install use?',
+    options: candidates.map(([key, env]) => {
+      const dashboardName = env.environmentName
+        ? env.projectName
+          ? `${env.projectName} > ${env.environmentName}`
+          : env.environmentName
+        : env.environmentId;
+      let label = dashboardName ? `${key} — ${dashboardName}` : key;
+      if (key === config.activeEnvironment) label += ' (active)';
+      const hint = env.type === 'sandbox' ? 'Sandbox' : env.type === 'unclaimed' ? 'Unclaimed' : 'Production';
+      return { value: key, label, hint };
+    }),
+    initialValue: config.activeEnvironment,
+  });
+  if (ui.isCancel(choice)) exitWithCode(ExitCode.CANCELLED);
+  if (choice !== config.activeEnvironment) setActiveEnvironment(String(choice));
+  return getActiveEnvironment();
+}
+
 export async function resolveInstallCredentials(
   apiKey: string | undefined,
   installDir: string | undefined,
@@ -22,7 +68,7 @@ export async function resolveInstallCredentials(
   try {
     const { getActiveEnvironment, isUnclaimedEnvironment } = await import('./config-store.js');
     const { getAccessToken } = await import('./credentials.js');
-    const activeEnv = getActiveEnvironment();
+    const activeEnv = await maybePickInstallEnvironment(getActiveEnvironment());
 
     if (activeEnv?.apiKey) {
       // Has API key — but does it have gateway auth?
