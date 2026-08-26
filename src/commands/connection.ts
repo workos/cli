@@ -3,6 +3,7 @@ import type { ConnectionType } from '@workos-inc/node';
 import { createWorkOSClient } from '../lib/workos-client.js';
 import { formatTable } from '../utils/table.js';
 import { printPaginationFooter } from '../utils/resource-command.js';
+import { resolveInputBody } from '../utils/request-body.js';
 import { outputSuccess, outputJson, isJsonMode, exitWithError } from '../utils/output.js';
 import { createApiErrorHandler } from '../lib/api-error-handler.js';
 import { isCiMode, isPromptAllowed } from '../utils/interaction-mode.js';
@@ -70,6 +71,99 @@ export async function runConnectionList(
     );
 
     printPaginationFooter(result.listMetadata);
+  } catch (error) {
+    handleApiError(error);
+  }
+}
+
+export interface ConnectionBodyOptions {
+  org?: string;
+  name?: string;
+  externalId?: string;
+  type?: string;
+  data?: string;
+  file?: string;
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+async function resolveConnectionBody(options: ConnectionBodyOptions): Promise<Record<string, unknown>> {
+  let body: Record<string, unknown> = {};
+
+  const raw = await resolveInputBody(options);
+  if (raw !== undefined) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      exitWithError({
+        code: 'invalid_json_body',
+        message: 'Request body must be valid JSON.',
+      });
+    }
+    if (!isJsonObject(parsed)) {
+      exitWithError({
+        code: 'invalid_json_body',
+        message: 'Request body must be a JSON object.',
+      });
+    }
+    body = { ...parsed };
+  }
+
+  if (options.org !== undefined) body.organization_id = options.org;
+  if (options.name !== undefined) body.name = options.name;
+  if (options.externalId !== undefined) body.external_id = options.externalId;
+  if (options.type !== undefined) body.connection_type = options.type;
+
+  return body;
+}
+
+export async function runConnectionCreate(
+  options: ConnectionBodyOptions,
+  apiKey: string,
+  baseUrl?: string,
+): Promise<void> {
+  const body = await resolveConnectionBody(options);
+
+  if (typeof body.organization_id !== 'string' || body.organization_id.length === 0) {
+    exitWithError({
+      code: 'missing_organization_id',
+      message: 'An organization ID is required. Pass --org or include organization_id in the JSON body.',
+    });
+  }
+
+  const client = createWorkOSClient(apiKey, baseUrl);
+
+  try {
+    const connection = await client.connections.create(body);
+    outputSuccess('Created connection', connection);
+  } catch (error) {
+    handleApiError(error);
+  }
+}
+
+export async function runConnectionUpdate(
+  id: string,
+  options: ConnectionBodyOptions,
+  apiKey: string,
+  baseUrl?: string,
+): Promise<void> {
+  const body = await resolveConnectionBody(options);
+
+  if (Object.keys(body).length === 0) {
+    exitWithError({
+      code: 'empty_update_body',
+      message: 'Nothing to update. Pass at least one field flag, or a JSON body via --data or --file.',
+    });
+  }
+
+  const client = createWorkOSClient(apiKey, baseUrl);
+
+  try {
+    const connection = await client.connections.update(id, body);
+    outputSuccess('Updated connection', connection);
   } catch (error) {
     handleApiError(error);
   }

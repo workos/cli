@@ -1,5 +1,4 @@
 import chalk from 'chalk';
-import { readFile } from 'node:fs/promises';
 import { loadCatalog, endpointsByTag } from './catalog.js';
 import { apiRequest } from './request.js';
 import { resolveApiBaseUrl } from '../../lib/api-key.js';
@@ -8,6 +7,7 @@ import { ExitCode, exitWithCode } from '../../utils/exit-codes.js';
 import { isCiMode, isPromptAllowed, getInteractionMode } from '../../utils/interaction-mode.js';
 import { confirmationRecovery, authLoginRecovery, missingArgsRecovery } from '../../utils/recovery-hints.js';
 import { formatWorkOSCommand, formatWorkOSCommandArgs } from '../../utils/command-invocation.js';
+import { resolveInputBody } from '../../utils/request-body.js';
 import { colorMethod, printResponse } from './format.js';
 
 export { colorMethod } from './format.js';
@@ -94,7 +94,7 @@ export async function runApiLs(filter?: string): Promise<void> {
 }
 
 export async function runApiRequest(endpoint: string, options: ApiCommandOptions): Promise<void> {
-  const body = await resolveBody(options);
+  const body = await resolveInputBody(options);
   const hasBody = body !== undefined;
   const method = (options.method ?? (hasBody ? 'POST' : 'GET')).toUpperCase();
   const baseUrl = resolveApiBaseUrl();
@@ -202,37 +202,6 @@ function buildConfirmationCommand(endpoint: string, method: string, options: Api
   }
   args.push('--yes');
   return formatWorkOSCommandArgs(args);
-}
-
-async function resolveBody(options: ApiCommandOptions): Promise<string | undefined> {
-  if (options.data !== undefined) return options.data;
-  if (options.file) {
-    if (options.file === '-') {
-      const chunks: Buffer[] = [];
-      for await (const chunk of process.stdin) {
-        chunks.push(chunk);
-      }
-      const stdinBody = Buffer.concat(chunks).toString('utf-8');
-      if (stdinBody.length === 0) {
-        exitWithError({
-          code: 'empty_stdin_body',
-          message:
-            'Reading request body from stdin (--file -) yielded no data. Pipe data into the command or pass --data instead.',
-        });
-      }
-      return stdinBody;
-    }
-    try {
-      return await readFile(options.file, 'utf-8');
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      exitWithError({
-        code: 'file_read_error',
-        message: `Could not read request body file "${options.file}": ${message}`,
-      });
-    }
-  }
-  return undefined;
 }
 
 function prettyPrint(jsonString: string): void {

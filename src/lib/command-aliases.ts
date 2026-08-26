@@ -9,5 +9,6 @@ export const COMMAND_ALIASES: Record<string, string> = {
   org: 'organization',
   // `env` was the pre-0.22 name for local profiles; kept as a quiet alias.
   env: 'profile',
+  connections: 'connection',
   claim: 'profile.claim',
 };
