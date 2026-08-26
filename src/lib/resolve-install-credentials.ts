@@ -9,6 +9,14 @@
  * - Direct mode: not handled here (resolved in agent-interface.ts via ANTHROPIC_API_KEY)
  */
 import type { EnvironmentConfig } from './config-store.js';
+import type { TeamEnvironment } from './environment-target.js';
+
+/**
+ * Upper bound on team-environment discovery before the picker falls back to
+ * local profiles. The refresh client alone can wait 30s on a dead endpoint;
+ * the picker (and the single-profile silent path) must not inherit that wait.
+ */
+const TEAM_DISCOVERY_TIMEOUT_MS = 3_000;
 
 /**
  * When several stored profiles could serve this install, ask which WorkOS
@@ -51,24 +59,28 @@ export async function maybePickInstallEnvironment(
   if (candidates.length === 0) return activeEnv;
 
   // Best-effort: the rest of the team's environments, for the disabled rows.
-  // Requires a usable session; any failure degrades to the local-only picker.
-  let teamEnvironments: Array<{
-    id: string;
-    name: string | null;
-    sandbox?: boolean | null;
-    clientId?: string | null;
-    projectName?: string | null;
-  }> = [];
-  try {
-    const { refreshIfExpired } = await import('./command-auth.js');
-    const token = (await refreshIfExpired())?.accessToken;
-    if (token) {
+  // Any failure degrades to the local-only picker — including slowness: the
+  // refresh client alone waits 30s before giving up, and this enrichment must
+  // not stall installer startup (or the single-profile silent path) behind a
+  // slow or dead endpoint, so the whole discovery is bounded.
+  const discoverTeam = async (): Promise<TeamEnvironment[]> => {
+    try {
+      const { refreshIfExpired } = await import('./command-auth.js');
+      const token = (await refreshIfExpired())?.accessToken;
+      if (!token) return [];
       const { fetchTeamEnvironments } = await import('./environment-target.js');
-      teamEnvironments = await fetchTeamEnvironments(token);
+      return await fetchTeamEnvironments(token);
+    } catch {
+      return []; // Offline / logged out / flag-gated — the local-only picker still works.
     }
-  } catch {
-    // Offline / logged out / flag-gated — the local-only picker still works.
-  }
+  };
+  const teamEnvironments = await Promise.race([
+    discoverTeam(),
+    new Promise<TeamEnvironment[]>((resolve) => {
+      const timer = setTimeout(() => resolve([]), TEAM_DISCOVERY_TIMEOUT_MS);
+      timer.unref?.();
+    }),
+  ]);
 
   const keyedClientIds = new Set(candidates.map(([, env]) => env.clientId).filter(Boolean));
   const keyedEnvironmentIds = new Set(candidates.map(([, env]) => env.environmentId).filter(Boolean));
@@ -94,9 +106,13 @@ export async function maybePickInstallEnvironment(
     ...unavailable.map((env) => formatEnvironmentLabel(env).length),
   );
 
+  // Count the team, not this machine: candidates can include foreign profiles
+  // (a key from another account left on disk), which must not inflate the team
+  // totals. teamEnvironments.length IS the team total when discovery ran.
+  const teamReady = teamEnvironments.length - unavailable.length;
   ui.note(
     unavailable.length > 0
-      ? `Your team has ${candidates.length + unavailable.length} environments; ${candidates.length} ${candidates.length === 1 ? 'is' : 'are'} ready on this machine — pick the one this app should call home.
+      ? `Your team has ${teamEnvironments.length} environments; ${teamReady} ${teamReady === 1 ? 'is' : 'are'} ready on this machine — pick the one this app should call home.
 ○ rows need an API key here first: workos profile add <name> <api-key> --client-id <client-id>`
       : `This machine knows ${candidates.length} WorkOS environments — pick the one this app should call home.`,
   );

@@ -481,9 +481,13 @@ describe('resolveInstallCredentials', () => {
       expect(disabledRows[0].value).toBe('__unavailable__env_prod');
       expect(disabledRows[0].label).toContain('cli-branding-smoke > Production');
       expect(disabledRows[0].disabled).toContain('no API key on this machine');
-      // The note names the gap and the recipe.
+      // The note counts the TEAM, not local profiles: 'staging' carries no
+      // clientId/environmentId and joins nothing in the team catalog (a
+      // foreign profile), so the team truth is 2 environments, 1 keyed here —
+      // not the 3/2 a naive local count would claim. Plus the recipe.
       const note = String(mockUi.note.mock.calls[0][0]);
-      expect(note).toContain('3 environments');
+      expect(note).toContain('2 environments');
+      expect(note).toContain('1 is ready');
       expect(note).toContain('workos profile add');
     });
 
@@ -513,6 +517,21 @@ describe('resolveInstallCredentials', () => {
       const call = mockSelect.mock.calls[0][0] as { options: Array<{ disabled?: string }> };
       expect(call.options.every((o) => !o.disabled)).toBe(true);
     });
+
+    it('does not let a hung session refresh stall the picker', async () => {
+      mockGetConfig.mockReturnValue(twoProfiles);
+      // Expired session + dead endpoint: the refresh promise never settles.
+      // Discovery is bounded, so the picker still opens with local-only rows.
+      mockRefreshIfExpired.mockReturnValue(new Promise(() => {}));
+      mockSelect.mockResolvedValue('staging');
+
+      const start = Date.now();
+      await maybePickInstallEnvironment(null, emptyCwd);
+
+      expect(Date.now() - start).toBeLessThan(10_000); // bounded, not the 30s refresh timeout
+      const call = mockSelect.mock.calls[0][0] as { options: Array<{ disabled?: string }> };
+      expect(call.options.every((o) => !o.disabled)).toBe(true);
+    }, 15_000);
 
     it('cancel cancels the install (exit 2)', async () => {
       mockGetConfig.mockReturnValue(twoProfiles);
