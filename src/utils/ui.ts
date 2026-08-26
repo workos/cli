@@ -357,6 +357,8 @@ interface SelectOption<T> {
   value: T;
   label?: string;
   hint?: string;
+  /** Not selectable; a string renders as the reason next to the row. */
+  disabled?: boolean | string;
 }
 interface SelectOptions<T> {
   message: string;
@@ -376,6 +378,7 @@ async function select<T>(options: SelectOptions<T>): Promise<T | symbol> {
             value: o.value,
             name: o.label ?? String(o.value),
             description: o.hint,
+            disabled: o.disabled,
           })),
           default: options.initialValue,
           pageSize: options.maxItems,

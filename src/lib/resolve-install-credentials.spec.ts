@@ -43,6 +43,18 @@ vi.mock('./unclaimed-env-provision.js', () => ({
   tryProvisionUnclaimedEnv: (...args: unknown[]) => mockTryProvisionUnclaimedEnv(...args),
 }));
 
+// Session + team-environment discovery for the picker's disabled rows.
+const mockRefreshIfExpired = vi.fn();
+vi.mock('./command-auth.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./command-auth.js')>();
+  return { ...actual, refreshIfExpired: () => mockRefreshIfExpired() };
+});
+const mockFetchTeamEnvironments = vi.fn();
+vi.mock('./environment-target.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./environment-target.js')>();
+  return { ...actual, fetchTeamEnvironments: (...args: unknown[]) => mockFetchTeamEnvironments(...args) };
+});
+
 // Mock the UI facade — the no-clobber branch now explains itself out loud.
 const CANCEL = Symbol('cancel');
 const mockSelect = vi.fn();
@@ -69,6 +81,7 @@ describe('resolveInstallCredentials', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetConfig.mockReturnValue(null);
+    mockRefreshIfExpired.mockResolvedValue(null);
     delete process.env.WORKOS_API_KEY;
     emptyCwd = mkdtempSync(join(tmpdir(), 'resolve-install-credentials-cwd-'));
     cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(emptyCwd);
@@ -437,6 +450,66 @@ describe('resolveInstallCredentials', () => {
 
       expect(mockSelect).not.toHaveBeenCalled();
       expect(mockSetActiveEnvironment).not.toHaveBeenCalled();
+    });
+
+    it('lists team environments without a local key as disabled rows', async () => {
+      mockGetConfig.mockReturnValue(twoProfiles);
+      mockRefreshIfExpired.mockResolvedValue({ accessToken: 'tok' });
+      mockFetchTeamEnvironments.mockResolvedValue([
+        // Joined to the keyed 'staging-3' profile via clientId — not duplicated.
+        { id: 'env_staging', name: 'Staging', sandbox: true, clientId: 'client_b', projectName: 'cli-branding-smoke' },
+        { id: 'env_prod', name: 'Production', sandbox: false, clientId: 'client_z', projectName: 'cli-branding-smoke' },
+      ]);
+      mockGetConfig.mockReturnValue({
+        ...twoProfiles,
+        environments: {
+          ...twoProfiles.environments,
+          'staging-3': { ...twoProfiles.environments['staging-3'], clientId: 'client_b' },
+        },
+      });
+      mockSelect.mockResolvedValue('staging');
+
+      await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+
+      const call = mockSelect.mock.calls[0][0] as {
+        options: Array<{ value: string; label: string; disabled?: string }>;
+      };
+      const disabledRows = call.options.filter((o) => o.disabled);
+      expect(disabledRows).toHaveLength(1);
+      expect(disabledRows[0].value).toBe('__unavailable__env_prod');
+      expect(disabledRows[0].label).toContain('cli-branding-smoke > Production');
+      expect(disabledRows[0].disabled).toContain('no API key on this machine');
+      // The note names the gap and the recipe.
+      const note = String(mockUi.note.mock.calls[0][0]);
+      expect(note).toContain('3 environments');
+      expect(note).toContain('workos profile add');
+    });
+
+    it('prompts even with a single keyed profile when the team has more environments', async () => {
+      mockGetConfig.mockReturnValue({
+        activeEnvironment: 'staging-3',
+        environments: { 'staging-3': twoProfiles.environments['staging-3'] },
+      });
+      mockRefreshIfExpired.mockResolvedValue({ accessToken: 'tok' });
+      mockFetchTeamEnvironments.mockResolvedValue([
+        { id: 'env_prod', name: 'Production', sandbox: false, clientId: 'client_z', projectName: 'P' },
+      ]);
+      mockSelect.mockResolvedValue('staging-3');
+
+      await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+
+      expect(mockSelect).toHaveBeenCalled();
+    });
+
+    it('degrades to the local-only picker when team discovery fails', async () => {
+      mockGetConfig.mockReturnValue(twoProfiles);
+      mockRefreshIfExpired.mockRejectedValue(new Error('offline'));
+      mockSelect.mockResolvedValue('staging');
+
+      await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+
+      const call = mockSelect.mock.calls[0][0] as { options: Array<{ disabled?: string }> };
+      expect(call.options.every((o) => !o.disabled)).toBe(true);
     });
 
     it('cancel cancels the install (exit 2)', async () => {

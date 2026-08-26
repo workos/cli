@@ -24,6 +24,13 @@ import type { EnvironmentConfig } from './config-store.js';
  * persists via setActiveEnvironment so the installer and every later command
  * agree; cancel cancels the install (exit 2), matching the installer's other
  * prompts.
+ *
+ * The picker shows the WHOLE team, not just this machine: environments the
+ * session can see but that have no local API key render as disabled rows
+ * with the recipe to enable them. The dashboard catalog has no operation
+ * that creates or reveals an sk_ secret, so the CLI cannot make those rows
+ * selectable on its own — but hiding them is what made installs feel like
+ * they were choosing from a different list than the dashboard shows.
  */
 async function maybePickInstallEnvironment(
   activeEnv: EnvironmentConfig | null,
@@ -41,32 +48,77 @@ async function maybePickInstallEnvironment(
   const config = getConfig();
   if (!config) return activeEnv;
   const candidates = Object.entries(config.environments).filter(([, env]) => env.apiKey);
-  if (candidates.length < 2) return activeEnv;
+  if (candidates.length === 0) return activeEnv;
+
+  // Best-effort: the rest of the team's environments, for the disabled rows.
+  // Requires a usable session; any failure degrades to the local-only picker.
+  let teamEnvironments: Array<{
+    id: string;
+    name: string | null;
+    sandbox?: boolean | null;
+    clientId?: string | null;
+    projectName?: string | null;
+  }> = [];
+  try {
+    const { refreshIfExpired } = await import('./command-auth.js');
+    const token = (await refreshIfExpired())?.accessToken;
+    if (token) {
+      const { fetchTeamEnvironments } = await import('./environment-target.js');
+      teamEnvironments = await fetchTeamEnvironments(token);
+    }
+  } catch {
+    // Offline / logged out / flag-gated — the local-only picker still works.
+  }
+
+  const keyedClientIds = new Set(candidates.map(([, env]) => env.clientId).filter(Boolean));
+  const keyedEnvironmentIds = new Set(candidates.map(([, env]) => env.environmentId).filter(Boolean));
+  const unavailable = teamEnvironments.filter(
+    (env) => !(env.clientId && keyedClientIds.has(env.clientId)) && !keyedEnvironmentIds.has(env.id),
+  );
+
+  // One usable profile and nothing else visible: the pick is forced — stay silent.
+  if (candidates.length < 2 && unavailable.length === 0) return activeEnv;
 
   const ui = (await import('../utils/ui.js')).default;
   const { ExitCode, exitWithCode } = await import('../utils/exit-codes.js');
   const chalk = (await import('chalk')).default;
+  const { formatEnvironmentLabel } = await import('./environment-target.js');
 
   // Lead with the environment (the thing being chosen); the profile key is
   // bookkeeping and rides dim in the metadata. Labels are column-aligned —
   // padEnd runs on the PLAIN name before any color, so ANSI codes never
   // skew the columns (see the env-list alignment bug).
   const displayFor = (key: string, env: EnvironmentConfig): string => profileEnvironmentLabel(env) ?? key;
-  const nameW = Math.max(...candidates.map(([key, env]) => displayFor(key, env).length));
+  const nameW = Math.max(
+    ...candidates.map(([key, env]) => displayFor(key, env).length),
+    ...unavailable.map((env) => formatEnvironmentLabel(env).length),
+  );
 
-  ui.note(`This machine knows ${candidates.length} WorkOS environments — pick the one this app should call home.`);
+  ui.note(
+    unavailable.length > 0
+      ? `Your team has ${candidates.length + unavailable.length} environments; ${candidates.length} ${candidates.length === 1 ? 'is' : 'are'} ready on this machine — pick the one this app should call home.
+○ rows need an API key here first: workos profile add <name> <api-key> --client-id <client-id>`
+      : `This machine knows ${candidates.length} WorkOS environments — pick the one this app should call home.`,
+  );
 
   const choice = await ui.select({
     message: 'Which WorkOS environment should this install use?',
-    options: candidates.map(([key, env]) => {
-      const display = displayFor(key, env);
-      const type = env.type === 'sandbox' ? 'Sandbox' : env.type === 'unclaimed' ? 'Unclaimed' : 'Production';
-      // Only show the profile key when it isn't already the display name.
-      const meta = [display === key ? null : key, type].filter(Boolean).join(' · ');
-      let label = `${display.padEnd(nameW)}  ${chalk.dim(meta)}`;
-      if (key === config.activeEnvironment) label += ` ${chalk.green('● active')}`;
-      return { value: key, label };
-    }),
+    options: [
+      ...candidates.map(([key, env]) => {
+        const display = displayFor(key, env);
+        const type = env.type === 'sandbox' ? 'Sandbox' : env.type === 'unclaimed' ? 'Unclaimed' : 'Production';
+        // Only show the profile key when it isn't already the display name.
+        const meta = [display === key ? null : key, type].filter(Boolean).join(' · ');
+        let label = `${display.padEnd(nameW)}  ${chalk.dim(meta)}`;
+        if (key === config.activeEnvironment) label += ` ${chalk.green('● active')}`;
+        return { value: key, label };
+      }),
+      ...unavailable.map((env) => ({
+        value: `__unavailable__${env.id}`,
+        label: `${formatEnvironmentLabel(env).padEnd(nameW)}  ${chalk.dim(env.sandbox ? 'Sandbox' : 'Production')}`,
+        disabled: '○ no API key on this machine',
+      })),
+    ],
     initialValue: config.activeEnvironment,
   });
   if (ui.isCancel(choice)) exitWithCode(ExitCode.CANCELLED);
