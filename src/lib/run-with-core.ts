@@ -533,6 +533,18 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
 
   await adapter.start();
 
+  // Environment pick lives AFTER the brand mark (adapter.start) and BEFORE the
+  // machine starts (branch prompt, detection, …), so the flow reads: banner →
+  // choose environment → install steps. Running pre-machine also means the
+  // machine's own auth check sees the PICKED profile — switching to a profile
+  // that still needs a login is handled by the in-flow device auth. Explicit
+  // credentials (flag/env var) and headless runs skip it; the helper itself
+  // guards JSON mode, project-owned keys, and single-profile configs.
+  if (!headlessMode && !augmentedOptions.apiKey && !process.env.WORKOS_API_KEY) {
+    const { maybePickInstallEnvironment } = await import('./resolve-install-credentials.js');
+    await maybePickInstallEnvironment(getActiveEnvironment(), augmentedOptions.installDir);
+  }
+
   analytics.configureAuthFromAvailableSources();
   const mode = headlessMode ? 'headless' : augmentedOptions.dashboard ? 'tui' : 'cli';
   analytics.sessionStart(mode, getVersion());

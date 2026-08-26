@@ -66,7 +66,9 @@ const mockUi = {
 };
 vi.mock('../utils/ui.js', () => ({ default: mockUi }));
 
-const { resolveInstallCredentials, resolveStagingCredentials } = await import('./resolve-install-credentials.js');
+const { resolveInstallCredentials, resolveStagingCredentials, maybePickInstallEnvironment } = await import(
+  './resolve-install-credentials.js'
+);
 const { setOutputMode } = await import('../utils/output.js');
 
 describe('resolveInstallCredentials', () => {
@@ -382,7 +384,7 @@ describe('resolveInstallCredentials', () => {
       mockGetConfig.mockReturnValue(twoProfiles);
       mockSelect.mockResolvedValue('staging');
 
-      await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+      await maybePickInstallEnvironment(null, emptyCwd);
 
       const call = mockSelect.mock.calls[0][0] as {
         options: Array<{ value: string; label: string }>;
@@ -403,7 +405,7 @@ describe('resolveInstallCredentials', () => {
       mockGetConfig.mockReturnValue(twoProfiles);
       mockSelect.mockResolvedValue('staging-3');
 
-      await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+      await maybePickInstallEnvironment(null, emptyCwd);
 
       expect(mockSetActiveEnvironment).not.toHaveBeenCalled();
     });
@@ -414,7 +416,7 @@ describe('resolveInstallCredentials', () => {
         environments: { 'staging-3': twoProfiles.environments['staging-3'] },
       });
 
-      await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+      await maybePickInstallEnvironment(null, emptyCwd);
 
       expect(mockSelect).not.toHaveBeenCalled();
     });
@@ -424,7 +426,7 @@ describe('resolveInstallCredentials', () => {
       setInteractionMode({ mode: 'agent', source: 'env' });
       try {
         mockGetConfig.mockReturnValue(twoProfiles);
-        await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+        await maybePickInstallEnvironment(null, emptyCwd);
         expect(mockSelect).not.toHaveBeenCalled();
       } finally {
         resetInteractionModeForTests();
@@ -435,7 +437,7 @@ describe('resolveInstallCredentials', () => {
       mockGetConfig.mockReturnValue(twoProfiles);
       setOutputMode('json');
 
-      await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+      await maybePickInstallEnvironment(null, emptyCwd);
 
       expect(mockSelect).not.toHaveBeenCalled();
     });
@@ -446,7 +448,7 @@ describe('resolveInstallCredentials', () => {
       writeFileSync(join(emptyCwd, '.env'), 'WORKOS_API_KEY=sk_project\n');
       mockGetConfig.mockReturnValue(twoProfiles);
 
-      await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+      await maybePickInstallEnvironment(null, emptyCwd);
 
       expect(mockSelect).not.toHaveBeenCalled();
       expect(mockSetActiveEnvironment).not.toHaveBeenCalled();
@@ -469,7 +471,7 @@ describe('resolveInstallCredentials', () => {
       });
       mockSelect.mockResolvedValue('staging');
 
-      await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+      await maybePickInstallEnvironment(null, emptyCwd);
 
       const call = mockSelect.mock.calls[0][0] as {
         options: Array<{ value: string; label: string; disabled?: string }>;
@@ -496,7 +498,7 @@ describe('resolveInstallCredentials', () => {
       ]);
       mockSelect.mockResolvedValue('staging-3');
 
-      await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+      await maybePickInstallEnvironment(null, emptyCwd);
 
       expect(mockSelect).toHaveBeenCalled();
     });
@@ -506,7 +508,7 @@ describe('resolveInstallCredentials', () => {
       mockRefreshIfExpired.mockRejectedValue(new Error('offline'));
       mockSelect.mockResolvedValue('staging');
 
-      await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+      await maybePickInstallEnvironment(null, emptyCwd);
 
       const call = mockSelect.mock.calls[0][0] as { options: Array<{ disabled?: string }> };
       expect(call.options.every((o) => !o.disabled)).toBe(true);
@@ -516,7 +518,7 @@ describe('resolveInstallCredentials', () => {
       mockGetConfig.mockReturnValue(twoProfiles);
       mockSelect.mockResolvedValue(CANCEL);
 
-      await expect(resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate)).rejects.toMatchObject({
+      await expect(maybePickInstallEnvironment(null, emptyCwd)).rejects.toMatchObject({
         exitCode: 2,
       });
       expect(mockSetActiveEnvironment).not.toHaveBeenCalled();

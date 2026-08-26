@@ -32,7 +32,7 @@ import type { EnvironmentConfig } from './config-store.js';
  * selectable on its own — but hiding them is what made installs feel like
  * they were choosing from a different list than the dashboard shows.
  */
-async function maybePickInstallEnvironment(
+export async function maybePickInstallEnvironment(
   activeEnv: EnvironmentConfig | null,
   installDir: string,
 ): Promise<EnvironmentConfig | null> {
@@ -209,7 +209,7 @@ export async function resolveInstallCredentials(
   try {
     const { getActiveEnvironment, isUnclaimedEnvironment } = await import('./config-store.js');
     const { getAccessToken } = await import('./credentials.js');
-    const activeEnv = await maybePickInstallEnvironment(getActiveEnvironment(), installDir ?? process.cwd());
+    const activeEnv = getActiveEnvironment();
 
     if (activeEnv?.apiKey) {
       // Has API key — but does it have gateway auth?
