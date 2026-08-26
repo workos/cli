@@ -390,9 +390,11 @@ export const installerMachine = setup({
     >(async () => {
       throw new Error('runDeviceAuth not implemented - provide via machine.provide()');
     }),
-    fetchStagingCredentials: fromPromise<StagingCredentials, void>(async () => {
-      throw new Error('fetchStagingCredentials not implemented - provide via machine.provide()');
-    }),
+    fetchStagingCredentials: fromPromise<StagingCredentials, { installDir: string; envScanConsent?: boolean }>(
+      async () => {
+        throw new Error('fetchStagingCredentials not implemented - provide via machine.provide()');
+      },
+    ),
     // Branch check actors
     checkBranch: fromPromise<BranchCheckOutput, void>(async () => {
       throw new Error('checkBranch not implemented - provide via machine.provide()');
@@ -897,6 +899,10 @@ export const installerMachine = setup({
           invoke: {
             id: 'fetchStagingCredentials',
             src: 'fetchStagingCredentials',
+            input: ({ context }) => ({
+              installDir: context.options.installDir,
+              envScanConsent: context.envScanConsent,
+            }),
             onDone: {
               target: '#installer.configuring',
               actions: [

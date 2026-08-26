@@ -8,6 +8,132 @@
  * - Logged-in user: API key + OAuth token (credential proxy handles gateway)
  * - Direct mode: not handled here (resolved in agent-interface.ts via ANTHROPIC_API_KEY)
  */
+import type { EnvironmentConfig } from './config-store.js';
+
+/**
+ * When several stored profiles could serve this install, ask which WorkOS
+ * environment to use instead of silently taking the active one — profile
+ * names like 'staging-3' say nothing about which dashboard environment they
+ * target, and installs write the chosen credentials into the project.
+ *
+ * Never prompts for: explicit keys (handled before this runs), non-interactive
+ * modes (including --json on a TTY — ui.select would throw), projects that
+ * already carry their own WORKOS_API_KEY (the no-clobber path keeps the
+ * project's key; prompting would convert it into an overwrite with a picked
+ * profile's key), or configs with fewer than two keyed profiles. Choosing
+ * persists via setActiveEnvironment so the installer and every later command
+ * agree; cancel cancels the install (exit 2), matching the installer's other
+ * prompts.
+ */
+async function maybePickInstallEnvironment(
+  activeEnv: EnvironmentConfig | null,
+  installDir: string,
+): Promise<EnvironmentConfig | null> {
+  const { isPromptAllowed } = await import('../utils/interaction-mode.js');
+  const { isJsonMode } = await import('../utils/output.js');
+  if (!isPromptAllowed() || isJsonMode()) return activeEnv;
+
+  const { readProjectEnvCredentials } = await import('./project-env.js');
+  if (readProjectEnvCredentials(installDir).apiKey) return activeEnv;
+
+  const { getConfig, getActiveEnvironment, setActiveEnvironment } = await import('./config-store.js');
+  const config = getConfig();
+  if (!config) return activeEnv;
+  const candidates = Object.entries(config.environments).filter(([, env]) => env.apiKey);
+  if (candidates.length < 2) return activeEnv;
+
+  const ui = (await import('../utils/ui.js')).default;
+  const { ExitCode, exitWithCode } = await import('../utils/exit-codes.js');
+
+  const choice = await ui.select({
+    message: 'Which WorkOS environment should this install use?',
+    options: candidates.map(([key, env]) => {
+      const dashboardName = env.environmentName
+        ? env.projectName
+          ? `${env.projectName} > ${env.environmentName}`
+          : env.environmentName
+        : env.environmentId;
+      let label = dashboardName ? `${key} — ${dashboardName}` : key;
+      if (key === config.activeEnvironment) label += ' (active)';
+      const hint = env.type === 'sandbox' ? 'Sandbox' : env.type === 'unclaimed' ? 'Unclaimed' : 'Production';
+      return { value: key, label, hint };
+    }),
+    initialValue: config.activeEnvironment,
+  });
+  if (ui.isCancel(choice)) exitWithCode(ExitCode.CANCELLED);
+  if (choice !== config.activeEnvironment) setActiveEnvironment(String(choice));
+  return getActiveEnvironment();
+}
+
+/**
+ * The install machine's staging-credential step. Source priority: active
+ * profile -> cached staging pair -> fresh staging fetch (persisted for reuse).
+ *
+ * The no-clobber contract for project-owned keys: when the user consented to
+ * the env-file scan and the project STILL lands here, the scan found no valid
+ * client ID (a complete pair short-circuits into `configuring`) -- i.e. the
+ * project is key-only. No API maps a secret key back to its environment, so
+ * no fallback can supply the matching client ID: adopting another
+ * environment's would configure the app against two environments at once, and
+ * returning a full fallback pair would silently re-point it. Refuse both by
+ * throwing -- the machine routes staging failures to the manual prompt, where
+ * the user supplies the matching pair. When the scan was declined the project
+ * opted out of its env files being used, and the fallback pair applies.
+ */
+export async function resolveStagingCredentials(
+  installDir: string,
+  envScanConsent: boolean | undefined,
+): Promise<{ clientId: string; apiKey: string }> {
+  const { getActiveEnvironment, getConfig, saveConfig } = await import('./config-store.js');
+  const { getAccessToken, getStagingCredentials, saveStagingCredentials } = await import('./credentials.js');
+
+  if (envScanConsent) {
+    const { readProjectEnvCredentials } = await import('./project-env.js');
+    const { isValidApiKey } = await import('./credential-discovery.js');
+    const projectKey = readProjectEnvCredentials(installDir).apiKey;
+    if (projectKey && isValidApiKey(projectKey)) {
+      throw new Error(
+        'This project already has WORKOS_API_KEY but no valid WORKOS_CLIENT_ID, and the matching client ID cannot be looked up automatically',
+      );
+    }
+  }
+
+  const activeEnv = getActiveEnvironment();
+  if (activeEnv?.clientId && activeEnv?.apiKey) {
+    return { clientId: activeEnv.clientId, apiKey: activeEnv.apiKey };
+  }
+
+  const cached = getStagingCredentials();
+  if (cached) return cached;
+
+  const token = getAccessToken();
+  if (!token) throw new Error('No access token available');
+
+  const { fetchStagingCredentials } = await import('./staging-api.js');
+  const staging = await fetchStagingCredentials(token);
+  saveStagingCredentials(staging);
+
+  try {
+    const config = getConfig() ?? { environments: {} };
+    if (!config.environments['default']) {
+      config.environments['default'] = {
+        name: 'default',
+        type: staging.apiKey.startsWith('sk_test_') ? 'sandbox' : 'production',
+        apiKey: staging.apiKey,
+        clientId: staging.clientId,
+      };
+      if (!config.activeEnvironment) {
+        config.activeEnvironment = 'default';
+      }
+      saveConfig(config);
+    }
+  } catch {
+    // Don't block install if config-store write fails
+  }
+
+  return staging;
+}
+
 export async function resolveInstallCredentials(
   apiKey: string | undefined,
   installDir: string | undefined,
@@ -22,7 +148,7 @@ export async function resolveInstallCredentials(
   try {
     const { getActiveEnvironment, isUnclaimedEnvironment } = await import('./config-store.js');
     const { getAccessToken } = await import('./credentials.js');
-    const activeEnv = getActiveEnvironment();
+    const activeEnv = await maybePickInstallEnvironment(getActiveEnvironment(), installDir ?? process.cwd());
 
     if (activeEnv?.apiKey) {
       // Has API key — but does it have gateway auth?

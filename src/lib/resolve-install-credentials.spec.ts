@@ -6,15 +6,31 @@ import { join } from 'node:path';
 // Mock config-store
 const mockGetActiveEnvironment = vi.fn();
 const mockIsUnclaimedEnvironment = vi.fn();
+const mockGetConfig = vi.fn();
+const mockSetActiveEnvironment = vi.fn();
+const mockSaveConfig = vi.fn();
 vi.mock('./config-store.js', () => ({
   getActiveEnvironment: (...args: unknown[]) => mockGetActiveEnvironment(...args),
   isUnclaimedEnvironment: (...args: unknown[]) => mockIsUnclaimedEnvironment(...args),
+  getConfig: () => mockGetConfig(),
+  setActiveEnvironment: (...args: unknown[]) => mockSetActiveEnvironment(...args),
+  saveConfig: (...args: unknown[]) => mockSaveConfig(...args),
 }));
 
 // Mock credentials
 const mockGetAccessToken = vi.fn();
+const mockGetStagingCredentials = vi.fn();
+const mockSaveStagingCredentials = vi.fn();
 vi.mock('./credentials.js', () => ({
   getAccessToken: () => mockGetAccessToken(),
+  getStagingCredentials: () => mockGetStagingCredentials(),
+  saveStagingCredentials: (...args: unknown[]) => mockSaveStagingCredentials(...args),
+}));
+
+// Mock the staging API
+const mockFetchStagingCredentials = vi.fn();
+vi.mock('./staging-api.js', () => ({
+  fetchStagingCredentials: (...args: unknown[]) => mockFetchStagingCredentials(...args),
 }));
 
 // Mock unclaimed-env-provision
@@ -24,12 +40,16 @@ vi.mock('./unclaimed-env-provision.js', () => ({
 }));
 
 // Mock the UI facade — the no-clobber branch now explains itself out loud.
+const CANCEL = Symbol('cancel');
+const mockSelect = vi.fn();
 const mockUi = {
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), step: vi.fn(), success: vi.fn(), hint: vi.fn() },
+  select: (...args: unknown[]) => mockSelect(...args),
+  isCancel: (value: unknown) => value === CANCEL,
 };
 vi.mock('../utils/ui.js', () => ({ default: mockUi }));
 
-const { resolveInstallCredentials } = await import('./resolve-install-credentials.js');
+const { resolveInstallCredentials, resolveStagingCredentials } = await import('./resolve-install-credentials.js');
 const { setOutputMode } = await import('../utils/output.js');
 
 describe('resolveInstallCredentials', () => {
@@ -43,6 +63,7 @@ describe('resolveInstallCredentials', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetConfig.mockReturnValue(null);
     delete process.env.WORKOS_API_KEY;
     emptyCwd = mkdtempSync(join(tmpdir(), 'resolve-install-credentials-cwd-'));
     cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(emptyCwd);
@@ -309,6 +330,174 @@ describe('resolveInstallCredentials', () => {
 
       expect(mockUi.log.info).not.toHaveBeenCalled();
       expect(mockAuthenticate).toHaveBeenCalled();
+    });
+  });
+
+  describe('environment picker', () => {
+    const twoProfiles = {
+      activeEnvironment: 'staging-3',
+      environments: {
+        staging: {
+          name: 'staging',
+          type: 'sandbox',
+          apiKey: 'sk_test_a',
+          environmentName: 'test12',
+          projectName: "Nick's Team's Project",
+        },
+        'staging-3': {
+          name: 'staging-3',
+          type: 'sandbox',
+          apiKey: 'sk_test_b',
+          environmentName: 'Staging',
+          projectName: 'cli-branding-smoke',
+        },
+      },
+    };
+
+    beforeEach(() => {
+      mockGetActiveEnvironment.mockReturnValue(twoProfiles.environments['staging-3']);
+      mockIsUnclaimedEnvironment.mockReturnValue(false);
+      mockGetAccessToken.mockReturnValue('token_x');
+    });
+
+    it('prompts with project-prefixed labels and persists a different choice', async () => {
+      mockGetConfig.mockReturnValue(twoProfiles);
+      mockSelect.mockResolvedValue('staging');
+
+      await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+
+      const call = mockSelect.mock.calls[0][0] as {
+        options: Array<{ value: string; label: string }>;
+        initialValue: string;
+      };
+      expect(call.initialValue).toBe('staging-3');
+      expect(call.options.map((o) => o.label)).toEqual([
+        "staging — Nick's Team's Project > test12",
+        'staging-3 — cli-branding-smoke > Staging (active)',
+      ]);
+      expect(mockSetActiveEnvironment).toHaveBeenCalledWith('staging');
+    });
+
+    it('keeps the active profile without a config write when it is re-chosen', async () => {
+      mockGetConfig.mockReturnValue(twoProfiles);
+      mockSelect.mockResolvedValue('staging-3');
+
+      await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+
+      expect(mockSetActiveEnvironment).not.toHaveBeenCalled();
+    });
+
+    it('never prompts with a single keyed profile', async () => {
+      mockGetConfig.mockReturnValue({
+        activeEnvironment: 'staging-3',
+        environments: { 'staging-3': twoProfiles.environments['staging-3'] },
+      });
+
+      await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+
+      expect(mockSelect).not.toHaveBeenCalled();
+    });
+
+    it('never prompts in non-interactive modes', async () => {
+      const { setInteractionMode, resetInteractionModeForTests } = await import('../utils/interaction-mode.js');
+      setInteractionMode({ mode: 'agent', source: 'env' });
+      try {
+        mockGetConfig.mockReturnValue(twoProfiles);
+        await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+        expect(mockSelect).not.toHaveBeenCalled();
+      } finally {
+        resetInteractionModeForTests();
+      }
+    });
+
+    it('never prompts in JSON mode, even on a TTY', async () => {
+      mockGetConfig.mockReturnValue(twoProfiles);
+      setOutputMode('json');
+
+      await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+
+      expect(mockSelect).not.toHaveBeenCalled();
+    });
+
+    it('never prompts when the project already carries WORKOS_API_KEY', async () => {
+      // The no-clobber contract: a project key is kept, so offering a profile
+      // pick here would set up an overwrite with a different environment's key.
+      writeFileSync(join(emptyCwd, '.env'), 'WORKOS_API_KEY=sk_project\n');
+      mockGetConfig.mockReturnValue(twoProfiles);
+
+      await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+
+      expect(mockSelect).not.toHaveBeenCalled();
+      expect(mockSetActiveEnvironment).not.toHaveBeenCalled();
+    });
+
+    it('cancel cancels the install (exit 2)', async () => {
+      mockGetConfig.mockReturnValue(twoProfiles);
+      mockSelect.mockResolvedValue(CANCEL);
+
+      await expect(resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate)).rejects.toMatchObject({
+        exitCode: 2,
+      });
+      expect(mockSetActiveEnvironment).not.toHaveBeenCalled();
+    });
+  });
+
+  // The machine-side half of the no-clobber contract: a key-only project scans
+  // as "no valid credentials" (client ID missing/invalid) and lands in the
+  // staging-credential step, which must not hand configureEnvironment a
+  // different environment's key to upsert over the project's own.
+  describe('resolveStagingCredentials', () => {
+    let projectDir: string;
+
+    beforeEach(() => {
+      projectDir = mkdtempSync(join(tmpdir(), 'resolve-staging-credentials-test-'));
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'staging',
+        type: 'sandbox',
+        apiKey: 'sk_test_active_key',
+        clientId: 'client_01ACTIVE',
+      });
+      mockGetStagingCredentials.mockReturnValue(null);
+      mockGetAccessToken.mockReturnValue('token_x');
+    });
+
+    afterEach(() => {
+      rmSync(projectDir, { recursive: true, force: true });
+    });
+
+    it('returns the active profile pair when the project carries no key', async () => {
+      const result = await resolveStagingCredentials(projectDir, true);
+
+      expect(result).toEqual({ clientId: 'client_01ACTIVE', apiKey: 'sk_test_active_key' });
+    });
+
+    it('refuses a key-only project after a consented scan, routing to the manual prompt', async () => {
+      // The scan found no valid client ID (or the pair would have gone
+      // straight to configuring), and no API maps a secret key back to its
+      // environment — so no fallback pair is safe to write. The machine
+      // routes staging failures to the manual credential prompt.
+      writeFileSync(join(projectDir, '.env'), 'WORKOS_API_KEY=sk_test_project_key\n');
+
+      await expect(resolveStagingCredentials(projectDir, true)).rejects.toThrow(/no valid WORKOS_CLIENT_ID/);
+      expect(mockFetchStagingCredentials).not.toHaveBeenCalled();
+    });
+
+    it('returns the active profile pair for a key-only project when the scan was declined', async () => {
+      // Declining the scan opts the project out of its env files being used —
+      // the CLI-side fallback pair applies, overwrite and all.
+      writeFileSync(join(projectDir, '.env'), 'WORKOS_API_KEY=sk_test_project_key\n');
+
+      const result = await resolveStagingCredentials(projectDir, false);
+
+      expect(result).toEqual({ clientId: 'client_01ACTIVE', apiKey: 'sk_test_active_key' });
+    });
+
+    it('treats an invalid project key as absent, matching credential discovery', async () => {
+      writeFileSync(join(projectDir, '.env'), 'WORKOS_API_KEY=not-a-real-key\n');
+
+      const result = await resolveStagingCredentials(projectDir, true);
+
+      expect(result).toEqual({ clientId: 'client_01ACTIVE', apiKey: 'sk_test_active_key' });
     });
   });
 });

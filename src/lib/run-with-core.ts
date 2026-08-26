@@ -25,11 +25,10 @@ import type { Integration } from './constants.js';
 import { readProjectEnvCredentials } from './project-env.js';
 import { enableDebugLogs, initLogFile, logInfo, logError } from '../utils/debug.js';
 
-import { getAccessToken, saveCredentials, getStagingCredentials, saveStagingCredentials } from './credentials.js';
-import { getConfig, saveConfig, getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
+import { getAccessToken, saveCredentials } from './credentials.js';
+import { getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
 import { checkForEnvFiles, discoverCredentials } from './credential-discovery.js';
 import { requestDeviceCode, pollForToken } from './device-auth.js';
-import { fetchStagingCredentials as fetchStagingCredentialsApi } from './staging-api.js';
 import { getCliAuthClientId, getAuthkitDomain } from './settings.js';
 import { getTelemetryUrl } from '../utils/urls.js';
 import { analytics } from '../utils/analytics.js';
@@ -439,40 +438,9 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         return { result, deviceAuth };
       }),
 
-      fetchStagingCredentials: fromPromise(async () => {
-        const activeEnv = getActiveEnvironment();
-        if (activeEnv?.clientId && activeEnv?.apiKey) {
-          return { clientId: activeEnv.clientId, apiKey: activeEnv.apiKey };
-        }
-
-        const cached = getStagingCredentials();
-        if (cached) return cached;
-
-        const token = getAccessToken();
-        if (!token) throw new Error('No access token available');
-
-        const staging = await fetchStagingCredentialsApi(token);
-        saveStagingCredentials(staging);
-
-        try {
-          const config = getConfig() ?? { environments: {} };
-          if (!config.environments['default']) {
-            config.environments['default'] = {
-              name: 'default',
-              type: staging.apiKey.startsWith('sk_test_') ? 'sandbox' : 'production',
-              apiKey: staging.apiKey,
-              clientId: staging.clientId,
-            };
-            if (!config.activeEnvironment) {
-              config.activeEnvironment = 'default';
-            }
-            saveConfig(config);
-          }
-        } catch {
-          // Don't block install if config-store write fails
-        }
-
-        return staging;
+      fetchStagingCredentials: fromPromise(async ({ input }) => {
+        const { resolveStagingCredentials } = await import('./resolve-install-credentials.js');
+        return resolveStagingCredentials(input.installDir, input.envScanConsent);
       }),
 
       // Branch check actors
