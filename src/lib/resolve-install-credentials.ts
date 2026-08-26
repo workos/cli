@@ -69,35 +69,42 @@ async function maybePickInstallEnvironment(
  * The install machine's staging-credential step. Source priority: active
  * profile -> cached staging pair -> fresh staging fetch (persisted for reuse).
  *
- * A project that already carries its own valid WORKOS_API_KEY keeps it. The
- * preflight no-clobber path is only half the contract: scanning a key-only
- * project finds no valid client ID and lands here, so returning the fallback's
- * COMPLETE pair would let configureEnvironment upsert a different
- * environment's key over the project's. The fallback supplies only the missing
- * client ID. An invalid project key is no key -- discovery ignores it too.
+ * The no-clobber contract for project-owned keys: when the user consented to
+ * the env-file scan and the project STILL lands here, the scan found no valid
+ * client ID (a complete pair short-circuits into `configuring`) -- i.e. the
+ * project is key-only. No API maps a secret key back to its environment, so
+ * no fallback can supply the matching client ID: adopting another
+ * environment's would configure the app against two environments at once, and
+ * returning a full fallback pair would silently re-point it. Refuse both by
+ * throwing -- the machine routes staging failures to the manual prompt, where
+ * the user supplies the matching pair. When the scan was declined the project
+ * opted out of its env files being used, and the fallback pair applies.
  */
-export async function resolveStagingCredentials(installDir: string): Promise<{ clientId: string; apiKey: string }> {
+export async function resolveStagingCredentials(
+  installDir: string,
+  envScanConsent: boolean | undefined,
+): Promise<{ clientId: string; apiKey: string }> {
   const { getActiveEnvironment, getConfig, saveConfig } = await import('./config-store.js');
   const { getAccessToken, getStagingCredentials, saveStagingCredentials } = await import('./credentials.js');
-  const { readProjectEnvCredentials } = await import('./project-env.js');
-  const { isValidApiKey } = await import('./credential-discovery.js');
-  const { logInfo } = await import('../utils/debug.js');
 
-  const projectKey = readProjectEnvCredentials(installDir).apiKey;
-  const keepKey = projectKey && isValidApiKey(projectKey) ? projectKey : undefined;
-  const forProject = ({ clientId, apiKey }: { clientId: string; apiKey: string }) => {
-    if (!keepKey) return { clientId, apiKey };
-    logInfo('[resolve-install-credentials] Project WORKOS_API_KEY kept -- adopting only the client ID');
-    return { clientId, apiKey: keepKey };
-  };
+  if (envScanConsent) {
+    const { readProjectEnvCredentials } = await import('./project-env.js');
+    const { isValidApiKey } = await import('./credential-discovery.js');
+    const projectKey = readProjectEnvCredentials(installDir).apiKey;
+    if (projectKey && isValidApiKey(projectKey)) {
+      throw new Error(
+        'This project already has WORKOS_API_KEY but no valid WORKOS_CLIENT_ID, and the matching client ID cannot be looked up automatically',
+      );
+    }
+  }
 
   const activeEnv = getActiveEnvironment();
   if (activeEnv?.clientId && activeEnv?.apiKey) {
-    return forProject({ clientId: activeEnv.clientId, apiKey: activeEnv.apiKey });
+    return { clientId: activeEnv.clientId, apiKey: activeEnv.apiKey };
   }
 
   const cached = getStagingCredentials();
-  if (cached) return forProject(cached);
+  if (cached) return cached;
 
   const token = getAccessToken();
   if (!token) throw new Error('No access token available');
@@ -124,7 +131,7 @@ export async function resolveStagingCredentials(installDir: string): Promise<{ c
     // Don't block install if config-store write fails
   }
 
-  return forProject(staging);
+  return staging;
 }
 
 export async function resolveInstallCredentials(

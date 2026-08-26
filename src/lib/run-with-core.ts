@@ -440,7 +440,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
 
       fetchStagingCredentials: fromPromise(async ({ input }) => {
         const { resolveStagingCredentials } = await import('./resolve-install-credentials.js');
-        return resolveStagingCredentials(input.installDir);
+        return resolveStagingCredentials(input.installDir, input.envScanConsent);
       }),
 
       // Branch check actors

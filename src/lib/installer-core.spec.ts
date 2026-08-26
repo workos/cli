@@ -442,10 +442,12 @@ describe('InstallerCore State Machine', () => {
             deviceAuthStarted = true;
             throw new Error('device auth should not be called');
           }),
-          fetchStagingCredentials: fromPromise<StagingCredentials, { installDir: string }>(async () => ({
-            clientId: 'client_unclaimed',
-            apiKey: 'sk_test_unclaimed',
-          })),
+          fetchStagingCredentials: fromPromise<StagingCredentials, { installDir: string; envScanConsent?: boolean }>(
+            async () => ({
+              clientId: 'client_unclaimed',
+              apiKey: 'sk_test_unclaimed',
+            }),
+          ),
         },
       });
 

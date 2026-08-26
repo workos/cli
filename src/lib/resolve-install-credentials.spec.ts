@@ -466,39 +466,36 @@ describe('resolveInstallCredentials', () => {
     });
 
     it('returns the active profile pair when the project carries no key', async () => {
-      const result = await resolveStagingCredentials(projectDir);
+      const result = await resolveStagingCredentials(projectDir, true);
 
       expect(result).toEqual({ clientId: 'client_01ACTIVE', apiKey: 'sk_test_active_key' });
     });
 
-    it('keeps a valid project WORKOS_API_KEY and adopts only the active profile client ID', async () => {
+    it('refuses a key-only project after a consented scan, routing to the manual prompt', async () => {
+      // The scan found no valid client ID (or the pair would have gone
+      // straight to configuring), and no API maps a secret key back to its
+      // environment — so no fallback pair is safe to write. The machine
+      // routes staging failures to the manual credential prompt.
       writeFileSync(join(projectDir, '.env'), 'WORKOS_API_KEY=sk_test_project_key\n');
 
-      const result = await resolveStagingCredentials(projectDir);
-
-      expect(result).toEqual({ clientId: 'client_01ACTIVE', apiKey: 'sk_test_project_key' });
+      await expect(resolveStagingCredentials(projectDir, true)).rejects.toThrow(/no valid WORKOS_CLIENT_ID/);
+      expect(mockFetchStagingCredentials).not.toHaveBeenCalled();
     });
 
-    it('keeps the project key on the fresh-fetch path, caching the fetched pair verbatim', async () => {
+    it('returns the active profile pair for a key-only project when the scan was declined', async () => {
+      // Declining the scan opts the project out of its env files being used —
+      // the CLI-side fallback pair applies, overwrite and all.
       writeFileSync(join(projectDir, '.env'), 'WORKOS_API_KEY=sk_test_project_key\n');
-      mockGetActiveEnvironment.mockReturnValue(null);
-      mockFetchStagingCredentials.mockResolvedValue({ clientId: 'client_01STAGING', apiKey: 'sk_test_staging_key' });
 
-      const result = await resolveStagingCredentials(projectDir);
+      const result = await resolveStagingCredentials(projectDir, false);
 
-      expect(result).toEqual({ clientId: 'client_01STAGING', apiKey: 'sk_test_project_key' });
-      // The cache stays truthful: it records the staging environment's real
-      // pair, not the project-key mix returned for this install.
-      expect(mockSaveStagingCredentials).toHaveBeenCalledWith({
-        clientId: 'client_01STAGING',
-        apiKey: 'sk_test_staging_key',
-      });
+      expect(result).toEqual({ clientId: 'client_01ACTIVE', apiKey: 'sk_test_active_key' });
     });
 
     it('treats an invalid project key as absent, matching credential discovery', async () => {
       writeFileSync(join(projectDir, '.env'), 'WORKOS_API_KEY=not-a-real-key\n');
 
-      const result = await resolveStagingCredentials(projectDir);
+      const result = await resolveStagingCredentials(projectDir, true);
 
       expect(result).toEqual({ clientId: 'client_01ACTIVE', apiKey: 'sk_test_active_key' });
     });
