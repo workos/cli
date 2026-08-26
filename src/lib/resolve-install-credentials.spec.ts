@@ -25,10 +25,14 @@ vi.mock('./config-store.js', async (importOriginal) => {
 const mockGetAccessToken = vi.fn();
 const mockGetStagingCredentials = vi.fn();
 const mockSaveStagingCredentials = vi.fn();
+const mockGetCredentials = vi.fn();
+const mockIsTokenExpired = vi.fn();
 vi.mock('./credentials.js', () => ({
   getAccessToken: () => mockGetAccessToken(),
   getStagingCredentials: () => mockGetStagingCredentials(),
   saveStagingCredentials: (...args: unknown[]) => mockSaveStagingCredentials(...args),
+  getCredentials: () => mockGetCredentials(),
+  isTokenExpired: (...args: unknown[]) => mockIsTokenExpired(...args),
 }));
 
 // Mock the staging API
@@ -43,12 +47,9 @@ vi.mock('./unclaimed-env-provision.js', () => ({
   tryProvisionUnclaimedEnv: (...args: unknown[]) => mockTryProvisionUnclaimedEnv(...args),
 }));
 
-// Session + team-environment discovery for the picker's disabled rows.
-const mockRefreshIfExpired = vi.fn();
-vi.mock('./command-auth.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./command-auth.js')>();
-  return { ...actual, refreshIfExpired: () => mockRefreshIfExpired() };
-});
+// Team-environment discovery for the picker's disabled rows. The picker only
+// ever uses a currently-valid stored token — it never refreshes (a refresh
+// outliving the discovery timeout can clear a newer session on invalid_grant).
 const mockFetchTeamEnvironments = vi.fn();
 vi.mock('./environment-target.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./environment-target.js')>();
@@ -83,7 +84,8 @@ describe('resolveInstallCredentials', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetConfig.mockReturnValue(null);
-    mockRefreshIfExpired.mockResolvedValue(null);
+    mockGetCredentials.mockReturnValue(null);
+    mockIsTokenExpired.mockReturnValue(false);
     delete process.env.WORKOS_API_KEY;
     emptyCwd = mkdtempSync(join(tmpdir(), 'resolve-install-credentials-cwd-'));
     cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(emptyCwd);
@@ -456,7 +458,7 @@ describe('resolveInstallCredentials', () => {
 
     it('lists team environments without a local key as disabled rows', async () => {
       mockGetConfig.mockReturnValue(twoProfiles);
-      mockRefreshIfExpired.mockResolvedValue({ accessToken: 'tok' });
+      mockGetCredentials.mockReturnValue({ accessToken: 'tok', expiresAt: Date.now() + 3_600_000 });
       mockFetchTeamEnvironments.mockResolvedValue([
         // Joined to the keyed 'staging-3' profile via clientId — not duplicated.
         { id: 'env_staging', name: 'Staging', sandbox: true, clientId: 'client_b', projectName: 'cli-branding-smoke' },
@@ -496,7 +498,7 @@ describe('resolveInstallCredentials', () => {
         activeEnvironment: 'staging-3',
         environments: { 'staging-3': twoProfiles.environments['staging-3'] },
       });
-      mockRefreshIfExpired.mockResolvedValue({ accessToken: 'tok' });
+      mockGetCredentials.mockReturnValue({ accessToken: 'tok', expiresAt: Date.now() + 3_600_000 });
       mockFetchTeamEnvironments.mockResolvedValue([
         { id: 'env_prod', name: 'Production', sandbox: false, clientId: 'client_z', projectName: 'P' },
       ]);
@@ -509,7 +511,8 @@ describe('resolveInstallCredentials', () => {
 
     it('degrades to the local-only picker when team discovery fails', async () => {
       mockGetConfig.mockReturnValue(twoProfiles);
-      mockRefreshIfExpired.mockRejectedValue(new Error('offline'));
+      mockGetCredentials.mockReturnValue({ accessToken: 'tok', expiresAt: Date.now() + 3_600_000 });
+      mockFetchTeamEnvironments.mockRejectedValue(new Error('offline'));
       mockSelect.mockResolvedValue('staging');
 
       await maybePickInstallEnvironment(null, emptyCwd);
@@ -518,20 +521,37 @@ describe('resolveInstallCredentials', () => {
       expect(call.options.every((o) => !o.disabled)).toBe(true);
     });
 
-    it('does not let a hung session refresh stall the picker', async () => {
+    it('does not let a hung team fetch stall the picker', async () => {
       mockGetConfig.mockReturnValue(twoProfiles);
-      // Expired session + dead endpoint: the refresh promise never settles.
+      // Valid session + dead endpoint: the fetch promise never settles.
       // Discovery is bounded, so the picker still opens with local-only rows.
-      mockRefreshIfExpired.mockReturnValue(new Promise(() => {}));
+      mockGetCredentials.mockReturnValue({ accessToken: 'tok', expiresAt: Date.now() + 3_600_000 });
+      mockFetchTeamEnvironments.mockReturnValue(new Promise(() => {}));
       mockSelect.mockResolvedValue('staging');
 
       const start = Date.now();
       await maybePickInstallEnvironment(null, emptyCwd);
 
-      expect(Date.now() - start).toBeLessThan(10_000); // bounded, not the 30s refresh timeout
+      expect(Date.now() - start).toBeLessThan(10_000); // bounded, not the 30s fetch timeout
       const call = mockSelect.mock.calls[0][0] as { options: Array<{ disabled?: string }> };
       expect(call.options.every((o) => !o.disabled)).toBe(true);
     }, 15_000);
+
+    it('never refreshes inside the picker — an expired session degrades to local-only rows', async () => {
+      // A refresh raced past the discovery timeout keeps running and can
+      // answer invalid_grant after the installer writes a new session, which
+      // clears the credential store. The picker must only use a valid token.
+      mockGetConfig.mockReturnValue(twoProfiles);
+      mockGetCredentials.mockReturnValue({ accessToken: 'tok', expiresAt: 0 });
+      mockIsTokenExpired.mockReturnValue(true);
+      mockSelect.mockResolvedValue('staging');
+
+      await maybePickInstallEnvironment(null, emptyCwd);
+
+      expect(mockFetchTeamEnvironments).not.toHaveBeenCalled();
+      const call = mockSelect.mock.calls[0][0] as { options: Array<{ disabled?: string }> };
+      expect(call.options.every((o) => !o.disabled)).toBe(true);
+    });
 
     it('cancel cancels the install (exit 2)', async () => {
       mockGetConfig.mockReturnValue(twoProfiles);

@@ -13,8 +13,8 @@ import type { TeamEnvironment } from './environment-target.js';
 
 /**
  * Upper bound on team-environment discovery before the picker falls back to
- * local profiles. The refresh client alone can wait 30s on a dead endpoint;
- * the picker (and the single-profile silent path) must not inherit that wait.
+ * local profiles. The GraphQL fetch can wait 30s on a dead endpoint; the
+ * picker (and the single-profile silent path) must not inherit that wait.
  */
 const TEAM_DISCOVERY_TIMEOUT_MS = 3_000;
 
@@ -59,17 +59,22 @@ export async function maybePickInstallEnvironment(
   if (candidates.length === 0) return activeEnv;
 
   // Best-effort: the rest of the team's environments, for the disabled rows.
-  // Any failure degrades to the local-only picker — including slowness: the
-  // refresh client alone waits 30s before giving up, and this enrichment must
-  // not stall installer startup (or the single-profile silent path) behind a
-  // slow or dead endpoint, so the whole discovery is bounded.
+  // Any failure degrades to the local-only picker — including slowness: a
+  // dead endpoint's 30s fetch timeout must not stall installer startup (or
+  // the single-profile silent path), so the fetch is bounded. Only a
+  // currently-valid token is used — never a refresh: the race abandons the
+  // loser without cancelling it, and a refresh outliving the picker can
+  // answer invalid_grant AFTER the installer's own auth flow wrote a new
+  // session, and invalid_grant clears the credential store. An expired
+  // session just degrades to the local-only picker; the machine's auth check
+  // re-authenticates later.
   const discoverTeam = async (): Promise<TeamEnvironment[]> => {
     try {
-      const { refreshIfExpired } = await import('./command-auth.js');
-      const token = (await refreshIfExpired())?.accessToken;
-      if (!token) return [];
+      const { getCredentials, isTokenExpired } = await import('./credentials.js');
+      const creds = getCredentials();
+      if (!creds || isTokenExpired(creds)) return [];
       const { fetchTeamEnvironments } = await import('./environment-target.js');
-      return await fetchTeamEnvironments(token);
+      return await fetchTeamEnvironments(creds.accessToken);
     } catch {
       return []; // Offline / logged out / flag-gated — the local-only picker still works.
     }
