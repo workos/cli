@@ -14,6 +14,7 @@ import { getInteractionMode, isAgentMode, isCiMode } from '../utils/interaction-
 import { getOutputMode, isJsonMode, resolveEffectiveOutputMode, setOutputMode } from '../utils/output.js';
 import type {
   InstallerMachineContext,
+  CredentialSource,
   DetectionOutput,
   GitCheckOutput,
   AgentOutput,
@@ -23,6 +24,7 @@ import type {
 import { isScaffoldableEmptyDir, resolvePackageManager, runCreateNextApp } from './scaffold/index.js';
 import type { Integration } from './constants.js';
 import { readProjectEnvCredentials } from './project-env.js';
+import type { ProjectEnvCredentials } from './project-env.js';
 import { enableDebugLogs, initLogFile, logInfo, logError } from '../utils/debug.js';
 
 import { getAccessToken, saveCredentials } from './credentials.js';
@@ -152,6 +154,28 @@ export async function detectSingleIntegration(
   return false;
 }
 
+/**
+ * Provenance label for the credential pair `runWithCore` hands the machine.
+ *
+ * Only a pair the user supplied nothing toward can honestly name the project's
+ * env file as its origin. That total backfill is the path a freshly provisioned
+ * unclaimed environment takes — provisioning writes .env.local before the
+ * machine starts — and labeling it 'cli' is what made the installer claim
+ * credentials the user had never provided.
+ *
+ * A mixed pair keeps the caller's source instead: one flag plus one backfill is
+ * not an env-file resolution, and calling it one makes the installer announce
+ * `.env.local` as the origin of a value the user typed on the command line.
+ */
+export function resolveCredentialSource(
+  options: Pick<InstallerOptions, 'apiKey' | 'clientId' | 'credentialSource'>,
+  existingCreds: ProjectEnvCredentials,
+): CredentialSource | undefined {
+  const userSuppliedEither = Boolean(options.apiKey || options.clientId);
+  const backfilledFromProjectEnv = !userSuppliedEither && Boolean(existingCreds.apiKey || existingCreds.clientId);
+  return backfilledFromProjectEnv ? 'env' : options.credentialSource;
+}
+
 export async function runWithCore(options: InstallerOptions): Promise<void> {
   // Initialize debug/logging early so we capture all failures
   initLogFile();
@@ -172,18 +196,11 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   analytics.setGatewayUrl(gatewayUrl);
 
   const existingCreds = readProjectEnvCredentials(options.installDir);
-  // Either credential arriving from the project's env file rather than from the
-  // user makes this an 'env' resolution, not 'cli'. This backfill is the path a
-  // freshly provisioned unclaimed environment takes — provisioning writes
-  // .env.local before the machine starts — so mislabeling it as 'cli' is what
-  // made the installer claim credentials the user had never provided.
-  const backfilledFromProjectEnv =
-    (!options.apiKey && Boolean(existingCreds.apiKey)) || (!options.clientId && Boolean(existingCreds.clientId));
   const augmentedOptions: InstallerOptions = {
     ...options,
     apiKey: options.apiKey || existingCreds.apiKey,
     clientId: options.clientId || existingCreds.clientId,
-    credentialSource: backfilledFromProjectEnv ? 'env' : options.credentialSource,
+    credentialSource: resolveCredentialSource(options, existingCreds),
   };
 
   const emitter = createInstallerEventEmitter();

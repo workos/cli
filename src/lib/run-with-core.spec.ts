@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { detectSingleIntegration } from './run-with-core.js';
+import { detectSingleIntegration, resolveCredentialSource } from './run-with-core.js';
 
 describe('detectSingleIntegration', () => {
   let dir: string;
@@ -73,5 +73,43 @@ describe('detectSingleIntegration', () => {
 
     const result = await detectSingleIntegration('kotlin', { installDir: dir });
     expect(result).toBe(true);
+  });
+});
+
+describe('resolveCredentialSource', () => {
+  it("labels a fully backfilled pair 'env'", () => {
+    // The provisioned unclaimed environment path: provisioning wrote the env
+    // file before the machine started, so the user supplied neither value.
+    const source = resolveCredentialSource(
+      { credentialSource: 'cli' },
+      { apiKey: 'sk_test_provisioned', clientId: 'client_provisioned' },
+    );
+
+    expect(source).toBe('env');
+  });
+
+  it('keeps the caller source when the user supplied both credentials', () => {
+    const source = resolveCredentialSource(
+      { apiKey: 'sk_test_flag', clientId: 'client_flag', credentialSource: 'cli' },
+      { apiKey: 'sk_test_file', clientId: 'client_file' },
+    );
+
+    expect(source).toBe('cli');
+  });
+
+  // Regression guard: a mixed pair used to be labeled 'env' wholesale, which
+  // made the installer announce `.env.local` as the origin of a credential the
+  // user had typed on the command line.
+  it('does not claim env provenance when only one credential was backfilled', () => {
+    expect(
+      resolveCredentialSource({ apiKey: 'sk_test_flag', credentialSource: 'cli' }, { clientId: 'client_file' }),
+    ).toBe('cli');
+    expect(
+      resolveCredentialSource({ clientId: 'client_flag', credentialSource: 'cli' }, { apiKey: 'sk_test_file' }),
+    ).toBe('cli');
+  });
+
+  it('leaves an unset caller source unset when there is nothing to backfill', () => {
+    expect(resolveCredentialSource({}, {})).toBeUndefined();
   });
 });
