@@ -111,4 +111,49 @@ describe('buildCompletionData', () => {
     expect(data.signInSnippet).toBeUndefined();
     expect(data.nextSteps.some((s) => /refreshAuth/.test(s))).toBe(false);
   });
+
+  describe('unclaimed-environment claim step', () => {
+    it('leads the next steps with the claim command when one is supplied', async () => {
+      writePackageJson({ scripts: { dev: 'next dev' }, dependencies: { next: '15.0.0' } });
+
+      const data = await buildCompletionData(
+        { integration: 'nextjs', changedFiles: [], installDir },
+        { ...baseDeps, claimCommand: 'workos profile claim' },
+      );
+
+      // First, not buried: the provision-time notice has already scrolled away
+      // behind scaffolding and the agent run by the time this box renders.
+      expect(data.nextSteps[0]).toBe('Run `workos profile claim` to link this environment to your WorkOS account');
+      // The concrete steps still follow, in order.
+      expect(data.nextSteps[1]).toContain('start your dev server');
+      expect(data.nextSteps[2]).toContain('test authentication');
+    });
+
+    it('omits the claim step for a claimed environment', async () => {
+      writePackageJson({ scripts: { dev: 'next dev' }, dependencies: { next: '15.0.0' } });
+
+      const data = await buildCompletionData({ integration: 'nextjs', changedFiles: [], installDir }, baseDeps);
+
+      expect(data.nextSteps.some((s) => /claim/i.test(s))).toBe(false);
+      expect(data.nextSteps[0]).toContain('start your dev server');
+    });
+
+    it('keeps the claim step ahead of framework steps too', async () => {
+      writePackageJson({ scripts: { dev: 'next dev' }, dependencies: { next: '15.0.0' } });
+
+      const data = await buildCompletionData(
+        { integration: 'nextjs', changedFiles: [], installDir },
+        {
+          ...baseDeps,
+          claimCommand: 'workos profile claim',
+          frameworkNextSteps: ['Visit the WorkOS Dashboard to manage users and settings'],
+        },
+      );
+
+      const claimIndex = data.nextSteps.findIndex((s) => /profile claim/.test(s));
+      const dashboardIndex = data.nextSteps.findIndex((s) => /WorkOS Dashboard/.test(s));
+      expect(claimIndex).toBe(0);
+      expect(dashboardIndex).toBeGreaterThan(claimIndex);
+    });
+  });
 });

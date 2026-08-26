@@ -105,10 +105,25 @@ describe('unclaimed-env-provision', () => {
             apiKey: 'sk_test_oneshot',
             clientId: 'client_01ABC',
             claimToken: 'ct_token123',
+            authkitDomain: 'auth.example.com',
           },
         },
         activeEnvironment: 'unclaimed',
       });
+    });
+
+    it('persists the AuthKit domain — the only printable name an unclaimed env has', async () => {
+      // Provisioning returns no environmentId/environmentName, so dropping this
+      // leaves profileEnvironmentLabel with nothing and every status line falls
+      // back to "your active WorkOS environment".
+      mockProvisionUnclaimedEnvironment.mockResolvedValueOnce(validProvisionResult);
+
+      await tryProvisionUnclaimedEnv({ installDir: testDir });
+
+      const saved = mockSaveConfig.mock.calls[0]?.[0] as {
+        environments: Record<string, { authkitDomain?: string }>;
+      };
+      expect(saved.environments.unclaimed.authkitDomain).toBe('auth.example.com');
     });
 
     it('preserves existing config environments', async () => {

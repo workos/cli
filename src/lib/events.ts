@@ -57,7 +57,14 @@ export interface InstallerEvents {
   'git:dirty:confirmed': Record<string, never>;
   'git:dirty:cancelled': Record<string, never>;
   'credentials:gathering': { requiresApiKey: boolean };
-  'credentials:found': Record<string, never>;
+  /**
+   * Credentials were already on `options` when the machine started. `source`
+   * separates the two ways that happens — flags the user typed ('cli') versus a
+   * pair `runWithCore` backfilled from the project's env file ('env') — because
+   * the two need different copy, and the payload lets a listener check whether
+   * the active profile is the one that supplied them.
+   */
+  'credentials:found': { source?: 'cli' | 'env'; credentials?: { clientId?: string; apiKey?: string } };
   // Credential discovery events
   'credentials:env:detected': { files: string[] };
   'credentials:env:prompt': { files: string[] };

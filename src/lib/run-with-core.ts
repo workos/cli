@@ -14,6 +14,7 @@ import { getInteractionMode, isAgentMode, isCiMode } from '../utils/interaction-
 import { getOutputMode, isJsonMode, resolveEffectiveOutputMode, setOutputMode } from '../utils/output.js';
 import type {
   InstallerMachineContext,
+  CredentialSource,
   DetectionOutput,
   GitCheckOutput,
   AgentOutput,
@@ -23,6 +24,7 @@ import type {
 import { isScaffoldableEmptyDir, resolvePackageManager, runCreateNextApp } from './scaffold/index.js';
 import type { Integration } from './constants.js';
 import { readProjectEnvCredentials } from './project-env.js';
+import type { ProjectEnvCredentials } from './project-env.js';
 import { enableDebugLogs, initLogFile, logInfo, logError } from '../utils/debug.js';
 
 import { getAccessToken, saveCredentials } from './credentials.js';
@@ -152,6 +154,28 @@ export async function detectSingleIntegration(
   return false;
 }
 
+/**
+ * Provenance label for the credential pair `runWithCore` hands the machine.
+ *
+ * Only a pair the user supplied nothing toward can honestly name the project's
+ * env file as its origin. That total backfill is the path a freshly provisioned
+ * unclaimed environment takes — provisioning writes .env.local before the
+ * machine starts — and labeling it 'cli' is what made the installer claim
+ * credentials the user had never provided.
+ *
+ * A mixed pair keeps the caller's source instead: one flag plus one backfill is
+ * not an env-file resolution, and calling it one makes the installer announce
+ * `.env.local` as the origin of a value the user typed on the command line.
+ */
+export function resolveCredentialSource(
+  options: Pick<InstallerOptions, 'apiKey' | 'clientId' | 'credentialSource'>,
+  existingCreds: ProjectEnvCredentials,
+): CredentialSource | undefined {
+  const userSuppliedEither = Boolean(options.apiKey || options.clientId);
+  const backfilledFromProjectEnv = !userSuppliedEither && Boolean(existingCreds.apiKey || existingCreds.clientId);
+  return backfilledFromProjectEnv ? 'env' : options.credentialSource;
+}
+
 export async function runWithCore(options: InstallerOptions): Promise<void> {
   // Initialize debug/logging early so we capture all failures
   initLogFile();
@@ -176,6 +200,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
     ...options,
     apiKey: options.apiKey || existingCreds.apiKey,
     clientId: options.clientId || existingCreds.clientId,
+    credentialSource: resolveCredentialSource(options, existingCreds),
   };
 
   const emitter = createInstallerEventEmitter();
@@ -346,13 +371,28 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
 
       buildCompletion: fromPromise<CompletionData | undefined, { context: InstallerMachineContext }>(
         async ({ input }) => {
-          const { integration, changedFiles, options: installerOptions } = input.context;
+          const { integration, changedFiles, options: installerOptions, credentials } = input.context;
           if (!integration) return undefined;
           try {
             const registry = await getRegistry();
             const mod = registry.get(integration);
             const cfg = mod?.config;
             const settings = getInstallerSettings();
+            // Read the config now, at the end of the install, not from a value
+            // captured earlier: the environment can be claimed mid-install (the
+            // browser claim CTA), and a claimed environment must not be told to
+            // claim itself. Exact credential match is required — a leftover
+            // unclaimed profile can sit active while this install used the
+            // project's own keys, and pointing that user at `claim` would name
+            // an environment their app never touched.
+            const activeEnv = getActiveEnvironment();
+            const usedUnclaimedEnv = Boolean(
+              activeEnv &&
+              isUnclaimedEnvironment(activeEnv) &&
+              credentials &&
+              activeEnv.apiKey === credentials.apiKey &&
+              activeEnv.clientId === credentials.clientId,
+            );
             return await buildCompletionData(
               { integration, changedFiles, installDir: installerOptions.installDir },
               {
@@ -362,6 +402,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
                 dashboardUrl: settings.documentation.dashboardUrl,
                 frameworkNextSteps: cfg?.ui.getOutroNextSteps?.({}) ?? [],
                 signInSnippet: cfg?.ui.getSignInSnippet?.({}),
+                claimCommand: usedUnclaimedEnv ? formatWorkOSCommand('profile claim') : undefined,
               },
             );
           } catch {

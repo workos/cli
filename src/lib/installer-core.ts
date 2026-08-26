@@ -133,7 +133,10 @@ export const installerMachine = setup({
       context.emitter.emit('credentials:request', { requiresApiKey });
     },
     emitCredentialsFound: ({ context }) => {
-      context.emitter.emit('credentials:found', {});
+      context.emitter.emit('credentials:found', {
+        source: context.options.credentialSource === 'env' ? 'env' : 'cli',
+        credentials: { clientId: context.options.clientId, apiKey: context.options.apiKey },
+      });
     },
     emitEnvDetected: ({ context }) => {
       context.emitter.emit('credentials:env:detected', { files: context.envFilesDetected ?? [] });
@@ -751,7 +754,14 @@ export const installerMachine = setup({
               target: '#installer.configuring',
               guard: 'hasCredentials',
               actions: [
-                assign({ credentialSource: () => 'cli' as CredentialSource }),
+                // 'cli' means the user handed us these credentials. Credentials
+                // that only reached `options` because runWithCore backfilled them
+                // from the project's env file are not that, and calling them 'cli'
+                // is what made a freshly provisioned unclaimed environment
+                // announce itself as "the WorkOS credentials you provided".
+                assign({
+                  credentialSource: ({ context }) => context.options.credentialSource ?? ('cli' as CredentialSource),
+                }),
                 'emitCredentialsFound',
                 { type: 'emitStateExit', params: { state: 'gatheringCredentials' } },
               ],

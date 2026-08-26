@@ -523,5 +523,132 @@ describe('CLIAdapter', () => {
       expect(calls).toContain('Using your active WorkOS environment');
       expect(calls.join('\n')).not.toContain('Using environment:');
     });
+
+    it('unclaimed copy also covers the cli-flags path, which is where provisioning lands', async () => {
+      // runWithCore backfills options.apiKey/clientId from the .env.local that
+      // provisioning just wrote, so a freshly provisioned environment
+      // short-circuits at checkingCliFlags and never reaches staging
+      // resolution. The copy has to exist on this path or it never fires.
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'unclaimed',
+        type: 'unclaimed',
+        apiKey: 'sk_test_x',
+        clientId: 'client_x',
+        claimToken: 'ct_x',
+        authkitDomain: 'witty-rest-53.authkit.app',
+      });
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('credentials:found', {
+        source: 'env',
+        credentials: { clientId: 'client_x', apiKey: 'sk_test_x' },
+      });
+
+      const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls).toContain('Using a new WorkOS environment created for this install (witty-rest-53.authkit.app)');
+      expect(calls.join('\n')).not.toContain('Found existing WorkOS credentials');
+    });
+
+    it('names .env.local for an env-file backfill into a claimed environment', async () => {
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'staging-3',
+        type: 'sandbox',
+        apiKey: 'sk_test_x',
+        clientId: 'client_x',
+      });
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('credentials:found', {
+        source: 'env',
+        credentials: { clientId: 'client_x', apiKey: 'sk_test_x' },
+      });
+
+      const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls).toContain('Found existing WorkOS credentials in .env.local');
+    });
+
+    it('never claims .env.local for credentials passed as flags', async () => {
+      mockGetActiveEnvironment.mockReturnValue(null);
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('credentials:found', {
+        source: 'cli',
+        credentials: { clientId: 'client_flag', apiKey: 'sk_test_flag' },
+      });
+
+      const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls.join('\n')).not.toContain('.env.local');
+    });
+
+    it('says the environment is new and names it by AuthKit domain when unclaimed', async () => {
+      // Provisioning returns no environmentId/environmentName, so the generic
+      // "Using your active WorkOS environment" made a just-created environment
+      // read as one the user already had — the friction that sent people to the
+      // dashboard to compare client IDs.
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'unclaimed',
+        type: 'unclaimed',
+        apiKey: 'sk_test_x',
+        clientId: 'client_x',
+        claimToken: 'ct_x',
+        authkitDomain: 'witty-rest-53.authkit.app',
+      });
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('staging:fetching', {});
+      emitter.emit('staging:success', { source: 'stored', credentials: { clientId: 'client_x', apiKey: 'sk_test_x' } });
+
+      const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls).toContain('Using a new WorkOS environment created for this install (witty-rest-53.authkit.app)');
+      expect(calls.join('\n')).not.toContain('Using your active WorkOS environment');
+    });
+
+    it('drops the domain suffix for an unclaimed env provisioned before authkitDomain was stored', async () => {
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'unclaimed',
+        type: 'unclaimed',
+        apiKey: 'sk_test_x',
+        clientId: 'client_x',
+        claimToken: 'ct_x',
+      });
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('staging:fetching', {});
+      emitter.emit('staging:success', { source: 'stored', credentials: { clientId: 'client_x', apiKey: 'sk_test_x' } });
+
+      const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls).toContain('Using a new WorkOS environment created for this install');
+    });
+
+    it('keeps the generic copy when an unclaimed profile did not supply the credentials', async () => {
+      // A leftover unclaimed profile can sit active while the install used the
+      // project's own keys — calling that environment "created for this install"
+      // would be a lie about which environment the app now targets.
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'unclaimed',
+        type: 'unclaimed',
+        apiKey: 'sk_test_x',
+        clientId: 'client_x',
+        claimToken: 'ct_x',
+        authkitDomain: 'witty-rest-53.authkit.app',
+      });
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('staging:fetching', {});
+      emitter.emit('staging:success', {
+        source: 'stored',
+        credentials: { clientId: 'client_x', apiKey: 'sk_test_project' },
+      });
+
+      const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls).toContain('Using your active WorkOS environment');
+      expect(calls.join('\n')).not.toContain('created for this install');
+    });
   });
 });

@@ -414,6 +414,73 @@ describe('InstallerCore State Machine', () => {
       actor.stop();
     });
 
+    it('keeps an env-file provenance through the cli-flags short-circuit', async () => {
+      // runWithCore backfills options.apiKey/clientId from the project's
+      // .env.local — the path a freshly provisioned unclaimed environment takes.
+      // Those credentials must not be relabeled 'cli', or the installer tells
+      // the user it is using credentials they never provided.
+      const emitter = createInstallerEventEmitter();
+      const options: InstallerOptions = {
+        debug: false,
+        forceInstall: false,
+        installDir: '/test/project',
+        default: false,
+        local: true,
+        ci: false,
+        skipAuth: true,
+        dashboard: false,
+        emitter,
+        apiKey: 'sk_test_provisioned',
+        clientId: 'client_provisioned',
+        credentialSource: 'env',
+      };
+
+      const found: Array<{ source?: string }> = [];
+      emitter.on('credentials:found', (payload) => found.push(payload));
+
+      const actor = createActor(installerMachine.provide({ actors: baseMockActors }), {
+        input: { emitter, options },
+      });
+      actor.start();
+      actor.send({ type: 'START' });
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(found).toHaveLength(1);
+      expect(found[0].source).toBe('env');
+      actor.stop();
+    });
+
+    it('labels credentials that really came from flags as cli', async () => {
+      const emitter = createInstallerEventEmitter();
+      const options: InstallerOptions = {
+        debug: false,
+        forceInstall: false,
+        installDir: '/test/project',
+        default: false,
+        local: true,
+        ci: false,
+        skipAuth: true,
+        dashboard: false,
+        emitter,
+        apiKey: 'sk_test_flag',
+        clientId: 'client_flag',
+      };
+
+      const found: Array<{ source?: string }> = [];
+      emitter.on('credentials:found', (payload) => found.push(payload));
+
+      const actor = createActor(installerMachine.provide({ actors: baseMockActors }), {
+        input: { emitter, options },
+      });
+      actor.start();
+      actor.send({ type: 'START' });
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(found).toHaveLength(1);
+      expect(found[0].source).toBe('cli');
+      actor.stop();
+    });
+
     it('skips device auth when checkStoredAuth returns true (unclaimed env)', async () => {
       const emitter = createInstallerEventEmitter();
       const options: InstallerOptions = {

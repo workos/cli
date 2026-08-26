@@ -4,7 +4,7 @@ import { relative } from 'node:path';
 import ui, { PromptUnavailableError } from '../../utils/ui.js';
 import chalk from 'chalk';
 import { getConfig } from '../settings.js';
-import { getActiveEnvironment, profileEnvironmentLabel } from '../config-store.js';
+import { getActiveEnvironment, isUnclaimedEnvironment, profileEnvironmentLabel } from '../config-store.js';
 import { ProgressTracker } from '../progress-tracker.js';
 import { renderCompletionSummary, renderBrandMark } from '../../utils/summary-box.js';
 import { classifyAgentFailure, describeAgentFailure } from '../failure-classifier.js';
@@ -291,7 +291,39 @@ export class CLIAdapter implements InstallerAdapter {
     this.queueableLog(() => ui.log.warn('Could not detect framework automatically'));
   };
 
-  private handleCredentialsFound = (): void => {
+  /**
+   * Copy for an install running against a newly provisioned unclaimed
+   * environment, or undefined when it isn't.
+   *
+   * Provisioning returns no environmentId/environmentName, so
+   * `profileEnvironmentLabel` has nothing to build from and the generic copy
+   * reads as though the CLI picked up an environment the user already had —
+   * the ambiguity that sends people to the dashboard to compare client IDs.
+   *
+   * Requires an exact credential match: a leftover unclaimed profile can sit
+   * active while the install used the project's own keys, and calling that
+   * environment "created for this install" would misname what the app targets.
+   */
+  private newUnclaimedEnvironmentLine(credentials?: { clientId?: string; apiKey?: string }): string | undefined {
+    const active = getActiveEnvironment();
+    if (!active || !isUnclaimedEnvironment(active)) return undefined;
+    if (!credentials?.clientId || !credentials.apiKey) return undefined;
+    if (active.clientId !== credentials.clientId || active.apiKey !== credentials.apiKey) return undefined;
+    const domain = active.authkitDomain ? ` (${active.authkitDomain})` : '';
+    return `Using a new WorkOS environment created for this install${domain}`;
+  }
+
+  private handleCredentialsFound = ({ source, credentials }: InstallerEvents['credentials:found']): void => {
+    const newEnvironment = this.newUnclaimedEnvironmentLine(credentials);
+    if (newEnvironment) {
+      ui.log.success(newEnvironment);
+      return;
+    }
+    // Only the env-file backfill can honestly name .env.local. For credentials
+    // the user passed as flags, the integration installer announces them
+    // itself — naming a file they may never have touched is the same
+    // wrong-provenance claim in the other direction.
+    if (source === 'cli') return;
     ui.log.success('Found existing WorkOS credentials in .env.local');
   };
 
@@ -350,6 +382,18 @@ export class CLIAdapter implements InstallerAdapter {
     );
     const label = active && suppliedCredentials ? profileEnvironmentLabel(active) : undefined;
     const named = label ? `${label} (${active!.name})` : undefined;
+
+    // An unclaimed environment can never satisfy the naming above, so it gets
+    // its own copy (see newUnclaimedEnvironmentLine). Reachable here when
+    // .env.local was not pre-populated and checkStoredAuth routed an already
+    // active unclaimed profile through staging resolution.
+    const newEnvironment = this.newUnclaimedEnvironmentLine(credentials);
+    if (newEnvironment) {
+      this.stopSpinner('Environment ready');
+      ui.log.success(newEnvironment);
+      return;
+    }
+
     if (source === 'device') {
       this.stopSpinner('Environment ready');
       ui.log.success(named ? `Set up environment: ${named}` : 'Set up a WorkOS environment for this install');
