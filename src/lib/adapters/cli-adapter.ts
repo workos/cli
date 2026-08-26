@@ -4,6 +4,7 @@ import { relative } from 'node:path';
 import ui, { PromptUnavailableError } from '../../utils/ui.js';
 import chalk from 'chalk';
 import { getConfig } from '../settings.js';
+import { getActiveEnvironment, profileEnvironmentLabel } from '../config-store.js';
 import { ProgressTracker } from '../progress-tracker.js';
 import { renderCompletionSummary, renderBrandMark } from '../../utils/summary-box.js';
 import { classifyAgentFailure, describeAgentFailure } from '../failure-classifier.js';
@@ -329,16 +330,35 @@ export class CLIAdapter implements InstallerAdapter {
     this.spinner.start('Fetching your WorkOS credentials...');
   };
 
-  private handleStagingSuccess = ({ source }: InstallerEvents['staging:success']): void => {
+  private handleStagingSuccess = ({ source, credentials }: InstallerEvents['staging:success']): void => {
+    // Name the environment when the profile has resolved one — "Using your
+    // active WorkOS environment" answers none of "which one?" (the question
+    // that started this: profiles like 'staging-3' are opaque labels).
+    //
+    // Only when the active profile actually supplied the credentials in use.
+    // Field presence is not enough: the credentials can come from a cached or
+    // freshly fetched staging pair while a complete profile sits active, and
+    // key-only projects are refused out of staging resolution entirely.
+    // Exact match or generic copy — a wrong name is worse than none.
+    const active = getActiveEnvironment();
+    const suppliedCredentials = Boolean(
+      active?.apiKey &&
+      active?.clientId &&
+      credentials &&
+      active.apiKey === credentials.apiKey &&
+      active.clientId === credentials.clientId,
+    );
+    const label = active && suppliedCredentials ? profileEnvironmentLabel(active) : undefined;
+    const named = label ? `${label} (${active!.name})` : undefined;
     if (source === 'device') {
       this.stopSpinner('Environment ready');
-      ui.log.success('Set up a WorkOS environment for this install');
+      ui.log.success(named ? `Set up environment: ${named}` : 'Set up a WorkOS environment for this install');
     } else if (source === 'stored') {
-      this.stopSpinner('Using active environment');
-      ui.log.success('Using your active WorkOS environment');
+      this.stopSpinner('Environment ready');
+      ui.log.success(named ? `Using environment: ${named}` : 'Using your active WorkOS environment');
     } else {
       this.stopSpinner('Environment ready');
-      ui.log.success('Using your WorkOS environment');
+      ui.log.success(named ? `Using environment: ${named}` : 'Using your WorkOS environment');
     }
   };
 

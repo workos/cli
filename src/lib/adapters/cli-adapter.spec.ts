@@ -31,6 +31,17 @@ vi.mock('../../utils/ui.js', () => ({
   },
 }));
 
+// The adapter names the environment when the active profile has resolved one;
+// default to no active profile so the fallback copy stays under test.
+const mockGetActiveEnvironment = vi.fn();
+vi.mock('../config-store.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../config-store.js')>();
+  return {
+    ...actual,
+    getActiveEnvironment: (...args: unknown[]) => mockGetActiveEnvironment(...args),
+  };
+});
+
 vi.mock('../settings.js', () => ({
   getConfig: vi.fn(() => ({
     branding: {
@@ -443,6 +454,74 @@ describe('CLIAdapter', () => {
       const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
       expect(calls).toContain('Using your active WorkOS environment');
       expect(calls.join('\n')).not.toMatch(/retrieved/i);
+    });
+
+    it('stored path names the environment when the profile supplied the credentials', async () => {
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'staging-3',
+        type: 'sandbox',
+        apiKey: 'sk_test_x',
+        clientId: 'client_x',
+        environmentName: 'Staging',
+        projectName: 'cli-branding-smoke',
+      });
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('staging:fetching', {});
+      emitter.emit('staging:success', { source: 'stored', credentials: { clientId: 'client_x', apiKey: 'sk_test_x' } });
+
+      const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls).toContain('Using environment: cli-branding-smoke > Staging (staging-3)');
+    });
+
+    it('stored path never names the profile for mixed project-key credentials', async () => {
+      // Defense in depth: if the credentials in use ever combine another
+      // source's client ID with a different API key (a project-kept key was
+      // the case that motivated this gate), the profile must not be named —
+      // the app's API calls target the key's environment, not the profile's.
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'staging-3',
+        type: 'sandbox',
+        apiKey: 'sk_test_x',
+        clientId: 'client_x',
+        environmentName: 'Staging',
+        projectName: 'cli-branding-smoke',
+      });
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('staging:fetching', {});
+      emitter.emit('staging:success', {
+        source: 'stored',
+        credentials: { clientId: 'client_x', apiKey: 'sk_test_project' },
+      });
+
+      const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls).toContain('Using your active WorkOS environment');
+      expect(calls.join('\n')).not.toContain('Using environment:');
+    });
+
+    it('stored path never names a profile that could not have supplied the credentials', async () => {
+      // No clientId: the credentials actor falls through to cached/fetched
+      // staging credentials, so naming this profile would label the wrong
+      // environment (see run-with-core.ts fetchStagingCredentials).
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'staging-3',
+        type: 'sandbox',
+        apiKey: 'sk_test_x',
+        environmentName: 'Staging',
+        projectName: 'cli-branding-smoke',
+      });
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('staging:fetching', {});
+      emitter.emit('staging:success', { source: 'stored' });
+
+      const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls).toContain('Using your active WorkOS environment');
+      expect(calls.join('\n')).not.toContain('Using environment:');
     });
   });
 });

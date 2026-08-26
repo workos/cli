@@ -9,13 +9,17 @@ const mockIsUnclaimedEnvironment = vi.fn();
 const mockGetConfig = vi.fn();
 const mockSetActiveEnvironment = vi.fn();
 const mockSaveConfig = vi.fn();
-vi.mock('./config-store.js', () => ({
-  getActiveEnvironment: (...args: unknown[]) => mockGetActiveEnvironment(...args),
-  isUnclaimedEnvironment: (...args: unknown[]) => mockIsUnclaimedEnvironment(...args),
-  getConfig: () => mockGetConfig(),
-  setActiveEnvironment: (...args: unknown[]) => mockSetActiveEnvironment(...args),
-  saveConfig: (...args: unknown[]) => mockSaveConfig(...args),
-}));
+vi.mock('./config-store.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./config-store.js')>();
+  return {
+    ...actual,
+    getActiveEnvironment: (...args: unknown[]) => mockGetActiveEnvironment(...args),
+    isUnclaimedEnvironment: (...args: unknown[]) => mockIsUnclaimedEnvironment(...args),
+    getConfig: () => mockGetConfig(),
+    setActiveEnvironment: (...args: unknown[]) => mockSetActiveEnvironment(...args),
+    saveConfig: (...args: unknown[]) => mockSaveConfig(...args),
+  };
+});
 
 // Mock credentials
 const mockGetAccessToken = vi.fn();
@@ -44,6 +48,7 @@ const CANCEL = Symbol('cancel');
 const mockSelect = vi.fn();
 const mockUi = {
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), step: vi.fn(), success: vi.fn(), hint: vi.fn() },
+  note: vi.fn(),
   select: (...args: unknown[]) => mockSelect(...args),
   isCancel: (value: unknown) => value === CANCEL,
 };
@@ -371,10 +376,13 @@ describe('resolveInstallCredentials', () => {
         initialValue: string;
       };
       expect(call.initialValue).toBe('staging-3');
-      expect(call.options.map((o) => o.label)).toEqual([
-        "staging — Nick's Team's Project > test12",
-        'staging-3 — cli-branding-smoke > Staging (active)',
-      ]);
+      // Environment-first labels, column-aligned, with the profile key and
+      // type dim in the metadata and the active row marked.
+      const labels = call.options.map((o) => o.label);
+      expect(labels[0]).toMatch(/^Nick's Team's Project > test12\s+staging · Sandbox$/);
+      expect(labels[1]).toMatch(/^cli-branding-smoke > Staging\s+staging-3 · Sandbox ● active$/);
+      // Framed intro line gives the prompt breathing room.
+      expect(mockUi.note).toHaveBeenCalledWith(expect.stringContaining('pick the one this app should call home'));
       expect(mockSetActiveEnvironment).toHaveBeenCalledWith('staging');
     });
 

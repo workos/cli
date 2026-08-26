@@ -167,7 +167,10 @@ export const installerMachine = setup({
       context.emitter.emit('staging:fetching', {});
     },
     emitStagingSuccess: ({ context }) => {
-      context.emitter.emit('staging:success', { source: context.deviceAuth ? 'device' : 'stored' });
+      context.emitter.emit('staging:success', {
+        source: context.deviceAuth ? 'device' : 'stored',
+        credentials: context.credentials,
+      });
     },
     emitStagingError: ({ context }) => {
       const message = context.error?.message ?? 'Failed to fetch staging credentials';

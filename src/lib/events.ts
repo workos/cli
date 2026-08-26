@@ -72,7 +72,7 @@ export interface InstallerEvents {
   'device:error': { message: string };
   // Staging API events
   'staging:fetching': Record<string, never>;
-  'staging:success': { source?: 'device' | 'stored' };
+  'staging:success': { source?: 'device' | 'stored'; credentials?: { clientId: string; apiKey?: string } };
   'staging:error': { message: string; statusCode?: number };
   'config:start': Record<string, never>;
   'config:complete': Record<string, never>;
