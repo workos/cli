@@ -46,15 +46,29 @@ async function maybePickInstallEnvironment(
 
   const ui = (await import('../utils/ui.js')).default;
   const { ExitCode, exitWithCode } = await import('../utils/exit-codes.js');
+  const chalk = (await import('chalk')).default;
+
+  // Lead with the environment (the thing being chosen); the profile key is
+  // bookkeeping and rides dim in the metadata. Labels are column-aligned —
+  // padEnd runs on the PLAIN name before any color, so ANSI codes never
+  // skew the columns (see the env-list alignment bug).
+  const displayFor = (key: string, env: EnvironmentConfig): string => profileEnvironmentLabel(env) ?? key;
+  const nameW = Math.max(...candidates.map(([key, env]) => displayFor(key, env).length));
+
+  ui.note(
+    `This machine knows ${candidates.length} WorkOS environments — pick the one this app should call home.`,
+  );
 
   const choice = await ui.select({
     message: 'Which WorkOS environment should this install use?',
     options: candidates.map(([key, env]) => {
-      const dashboardName = profileEnvironmentLabel(env);
-      let label = dashboardName ? `${key} — ${dashboardName}` : key;
-      if (key === config.activeEnvironment) label += ' (active)';
-      const hint = env.type === 'sandbox' ? 'Sandbox' : env.type === 'unclaimed' ? 'Unclaimed' : 'Production';
-      return { value: key, label, hint };
+      const display = displayFor(key, env);
+      const type = env.type === 'sandbox' ? 'Sandbox' : env.type === 'unclaimed' ? 'Unclaimed' : 'Production';
+      // Only show the profile key when it isn't already the display name.
+      const meta = [display === key ? null : key, type].filter(Boolean).join(' · ');
+      let label = `${display.padEnd(nameW)}  ${chalk.dim(meta)}`;
+      if (key === config.activeEnvironment) label += ` ${chalk.green('● active')}`;
+      return { value: key, label };
     }),
     initialValue: config.activeEnvironment,
   });
