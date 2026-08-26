@@ -17,13 +17,24 @@ import type { EnvironmentConfig } from './config-store.js';
  * target, and installs write the chosen credentials into the project.
  *
  * Never prompts for: explicit keys (handled before this runs), non-interactive
- * modes, or configs with fewer than two keyed profiles. Choosing persists via
- * setActiveEnvironment so the installer and every later command agree; cancel
- * cancels the install (exit 2), matching the installer's other prompts.
+ * modes (including --json on a TTY — ui.select would throw), projects that
+ * already carry their own WORKOS_API_KEY (the no-clobber path keeps the
+ * project's key; prompting would convert it into an overwrite with a picked
+ * profile's key), or configs with fewer than two keyed profiles. Choosing
+ * persists via setActiveEnvironment so the installer and every later command
+ * agree; cancel cancels the install (exit 2), matching the installer's other
+ * prompts.
  */
-async function maybePickInstallEnvironment(activeEnv: EnvironmentConfig | null): Promise<EnvironmentConfig | null> {
+async function maybePickInstallEnvironment(
+  activeEnv: EnvironmentConfig | null,
+  installDir: string,
+): Promise<EnvironmentConfig | null> {
   const { isPromptAllowed } = await import('../utils/interaction-mode.js');
-  if (!isPromptAllowed()) return activeEnv;
+  const { isJsonMode } = await import('../utils/output.js');
+  if (!isPromptAllowed() || isJsonMode()) return activeEnv;
+
+  const { readProjectEnvCredentials } = await import('./project-env.js');
+  if (readProjectEnvCredentials(installDir).apiKey) return activeEnv;
 
   const { getConfig, getActiveEnvironment, setActiveEnvironment } = await import('./config-store.js');
   const config = getConfig();
@@ -68,7 +79,7 @@ export async function resolveInstallCredentials(
   try {
     const { getActiveEnvironment, isUnclaimedEnvironment } = await import('./config-store.js');
     const { getAccessToken } = await import('./credentials.js');
-    const activeEnv = await maybePickInstallEnvironment(getActiveEnvironment());
+    const activeEnv = await maybePickInstallEnvironment(getActiveEnvironment(), installDir ?? process.cwd());
 
     if (activeEnv?.apiKey) {
       // Has API key — but does it have gateway auth?

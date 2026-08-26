@@ -398,6 +398,27 @@ describe('resolveInstallCredentials', () => {
       }
     });
 
+    it('never prompts in JSON mode, even on a TTY', async () => {
+      mockGetConfig.mockReturnValue(twoProfiles);
+      setOutputMode('json');
+
+      await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+
+      expect(mockSelect).not.toHaveBeenCalled();
+    });
+
+    it('never prompts when the project already carries WORKOS_API_KEY', async () => {
+      // The no-clobber contract: a project key is kept, so offering a profile
+      // pick here would set up an overwrite with a different environment's key.
+      writeFileSync(join(emptyCwd, '.env'), 'WORKOS_API_KEY=sk_project\n');
+      mockGetConfig.mockReturnValue(twoProfiles);
+
+      await resolveInstallCredentials(undefined, undefined, undefined, mockAuthenticate);
+
+      expect(mockSelect).not.toHaveBeenCalled();
+      expect(mockSetActiveEnvironment).not.toHaveBeenCalled();
+    });
+
     it('cancel cancels the install (exit 2)', async () => {
       mockGetConfig.mockReturnValue(twoProfiles);
       mockSelect.mockResolvedValue(CANCEL);
