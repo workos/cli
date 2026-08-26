@@ -68,24 +68,33 @@ export async function maybePickInstallEnvironment(
   // session, and invalid_grant clears the credential store. An expired
   // session just degrades to the local-only picker; the machine's auth check
   // re-authenticates later.
+  const discovery = new AbortController();
   const discoverTeam = async (): Promise<TeamEnvironment[]> => {
     try {
       const { getCredentials, isTokenExpired } = await import('./credentials.js');
       const creds = getCredentials();
       if (!creds || isTokenExpired(creds)) return [];
       const { fetchTeamEnvironments } = await import('./environment-target.js');
-      return await fetchTeamEnvironments(creds.accessToken);
+      return await fetchTeamEnvironments(creds.accessToken, discovery.signal);
     } catch {
       return []; // Offline / logged out / flag-gated — the local-only picker still works.
     }
   };
+  // A lost race must also CANCEL the request: an abandoned fetch keeps its
+  // socket and abort timer alive, and CLI exit waits on the event loop
+  // draining — otherwise a quick install lingers until the transport timeout.
+  let discoveryTimer: ReturnType<typeof setTimeout> | undefined;
   const teamEnvironments = await Promise.race([
     discoverTeam(),
     new Promise<TeamEnvironment[]>((resolve) => {
-      const timer = setTimeout(() => resolve([]), TEAM_DISCOVERY_TIMEOUT_MS);
-      timer.unref?.();
+      discoveryTimer = setTimeout(() => {
+        discovery.abort();
+        resolve([]);
+      }, TEAM_DISCOVERY_TIMEOUT_MS);
+      discoveryTimer.unref?.();
     }),
   ]);
+  clearTimeout(discoveryTimer);
 
   const keyedClientIds = new Set(candidates.map(([, env]) => env.clientId).filter(Boolean));
   const keyedEnvironmentIds = new Set(candidates.map(([, env]) => env.environmentId).filter(Boolean));
