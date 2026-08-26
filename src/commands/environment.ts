@@ -18,6 +18,7 @@ import { runEnvScopedOperation, runTeamScopedOperation } from '../lib/dashboard-
 import { requireCommandToken } from '../lib/command-auth.js';
 import {
   fetchTeamEnvironments,
+  formatEnvironmentLabel,
   healProfiles,
   promptForEnvironment,
   type TeamEnvironment,
@@ -142,12 +143,13 @@ export async function runEnvironmentUse(environmentIdArg?: string): Promise<void
   }
 
   const chosen = environments.find((env) => env.id === targetId);
-  setProfileEnvironmentId(activeName, chosen!.id, chosen!.name);
+  setProfileEnvironmentId(activeName, chosen!.id, chosen!.name, chosen!.projectName);
 
-  outputSuccess(`Active profile ${chalk.bold(activeName)} now targets ${chalk.bold(chosen!.name ?? chosen!.id)}`, {
+  outputSuccess(`Active profile ${chalk.bold(activeName)} now targets ${chalk.bold(formatEnvironmentLabel(chosen!))}`, {
     profile: activeName,
     environmentId: chosen!.id,
     environmentName: chosen!.name ?? null,
+    projectName: chosen!.projectName ?? null,
   });
 }
 

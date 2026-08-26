@@ -31,6 +31,12 @@ interface BaseEnvironmentConfig {
    * Refreshed by the same resolution paths that maintain `environmentId`.
    */
   environmentName?: string;
+  /**
+   * The owning project's name, captured with `environmentName`. Environment
+   * names are only unique per project, so display paths prefix this to
+   * disambiguate (e.g. "My Project > Staging").
+   */
+  projectName?: string;
 }
 
 export interface ClaimedEnvironmentConfig extends BaseEnvironmentConfig {
@@ -108,14 +114,21 @@ export function setActiveEnvironment(name: string): void {
  * and opportunistic healing). No-op when the profile does not exist or already
  * stores the same ID — healing must never churn the keyring with no-op writes.
  */
-export function setProfileEnvironmentId(envKey: string, environmentId: string, environmentName?: string | null): void {
+export function setProfileEnvironmentId(
+  envKey: string,
+  environmentId: string,
+  environmentName?: string | null,
+  projectName?: string | null,
+): void {
   const config = getConfig();
   const profile = config?.environments[envKey];
   if (!config || !profile) return;
   const nameUnchanged = environmentName === undefined || profile.environmentName === (environmentName ?? undefined);
-  if (profile.environmentId === environmentId && nameUnchanged) return;
+  const projectUnchanged = projectName === undefined || profile.projectName === (projectName ?? undefined);
+  if (profile.environmentId === environmentId && nameUnchanged && projectUnchanged) return;
   profile.environmentId = environmentId;
   if (environmentName !== undefined) profile.environmentName = environmentName ?? undefined;
+  if (projectName !== undefined) profile.projectName = projectName ?? undefined;
   saveConfig(config);
 }
 
@@ -196,6 +209,7 @@ export function markEnvironmentClaimed(): void {
       ...(env.ownerUserId && { ownerUserId: env.ownerUserId }),
       ...(env.environmentId && { environmentId: env.environmentId }),
       ...(env.environmentName && { environmentName: env.environmentName }),
+      ...(env.projectName && { projectName: env.projectName }),
     };
 
     if (oldKey !== newKey) {

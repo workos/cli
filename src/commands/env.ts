@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import ui from '../utils/ui.js';
 import { getConfig, saveConfig, isUnclaimedEnvironment, freshEnvKey } from '../lib/config-store.js';
-import type { CliConfig } from '../lib/config-store.js';
+import type { CliConfig, EnvironmentConfig } from '../lib/config-store.js';
 import { getApiBaseUrlSource } from '../lib/api-key.js';
 import { outputSuccess, outputJson, exitWithError, isJsonMode } from '../utils/output.js';
 import { isAgentMode, isCiMode, isPromptAllowed } from '../utils/interaction-mode.js';
@@ -16,6 +16,16 @@ import {
 import { tryResolveProfileEnvironmentId } from '../lib/environment-target.js';
 
 const ENV_NAME_REGEX = /^[a-z0-9\-_]+$/;
+
+/**
+ * "Project > Environment" display label for a profile's resolved dashboard
+ * environment (names are only unique per project), or undefined when the
+ * profile has no resolved name.
+ */
+function profileEnvironmentLabel(env: EnvironmentConfig): string | undefined {
+  if (!env.environmentName) return undefined;
+  return env.projectName ? `${env.projectName} > ${env.environmentName}` : env.environmentName;
+}
 
 function validateEnvName(name: string | undefined): string | undefined {
   if (!name || !ENV_NAME_REGEX.test(name)) {
@@ -266,7 +276,7 @@ export async function runEnvSwitch(name?: string): Promise<void> {
       if (env.type === 'sandbox') label += ` [Sandbox]`;
       if (env.endpoint) label += ` [${env.endpoint}]`;
       if (key === config.activeEnvironment) label += chalk.green(' (active)');
-      const environment = env.environmentName ?? env.environmentId;
+      const environment = profileEnvironmentLabel(env) ?? env.environmentId;
       return { value: key, label, ...(environment && { hint: environment }) };
     });
 
@@ -329,6 +339,7 @@ export async function runEnvList(): Promise<void> {
       hasClientId: !!env.clientId,
       environmentId: env.environmentId ?? null,
       environmentName: env.environmentName ?? null,
+      projectName: env.projectName ?? null,
     }));
     outputJson({ data, override });
     return;
@@ -369,7 +380,7 @@ export async function runEnvList(): Promise<void> {
     const endpoint = env.endpoint ? endpointRaw : chalk.dim(endpointRaw);
     // Name-first: the dashboard name is what users recognize; fall back to
     // the raw ID for profiles resolved before names were stored.
-    const environment = env.environmentName ?? env.environmentId ?? chalk.dim('—');
+    const environment = profileEnvironmentLabel(env) ?? env.environmentId ?? chalk.dim('—');
 
     console.log([marker, name, type.padEnd(typeW), endpoint, environment].join('  '));
   }

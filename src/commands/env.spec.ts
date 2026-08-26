@@ -343,13 +343,15 @@ describe('env commands', () => {
       const config = getConfig()!;
       config.environments.prod.environmentId = 'environment_123';
       config.environments.prod.environmentName = 'Production';
+      config.environments.prod.projectName = 'My Project';
       config.environments.legacy.environmentId = 'environment_456';
       saveConfig(config);
       const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
       await runEnvList();
       const lines = logSpy.mock.calls.map((c) => c.map(String).join(' '));
       expect(lines.some((l) => l.includes('Environment'))).toBe(true);
-      expect(lines.some((l) => l.includes('prod') && l.includes('Production'))).toBe(true);
+      // Project-prefixed: environment names are only unique per project.
+      expect(lines.some((l) => l.includes('prod') && l.includes('My Project > Production'))).toBe(true);
       expect(lines.some((l) => l.includes('legacy') && l.includes('environment_456'))).toBe(true);
       logSpy.mockRestore();
     });
@@ -592,17 +594,19 @@ describe('env commands', () => {
       expect(output.data[0].environmentName).toBeNull();
     });
 
-    it('runEnvList includes the stored environmentId and environmentName per profile', async () => {
+    it('runEnvList includes the stored environmentId, environmentName, and projectName per profile', async () => {
       await runEnvAdd({ name: 'prod', apiKey: 'sk_live_abc' });
       const config = getConfig()!;
       config.environments.prod.environmentId = 'environment_123';
       config.environments.prod.environmentName = 'Production';
+      config.environments.prod.projectName = 'My Project';
       saveConfig(config);
       consoleOutput = [];
       await runEnvList();
       const output = JSON.parse(consoleOutput[0]);
       expect(output.data[0].environmentId).toBe('environment_123');
       expect(output.data[0].environmentName).toBe('Production');
+      expect(output.data[0].projectName).toBe('My Project');
     });
 
     it('runEnvList outputs empty data array when no environments', async () => {

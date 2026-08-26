@@ -50,17 +50,23 @@ vi.mock('node:os', async (importOriginal) => {
 });
 
 const { getConfig, saveConfig, setInsecureConfigStorage, clearConfig } = await import('./config-store.js');
-const { resolveEnvironmentTarget, tryResolveProfileEnvironmentId } = await import('./environment-target.js');
+const { resolveEnvironmentTarget, tryResolveProfileEnvironmentId, formatEnvironmentLabel } =
+  await import('./environment-target.js');
 const { DashboardGraphqlError } = await import('./dashboard-graphql.js');
 const { setInteractionMode, resetInteractionModeForTests } = await import('../utils/interaction-mode.js');
 const { CliExit } = await import('../utils/cli-exit.js');
 const ui = (await import('../utils/ui.js')).default;
 
 /** teamProjectsV2 response with the given environments spread over projects. */
-function teamData(environments: Array<{ id: string; name?: string; clientId?: string; sandbox?: boolean }>) {
+function teamData(
+  environments: Array<{ id: string; name?: string; clientId?: string; sandbox?: boolean }>,
+  projectName: string | null = null,
+) {
   return {
     currentTeam: {
-      projectsV2: [{ environments: environments.map((env) => ({ name: env.id, sandbox: false, ...env })) }],
+      projectsV2: [
+        { name: projectName, environments: environments.map((env) => ({ name: env.id, sandbox: false, ...env })) },
+      ],
     },
   };
 }
@@ -407,5 +413,35 @@ describe('tryResolveProfileEnvironmentId', () => {
   it('reports false for a missing profile key', async () => {
     await expect(tryResolveProfileEnvironmentId('missing')).resolves.toBe(false);
     expect(mockGraphqlRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe('project-name mapping (fetchTeamEnvironments → profile)', () => {
+  it('copies the GraphQL project name onto environments and persists it through healing', async () => {
+    seedProfile({ clientId: 'client_abc' });
+    mockGraphqlRequest.mockResolvedValue(
+      teamData([{ id: 'env_joined', name: 'Staging', clientId: 'client_abc' }], 'My Project'),
+    );
+    await expect(tryResolveProfileEnvironmentId('staging')).resolves.toBe(true);
+    const profile = getConfig()?.environments.staging;
+    expect(profile?.environmentId).toBe('env_joined');
+    expect(profile?.environmentName).toBe('Staging');
+    // The mapping under test: fetchTeamEnvironments must copy the owning
+    // project's name onto each environment — the formatter tests alone
+    // cannot catch a regression here.
+    expect(profile?.projectName).toBe('My Project');
+  });
+});
+
+describe('formatEnvironmentLabel', () => {
+  it('prefixes the project name — environment names are only unique per project', () => {
+    expect(formatEnvironmentLabel({ id: 'env_1', name: 'Staging', projectName: 'My Project' })).toBe(
+      'My Project > Staging',
+    );
+  });
+
+  it('falls back to the bare name, then the id', () => {
+    expect(formatEnvironmentLabel({ id: 'env_1', name: 'Staging', projectName: null })).toBe('Staging');
+    expect(formatEnvironmentLabel({ id: 'env_1', name: null, projectName: null })).toBe('env_1');
   });
 });
