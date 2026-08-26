@@ -36,9 +36,8 @@ async function maybePickInstallEnvironment(
   const { readProjectEnvCredentials } = await import('./project-env.js');
   if (readProjectEnvCredentials(installDir).apiKey) return activeEnv;
 
-  const { getConfig, getActiveEnvironment, setActiveEnvironment, profileEnvironmentLabel } = await import(
-    './config-store.js'
-  );
+  const { getConfig, getActiveEnvironment, setActiveEnvironment, profileEnvironmentLabel } =
+    await import('./config-store.js');
   const config = getConfig();
   if (!config) return activeEnv;
   const candidates = Object.entries(config.environments).filter(([, env]) => env.apiKey);
@@ -55,9 +54,7 @@ async function maybePickInstallEnvironment(
   const displayFor = (key: string, env: EnvironmentConfig): string => profileEnvironmentLabel(env) ?? key;
   const nameW = Math.max(...candidates.map(([key, env]) => displayFor(key, env).length));
 
-  ui.note(
-    `This machine knows ${candidates.length} WorkOS environments — pick the one this app should call home.`,
-  );
+  ui.note(`This machine knows ${candidates.length} WorkOS environments — pick the one this app should call home.`);
 
   const choice = await ui.select({
     message: 'Which WorkOS environment should this install use?',

@@ -334,8 +334,15 @@ export class CLIAdapter implements InstallerAdapter {
     // Name the environment when the profile has resolved one — "Using your
     // active WorkOS environment" answers none of "which one?" (the question
     // that started this: profiles like 'staging-3' are opaque labels).
+    //
+    // Only when the active profile actually supplied the credentials: the
+    // fetchStagingCredentials actor (run-with-core.ts) uses the profile only
+    // when it has BOTH apiKey and clientId, otherwise it falls through to
+    // cached/fetched staging credentials — naming the profile then would
+    // report a different environment than the one being configured.
     const active = getActiveEnvironment();
-    const label = active ? profileEnvironmentLabel(active) : undefined;
+    const suppliedCredentials = Boolean(active?.apiKey && active?.clientId);
+    const label = active && suppliedCredentials ? profileEnvironmentLabel(active) : undefined;
     const named = label ? `${label} (${active!.name})` : undefined;
     if (source === 'device') {
       this.stopSpinner('Environment ready');
