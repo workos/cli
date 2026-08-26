@@ -492,7 +492,10 @@ describe('CLIAdapter', () => {
       const ui = await import('../../utils/ui.js');
 
       emitter.emit('staging:fetching', {});
-      emitter.emit('staging:success', { source: 'stored', credentials: { clientId: 'client_x', apiKey: 'sk_test_project' } });
+      emitter.emit('staging:success', {
+        source: 'stored',
+        credentials: { clientId: 'client_x', apiKey: 'sk_test_project' },
+      });
 
       const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
       expect(calls).toContain('Using your active WorkOS environment');

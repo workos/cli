@@ -343,10 +343,10 @@ export class CLIAdapter implements InstallerAdapter {
     const active = getActiveEnvironment();
     const suppliedCredentials = Boolean(
       active?.apiKey &&
-        active?.clientId &&
-        credentials &&
-        active.apiKey === credentials.apiKey &&
-        active.clientId === credentials.clientId,
+      active?.clientId &&
+      credentials &&
+      active.apiKey === credentials.apiKey &&
+      active.clientId === credentials.clientId,
     );
     const label = active && suppliedCredentials ? profileEnvironmentLabel(active) : undefined;
     const named = label ? `${label} (${active!.name})` : undefined;
