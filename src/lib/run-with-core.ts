@@ -172,10 +172,18 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   analytics.setGatewayUrl(gatewayUrl);
 
   const existingCreds = readProjectEnvCredentials(options.installDir);
+  // Either credential arriving from the project's env file rather than from the
+  // user makes this an 'env' resolution, not 'cli'. This backfill is the path a
+  // freshly provisioned unclaimed environment takes — provisioning writes
+  // .env.local before the machine starts — so mislabeling it as 'cli' is what
+  // made the installer claim credentials the user had never provided.
+  const backfilledFromProjectEnv =
+    (!options.apiKey && Boolean(existingCreds.apiKey)) || (!options.clientId && Boolean(existingCreds.clientId));
   const augmentedOptions: InstallerOptions = {
     ...options,
     apiKey: options.apiKey || existingCreds.apiKey,
     clientId: options.clientId || existingCreds.clientId,
+    credentialSource: backfilledFromProjectEnv ? 'env' : options.credentialSource,
   };
 
   const emitter = createInstallerEventEmitter();
@@ -346,13 +354,28 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
 
       buildCompletion: fromPromise<CompletionData | undefined, { context: InstallerMachineContext }>(
         async ({ input }) => {
-          const { integration, changedFiles, options: installerOptions } = input.context;
+          const { integration, changedFiles, options: installerOptions, credentials } = input.context;
           if (!integration) return undefined;
           try {
             const registry = await getRegistry();
             const mod = registry.get(integration);
             const cfg = mod?.config;
             const settings = getInstallerSettings();
+            // Read the config now, at the end of the install, not from a value
+            // captured earlier: the environment can be claimed mid-install (the
+            // browser claim CTA), and a claimed environment must not be told to
+            // claim itself. Exact credential match is required — a leftover
+            // unclaimed profile can sit active while this install used the
+            // project's own keys, and pointing that user at `claim` would name
+            // an environment their app never touched.
+            const activeEnv = getActiveEnvironment();
+            const usedUnclaimedEnv = Boolean(
+              activeEnv &&
+              isUnclaimedEnvironment(activeEnv) &&
+              credentials &&
+              activeEnv.apiKey === credentials.apiKey &&
+              activeEnv.clientId === credentials.clientId,
+            );
             return await buildCompletionData(
               { integration, changedFiles, installDir: installerOptions.installDir },
               {
@@ -362,6 +385,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
                 dashboardUrl: settings.documentation.dashboardUrl,
                 frameworkNextSteps: cfg?.ui.getOutroNextSteps?.({}) ?? [],
                 signInSnippet: cfg?.ui.getSignInSnippet?.({}),
+                claimCommand: usedUnclaimedEnv ? formatWorkOSCommand('profile claim') : undefined,
               },
             );
           } catch {

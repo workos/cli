@@ -24,6 +24,12 @@ export interface CompletionDataDeps {
   frameworkNextSteps?: string[];
   /** Per-framework "add a sign-in link" snippet */
   signInSnippet?: string;
+  /**
+   * Claim command for an unclaimed environment this install actually used
+   * (e.g. `workos profile claim`), or undefined for a claimed environment.
+   * Resolved by the caller, which owns the config lookup.
+   */
+  claimCommand?: string;
 }
 
 /**
@@ -49,12 +55,20 @@ export async function buildCompletionData(ctx: CompletionContext, deps: Completi
   // above already names the exact lockfile-aware command.
   const framework = (deps.frameworkNextSteps ?? []).filter((s) => !/start .*dev(elopment)? server/i.test(s));
 
+  // An unclaimed environment's credentials live only on this machine, so a
+  // missed claim loses the environment for good — it leads the next steps for
+  // that reason, and because the provision-time notice is printed before
+  // scaffolding and the agent run, minutes of output before the install ends.
+  const claim = deps.claimCommand
+    ? [`Run \`${deps.claimCommand}\` to link this environment to your WorkOS account`]
+    : [];
+
   return {
     integration: ctx.integration,
     devCommand,
     url,
     files,
-    nextSteps: [...concrete, ...framework],
+    nextSteps: [...claim, ...concrete, ...framework],
     docsUrl: deps.docsUrl,
     dashboardUrl: deps.dashboardUrl,
     signInSnippet: deps.signInSnippet,

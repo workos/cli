@@ -37,6 +37,15 @@ interface BaseEnvironmentConfig {
    * disambiguate (e.g. "My Project > Staging").
    */
   projectName?: string;
+  /**
+   * The environment's AuthKit domain (e.g. `witty-rest-53.authkit.app`).
+   *
+   * The only human-recognizable identifier an unclaimed environment has:
+   * provisioning returns no `environmentId` or `environmentName`, so display
+   * paths that rely on `profileEnvironmentLabel` have nothing to print for a
+   * freshly provisioned environment. Cosmetic — never an identity key.
+   */
+  authkitDomain?: string;
 }
 
 export interface ClaimedEnvironmentConfig extends BaseEnvironmentConfig {

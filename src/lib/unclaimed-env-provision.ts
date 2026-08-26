@@ -80,6 +80,11 @@ export async function tryProvisionUnclaimedEnv(options: UnclaimedEnvProvisionOpt
       apiKey: result.apiKey,
       clientId: result.clientId,
       claimToken: result.claimToken,
+      // Provisioning returns no environmentId/environmentName, so without this
+      // the environment has no printable name and every status line degrades to
+      // "your active WorkOS environment" — the ambiguity that sends people to
+      // the dashboard to check whether the CLI reused their existing env.
+      authkitDomain: result.authkitDomain,
     };
     config.activeEnvironment = key;
     saveConfig(config);
