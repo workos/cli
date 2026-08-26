@@ -4,6 +4,7 @@ import { relative } from 'node:path';
 import ui, { PromptUnavailableError } from '../../utils/ui.js';
 import chalk from 'chalk';
 import { getConfig } from '../settings.js';
+import { getActiveEnvironment, profileEnvironmentLabel } from '../config-store.js';
 import { ProgressTracker } from '../progress-tracker.js';
 import { renderCompletionSummary, renderBrandMark } from '../../utils/summary-box.js';
 import { classifyAgentFailure, describeAgentFailure } from '../failure-classifier.js';
@@ -330,15 +331,21 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handleStagingSuccess = ({ source }: InstallerEvents['staging:success']): void => {
+    // Name the environment when the profile has resolved one — "Using your
+    // active WorkOS environment" answers none of "which one?" (the question
+    // that started this: profiles like 'staging-3' are opaque labels).
+    const active = getActiveEnvironment();
+    const label = active ? profileEnvironmentLabel(active) : undefined;
+    const named = label ? `${label} (${active!.name})` : undefined;
     if (source === 'device') {
       this.stopSpinner('Environment ready');
-      ui.log.success('Set up a WorkOS environment for this install');
+      ui.log.success(named ? `Set up environment: ${named}` : 'Set up a WorkOS environment for this install');
     } else if (source === 'stored') {
-      this.stopSpinner('Using active environment');
-      ui.log.success('Using your active WorkOS environment');
+      this.stopSpinner('Environment ready');
+      ui.log.success(named ? `Using environment: ${named}` : 'Using your active WorkOS environment');
     } else {
       this.stopSpinner('Environment ready');
-      ui.log.success('Using your WorkOS environment');
+      ui.log.success(named ? `Using environment: ${named}` : 'Using your WorkOS environment');
     }
   };
 

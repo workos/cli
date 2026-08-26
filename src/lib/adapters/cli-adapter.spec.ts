@@ -31,6 +31,17 @@ vi.mock('../../utils/ui.js', () => ({
   },
 }));
 
+// The adapter names the environment when the active profile has resolved one;
+// default to no active profile so the fallback copy stays under test.
+const mockGetActiveEnvironment = vi.fn();
+vi.mock('../config-store.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../config-store.js')>();
+  return {
+    ...actual,
+    getActiveEnvironment: (...args: unknown[]) => mockGetActiveEnvironment(...args),
+  };
+});
+
 vi.mock('../settings.js', () => ({
   getConfig: vi.fn(() => ({
     branding: {
@@ -443,6 +454,24 @@ describe('CLIAdapter', () => {
       const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
       expect(calls).toContain('Using your active WorkOS environment');
       expect(calls.join('\n')).not.toMatch(/retrieved/i);
+    });
+
+    it('stored path names the environment when the profile has resolved one', async () => {
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'staging-3',
+        type: 'sandbox',
+        apiKey: 'sk_test_x',
+        environmentName: 'Staging',
+        projectName: 'cli-branding-smoke',
+      });
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('staging:fetching', {});
+      emitter.emit('staging:success', { source: 'stored' });
+
+      const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls).toContain('Using environment: cli-branding-smoke > Staging (staging-3)');
     });
   });
 });

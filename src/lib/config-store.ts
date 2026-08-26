@@ -132,6 +132,21 @@ export function setProfileEnvironmentId(
   saveConfig(config);
 }
 
+/**
+ * Human-readable label for the dashboard environment a profile targets:
+ * "Project > Environment" when both are known (environment names are only
+ * unique per project), the bare name, the raw ID, or undefined when the
+ * profile has never resolved. Shared by every surface that prints a
+ * profile's environment (profile list/switch, install picker, installer
+ * status lines).
+ */
+export function profileEnvironmentLabel(env: EnvironmentConfig): string | undefined {
+  if (env.environmentName) {
+    return env.projectName ? `${env.projectName} > ${env.environmentName}` : env.environmentName;
+  }
+  return env.environmentId;
+}
+
 /** Pick a non-colliding environments key: `base`, else `base-2`, `base-3`, … */
 export function freshEnvKey(config: CliConfig, base: string): string {
   if (!config.environments[base]) return base;

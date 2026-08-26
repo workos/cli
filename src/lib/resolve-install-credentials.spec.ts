@@ -9,13 +9,17 @@ const mockIsUnclaimedEnvironment = vi.fn();
 const mockGetConfig = vi.fn();
 const mockSetActiveEnvironment = vi.fn();
 const mockSaveConfig = vi.fn();
-vi.mock('./config-store.js', () => ({
-  getActiveEnvironment: (...args: unknown[]) => mockGetActiveEnvironment(...args),
-  isUnclaimedEnvironment: (...args: unknown[]) => mockIsUnclaimedEnvironment(...args),
-  getConfig: () => mockGetConfig(),
-  setActiveEnvironment: (...args: unknown[]) => mockSetActiveEnvironment(...args),
-  saveConfig: (...args: unknown[]) => mockSaveConfig(...args),
-}));
+vi.mock('./config-store.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./config-store.js')>();
+  return {
+    ...actual,
+    getActiveEnvironment: (...args: unknown[]) => mockGetActiveEnvironment(...args),
+    isUnclaimedEnvironment: (...args: unknown[]) => mockIsUnclaimedEnvironment(...args),
+    getConfig: () => mockGetConfig(),
+    setActiveEnvironment: (...args: unknown[]) => mockSetActiveEnvironment(...args),
+    saveConfig: (...args: unknown[]) => mockSaveConfig(...args),
+  };
+});
 
 // Mock credentials
 const mockGetAccessToken = vi.fn();

@@ -36,7 +36,9 @@ async function maybePickInstallEnvironment(
   const { readProjectEnvCredentials } = await import('./project-env.js');
   if (readProjectEnvCredentials(installDir).apiKey) return activeEnv;
 
-  const { getConfig, getActiveEnvironment, setActiveEnvironment } = await import('./config-store.js');
+  const { getConfig, getActiveEnvironment, setActiveEnvironment, profileEnvironmentLabel } = await import(
+    './config-store.js'
+  );
   const config = getConfig();
   if (!config) return activeEnv;
   const candidates = Object.entries(config.environments).filter(([, env]) => env.apiKey);
@@ -48,11 +50,7 @@ async function maybePickInstallEnvironment(
   const choice = await ui.select({
     message: 'Which WorkOS environment should this install use?',
     options: candidates.map(([key, env]) => {
-      const dashboardName = env.environmentName
-        ? env.projectName
-          ? `${env.projectName} > ${env.environmentName}`
-          : env.environmentName
-        : env.environmentId;
+      const dashboardName = profileEnvironmentLabel(env);
       let label = dashboardName ? `${key} — ${dashboardName}` : key;
       if (key === config.activeEnvironment) label += ' (active)';
       const hint = env.type === 'sandbox' ? 'Sandbox' : env.type === 'unclaimed' ? 'Unclaimed' : 'Production';
