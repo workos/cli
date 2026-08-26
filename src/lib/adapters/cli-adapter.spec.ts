@@ -476,10 +476,10 @@ describe('CLIAdapter', () => {
     });
 
     it('stored path never names the profile for mixed project-key credentials', async () => {
-      // resolveStagingCredentials keeps a project-owned WORKOS_API_KEY and
-      // pairs it with the active profile's client ID — the profile is
-      // complete, but the app's API calls target the project's environment,
-      // so naming the profile would label the wrong one.
+      // Defense in depth: if the credentials in use ever combine another
+      // source's client ID with a different API key (a project-kept key was
+      // the case that motivated this gate), the profile must not be named —
+      // the app's API calls target the key's environment, not the profile's.
       mockGetActiveEnvironment.mockReturnValue({
         name: 'staging-3',
         type: 'sandbox',

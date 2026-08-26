@@ -336,11 +336,10 @@ export class CLIAdapter implements InstallerAdapter {
     // that started this: profiles like 'staging-3' are opaque labels).
     //
     // Only when the active profile actually supplied the credentials in use.
-    // Field presence is not enough: resolveStagingCredentials keeps a
-    // project-owned WORKOS_API_KEY and pairs it with the profile's client ID,
-    // so the profile can be complete while the app's API calls still target
-    // the PROJECT's environment. Exact match or generic copy — a wrong name
-    // is worse than none.
+    // Field presence is not enough: the credentials can come from a cached or
+    // freshly fetched staging pair while a complete profile sits active, and
+    // key-only projects are refused out of staging resolution entirely.
+    // Exact match or generic copy — a wrong name is worse than none.
     const active = getActiveEnvironment();
     const suppliedCredentials = Boolean(
       active?.apiKey &&
