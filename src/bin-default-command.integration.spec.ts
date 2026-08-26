@@ -99,7 +99,8 @@ describe('bin $0 default command (non-TTY)', () => {
 
     const combined = `${result.stdout}\n${result.stderr}`;
     // parser.showHelp() (not the fresh-yargs block) lists the full command set.
-    expect(combined).toMatch(/install/);
+    expect(combined).toContain('workos install');
+    expect(combined).toContain('[aliases: integrate]');
     expect(combined).toMatch(/organization/);
     expect(combined).toMatch(/auth/);
   }, 20_000);

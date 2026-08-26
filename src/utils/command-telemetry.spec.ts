@@ -5,6 +5,7 @@ describe('command-telemetry', () => {
   describe('resolveCanonicalName', () => {
     it('resolves aliased commands', () => {
       expect(resolveCanonicalName(['org', 'list'])).toBe('organization.list');
+      expect(resolveCanonicalName(['integrate'])).toBe('install');
     });
 
     it('passes through non-aliased commands', () => {

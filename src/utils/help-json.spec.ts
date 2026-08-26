@@ -27,6 +27,7 @@ describe('help-json', () => {
 
     it('resolves command aliases', () => {
       expect(extractHelpJsonCommand(['org', '--help', '--json'])).toBe('organization');
+      expect(extractHelpJsonCommand(['integrate', '--help', '--json'])).toBe('install');
     });
   });
 
