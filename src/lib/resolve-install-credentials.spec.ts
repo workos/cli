@@ -67,9 +67,8 @@ const mockUi = {
 };
 vi.mock('../utils/ui.js', () => ({ default: mockUi }));
 
-const { resolveInstallCredentials, resolveStagingCredentials, maybePickInstallEnvironment } = await import(
-  './resolve-install-credentials.js'
-);
+const { resolveInstallCredentials, resolveStagingCredentials, maybePickInstallEnvironment } =
+  await import('./resolve-install-credentials.js');
 const { setOutputMode } = await import('../utils/output.js');
 
 describe('resolveInstallCredentials', () => {
