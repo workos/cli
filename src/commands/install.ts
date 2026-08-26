@@ -6,6 +6,7 @@ import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
 import { isCiMode } from '../utils/interaction-mode.js';
 import type { ArgumentsCamelCase } from 'yargs';
 import { InstallDeclinedError } from '../lib/installer-errors.js';
+import { CliExit } from '../utils/cli-exit.js';
 import { maybeRunSetupAfter } from './setup.js';
 
 /**
@@ -37,6 +38,10 @@ export async function handleInstall(argv: ArgumentsCamelCase<InstallerArgs>): Pr
     // (human/TTY-only, decline-respecting) and best-effort — never fails install.
     await maybeRunSetupAfter('install');
   } catch (err) {
+    // Structured exits (e.g. the environment picker's cancel, exit 2) carry
+    // their own code and messaging — masking them as installer_error would
+    // turn a clean cancel into a failure.
+    if (err instanceof CliExit) throw err;
     if (err instanceof InstallDeclinedError) {
       // The integration already printed actionable guidance; exit non-zero
       // so scripts don't proceed as if AuthKit were installed.

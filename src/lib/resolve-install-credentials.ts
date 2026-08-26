@@ -9,6 +9,14 @@
  * - Direct mode: not handled here (resolved in agent-interface.ts via ANTHROPIC_API_KEY)
  */
 import type { EnvironmentConfig } from './config-store.js';
+import type { TeamEnvironment } from './environment-target.js';
+
+/**
+ * Upper bound on team-environment discovery before the picker falls back to
+ * local profiles. The GraphQL fetch can wait 30s on a dead endpoint; the
+ * picker (and the single-profile silent path) must not inherit that wait.
+ */
+const TEAM_DISCOVERY_TIMEOUT_MS = 3_000;
 
 /**
  * When several stored profiles could serve this install, ask which WorkOS
@@ -24,8 +32,15 @@ import type { EnvironmentConfig } from './config-store.js';
  * persists via setActiveEnvironment so the installer and every later command
  * agree; cancel cancels the install (exit 2), matching the installer's other
  * prompts.
+ *
+ * The picker shows the WHOLE team, not just this machine: environments the
+ * session can see but that have no local API key render as disabled rows
+ * with the recipe to enable them. The dashboard catalog has no operation
+ * that creates or reveals an sk_ secret, so the CLI cannot make those rows
+ * selectable on its own — but hiding them is what made installs feel like
+ * they were choosing from a different list than the dashboard shows.
  */
-async function maybePickInstallEnvironment(
+export async function maybePickInstallEnvironment(
   activeEnv: EnvironmentConfig | null,
   installDir: string,
 ): Promise<EnvironmentConfig | null> {
@@ -41,32 +56,99 @@ async function maybePickInstallEnvironment(
   const config = getConfig();
   if (!config) return activeEnv;
   const candidates = Object.entries(config.environments).filter(([, env]) => env.apiKey);
-  if (candidates.length < 2) return activeEnv;
+  if (candidates.length === 0) return activeEnv;
+
+  // Best-effort: the rest of the team's environments, for the disabled rows.
+  // Any failure degrades to the local-only picker — including slowness: a
+  // dead endpoint's 30s fetch timeout must not stall installer startup (or
+  // the single-profile silent path), so the fetch is bounded. Only a
+  // currently-valid token is used — never a refresh: the race abandons the
+  // loser without cancelling it, and a refresh outliving the picker can
+  // answer invalid_grant AFTER the installer's own auth flow wrote a new
+  // session, and invalid_grant clears the credential store. An expired
+  // session just degrades to the local-only picker; the machine's auth check
+  // re-authenticates later.
+  const discovery = new AbortController();
+  const discoverTeam = async (): Promise<TeamEnvironment[]> => {
+    try {
+      const { getCredentials, isTokenExpired } = await import('./credentials.js');
+      const creds = getCredentials();
+      if (!creds || isTokenExpired(creds)) return [];
+      const { fetchTeamEnvironments } = await import('./environment-target.js');
+      return await fetchTeamEnvironments(creds.accessToken, discovery.signal);
+    } catch {
+      return []; // Offline / logged out / flag-gated — the local-only picker still works.
+    }
+  };
+  // A lost race must also CANCEL the request: an abandoned fetch keeps its
+  // socket and abort timer alive, and CLI exit waits on the event loop
+  // draining — otherwise a quick install lingers until the transport timeout.
+  let discoveryTimer: ReturnType<typeof setTimeout> | undefined;
+  const teamEnvironments = await Promise.race([
+    discoverTeam(),
+    new Promise<TeamEnvironment[]>((resolve) => {
+      discoveryTimer = setTimeout(() => {
+        discovery.abort();
+        resolve([]);
+      }, TEAM_DISCOVERY_TIMEOUT_MS);
+      discoveryTimer.unref?.();
+    }),
+  ]);
+  clearTimeout(discoveryTimer);
+
+  const keyedClientIds = new Set(candidates.map(([, env]) => env.clientId).filter(Boolean));
+  const keyedEnvironmentIds = new Set(candidates.map(([, env]) => env.environmentId).filter(Boolean));
+  const unavailable = teamEnvironments.filter(
+    (env) => !(env.clientId && keyedClientIds.has(env.clientId)) && !keyedEnvironmentIds.has(env.id),
+  );
+
+  // One usable profile and nothing else visible: the pick is forced — stay silent.
+  if (candidates.length < 2 && unavailable.length === 0) return activeEnv;
 
   const ui = (await import('../utils/ui.js')).default;
   const { ExitCode, exitWithCode } = await import('../utils/exit-codes.js');
   const chalk = (await import('chalk')).default;
+  const { formatEnvironmentLabel } = await import('./environment-target.js');
 
   // Lead with the environment (the thing being chosen); the profile key is
   // bookkeeping and rides dim in the metadata. Labels are column-aligned —
   // padEnd runs on the PLAIN name before any color, so ANSI codes never
   // skew the columns (see the env-list alignment bug).
   const displayFor = (key: string, env: EnvironmentConfig): string => profileEnvironmentLabel(env) ?? key;
-  const nameW = Math.max(...candidates.map(([key, env]) => displayFor(key, env).length));
+  const nameW = Math.max(
+    ...candidates.map(([key, env]) => displayFor(key, env).length),
+    ...unavailable.map((env) => formatEnvironmentLabel(env).length),
+  );
 
-  ui.note(`This machine knows ${candidates.length} WorkOS environments — pick the one this app should call home.`);
+  // Count the team, not this machine: candidates can include foreign profiles
+  // (a key from another account left on disk), which must not inflate the team
+  // totals. teamEnvironments.length IS the team total when discovery ran.
+  const teamReady = teamEnvironments.length - unavailable.length;
+  ui.note(
+    unavailable.length > 0
+      ? `Your team has ${teamEnvironments.length} environments; ${teamReady} ${teamReady === 1 ? 'is' : 'are'} ready on this machine — pick the one this app should call home.
+○ rows need an API key here first: workos profile add <name> <api-key> --client-id <client-id>`
+      : `This machine knows ${candidates.length} WorkOS environments — pick the one this app should call home.`,
+  );
 
   const choice = await ui.select({
     message: 'Which WorkOS environment should this install use?',
-    options: candidates.map(([key, env]) => {
-      const display = displayFor(key, env);
-      const type = env.type === 'sandbox' ? 'Sandbox' : env.type === 'unclaimed' ? 'Unclaimed' : 'Production';
-      // Only show the profile key when it isn't already the display name.
-      const meta = [display === key ? null : key, type].filter(Boolean).join(' · ');
-      let label = `${display.padEnd(nameW)}  ${chalk.dim(meta)}`;
-      if (key === config.activeEnvironment) label += ` ${chalk.green('● active')}`;
-      return { value: key, label };
-    }),
+    options: [
+      ...candidates.map(([key, env]) => {
+        const display = displayFor(key, env);
+        const type = env.type === 'sandbox' ? 'Sandbox' : env.type === 'unclaimed' ? 'Unclaimed' : 'Production';
+        // Only show the profile key when it isn't already the display name.
+        const meta = [display === key ? null : key, type].filter(Boolean).join(' · ');
+        let label = `${display.padEnd(nameW)}  ${chalk.dim(meta)}`;
+        if (key === config.activeEnvironment) label += ` ${chalk.green('● active')}`;
+        return { value: key, label };
+      }),
+      ...unavailable.map((env) => ({
+        value: `__unavailable__${env.id}`,
+        label: `${formatEnvironmentLabel(env).padEnd(nameW)}  ${chalk.dim(env.sandbox ? 'Sandbox' : 'Production')}`,
+        disabled: '○ no API key on this machine',
+      })),
+    ],
     initialValue: config.activeEnvironment,
   });
   if (ui.isCancel(choice)) exitWithCode(ExitCode.CANCELLED);
@@ -157,7 +239,7 @@ export async function resolveInstallCredentials(
   try {
     const { getActiveEnvironment, isUnclaimedEnvironment } = await import('./config-store.js');
     const { getAccessToken } = await import('./credentials.js');
-    const activeEnv = await maybePickInstallEnvironment(getActiveEnvironment(), installDir ?? process.cwd());
+    const activeEnv = getActiveEnvironment();
 
     if (activeEnv?.apiKey) {
       // Has API key — but does it have gateway auth?

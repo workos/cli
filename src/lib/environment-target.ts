@@ -83,9 +83,9 @@ function remedies(): string {
  * whether that is fatal (`resolveEnvironmentTarget`) or best-effort
  * (`tryResolveProfileEnvironmentId`).
  */
-export async function fetchTeamEnvironments(token: string): Promise<TeamEnvironment[]> {
+export async function fetchTeamEnvironments(token: string, signal?: AbortSignal): Promise<TeamEnvironment[]> {
   const op = getOperation('teamProjectsV2');
-  const data = await dashboardGraphqlRequest<TeamProjectsData>(resolveExecutableDocument(op), { token });
+  const data = await dashboardGraphqlRequest<TeamProjectsData>(resolveExecutableDocument(op), { token, signal });
   const projects = data.currentTeam?.projectsV2 ?? [];
   return projects.flatMap((project) =>
     (project.environments ?? []).map((env) => ({ ...env, projectName: project.name })),

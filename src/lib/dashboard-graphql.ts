@@ -70,6 +70,13 @@ export interface DashboardGraphqlOptions {
    * no environment header.
    */
   environmentId?: string;
+  /**
+   * Optional caller cancellation, merged into the request's own abort
+   * controller so the socket dies with the caller's deadline instead of
+   * holding the event loop open until the transport timeout. (The install
+   * picker's bounded team discovery is the caller that needs this.)
+   */
+  signal?: AbortSignal;
 }
 
 /**
@@ -95,6 +102,7 @@ async function sendDashboardRequest<T>(
   const url = `${getWorkOSApiUrl()}/graphql`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  options.signal?.addEventListener('abort', () => controller.abort(), { once: true });
 
   let res: Response;
   try {
