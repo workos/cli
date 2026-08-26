@@ -65,6 +65,68 @@ async function maybePickInstallEnvironment(
   return getActiveEnvironment();
 }
 
+/**
+ * The install machine's staging-credential step. Source priority: active
+ * profile -> cached staging pair -> fresh staging fetch (persisted for reuse).
+ *
+ * A project that already carries its own valid WORKOS_API_KEY keeps it. The
+ * preflight no-clobber path is only half the contract: scanning a key-only
+ * project finds no valid client ID and lands here, so returning the fallback's
+ * COMPLETE pair would let configureEnvironment upsert a different
+ * environment's key over the project's. The fallback supplies only the missing
+ * client ID. An invalid project key is no key -- discovery ignores it too.
+ */
+export async function resolveStagingCredentials(installDir: string): Promise<{ clientId: string; apiKey: string }> {
+  const { getActiveEnvironment, getConfig, saveConfig } = await import('./config-store.js');
+  const { getAccessToken, getStagingCredentials, saveStagingCredentials } = await import('./credentials.js');
+  const { readProjectEnvCredentials } = await import('./project-env.js');
+  const { isValidApiKey } = await import('./credential-discovery.js');
+  const { logInfo } = await import('../utils/debug.js');
+
+  const projectKey = readProjectEnvCredentials(installDir).apiKey;
+  const keepKey = projectKey && isValidApiKey(projectKey) ? projectKey : undefined;
+  const forProject = ({ clientId, apiKey }: { clientId: string; apiKey: string }) => {
+    if (!keepKey) return { clientId, apiKey };
+    logInfo('[resolve-install-credentials] Project WORKOS_API_KEY kept -- adopting only the client ID');
+    return { clientId, apiKey: keepKey };
+  };
+
+  const activeEnv = getActiveEnvironment();
+  if (activeEnv?.clientId && activeEnv?.apiKey) {
+    return forProject({ clientId: activeEnv.clientId, apiKey: activeEnv.apiKey });
+  }
+
+  const cached = getStagingCredentials();
+  if (cached) return forProject(cached);
+
+  const token = getAccessToken();
+  if (!token) throw new Error('No access token available');
+
+  const { fetchStagingCredentials } = await import('./staging-api.js');
+  const staging = await fetchStagingCredentials(token);
+  saveStagingCredentials(staging);
+
+  try {
+    const config = getConfig() ?? { environments: {} };
+    if (!config.environments['default']) {
+      config.environments['default'] = {
+        name: 'default',
+        type: staging.apiKey.startsWith('sk_test_') ? 'sandbox' : 'production',
+        apiKey: staging.apiKey,
+        clientId: staging.clientId,
+      };
+      if (!config.activeEnvironment) {
+        config.activeEnvironment = 'default';
+      }
+      saveConfig(config);
+    }
+  } catch {
+    // Don't block install if config-store write fails
+  }
+
+  return forProject(staging);
+}
+
 export async function resolveInstallCredentials(
   apiKey: string | undefined,
   installDir: string | undefined,

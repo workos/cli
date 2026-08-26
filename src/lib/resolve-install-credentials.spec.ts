@@ -8,17 +8,29 @@ const mockGetActiveEnvironment = vi.fn();
 const mockIsUnclaimedEnvironment = vi.fn();
 const mockGetConfig = vi.fn();
 const mockSetActiveEnvironment = vi.fn();
+const mockSaveConfig = vi.fn();
 vi.mock('./config-store.js', () => ({
   getActiveEnvironment: (...args: unknown[]) => mockGetActiveEnvironment(...args),
   isUnclaimedEnvironment: (...args: unknown[]) => mockIsUnclaimedEnvironment(...args),
   getConfig: () => mockGetConfig(),
   setActiveEnvironment: (...args: unknown[]) => mockSetActiveEnvironment(...args),
+  saveConfig: (...args: unknown[]) => mockSaveConfig(...args),
 }));
 
 // Mock credentials
 const mockGetAccessToken = vi.fn();
+const mockGetStagingCredentials = vi.fn();
+const mockSaveStagingCredentials = vi.fn();
 vi.mock('./credentials.js', () => ({
   getAccessToken: () => mockGetAccessToken(),
+  getStagingCredentials: () => mockGetStagingCredentials(),
+  saveStagingCredentials: (...args: unknown[]) => mockSaveStagingCredentials(...args),
+}));
+
+// Mock the staging API
+const mockFetchStagingCredentials = vi.fn();
+vi.mock('./staging-api.js', () => ({
+  fetchStagingCredentials: (...args: unknown[]) => mockFetchStagingCredentials(...args),
 }));
 
 // Mock unclaimed-env-provision
@@ -37,7 +49,7 @@ const mockUi = {
 };
 vi.mock('../utils/ui.js', () => ({ default: mockUi }));
 
-const { resolveInstallCredentials } = await import('./resolve-install-credentials.js');
+const { resolveInstallCredentials, resolveStagingCredentials } = await import('./resolve-install-credentials.js');
 const { setOutputMode } = await import('../utils/output.js');
 
 describe('resolveInstallCredentials', () => {
@@ -427,6 +439,68 @@ describe('resolveInstallCredentials', () => {
         exitCode: 2,
       });
       expect(mockSetActiveEnvironment).not.toHaveBeenCalled();
+    });
+  });
+
+  // The machine-side half of the no-clobber contract: a key-only project scans
+  // as "no valid credentials" (client ID missing/invalid) and lands in the
+  // staging-credential step, which must not hand configureEnvironment a
+  // different environment's key to upsert over the project's own.
+  describe('resolveStagingCredentials', () => {
+    let projectDir: string;
+
+    beforeEach(() => {
+      projectDir = mkdtempSync(join(tmpdir(), 'resolve-staging-credentials-test-'));
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'staging',
+        type: 'sandbox',
+        apiKey: 'sk_test_active_key',
+        clientId: 'client_01ACTIVE',
+      });
+      mockGetStagingCredentials.mockReturnValue(null);
+      mockGetAccessToken.mockReturnValue('token_x');
+    });
+
+    afterEach(() => {
+      rmSync(projectDir, { recursive: true, force: true });
+    });
+
+    it('returns the active profile pair when the project carries no key', async () => {
+      const result = await resolveStagingCredentials(projectDir);
+
+      expect(result).toEqual({ clientId: 'client_01ACTIVE', apiKey: 'sk_test_active_key' });
+    });
+
+    it('keeps a valid project WORKOS_API_KEY and adopts only the active profile client ID', async () => {
+      writeFileSync(join(projectDir, '.env'), 'WORKOS_API_KEY=sk_test_project_key\n');
+
+      const result = await resolveStagingCredentials(projectDir);
+
+      expect(result).toEqual({ clientId: 'client_01ACTIVE', apiKey: 'sk_test_project_key' });
+    });
+
+    it('keeps the project key on the fresh-fetch path, caching the fetched pair verbatim', async () => {
+      writeFileSync(join(projectDir, '.env'), 'WORKOS_API_KEY=sk_test_project_key\n');
+      mockGetActiveEnvironment.mockReturnValue(null);
+      mockFetchStagingCredentials.mockResolvedValue({ clientId: 'client_01STAGING', apiKey: 'sk_test_staging_key' });
+
+      const result = await resolveStagingCredentials(projectDir);
+
+      expect(result).toEqual({ clientId: 'client_01STAGING', apiKey: 'sk_test_project_key' });
+      // The cache stays truthful: it records the staging environment's real
+      // pair, not the project-key mix returned for this install.
+      expect(mockSaveStagingCredentials).toHaveBeenCalledWith({
+        clientId: 'client_01STAGING',
+        apiKey: 'sk_test_staging_key',
+      });
+    });
+
+    it('treats an invalid project key as absent, matching credential discovery', async () => {
+      writeFileSync(join(projectDir, '.env'), 'WORKOS_API_KEY=not-a-real-key\n');
+
+      const result = await resolveStagingCredentials(projectDir);
+
+      expect(result).toEqual({ clientId: 'client_01ACTIVE', apiKey: 'sk_test_active_key' });
     });
   });
 });
