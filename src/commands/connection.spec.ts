@@ -50,13 +50,14 @@ const mockConnection = {
 const mockApiConnection = {
   object: 'connection',
   id: 'conn_01ABC',
-  organization_id: 'org_123',
+  organizationId: 'org_123',
   name: 'Okta SSO',
-  connection_type: 'GenericSAML',
+  type: 'GenericSAML',
   state: 'active',
-  external_id: 'legacy-42',
-  created_at: '2025-01-01T00:00:00Z',
-  updated_at: '2025-01-01T00:00:00Z',
+  externalId: 'legacy-42',
+  domains: [{ object: 'connection_domain', id: 'org_domain_123', domain: 'example.com' }],
+  createdAt: '2025-01-01T00:00:00Z',
+  updatedAt: '2025-01-01T00:00:00Z',
 };
 
 describe('connection commands', () => {
@@ -291,7 +292,10 @@ describe('connection commands', () => {
       const output = JSON.parse(consoleOutput[0]);
       expect(output.status).toBe('ok');
       expect(output.data.id).toBe('conn_01ABC');
-      expect(output.data.connection_type).toBe('GenericSAML');
+      expect(output.data.organizationId).toBe('org_123');
+      expect(output.data.type).toBe('GenericSAML');
+      expect(output.data.domains[0].domain).toBe('example.com');
+      expect(output.data.connection_type).toBeUndefined();
     });
 
     it('runConnectionUpdate outputs the success envelope with the connection', async () => {
@@ -300,7 +304,8 @@ describe('connection commands', () => {
       const output = JSON.parse(consoleOutput[0]);
       expect(output.status).toBe('ok');
       expect(output.data.id).toBe('conn_01ABC');
-      expect(output.data.external_id).toBe('legacy-42');
+      expect(output.data.externalId).toBe('legacy-42');
+      expect(output.data.external_id).toBeUndefined();
     });
   });
 });

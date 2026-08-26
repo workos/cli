@@ -1,9 +1,9 @@
-import { readFile } from 'node:fs/promises';
 import chalk from 'chalk';
 import type { ConnectionType } from '@workos-inc/node';
 import { createWorkOSClient } from '../lib/workos-client.js';
 import { formatTable } from '../utils/table.js';
 import { printPaginationFooter } from '../utils/resource-command.js';
+import { resolveInputBody } from '../utils/request-body.js';
 import { outputSuccess, outputJson, isJsonMode, exitWithError } from '../utils/output.js';
 import { createApiErrorHandler } from '../lib/api-error-handler.js';
 import { isCiMode, isPromptAllowed } from '../utils/interaction-mode.js';
@@ -92,36 +92,7 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
 async function resolveConnectionBody(options: ConnectionBodyOptions): Promise<Record<string, unknown>> {
   let body: Record<string, unknown> = {};
 
-  let raw: string | undefined;
-  if (options.data !== undefined) {
-    raw = options.data;
-  } else if (options.file) {
-    if (options.file === '-') {
-      const chunks: Buffer[] = [];
-      for await (const chunk of process.stdin) {
-        chunks.push(chunk);
-      }
-      raw = Buffer.concat(chunks).toString('utf-8');
-      if (raw.length === 0) {
-        exitWithError({
-          code: 'empty_stdin_body',
-          message:
-            'Reading request body from stdin (--file -) yielded no data. Pipe data into the command or pass --data instead.',
-        });
-      }
-    } else {
-      try {
-        raw = await readFile(options.file, 'utf-8');
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        exitWithError({
-          code: 'file_read_error',
-          message: `Could not read request body file "${options.file}": ${message}`,
-        });
-      }
-    }
-  }
-
+  const raw = await resolveInputBody(options);
   if (raw !== undefined) {
     let parsed: unknown;
     try {

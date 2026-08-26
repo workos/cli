@@ -22,7 +22,26 @@ export interface AuditLogRetention {
   retention_period_in_days: number;
 }
 
+export interface SsoConnectionDomain {
+  object: 'connection_domain';
+  id: string;
+  domain: string;
+}
+
 export interface SsoConnection {
+  object: 'connection';
+  id: string;
+  organizationId: string;
+  name: string;
+  type: string;
+  state: string;
+  externalId?: string | null;
+  domains: SsoConnectionDomain[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface SsoConnectionResponse {
   object: 'connection';
   id: string;
   organization_id: string;
@@ -30,9 +49,24 @@ export interface SsoConnection {
   connection_type: string;
   state: string;
   external_id?: string | null;
+  domains: SsoConnectionDomain[];
   created_at: string;
   updated_at: string;
-  [key: string]: unknown;
+}
+
+function deserializeConnection(connection: SsoConnectionResponse): SsoConnection {
+  return {
+    object: connection.object,
+    id: connection.id,
+    organizationId: connection.organization_id,
+    name: connection.name,
+    type: connection.connection_type,
+    state: connection.state,
+    ...(connection.external_id !== undefined && { externalId: connection.external_id }),
+    domains: connection.domains,
+    createdAt: connection.created_at,
+    updatedAt: connection.updated_at,
+  };
 }
 
 export interface WorkOSCLIClient {
@@ -164,22 +198,24 @@ export function createWorkOSClient(apiKey?: string, baseUrl?: string): WorkOSCLI
 
     connections: {
       async create(body: Record<string, unknown>) {
-        return workosRequest<SsoConnection>({
+        const connection = await workosRequest<SsoConnectionResponse>({
           method: 'POST',
           path: '/connections',
           apiKey: key,
           baseUrl: base,
           body,
         });
+        return deserializeConnection(connection);
       },
       async update(id: string, body: Record<string, unknown>) {
-        return workosRequest<SsoConnection>({
+        const connection = await workosRequest<SsoConnectionResponse>({
           method: 'PATCH',
           path: `/connections/${encodeURIComponent(id)}`,
           apiKey: key,
           baseUrl: base,
           body,
         });
+        return deserializeConnection(connection);
       },
     },
   };
