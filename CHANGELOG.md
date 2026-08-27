@@ -4,6 +4,38 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.0](https://github.com/workos/cli/compare/v0.21.1...v0.22.0) (2026-08-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* both commands now require `workos auth login` (API keys are no longer accepted; --api-key removed) and emit new curated JSON shapes (top-level resource objects, camelCase, no list_metadata — the authoritative examples live in each command's spec file). Flag mapping, old -> new:
+    - organization list: --domain now maps to server-side search
+      (name/domain); every subcommand gains --environment-id
+    - organization delete / user delete: gain --yes (destructive
+      confirmation: prompt, --yes bypass, non-interactive refusal)
+    - user list: --organization dropped (no backing filter on this plane);
+      --email now maps to server-side search
+    - user update: --email-verified and --password dropped (not supported on
+      this plane); --email and --locale added; now requires at least one
+      update flag
+
+### Features
+
+* add connection create and update commands ([#221](https://github.com/workos/cli/issues/221)) ([9a53443](https://github.com/workos/cli/commit/9a53443952645af6c03a9e63852102b1866bc05a))
+* add integrate alias for install ([#235](https://github.com/workos/cli/issues/235)) ([1adbe84](https://github.com/workos/cli/commit/1adbe84797bdd258f33a6b31eba9cdcd147a1587))
+* **install:** let the user pick the environment during install ([#230](https://github.com/workos/cli/issues/230)) ([8eb9408](https://github.com/workos/cli/commit/8eb9408e8700afc9308052c1bf064a2aec2a8ae5))
+* **install:** name the environment in installer status lines ([#231](https://github.com/workos/cli/issues/231)) ([c7d5cb8](https://github.com/workos/cli/commit/c7d5cb865229c1e57cf20550ca39a39e505ff36d))
+* **install:** show the whole team in the environment picker ([#232](https://github.com/workos/cli/issues/232)) ([d8919df](https://github.com/workos/cli/commit/d8919df221282f634cd82b5536f199964ef32111))
+* make dashboard environments first-class in the CLI ([#228](https://github.com/workos/cli/issues/228)) ([e344173](https://github.com/workos/cli/commit/e344173f66547dd7a413365ed63853ee4e9be54c))
+* migrate resource commands to the dashboard account plane ([#201](https://github.com/workos/cli/issues/201)) ([35a5d7e](https://github.com/workos/cli/commit/35a5d7e6a1116d5272cbebccb4db43237dd5dacd))
+* prefix the project name on environment display labels ([#229](https://github.com/workos/cli/issues/229)) ([cc51696](https://github.com/workos/cli/commit/cc51696c9bb08c4371582b6c6c5cb602aa380f74))
+
+
+### Bug Fixes
+
+* **install:** surface unclaimed environments honestly ([#234](https://github.com/workos/cli/issues/234)) ([ad8f85f](https://github.com/workos/cli/commit/ad8f85fcfbbc2427212ba1a0494cd59fc73aef7b))
+
 ## [0.21.1](https://github.com/workos/cli/compare/v0.21.0...v0.21.1) (2026-08-19)
 
 
