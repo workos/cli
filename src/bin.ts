@@ -367,6 +367,7 @@ async function runCli(): Promise<void> {
           'env',
           'claim',
           'install',
+          'integrate',
           'setup',
           'debug',
           'internal',
@@ -3182,7 +3183,7 @@ async function runCli(): Promise<void> {
       },
     )
     .command(
-      'install',
+      ['install', 'integrate'],
       'Install WorkOS AuthKit into your project (interactive framework detection and setup)',
       (yargs) => yargs.options(installerOptions),
       async (argv) => {

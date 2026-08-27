@@ -6,6 +6,7 @@
  * Adding an alias here updates both metrics aggregation and --help --json output.
  */
 export const COMMAND_ALIASES: Record<string, string> = {
+  integrate: 'install',
   org: 'organization',
   // `env` was the pre-0.22 name for local profiles; kept as a quiet alias.
   env: 'profile',
