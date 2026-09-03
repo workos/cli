@@ -36,9 +36,12 @@ import { extractTarEntry } from './npm-tarball.js';
  * Failure at any stage is silent-but-debuggable (logged via logWarn, like
  * version-check.ts) and leaves the caller on the compiled-in module. A version
  * that fails to install or import is quarantined — its directory is deleted
- * and the failure remembered until the resolution TTL expires — so a broken
- * bundle is never retried on every invocation and older downloaded upgrades
- * get their turn as the offline fallback.
+ * and the failure remembered — so a broken bundle is never retried on every
+ * invocation and older downloaded upgrades get their turn as the offline
+ * fallback. A tarball or bundle that is actually broken stays quarantined
+ * until the resolution TTL expires; a transient download failure (network,
+ * timeout, registry 5xx) only for a short backoff, so one blip doesn't cost
+ * the upgrade for a day.
  * WORKOS_RUNTIME_DEPS=0 is the kill switch: compiled-in only, no network and
  * no cache reads. When running from source the mechanism is off by default —
  * node_modules already has the packages — and WORKOS_RUNTIME_DEPS=1 forces it
@@ -51,6 +54,13 @@ const METADATA_TIMEOUT_MS = 3_000;
 /** Bundle tarballs can be tens of MB; downloaded at most once per version. */
 const TARBALL_TIMEOUT_MS = 30_000;
 const RESOLUTION_TTL_MS = 24 * 60 * 60 * 1000;
+/**
+ * How long a transient download failure keeps its version quarantined. Long
+ * enough that a blackholed network costs at most one TARBALL_TIMEOUT_MS stall
+ * per window, short enough that the upgrade lands soon after the network
+ * recovers rather than after the full resolution TTL.
+ */
+const TRANSIENT_RETRY_MS = 15 * 60 * 1000;
 /** Generous gzip-bomb cap for JS bundle files (see npm-tarball.ts). */
 const MAX_BUNDLE_UNCOMPRESSED_BYTES = 256 * 1024 * 1024;
 const RESOLUTION_FILENAME = 'resolution.json';
@@ -68,15 +78,22 @@ type ResolvedVersion = {
 type Resolution = {
   /** Newest usable upgrade, or null when the registry has nothing newer than the compiled-in version. */
   resolved: ResolvedVersion | null;
-  /** Downloading, installing, or importing `resolved` failed; it is quarantined until the TTL expires. */
+  /** `resolved` is quarantined: installing or importing it failed recently enough that it must not be retried yet. */
   installFailed: boolean;
 };
 
-type ResolutionCache = Resolution & {
+type ResolutionCache = {
   fetchedAt: number;
   /** Baked range and compiled-in version the lookup was made against; a CLI update invalidates the entry. */
   range: string;
   bundledVersion: string;
+  resolved: ResolvedVersion | null;
+  /**
+   * Installing `resolved` failed; don't retry before this time. A broken
+   * tarball or bundle is quarantined until the entry itself expires (the
+   * resolution TTL); a transient download failure only for TRANSIENT_RETRY_MS.
+   */
+  retryAt?: number;
 };
 
 /** Shape of the npm registry's abbreviated ("install") package metadata. */
@@ -186,7 +203,8 @@ function readResolutionCache(cacheDir: string, dep: RuntimeDep): Resolution | nu
   try {
     const parsed = JSON.parse(readFileSync(join(cacheDir, RESOLUTION_FILENAME), 'utf8')) as Partial<ResolutionCache>;
     if (typeof parsed.fetchedAt !== 'number') return null;
-    const age = Date.now() - parsed.fetchedAt;
+    const now = Date.now();
+    const age = now - parsed.fetchedAt;
     // A negative age means the clock rolled back under a future timestamp;
     // treat it as stale rather than trusting it forever.
     if (age < 0 || age >= RESOLUTION_TTL_MS) return null;
@@ -206,24 +224,34 @@ function readResolutionCache(cacheDir: string, dep: RuntimeDep): Resolution | nu
     }
     return {
       resolved: { version: resolved.version, tarballUrl: resolved.tarballUrl, integrity: resolved.integrity },
-      installFailed: parsed.installFailed === true,
+      installFailed: typeof parsed.retryAt === 'number' && now < parsed.retryAt,
     };
   } catch {
     return null;
   }
 }
 
-function writeResolutionCache(cacheDir: string, dep: RuntimeDep, resolution: Resolution): void {
+/**
+ * Remember a registry lookup. `retryAt` quarantines `resolved` until that
+ * time — omit it when the version is fine to install.
+ */
+function writeResolutionCache(
+  cacheDir: string,
+  dep: RuntimeDep,
+  resolved: ResolvedVersion | null,
+  retryAt?: number,
+): void {
   // Best-effort: a failed cache write only costs a refetch next run.
   try {
     mkdirSync(cacheDir, { recursive: true, mode: 0o700 });
     const path = join(cacheDir, RESOLUTION_FILENAME);
     const temporary = `${path}.tmp.${process.pid}.${randomUUID()}`;
     const entry: ResolutionCache = {
-      ...resolution,
       fetchedAt: Date.now(),
       range: dep.range,
       bundledVersion: dep.bundledVersion,
+      resolved,
+      ...(retryAt === undefined ? {} : { retryAt }),
     };
     writeFileSync(temporary, JSON.stringify(entry));
     renameSync(temporary, path);
@@ -245,6 +273,41 @@ async function fetchResolution(dep: RuntimeDep): Promise<ResolvedVersion | null>
   return pickHighestSatisfying(metadata, dep);
 }
 
+/**
+ * A download failure that a later attempt may well succeed at — the network,
+ * a timeout, or the registry having a bad moment — as opposed to a tarball
+ * or bundle that is itself broken.
+ */
+class TransientDownloadError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TransientDownloadError';
+  }
+}
+
+function isTransientStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+/** Fetch the resolved tarball's raw bytes, distinguishing transient failures from a bad response. */
+async function fetchTarball(resolved: ResolvedVersion): Promise<Buffer> {
+  let response: Response;
+  try {
+    response = await fetch(resolved.tarballUrl, { signal: AbortSignal.timeout(TARBALL_TIMEOUT_MS) });
+  } catch (error) {
+    throw new TransientDownloadError(`Downloading ${resolved.tarballUrl} failed: ${String(error)}`);
+  }
+  if (!response.ok) {
+    const message = `HTTP ${response.status} downloading ${resolved.tarballUrl}`;
+    throw isTransientStatus(response.status) ? new TransientDownloadError(message) : new Error(message);
+  }
+  try {
+    return Buffer.from(await response.arrayBuffer());
+  } catch (error) {
+    throw new TransientDownloadError(`Reading ${resolved.tarballUrl} failed: ${String(error)}`);
+  }
+}
+
 /** Write-to-temp + rename; a concurrent winner is accepted (its bytes passed the same verification). */
 function atomicWriteFile(path: string, bytes: Buffer): void {
   const temporary = `${path}.tmp.${process.pid}.${randomUUID()}`;
@@ -264,11 +327,7 @@ function atomicWriteFile(path: string, bytes: Buffer): void {
  * can never leave an importable entrypoint missing its sidecars.
  */
 async function downloadBundle(dep: RuntimeDep, resolved: ResolvedVersion, versionDir: string): Promise<void> {
-  const response = await fetch(resolved.tarballUrl, { signal: AbortSignal.timeout(TARBALL_TIMEOUT_MS) });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status} downloading ${resolved.tarballUrl}`);
-  }
-  const tarball = Buffer.from(await response.arrayBuffer());
+  const tarball = await fetchTarball(resolved);
   // Verify BEFORE extracting; nothing unverified is ever written to the cache.
   // The tarball-wide sha512 covers every extracted file in one check.
   verifySriIntegrity(tarball, resolved.integrity);
@@ -321,7 +380,7 @@ function quarantineVersion(cacheDir: string, version: string): void {
   try {
     rmSync(join(cacheDir, version), { recursive: true, force: true });
   } catch {
-    // Best-effort (e.g. a file still open elsewhere); the installFailed marker
+    // Best-effort (e.g. a file still open elsewhere); the retryAt marker
     // keeps the resolved version skipped regardless.
   }
 }
@@ -370,7 +429,7 @@ export async function loadRuntimeDep(
     if (!resolution) {
       try {
         resolution = { resolved: await fetchResolution(dep), installFailed: false };
-        writeResolutionCache(cacheDir, dep, resolution);
+        writeResolutionCache(cacheDir, dep, resolution.resolved);
       } catch (error) {
         logWarn(`Version resolution for runtime dep ${dep.npmPackage} failed:`, error);
       }
@@ -382,8 +441,9 @@ export async function loadRuntimeDep(
     // module.
     if (resolution !== null && resolution.resolved === null) return null;
 
-    // A quarantined version is left alone until the TTL expires: not
+    // A quarantined version is left alone until its retry time: not
     // re-downloaded, and not re-imported even if its directory is still there.
+    let quarantined = resolution?.installFailed ? resolution.resolved?.version : undefined;
     if (resolution?.resolved && !resolution.installFailed) {
       const { resolved } = resolution;
       try {
@@ -397,17 +457,20 @@ export async function loadRuntimeDep(
         logWarn(`Runtime bundle install for ${dep.npmPackage}@${resolved.version} failed:`, error);
         // Quarantine: drop the version dir so neither this run's fallback nor
         // the next run imports a bundle that just failed, and remember the
-        // failure so no invocation inside the TTL re-downloads a tarball that
-        // can't install (e.g. the package hasn't published a bundle yet).
+        // failure so invocations don't keep re-downloading. A tarball that
+        // can't install (e.g. the package hasn't published a bundle yet) or a
+        // bundle that won't import stays quarantined until the resolution
+        // expires; a network blip only briefly.
         quarantineVersion(cacheDir, resolved.version);
-        writeResolutionCache(cacheDir, dep, { resolved, installFailed: true });
+        quarantined = resolved.version;
+        const backoff = error instanceof TransientDownloadError ? TRANSIENT_RETRY_MS : RESOLUTION_TTL_MS;
+        writeResolutionCache(cacheDir, dep, resolved, Date.now() + backoff);
       }
     }
 
     // Resolution or install failed — a previously downloaded upgrade (verified
     // when it was installed) still works offline. Newest first; one that no
     // longer imports is quarantined so the next gets its turn.
-    const quarantined = resolution?.installFailed ? resolution.resolved?.version : undefined;
     for (const version of downloadedUpgrades(cacheDir, dep)) {
       if (version === quarantined) continue;
       try {

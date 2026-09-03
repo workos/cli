@@ -20,6 +20,10 @@ const DEP: RuntimeDep = {
   files: ['dist/bundle.js'],
 };
 
+const HOUR_MS = 60 * 60 * 1000;
+/** The resolution TTL (runtime-assets.ts); permanent quarantines last this long. */
+const TTL_MS = 24 * HOUR_MS;
+
 function sri(data: Buffer): string {
   return `sha512-${createHash('sha512').update(data).digest('base64')}`;
 }
@@ -34,6 +38,10 @@ function bytesResponse(body: Buffer): Response {
     status: 200,
     arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
   } as unknown as Response;
+}
+
+function errorResponse(status: number): Response {
+  return { ok: false, status } as unknown as Response;
 }
 
 /** Abbreviated packument with per-version dist info defaulted. */
@@ -145,8 +153,8 @@ describe('loadRuntimeDep', () => {
     );
   }
 
-  function resolvedVersion(version: string): Record<string, string> {
-    return { version, tarballUrl: `https://example.invalid/${version}.tgz`, integrity: 'sha512-never-checked' };
+  function resolvedVersion(version: string, integrity = 'sha512-never-checked'): Record<string, string> {
+    return { version, tarballUrl: `https://example.invalid/${version}.tgz`, integrity };
   }
 
   /** resolution.json as this CLI build would have written it, with overrides. */
@@ -154,18 +162,19 @@ describe('loadRuntimeDep', () => {
     mkdirSync(join(cacheRoot, DEP.name), { recursive: true });
     writeFileSync(
       join(cacheRoot, DEP.name, 'resolution.json'),
-      JSON.stringify({
-        fetchedAt: Date.now(),
-        range: DEP.range,
-        bundledVersion: DEP.bundledVersion,
-        installFailed: false,
-        ...entry,
-      }),
+      JSON.stringify({ fetchedAt: Date.now(), range: DEP.range, bundledVersion: DEP.bundledVersion, ...entry }),
     );
   }
 
-  function readResolution(): Record<string, unknown> {
+  function readResolution(): { fetchedAt: number; retryAt?: number; [key: string]: unknown } {
     return JSON.parse(readFileSync(join(cacheRoot, DEP.name, 'resolution.json'), 'utf8'));
+  }
+
+  /** How long the remembered failure quarantines the resolved version. */
+  function quarantineMs(): number {
+    const { fetchedAt, retryAt } = readResolution();
+    expect(typeof retryAt).toBe('number');
+    return (retryAt as number) - fetchedAt;
   }
 
   /** Every fetch rejects — the registry is unreachable, or must not be touched at all. */
@@ -191,12 +200,9 @@ describe('loadRuntimeDep', () => {
     expect(metadataUrl).toBe('https://registry.npmjs.org/%40workos%2Ftest-dep');
     expect(metadataInit.headers.accept).toBe('application/vnd.npm.install-v1+json');
     expect(existsSync(join(versionDir('1.4.0'), 'bundle.mjs'))).toBe(true);
-    expect(readResolution()).toMatchObject({
-      resolved: { version: '1.4.0' },
-      installFailed: false,
-      range: '^1.0.0',
-      bundledVersion: '1.0.0',
-    });
+    const resolution = readResolution();
+    expect(resolution).toMatchObject({ resolved: { version: '1.4.0' }, range: '^1.0.0', bundledVersion: '1.0.0' });
+    expect(resolution.retryAt).toBeUndefined();
   });
 
   it('installs sidecar files next to the entrypoint (migrations worker contract)', async () => {
@@ -229,6 +235,8 @@ describe('loadRuntimeDep', () => {
 
     expect(await loadRuntimeDep(DEP, { cacheRoot })).toBeNull();
     expect(existsSync(versionDir('1.4.0'))).toBe(false);
+    // Tampered bytes are not a network blip: quarantined for the full TTL.
+    expect(quarantineMs()).toBeGreaterThanOrEqual(TTL_MS - 1000);
   });
 
   it('honors the resolution TTL: no metadata refetch while the cache is fresh', async () => {
@@ -244,7 +252,7 @@ describe('loadRuntimeDep', () => {
 
   it('refetches metadata once the resolution cache is past its TTL', async () => {
     seedInstalledVersion('1.2.3', 'stale');
-    seedResolution({ resolved: resolvedVersion('1.2.3'), fetchedAt: Date.now() - 25 * 60 * 60 * 1000 });
+    seedResolution({ resolved: resolvedVersion('1.2.3'), fetchedAt: Date.now() - 25 * HOUR_MS });
     const tarball = makeTarball([['package/dist/bundle.js', Buffer.from('export const marker = "v1.5.0";\n')]]);
     const fetchMock = vi
       .fn()
@@ -354,13 +362,65 @@ describe('loadRuntimeDep', () => {
 
     expect(await loadRuntimeDep(DEP, { cacheRoot })).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(readResolution()).toMatchObject({ resolved: { version: '1.6.0' }, installFailed: true });
+    // Nothing transient about a tarball with no bundle in it: quarantined for the full TTL.
+    expect(readResolution()).toMatchObject({ resolved: { version: '1.6.0' } });
+    expect(quarantineMs()).toBeGreaterThanOrEqual(TTL_MS - 1000);
 
     // Next invocation inside the TTL: no metadata refetch, no tarball retry.
     const secondFetch = stubFetchRejecting('network must not be touched');
 
     expect(await loadRuntimeDep(DEP, { cacheRoot })).toBeNull();
     expect(secondFetch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a network error or timeout', () => Promise.reject(new Error('fetch failed: timeout'))],
+    ['a registry 503', () => Promise.resolve(errorResponse(503))],
+    ['a registry 429', () => Promise.resolve(errorResponse(429))],
+  ])('backs off briefly after %s instead of quarantining the version for the whole TTL', async (_, download) => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(metadata({ '1.6.0': {} })))
+      .mockImplementationOnce(download);
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await loadRuntimeDep(DEP, { cacheRoot })).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // A blip that may well clear up shouldn't cost the upgrade for a day, but
+    // hammering a blackholed network with 30s tarball fetches on every
+    // invocation is no good either: a short quarantine, not a full-TTL one.
+    const backoff = quarantineMs();
+    expect(backoff).toBeGreaterThan(0);
+    expect(backoff).toBeLessThan(TTL_MS);
+
+    // Inside the backoff window: nothing is retried.
+    const secondFetch = stubFetchRejecting('network must not be touched');
+
+    expect(await loadRuntimeDep(DEP, { cacheRoot })).toBeNull();
+    expect(secondFetch).not.toHaveBeenCalled();
+  });
+
+  it('quarantines a tarball URL that 404s for the whole TTL', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(metadata({ '1.6.0': {} })))
+      .mockResolvedValueOnce(errorResponse(404));
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await loadRuntimeDep(DEP, { cacheRoot })).toBeNull();
+    expect(quarantineMs()).toBeGreaterThanOrEqual(TTL_MS - 1000);
+  });
+
+  it('retries the download once a transient backoff has elapsed', async () => {
+    const tarball = makeTarball([['package/dist/bundle.js', Buffer.from('export const marker = "recovered";\n')]]);
+    // The resolution is still fresh; only the download is due for another try.
+    seedResolution({ resolved: resolvedVersion('1.6.0', sri(tarball)), retryAt: Date.now() - 1 });
+    const fetchMock = vi.fn().mockResolvedValueOnce(bytesResponse(tarball));
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect((await loadRuntimeDep(DEP, { cacheRoot }))?.marker).toBe('recovered');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe('https://example.invalid/1.6.0.tgz');
   });
 
   it('quarantines a downloaded bundle that fails to import and does not retry it within the TTL', async () => {
@@ -375,7 +435,8 @@ describe('loadRuntimeDep', () => {
     // The version dir is gone, so neither the fallback nor the next run can
     // trip over it, and the failure is remembered for the TTL.
     expect(existsSync(versionDir('1.6.0'))).toBe(false);
-    expect(readResolution()).toMatchObject({ resolved: { version: '1.6.0' }, installFailed: true });
+    expect(readResolution()).toMatchObject({ resolved: { version: '1.6.0' } });
+    expect(quarantineMs()).toBeGreaterThanOrEqual(TTL_MS - 1000);
 
     const secondFetch = stubFetchRejecting('network must not be touched');
 
@@ -394,7 +455,8 @@ describe('loadRuntimeDep', () => {
     expect((await loadRuntimeDep(DEP, { cacheRoot }))?.marker).toBe('older-good');
     expect(fetchMock).not.toHaveBeenCalled();
     expect(existsSync(versionDir('1.3.0'))).toBe(false);
-    expect(readResolution()).toMatchObject({ resolved: { version: '1.3.0' }, installFailed: true });
+    expect(readResolution()).toMatchObject({ resolved: { version: '1.3.0' } });
+    expect(quarantineMs()).toBeGreaterThanOrEqual(TTL_MS - 1000);
 
     // Next run inside the TTL skips the quarantined version outright.
     expect((await loadRuntimeDep(DEP, { cacheRoot }))?.marker).toBe('older-good');
