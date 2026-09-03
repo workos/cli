@@ -1,4 +1,26 @@
+import { loadRuntimeBundle } from '../lib/runtime-assets.js';
 import { getWorkOSCommand } from '../utils/command-invocation.js';
+
+/** The commander surface the CLI drives; the compiled-in package is the compile-time contract. */
+type MigrationsProgram = {
+  name(str: string): unknown;
+  parseAsync(argv: string[], options?: { from: 'user' }): Promise<unknown>;
+};
+
+/**
+ * Prefer the runtime-downloaded @workos/migrations bundle (exports `program`;
+ * see lib/runtime-assets.ts), falling back to the compiled-in package when no
+ * bundle is available or it lacks the expected export shape.
+ */
+async function resolveMigrationsProgram(): Promise<MigrationsProgram> {
+  const bundle = await loadRuntimeBundle('migrations');
+  const candidate = bundle?.program as Partial<MigrationsProgram> | undefined;
+  if (typeof candidate?.name === 'function' && typeof candidate?.parseAsync === 'function') {
+    return candidate as MigrationsProgram;
+  }
+  const compiledIn = (await import('@workos/migrations/dist/cli/index.js')) as { program: MigrationsProgram };
+  return compiledIn.program;
+}
 
 const workosOnlyMigrationsFlags = new Map([
   ['--api-key', true],
@@ -53,12 +75,7 @@ export async function runMigrations(args: string[], apiKey?: string, apiBaseUrl?
     process.env.WORKOS_API_URL = apiBaseUrl;
   }
 
-  const { program } = (await import('@workos/migrations/dist/cli/index.js')) as {
-    program: {
-      name(str: string): unknown;
-      parseAsync(argv: string[], options?: { from: 'user' }): Promise<unknown>;
-    };
-  };
+  const program = await resolveMigrationsProgram();
 
   program.name(`${getWorkOSCommand()} migrations`);
   await program.parseAsync(args, { from: 'user' });
