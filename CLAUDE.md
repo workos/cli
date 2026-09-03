@@ -20,7 +20,7 @@ WorkOS CLI for installing AuthKit integrations and managing WorkOS resources (or
 ## Tech Constraints
 
 - **Bun** only; the shipped CLI is a Bun-compiled standalone binary
-- Runtime assets must be statically imported or materialized from the compiled binary. Two exceptions: (1) the Agent SDK `claude` executable is downloaded on first agent use — pinned by version + sha256 in the generated manifest — and cached under `~/.workos/cache/agent-sdk/`; (2) runtime dep bundles (`@workos/migrations`, `@workos/emulate`) are resolved from the npm registry against semver ranges baked in the generated manifest, integrity-verified, cached under `~/.workos/cache/<dep>/`, and always fall back to the compiled-in module (`WORKOS_RUNTIME_DEPS=0` kill switch) — see `src/lib/runtime-assets.ts`
+- Runtime assets must be statically imported or materialized from the compiled binary. Two exceptions: (1) the Agent SDK `claude` executable is downloaded on first agent use — pinned by version + sha256 in the generated manifest — and cached under `~/.workos/cache/agent-sdk/`; (2) runtime dep bundles (`@workos/migrations`, `@workos/emulate`) are resolved from the npm registry against semver ranges baked in the generated manifest (only versions strictly newer than the compiled-in one, also baked, are ever run; the cache is shared across CLI installs), integrity-verified, cached under `~/.workos/cache/<dep>/`, and always fall back to the compiled-in module (`WORKOS_RUNTIME_DEPS=0` kill switch) — see `src/lib/runtime-assets.ts`
 
 ## Commit Conventions
 

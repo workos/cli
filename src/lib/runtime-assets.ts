@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, s
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { maxSatisfying, satisfies, valid } from 'semver';
+import { gt, maxSatisfying, rsort, satisfies, valid } from 'semver';
 import { RUNTIME_DEPS, type RuntimeDepManifestEntry, type RuntimeDepName } from '../generated/runtime-deps-manifest.js';
 import { logWarn } from '../utils/debug.js';
 import { isCompiledBinary } from './agent-sdk-assets.js';
@@ -20,9 +20,13 @@ import { extractTarEntry } from './npm-tarball.js';
  * inside a baked semver range and falls back to the compiled-in module
  * whenever anything goes wrong.
  *
- * Flow per dependency (see loadRuntimeBundle):
+ * Flow per dependency (see loadRuntimeDep):
  *  1. resolve the newest non-deprecated version in range from the npm registry
- *     (abbreviated metadata, cached on disk for 24h),
+ *     (abbreviated metadata, cached on disk for 24h). Only versions strictly
+ *     newer than the one compiled into this binary count (see isUpgrade): the
+ *     cache dir is shared by every CLI install on the machine, so an older
+ *     cached bundle must never downgrade a newer CLI, and a current CLI never
+ *     re-downloads what it already ships,
  *  2. download the version's tarball, verify its SRI sha512 integrity BEFORE
  *     extracting anything, extract the manifest's files (the ESM bundle plus
  *     any sidecars it resolves relative to itself, like migrations' worker.js),
@@ -30,7 +34,11 @@ import { extractTarEntry } from './npm-tarball.js';
  *  3. dynamic-import the cached bundle entrypoint.
  *
  * Failure at any stage is silent-but-debuggable (logged via logWarn, like
- * version-check.ts) and leaves the caller on the compiled-in module.
+ * version-check.ts) and leaves the caller on the compiled-in module. A version
+ * that fails to install or import is quarantined — its directory is deleted
+ * and the failure remembered until the resolution TTL expires — so a broken
+ * bundle is never retried on every invocation and older downloaded upgrades
+ * get their turn as the offline fallback.
  * WORKOS_RUNTIME_DEPS=0 is the kill switch: compiled-in only, no network and
  * no cache reads. When running from source the mechanism is off by default —
  * node_modules already has the packages — and WORKOS_RUNTIME_DEPS=1 forces it
@@ -56,10 +64,19 @@ type ResolvedVersion = {
   integrity: string;
 };
 
-type ResolutionCache = ResolvedVersion & {
+/** Outcome of a registry lookup, as remembered on disk between invocations. */
+type Resolution = {
+  /** Newest usable upgrade, or null when the registry has nothing newer than the compiled-in version. */
+  resolved: ResolvedVersion | null;
+  /** Downloading, installing, or importing `resolved` failed; it is quarantined until the TTL expires. */
+  installFailed: boolean;
+};
+
+type ResolutionCache = Resolution & {
   fetchedAt: number;
-  /** A download/install of this version failed; don't retry until the TTL expires. */
-  installFailed?: boolean;
+  /** Baked range and compiled-in version the lookup was made against; a CLI update invalidates the entry. */
+  range: string;
+  bundledVersion: string;
 };
 
 /** Shape of the npm registry's abbreviated ("install") package metadata. */
@@ -80,24 +97,39 @@ export type LoadRuntimeBundleOptions = {
 };
 
 /**
- * Pick the highest non-deprecated version satisfying `range` from abbreviated
- * registry metadata. Returns null when nothing usable satisfies the range
- * (including versions missing a tarball URL or sha512 integrity — those could
- * never be verified, so they are never candidates). Exported for tests.
+ * Whether `version` may run in place of the compiled-in module: inside the
+ * baked range AND strictly newer than the compiled-in version. Every version
+ * the loader considers — registry candidates, the cached resolution, and
+ * downloaded version dirs — passes through this one check, so nothing older
+ * than (or equal to) what the binary ships can ever win.
  */
-export function pickHighestSatisfying(metadata: AbbreviatedPackument, range: string): ResolvedVersion | null {
+function isUpgrade(version: string, dep: Pick<RuntimeDep, 'range' | 'bundledVersion'>): boolean {
+  return valid(version) !== null && satisfies(version, dep.range) && gt(version, dep.bundledVersion);
+}
+
+/**
+ * Pick the highest non-deprecated upgrade from abbreviated registry metadata
+ * (inside `dep.range` and newer than `dep.bundledVersion`). Returns null when
+ * there is nothing to upgrade to, which includes versions missing a tarball
+ * URL or sha512 integrity — those could never be verified, so they are never
+ * candidates. Exported for tests.
+ */
+export function pickHighestSatisfying(
+  metadata: AbbreviatedPackument,
+  dep: Pick<RuntimeDep, 'range' | 'bundledVersion'>,
+): ResolvedVersion | null {
   const versions = metadata.versions ?? {};
   const candidates = Object.keys(versions).filter((version) => {
     const info = versions[version];
     return (
-      valid(version) !== null &&
+      isUpgrade(version, dep) &&
       !info?.deprecated &&
       typeof info?.dist?.tarball === 'string' &&
       typeof info?.dist?.integrity === 'string' &&
       sha512Digests(info.dist.integrity).length > 0
     );
   });
-  const version = maxSatisfying(candidates, range);
+  const version = maxSatisfying(candidates, dep.range);
   if (!version) return null;
   const dist = versions[version]?.dist as { tarball: string; integrity: string };
   return { version, tarballUrl: dist.tarball, integrity: dist.integrity };
@@ -149,48 +181,59 @@ function entryPath(cacheDir: string, version: string, dep: RuntimeDep): string {
   return join(cacheDir, version, installedFileName(dep.files[0], true));
 }
 
-function readResolutionCache(cacheDir: string, range: string): (ResolvedVersion & { installFailed?: boolean }) | null {
+/** The remembered registry lookup, or null when it is missing, stale, or was made for a different CLI build. */
+function readResolutionCache(cacheDir: string, dep: RuntimeDep): Resolution | null {
   try {
     const parsed = JSON.parse(readFileSync(join(cacheDir, RESOLUTION_FILENAME), 'utf8')) as Partial<ResolutionCache>;
-    if (
-      typeof parsed.version !== 'string' ||
-      typeof parsed.tarballUrl !== 'string' ||
-      typeof parsed.integrity !== 'string' ||
-      typeof parsed.fetchedAt !== 'number'
-    ) {
-      return null;
-    }
+    if (typeof parsed.fetchedAt !== 'number') return null;
     const age = Date.now() - parsed.fetchedAt;
     // A negative age means the clock rolled back under a future timestamp;
     // treat it as stale rather than trusting it forever.
     if (age < 0 || age >= RESOLUTION_TTL_MS) return null;
-    // The baked range may have moved since the resolution was cached (CLI update).
-    if (valid(parsed.version) === null || !satisfies(parsed.version, range)) return null;
+    // Looked up by a different CLI build (the baked range or the compiled-in
+    // version moved): its verdict says nothing about what this binary needs,
+    // and trusting it is how a shared cache downgrades a newer CLI.
+    if (parsed.range !== dep.range || parsed.bundledVersion !== dep.bundledVersion) return null;
+    if (parsed.resolved === null) return { resolved: null, installFailed: false };
+    const resolved = parsed.resolved;
+    if (
+      typeof resolved?.version !== 'string' ||
+      typeof resolved.tarballUrl !== 'string' ||
+      typeof resolved.integrity !== 'string' ||
+      !isUpgrade(resolved.version, dep)
+    ) {
+      return null;
+    }
     return {
-      version: parsed.version,
-      tarballUrl: parsed.tarballUrl,
-      integrity: parsed.integrity,
-      ...(parsed.installFailed === true ? { installFailed: true } : {}),
+      resolved: { version: resolved.version, tarballUrl: resolved.tarballUrl, integrity: resolved.integrity },
+      installFailed: parsed.installFailed === true,
     };
   } catch {
     return null;
   }
 }
 
-function writeResolutionCache(cacheDir: string, resolved: ResolvedVersion & { installFailed?: boolean }): void {
+function writeResolutionCache(cacheDir: string, dep: RuntimeDep, resolution: Resolution): void {
   // Best-effort: a failed cache write only costs a refetch next run.
   try {
     mkdirSync(cacheDir, { recursive: true, mode: 0o700 });
     const path = join(cacheDir, RESOLUTION_FILENAME);
     const temporary = `${path}.tmp.${process.pid}.${randomUUID()}`;
-    writeFileSync(temporary, JSON.stringify({ ...resolved, fetchedAt: Date.now() } satisfies ResolutionCache));
+    const entry: ResolutionCache = {
+      ...resolution,
+      fetchedAt: Date.now(),
+      range: dep.range,
+      bundledVersion: dep.bundledVersion,
+    };
+    writeFileSync(temporary, JSON.stringify(entry));
     renameSync(temporary, path);
   } catch {
     // Ignored.
   }
 }
 
-async function fetchResolution(dep: RuntimeDep): Promise<ResolvedVersion> {
+/** Registry lookup; null means the registry has nothing newer than the compiled-in version. */
+async function fetchResolution(dep: RuntimeDep): Promise<ResolvedVersion | null> {
   const response = await fetch(`${REGISTRY_BASE_URL}/${encodeURIComponent(dep.npmPackage)}`, {
     headers: { accept: 'application/vnd.npm.install-v1+json' },
     signal: AbortSignal.timeout(METADATA_TIMEOUT_MS),
@@ -199,11 +242,7 @@ async function fetchResolution(dep: RuntimeDep): Promise<ResolvedVersion> {
     throw new Error(`HTTP ${response.status} fetching ${dep.npmPackage} metadata`);
   }
   const metadata = (await response.json()) as AbbreviatedPackument;
-  const resolved = pickHighestSatisfying(metadata, dep.range);
-  if (!resolved) {
-    throw new Error(`No non-deprecated ${dep.npmPackage} version satisfies ${dep.range}`);
-  }
-  return resolved;
+  return pickHighestSatisfying(metadata, dep);
 }
 
 /** Write-to-temp + rename; a concurrent winner is accepted (its bytes passed the same verification). */
@@ -272,18 +311,33 @@ function cleanupStaleVersions(cacheDir: string, currentVersion: string): void {
   }
 }
 
-/** Newest already-downloaded version inside the baked range, for offline runs. */
-function newestDownloadedVersion(cacheDir: string, dep: RuntimeDep): string | null {
+/**
+ * Remove a version dir whose bundle failed to install or import. Deleting it,
+ * rather than leaving it for the offline fallback to trip over on every run,
+ * is what lets the cache heal: older downloaded upgrades get their turn now,
+ * and the next resolution after the TTL downloads the version fresh.
+ */
+function quarantineVersion(cacheDir: string, version: string): void {
+  try {
+    rmSync(join(cacheDir, version), { recursive: true, force: true });
+  } catch {
+    // Best-effort (e.g. a file still open elsewhere); the installFailed marker
+    // keeps the resolved version skipped regardless.
+  }
+}
+
+/**
+ * Previously downloaded upgrades — complete installs inside the range and
+ * newer than the compiled-in version — newest first. The offline fallback.
+ */
+function downloadedUpgrades(cacheDir: string, dep: RuntimeDep): string[] {
   let entries: string[];
   try {
     entries = readdirSync(cacheDir);
   } catch {
-    return null;
+    return [];
   }
-  const candidates = entries.filter(
-    (entry) => valid(entry) !== null && satisfies(entry, dep.range) && existsSync(entryPath(cacheDir, entry, dep)),
-  );
-  return maxSatisfying(candidates, dep.range);
+  return rsort(entries.filter((entry) => isUpgrade(entry, dep) && existsSync(entryPath(cacheDir, entry, dep))));
 }
 
 async function importBundle(bundlePath: string): Promise<Record<string, unknown>> {
@@ -312,40 +366,58 @@ export async function loadRuntimeDep(
 
   const cacheDir = join(options.cacheRoot ?? defaultCacheRoot(), dep.name);
   try {
-    let resolved = readResolutionCache(cacheDir, dep.range);
-    if (!resolved) {
+    let resolution = readResolutionCache(cacheDir, dep);
+    if (!resolution) {
       try {
-        resolved = await fetchResolution(dep);
-        writeResolutionCache(cacheDir, resolved);
+        resolution = { resolved: await fetchResolution(dep), installFailed: false };
+        writeResolutionCache(cacheDir, dep, resolution);
       } catch (error) {
         logWarn(`Version resolution for runtime dep ${dep.npmPackage} failed:`, error);
-        resolved = null;
       }
     }
 
-    if (resolved) {
+    // A definitive answer from the registry: nothing newer than what this
+    // binary already ships. Not a failure, so no fallback either — a cached
+    // older upgrade (or one since deprecated) must not outrank the compiled-in
+    // module.
+    if (resolution !== null && resolution.resolved === null) return null;
+
+    // A quarantined version is left alone until the TTL expires: not
+    // re-downloaded, and not re-imported even if its directory is still there.
+    if (resolution?.resolved && !resolution.installFailed) {
+      const { resolved } = resolution;
       try {
         const bundlePath = entryPath(cacheDir, resolved.version, dep);
-        if (existsSync(bundlePath)) return await importBundle(bundlePath);
-        if (!resolved.installFailed) {
+        if (!existsSync(bundlePath)) {
           await downloadBundle(dep, resolved, join(cacheDir, resolved.version));
           cleanupStaleVersions(cacheDir, resolved.version);
-          return await importBundle(bundlePath);
         }
+        return await importBundle(bundlePath);
       } catch (error) {
         logWarn(`Runtime bundle install for ${dep.npmPackage}@${resolved.version} failed:`, error);
-        // Remember the failure so every invocation inside the TTL window
-        // doesn't re-download a tarball that can't install (e.g. the package
-        // hasn't published a bundle yet). Retried after the TTL expires.
-        writeResolutionCache(cacheDir, { ...resolved, installFailed: true });
+        // Quarantine: drop the version dir so neither this run's fallback nor
+        // the next run imports a bundle that just failed, and remember the
+        // failure so no invocation inside the TTL re-downloads a tarball that
+        // can't install (e.g. the package hasn't published a bundle yet).
+        quarantineVersion(cacheDir, resolved.version);
+        writeResolutionCache(cacheDir, dep, { resolved, installFailed: true });
       }
     }
 
-    // Resolution or install failed — the newest previously downloaded version
-    // (verified when it was installed) still works offline.
-    const fallback = newestDownloadedVersion(cacheDir, dep);
-    if (!fallback) return null;
-    return await importBundle(entryPath(cacheDir, fallback, dep));
+    // Resolution or install failed — a previously downloaded upgrade (verified
+    // when it was installed) still works offline. Newest first; one that no
+    // longer imports is quarantined so the next gets its turn.
+    const quarantined = resolution?.installFailed ? resolution.resolved?.version : undefined;
+    for (const version of downloadedUpgrades(cacheDir, dep)) {
+      if (version === quarantined) continue;
+      try {
+        return await importBundle(entryPath(cacheDir, version, dep));
+      } catch (error) {
+        logWarn(`Cached runtime bundle ${dep.npmPackage}@${version} failed to import; removing it:`, error);
+        quarantineVersion(cacheDir, version);
+      }
+    }
+    return null;
   } catch (error) {
     logWarn(`Runtime bundle for ${dep.npmPackage} unavailable; using the compiled-in module:`, error);
     return null;
