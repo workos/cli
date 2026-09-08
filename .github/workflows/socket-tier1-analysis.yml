@@ -12,6 +12,9 @@ on:
         description: 'Required by the return-dispatch action'
         required: true
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}
   cancel-in-progress: true
@@ -27,6 +30,10 @@ jobs:
           echo "distinct_id: ${{ github.event.inputs.distinct_id }}"
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
+      - name: Setup Socket Firewall
+        uses: workos/setup-socket-firewall@ca93dd8aa351f54f4729fe3377a9be23c631c25d
+        with:
+          token: ${{ secrets.PUBLIC_SOCKET_FIREWALL_TOKEN }}
       - name: Install Socket CLI
         run: npm install -g socket
       - name: Run Tier 1 reachability scan
