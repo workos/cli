@@ -355,7 +355,13 @@ const SKILLS_UPDATE_EXEMPT_COMMANDS = new Set(['root', 'skills', 'setup', 'docto
 export async function maybeOfferSkillsUpdate(commandName: string): Promise<void> {
   try {
     if (SKILLS_UPDATE_EXEMPT_COMMANDS.has(commandName.split('.')[0])) return;
-    if (isJsonMode() || !isPromptAllowed() || isSetupDeclined()) return;
+    // Interaction mode is resolved from stdout/stderr, which says nothing about
+    // whether anyone can answer: with stdin redirected (`workos org list < /dev/null`)
+    // the mode is still `human`, so the offer prints, `ui.confirm` throws on the
+    // non-TTY stdin, and the catch below swallows it before the offered version is
+    // recorded — so every later command re-prints an offer nobody can answer.
+    // Check stdin before emitting any prompt-related output.
+    if (isJsonMode() || !isPromptAllowed() || !process.stdin.isTTY || isSetupDeclined()) return;
 
     const info = await checkSkills();
     const bundled = info?.bundledVersion;
@@ -376,10 +382,23 @@ export async function maybeOfferSkillsUpdate(commandName: string): Promise<void>
 
     const agents = Object.values(createAgents(homedir())).filter((a) => staleNames.has(a.displayName));
     const result = await refreshWorkOSSkills({ agents });
-    if (result) {
-      ui.log.success(`Updated WorkOS skills for ${result.agents.map((a) => a.displayName).join(', ')}.`);
-    } else {
+    // `refreshWorkOSSkills` is truthy as soon as ONE agent lands, so a truthy
+    // result is not the same as "all of them updated". Reporting it as a clean
+    // success would leave an agent silently stale, and the offered version above
+    // is already recorded — deliberately, so a persistently broken refresh can't
+    // nag after every command — which makes the explicit retry command the only
+    // remaining path for whatever failed. Say so instead of claiming success.
+    const updated = result?.agents.map((a) => a.displayName) ?? [];
+    const failed = agents.map((a) => a.displayName).filter((name) => !updated.includes(name));
+
+    if (updated.length === 0) {
       ui.log.error(`Couldn't update WorkOS skills. Run \`${formatWorkOSCommand('skills install')}\` to retry.`);
+    } else if (failed.length > 0) {
+      ui.log.warn(
+        `Updated WorkOS skills for ${updated.join(', ')}, but ${failed.join(', ')} ${failed.length === 1 ? 'is' : 'are'} still on an older version. Run \`${formatWorkOSCommand('skills install')}\` to finish.`,
+      );
+    } else {
+      ui.log.success(`Updated WorkOS skills for ${updated.join(', ')}.`);
     }
   } catch (error) {
     analytics.captureException(error instanceof Error ? error : new Error(String(error)), {
