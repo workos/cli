@@ -41,6 +41,8 @@ vi.mock('../lib/preferences.js', () => ({
   clearSetupDecline: vi.fn(),
   getSkillsUpdateOfferedVersion: vi.fn(() => undefined),
   recordSkillsUpdateOffered: vi.fn(),
+  hasSkillsUpdateRetried: vi.fn(() => false),
+  recordSkillsUpdateRetry: vi.fn(),
 }));
 
 vi.mock('./install-skill.js', () => ({
@@ -118,6 +120,7 @@ beforeEach(() => {
   vi.mocked(prefs.isSetupDeclined).mockReturnValue(false);
   vi.mocked(prefs.isSetupCompleted).mockReturnValue(false);
   vi.mocked(prefs.getSkillsUpdateOfferedVersion).mockReturnValue(undefined);
+  vi.mocked(prefs.hasSkillsUpdateRetried).mockReturnValue(false);
   vi.mocked(checkSkills).mockResolvedValue(null);
   vi.mocked(refreshWorkOSSkills).mockResolvedValue({
     agents: [claudeAgent as any],
@@ -537,7 +540,8 @@ describe('maybeOfferSkillsUpdate', () => {
     expect(ui.confirm).not.toHaveBeenCalled();
   });
 
-  it('reports a partial refresh as incomplete rather than a success', async () => {
+  /** Both agents stale, but only Claude Code lands — a truthy result all the same. */
+  function partialRefresh() {
     vi.mocked(checkSkills).mockResolvedValue({
       bundledVersion: '2.0.0',
       agents: [
@@ -546,7 +550,6 @@ describe('maybeOfferSkillsUpdate', () => {
       ],
     });
     vi.mocked(ui.confirm).mockResolvedValue(true);
-    // Only Claude Code lands — `refreshWorkOSSkills` is truthy all the same.
     vi.mocked(refreshWorkOSSkills).mockResolvedValue({
       agents: [claudeAgent as any],
       skills: ['workos'],
@@ -554,6 +557,10 @@ describe('maybeOfferSkillsUpdate', () => {
       perAgentBefore: {},
       perAgentAfter: {},
     });
+  }
+
+  it('reports a partial refresh as incomplete rather than a success', async () => {
+    partialRefresh();
 
     await maybeOfferSkillsUpdate('organization.list');
 
@@ -562,6 +569,30 @@ describe('maybeOfferSkillsUpdate', () => {
     expect(warning).toContain('Claude Code');
     expect(warning).toContain('Cursor');
     expect(warning).toContain('workos skills install');
+  });
+
+  it('leaves a partial refresh eligible for exactly one more offer', async () => {
+    partialRefresh();
+
+    await maybeOfferSkillsUpdate('organization.list');
+
+    // The version is recorded up front so a throwing refresh can't nag forever,
+    // then re-opened by the retry marker because some agents did land.
+    expect(prefs.recordSkillsUpdateOffered).toHaveBeenCalledWith('2.0.0');
+    expect(prefs.recordSkillsUpdateRetry).toHaveBeenCalledWith('2.0.0');
+  });
+
+  it('goes quiet after a second incomplete refresh for the same version', async () => {
+    partialRefresh();
+    vi.mocked(prefs.hasSkillsUpdateRetried).mockReturnValue(true);
+
+    await maybeOfferSkillsUpdate('organization.list');
+
+    expect(ui.log.warn).toHaveBeenCalled();
+    // Retry already spent: the recorded version stands, so only the explicit
+    // `workos skills install` remains.
+    expect(prefs.recordSkillsUpdateRetry).not.toHaveBeenCalled();
+    expect(prefs.recordSkillsUpdateOffered).toHaveBeenCalledWith('2.0.0');
   });
 
   it('points at the retry command when nothing could be refreshed', async () => {
@@ -573,6 +604,10 @@ describe('maybeOfferSkillsUpdate', () => {
 
     expect(ui.log.success).not.toHaveBeenCalled();
     expect(ui.log.error).toHaveBeenCalledWith(expect.stringContaining('workos skills install'));
+    // Nothing landed, so nothing suggests a retry would fare better: remembered,
+    // not re-offered.
+    expect(prefs.recordSkillsUpdateOffered).toHaveBeenCalledWith('2.0.0');
+    expect(prefs.recordSkillsUpdateRetry).not.toHaveBeenCalled();
   });
 
   it('never throws; failures are reported to telemetry', async () => {

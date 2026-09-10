@@ -35,7 +35,9 @@ import {
   recordSetupCompleted,
   clearSetupDecline,
   getSkillsUpdateOfferedVersion,
+  hasSkillsUpdateRetried,
   recordSkillsUpdateOffered,
+  recordSkillsUpdateRetry,
 } from '../lib/preferences.js';
 import { createAgents, detectAgents, refreshWorkOSSkills, type AgentConfig } from './install-skill.js';
 import { checkSkills } from '../doctor/checks/skills.js';
@@ -348,9 +350,11 @@ const SKILLS_UPDATE_EXEMPT_COMMANDS = new Set(['root', 'skills', 'setup', 'docto
  * Best-effort offer to refresh CLI-installed skills that trail the version
  * bundled with this binary. Runs after every successful command (see `runCli`),
  * gated like the automatic setup offer: human TTY only, never after a setup
- * decline. Asked at most once per bundled skills version — a "no" (or a failed
- * refresh) is remembered until a newer CLI ships newer skills; a cancel
- * (ctrl-c) is not. Never throws into the parent command.
+ * decline. Asked at most once per bundled skills version — a "no" (or a refresh
+ * that landed nothing) is remembered until a newer CLI ships newer skills; a
+ * cancel (ctrl-c) is not, and a refresh that landed for some agents but not all
+ * gets exactly one more offer before going quiet. Never throws into the parent
+ * command.
  */
 export async function maybeOfferSkillsUpdate(commandName: string): Promise<void> {
   try {
@@ -374,32 +378,46 @@ export async function maybeOfferSkillsUpdate(commandName: string): Promise<void>
     const answer = await ui.confirm({ message: 'Update them now?', initialValue: false });
     if (isCancel(answer)) return;
 
-    recordSkillsUpdateOffered(bundled);
     if (!answer) {
+      recordSkillsUpdateOffered(bundled);
       ui.log.hint(`Skipped. Run \`${formatWorkOSCommand('skills install')}\` to update later.`);
       return;
     }
 
+    // Recorded BEFORE the refresh on purpose: if the refresh throws (or the
+    // process dies mid-way) the version is already remembered, so a hard failure
+    // can never turn into an offer after every subsequent command. A recoverable
+    // partial miss downgrades this to retry-eligible below.
+    const alreadyRetried = hasSkillsUpdateRetried(bundled);
+    recordSkillsUpdateOffered(bundled);
+
     const agents = Object.values(createAgents(homedir())).filter((a) => staleNames.has(a.displayName));
     const result = await refreshWorkOSSkills({ agents });
     // `refreshWorkOSSkills` is truthy as soon as ONE agent lands, so a truthy
-    // result is not the same as "all of them updated". Reporting it as a clean
-    // success would leave an agent silently stale, and the offered version above
-    // is already recorded — deliberately, so a persistently broken refresh can't
-    // nag after every command — which makes the explicit retry command the only
-    // remaining path for whatever failed. Say so instead of claiming success.
+    // result is not the same as "all of them updated" — reporting it as a clean
+    // success would leave an agent silently stale.
     const updated = result?.agents.map((a) => a.displayName) ?? [];
     const failed = agents.map((a) => a.displayName).filter((name) => !updated.includes(name));
 
     if (updated.length === 0) {
       ui.log.error(`Couldn't update WorkOS skills. Run \`${formatWorkOSCommand('skills install')}\` to retry.`);
-    } else if (failed.length > 0) {
-      ui.log.warn(
-        `Updated WorkOS skills for ${updated.join(', ')}, but ${failed.join(', ')} ${failed.length === 1 ? 'is' : 'are'} still on an older version. Run \`${formatWorkOSCommand('skills install')}\` to finish.`,
-      );
-    } else {
-      ui.log.success(`Updated WorkOS skills for ${updated.join(', ')}.`);
+      return;
     }
+
+    if (failed.length === 0) {
+      ui.log.success(`Updated WorkOS skills for ${updated.join(', ')}.`);
+      return;
+    }
+
+    // Partial: some agents landed, so the refresh mechanism demonstrably works
+    // and the miss is worth one more automatic offer. Bounded to one — a
+    // permanently unwritable skills dir must not re-ask after every command —
+    // after which the recorded version above stands and only the explicit
+    // command remains.
+    if (!alreadyRetried) recordSkillsUpdateRetry(bundled);
+    ui.log.warn(
+      `Updated WorkOS skills for ${updated.join(', ')}, but ${failed.join(', ')} ${failed.length === 1 ? 'is' : 'are'} still on an older version. Run \`${formatWorkOSCommand('skills install')}\` to finish.`,
+    );
   } catch (error) {
     analytics.captureException(error instanceof Error ? error : new Error(String(error)), {
       'setup.trigger': 'skills-update',
