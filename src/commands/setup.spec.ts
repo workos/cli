@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 const CANCEL = Symbol('cancel');
@@ -7,7 +7,7 @@ vi.mock('../utils/ui.js', () => ({
   default: {
     heading: vi.fn(),
     note: vi.fn(),
-    log: { info: vi.fn(), success: vi.fn(), error: vi.fn(), hint: vi.fn() },
+    log: { info: vi.fn(), success: vi.fn(), error: vi.fn(), hint: vi.fn(), warn: vi.fn() },
     confirm: vi.fn(),
   },
   isCancel: (v: unknown) => v === CANCEL,
@@ -39,6 +39,10 @@ vi.mock('../lib/preferences.js', () => ({
   recordSetupDeclined: vi.fn(),
   recordSetupCompleted: vi.fn(),
   clearSetupDecline: vi.fn(),
+  getSkillsUpdateOfferedVersion: vi.fn(() => undefined),
+  recordSkillsUpdateOffered: vi.fn(),
+  hasSkillsUpdateRetried: vi.fn(() => false),
+  recordSkillsUpdateRetry: vi.fn(),
 }));
 
 vi.mock('./install-skill.js', () => ({
@@ -48,6 +52,10 @@ vi.mock('./install-skill.js', () => ({
   })),
   detectAgents: vi.fn(),
   refreshWorkOSSkills: vi.fn(),
+}));
+
+vi.mock('../doctor/checks/skills.js', () => ({
+  checkSkills: vi.fn(),
 }));
 
 vi.mock('../lib/mcp-clients.js', () => ({
@@ -76,10 +84,11 @@ const { isJsonMode, outputSuccess } = await import('../utils/output.js');
 const { isPromptAllowed } = await import('../utils/interaction-mode.js');
 const prefs = await import('../lib/preferences.js');
 const { detectAgents, refreshWorkOSSkills } = await import('./install-skill.js');
+const { checkSkills } = await import('../doctor/checks/skills.js');
 const { detectMcpClients } = await import('../lib/mcp-clients.js');
 const { analytics } = await import('../utils/analytics.js');
 
-const { runSetup, maybeRunSetupAfter } = await import('./setup.js');
+const { runSetup, maybeRunSetupAfter, maybeOfferSkillsUpdate } = await import('./setup.js');
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 const claudeAgent = { name: 'claude-code', displayName: 'Claude Code', globalSkillsDir: '/x', detect: () => true };
@@ -110,6 +119,9 @@ beforeEach(() => {
   vi.mocked(isJsonMode).mockReturnValue(false);
   vi.mocked(prefs.isSetupDeclined).mockReturnValue(false);
   vi.mocked(prefs.isSetupCompleted).mockReturnValue(false);
+  vi.mocked(prefs.getSkillsUpdateOfferedVersion).mockReturnValue(undefined);
+  vi.mocked(prefs.hasSkillsUpdateRetried).mockReturnValue(false);
+  vi.mocked(checkSkills).mockResolvedValue(null);
   vi.mocked(refreshWorkOSSkills).mockResolvedValue({
     agents: [claudeAgent as any],
     skills: ['workos', 'workos-widgets'],
@@ -429,5 +441,180 @@ describe('maybeRunSetupAfter', () => {
 
     const confirmArgs = vi.mocked(ui.confirm).mock.calls[0][0] as { signal?: AbortSignal };
     expect(confirmArgs.signal).toBeUndefined();
+  });
+});
+
+describe('maybeOfferSkillsUpdate', () => {
+  const realStdinIsTTY = process.stdin.isTTY;
+
+  beforeEach(() => {
+    // Interaction mode is mocked, but the stdin gate reads the real stream — and
+    // vitest runs with stdin redirected. Stub an answerable terminal.
+    process.stdin.isTTY = true;
+  });
+
+  afterEach(() => {
+    process.stdin.isTTY = realStdinIsTTY;
+  });
+
+  function staleClaude() {
+    vi.mocked(checkSkills).mockResolvedValue({
+      bundledVersion: '2.0.0',
+      agents: [
+        { agent: 'Claude Code', installedVersion: '1.0.0', stale: true },
+        { agent: 'Cursor', installedVersion: '2.0.0', stale: false },
+      ],
+    });
+  }
+
+  it('is silent for exempt commands, non-human mode, JSON mode, and after a setup decline', async () => {
+    staleClaude();
+
+    await maybeOfferSkillsUpdate('skills.install');
+    await maybeOfferSkillsUpdate('root');
+    vi.mocked(isPromptAllowed).mockReturnValue(false);
+    await maybeOfferSkillsUpdate('organization.list');
+    vi.mocked(isPromptAllowed).mockReturnValue(true);
+    vi.mocked(isJsonMode).mockReturnValue(true);
+    await maybeOfferSkillsUpdate('organization.list');
+    vi.mocked(isJsonMode).mockReturnValue(false);
+    vi.mocked(prefs.isSetupDeclined).mockReturnValue(true);
+    await maybeOfferSkillsUpdate('organization.list');
+
+    expect(ui.confirm).not.toHaveBeenCalled();
+  });
+
+  it('does not prompt when nothing is stale or this bundled version was already offered', async () => {
+    await maybeOfferSkillsUpdate('organization.list');
+    staleClaude();
+    vi.mocked(prefs.getSkillsUpdateOfferedVersion).mockReturnValue('2.0.0');
+    await maybeOfferSkillsUpdate('organization.list');
+
+    expect(ui.confirm).not.toHaveBeenCalled();
+  });
+
+  it('refreshes only the stale agents on accept and remembers the bundled version', async () => {
+    staleClaude();
+    vi.mocked(ui.confirm).mockResolvedValue(true);
+
+    await maybeOfferSkillsUpdate('organization.list');
+
+    expect(ui.confirm).toHaveBeenCalledWith(expect.objectContaining({ initialValue: false }));
+    expect(refreshWorkOSSkills).toHaveBeenCalledWith({
+      agents: [expect.objectContaining({ name: 'claude-code' })],
+    });
+    expect(prefs.recordSkillsUpdateOffered).toHaveBeenCalledWith('2.0.0');
+    expect(ui.log.success).toHaveBeenCalled();
+  });
+
+  it('installs nothing on decline but remembers the version so it is not asked again', async () => {
+    staleClaude();
+    vi.mocked(ui.confirm).mockResolvedValue(false);
+
+    await maybeOfferSkillsUpdate('organization.list');
+
+    expect(refreshWorkOSSkills).not.toHaveBeenCalled();
+    expect(prefs.recordSkillsUpdateOffered).toHaveBeenCalledWith('2.0.0');
+  });
+
+  it('treats cancel (ctrl-c) as skip without remembering the version', async () => {
+    staleClaude();
+    vi.mocked(ui.confirm).mockResolvedValue(CANCEL);
+
+    await maybeOfferSkillsUpdate('organization.list');
+
+    expect(refreshWorkOSSkills).not.toHaveBeenCalled();
+    expect(prefs.recordSkillsUpdateOffered).not.toHaveBeenCalled();
+  });
+
+  it('stays silent when stdin is redirected, so it never asks a question nobody can answer', async () => {
+    staleClaude();
+    process.stdin.isTTY = undefined;
+
+    await maybeOfferSkillsUpdate('organization.list');
+
+    // The message must not print either: `ui.confirm` would throw on the
+    // redirected stdin, leaving the version unrecorded and the offer to repeat
+    // after every later command.
+    expect(ui.log.info).not.toHaveBeenCalled();
+    expect(ui.confirm).not.toHaveBeenCalled();
+  });
+
+  /** Both agents stale, but only Claude Code lands — a truthy result all the same. */
+  function partialRefresh() {
+    vi.mocked(checkSkills).mockResolvedValue({
+      bundledVersion: '2.0.0',
+      agents: [
+        { agent: 'Claude Code', installedVersion: '1.0.0', stale: true },
+        { agent: 'Cursor', installedVersion: '1.0.0', stale: true },
+      ],
+    });
+    vi.mocked(ui.confirm).mockResolvedValue(true);
+    vi.mocked(refreshWorkOSSkills).mockResolvedValue({
+      agents: [claudeAgent as any],
+      skills: ['workos'],
+      version: '2.0.0',
+      perAgentBefore: {},
+      perAgentAfter: {},
+    });
+  }
+
+  it('reports a partial refresh as incomplete rather than a success', async () => {
+    partialRefresh();
+
+    await maybeOfferSkillsUpdate('organization.list');
+
+    expect(ui.log.success).not.toHaveBeenCalled();
+    const warning = vi.mocked(ui.log.warn).mock.calls[0][0];
+    expect(warning).toContain('Claude Code');
+    expect(warning).toContain('Cursor');
+    expect(warning).toContain('workos skills install');
+  });
+
+  it('leaves a partial refresh eligible for exactly one more offer', async () => {
+    partialRefresh();
+
+    await maybeOfferSkillsUpdate('organization.list');
+
+    // The version is recorded up front so a throwing refresh can't nag forever,
+    // then re-opened by the retry marker because some agents did land.
+    expect(prefs.recordSkillsUpdateOffered).toHaveBeenCalledWith('2.0.0');
+    expect(prefs.recordSkillsUpdateRetry).toHaveBeenCalledWith('2.0.0');
+  });
+
+  it('goes quiet after a second incomplete refresh for the same version', async () => {
+    partialRefresh();
+    vi.mocked(prefs.hasSkillsUpdateRetried).mockReturnValue(true);
+
+    await maybeOfferSkillsUpdate('organization.list');
+
+    expect(ui.log.warn).toHaveBeenCalled();
+    // Retry already spent: the recorded version stands, so only the explicit
+    // `workos skills install` remains.
+    expect(prefs.recordSkillsUpdateRetry).not.toHaveBeenCalled();
+    expect(prefs.recordSkillsUpdateOffered).toHaveBeenCalledWith('2.0.0');
+  });
+
+  it('points at the retry command when nothing could be refreshed', async () => {
+    staleClaude();
+    vi.mocked(ui.confirm).mockResolvedValue(true);
+    vi.mocked(refreshWorkOSSkills).mockResolvedValue(null);
+
+    await maybeOfferSkillsUpdate('organization.list');
+
+    expect(ui.log.success).not.toHaveBeenCalled();
+    expect(ui.log.error).toHaveBeenCalledWith(expect.stringContaining('workos skills install'));
+    // Nothing landed, so nothing suggests a retry would fare better: remembered,
+    // not re-offered.
+    expect(prefs.recordSkillsUpdateOffered).toHaveBeenCalledWith('2.0.0');
+    expect(prefs.recordSkillsUpdateRetry).not.toHaveBeenCalled();
+  });
+
+  it('never throws; failures are reported to telemetry', async () => {
+    vi.mocked(checkSkills).mockRejectedValue(new Error('boom'));
+
+    await expect(maybeOfferSkillsUpdate('organization.list')).resolves.toBeUndefined();
+
+    expect(analytics.captureException).toHaveBeenCalledWith(expect.any(Error), { 'setup.trigger': 'skills-update' });
   });
 });
