@@ -34,8 +34,11 @@ import {
   recordSetupDeclined,
   recordSetupCompleted,
   clearSetupDecline,
+  getSkillsUpdateOfferedVersion,
+  recordSkillsUpdateOffered,
 } from '../lib/preferences.js';
 import { createAgents, detectAgents, refreshWorkOSSkills, type AgentConfig } from './install-skill.js';
+import { checkSkills } from '../doctor/checks/skills.js';
 import {
   detectMcpClients,
   MCP_AGENT_KEYS,
@@ -331,6 +334,56 @@ export async function maybeRunSetupAfter(trigger: 'login' | 'install'): Promise<
     // Setup must never fail or block login / install — but don't drop the signal.
     analytics.captureException(error instanceof Error ? error : new Error(String(error)), {
       'setup.trigger': trigger,
+    });
+  }
+}
+
+/**
+ * Commands after which the stale-skills prompt is never shown: the bare root
+ * (`--help` / `--version`) and the commands that manage or report on skills.
+ */
+const SKILLS_UPDATE_EXEMPT_COMMANDS = new Set(['root', 'skills', 'setup', 'doctor']);
+
+/**
+ * Best-effort offer to refresh CLI-installed skills that trail the version
+ * bundled with this binary. Runs after every successful command (see `runCli`),
+ * gated like the automatic setup offer: human TTY only, never after a setup
+ * decline. Asked at most once per bundled skills version — a "no" (or a failed
+ * refresh) is remembered until a newer CLI ships newer skills; a cancel
+ * (ctrl-c) is not. Never throws into the parent command.
+ */
+export async function maybeOfferSkillsUpdate(commandName: string): Promise<void> {
+  try {
+    if (SKILLS_UPDATE_EXEMPT_COMMANDS.has(commandName.split('.')[0])) return;
+    if (isJsonMode() || !isPromptAllowed() || isSetupDeclined()) return;
+
+    const info = await checkSkills();
+    const bundled = info?.bundledVersion;
+    const staleNames = new Set(info?.agents.filter((a) => a.stale).map((a) => a.agent));
+    if (!bundled || staleNames.size === 0 || getSkillsUpdateOfferedVersion() === bundled) return;
+
+    ui.log.info(
+      `WorkOS skills for ${[...staleNames].join(', ')} are older than the ones bundled with this CLI (${bundled}).`,
+    );
+    const answer = await ui.confirm({ message: 'Update them now?', initialValue: false });
+    if (isCancel(answer)) return;
+
+    recordSkillsUpdateOffered(bundled);
+    if (!answer) {
+      ui.log.hint(`Skipped. Run \`${formatWorkOSCommand('skills install')}\` to update later.`);
+      return;
+    }
+
+    const agents = Object.values(createAgents(homedir())).filter((a) => staleNames.has(a.displayName));
+    const result = await refreshWorkOSSkills({ agents });
+    if (result) {
+      ui.log.success(`Updated WorkOS skills for ${result.agents.map((a) => a.displayName).join(', ')}.`);
+    } else {
+      ui.log.error(`Couldn't update WorkOS skills. Run \`${formatWorkOSCommand('skills install')}\` to retry.`);
+    }
+  } catch (error) {
+    analytics.captureException(error instanceof Error ? error : new Error(String(error)), {
+      'setup.trigger': 'skills-update',
     });
   }
 }

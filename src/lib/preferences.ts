@@ -51,6 +51,11 @@ export interface CliPreferences {
     declined?: boolean;
     /** ISO timestamp the user completed a setup run. */
     completedAt?: string;
+    /**
+     * Bundled skills version the automatic stale-skills update prompt was last
+     * answered for. Suppresses re-asking until a newer CLI ships newer skills.
+     */
+    skillsUpdateOfferedVersion?: string;
   };
 }
 
@@ -204,6 +209,16 @@ export function recordSetupDeclined(): void {
 /** Persist a completed setup run, stamping the current time. */
 export function recordSetupCompleted(): void {
   savePreferences({ setup: { completedAt: new Date().toISOString() } });
+}
+
+/** Bundled skills version the stale-skills update prompt was last answered for. */
+export function getSkillsUpdateOfferedVersion(): string | undefined {
+  return getPreferences().setup?.skillsUpdateOfferedVersion;
+}
+
+/** Persist that the stale-skills update prompt was answered for `version`. */
+export function recordSkillsUpdateOffered(version: string): void {
+  savePreferences({ setup: { skillsUpdateOfferedVersion: version } });
 }
 
 /** Clear the setup decline (new + legacy) so automatic offers resume. For `workos setup --reset`. */

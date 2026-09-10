@@ -39,6 +39,8 @@ vi.mock('../lib/preferences.js', () => ({
   recordSetupDeclined: vi.fn(),
   recordSetupCompleted: vi.fn(),
   clearSetupDecline: vi.fn(),
+  getSkillsUpdateOfferedVersion: vi.fn(() => undefined),
+  recordSkillsUpdateOffered: vi.fn(),
 }));
 
 vi.mock('./install-skill.js', () => ({
@@ -48,6 +50,10 @@ vi.mock('./install-skill.js', () => ({
   })),
   detectAgents: vi.fn(),
   refreshWorkOSSkills: vi.fn(),
+}));
+
+vi.mock('../doctor/checks/skills.js', () => ({
+  checkSkills: vi.fn(),
 }));
 
 vi.mock('../lib/mcp-clients.js', () => ({
@@ -76,10 +82,11 @@ const { isJsonMode, outputSuccess } = await import('../utils/output.js');
 const { isPromptAllowed } = await import('../utils/interaction-mode.js');
 const prefs = await import('../lib/preferences.js');
 const { detectAgents, refreshWorkOSSkills } = await import('./install-skill.js');
+const { checkSkills } = await import('../doctor/checks/skills.js');
 const { detectMcpClients } = await import('../lib/mcp-clients.js');
 const { analytics } = await import('../utils/analytics.js');
 
-const { runSetup, maybeRunSetupAfter } = await import('./setup.js');
+const { runSetup, maybeRunSetupAfter, maybeOfferSkillsUpdate } = await import('./setup.js');
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 const claudeAgent = { name: 'claude-code', displayName: 'Claude Code', globalSkillsDir: '/x', detect: () => true };
@@ -110,6 +117,8 @@ beforeEach(() => {
   vi.mocked(isJsonMode).mockReturnValue(false);
   vi.mocked(prefs.isSetupDeclined).mockReturnValue(false);
   vi.mocked(prefs.isSetupCompleted).mockReturnValue(false);
+  vi.mocked(prefs.getSkillsUpdateOfferedVersion).mockReturnValue(undefined);
+  vi.mocked(checkSkills).mockResolvedValue(null);
   vi.mocked(refreshWorkOSSkills).mockResolvedValue({
     agents: [claudeAgent as any],
     skills: ['workos', 'workos-widgets'],
@@ -429,5 +438,85 @@ describe('maybeRunSetupAfter', () => {
 
     const confirmArgs = vi.mocked(ui.confirm).mock.calls[0][0] as { signal?: AbortSignal };
     expect(confirmArgs.signal).toBeUndefined();
+  });
+});
+
+describe('maybeOfferSkillsUpdate', () => {
+  function staleClaude() {
+    vi.mocked(checkSkills).mockResolvedValue({
+      bundledVersion: '2.0.0',
+      agents: [
+        { agent: 'Claude Code', installedVersion: '1.0.0', stale: true },
+        { agent: 'Cursor', installedVersion: '2.0.0', stale: false },
+      ],
+    });
+  }
+
+  it('is silent for exempt commands, non-human mode, JSON mode, and after a setup decline', async () => {
+    staleClaude();
+
+    await maybeOfferSkillsUpdate('skills.install');
+    await maybeOfferSkillsUpdate('root');
+    vi.mocked(isPromptAllowed).mockReturnValue(false);
+    await maybeOfferSkillsUpdate('organization.list');
+    vi.mocked(isPromptAllowed).mockReturnValue(true);
+    vi.mocked(isJsonMode).mockReturnValue(true);
+    await maybeOfferSkillsUpdate('organization.list');
+    vi.mocked(isJsonMode).mockReturnValue(false);
+    vi.mocked(prefs.isSetupDeclined).mockReturnValue(true);
+    await maybeOfferSkillsUpdate('organization.list');
+
+    expect(ui.confirm).not.toHaveBeenCalled();
+  });
+
+  it('does not prompt when nothing is stale or this bundled version was already offered', async () => {
+    await maybeOfferSkillsUpdate('organization.list');
+    staleClaude();
+    vi.mocked(prefs.getSkillsUpdateOfferedVersion).mockReturnValue('2.0.0');
+    await maybeOfferSkillsUpdate('organization.list');
+
+    expect(ui.confirm).not.toHaveBeenCalled();
+  });
+
+  it('refreshes only the stale agents on accept and remembers the bundled version', async () => {
+    staleClaude();
+    vi.mocked(ui.confirm).mockResolvedValue(true);
+
+    await maybeOfferSkillsUpdate('organization.list');
+
+    expect(ui.confirm).toHaveBeenCalledWith(expect.objectContaining({ initialValue: false }));
+    expect(refreshWorkOSSkills).toHaveBeenCalledWith({
+      agents: [expect.objectContaining({ name: 'claude-code' })],
+    });
+    expect(prefs.recordSkillsUpdateOffered).toHaveBeenCalledWith('2.0.0');
+    expect(ui.log.success).toHaveBeenCalled();
+  });
+
+  it('installs nothing on decline but remembers the version so it is not asked again', async () => {
+    staleClaude();
+    vi.mocked(ui.confirm).mockResolvedValue(false);
+
+    await maybeOfferSkillsUpdate('organization.list');
+
+    expect(refreshWorkOSSkills).not.toHaveBeenCalled();
+    expect(prefs.recordSkillsUpdateOffered).toHaveBeenCalledWith('2.0.0');
+  });
+
+  it('treats cancel (ctrl-c) as skip without remembering the version', async () => {
+    staleClaude();
+    vi.mocked(ui.confirm).mockResolvedValue(CANCEL);
+
+    await maybeOfferSkillsUpdate('organization.list');
+
+    expect(refreshWorkOSSkills).not.toHaveBeenCalled();
+    expect(prefs.recordSkillsUpdateOffered).not.toHaveBeenCalled();
+  });
+
+  it('never throws; failures are reported to telemetry', async () => {
+    vi.mocked(checkSkills).mockRejectedValue(new Error('boom'));
+
+    await expect(maybeOfferSkillsUpdate('organization.list')).resolves.toBeUndefined();
+
+    expect(analytics.captureException).toHaveBeenCalledWith(expect.any(Error), { 'setup.trigger': 'skills-update' });
   });
 });
