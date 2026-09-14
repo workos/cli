@@ -22,7 +22,8 @@
 # Usage: [WORKOS_API_KEY=sk_...] sh command-smoke.sh /path/to/workos
 set -u
 
-BIN="$1"
+# Keep the binary address valid when a check changes working directory.
+BIN="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
 fails=0
 
 pass() { echo "  ok: $1"; }
@@ -33,9 +34,9 @@ fail() {
 
 # Sandbox the config/home so host auth state can never leak in; the Windows
 # binary reads USERPROFILE, which needs a Windows-style path under Git Bash.
-SANDBOX=$(mktemp -d)
+SANDBOX=$(mktemp -d) || exit 1
 if command -v cygpath >/dev/null 2>&1; then
-  USERPROFILE=$(cygpath -w "$SANDBOX")
+  USERPROFILE=$(cygpath -w "$SANDBOX") || exit 1
 else
   USERPROFILE="$SANDBOX"
 fi
@@ -109,6 +110,51 @@ case "$err" in
   *) json_ok=0 ;;
 esac
 if [ "$code" -eq 1 ] && [ "$json_ok" -eq 1 ]; then pass "unknown command exits 1 with structured error"; else fail "unknown command contract (exit $code, want 1): $err"; fi
+
+# Doctor must use installed tools, not shims planted in its project directory.
+# This runs against the shipped Bun binary on native Windows release runners
+# too. On POSIX, a relative PATH entry supplies the equivalent CWD-first lookup.
+probe_project="$SANDBOX/untrusted project"
+probe_tools="$SANDBOX/installed tools"
+probe_marker="$SANDBOX/planted-ran"
+mkdir -p "$probe_project" "$probe_tools" "$SANDBOX/.claude" "$SANDBOX/.codex"
+printf '%s\n' '{"name":"probe-project","private":true}' >"$probe_project/package.json"
+printf '%s\n' '{}' >"$probe_project/package-lock.json"
+if command -v cygpath >/dev/null 2>&1; then
+  probe_path="$probe_tools:$PATH"
+  WORKOS_EXEC_MARKER=$(cygpath -w "$probe_marker") || exit 1
+  for tool in node npm claude codex; do
+    printf '@echo off\r\necho v98.76.54\r\n' >"$probe_tools/$tool.cmd"
+    printf '@echo off\r\necho planted> "%%WORKOS_EXEC_MARKER%%"\r\necho v0.0.0\r\n' >"$probe_project/$tool.bat"
+  done
+else
+  probe_path=".:$probe_tools:$PATH"
+  WORKOS_EXEC_MARKER="$probe_marker"
+  for tool in node npm claude codex; do
+    printf '#!/bin/sh\necho v98.76.54\n' >"$probe_tools/$tool"
+    printf '#!/bin/sh\necho planted > "$WORKOS_EXEC_MARKER"\necho v0.0.0\n' >"$probe_project/$tool"
+    chmod +x "$probe_tools/$tool" "$probe_project/$tool"
+  done
+fi
+export WORKOS_EXEC_MARKER
+out=$(cd "$probe_project" && PATH="$probe_path" "$BIN" doctor --skip-api --skip-ai --json 2>"$SANDBOX/doctor-stderr")
+code=$?
+# An otherwise-empty project may correctly produce diagnostic errors, exit 1.
+case "$out" in
+  *'"nodeVersion": "v98.76.54"'*'"packageManagerVersion": "v98.76.54"'*) json_ok=1 ;;
+  *) json_ok=0 ;;
+esac
+if [ "$code" -le 1 ] && [ "$json_ok" -eq 1 ] && [ ! -e "$probe_marker" ]; then
+  pass "doctor ignores repo-local binaries and runs installed tool shims"
+else
+  fail "doctor tool isolation (exit $code): $out $(cat "$SANDBOX/doctor-stderr")"
+fi
+# Prove the MCP availability probes actually ran, rather than passing because
+# the fake clients were not detected in this platform's home directory.
+case "$out" in
+  *'"agent": "Claude Code"'*'"agent": "Codex"'*) pass "doctor probes both installed MCP clients" ;;
+  *) fail "doctor did not probe both MCP clients" ;;
+esac
 
 # ---- Authenticated commands (opt-in via WORKOS_API_KEY) ----
 if [ -n "$SMOKE_API_KEY" ]; then
