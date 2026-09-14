@@ -112,8 +112,9 @@ esac
 if [ "$code" -eq 1 ] && [ "$json_ok" -eq 1 ]; then pass "unknown command exits 1 with structured error"; else fail "unknown command contract (exit $code, want 1): $err"; fi
 
 # Doctor must use installed tools, not shims planted in its project directory.
-# This runs against the shipped Bun binary on native Windows release runners
-# too. On POSIX, a relative PATH entry supplies the equivalent CWD-first lookup.
+# This runs against the shipped Bun binary on native Windows release runners,
+# where CWD-first lookup is implicit. Do not emulate it with "." in POSIX PATH:
+# Bun 1.3.x resolves relative PATH entries before applying the child's cwd.
 probe_project="$SANDBOX/untrusted project"
 probe_tools="$SANDBOX/installed tools"
 probe_marker="$SANDBOX/planted-ran"
@@ -128,7 +129,7 @@ if command -v cygpath >/dev/null 2>&1; then
     printf '@echo off\r\necho planted> "%%WORKOS_EXEC_MARKER%%"\r\necho v0.0.0\r\n' >"$probe_project/$tool.bat"
   done
 else
-  probe_path=".:$probe_tools:$PATH"
+  probe_path="$probe_tools:$PATH"
   WORKOS_EXEC_MARKER="$probe_marker"
   for tool in node npm claude codex; do
     printf '#!/bin/sh\necho v98.76.54\n' >"$probe_tools/$tool"
