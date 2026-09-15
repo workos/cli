@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.1](https://github.com/workos/cli/compare/v0.22.0...v0.22.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* **deps:** update minor and patch updates ([#242](https://github.com/workos/cli/issues/242)) ([26c7905](https://github.com/workos/cli/commit/26c79056c0eda297be3e8dac08a0ac5a4f047fb8))
+* isolate diagnostic subprocess working directories ([#238](https://github.com/workos/cli/issues/238)) ([601079d](https://github.com/workos/cli/commit/601079dbc48e52faa2655086c4880e0d44f1e8f0))
+
 ## [0.22.0](https://github.com/workos/cli/compare/v0.21.1...v0.22.0) (2026-08-27)
 
 
