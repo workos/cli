@@ -1,15 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { WorkOS } from '@workos-inc/node';
 
 const mockSdk = {
-  organizations: {
+  apiKeys: {
     listOrganizationApiKeys: vi.fn(),
     createOrganizationApiKey: vi.fn(),
-  },
-  apiKeys: {
-    validateApiKey: vi.fn(),
+    createValidation: vi.fn(),
     deleteApiKey: vi.fn(),
   },
-};
+} satisfies { apiKeys: Partial<WorkOS['apiKeys']> };
 
 vi.mock('../lib/workos-client.js', () => ({
   createWorkOSClient: () => ({ sdk: mockSdk }),
@@ -45,14 +44,21 @@ describe('api-key-mgmt commands', () => {
     vi.restoreAllMocks();
   });
 
+  it('mocks methods that exist on the installed SDK', () => {
+    const sdk = new WorkOS('sk_test');
+    for (const method of Object.keys(mockSdk.apiKeys)) {
+      expect(sdk.apiKeys).toHaveProperty(method, expect.any(Function));
+    }
+  });
+
   describe('runApiKeyList', () => {
     it('lists keys in table', async () => {
-      mockSdk.organizations.listOrganizationApiKeys.mockResolvedValue({
+      mockSdk.apiKeys.listOrganizationApiKeys.mockResolvedValue({
         data: [mockApiKey],
         listMetadata: { before: null, after: null },
       });
       await runApiKeyList({ organizationId: 'org_456' }, 'sk_test');
-      expect(mockSdk.organizations.listOrganizationApiKeys).toHaveBeenCalledWith(
+      expect(mockSdk.apiKeys.listOrganizationApiKeys).toHaveBeenCalledWith(
         expect.objectContaining({ organizationId: 'org_456' }),
       );
       expect(consoleOutput.some((l) => l.includes('key_123'))).toBe(true);
@@ -60,7 +66,7 @@ describe('api-key-mgmt commands', () => {
     });
 
     it('handles empty results', async () => {
-      mockSdk.organizations.listOrganizationApiKeys.mockResolvedValue({
+      mockSdk.apiKeys.listOrganizationApiKeys.mockResolvedValue({
         data: [],
         listMetadata: { before: null, after: null },
       });
@@ -69,12 +75,12 @@ describe('api-key-mgmt commands', () => {
     });
 
     it('passes pagination params', async () => {
-      mockSdk.organizations.listOrganizationApiKeys.mockResolvedValue({
+      mockSdk.apiKeys.listOrganizationApiKeys.mockResolvedValue({
         data: [],
         listMetadata: { before: null, after: null },
       });
       await runApiKeyList({ organizationId: 'org_456', limit: 5, order: 'desc' }, 'sk_test');
-      expect(mockSdk.organizations.listOrganizationApiKeys).toHaveBeenCalledWith(
+      expect(mockSdk.apiKeys.listOrganizationApiKeys).toHaveBeenCalledWith(
         expect.objectContaining({ limit: 5, order: 'desc' }),
       );
     });
@@ -82,16 +88,16 @@ describe('api-key-mgmt commands', () => {
 
   describe('runApiKeyCreate', () => {
     it('creates API key with org and name', async () => {
-      mockSdk.organizations.createOrganizationApiKey.mockResolvedValue({ ...mockApiKey, value: 'sk_test_full_key' });
+      mockSdk.apiKeys.createOrganizationApiKey.mockResolvedValue({ ...mockApiKey, value: 'sk_test_full_key' });
       await runApiKeyCreate({ organizationId: 'org_456', name: 'My Key' }, 'sk_test');
-      expect(mockSdk.organizations.createOrganizationApiKey).toHaveBeenCalledWith({
+      expect(mockSdk.apiKeys.createOrganizationApiKey).toHaveBeenCalledWith({
         organizationId: 'org_456',
         name: 'My Key',
       });
     });
 
     it('displays key value warning in human mode', async () => {
-      mockSdk.organizations.createOrganizationApiKey.mockResolvedValue({ ...mockApiKey, value: 'sk_test_full_key' });
+      mockSdk.apiKeys.createOrganizationApiKey.mockResolvedValue({ ...mockApiKey, value: 'sk_test_full_key' });
       await runApiKeyCreate({ organizationId: 'org_456', name: 'My Key' }, 'sk_test');
       expect(consoleOutput.some((l) => l.includes('Created API key'))).toBe(true);
       expect(consoleOutput.some((l) => l.includes('sk_test_full_key'))).toBe(true);
@@ -99,9 +105,9 @@ describe('api-key-mgmt commands', () => {
     });
 
     it('passes permissions when provided', async () => {
-      mockSdk.organizations.createOrganizationApiKey.mockResolvedValue({ ...mockApiKey, value: 'sk_test_full_key' });
+      mockSdk.apiKeys.createOrganizationApiKey.mockResolvedValue({ ...mockApiKey, value: 'sk_test_full_key' });
       await runApiKeyCreate({ organizationId: 'org_456', name: 'My Key', permissions: ['read', 'write'] }, 'sk_test');
-      expect(mockSdk.organizations.createOrganizationApiKey).toHaveBeenCalledWith({
+      expect(mockSdk.apiKeys.createOrganizationApiKey).toHaveBeenCalledWith({
         organizationId: 'org_456',
         name: 'My Key',
         permissions: ['read', 'write'],
@@ -111,14 +117,14 @@ describe('api-key-mgmt commands', () => {
 
   describe('runApiKeyValidate', () => {
     it('validates API key', async () => {
-      mockSdk.apiKeys.validateApiKey.mockResolvedValue({ apiKey: mockApiKey });
+      mockSdk.apiKeys.createValidation.mockResolvedValue({ apiKey: mockApiKey });
       await runApiKeyValidate('sk_test_value', 'sk_test');
-      expect(mockSdk.apiKeys.validateApiKey).toHaveBeenCalledWith({ value: 'sk_test_value' });
+      expect(mockSdk.apiKeys.createValidation).toHaveBeenCalledWith({ value: 'sk_test_value' });
       expect(consoleOutput.some((l) => l.includes('valid'))).toBe(true);
     });
 
     it('handles invalid key (null result)', async () => {
-      mockSdk.apiKeys.validateApiKey.mockResolvedValue({ apiKey: null });
+      mockSdk.apiKeys.createValidation.mockResolvedValue({ apiKey: null });
       await runApiKeyValidate('sk_test_invalid', 'sk_test');
       expect(consoleOutput.some((l) => l.includes('invalid'))).toBe(true);
     });
@@ -138,7 +144,7 @@ describe('api-key-mgmt commands', () => {
     afterEach(() => setOutputMode('human'));
 
     it('list outputs { data, listMetadata }', async () => {
-      mockSdk.organizations.listOrganizationApiKeys.mockResolvedValue({
+      mockSdk.apiKeys.listOrganizationApiKeys.mockResolvedValue({
         data: [mockApiKey],
         listMetadata: { before: null, after: 'cursor_a' },
       });
@@ -150,7 +156,7 @@ describe('api-key-mgmt commands', () => {
     });
 
     it('create includes key value in output', async () => {
-      mockSdk.organizations.createOrganizationApiKey.mockResolvedValue({ ...mockApiKey, value: 'sk_test_full_key' });
+      mockSdk.apiKeys.createOrganizationApiKey.mockResolvedValue({ ...mockApiKey, value: 'sk_test_full_key' });
       await runApiKeyCreate({ organizationId: 'org_456', name: 'My Key' }, 'sk_test');
       const output = JSON.parse(consoleOutput[0]);
       expect(output.status).toBe('ok');
@@ -158,7 +164,7 @@ describe('api-key-mgmt commands', () => {
     });
 
     it('validate outputs raw JSON', async () => {
-      mockSdk.apiKeys.validateApiKey.mockResolvedValue({ apiKey: mockApiKey });
+      mockSdk.apiKeys.createValidation.mockResolvedValue({ apiKey: mockApiKey });
       await runApiKeyValidate('sk_test_value', 'sk_test');
       const output = JSON.parse(consoleOutput[0]);
       expect(output.apiKey.id).toBe('key_123');

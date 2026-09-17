@@ -27,7 +27,7 @@ export async function runSetupOrg(options: SetupOrgOptions, apiKey: string, base
 
     // 2. Add domain
     if (options.domain) {
-      const domainResult = await client.sdk.organizationDomains.create({
+      const domainResult = await client.sdk.organizationDomains.createOrganizationDomain({
         domain: options.domain,
         organizationId: org.id,
       });
@@ -36,7 +36,7 @@ export async function runSetupOrg(options: SetupOrgOptions, apiKey: string, base
 
       // 3. Verify domain
       try {
-        await client.sdk.organizationDomains.verify(domainResult.id);
+        await client.sdk.organizationDomains.verifyOrganizationDomain(domainResult.id);
         summary.domainVerified = true;
         if (!isJsonMode()) console.log(chalk.green(`  Verified domain: ${options.domain}`));
       } catch {
@@ -68,8 +68,8 @@ export async function runSetupOrg(options: SetupOrgOptions, apiKey: string, base
 
     // 5. Generate Admin Portal link
     try {
-      const portal = await client.sdk.portal.generateLink({
-        intent: 'sso' as Parameters<typeof client.sdk.portal.generateLink>[0]['intent'],
+      const portal = await client.sdk.adminPortal.generateLink({
+        intent: 'sso' as Parameters<typeof client.sdk.adminPortal.generateLink>[0]['intent'],
         organization: org.id,
       });
       summary.portalLink = portal.link;
