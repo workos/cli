@@ -30,7 +30,7 @@
     "@workos/emulate": "^0.13.1",
     "@workos/migrations": "^2.6.0",
     "@workos/openapi-spec": "^0.100.0",
-    "@workos/skills": "0.7.2",
+    "@workos/skills": "0.7.3",
     "chalk": "^5.6.2",
     "diff": "^8.0.3",
     "fast-glob": "^3.3.3",
