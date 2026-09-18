@@ -34,6 +34,13 @@ describe('embedded skills assets', () => {
     expect(reference).toBe(readFileSync(join(skillsDir, 'workos', 'references', 'workos-authkit-base.md'), 'utf8'));
   });
 
+  it('bundles the shared AuthKit application setup reference', async () => {
+    const reference = await getReference('workos-authkit-setup');
+    expect(reference).toContain('# AuthKit application setup');
+    expect(reference).toContain('Sign-out URI');
+    expect(reference).toContain('Initiate login URI');
+  });
+
   it('reaps stale extraction roots from other versions, keeping fresh ones', async () => {
     const suffix = extractionSuffix();
     const staleRoot = join(tmpdir(), `workos-skills-0.0.1-spec-stale${suffix}`);

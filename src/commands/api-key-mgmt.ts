@@ -19,7 +19,7 @@ export async function runApiKeyList(options: ApiKeyListOptions, apiKey: string, 
   const client = createWorkOSClient(apiKey, baseUrl);
 
   try {
-    const result = await client.sdk.organizations.listOrganizationApiKeys({
+    const result = await client.sdk.apiKeys.listOrganizationApiKeys({
       organizationId: options.organizationId,
       limit: options.limit,
       before: options.before,
@@ -59,7 +59,7 @@ export async function runApiKeyCreate(options: ApiKeyCreateOptions, apiKey: stri
   const client = createWorkOSClient(apiKey, baseUrl);
 
   try {
-    const result = await client.sdk.organizations.createOrganizationApiKey({
+    const result = await client.sdk.apiKeys.createOrganizationApiKey({
       organizationId: options.organizationId,
       name: options.name,
       ...(options.permissions && { permissions: options.permissions }),
@@ -86,7 +86,7 @@ export async function runApiKeyValidate(value: string, apiKey: string, baseUrl?:
   const client = createWorkOSClient(apiKey, baseUrl);
 
   try {
-    const result = await client.sdk.apiKeys.validateApiKey({ value });
+    const result = await client.sdk.apiKeys.createValidation({ value });
 
     if (isJsonMode()) {
       outputJson(result);

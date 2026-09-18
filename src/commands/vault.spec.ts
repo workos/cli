@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { WorkOS } from '@workos-inc/node';
 
 const mockSdk = {
   vault: {
@@ -9,7 +10,7 @@ const mockSdk = {
     updateObject: vi.fn(),
     deleteObject: vi.fn(),
     describeObject: vi.fn(),
-    listObjectVersions: vi.fn(),
+    listObjectVersions: vi.fn<WorkOS['vault']['listObjectVersions']>(),
   },
 };
 
@@ -181,7 +182,9 @@ describe('vault commands', () => {
 
   describe('runVaultListVersions', () => {
     it('lists versions by object ID', async () => {
-      const versions = [{ id: 'v1', createdAt: '2024-01-01', currentVersion: true }];
+      const versions = [
+        { id: 'v1', createdAt: new Date('2024-01-01'), currentVersion: true, etag: 'etag_1', size: 12 },
+      ];
       mockSdk.vault.listObjectVersions.mockResolvedValue(versions);
       await runVaultListVersions('obj_123', 'sk_test');
       expect(mockSdk.vault.listObjectVersions).toHaveBeenCalledWith({ id: 'obj_123' });
@@ -201,6 +204,16 @@ describe('vault commands', () => {
       const output = JSON.parse(consoleOutput[0]);
       expect(output.data).toHaveLength(1);
       expect(output.listMetadata.after).toBe('cursor_a');
+    });
+
+    it('versions preserves the JSON shape without SDK-added fields', async () => {
+      mockSdk.vault.listObjectVersions.mockResolvedValue([
+        { id: 'v1', createdAt: new Date('2024-01-01'), currentVersion: true, etag: 'etag_1', size: 12 },
+      ]);
+      await runVaultListVersions('obj_123', 'sk_test');
+      expect(JSON.parse(consoleOutput[0])).toEqual([
+        { id: 'v1', createdAt: '2024-01-01T00:00:00.000Z', currentVersion: true },
+      ]);
     });
 
     it('get --decrypt outputs value in JSON', async () => {

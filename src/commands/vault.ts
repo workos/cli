@@ -158,7 +158,7 @@ export async function runVaultListVersions(id: string, apiKey: string, baseUrl?:
 
   try {
     const result = await client.sdk.vault.listObjectVersions({ id });
-    outputJson(result);
+    outputJson(result.map(({ createdAt, currentVersion, id }) => ({ createdAt, currentVersion, id })));
   } catch (error) {
     handleApiError(error);
   }
