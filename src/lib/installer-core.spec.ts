@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createActor, fromPromise } from 'xstate';
+import { createActor, fromPromise, waitFor } from 'xstate';
 import { installerMachine } from './installer-core.js';
 import { createInstallerEventEmitter } from './events.js';
 import type { InstallerOptions } from '../utils/types.js';
@@ -309,6 +309,32 @@ describe('InstallerCore State Machine', () => {
   });
 
   describe('full flow', () => {
+    it('retains pending application setup for the completion actor', async () => {
+      const applicationSetup = {
+        clientId: 'client_123',
+        redirectUri: 'http://localhost:3000/callback',
+        signOutUri: 'http://localhost:3000/',
+        initiateLoginUri: 'http://localhost:3000/sign-in',
+        verified: false,
+        reason: 'No dashboard session.',
+      };
+      const { actor } = createTestActor(
+        { skipAuth: true, noCommit: true, apiKey: 'sk_test_123', clientId: 'client_123' },
+        {
+          runAgent: fromPromise<AgentOutput, { context: InstallerMachineContext }>(async () => ({
+            success: true,
+            summary: 'App code installed; setup pending.',
+            applicationSetup,
+          })),
+        },
+      );
+      actor.start();
+      actor.send({ type: 'START' });
+      await waitFor(actor, (snapshot) => snapshot.context.applicationSetup !== undefined);
+      expect(actor.getSnapshot().context.applicationSetup).toEqual(applicationSetup);
+      actor.stop();
+    });
+
     it('completes the full wizard flow with provided credentials', async () => {
       const emitter = createInstallerEventEmitter();
       const options: InstallerOptions = {

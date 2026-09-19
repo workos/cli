@@ -155,6 +155,46 @@ describe('validateInstallation', () => {
   });
 
   describe('file validation', () => {
+    it('requires an initiate-login route distinct from the callback', async () => {
+      mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'app', 'callback', 'route.ts'),
+        "import { handleAuth } from '@workos-inc/authkit-nextjs'; export const GET = handleAuth();",
+      );
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+      expect(result.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ type: 'file', severity: 'error', message: expect.stringContaining('sign-in') }),
+        ]),
+      );
+    });
+
+    it('rejects a callback handler masquerading as the sign-in route', async () => {
+      mkdirSync(join(testDir, 'app', 'sign-in'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'app', 'sign-in', 'route.ts'),
+        "import { handleAuth } from '@workos-inc/authkit-nextjs'; export const GET = handleAuth();",
+      );
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+      expect(result.issues.some((issue) => issue.message.includes('getSignInUrl') && issue.severity === 'error')).toBe(
+        true,
+      );
+    });
+
+    it.each(['app', 'src/app'])('accepts the SDK-backed sign-in route under %s', async (appDir) => {
+      mkdirSync(join(testDir, appDir, 'sign-in'), { recursive: true });
+      writeFileSync(
+        join(testDir, appDir, 'sign-in', 'route.ts'),
+        `
+        import { getSignInUrl } from '@workos-inc/authkit-nextjs';
+        import { redirect } from 'next/navigation';
+        export async function GET() { return redirect(await getSignInUrl()); }
+      `,
+      );
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+      expect(result.issues.filter((issue) => issue.message.includes('sign-in'))).toEqual([]);
+    });
+
     it('detects missing callback route file', async () => {
       writeFileSync(
         join(testDir, 'package.json'),
@@ -291,6 +331,15 @@ describe('validateInstallation', () => {
       writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
       writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
 
+      mkdirSync(join(testDir, 'app', 'sign-in'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'app', 'sign-in', 'route.ts'),
+        `
+        import { getSignInUrl } from '@workos-inc/authkit-nextjs';
+        import { redirect } from 'next/navigation';
+        export async function GET() { return redirect(await getSignInUrl()); }
+      `,
+      );
       const result = await validateInstallation('nextjs', testDir);
 
       // All required files exist with required patterns, should pass

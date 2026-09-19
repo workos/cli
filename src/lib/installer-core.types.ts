@@ -60,6 +60,7 @@ export interface InstallerMachineContext {
   prUrl?: string;
   /** Summary message from agent execution */
   agentSummary?: string;
+  applicationSetup?: import('./authkit-application-setup.js').AuthkitApplicationSetup;
   /** Whether the install directory is empty and can be scaffolded into */
   scaffoldable?: boolean;
   /** Package manager resolved for the scaffolded app */
@@ -129,6 +130,7 @@ export interface GitCheckOutput {
 export interface AgentOutput {
   success: boolean;
   summary?: string;
+  applicationSetup?: import('./authkit-application-setup.js').AuthkitApplicationSetup;
   error?: Error;
 }
 

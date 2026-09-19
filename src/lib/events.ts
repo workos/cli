@@ -25,6 +25,8 @@ export interface CompletionData {
   dashboardUrl: string;
   /** Optional per-framework "add a sign-in link" snippet */
   signInSnippet?: string;
+  /** Saved application configuration is separate from untested browser flows. */
+  applicationSetup?: import('./authkit-application-setup.js').AuthkitApplicationSetup;
 }
 
 export interface InstallerEvents {
