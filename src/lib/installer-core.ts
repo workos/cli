@@ -1016,6 +1016,7 @@ export const installerMachine = setup({
                   const output = event.output as AgentOutput;
                   return output.summary;
                 },
+                applicationSetup: ({ event }) => (event.output as AgentOutput).applicationSetup,
               }),
               ({ context, event }) => {
                 const output = event.output as AgentOutput;

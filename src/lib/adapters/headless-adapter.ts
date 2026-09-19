@@ -420,6 +420,7 @@ export class HeadlessAdapter implements InstallerAdapter {
             url: completion.url,
             files: completion.files,
             nextSteps: completion.nextSteps,
+            ...(completion.applicationSetup ? { applicationSetup: completion.applicationSetup } : {}),
           }
         : {}),
     });

@@ -413,6 +413,14 @@ describe('HeadlessAdapter', () => {
     it('spreads structured completion fields into the complete event when present', async () => {
       const adapter = createAdapter();
       await adapter.start();
+      const applicationSetup = {
+        clientId: 'client_app',
+        redirectUri: 'http://localhost:3000/callback',
+        signOutUri: 'http://localhost:3000/',
+        initiateLoginUri: 'http://localhost:3000/sign-in',
+        verified: false,
+        reason: 'No dashboard session.',
+      };
 
       emitter.emit('complete', {
         success: true,
@@ -423,6 +431,7 @@ describe('HeadlessAdapter', () => {
           url: 'http://localhost:3000',
           files: ['a.ts'],
           nextSteps: ['x'],
+          applicationSetup,
           docsUrl: 'https://d',
           dashboardUrl: 'https://dash',
         },
@@ -437,6 +446,7 @@ describe('HeadlessAdapter', () => {
           url: 'http://localhost:3000',
           files: ['a.ts'],
           nextSteps: ['x'],
+          applicationSetup,
         }),
       );
       await adapter.stop();
