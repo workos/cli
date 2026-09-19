@@ -3,7 +3,9 @@ import open from 'open';
 import { installerMachine } from './installer-core.js';
 import { createInstallerEventEmitter } from './events.js';
 import type { CompletionData } from './events.js';
-import { buildCompletionData } from './completion-data.js';
+import { buildCompletionData, applicationSetupNextSteps } from './completion-data.js';
+import { readNextjsApplicationSetup, configureAuthkitApplication } from './authkit-application-setup.js';
+import { validateInstallation } from './validation/index.js';
 import { resolveDevCommand } from './dev-command.js';
 import { getConfig as getInstallerSettings } from './settings.js';
 import { CLIAdapter } from './adapters/cli-adapter.js';
@@ -47,7 +49,7 @@ import {
   generateCommitMessage as generateCommitMessageAi,
   generatePrDescription as generatePrDescriptionAi,
 } from './ai-content.js';
-import { autoConfigureWorkOSEnvironment } from './workos-management.js';
+import { autoConfigureWorkOSEnvironment, configureCallbackUri } from './workos-management.js';
 import { detectPort, getCallbackPath } from './port-detection.js';
 import { writeEnvLocal } from './env-writer.js';
 import { getRegistry } from './registry.js';
@@ -325,10 +327,16 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
 
         const requiresApiKey = ['nextjs', 'tanstack-start', 'react-router'].includes(integration);
         if (credentials.apiKey && requiresApiKey) {
-          await autoConfigureWorkOSEnvironment(credentials.apiKey, integration, port, {
-            homepageUrl: installerOptions.homepageUrl,
-            redirectUri: installerOptions.redirectUri,
-          });
+          if (integration === 'nextjs') {
+            // Preserve API-key-only onboarding; the remaining URLs are handled
+            // after the agent with dashboard-session targeting and read-back.
+            await configureCallbackUri(credentials.apiKey, redirectUri);
+          } else {
+            await autoConfigureWorkOSEnvironment(credentials.apiKey, integration, port, {
+              homepageUrl: installerOptions.homepageUrl,
+              redirectUri: installerOptions.redirectUri,
+            });
+          }
         }
 
         const redirectUriKey = integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
@@ -357,9 +365,40 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
             emitter: context.emitter,
           };
           const summary = await runIntegrationInstallerFn(integration, agentOptions);
+          let applicationSetup;
+          if (integration === 'nextjs') {
+            applicationSetup = await readNextjsApplicationSetup(
+              installerOptions.installDir,
+              installerOptions.homepageUrl,
+            );
+            const expectedRedirectUri =
+              installerOptions.redirectUri ||
+              `http://localhost:${detectPort(integration, installerOptions.installDir)}${getCallbackPath(integration)}`;
+            if (applicationSetup.redirectUri !== expectedRedirectUri) {
+              throw new Error(
+                'The app callback URL changed during installation. Confirm it before configuring WorkOS.',
+              );
+            }
+            // Even --no-validate must not point the dashboard at a missing route.
+            const validation = await validateInstallation(integration, installerOptions.installDir, {
+              runBuild: false,
+            });
+            if (!validation.passed) {
+              throw new Error(
+                `Application setup is incomplete:\n${validation.issues
+                  .filter((issue) => issue.severity === 'error')
+                  .map((issue) => `${issue.message}. ${issue.hint ?? ''}`)
+                  .join('\n')}`,
+              );
+            }
+            applicationSetup = await configureAuthkitApplication(applicationSetup, credentials?.clientId ?? '');
+          }
           return {
             success: true,
-            summary: summary || `Successfully installed WorkOS AuthKit for ${integration}!`,
+            applicationSetup,
+            summary: applicationSetup
+              ? ['App code installed.', ...applicationSetupNextSteps(applicationSetup)].join('\n')
+              : summary || `Successfully installed WorkOS AuthKit for ${integration}!`,
           };
         } catch (error) {
           return {
@@ -371,7 +410,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
 
       buildCompletion: fromPromise<CompletionData | undefined, { context: InstallerMachineContext }>(
         async ({ input }) => {
-          const { integration, changedFiles, options: installerOptions, credentials } = input.context;
+          const { integration, changedFiles, options: installerOptions, credentials, applicationSetup } = input.context;
           if (!integration) return undefined;
           try {
             const registry = await getRegistry();
@@ -403,6 +442,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
                 frameworkNextSteps: cfg?.ui.getOutroNextSteps?.({}) ?? [],
                 signInSnippet: cfg?.ui.getSignInSnippet?.({}),
                 claimCommand: usedUnclaimedEnv ? formatWorkOSCommand('profile claim') : undefined,
+                applicationSetup,
               },
             );
           } catch {

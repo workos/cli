@@ -200,7 +200,7 @@ export async function validateFiles(rules: ValidationRules, projectDir: string):
           if (!content.includes(pattern)) {
             issues.push({
               type: 'pattern',
-              severity: 'warning',
+              severity: rule.severity ?? 'warning',
               message: `File ${matches[0]} missing expected pattern: "${pattern}"`,
               hint: `Ensure ${matches[0]} contains: ${pattern}`,
             });
@@ -214,7 +214,7 @@ export async function validateFiles(rules: ValidationRules, projectDir: string):
         if (!hasAny) {
           issues.push({
             type: 'pattern',
-            severity: 'warning',
+            severity: rule.severity ?? 'warning',
             message: `File ${matches[0]} missing one of: ${rule.mustContainAny.join(', ')}`,
             hint: `Ensure ${matches[0]} contains one of these patterns`,
           });

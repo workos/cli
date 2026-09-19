@@ -17,7 +17,7 @@ vi.mock('../utils/analytics.js', () => ({
 
 const { analytics } = await import('../utils/analytics.js');
 const ui = (await import('../utils/ui.js')).default;
-const { autoConfigureWorkOSEnvironment } = await import('./workos-management.js');
+const { autoConfigureWorkOSEnvironment, configureCallbackUri } = await import('./workos-management.js');
 
 const API_KEY = 'sk_test_123';
 const HOMEPAGE_ENDPOINT = 'https://api.workos.com/user_management/app_homepage_url';
@@ -113,6 +113,37 @@ describe('workos-management', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  describe('Next.js callback-only setup', () => {
+    it('preserves API-key onboarding without writing homepage or CORS settings', async () => {
+      const { calls } = stubFetch(() => {
+        throw new Error('Homepage must not be read or written');
+      });
+      expect(await configureCallbackUri(API_KEY, `${BASE_URL}/callback`)).toBe(true);
+      expect(calls).toEqual([{ method: 'POST', url: 'https://api.workos.com/user_management/redirect_uris' }]);
+      expect(rowFor('Redirect URI').value).toBe(`${BASE_URL}/callback`);
+    });
+
+    it('treats an already registered callback as a no-op', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => jsonResponse(422, { message: 'Redirect URI already exists' })),
+      );
+      expect(await configureCallbackUri(API_KEY, `${BASE_URL}/callback`)).toBe(true);
+      expect(rowFor('Redirect URI').status).toBe('already set');
+    });
+
+    it('reports a registration failure without claiming all settings are configured', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => jsonResponse(403, { message: 'Forbidden' })),
+      );
+      expect(await configureCallbackUri(API_KEY, `${BASE_URL}/callback`)).toBe(false);
+      expect(ui.log.success).not.toHaveBeenCalled();
+      expect(ui.rows).not.toHaveBeenCalled();
+      expect(ui.log.warn).toHaveBeenCalled();
+    });
   });
 
   describe('setHomepageUrl read-then-write', () => {

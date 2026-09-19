@@ -51,6 +51,22 @@ describe('buildCompletionData', () => {
     expect(data.integration).toBe('nextjs');
   });
 
+  it.each([true, false])('retains application setup status and concrete URLs when verified=%s', async (verified) => {
+    writePackageJson({ scripts: { dev: 'next dev' }, dependencies: { next: '16.0.0' } });
+    const applicationSetup = {
+      clientId: 'client_app',
+      redirectUri: 'http://localhost:3000/callback',
+      signOutUri: 'http://localhost:3000/',
+      initiateLoginUri: 'http://localhost:3000/sign-in',
+      verified,
+      reason: verified ? undefined : 'No dashboard session is available.',
+    };
+    const data = await buildCompletionData({ integration: 'nextjs', installDir }, { ...baseDeps, applicationSetup });
+    expect(data.applicationSetup).toEqual(applicationSetup);
+    expect(data.nextSteps.join('\n')).toContain('Initiate login URI: http://localhost:3000/sign-in');
+    expect(data.nextSteps.join('\n')).toContain(verified ? 'browser flows are not yet tested' : 'setup is incomplete');
+  });
+
   it('respects a Vite server.port override for react', async () => {
     writePackageJson({ scripts: { dev: 'vite' }, dependencies: { react: '18.0.0', vite: '5.0.0' } });
     writeFile('vite.config.ts', 'export default { server: { port: 8080 } };');

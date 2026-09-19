@@ -19,7 +19,10 @@ export function renderCompletionSummary(success: boolean, summary?: string, comp
       const steps: SummaryBoxItem[] = completion.nextSteps.map((s) => ({ type: 'pending', text: s }));
       return renderFlatSummary({
         expression: 'success',
-        title: 'WorkOS AuthKit Installed',
+        title:
+          completion.applicationSetup && !completion.applicationSetup.verified
+            ? 'App code installed; WorkOS setup required'
+            : 'WorkOS AuthKit Installed',
         items: [...shown, ...steps],
         footer: completion.docsUrl,
       });
@@ -29,6 +32,7 @@ export function renderCompletionSummary(success: boolean, summary?: string, comp
       expression: 'success',
       title: 'WorkOS AuthKit Installed',
       items: [
+        ...(summary ? [{ type: 'pending' as const, text: summary }] : []),
         { type: 'pending', text: 'Start dev server to test authentication' },
         { type: 'pending', text: 'Visit WorkOS Dashboard to manage users' },
       ],

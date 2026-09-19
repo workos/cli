@@ -31,6 +31,7 @@ export interface FileRule {
   path: string; // glob pattern, e.g., "middleware.ts" or "app/**/callback/**/route.ts"
   mustContain?: string[]; // strings that must appear in file
   mustContainAny?: string[]; // at least one must appear
+  severity?: ValidationSeverity; // missing content patterns default to warning
 }
 
 export interface VariantRules {
