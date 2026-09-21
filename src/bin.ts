@@ -13,6 +13,7 @@ import { getVersion } from './lib/settings.js';
 
 import yargs from 'yargs';
 import { ensureAuthenticated } from './lib/ensure-auth.js';
+import { InstallDeclinedError } from './lib/installer-errors.js';
 import { checkForUpdates } from './lib/version-check.js';
 
 import {
@@ -3188,11 +3189,13 @@ async function runCli(): Promise<void> {
       (yargs) => yargs.options(installerOptions),
       async (argv) => {
         await applyInsecureStorage(argv.insecureStorage);
-        // MUST run before credential resolution below: that provisions a WorkOS
-        // environment and writes its credentials into the project's env file,
-        // so a guard placed after it is no guard at all.
+        // Preflight must precede credential provisioning and project writes.
         const preflight = await import('./lib/preflight-authkit.js');
-        await preflight.assertNoExistingAuthKit({ installDir: argv.installDir ?? process.cwd(), force: argv.force });
+        await preflight.assertInstallPreflight({
+          installDir: argv.installDir ?? process.cwd(),
+          force: argv.force,
+          router: argv.router,
+        });
         await resolveInstallCredentials(argv.apiKey, argv.installDir, argv.skipAuth, ensureAuthenticated);
         const { handleInstall } = await import('./commands/install.js');
         await handleInstall(argv);
@@ -3407,7 +3410,11 @@ async function runCli(): Promise<void> {
         await applyInsecureStorage(argv.insecureStorage);
         // Guard first, before credential resolution — see the `install` handler above.
         const preflight = await import('./lib/preflight-authkit.js');
-        await preflight.assertNoExistingAuthKit({ installDir: argv.installDir ?? process.cwd(), force: argv.force });
+        await preflight.assertInstallPreflight({
+          installDir: argv.installDir ?? process.cwd(),
+          force: argv.force,
+          router: argv.router,
+        });
         await resolveInstallCredentials(argv.apiKey, argv.installDir, argv.skipAuth, ensureAuthenticated);
         const { handleInstall } = await import('./commands/install.js');
         await handleInstall({ ...argv, dashboard: true });
@@ -3448,7 +3455,7 @@ async function runCli(): Promise<void> {
         // After the confirm above (two prompts back to back is worse UX), but
         // still before credential resolution touches the project.
         const preflight = await import('./lib/preflight-authkit.js');
-        await preflight.assertNoExistingAuthKit({ installDir: process.cwd(), force: argv.force });
+        await preflight.assertInstallPreflight({ installDir: process.cwd(), force: argv.force });
         await resolveInstallCredentials(undefined, undefined, false, ensureAuthenticated);
 
         const { handleInstall } = await import('./commands/install.js');
@@ -3493,6 +3500,13 @@ async function runCli(): Promise<void> {
           apiContext: error.context?.apiContext,
         },
       };
+    } else if (error instanceof InstallDeclinedError) {
+      process.exitCode = 1;
+      commandOutcome = {
+        success: false,
+        options: { flags, reason: 'validation_error', errorCode: error.code },
+      };
+      outputError({ code: error.code, message: error.message });
     } else if (error instanceof PromptUnavailableError) {
       // A prompt was attempted where the user can't answer (--json, or non-TTY
       // stdin) on a direct command. Not a crash — surface a clear, structured

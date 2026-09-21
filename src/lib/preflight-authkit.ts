@@ -1,5 +1,5 @@
 /**
- * Install preflight: refuse to run over an existing AuthKit install.
+ * Install preflight: reject unsupported Next.js routers and protect existing AuthKit installs.
  *
  * `workos install` provisions a fresh WorkOS environment and writes its
  * credentials into the project's env file before the installer state machine
@@ -8,7 +8,11 @@
  * agent/CI/JSON mode, with `--force` as the escape hatch.
  */
 
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { AUTHKIT_PACKAGES } from '../doctor/checks/sdk.js';
+import { assertSupportedNextJsRouter, NextJsRouter } from '../integrations/nextjs/utils.js';
+import type { InstallerOptions } from '../utils/types.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
 import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
 import { isPromptAllowed } from '../utils/interaction-mode.js';
@@ -35,6 +39,21 @@ export function detectExistingAuthKit(installDir: string): DetectedAuthKitPackag
   return [...AUTHKIT_PACKAGES]
     .map((name) => ({ name, version: getPackageVersion(name, packageJson) }))
     .filter((pkg): pkg is DetectedAuthKitPackage => !!pkg.version);
+}
+
+/** Reject known unsupported routers before credential provisioning can write files. */
+export async function assertInstallPreflight(
+  opts: Pick<InstallerOptions, 'installDir' | 'router'> & { force?: boolean },
+): Promise<void> {
+  const isNextjs = !!getPackageVersion('next', readPackageJson(opts.installDir) ?? {});
+  if (isNextjs || opts.router === 'pages') {
+    const hasPages = ['pages', 'src/pages'].some((path) => existsSync(join(opts.installDir, path)));
+    const hasApp = ['app', 'src/app'].some((path) => existsSync(join(opts.installDir, path)));
+    if (opts.router === 'pages' || (!opts.router && hasPages && !hasApp)) {
+      assertSupportedNextJsRouter(NextJsRouter.PAGES_ROUTER);
+    }
+  }
+  await assertNoExistingAuthKit(opts);
 }
 
 /**

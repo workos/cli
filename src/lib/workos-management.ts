@@ -78,25 +78,6 @@ async function createRedirectUri(apiKey: string, uri: string): Promise<{ success
   throw new Error(error.message || `HTTP ${error.status}`);
 }
 
-/** Register only the callback for Next.js, including unclaimed/API-key-only installs. */
-export async function configureCallbackUri(apiKey: string, uri: string): Promise<boolean> {
-  try {
-    const result = await createRedirectUri(apiKey, uri);
-    ui.rows([
-      {
-        key: 'Redirect URI',
-        value: uri,
-        status: result.alreadyExists ? 'already set' : 'created',
-        statusKind: result.alreadyExists ? 'muted' : 'ok',
-      },
-    ]);
-    return true;
-  } catch {
-    ui.log.warn('Could not register the callback URL. Application setup will report any remaining configuration.');
-    return false;
-  }
-}
-
 /**
  * Create a CORS origin in WorkOS.
  * Returns success on 201 or 409 (already exists).

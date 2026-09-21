@@ -49,7 +49,8 @@ import {
   generateCommitMessage as generateCommitMessageAi,
   generatePrDescription as generatePrDescriptionAi,
 } from './ai-content.js';
-import { autoConfigureWorkOSEnvironment, configureCallbackUri } from './workos-management.js';
+import { autoConfigureWorkOSEnvironment } from './workos-management.js';
+import { assertSupportedNextJsRouter, getNextJsRouter } from '../integrations/nextjs/utils.js';
 import { detectPort, getCallbackPath } from './port-detection.js';
 import { writeEnvLocal } from './env-writer.js';
 import { getRegistry } from './registry.js';
@@ -178,6 +179,42 @@ export function resolveCredentialSource(
   return backfilledFromProjectEnv ? 'env' : options.credentialSource;
 }
 
+export async function configureInstallEnvironment(
+  context: Pick<InstallerMachineContext, 'options' | 'integration' | 'credentials'>,
+): Promise<void> {
+  const { options: installerOptions, integration, credentials } = context;
+  if (!integration || !credentials) throw new Error('Missing integration or credentials');
+
+  const registry = await getRegistry();
+  const mod = registry.get(integration);
+  if (mod?.config.metadata.language !== 'javascript') return;
+
+  if (integration === 'nextjs') {
+    assertSupportedNextJsRouter(await getNextJsRouter(installerOptions));
+    // Keep a human's choice in a mixed-router project for the agent's context.
+    installerOptions.router = 'app';
+  }
+
+  const port = detectPort(integration, installerOptions.installDir);
+  const redirectUri = installerOptions.redirectUri || `http://localhost:${port}${getCallbackPath(integration)}`;
+  // Next.js callback, sign-out and initiate-login writes share the confirmed
+  // dashboard application in configureAuthkitApplication, never an unverified key.
+  const requiresApiKey = ['tanstack-start', 'react-router'].includes(integration);
+  if (credentials.apiKey && requiresApiKey) {
+    await autoConfigureWorkOSEnvironment(credentials.apiKey, integration, port, {
+      homepageUrl: installerOptions.homepageUrl,
+      redirectUri: installerOptions.redirectUri,
+    });
+  }
+
+  const redirectUriKey = integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
+  writeEnvLocal(installerOptions.installDir, {
+    ...(credentials.apiKey ? { WORKOS_API_KEY: credentials.apiKey } : {}),
+    WORKOS_CLIENT_ID: credentials.clientId,
+    [redirectUriKey]: redirectUri,
+  });
+}
+
 export async function runWithCore(options: InstallerOptions): Promise<void> {
   // Initialize debug/logging early so we capture all failures
   initLogFile();
@@ -304,49 +341,9 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         return { isClean: files.length === 0, files };
       }),
 
-      configureEnvironment: fromPromise<void, { context: InstallerMachineContext }>(async ({ input }) => {
-        const { context } = input;
-        const { options: installerOptions, integration, credentials } = context;
-
-        if (!integration || !credentials) {
-          throw new Error('Missing integration or credentials');
-        }
-
-        // Non-JS integrations own their env file writing (e.g. Python writes
-        // .env inside its own run()). Skip here so we don't leak a .env.local
-        // with JS-flavored vars (WORKOS_COOKIE_PASSWORD, wrong redirect port).
-        const registry = await getRegistry();
-        const mod = registry.get(integration);
-        if (mod?.config.metadata.language !== 'javascript') {
-          return;
-        }
-
-        const port = detectPort(integration, installerOptions.installDir);
-        const callbackPath = getCallbackPath(integration);
-        const redirectUri = installerOptions.redirectUri || `http://localhost:${port}${callbackPath}`;
-
-        const requiresApiKey = ['nextjs', 'tanstack-start', 'react-router'].includes(integration);
-        if (credentials.apiKey && requiresApiKey) {
-          if (integration === 'nextjs') {
-            // Preserve API-key-only onboarding; the remaining URLs are handled
-            // after the agent with dashboard-session targeting and read-back.
-            await configureCallbackUri(credentials.apiKey, redirectUri);
-          } else {
-            await autoConfigureWorkOSEnvironment(credentials.apiKey, integration, port, {
-              homepageUrl: installerOptions.homepageUrl,
-              redirectUri: installerOptions.redirectUri,
-            });
-          }
-        }
-
-        const redirectUriKey = integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
-
-        writeEnvLocal(installerOptions.installDir, {
-          ...(credentials.apiKey ? { WORKOS_API_KEY: credentials.apiKey } : {}),
-          WORKOS_CLIENT_ID: credentials.clientId,
-          [redirectUriKey]: redirectUri,
-        });
-      }),
+      configureEnvironment: fromPromise<void, { context: InstallerMachineContext }>(({ input }) =>
+        configureInstallEnvironment(input.context),
+      ),
 
       runAgent: fromPromise<AgentOutput, { context: InstallerMachineContext }>(async ({ input }) => {
         const { context } = input;

@@ -111,6 +111,24 @@ case "$err" in
 esac
 if [ "$code" -eq 1 ] && [ "$json_ok" -eq 1 ]; then pass "unknown command exits 1 with structured error"; else fail "unknown command contract (exit $code, want 1): $err"; fi
 
+# Unsupported Pages Router installs must stop before provisioning, even with --force.
+pages_project="$SANDBOX/pages-project"
+mkdir -p "$pages_project/src/pages"
+printf '%s\n' '{"dependencies":{"next":"16.0.0"}}' >"$pages_project/package.json"
+for command in install integrate dashboard; do
+  err=$("$BIN" "$command" --install-dir "$pages_project" --force --json --insecure-storage 2>&1 >/dev/null)
+  code=$?
+  case "$err" in
+    *'"code":"unsupported_nextjs_router"'*) json_ok=1 ;;
+    *) json_ok=0 ;;
+  esac
+  if [ "$code" -eq 1 ] && [ "$json_ok" -eq 1 ] && [ ! -e "$pages_project/.env.local" ] && [ ! -e "$pages_project/src/app" ]; then
+    pass "$command declines Pages Router before project writes or login"
+  else
+    fail "$command Pages Router preflight (exit $code): $err"
+  fi
+done
+
 # Doctor must use installed tools, not shims planted in its project directory.
 # This runs against the shipped Bun binary on native Windows release runners,
 # where CWD-first lookup is implicit. Do not emulate it with "." in POSIX PATH:

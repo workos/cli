@@ -11,8 +11,8 @@ vi.mock('./validation/security-checks.js', () => ({
   formatSecurityFindingsForAgent: vi.fn(() => ''),
 }));
 vi.mock('../steps/index.js', () => ({}));
-vi.mock('./workos-management.js', () => ({}));
-vi.mock('./env-writer.js', () => ({}));
+vi.mock('./workos-management.js', () => ({ autoConfigureWorkOSEnvironment: vi.fn() }));
+vi.mock('./env-writer.js', () => ({ writeEnvLocal: vi.fn() }));
 vi.mock('../utils/ui-utils.js', () => ({
   ensurePackageIsInstalled: vi.fn(),
   getOrAskForWorkOSCredentials: vi.fn(async () => ({ apiKey: 'test-key', clientId: 'client_test' })),
@@ -27,6 +27,9 @@ import { getReference } from './skills-assets.js';
 import { initializeAgent, runAgent } from './agent-interface.js';
 import { runAgentInstaller } from './agent-runner.js';
 import { validateInstallation, quickCheckValidateAndFormat } from './validation/index.js';
+import { autoConfigureWorkOSEnvironment } from './workos-management.js';
+import { writeEnvLocal } from './env-writer.js';
+import { getOrAskForWorkOSCredentials } from '../utils/ui-utils.js';
 
 const options: InstallerOptions = {
   debug: false,
@@ -96,6 +99,25 @@ describe('installer prompt', () => {
       expect(prompt).not.toContain('NEXT_PUBLIC_WORKOS_REDIRECT_URI');
       expect(getReference).not.toHaveBeenCalledWith('workos-authkit-base');
     }
+  });
+
+  it('declines Pages Router before requesting credentials, writing files, or starting the agent', async () => {
+    const framework = {
+      ...config,
+      metadata: { ...config.metadata, gatherContext: async () => ({ router: 'pages-router' }) },
+    };
+    await expect(runAgentInstaller(framework, options)).rejects.toMatchObject({
+      code: 'unsupported_nextjs_router',
+    });
+    expect(getOrAskForWorkOSCredentials).not.toHaveBeenCalled();
+    expect(writeEnvLocal).not.toHaveBeenCalled();
+    expect(initializeAgent).not.toHaveBeenCalled();
+  });
+
+  it('does not register a callback in the API-key environment when run directly', async () => {
+    await runAgentInstaller(config, { ...options, clientId: undefined });
+    expect(autoConfigureWorkOSEnvironment).not.toHaveBeenCalled();
+    expect(runAgent).toHaveBeenCalled();
   });
 
   it('blocks success when an application route is still missing after retries', async () => {

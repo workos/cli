@@ -68,7 +68,9 @@ export async function readNextjsApplicationSetup(
 /**
  * Native installer configuration, never agent-controlled shell access.
  * Only the default application whose client ID matches this install in a
- * confirmed sandbox can be changed. Existing defaults/URLs are never replaced
+ * confirmed sandbox can be changed. All URL writes, including the callback,
+ * use that one application identity; API keys are never used to choose a target.
+ * Existing defaults/URLs are never replaced
  * with different values. Other cases return concrete manual setup instructions.
  */
 export async function configureAuthkitApplication(
@@ -90,7 +92,7 @@ export async function configureAuthkitApplication(
     const session = await refreshIfExpired();
     if (!session)
       return pending(
-        'No dashboard session is available. Sign in or claim the environment, then configure the URLs in the dashboard.',
+        'No dashboard session is available. No application URLs were changed. Sign in to the CLI (and claim the environment if needed), then configure and verify all three URLs in the dashboard.',
       );
     const environments = await fetchTeamEnvironments(session.accessToken);
     const matches = environments.filter((environment) => environment.clientId === setup.clientId);

@@ -18,7 +18,8 @@ import { analytics } from '../utils/analytics.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from './constants.js';
 import { initializeAgent, runAgent, type RetryConfig } from './agent-interface.js';
 import { uploadEnvironmentVariablesStep } from '../steps/index.js';
-import { autoConfigureWorkOSEnvironment, configureCallbackUri } from './workos-management.js';
+import { autoConfigureWorkOSEnvironment } from './workos-management.js';
+import { assertSupportedNextJsRouter } from '../integrations/nextjs/utils.js';
 import { detectPort, getCallbackPath } from './port-detection.js';
 import { writeEnvLocal } from './env-writer.js';
 
@@ -55,6 +56,12 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
     integration: config.metadata.integration,
   });
 
+  // Reject unsupported routers before requesting credentials or changing the project.
+  const frameworkContext = config.metadata.gatherContext ? await config.metadata.gatherContext(options) : {};
+  if (config.metadata.integration === 'nextjs') {
+    assertSupportedNextJsRouter(frameworkContext.router);
+  }
+
   // Get WorkOS credentials (API key optional for client-only SDKs)
   const { apiKey, clientId } = await getOrAskForWorkOSCredentials(options, config.environment.requiresApiKey);
 
@@ -64,22 +71,15 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
 
   // Auto-configure WorkOS environment (redirect URI, CORS, homepage)
   // Skip if caller already handled this (prevents duplicate dashboard config output)
-  // Next.js URL setup runs natively after code validation, with client-ID
-  // targeting and read-back. Do not pre-write unrelated homepage/CORS settings.
-  if (!callerHandledConfig && apiKey && config.environment.requiresApiKey) {
+  // Next.js URLs are ALL configured after validation using the same confirmed
+  // dashboard application. An independently supplied API key may target another env.
+  if (!callerHandledConfig && apiKey && config.environment.requiresApiKey && config.metadata.integration !== 'nextjs') {
     const port = detectPort(config.metadata.integration, options.installDir);
-    if (config.metadata.integration === 'nextjs') {
-      await configureCallbackUri(apiKey, options.redirectUri || `http://localhost:${port}${getCallbackPath('nextjs')}`);
-    } else {
-      await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, port, {
-        homepageUrl: options.homepageUrl,
-        redirectUri: options.redirectUri,
-      });
-    }
+    await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, port, {
+      homepageUrl: options.homepageUrl,
+      redirectUri: options.redirectUri,
+    });
   }
-
-  // Gather framework-specific context (e.g., Next.js router, React Native platform)
-  const frameworkContext = config.metadata.gatherContext ? await config.metadata.gatherContext(options) : {};
 
   // Write environment variables to .env.local BEFORE agent runs
   // Skip if caller already handled this (prevents double-writing)

@@ -195,6 +195,27 @@ describe('native application URL setup', () => {
     expect(writes()).toHaveLength(3);
   });
 
+  it('uses one client-ID-matched environment for callback, sign-out and initiate-login writes', async () => {
+    vi.mocked(fetchTeamEnvironments).mockResolvedValue([
+      { id: 'env_key', name: 'API key environment', sandbox: true, clientId: 'client_other' },
+      { id: 'env_app', name: 'App environment', sandbox: true, clientId: setup.clientId },
+    ]);
+    application.redirectUris = [];
+    const result = await configureAuthkitApplication(setup, setup.clientId);
+    expect(result.verified).toBe(true);
+    expect(writes().map(([name]) => name)).toEqual([
+      'setAuthkitApplicationLogoutUris',
+      'updateAuthkitApplication',
+      'setRedirectUris',
+    ]);
+    for (const [, options] of vi.mocked(dashboardGraphqlRequest).mock.calls) {
+      expect(options.environmentId).toBe('env_app');
+    }
+    for (const [, options] of writes()) {
+      expect(options.variables?.input).toMatchObject({ applicationId: 'app_1' });
+    }
+  });
+
   it('rejects incomplete application reads rather than overwriting an unknown list', async () => {
     vi.mocked(dashboardGraphqlRequest).mockResolvedValue({
       defaultUserlandApplication: { id: 'app_1', clientId: setup.clientId },

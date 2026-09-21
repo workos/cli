@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -17,7 +17,8 @@ const mockUi = {
 };
 vi.mock('../utils/ui.js', () => ({ default: mockUi }));
 
-const { assertNoExistingAuthKit, detectExistingAuthKit } = await import('./preflight-authkit.js');
+const { assertInstallPreflight, assertNoExistingAuthKit, detectExistingAuthKit } =
+  await import('./preflight-authkit.js');
 
 function writePackageJson(dir: string, deps: Record<string, string>, devDeps?: Record<string, string>): void {
   writeFileSync(
@@ -42,6 +43,42 @@ describe('preflight-authkit', () => {
     resetInteractionModeForTests();
     setOutputMode('human');
     errorSpy.mockRestore();
+  });
+
+  describe('unsupported Next.js routers', () => {
+    it.each(['pages', 'src/pages'])('declines a %s-only project even with --force', async (pages) => {
+      writePackageJson(testDir, { next: '16.0.0' });
+      mkdirSync(join(testDir, pages), { recursive: true });
+      const before = readdirSync(testDir);
+      await expect(assertInstallPreflight({ installDir: testDir, force: true })).rejects.toMatchObject({
+        code: 'unsupported_nextjs_router',
+      });
+      expect(readdirSync(testDir)).toEqual(before);
+      expect(mockConfirm).not.toHaveBeenCalled();
+    });
+
+    it('declines --router pages in an empty project before provisioning or scaffolding', async () => {
+      await expect(assertInstallPreflight({ installDir: testDir, router: 'pages' })).rejects.toMatchObject({
+        code: 'unsupported_nextjs_router',
+      });
+      expect(readdirSync(testDir)).toEqual([]);
+    });
+
+    it('does not mistake a non-Next.js pages directory for a Pages Router project', async () => {
+      writePackageJson(testDir, { react: '19.0.0' });
+      mkdirSync(join(testDir, 'pages'));
+      await expect(assertInstallPreflight({ installDir: testDir })).resolves.toBeUndefined();
+    });
+
+    it('allows mixed-router projects unless Pages Router is explicitly selected', async () => {
+      writePackageJson(testDir, { next: '16.0.0' });
+      mkdirSync(join(testDir, 'pages'));
+      mkdirSync(join(testDir, 'app'));
+      await expect(assertInstallPreflight({ installDir: testDir })).resolves.toBeUndefined();
+      await expect(assertInstallPreflight({ installDir: testDir, router: 'pages' })).rejects.toMatchObject({
+        code: 'unsupported_nextjs_router',
+      });
+    });
   });
 
   describe('detectExistingAuthKit', () => {
