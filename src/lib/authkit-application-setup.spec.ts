@@ -4,6 +4,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 vi.mock('./command-auth.js', () => ({ refreshIfExpired: vi.fn() }));
+vi.mock('./api-key.js', () => ({
+  resolveApiBaseUrl: () => 'https://api.workos.com',
+  resolveApiKey: vi.fn(),
+}));
 vi.mock('./environment-target.js', () => ({ fetchTeamEnvironments: vi.fn(), resolveEnvironmentTarget: vi.fn() }));
 vi.mock('./dashboard-graphql.js', () => ({ dashboardGraphqlRequest: vi.fn() }));
 vi.mock('../catalog/operation.js', () => ({
@@ -91,7 +95,79 @@ beforeEach(() => {
   });
 });
 
+afterEach(() => vi.unstubAllGlobals());
+
 describe('native application URL setup', () => {
+  it('registers the callback with an API key without a dashboard session', async () => {
+    vi.mocked(refreshIfExpired).mockResolvedValue(null);
+    const request = vi.fn(async () => new Response('{}', { status: 201 }));
+    vi.stubGlobal('fetch', request);
+    const result = await configureAuthkitApplication(setup, setup.clientId, 'sk_test_unclaimed');
+    expect(request).toHaveBeenCalledWith(
+      'https://api.workos.com/user_management/redirect_uris',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ Authorization: 'Bearer sk_test_unclaimed' }),
+        body: JSON.stringify({ uri: setup.redirectUri }),
+      }),
+    );
+    expect(result.callbackRegistered).toBe(true);
+    expect(result.verified).toBe(false);
+    expect(result.reason).toContain('Sign-out URI and Initiate login URI');
+    expect(fetchTeamEnvironments).not.toHaveBeenCalled();
+    expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
+  });
+
+  it('accepts an already registered API-only callback without claiming full setup', async () => {
+    vi.mocked(refreshIfExpired).mockResolvedValue(null);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{"message":"already exists"}', { status: 409 })),
+    );
+    const result = await configureAuthkitApplication(setup, setup.clientId, 'sk_test_unclaimed');
+    expect(result.callbackRegistered).toBe(true);
+    expect(result.verified).toBe(false);
+    expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
+  });
+
+  it('fails the install when the API-only callback cannot be registered', async () => {
+    vi.mocked(refreshIfExpired).mockResolvedValue(null);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{"message":"private details"}', { status: 403 })),
+    );
+    await expect(configureAuthkitApplication(setup, setup.clientId, 'sk_test_unclaimed')).rejects.toThrow(
+      'Could not register the callback URL',
+    );
+    expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
+  });
+
+  it.each(['sk_live_production', 'sk_unknown'])(
+    'refuses API-only callback writes without a sandbox key (%s)',
+    async (apiKey) => {
+      vi.mocked(refreshIfExpired).mockResolvedValue(null);
+      const request = vi.fn();
+      vi.stubGlobal('fetch', request);
+      await expect(configureAuthkitApplication(setup, setup.clientId, apiKey)).rejects.toThrow('sandbox API key');
+      expect(request).not.toHaveBeenCalled();
+      expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
+    },
+  );
+
+  it('never combines API-key writes with dashboard writes, even after a partial failure', async () => {
+    const request = vi.fn();
+    vi.stubGlobal('fetch', request);
+    application.redirectUris = [];
+    expect((await configureAuthkitApplication(setup, setup.clientId, 'sk_test_other_environment')).verified).toBe(true);
+    expect(writes()).toHaveLength(3);
+    expect(request).not.toHaveBeenCalled();
+    vi.mocked(dashboardGraphqlRequest).mockRejectedValue(new Error('dashboard unavailable'));
+    expect((await configureAuthkitApplication(setup, setup.clientId, 'sk_test_other_environment')).verified).toBe(
+      false,
+    );
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it('validates, preserves existing URLs, writes to the matched application, and reads back', async () => {
     const result = await configureAuthkitApplication(setup, setup.clientId);
     expect(result.verified).toBe(true);

@@ -67,6 +67,15 @@ describe('help-json', () => {
       );
     });
 
+    it('only advertises App Router for the installer', () => {
+      const tree = buildCommandTree('install') as {
+        options: { name: string; choices?: string[]; description: string }[];
+      };
+      const router = tree.options.find((option) => option.name === 'router');
+      expect(router?.choices).toEqual(['app']);
+      expect(router?.description).toContain('App Router only');
+    });
+
     it('does not include hidden dashboard command', () => {
       const tree = buildCommandTree();
       const names = (tree as { commands: { name: string }[] }).commands.map((c) => c.name);

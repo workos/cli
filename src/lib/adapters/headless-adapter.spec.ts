@@ -419,7 +419,8 @@ describe('HeadlessAdapter', () => {
         signOutUri: 'http://localhost:3000/',
         initiateLoginUri: 'http://localhost:3000/sign-in',
         verified: false,
-        reason: 'No dashboard session.',
+        callbackRegistered: true,
+        reason: 'Callback registered. Sign-out and initiate-login settings still need verification.',
       };
 
       emitter.emit('complete', {

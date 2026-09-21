@@ -131,7 +131,7 @@ export type InstallerOptions = {
    */
   pm?: string;
 
-  /** Next.js router to target when detection is ambiguous (from --router). */
+  /** Force App Router. Legacy 'pages' inputs are retained only to report an unsupported-router error to programmatic callers. */
   router?: 'app' | 'pages';
 };
 

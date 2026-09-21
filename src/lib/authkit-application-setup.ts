@@ -13,6 +13,8 @@ export interface AuthkitApplicationSetup {
   initiateLoginUri: string;
   homepageUrl?: string;
   verified: boolean;
+  /** The callback was registered; this alone does not verify the other URLs or browser flows. */
+  callbackRegistered?: boolean;
   reason?: string;
 }
 
@@ -68,14 +70,16 @@ export async function readNextjsApplicationSetup(
 /**
  * Native installer configuration, never agent-controlled shell access.
  * Only the default application whose client ID matches this install in a
- * confirmed sandbox can be changed. All URL writes, including the callback,
- * use that one application identity; API keys are never used to choose a target.
+ * confirmed sandbox can be changed through the dashboard. Without a dashboard
+ * session, only the callback is registered, using the API key as the sole target.
+ * These paths are exclusive: never mix API-key and client-ID-targeted writes.
  * Existing defaults/URLs are never replaced
  * with different values. Other cases return concrete manual setup instructions.
  */
 export async function configureAuthkitApplication(
   setup: AuthkitApplicationSetup,
   expectedClientId: string,
+  apiKey?: string,
 ): Promise<AuthkitApplicationSetup> {
   const pending = (reason: string): AuthkitApplicationSetup => ({ ...setup, verified: false, reason });
   const isSignOutDestination = (uri: string): boolean => {
@@ -88,12 +92,39 @@ export async function configureAuthkitApplication(
   if (setup.clientId !== expectedClientId) {
     return pending('The app client ID changed during installation. Confirm the application before configuring it.');
   }
-  try {
-    const session = await refreshIfExpired();
-    if (!session)
+  const session = await refreshIfExpired().catch(() => {
+    throw new Error('Could not check the dashboard session. No application URLs were changed. Retry setup.');
+  });
+  if (!session) {
+    if (!apiKey) {
       return pending(
-        'No dashboard session is available. No application URLs were changed. Sign in to the CLI (and claim the environment if needed), then configure and verify all three URLs in the dashboard.',
+        'No dashboard session or API key is available. No application URLs were changed. Configure and verify all three URLs in the dashboard.',
       );
+    }
+    if (!apiKey.startsWith('sk_test_')) {
+      throw new Error(
+        'Automatic callback registration requires a sandbox API key (sk_test_). Configure production URLs explicitly in the dashboard.',
+      );
+    }
+    // Use the existing REST callback operation for API-key-only and one-shot
+    // installs. Return here: a key and a client ID may identify different envs,
+    // so this branch must never continue into client-ID-targeted dashboard writes.
+    try {
+      const { createWorkOSClient } = await import('./workos-client.js');
+      await createWorkOSClient(apiKey).redirectUris.add(setup.redirectUri);
+    } catch {
+      // A missing callback makes sign-in unusable. Do not report install success.
+      throw new Error('Could not register the callback URL. Check the API key and connection, then retry setup.');
+    }
+    return {
+      ...pending(
+        'Callback registered using the API key. Sign-out URI and Initiate login URI still require dashboard setup and verification. Sign in to the CLI (and claim the environment if needed) to manage those settings.',
+      ),
+      callbackRegistered: true,
+    };
+  }
+
+  try {
     const environments = await fetchTeamEnvironments(session.accessToken);
     const matches = environments.filter((environment) => environment.clientId === setup.clientId);
     if (matches.length !== 1) return pending('Could not uniquely match the app client ID to a WorkOS environment.');
@@ -250,7 +281,12 @@ export async function configureAuthkitApplication(
         'URL read-back did not match the required settings. Check the dashboard before testing authentication.',
       );
     }
-    return { ...setup, signOutUri: saved.logoutUris.find((uri) => uri.isDefault)!.uri, verified: true };
+    return {
+      ...setup,
+      signOutUri: saved.logoutUris.find((uri) => uri.isDefault)!.uri,
+      callbackRegistered: true,
+      verified: true,
+    };
   } catch {
     // Never claim success based on a write response, expose credentials, or
     // print internal API errors. A partial write requires manual read-back too.

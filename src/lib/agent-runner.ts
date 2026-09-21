@@ -71,8 +71,8 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
 
   // Auto-configure WorkOS environment (redirect URI, CORS, homepage)
   // Skip if caller already handled this (prevents duplicate dashboard config output)
-  // Next.js URLs are ALL configured after validation using the same confirmed
-  // dashboard application. An independently supplied API key may target another env.
+  // Next.js URL setup runs after validation in the caller, which chooses either
+  // dashboard targeting or the API-only callback path, never both.
   if (!callerHandledConfig && apiKey && config.environment.requiresApiKey && config.metadata.integration !== 'nextjs') {
     const port = detectPort(config.metadata.integration, options.installDir);
     await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, port, {

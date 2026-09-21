@@ -1,10 +1,8 @@
 import fg from 'fast-glob';
-import { abortIfCancelled } from '../../utils/ui-utils.js';
 import ui from '../../utils/ui.js';
 import { getVersionBucket } from '../../utils/semver.js';
 import type { InstallerOptions } from '../../utils/types.js';
 import { IGNORE_PATTERNS } from '../../lib/constants.js';
-import { isPromptAllowed } from '../../utils/interaction-mode.js';
 import { InstallDeclinedError } from '../../lib/installer-errors.js';
 
 export function getNextJsVersionBucket(version: string | undefined): string {
@@ -63,35 +61,10 @@ export async function getNextJsRouter({
     return NextJsRouter.APP_ROUTER;
   }
 
-  // Ambiguous (both app/ and pages/ present, or neither). In non-interactive
-  // mode default to the app router (dominant/new-project case) with a warning
-  // instead of prompting — the --router flag above is the escape hatch.
-  if (!isPromptAllowed()) {
-    ui.log.warn(
-      'Could not determine the Next.js router (both app/ and pages/ present, or neither). ' +
-        'Defaulting to app router. Pass --router app|pages to override.',
-    );
-    return NextJsRouter.APP_ROUTER;
-  }
-
-  const result: NextJsRouter = await abortIfCancelled(
-    ui.select({
-      message: 'What router are you using?',
-      options: [
-        {
-          label: getNextJsRouterName(NextJsRouter.APP_ROUTER),
-          value: NextJsRouter.APP_ROUTER,
-        },
-        {
-          label: getNextJsRouterName(NextJsRouter.PAGES_ROUTER),
-          value: NextJsRouter.PAGES_ROUTER,
-        },
-      ],
-    }),
-    'nextjs',
-  );
-
-  return result;
+  // Only App Router is supported. Do not offer a Pages Router choice that the
+  // installer will subsequently reject. Mixed projects keep their pages tree.
+  ui.log.warn('Only App Router is supported. Using App Router; Pages Router routes will not be configured.');
+  return NextJsRouter.APP_ROUTER;
 }
 
 export const getNextJsRouterName = (router: NextJsRouter) => {

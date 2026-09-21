@@ -2153,7 +2153,8 @@ const commands: CommandSchema[] = [
       {
         name: 'router',
         type: 'string',
-        description: 'Next.js router to target when detection is ambiguous (app or pages)',
+        description: 'Use Next.js App Router (App Router only; Pages Router is not supported)',
+        choices: ['app'],
         required: false,
         hidden: false,
       },

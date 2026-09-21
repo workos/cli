@@ -269,8 +269,8 @@ const installerOptions = {
     type: 'string' as const,
   },
   router: {
-    choices: ['app', 'pages'] as const,
-    describe: 'Next.js router to target when detection is ambiguous (app or pages)',
+    choices: ['app'] as const,
+    describe: 'Use Next.js App Router (App Router only; Pages Router is not supported)',
     type: 'string' as const,
   },
   ...forceOption,

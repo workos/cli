@@ -197,8 +197,8 @@ export async function configureInstallEnvironment(
 
   const port = detectPort(integration, installerOptions.installDir);
   const redirectUri = installerOptions.redirectUri || `http://localhost:${port}${getCallbackPath(integration)}`;
-  // Next.js callback, sign-out and initiate-login writes share the confirmed
-  // dashboard application in configureAuthkitApplication, never an unverified key.
+  // Next.js URL writes happen after code validation. That step chooses ONE
+  // target: the dashboard application, or an API-key-only callback without a session.
   const requiresApiKey = ['tanstack-start', 'react-router'].includes(integration);
   if (credentials.apiKey && requiresApiKey) {
     await autoConfigureWorkOSEnvironment(credentials.apiKey, integration, port, {
@@ -388,7 +388,11 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
                   .join('\n')}`,
               );
             }
-            applicationSetup = await configureAuthkitApplication(applicationSetup, credentials?.clientId ?? '');
+            applicationSetup = await configureAuthkitApplication(
+              applicationSetup,
+              credentials?.clientId ?? '',
+              credentials?.apiKey,
+            );
           }
           return {
             success: true,

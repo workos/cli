@@ -19,15 +19,9 @@ vi.mock('../../utils/ui.js', () => ({
   },
 }));
 
-// Passthrough — the guard itself is covered by ui-utils.spec.ts; here we only
-// need ui.select's resolved value to flow through in the human path.
-vi.mock('../../utils/ui-utils.js', () => ({
-  abortIfCancelled: vi.fn(async (p) => await p),
-}));
-
 const fg = (await import('fast-glob')).default;
 const ui = (await import('../../utils/ui.js')).default;
-const { getNextJsRouter, NextJsRouter } = await import('./utils.js');
+const { getNextJsRouter, NextJsRouter, assertSupportedNextJsRouter } = await import('./utils.js');
 const { setInteractionMode, resetInteractionModeForTests } = await import('../../utils/interaction-mode.js');
 
 /** Configure fast-glob to report presence of pages/ and/or app/ dirs. */
@@ -71,15 +65,14 @@ describe('getNextJsRouter', () => {
     expect(ui.select).not.toHaveBeenCalled();
   });
 
-  it('ambiguous detection in human mode prompts and uses the answer', async () => {
+  it('mixed-router detection uses App Router without offering unsupported Pages Router', async () => {
     setInteractionMode({ mode: 'human', source: 'default' });
     mockDetection({ pages: true, app: true });
-    vi.mocked(ui.select).mockResolvedValueOnce(NextJsRouter.PAGES_ROUTER as never);
 
     const result = await getNextJsRouter({ installDir: '/proj' });
 
-    expect(result).toBe(NextJsRouter.PAGES_ROUTER);
-    expect(ui.select).toHaveBeenCalledOnce();
+    expect(result).toBe(NextJsRouter.APP_ROUTER);
+    expect(ui.select).not.toHaveBeenCalled();
   });
 
   it('ambiguous detection in agent mode defaults to app router with a warning (no prompt)', async () => {
@@ -104,12 +97,13 @@ describe('getNextJsRouter', () => {
     expect(ui.log.warn).toHaveBeenCalled();
   });
 
-  it('--router pages overrides ambiguous detection with no prompt', async () => {
+  it('recognizes a legacy programmatic pages selection so the installer can reject it', async () => {
     setInteractionMode({ mode: 'human', source: 'default' });
     mockDetection({ pages: true, app: true });
 
     const result = await getNextJsRouter({ installDir: '/proj', router: 'pages' });
 
+    expect(() => assertSupportedNextJsRouter(result)).toThrow('supports App Router only');
     expect(result).toBe(NextJsRouter.PAGES_ROUTER);
     expect(ui.select).not.toHaveBeenCalled();
   });
