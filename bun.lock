@@ -9,11 +9,11 @@
         "@anthropic-ai/sdk": "^0.124.0",
         "@inquirer/prompts": "^8.5.2",
         "@napi-rs/keyring": "^1.2.0",
-        "@workos-inc/node": "^8.7.0",
-        "@workos/emulate": "^0.12.0",
-        "@workos/migrations": "^2.4.0",
-        "@workos/openapi-spec": "^0.83.0",
-        "@workos/skills": "0.7.1",
+        "@workos-inc/node": "^10.13.0",
+        "@workos/emulate": "^0.13.1",
+        "@workos/migrations": "^2.6.0",
+        "@workos/openapi-spec": "^0.100.0",
+        "@workos/skills": "0.7.3",
         "chalk": "^5.6.2",
         "diff": "^8.0.3",
         "fast-glob": "^3.3.3",
@@ -120,7 +120,7 @@
 
     "@emnapi/wasi-threads": ["@emnapi/wasi-threads@1.2.2", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-c95qOXkHdydNKhscBTebqEC1CVAZpyqOfVfBzQ1qgzyl3gfeldUjIggDbIZgDKsHLgnsM+igH7TJ/eAasaVuMA=="],
 
-    "@hono/node-server": ["@hono/node-server@1.19.14", "", { "peerDependencies": { "hono": "^4" } }, "sha512-GwtvgtXxnWsucXvbQXkRgqksiH2Qed37H9xHZocE5sA3N8O8O8/8FA3uclQXxXVzc9XBZuEOMK7+r02FmSpHtw=="],
+    "@hono/node-server": ["@hono/node-server@2.1.1", "", { "peerDependencies": { "hono": "^4" } }, "sha512-ELuehkj5VCBdgEw9zs+ivkKwyzzUCSQuE96YmiPvn1ECBoZCczbFXJLeEGMTYjphP6gydh4pHMqEYPVMYUVgQg=="],
 
     "@inquirer/ansi": ["@inquirer/ansi@2.0.7", "", {}, "sha512-3eTuUO1vH2cZm2ZKHeQxnOqlTi9EfZDGgIe3BL3I4u+rJHocr9Fz86M4fjYABPvFnQG/gGK551HqDiIcETwU6Q=="],
 
@@ -366,15 +366,15 @@
 
     "@vitest/utils": ["@vitest/utils@4.1.10", "", { "dependencies": { "@vitest/pretty-format": "4.1.10", "convert-source-map": "^2.0.0", "tinyrainbow": "^3.1.0" } }, "sha512-fy9am/HWxbaGt/Sawrp90vt6Y6jQwf1RX77cz3uwoJwJVMli/e1IEwRPnMNJ7vKfPTwo0diXifkpPvwH9v7nGA=="],
 
-    "@workos-inc/node": ["@workos-inc/node@8.13.0", "", { "dependencies": { "eventemitter3": "^5.0.4" } }, "sha512-NgQKHpwh8AbT4KvAsW91Y+4f4jja2IvFPQ5atcy5NUxUMVRgXzRFEee3erawfXrTmiCVqJjd9PljHySKBXmHKQ=="],
+    "@workos-inc/node": ["@workos-inc/node@10.13.0", "", {}, "sha512-xPtcziTjN1irPiZ4niTaulYvRMs6D+Fz5E54GGHVOxNi0PV2/Ws1g/cx3q9oMvMhnINkva5iZ2T5aS6yLzdCWA=="],
 
-    "@workos/emulate": ["@workos/emulate@0.12.0", "", { "dependencies": { "@hono/node-server": "^1", "chalk": "^5.6.2", "hono": "^4", "semver": "^7.7.4", "yaml": "^2.8.2" }, "bin": { "workos-emulate": "dist/cli.js" } }, "sha512-J7kVy1riKg6eyIZ7L4QVQPF8IKzD/k+ZWImcIt9kzh0yGkBYnNPkNK0FrVxAbyFby/9Nwmt6VApawJQo9HWgig=="],
+    "@workos/emulate": ["@workos/emulate@0.13.1", "", { "dependencies": { "@hono/node-server": "^2.1.1", "chalk": "^5.6.2", "hono": "^4", "semver": "^7.7.4", "yaml": "^2.8.2" }, "bin": { "workos-emulate": "dist/cli.js" } }, "sha512-5/wRpFQNMKvnp1+lwwOEZlXFGARKBMnJyGvPyD1PO28zIXGDgtITIWtNBhRtUHPPzs0tD6vhbhyr/NGhsyQuag=="],
 
-    "@workos/migrations": ["@workos/migrations@2.5.0", "", { "dependencies": { "@aws-sdk/client-cognito-identity-provider": "^3.1041.0", "@workos-inc/node": "^10.0.0", "chalk": "^5.6.2", "cli-progress": "^3.12.0", "commander": "^15.0.0", "csv-parse": "^6.2.1", "csv-stringify": "^6.4.5", "dotenv": "^17.4.2", "fast-xml-parser": "^5.7.2", "google-auth-library": "^10.6.2", "prompts": "^2.4.2" }, "bin": { "workos-migrate": "dist/index.js" } }, "sha512-2kBiKOf0djjQIThpi43POWy76Dkvx8fFtKvdKtMNiOk5rJqyjsX3Y3oU7JjSx+gZJTfW2YfdDXrQhPnWzdyiUw=="],
+    "@workos/migrations": ["@workos/migrations@2.6.0", "", { "dependencies": { "@aws-sdk/client-cognito-identity-provider": "^3.1041.0", "@workos-inc/node": "^10.0.0", "chalk": "^5.6.2", "cli-progress": "^3.12.0", "commander": "^15.0.0", "csv-parse": "^6.2.1", "csv-stringify": "^6.4.5", "dotenv": "^17.4.2", "fast-xml-parser": "^5.7.2", "google-auth-library": "^10.6.2", "prompts": "^2.4.2" }, "bin": { "workos-migrate": "dist/index.js" } }, "sha512-A7pqwyzo/XWpvlwWTpTbf+DMw5XpHGSYr3/v/dWm1LmYFf5QZgqQy0nyC3O4+NQ2I7cpqpvLVP7AWDd94yBOjg=="],
 
-    "@workos/openapi-spec": ["@workos/openapi-spec@0.83.0", "", {}, "sha512-nYlp4IK7a4P0NFkvDpKJf3nYs9wA/CXtj4EruEJYzPPv0lwt7lgSKjAD0mskRxVKOgCIeA+i+6HrI1SqaJmqjQ=="],
+    "@workos/openapi-spec": ["@workos/openapi-spec@0.100.0", "", {}, "sha512-/DuUtAnHh1Tc2y2vMyHwydzGNlcEUzeUGCZ69tbEdEiw3N3pYSFCILBlP0jUAk+/Zx/whtqfRiMT1/tU+vdMqg=="],
 
-    "@workos/skills": ["@workos/skills@0.7.1", "", { "dependencies": { "yaml": "^2.8.2" } }, "sha512-s0iVaQ0Y2vo6ViBMxO5v675fLJXQt8w31z5sSuJ3eTV7WUtsWTGzIIPAaChP3keiBkSrMhyLNGmAz8wlEldIYQ=="],
+    "@workos/skills": ["@workos/skills@0.7.3", "", { "dependencies": { "yaml": "^2.8.2" } }, "sha512-xg+TqR52bBj6nNfhzzUuLhBwaeaFs/913H5z7jsq4LF/mxm6TzQkfecFh7z15wrbbf1unpFXSY3V0HGDyRdbWA=="],
 
     "accepts": ["accepts@2.0.0", "", { "dependencies": { "mime-types": "^3.0.0", "negotiator": "^1.0.0" } }, "sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng=="],
 
@@ -515,8 +515,6 @@
     "etag": ["etag@1.8.1", "", {}, "sha512-aIL5Fx7mawVa300al2BnEE4iNvo1qETxLrPI/o05L7z6go7fCw1J6EQmbK4FmJ2AS7kgVF/KEZWufBfdClMcPg=="],
 
     "event-target-shim": ["event-target-shim@6.0.2", "", {}, "sha512-8q3LsZjRezbFZ2PN+uP+Q7pnHUMmAOziU2vA2OwoFaKIXxlxl38IylhSSgUorWu/rf4er67w0ikBqjBFk/pomA=="],
-
-    "eventemitter3": ["eventemitter3@5.0.4", "", {}, "sha512-mlsTRyGaPBjPedk6Bvw+aqbsXDtoAyAzm5MO7JgU+yVRyMQ5O8bD4Kcci7BS85f93veegeCPkL8R4GLClnjLFw=="],
 
     "eventsource": ["eventsource@3.0.7", "", { "dependencies": { "eventsource-parser": "^3.0.1" } }, "sha512-CRT1WTyuQoD771GW56XEZFQ/ZoSfWid1alKGDYMmkt2yl8UXrVR4pspqWNEcqKvVIzg6PAltWjxcSSPrboA4iA=="],
 
@@ -954,7 +952,7 @@
 
     "@inquirer/core/signal-exit": ["signal-exit@4.1.0", "", {}, "sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw=="],
 
-    "@workos/migrations/@workos-inc/node": ["@workos-inc/node@10.7.0", "", {}, "sha512-rffa9znZuIv4yo+9JRxGOLTTSxh0XhOT6jlsktgqEi9MuB9V0VFHRzLd3bTpkq+J9sgrPZNGpvX4aWNfMqt5cQ=="],
+    "@modelcontextprotocol/sdk/@hono/node-server": ["@hono/node-server@1.19.14", "", { "peerDependencies": { "hono": "^4" } }, "sha512-GwtvgtXxnWsucXvbQXkRgqksiH2Qed37H9xHZocE5sA3N8O8O8/8FA3uclQXxXVzc9XBZuEOMK7+r02FmSpHtw=="],
 
     "body-parser/content-type": ["content-type@2.0.0", "", {}, "sha512-j/O/d7GcZCyNl7/hwZAb606rzqkyvaDctLmckbxLzHvFBzTJHuGEdodATcP3yIRoDrLHkIATJuvzbFlp/ki2cQ=="],
 

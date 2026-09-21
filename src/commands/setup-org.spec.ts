@@ -1,10 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { WorkOS } from '@workos-inc/node';
 
 const mockSdk = {
   organizations: { createOrganization: vi.fn() },
-  organizationDomains: { create: vi.fn(), verify: vi.fn() },
+  organizationDomains: { createOrganizationDomain: vi.fn(), verifyOrganizationDomain: vi.fn() },
   authorization: { createOrganizationRole: vi.fn() },
-  portal: { generateLink: vi.fn() },
+  adminPortal: { generateLink: vi.fn() },
+} satisfies {
+  [Resource in 'organizations' | 'organizationDomains' | 'authorization' | 'adminPortal']: Partial<WorkOS[Resource]>;
 };
 
 vi.mock('../lib/workos-client.js', () => ({
@@ -27,6 +30,15 @@ describe('setup-org command', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
+  it('mocks methods that exist on the installed SDK', () => {
+    const sdk = new WorkOS('sk_test');
+    for (const [resource, methods] of Object.entries(mockSdk)) {
+      for (const method of Object.keys(methods)) {
+        expect(sdk).toHaveProperty(`${resource}.${method}`, expect.any(Function));
+      }
+    }
+  });
+
   it('creates org with name only', async () => {
     mockSdk.organizations.createOrganization.mockResolvedValue({ id: 'org_123', name: 'Acme' });
     await runSetupOrg({ name: 'Acme' }, 'sk_test');
@@ -37,26 +49,29 @@ describe('setup-org command', () => {
   it('does not call domain or role APIs when not provided', async () => {
     mockSdk.organizations.createOrganization.mockResolvedValue({ id: 'org_123', name: 'Acme' });
     await runSetupOrg({ name: 'Acme' }, 'sk_test');
-    expect(mockSdk.organizationDomains.create).not.toHaveBeenCalled();
+    expect(mockSdk.organizationDomains.createOrganizationDomain).not.toHaveBeenCalled();
     expect(mockSdk.authorization.createOrganizationRole).not.toHaveBeenCalled();
   });
 
   it('adds and verifies domain when provided', async () => {
     mockSdk.organizations.createOrganization.mockResolvedValue({ id: 'org_123', name: 'Acme' });
-    mockSdk.organizationDomains.create.mockResolvedValue({ id: 'dom_1' });
-    mockSdk.organizationDomains.verify.mockResolvedValue({ id: 'dom_1', state: 'verified' });
+    mockSdk.organizationDomains.createOrganizationDomain.mockResolvedValue({ id: 'dom_1' });
+    mockSdk.organizationDomains.verifyOrganizationDomain.mockResolvedValue({ id: 'dom_1', state: 'verified' });
 
     await runSetupOrg({ name: 'Acme', domain: 'acme.com' }, 'sk_test');
 
-    expect(mockSdk.organizationDomains.create).toHaveBeenCalledWith({ domain: 'acme.com', organizationId: 'org_123' });
-    expect(mockSdk.organizationDomains.verify).toHaveBeenCalledWith('dom_1');
+    expect(mockSdk.organizationDomains.createOrganizationDomain).toHaveBeenCalledWith({
+      domain: 'acme.com',
+      organizationId: 'org_123',
+    });
+    expect(mockSdk.organizationDomains.verifyOrganizationDomain).toHaveBeenCalledWith('dom_1');
     expect(consoleOutput.some((l) => l.includes('Verified domain'))).toBe(true);
   });
 
   it('handles domain verification failure gracefully', async () => {
     mockSdk.organizations.createOrganization.mockResolvedValue({ id: 'org_123', name: 'Acme' });
-    mockSdk.organizationDomains.create.mockResolvedValue({ id: 'dom_1' });
-    mockSdk.organizationDomains.verify.mockRejectedValue(new Error('Verification pending'));
+    mockSdk.organizationDomains.createOrganizationDomain.mockResolvedValue({ id: 'dom_1' });
+    mockSdk.organizationDomains.verifyOrganizationDomain.mockRejectedValue(new Error('Verification pending'));
 
     await runSetupOrg({ name: 'Acme', domain: 'acme.com' }, 'sk_test');
 
@@ -100,17 +115,17 @@ describe('setup-org command', () => {
 
   it('generates portal link', async () => {
     mockSdk.organizations.createOrganization.mockResolvedValue({ id: 'org_123', name: 'Acme' });
-    mockSdk.portal.generateLink.mockResolvedValue({ link: 'https://portal.workos.com/xxx' });
+    mockSdk.adminPortal.generateLink.mockResolvedValue({ link: 'https://portal.workos.com/xxx' });
 
     await runSetupOrg({ name: 'Acme' }, 'sk_test');
 
-    expect(mockSdk.portal.generateLink).toHaveBeenCalledWith(expect.objectContaining({ organization: 'org_123' }));
+    expect(mockSdk.adminPortal.generateLink).toHaveBeenCalledWith(expect.objectContaining({ organization: 'org_123' }));
     expect(consoleOutput.some((l) => l.includes('portal.workos.com'))).toBe(true);
   });
 
   it('handles portal link failure gracefully', async () => {
     mockSdk.organizations.createOrganization.mockResolvedValue({ id: 'org_123', name: 'Acme' });
-    mockSdk.portal.generateLink.mockRejectedValue(new Error('Plan upgrade required'));
+    mockSdk.adminPortal.generateLink.mockRejectedValue(new Error('Plan upgrade required'));
 
     await runSetupOrg({ name: 'Acme' }, 'sk_test');
 
@@ -119,9 +134,9 @@ describe('setup-org command', () => {
 
   it('prints human-mode summary with all components', async () => {
     mockSdk.organizations.createOrganization.mockResolvedValue({ id: 'org_123', name: 'Acme' });
-    mockSdk.organizationDomains.create.mockResolvedValue({ id: 'dom_1' });
-    mockSdk.organizationDomains.verify.mockResolvedValue({});
-    mockSdk.portal.generateLink.mockResolvedValue({ link: 'https://portal.workos.com/xxx' });
+    mockSdk.organizationDomains.createOrganizationDomain.mockResolvedValue({ id: 'dom_1' });
+    mockSdk.organizationDomains.verifyOrganizationDomain.mockResolvedValue({});
+    mockSdk.adminPortal.generateLink.mockResolvedValue({ link: 'https://portal.workos.com/xxx' });
 
     await runSetupOrg({ name: 'Acme', domain: 'acme.com' }, 'sk_test');
 
@@ -136,7 +151,7 @@ describe('setup-org command', () => {
 
     it('outputs JSON summary with org ID', async () => {
       mockSdk.organizations.createOrganization.mockResolvedValue({ id: 'org_123', name: 'Acme' });
-      mockSdk.portal.generateLink.mockResolvedValue({ link: 'https://portal.workos.com/xxx' });
+      mockSdk.adminPortal.generateLink.mockResolvedValue({ link: 'https://portal.workos.com/xxx' });
 
       await runSetupOrg({ name: 'Acme' }, 'sk_test');
 
@@ -148,8 +163,8 @@ describe('setup-org command', () => {
 
     it('includes domain verification status in JSON', async () => {
       mockSdk.organizations.createOrganization.mockResolvedValue({ id: 'org_123', name: 'Acme' });
-      mockSdk.organizationDomains.create.mockResolvedValue({ id: 'dom_1' });
-      mockSdk.organizationDomains.verify.mockResolvedValue({});
+      mockSdk.organizationDomains.createOrganizationDomain.mockResolvedValue({ id: 'dom_1' });
+      mockSdk.organizationDomains.verifyOrganizationDomain.mockResolvedValue({});
 
       await runSetupOrg({ name: 'Acme', domain: 'acme.com' }, 'sk_test');
 
