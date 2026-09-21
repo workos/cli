@@ -2,9 +2,10 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseEnvFile } from '../utils/env-parser.js';
 import { refreshIfExpired } from './command-auth.js';
-import { fetchTeamEnvironments, resolveEnvironmentTarget } from './environment-target.js';
+import { fetchTeamEnvironments } from './environment-target.js';
 import { dashboardGraphqlRequest } from './dashboard-graphql.js';
 import { getOperation, resolveExecutableDocument } from '../catalog/operation.js';
+import { InstallDeclinedError } from './installer-errors.js';
 
 export interface AuthkitApplicationSetup {
   clientId: string;
@@ -68,20 +69,22 @@ export async function readNextjsApplicationSetup(
 }
 
 /**
- * Native installer configuration, never agent-controlled shell access.
- * Only the default application whose client ID matches this install in a
- * confirmed sandbox can be changed through the dashboard. Without a dashboard
- * session, only the callback is registered, using the API key as the sole target.
- * These paths are exclusive: never mix API-key and client-ID-targeted writes.
- * Existing defaults/URLs are never replaced
- * with different values. Other cases return concrete manual setup instructions.
+ * Callback registration is mandatory; remaining settings may require manual setup.
+ * Choose one write target: a uniquely matched dashboard sandbox, or the sandbox
+ * API key when no session/team match exists. Never fall back after dashboard writes.
  */
 export async function configureAuthkitApplication(
   setup: AuthkitApplicationSetup,
   expectedClientId: string,
   apiKey?: string,
 ): Promise<AuthkitApplicationSetup> {
-  const pending = (reason: string): AuthkitApplicationSetup => ({ ...setup, verified: false, reason });
+  let callbackRegistered = false;
+  const pending = (reason: string): AuthkitApplicationSetup => {
+    if (!callbackRegistered) {
+      throw new InstallDeclinedError(`Callback URL is not registered or verified. ${reason}`, 'callback_unregistered');
+    }
+    return { ...setup, callbackRegistered, verified: false, reason };
+  };
   const isSignOutDestination = (uri: string): boolean => {
     try {
       return new URL(uri).href === new URL(setup.signOutUri).href;
@@ -92,60 +95,55 @@ export async function configureAuthkitApplication(
   if (setup.clientId !== expectedClientId) {
     return pending('The app client ID changed during installation. Confirm the application before configuring it.');
   }
-  const session = await refreshIfExpired().catch(() => {
-    throw new Error('Could not check the dashboard session. No application URLs were changed. Retry setup.');
-  });
-  if (!session) {
-    if (!apiKey) {
+  const registerApiCallback = async (): Promise<AuthkitApplicationSetup> => {
+    if (!apiKey)
       return pending(
-        'No dashboard session or API key is available. No application URLs were changed. Configure and verify all three URLs in the dashboard.',
+        'No usable dashboard environment or API key is available. Configure the callback in the dashboard.',
       );
-    }
     if (!apiKey.startsWith('sk_test_')) {
-      throw new Error(
+      return pending(
         'Automatic callback registration requires a sandbox API key (sk_test_). Configure production URLs explicitly in the dashboard.',
       );
     }
-    // Use the existing REST callback operation for API-key-only and one-shot
-    // installs. Return here: a key and a client ID may identify different envs,
-    // so this branch must never continue into client-ID-targeted dashboard writes.
     try {
       const { createWorkOSClient } = await import('./workos-client.js');
       await createWorkOSClient(apiKey).redirectUris.add(setup.redirectUri);
     } catch {
-      // A missing callback makes sign-in unusable. Do not report install success.
-      throw new Error('Could not register the callback URL. Check the API key and connection, then retry setup.');
+      return pending('Could not register the callback URL. Check the API key and connection, then retry setup.');
     }
-    return {
-      ...pending(
-        'Callback registered using the API key. Sign-out URI and Initiate login URI still require dashboard setup and verification. Sign in to the CLI (and claim the environment if needed) to manage those settings.',
-      ),
-      callbackRegistered: true,
-    };
-  }
+    callbackRegistered = true;
+    return pending(
+      'Callback registered using the API key. Sign-out URI and Initiate login URI still require dashboard setup and verification. Sign in to the correct team (and claim the environment if needed) to manage those settings.',
+    );
+  };
+  const session = await refreshIfExpired().catch(() => {
+    throw new InstallDeclinedError(
+      'Callback URL is not registered or verified. Could not check the dashboard session. Retry setup.',
+      'callback_unregistered',
+    );
+  });
+  if (!session) return registerApiCallback();
 
   try {
     const environments = await fetchTeamEnvironments(session.accessToken);
     const matches = environments.filter((environment) => environment.clientId === setup.clientId);
+    // A session for another team must not disable API-key-only onboarding. No
+    // dashboard mutation has happened, and this branch returns before any can.
+    if (matches.length === 0) return registerApiCallback();
     if (matches.length !== 1) return pending('Could not uniquely match the app client ID to a WorkOS environment.');
     const environment = matches[0];
-    if (environment.sandbox !== true)
-      return pending(
-        'Automatic URL setup is restricted to sandbox environments. Configure this environment explicitly in the dashboard.',
-      );
-    const target = await resolveEnvironmentTarget(session.accessToken, {
-      flagValue: environment.id,
-      forMutation: true,
-    });
+    // Already validated by the team catalog and the application read below.
+    // Do not resolve again: that would re-fetch and mutate stored profiles.
+    const environmentId = environment.id;
     const request = <T>(name: string, variables: Record<string, unknown>): Promise<T> =>
       dashboardGraphqlRequest<T>(resolveExecutableDocument(getOperation(name)), {
         token: session.accessToken,
-        environmentId: target.environmentId,
+        environmentId,
         variables,
       });
     const readApplication = async (): Promise<Application> => {
       const data = await request<{ defaultUserlandApplication: Application | null }>('defaultAuthkitApplication', {
-        environmentId: target.environmentId,
+        environmentId,
       });
       const application = data.defaultUserlandApplication;
       if (
@@ -161,135 +159,142 @@ export async function configureAuthkitApplication(
         !application.redirectUris.every(
           (uri) => typeof uri.uri === 'string' && (uri.isDefault === null || typeof uri.isDefault === 'boolean'),
         )
-      ) {
+      )
         throw new Error('Application configuration unavailable');
-      }
       return application;
     };
-    const original = await readApplication();
-    const defaults = original.logoutUris.filter((uri) => uri.isDefault);
-    if (defaults.length > 1 || defaults.some((uri) => !isSignOutDestination(uri.uri))) {
+    let original = await readApplication();
+    if (environment.sandbox !== true) {
+      // Production can use an already registered callback, but is read-only here.
+      callbackRegistered = original.redirectUris.some((uri) => uri.uri === setup.redirectUri);
       return pending(
-        'An existing sign-out default differs from this app. It was left unchanged; confirm the intended default in the dashboard.',
-      );
-    }
-    if (original.initiateLoginUri && original.initiateLoginUri !== setup.initiateLoginUri) {
-      return pending(
-        'An existing Initiate login URI differs from this app. It was left unchanged; confirm the intended sign-in route in the dashboard.',
+        'Automatic URL setup is restricted to sandbox environments. Configure this environment explicitly in the dashboard.',
       );
     }
 
-    const needsLogout = !original.logoutUris.some((uri) => isSignOutDestination(uri.uri) && uri.isDefault);
+    // Register and verify the additive callback FIRST. Conflicting settings for
+    // other apps may block their own updates, but must not block basic sign-in.
+    if (!original.redirectUris.some((uri) => uri.uri === setup.redirectUri)) {
+      const input = {
+        applicationId: original.id,
+        redirectUris: [
+          ...original.redirectUris,
+          { uri: setup.redirectUri, isDefault: original.redirectUris.length === 0 },
+        ],
+      };
+      const validated = await request<{ setRedirectUris: { __typename: string } }>('setRedirectUris', {
+        input: { ...input, dryRun: true },
+      });
+      if (validated.setRedirectUris.__typename !== 'RedirectUrisSet') return pending('Callback URL validation failed.');
+      if (JSON.stringify(await readApplication()) !== JSON.stringify(original))
+        return pending('Application settings changed during setup. Recheck them before applying changes.');
+      const written = await request<{ setRedirectUris: { __typename: string } }>('setRedirectUris', {
+        input: { ...input, dryRun: false },
+      });
+      if (written.setRedirectUris.__typename !== 'RedirectUrisSet') return pending('Could not save the callback URL.');
+      const saved = await readApplication();
+      if (
+        saved.id !== original.id ||
+        !saved.redirectUris.some((uri) => uri.uri === setup.redirectUri) ||
+        !original.redirectUris.every((old) =>
+          saved.redirectUris.some((uri) => uri.uri === old.uri && (!old.isDefault || uri.isDefault)),
+        )
+      ) {
+        return pending('Callback read-back did not match the required settings.');
+      }
+      original = saved;
+    }
+    callbackRegistered = true;
+
+    const reasons: string[] = [];
+    const defaults = original.logoutUris.filter((uri) => uri.isDefault);
+    const signOutConflict = defaults.length > 1 || defaults.some((uri) => !isSignOutDestination(uri.uri));
+    const initiateConflict = !!original.initiateLoginUri && original.initiateLoginUri !== setup.initiateLoginUri;
+    if (signOutConflict)
+      reasons.push(
+        'An existing sign-out default differs from this app. It was left unchanged; confirm the intended default in the dashboard.',
+      );
+    if (initiateConflict)
+      reasons.push(
+        'An existing Initiate login URI differs from this app. It was left unchanged; confirm the intended sign-in route in the dashboard.',
+      );
+
+    const needsLogout =
+      !signOutConflict && !original.logoutUris.some((uri) => isSignOutDestination(uri.uri) && uri.isDefault);
     if (needsLogout) {
       const logoutUris = original.logoutUris.map((uri) => ({ ...uri, isDefault: isSignOutDestination(uri.uri) }));
       if (!logoutUris.some((uri) => isSignOutDestination(uri.uri)))
         logoutUris.push({ uri: setup.signOutUri, isDefault: true });
       const input = { applicationId: original.id, logoutUris };
-      const validate = await request<{ setUserlandApplicationLogoutUris: { __typename: string } }>(
+      const validated = await request<{ setUserlandApplicationLogoutUris: { __typename: string } }>(
         'setAuthkitApplicationLogoutUris',
         { input: { ...input, dryRun: true } },
       );
-      if (validate.setUserlandApplicationLogoutUris.__typename !== 'LogoutUrisSet') {
-        return pending('Sign-out URL validation failed. Existing settings were not changed.');
-      }
-      // Full-list setters have no compare-and-swap API. Detect changes during
-      // validation rather than knowingly overwriting another editor's work.
-      const current = await readApplication();
-      if (JSON.stringify(current) !== JSON.stringify(original)) {
+      if (validated.setUserlandApplicationLogoutUris.__typename !== 'LogoutUrisSet')
+        return pending('Sign-out URL validation failed. Its settings were not changed.');
+      if (JSON.stringify(await readApplication()) !== JSON.stringify(original))
         return pending('Application settings changed during setup. Recheck them before applying changes.');
-      }
       const saved = await request<{ setUserlandApplicationLogoutUris: { __typename: string } }>(
         'setAuthkitApplicationLogoutUris',
         { input: { ...input, dryRun: false } },
       );
-      if (saved.setUserlandApplicationLogoutUris.__typename !== 'LogoutUrisSet') {
+      if (saved.setUserlandApplicationLogoutUris.__typename !== 'LogoutUrisSet')
         return pending('Could not save the sign-out URL. Check the dashboard before continuing.');
-      }
     }
-    if (
-      original.initiateLoginUri !== setup.initiateLoginUri ||
-      (setup.homepageUrl !== undefined && original.appHomepageUrl !== setup.homepageUrl)
-    ) {
+    const needsInitiate = !initiateConflict && original.initiateLoginUri !== setup.initiateLoginUri;
+    const needsHomepage = setup.homepageUrl !== undefined && original.appHomepageUrl !== setup.homepageUrl;
+    if (needsInitiate || needsHomepage) {
       const current = await readApplication();
       if (
         current.id !== original.id ||
-        (current.initiateLoginUri && current.initiateLoginUri !== setup.initiateLoginUri)
+        (needsInitiate && current.initiateLoginUri && current.initiateLoginUri !== setup.initiateLoginUri)
       ) {
         return pending('The application or Initiate login URI changed during setup. It was not overwritten.');
       }
       if (
-        !current.initiateLoginUri ||
-        (setup.homepageUrl !== undefined && current.appHomepageUrl !== setup.homepageUrl)
+        (needsInitiate && !current.initiateLoginUri) ||
+        (needsHomepage && current.appHomepageUrl !== setup.homepageUrl)
       ) {
         const saved = await request<{ updateUserlandApplication: { __typename: string } }>('updateAuthkitApplication', {
           input: {
             applicationId: original.id,
-            ...(!current.initiateLoginUri ? { initiateLoginUri: setup.initiateLoginUri } : {}),
-            ...(setup.homepageUrl !== undefined ? { appHomepageUrl: setup.homepageUrl } : {}),
+            ...(needsInitiate && !current.initiateLoginUri ? { initiateLoginUri: setup.initiateLoginUri } : {}),
+            ...(needsHomepage ? { appHomepageUrl: setup.homepageUrl } : {}),
           },
         });
-        if (saved.updateUserlandApplication.__typename !== 'UserlandApplicationUpdated') {
-          return pending(
-            'Could not save application URLs. Check the Initiate login URI and any requested homepage in the dashboard.',
-          );
-        }
-      }
-    }
-    if (!original.redirectUris.some((uri) => uri.uri === setup.redirectUri)) {
-      const current = await readApplication();
-      if (current.id !== original.id) return pending('The application changed during setup. Recheck its URLs.');
-      if (!current.redirectUris.some((uri) => uri.uri === setup.redirectUri)) {
-        const input = {
-          applicationId: current.id,
-          redirectUris: [
-            ...current.redirectUris,
-            { uri: setup.redirectUri, isDefault: current.redirectUris.length === 0 },
-          ],
-        };
-        const validated = await request<{ setRedirectUris: { __typename: string } }>('setRedirectUris', {
-          input: { ...input, dryRun: true },
-        });
-        if (validated.setRedirectUris.__typename !== 'RedirectUrisSet')
-          return pending('Callback URL validation failed. Read back all settings in the dashboard.');
-        if (JSON.stringify(await readApplication()) !== JSON.stringify(current))
-          return pending('Application settings changed during setup. Recheck them before applying changes.');
-        const saved = await request<{ setRedirectUris: { __typename: string } }>('setRedirectUris', {
-          input: { ...input, dryRun: false },
-        });
-        if (saved.setRedirectUris.__typename !== 'RedirectUrisSet')
-          return pending('Could not save the callback URL. Read back all settings in the dashboard.');
+        if (saved.updateUserlandApplication.__typename !== 'UserlandApplicationUpdated')
+          return pending('Could not save application URLs. Check the dashboard before continuing.');
       }
     }
     const saved = await readApplication();
-    const redirectsPreserved = original.redirectUris.every((old) =>
-      saved.redirectUris.some((uri) => uri.uri === old.uri && (!old.isDefault || uri.isDefault)),
-    );
-    const preserved = original.logoutUris.every((old) =>
-      saved.logoutUris.some((uri) => uri.uri === old.uri && (!old.isDefault || uri.isDefault)),
-    );
+    callbackRegistered = saved.id === original.id && saved.redirectUris.some((uri) => uri.uri === setup.redirectUri);
+    if (!callbackRegistered) return pending('Callback read-back did not match the required settings.');
+    if (reasons.length) return pending(reasons.join(' '));
     if (
-      saved.id !== original.id ||
-      !preserved ||
-      !redirectsPreserved ||
+      !original.redirectUris.every((old) =>
+        saved.redirectUris.some((uri) => uri.uri === old.uri && (!old.isDefault || uri.isDefault)),
+      ) ||
+      !original.logoutUris.every((old) =>
+        saved.logoutUris.some((uri) => uri.uri === old.uri && (!old.isDefault || uri.isDefault)),
+      ) ||
       saved.logoutUris.filter((uri) => uri.isDefault).length !== 1 ||
-      !saved.redirectUris.some((uri) => uri.uri === setup.redirectUri) ||
       !saved.logoutUris.some((uri) => isSignOutDestination(uri.uri) && uri.isDefault) ||
       saved.initiateLoginUri !== setup.initiateLoginUri ||
       (setup.homepageUrl !== undefined && saved.appHomepageUrl !== setup.homepageUrl)
-    ) {
+    )
       return pending(
         'URL read-back did not match the required settings. Check the dashboard before testing authentication.',
       );
-    }
     return {
       ...setup,
       signOutUri: saved.logoutUris.find((uri) => uri.isDefault)!.uri,
-      callbackRegistered: true,
+      callbackRegistered,
       verified: true,
     };
-  } catch {
-    // Never claim success based on a write response, expose credentials, or
-    // print internal API errors. A partial write requires manual read-back too.
+  } catch (error) {
+    if (error instanceof InstallDeclinedError) throw error;
+    // Callback failures are fatal. Once it is confirmed, other settings may be
+    // reported as incomplete, without exposing private backend errors or switching targets.
     return pending(
       'Could not verify WorkOS application settings. Check dashboard access and read back all three URLs before continuing.',
     );

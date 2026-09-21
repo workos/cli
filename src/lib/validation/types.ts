@@ -29,6 +29,7 @@ export interface EnvVarRule {
 
 export interface FileRule {
   path: string; // glob pattern, e.g., "middleware.ts" or "app/**/callback/**/route.ts"
+  urlPath?: string; // Next.js public path; route groups do not contribute URL segments
   mustContain?: string[]; // strings that must appear in file
   mustContainAny?: string[]; // at least one must appear
   severity?: ValidationSeverity; // missing content patterns default to warning

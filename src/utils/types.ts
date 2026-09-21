@@ -131,8 +131,8 @@ export type InstallerOptions = {
    */
   pm?: string;
 
-  /** Force App Router. Legacy 'pages' inputs are retained only to report an unsupported-router error to programmatic callers. */
-  router?: 'app' | 'pages';
+  /** Force App Router when detecting a mixed project. */
+  router?: 'app';
 };
 
 export interface Feature {

@@ -8,7 +8,7 @@ export function applicationSetupNextSteps(setup: AuthkitApplicationSetup): strin
     setup.verified
       ? 'Application URLs were read back and verified; browser flows are not yet tested.'
       : `Application setup is incomplete: ${setup.reason ?? 'Settings have not been verified.'}`,
-    `Redirect URI: ${setup.redirectUri}`,
+    `Redirect URI: ${setup.redirectUri} (${setup.callbackRegistered || setup.verified ? 'registered' : 'not registered or verified'})`,
     `Sign-out URI: ${setup.signOutUri}`,
     `Initiate login URI: ${setup.initiateLoginUri} (starts sign-in; never use the callback URI)`,
     ...(setup.homepageUrl !== undefined ? [`Homepage URL: ${setup.homepageUrl}`] : []),

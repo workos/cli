@@ -8,7 +8,7 @@ vi.mock('./api-key.js', () => ({
   resolveApiBaseUrl: () => 'https://api.workos.com',
   resolveApiKey: vi.fn(),
 }));
-vi.mock('./environment-target.js', () => ({ fetchTeamEnvironments: vi.fn(), resolveEnvironmentTarget: vi.fn() }));
+vi.mock('./environment-target.js', () => ({ fetchTeamEnvironments: vi.fn() }));
 vi.mock('./dashboard-graphql.js', () => ({ dashboardGraphqlRequest: vi.fn() }));
 vi.mock('../catalog/operation.js', () => ({
   getOperation: (name: string) => ({ name }),
@@ -16,7 +16,7 @@ vi.mock('../catalog/operation.js', () => ({
 }));
 
 import { refreshIfExpired } from './command-auth.js';
-import { fetchTeamEnvironments, resolveEnvironmentTarget } from './environment-target.js';
+import { fetchTeamEnvironments } from './environment-target.js';
 import { dashboardGraphqlRequest } from './dashboard-graphql.js';
 import { configureAuthkitApplication, readNextjsApplicationSetup } from './authkit-application-setup.js';
 import { applicationSetupNextSteps } from './completion-data.js';
@@ -50,7 +50,6 @@ beforeEach(() => {
   vi.mocked(fetchTeamEnvironments).mockResolvedValue([
     { id: 'env_app', name: 'Sandbox', sandbox: true, clientId: setup.clientId },
   ]);
-  vi.mocked(resolveEnvironmentTarget).mockResolvedValue({ environmentId: 'env_app', source: 'flag' });
   application = {
     id: 'app_1',
     clientId: setup.clientId,
@@ -114,6 +113,7 @@ describe('native application URL setup', () => {
     expect(result.callbackRegistered).toBe(true);
     expect(result.verified).toBe(false);
     expect(result.reason).toContain('Sign-out URI and Initiate login URI');
+    expect(applicationSetupNextSteps(result)).toContain(`Redirect URI: ${setup.redirectUri} (registered)`);
     expect(fetchTeamEnvironments).not.toHaveBeenCalled();
     expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
   });
@@ -162,8 +162,8 @@ describe('native application URL setup', () => {
     expect(writes()).toHaveLength(3);
     expect(request).not.toHaveBeenCalled();
     vi.mocked(dashboardGraphqlRequest).mockRejectedValue(new Error('dashboard unavailable'));
-    expect((await configureAuthkitApplication(setup, setup.clientId, 'sk_test_other_environment')).verified).toBe(
-      false,
+    await expect(configureAuthkitApplication(setup, setup.clientId, 'sk_test_other_environment')).rejects.toThrow(
+      /Callback/,
     );
     expect(request).not.toHaveBeenCalled();
   });
@@ -174,7 +174,7 @@ describe('native application URL setup', () => {
     expect(application.logoutUris).toContainEqual({ id: 'uri_old', uri: 'https://old.example/', isDefault: false });
     expect(application.logoutUris).toContainEqual({ uri: setup.signOutUri, isDefault: true });
     expect(application.initiateLoginUri).toBe(setup.initiateLoginUri);
-    expect(resolveEnvironmentTarget).toHaveBeenCalledWith('test-token', { flagValue: 'env_app', forMutation: true });
+    expect(fetchTeamEnvironments).toHaveBeenCalledTimes(1);
     for (const [, options] of vi.mocked(dashboardGraphqlRequest).mock.calls)
       expect(options.environmentId).toBe('env_app');
     expect(vi.mocked(dashboardGraphqlRequest).mock.calls.at(-1)?.[0]).toBe('defaultAuthkitApplication');
@@ -216,14 +216,55 @@ describe('native application URL setup', () => {
     const result = await configureAuthkitApplication(setup, setup.clientId);
     expect(result.verified).toBe(false);
     expect(result.reason).toContain('left unchanged');
-    expect(writes()).toHaveLength(0);
+    expect(result.callbackRegistered).toBe(true);
+    expect(writes()).toHaveLength(1);
+  });
+
+  it('registers the callback with the supplied key when the session belongs to another team', async () => {
+    vi.mocked(fetchTeamEnvironments).mockResolvedValue([
+      { id: 'env_other', name: 'Other team', clientId: 'client_other', sandbox: true },
+    ]);
+    const request = vi.fn(async () => new Response('{}', { status: 201 }));
+    vi.stubGlobal('fetch', request);
+    const result = await configureAuthkitApplication(setup, setup.clientId, 'sk_test_team_a');
+    expect(result.callbackRegistered).toBe(true);
+    expect(result.verified).toBe(false);
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
+  });
+
+  it.each(['sign-out', 'initiate-login'] as const)(
+    'registers the callback despite a conflicting %s setting',
+    async (setting) => {
+      application.redirectUris = [];
+      if (setting === 'sign-out') application.logoutUris[0].isDefault = true;
+      else application.initiateLoginUri = 'https://existing.example/sign-in';
+      const result = await configureAuthkitApplication(setup, setup.clientId);
+      expect(application.redirectUris.some((uri) => uri.uri === setup.redirectUri)).toBe(true);
+      expect(result.callbackRegistered).toBe(true);
+      expect(result.verified).toBe(false);
+      expect(result.reason).toContain('left unchanged');
+      expect(writes()[0][0]).toBe('setRedirectUris');
+      if (setting === 'sign-out') {
+        expect(application.logoutUris).toEqual([{ id: 'uri_old', uri: 'https://old.example/', isDefault: true }]);
+        expect(application.initiateLoginUri).toBe(setup.initiateLoginUri);
+      } else {
+        expect(application.initiateLoginUri).toBe('https://existing.example/sign-in');
+        expect(application.logoutUris.some((uri) => uri.uri === setup.signOutUri && uri.isDefault)).toBe(true);
+      }
+    },
+  );
+
+  it('fails instead of completing when the dashboard cannot confirm the callback', async () => {
+    vi.mocked(dashboardGraphqlRequest).mockRejectedValue(new Error('private backend error'));
+    await expect(configureAuthkitApplication(setup, setup.clientId)).rejects.toThrow(/callback/i);
   });
 
   it('does not use the active profile when the client ID cannot be matched', async () => {
     vi.mocked(fetchTeamEnvironments).mockResolvedValue([
       { id: 'env_other', name: 'Other', clientId: 'client_other', sandbox: true },
     ]);
-    expect((await configureAuthkitApplication(setup, setup.clientId)).verified).toBe(false);
+    await expect(configureAuthkitApplication(setup, setup.clientId)).rejects.toThrow(/Callback/);
     expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
   });
 
@@ -231,33 +272,50 @@ describe('native application URL setup', () => {
     vi.mocked(fetchTeamEnvironments).mockResolvedValue([
       { id: 'env_prod', name: 'Production', clientId: setup.clientId, sandbox: false },
     ]);
-    expect((await configureAuthkitApplication(setup, setup.clientId)).verified).toBe(false);
-    expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
+    const production = await configureAuthkitApplication(setup, setup.clientId);
+    expect(production.verified).toBe(false);
+    expect(production.callbackRegistered).toBe(true);
+    expect(production.reason).toContain('restricted to sandbox');
+    expect(writes()).toHaveLength(0);
     vi.mocked(fetchTeamEnvironments).mockResolvedValue([
       { id: 'env_app', name: 'Sandbox', clientId: setup.clientId, sandbox: true },
     ]);
     application.clientId = 'client_other';
-    expect((await configureAuthkitApplication(setup, setup.clientId)).verified).toBe(false);
+    await expect(configureAuthkitApplication(setup, setup.clientId)).rejects.toThrow(/Callback/);
     expect(writes()).toHaveLength(0);
   });
 
-  it('reports missing dashboard access without launching authentication or attempting a write', async () => {
+  it('fails on a missing production callback without making production or API-key writes', async () => {
+    vi.mocked(fetchTeamEnvironments).mockResolvedValue([
+      { id: 'env_prod', name: 'Production', clientId: setup.clientId, sandbox: false },
+    ]);
+    application.redirectUris = [];
+    const request = vi.fn();
+    vi.stubGlobal('fetch', request);
+    await expect(configureAuthkitApplication(setup, setup.clientId, 'sk_test_other')).rejects.toThrow(
+      'restricted to sandbox',
+    );
+    expect(writes()).toHaveLength(0);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('fails without credentials rather than claiming an unregistered callback works', async () => {
     vi.mocked(refreshIfExpired).mockResolvedValue(null);
-    const result = await configureAuthkitApplication(setup, setup.clientId);
-    expect(result.verified).toBe(false);
-    expect(result.reason).toContain('No dashboard session');
+    await expect(configureAuthkitApplication(setup, setup.clientId)).rejects.toThrow(
+      'No usable dashboard environment or API key',
+    );
     expect(fetchTeamEnvironments).not.toHaveBeenCalled();
-    expect(applicationSetupNextSteps(result).join('\n')).toContain(setup.initiateLoginUri);
+    expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
   });
 
   it('refuses a changed app client ID before accessing the account', async () => {
-    expect((await configureAuthkitApplication(setup, 'client_other')).verified).toBe(false);
+    await expect(configureAuthkitApplication(setup, 'client_other')).rejects.toThrow('client ID changed');
     expect(refreshIfExpired).not.toHaveBeenCalled();
   });
 
-  it('stops when environment validation fails', async () => {
-    vi.mocked(resolveEnvironmentTarget).mockRejectedValue(new Error('environment_stale'));
-    expect((await configureAuthkitApplication(setup, setup.clientId)).verified).toBe(false);
+  it('fails safely when team discovery fails before callback verification', async () => {
+    vi.mocked(fetchTeamEnvironments).mockRejectedValue(new Error('private backend details'));
+    await expect(configureAuthkitApplication(setup, setup.clientId)).rejects.toThrow(/Callback/);
     expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
   });
 
@@ -280,9 +338,9 @@ describe('native application URL setup', () => {
     const result = await configureAuthkitApplication(setup, setup.clientId);
     expect(result.verified).toBe(true);
     expect(writes().map(([name]) => name)).toEqual([
+      'setRedirectUris',
       'setAuthkitApplicationLogoutUris',
       'updateAuthkitApplication',
-      'setRedirectUris',
     ]);
     for (const [, options] of vi.mocked(dashboardGraphqlRequest).mock.calls) {
       expect(options.environmentId).toBe('env_app');
@@ -292,11 +350,22 @@ describe('native application URL setup', () => {
     }
   });
 
+  it('fails if the callback write reports success but read-back is missing it', async () => {
+    application.redirectUris = [];
+    const original = vi.mocked(dashboardGraphqlRequest).getMockImplementation()!;
+    vi.mocked(dashboardGraphqlRequest).mockImplementation(async (name, options) => {
+      if (name === 'setRedirectUris') return { setRedirectUris: { __typename: 'RedirectUrisSet' } };
+      return original(name, options);
+    });
+    await expect(configureAuthkitApplication(setup, setup.clientId)).rejects.toThrow('Callback read-back');
+    expect(writes().map(([name]) => name)).toEqual(['setRedirectUris']);
+  });
+
   it('rejects incomplete application reads rather than overwriting an unknown list', async () => {
     vi.mocked(dashboardGraphqlRequest).mockResolvedValue({
       defaultUserlandApplication: { id: 'app_1', clientId: setup.clientId },
     });
-    expect((await configureAuthkitApplication(setup, setup.clientId)).verified).toBe(false);
+    await expect(configureAuthkitApplication(setup, setup.clientId)).rejects.toThrow(/Callback/);
     expect(writes()).toHaveLength(0);
   });
 
@@ -318,7 +387,7 @@ describe('native application URL setup', () => {
       { id: 'env_one', name: 'Sandbox', clientId: setup.clientId, sandbox: true },
       { id: 'env_two', name: 'Sandbox', clientId: setup.clientId, sandbox: true },
     ]);
-    expect((await configureAuthkitApplication(setup, setup.clientId)).verified).toBe(false);
+    await expect(configureAuthkitApplication(setup, setup.clientId)).rejects.toThrow('Could not uniquely match');
     expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
   });
 

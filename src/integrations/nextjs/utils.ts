@@ -30,7 +30,7 @@ export async function getNextJsRouter({
 }: Pick<InstallerOptions, 'installDir' | 'router'>): Promise<NextJsRouter> {
   // Explicit flag wins over detection (deterministic for agents).
   if (router) {
-    const chosen = router === 'pages' ? NextJsRouter.PAGES_ROUTER : NextJsRouter.APP_ROUTER;
+    const chosen = NextJsRouter.APP_ROUTER;
     ui.log.info(`Using ${getNextJsRouterName(chosen)} (--router)`);
     return chosen;
   }
@@ -63,8 +63,35 @@ export async function getNextJsRouter({
 
   // Only App Router is supported. Do not offer a Pages Router choice that the
   // installer will subsequently reject. Mixed projects keep their pages tree.
-  ui.log.warn('Only App Router is supported. Using App Router; Pages Router routes will not be configured.');
+  if (hasPagesDir && hasAppDir) {
+    ui.log.warn('Only App Router is supported. Using App Router; Pages Router routes will not be configured.');
+  }
   return NextJsRouter.APP_ROUTER;
+}
+
+/** Route groups change file locations, not the public URL. */
+export function nextjsRoutePath(file: string): string {
+  const segments = file
+    .replace(/^(src\/)?app\//, '')
+    .split('/')
+    .slice(0, -1);
+  return '/' + segments.filter((segment) => !/^\(.*\)$/.test(segment)).join('/');
+}
+
+export async function findNextjsSignInPage(installDir: string): Promise<string | undefined> {
+  const pages = await fg('{,src/}app/**/sign-in/page.{ts,tsx,js,jsx}', { cwd: installDir, ignore: IGNORE_PATTERNS });
+  return pages.find((file) => nextjsRoutePath(file) === '/sign-in');
+}
+
+/** The current installer owns /sign-in; never overwrite a page at that URL. */
+export async function assertNextjsSignInRouteAvailable(installDir: string): Promise<void> {
+  if (await findNextjsSignInPage(installDir)) {
+    const message =
+      'This installer requires a dedicated /sign-in route, but a page already serves that URL. ' +
+      'It was left unchanged. Configure AuthKit manually or move that page before running the installer.';
+    ui.log.warn(message);
+    throw new InstallDeclinedError(message, 'conflicting_sign_in_route');
+  }
 }
 
 export const getNextJsRouterName = (router: NextJsRouter) => {

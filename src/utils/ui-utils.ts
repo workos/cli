@@ -70,7 +70,7 @@ export async function abortIfCancelled<T>(
       code: 'non_interactive_prompt',
       message:
         `This step requires interactive input${integration ? ` for ${integration}` : ''}, but the CLI is running ` +
-        `in a non-interactive mode (agent/CI/non-TTY). Pass the required flags (e.g. --router app|pages for Next.js) ` +
+        `in a non-interactive mode (agent/CI/non-TTY). Pass the required flags (e.g. --router app for Next.js) ` +
         `or run in an interactive terminal.`,
       recovery: {
         hints: [

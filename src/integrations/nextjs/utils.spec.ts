@@ -21,7 +21,7 @@ vi.mock('../../utils/ui.js', () => ({
 
 const fg = (await import('fast-glob')).default;
 const ui = (await import('../../utils/ui.js')).default;
-const { getNextJsRouter, NextJsRouter, assertSupportedNextJsRouter } = await import('./utils.js');
+const { getNextJsRouter, NextJsRouter } = await import('./utils.js');
 const { setInteractionMode, resetInteractionModeForTests } = await import('../../utils/interaction-mode.js');
 
 /** Configure fast-glob to report presence of pages/ and/or app/ dirs. */
@@ -97,14 +97,10 @@ describe('getNextJsRouter', () => {
     expect(ui.log.warn).toHaveBeenCalled();
   });
 
-  it('recognizes a legacy programmatic pages selection so the installer can reject it', async () => {
-    setInteractionMode({ mode: 'human', source: 'default' });
-    mockDetection({ pages: true, app: true });
-
-    const result = await getNextJsRouter({ installDir: '/proj', router: 'pages' });
-
-    expect(() => assertSupportedNextJsRouter(result)).toThrow('supports App Router only');
-    expect(result).toBe(NextJsRouter.PAGES_ROUTER);
+  it('does not warn about nonexistent Pages Router routes in a fresh project', async () => {
+    mockDetection({ pages: false, app: false });
+    expect(await getNextJsRouter({ installDir: '/proj' })).toBe(NextJsRouter.APP_ROUTER);
+    expect(ui.log.warn).not.toHaveBeenCalled();
     expect(ui.select).not.toHaveBeenCalled();
   });
 

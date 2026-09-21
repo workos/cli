@@ -19,7 +19,7 @@ import { INSTALLER_INTERACTION_EVENT_NAME } from './constants.js';
 import { initializeAgent, runAgent, type RetryConfig } from './agent-interface.js';
 import { uploadEnvironmentVariablesStep } from '../steps/index.js';
 import { autoConfigureWorkOSEnvironment } from './workos-management.js';
-import { assertSupportedNextJsRouter } from '../integrations/nextjs/utils.js';
+import { assertSupportedNextJsRouter, assertNextjsSignInRouteAvailable } from '../integrations/nextjs/utils.js';
 import { detectPort, getCallbackPath } from './port-detection.js';
 import { writeEnvLocal } from './env-writer.js';
 
@@ -60,6 +60,7 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
   const frameworkContext = config.metadata.gatherContext ? await config.metadata.gatherContext(options) : {};
   if (config.metadata.integration === 'nextjs') {
     assertSupportedNextJsRouter(frameworkContext.router);
+    await assertNextjsSignInRouteAvailable(options.installDir);
   }
 
   // Get WorkOS credentials (API key optional for client-only SDKs)
@@ -142,9 +143,14 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
         validateAndFormat: async (workingDirectory: string) => {
           const quickPrompt = await quickCheckValidateAndFormat(workingDirectory);
           const security = await runInstallSecurityChecks(integration, workingDirectory);
-          const installation = await validateInstallation(integration, workingDirectory, { runBuild: false });
-          const errors = installation.issues.filter((issue) => issue.severity === 'error');
-          if (quickPrompt === null && security.blocking.length === 0 && installation.passed) return null;
+          // Only the Next.js rules were curated for a blocking gate in this installer.
+          const errors =
+            integration === 'nextjs'
+              ? (await validateInstallation(integration, workingDirectory, { runBuild: false })).issues.filter(
+                  (issue) => issue.severity === 'error',
+                )
+              : [];
+          if (quickPrompt === null && security.blocking.length === 0 && errors.length === 0) return null;
           const completenessPrompt = errors.map((issue) => `${issue.message}. ${issue.hint ?? ''}`).join('\n');
           return [quickPrompt, completenessPrompt, formatSecurityFindingsForAgent(security.findings)]
             .filter((p): p is string => Boolean(p))
@@ -214,7 +220,7 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
       await analytics.shutdown('error');
       throw new Error(formatBlockingSecurityError(security.blocking));
     }
-    if (!validationResult.passed) {
+    if (integration === 'nextjs' && !validationResult.passed) {
       await analytics.shutdown('error');
       throw new Error(
         `Installation validation failed:\n${validationResult.issues
@@ -304,7 +310,7 @@ async function buildIntegrationPrompt(
   const [baseContent, refContent, setupContent] = await Promise.all([
     isJavaScript ? getReference('workos-authkit-base') : Promise.resolve(''),
     getReference(skillName),
-    getReference('workos-authkit-setup'),
+    config.metadata.integration === 'nextjs' ? getReference('workos-authkit-setup') : Promise.resolve(''),
   ]);
 
   // Build env var list dynamically based on what was actually configured
@@ -332,7 +338,9 @@ ${baseContent ? `## General Guidelines\n\n${baseContent}\n\n` : ''}## Integratio
 
 ${refContent}
 
-## Required Application Setup and Verification
+${
+  setupContent
+    ? `## Required Application Setup and Verification
 
 ${setupContent}
 
@@ -340,14 +348,12 @@ ${setupContent}
 
 The setup reference above is already included in this prompt. Do not read a relative workos-authkit-setup.md from the app directory.
 The agent's shell permissions do not allow WorkOS management commands. Do not run workos, install another CLI, use curl or SDK scripts to bypass that boundary, or attempt dashboard authentication. Implement and validate the app code only. The installer handles supported dashboard configuration outside the agent after code validation; unavailable configuration must remain explicitly unverified.
-${
-  config.metadata.integration === 'nextjs'
-    ? `
-Create a dedicated /sign-in GET route in the App Router using getSignInUrl() from @workos-inc/authkit-nextjs and redirect(await getSignInUrl()) from next/navigation. Keep the OAuth callback using handleAuth() separate. The Initiate login URI is the app origin plus /sign-in, NEVER the callback URI. Read existing files before editing; do not replace an unrelated existing sign-in flow. Keep /sign-in public and follow the SDK README for PKCE cookie handling.
+
+Create a dedicated /sign-in GET route in the App Router using getSignInUrl() from @workos-inc/authkit-nextjs and redirect(await getSignInUrl()) from next/navigation. Keep the OAuth callback using handleAuth() separate. The Initiate login URI is the app origin plus /sign-in, NEVER the callback URI. Read existing files before editing; do not replace an unrelated existing sign-in flow. If a page already serves /sign-in (including inside route groups), stop: this installer cannot place a route handler alongside that page. Never delete the page or create a conflicting route. Keep /sign-in public and follow the SDK README for PKCE cookie handling.
+Do not claim the full integration or browser flows are verified. Report code implementation separately from application configuration and browser testing.
 `
     : ''
 }
-Do not claim the full integration or browser flows are verified. Report code implementation separately from application configuration and browser testing.
 
 Report your progress using [STATUS] prefixes.
 

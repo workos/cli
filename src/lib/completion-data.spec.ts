@@ -65,6 +65,9 @@ describe('buildCompletionData', () => {
     expect(data.applicationSetup).toEqual(applicationSetup);
     expect(data.nextSteps.join('\n')).toContain('Initiate login URI: http://localhost:3000/sign-in');
     expect(data.nextSteps.join('\n')).toContain(verified ? 'browser flows are not yet tested' : 'setup is incomplete');
+    expect(data.nextSteps.join('\n')).toContain(
+      `Redirect URI: ${applicationSetup.redirectUri} (${verified ? 'registered' : 'not registered or verified'})`,
+    );
   });
 
   it('respects a Vite server.port override for react', async () => {

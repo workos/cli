@@ -86,8 +86,14 @@ describe('installer prompt', () => {
     await runAgentInstaller(framework, options);
 
     const prompt = vi.mocked(runAgent).mock.calls[0][1];
-    expect(getReference).toHaveBeenCalledWith('workos-authkit-setup');
-    expect(prompt).toContain(setupContent);
+    if (framework.metadata.integration === 'nextjs') {
+      expect(getReference).toHaveBeenCalledWith('workos-authkit-setup');
+      expect(prompt).toContain(setupContent);
+    } else {
+      expect(getReference).not.toHaveBeenCalledWith('workos-authkit-setup');
+      expect(prompt).not.toContain(setupContent);
+      expect(prompt).not.toContain('installer handles supported dashboard configuration');
+    }
     expect(prompt).toContain(`Instructions from ${framework.metadata.skillName}`);
     expect(prompt).toContain('Router: app');
     expect(prompt).not.toContain('test-key');
@@ -119,6 +125,26 @@ describe('installer prompt', () => {
     expect(autoConfigureWorkOSEnvironment).not.toHaveBeenCalled();
     expect(runAgent).toHaveBeenCalled();
   });
+
+  it.each(['tanstack-start', 'react', 'react-router', 'vanilla-js'])(
+    'keeps %s completeness checks advisory',
+    async (integration) => {
+      const framework = { ...config, metadata: { ...config.metadata, integration } };
+      vi.mocked(validateInstallation).mockResolvedValue({
+        passed: false,
+        framework: integration,
+        durationMs: 0,
+        issues: [
+          { type: 'file', severity: 'error', message: 'Legacy layout missing', hint: 'Install obsolete package' },
+        ],
+      });
+      await expect(runAgentInstaller(framework, { ...options, noValidate: false })).resolves.toContain('Successfully');
+      const retry = vi.mocked(runAgent).mock.calls[0][5]!;
+      expect(await retry.validateAndFormat(options.installDir)).toBeNull();
+      vi.mocked(quickCheckValidateAndFormat).mockResolvedValue('Fix a genuine build failure');
+      expect(await retry.validateAndFormat(options.installDir)).toBe('Fix a genuine build failure');
+    },
+  );
 
   it('blocks success when an application route is still missing after retries', async () => {
     vi.mocked(validateInstallation).mockResolvedValue({

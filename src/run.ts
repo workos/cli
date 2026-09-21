@@ -34,7 +34,7 @@ export type InstallerArgs = {
   direct?: boolean;
   scaffold?: boolean;
   pm?: string;
-  router?: 'app' | 'pages';
+  router?: 'app';
 };
 
 /**

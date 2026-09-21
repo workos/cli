@@ -114,6 +114,7 @@ if [ "$code" -eq 1 ] && [ "$json_ok" -eq 1 ]; then pass "unknown command exits 1
 # Unsupported Pages Router installs must stop before provisioning, even with --force.
 pages_project="$SANDBOX/pages-project"
 mkdir -p "$pages_project/src/pages"
+printf '%s\n' 'export default function App() {}' >"$pages_project/src/pages/_app.tsx"
 printf '%s\n' '{"dependencies":{"next":"16.0.0"}}' >"$pages_project/package.json"
 for command in install integrate dashboard; do
   err=$("$BIN" "$command" --install-dir "$pages_project" --force --json --insecure-storage 2>&1 >/dev/null)
@@ -128,6 +129,25 @@ for command in install integrate dashboard; do
     fail "$command Pages Router preflight (exit $code): $err"
   fi
 done
+
+# A pre-existing sign-in page must not be overwritten by a route handler.
+signin_project="$SANDBOX/signin-project"
+mkdir -p "$signin_project/src/app/(auth)/sign-in"
+printf '%s\n' '{"dependencies":{"next":"16.0.0"}}' >"$signin_project/package.json"
+printf '%s\n' 'export default function Layout() {}' >"$signin_project/src/app/layout.tsx"
+printf '%s\n' 'export default function ExistingSignIn() {}' >"$SANDBOX/original-signin"
+cp "$SANDBOX/original-signin" "$signin_project/src/app/(auth)/sign-in/page.tsx"
+err=$("$BIN" install --install-dir "$signin_project" --force --json --insecure-storage 2>&1 >/dev/null)
+code=$?
+case "$err" in
+  *'"code":"conflicting_sign_in_route"'*) json_ok=1 ;;
+  *) json_ok=0 ;;
+esac
+if [ "$code" -eq 1 ] && [ "$json_ok" -eq 1 ] && [ ! -e "$signin_project/.env.local" ] && cmp -s "$SANDBOX/original-signin" "$signin_project/src/app/(auth)/sign-in/page.tsx"; then
+  pass "install preserves an existing grouped sign-in page before provisioning"
+else
+  fail "sign-in page preflight (exit $code): $err"
+fi
 
 # Doctor must use installed tools, not shims planted in its project directory.
 # This runs against the shipped Bun binary on native Windows release runners,

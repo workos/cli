@@ -65,16 +65,16 @@ describe('Next.js environment preparation', () => {
     await expect(readFile(join(directory, '.env.local'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
-  it('honors an explicit Pages Router selection in a mixed-router project', async () => {
+  it('does not mutate the state machine options while detecting the router', async () => {
     await mkdir(join(directory, 'app'), { recursive: true });
     await writeFile(join(directory, 'app/layout.tsx'), 'export default function Layout() {}');
-    await expect(
-      configureInstallEnvironment({
-        options: { ...options, router: 'pages' },
-        integration: 'nextjs',
-        credentials: { apiKey: 'sk_test_a', clientId: 'client_a' },
-      }),
-    ).rejects.toMatchObject({ code: 'unsupported_nextjs_router' });
+    const inputOptions = Object.freeze({ ...options, router: undefined });
+    await configureInstallEnvironment({
+      options: inputOptions,
+      integration: 'nextjs',
+      credentials: { apiKey: 'sk_test_a', clientId: 'client_a' },
+    });
+    expect(inputOptions.router).toBeUndefined();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

@@ -50,7 +50,11 @@ import {
   generatePrDescription as generatePrDescriptionAi,
 } from './ai-content.js';
 import { autoConfigureWorkOSEnvironment } from './workos-management.js';
-import { assertSupportedNextJsRouter, getNextJsRouter } from '../integrations/nextjs/utils.js';
+import {
+  assertSupportedNextJsRouter,
+  getNextJsRouter,
+  assertNextjsSignInRouteAvailable,
+} from '../integrations/nextjs/utils.js';
 import { detectPort, getCallbackPath } from './port-detection.js';
 import { writeEnvLocal } from './env-writer.js';
 import { getRegistry } from './registry.js';
@@ -191,8 +195,7 @@ export async function configureInstallEnvironment(
 
   if (integration === 'nextjs') {
     assertSupportedNextJsRouter(await getNextJsRouter(installerOptions));
-    // Keep a human's choice in a mixed-router project for the agent's context.
-    installerOptions.router = 'app';
+    await assertNextjsSignInRouteAvailable(installerOptions.installDir);
   }
 
   const port = detectPort(integration, installerOptions.installDir);
@@ -356,6 +359,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         try {
           const agentOptions: InstallerOptions = {
             ...installerOptions,
+            ...(integration === 'nextjs' ? { router: 'app' as const } : {}),
             apiKey: credentials?.apiKey,
             clientId: credentials?.clientId,
             credentialSource: context.credentialSource,
