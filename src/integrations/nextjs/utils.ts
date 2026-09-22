@@ -28,6 +28,14 @@ export async function getNextJsRouter({
   installDir,
   router,
 }: Pick<InstallerOptions, 'installDir' | 'router'>): Promise<NextJsRouter> {
+  // TypeScript and yargs constrain normal callers, but runtime input must not
+  // silently turn an unsupported selection into permission to change App Router files.
+  if (router !== undefined && router !== 'app') {
+    const message =
+      'Unsupported Next.js router selection. Only App Router is supported; use --router app or omit --router.';
+    ui.log.warn(message);
+    throw new InstallDeclinedError(message, 'unsupported_nextjs_router');
+  }
   // Explicit flag wins over detection (deterministic for agents).
   if (router) {
     const chosen = NextJsRouter.APP_ROUTER;

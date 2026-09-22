@@ -104,6 +104,16 @@ describe('getNextJsRouter', () => {
     expect(ui.select).not.toHaveBeenCalled();
   });
 
+  it.each(['pages', 'unknown', '', null, false, 0])(
+    'rejects unsupported runtime router input %j before detection',
+    async (router) => {
+      const input = JSON.parse(JSON.stringify({ installDir: '/proj', router }));
+      await expect(getNextJsRouter(input)).rejects.toMatchObject({ code: 'unsupported_nextjs_router' });
+      expect(fg).not.toHaveBeenCalled();
+      expect(ui.select).not.toHaveBeenCalled();
+    },
+  );
+
   it('--router app wins over detection with no prompt', async () => {
     setInteractionMode({ mode: 'human', source: 'default' });
     mockDetection({ pages: true, app: false });

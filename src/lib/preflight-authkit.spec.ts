@@ -58,6 +58,20 @@ describe('preflight-authkit', () => {
       expect(mockConfirm).not.toHaveBeenCalled();
     });
 
+    it.each([true, false])(
+      'rejects runtime Pages selection before provisioning (Next.js manifest: %s)',
+      async (hasManifest) => {
+        if (hasManifest) writePackageJson(testDir, { next: '16.0.0' });
+        const before = readdirSync(testDir);
+        const runtimeOptions = JSON.parse(JSON.stringify({ installDir: testDir, router: 'pages', force: true }));
+        await expect(assertInstallPreflight(runtimeOptions)).rejects.toMatchObject({
+          code: 'unsupported_nextjs_router',
+        });
+        expect(readdirSync(testDir)).toEqual(before);
+        expect(mockConfirm).not.toHaveBeenCalled();
+      },
+    );
+
     it('allows pages/api-only projects using the same detection as the installer', async () => {
       writePackageJson(testDir, { next: '16.0.0' });
       mkdirSync(join(testDir, 'pages/api'), { recursive: true });

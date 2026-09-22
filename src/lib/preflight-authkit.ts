@@ -48,7 +48,7 @@ export async function assertInstallPreflight(
   opts: Pick<InstallerOptions, 'installDir' | 'router'> & { force?: boolean },
 ): Promise<void> {
   const isNextjs = !!getPackageVersion('next', readPackageJson(opts.installDir) ?? {});
-  if (isNextjs || opts.router === 'app') {
+  if (isNextjs || opts.router !== undefined) {
     assertSupportedNextJsRouter(await getNextJsRouter(opts));
     await assertNextjsSignInRouteAvailable(opts.installDir);
   }

@@ -65,6 +65,19 @@ describe('Next.js environment preparation', () => {
     await expect(readFile(join(directory, '.env.local'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  it('rejects runtime Pages selection before writing credentials or making API calls', async () => {
+    const runtimeOptions = JSON.parse(JSON.stringify({ ...options, router: 'pages' }));
+    await expect(
+      configureInstallEnvironment({
+        options: runtimeOptions,
+        integration: 'nextjs',
+        credentials: { apiKey: 'sk_test_a', clientId: 'client_a' },
+      }),
+    ).rejects.toMatchObject({ code: 'unsupported_nextjs_router' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    await expect(readFile(join(directory, '.env.local'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('does not mutate the state machine options while detecting the router', async () => {
     await mkdir(join(directory, 'app'), { recursive: true });
     await writeFile(join(directory, 'app/layout.tsx'), 'export default function Layout() {}');
