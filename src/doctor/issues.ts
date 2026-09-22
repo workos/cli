@@ -24,7 +24,7 @@ export const ISSUE_DEFINITIONS = {
     severity: 'warning' as const,
     message: 'Cookie domain not explicitly set',
     remediation: 'Consider setting WORKOS_COOKIE_DOMAIN for cross-subdomain auth',
-    docsUrl: 'https://workos.com/docs/authkit/cookie-domain',
+    docsUrl: 'https://github.com/workos/authkit-nextjs#optional-configuration',
   },
   NO_SDK_FOUND: {
     severity: 'error' as const,
