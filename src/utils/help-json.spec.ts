@@ -73,7 +73,7 @@ describe('help-json', () => {
       };
       const router = tree.options.find((option) => option.name === 'router');
       expect(router?.choices).toEqual(['app']);
-      expect(router?.description).toContain('App Router only');
+      expect(router?.description).toContain('Pages-only projects are refused');
     });
 
     it('does not include hidden dashboard command', () => {

@@ -6,6 +6,7 @@ import { fetchTeamEnvironments } from './environment-target.js';
 import { dashboardGraphqlRequest } from './dashboard-graphql.js';
 import { getOperation, resolveExecutableDocument } from '../catalog/operation.js';
 import { InstallDeclinedError } from './installer-errors.js';
+import { setHomepageUrl } from './workos-management.js';
 
 export interface AuthkitApplicationSetup {
   clientId: string;
@@ -112,6 +113,15 @@ export async function configureAuthkitApplication(
       return pending('Could not register the callback URL. Check the API key and connection, then retry setup.');
     }
     callbackRegistered = true;
+    try {
+      await setHomepageUrl(apiKey, setup.homepageUrl ?? new URL(setup.redirectUri).origin, {
+        preserveExisting: setup.homepageUrl === undefined,
+      });
+    } catch {
+      return pending(
+        'Callback registered using the API key, but homepage setup failed. Check the Homepage URL, Sign-out URI and Initiate login URI in the dashboard.',
+      );
+    }
     return pending(
       'Callback registered using the API key. Sign-out URI and Initiate login URI still require dashboard setup and verification. Sign in to the correct team (and claim the environment if needed) to manage those settings.',
     );
@@ -242,7 +252,8 @@ export async function configureAuthkitApplication(
         return pending('Could not save the sign-out URL. Check the dashboard before continuing.');
     }
     const needsInitiate = !initiateConflict && original.initiateLoginUri !== setup.initiateLoginUri;
-    const needsHomepage = setup.homepageUrl !== undefined && original.appHomepageUrl !== setup.homepageUrl;
+    const homepageValue = setup.homepageUrl ?? (original.appHomepageUrl || new URL(setup.redirectUri).origin);
+    const needsHomepage = original.appHomepageUrl !== homepageValue;
     if (needsInitiate || needsHomepage) {
       const current = await readApplication();
       if (
@@ -252,14 +263,18 @@ export async function configureAuthkitApplication(
         return pending('The application or Initiate login URI changed during setup. It was not overwritten.');
       }
       if (
-        (needsInitiate && !current.initiateLoginUri) ||
-        (needsHomepage && current.appHomepageUrl !== setup.homepageUrl)
+        needsHomepage &&
+        current.appHomepageUrl !== original.appHomepageUrl &&
+        current.appHomepageUrl !== homepageValue
       ) {
+        return pending('The homepage URL changed during setup. It was not overwritten.');
+      }
+      if ((needsInitiate && !current.initiateLoginUri) || (needsHomepage && current.appHomepageUrl !== homepageValue)) {
         const saved = await request<{ updateUserlandApplication: { __typename: string } }>('updateAuthkitApplication', {
           input: {
             applicationId: original.id,
             ...(needsInitiate && !current.initiateLoginUri ? { initiateLoginUri: setup.initiateLoginUri } : {}),
-            ...(needsHomepage ? { appHomepageUrl: setup.homepageUrl } : {}),
+            ...(needsHomepage ? { appHomepageUrl: homepageValue } : {}),
           },
         });
         if (saved.updateUserlandApplication.__typename !== 'UserlandApplicationUpdated')
@@ -280,7 +295,7 @@ export async function configureAuthkitApplication(
       saved.logoutUris.filter((uri) => uri.isDefault).length !== 1 ||
       !saved.logoutUris.some((uri) => isSignOutDestination(uri.uri) && uri.isDefault) ||
       saved.initiateLoginUri !== setup.initiateLoginUri ||
-      (setup.homepageUrl !== undefined && saved.appHomepageUrl !== setup.homepageUrl)
+      saved.appHomepageUrl !== homepageValue
     )
       return pending(
         'URL read-back did not match the required settings. Check the dashboard before testing authentication.',

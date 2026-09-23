@@ -36,13 +36,6 @@ export async function getNextJsRouter({
     ui.log.warn(message);
     throw new InstallDeclinedError(message, 'unsupported_nextjs_router');
   }
-  // Explicit flag wins over detection (deterministic for agents).
-  if (router) {
-    const chosen = NextJsRouter.APP_ROUTER;
-    ui.log.info(`Using ${getNextJsRouterName(chosen)} (--router)`);
-    return chosen;
-  }
-
   const pagesMatches = await fg('**/pages/_app.@(ts|tsx|js|jsx)', {
     dot: true,
     cwd: installDir,

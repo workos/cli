@@ -131,7 +131,7 @@ export type InstallerOptions = {
    */
   pm?: string;
 
-  /** Force App Router when detecting a mixed project. */
+  /** Select App Router in mixed projects; Pages-only projects remain unsupported. */
   router?: 'app';
 };
 

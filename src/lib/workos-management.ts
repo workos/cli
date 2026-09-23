@@ -105,21 +105,31 @@ async function createCorsOrigin(apiKey: string, origin: string): Promise<{ succe
  * overwrites whatever a logged-in user already had configured. Reading first
  * makes the common case a no-op that reports itself honestly.
  *
- * A read failure is not fatal: fall through to the PUT, which is the old
- * behavior, rather than abandoning configuration over a GET we just added.
+ * With preserveExisting, only fill a confirmed empty homepage; failed reads
+ * must not turn an implicit default into an overwrite. Legacy callers retain
+ * the read-failure fallback to PUT.
  */
-async function setHomepageUrl(apiKey: string, url: string): Promise<{ success: boolean; alreadyExists: boolean }> {
+export async function setHomepageUrl(
+  apiKey: string,
+  url: string,
+  { preserveExisting = false }: { preserveExisting?: boolean } = {},
+): Promise<{ success: boolean; alreadyExists: boolean }> {
   try {
     const current = await workosRequest('GET', HOMEPAGE_URL_ENDPOINT, apiKey);
     if (current.ok) {
       const data = (await current.json()) as { url?: string } | null;
-      if (data?.url === url) {
+      if (preserveExisting && (!data || !('url' in data) || (data.url != null && typeof data.url !== 'string'))) {
+        throw new Error('Could not read the current homepage URL.');
+      }
+      if (data?.url === url || (preserveExisting && data?.url)) {
         return { success: true, alreadyExists: true };
       }
+    } else if (preserveExisting) {
+      throw new Error('Could not read the current homepage URL.');
     }
-  } catch {
-    // Read failed (endpoint missing, non-JSON body, network error) — fall
-    // through to the write so behavior is never worse than before.
+  } catch (error) {
+    if (preserveExisting) throw error;
+    // Legacy callers fall through to the write on read failures.
   }
 
   const response = await workosRequest('PUT', HOMEPAGE_URL_ENDPOINT, apiKey, { url });

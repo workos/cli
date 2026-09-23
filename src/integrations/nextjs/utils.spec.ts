@@ -114,13 +114,14 @@ describe('getNextJsRouter', () => {
     },
   );
 
-  it('--router app wins over detection with no prompt', async () => {
-    setInteractionMode({ mode: 'human', source: 'default' });
-    mockDetection({ pages: true, app: false });
-
-    const result = await getNextJsRouter({ installDir: '/proj', router: 'app' });
-
-    expect(result).toBe(NextJsRouter.APP_ROUTER);
+  it.each([
+    { pages: true, app: false, expected: NextJsRouter.PAGES_ROUTER },
+    { pages: true, app: true, expected: NextJsRouter.APP_ROUTER },
+    { pages: false, app: true, expected: NextJsRouter.APP_ROUTER },
+    { pages: false, app: false, expected: NextJsRouter.APP_ROUTER },
+  ])('--router app respects detection ($pages pages, $app app)', async ({ pages, app, expected }) => {
+    mockDetection({ pages, app });
+    expect(await getNextJsRouter({ installDir: '/proj', router: 'app' })).toBe(expected);
     expect(ui.select).not.toHaveBeenCalled();
   });
 });

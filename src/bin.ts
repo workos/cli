@@ -270,7 +270,7 @@ const installerOptions = {
   },
   router: {
     choices: ['app'] as const,
-    describe: 'Use Next.js App Router (App Router only; Pages Router is not supported)',
+    describe: 'Use Next.js App Router in mixed projects (Pages-only projects are refused)',
     type: 'string' as const,
   },
   ...forceOption,

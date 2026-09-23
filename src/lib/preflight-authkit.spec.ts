@@ -51,9 +51,11 @@ describe('preflight-authkit', () => {
       mkdirSync(join(testDir, pages), { recursive: true });
       writeFileSync(join(testDir, pages, '_app.tsx'), 'export default function App() {}');
       const before = readdirSync(testDir);
-      await expect(assertInstallPreflight({ installDir: testDir, force: true })).rejects.toMatchObject({
-        code: 'unsupported_nextjs_router',
-      });
+      for (const router of [undefined, 'app'] as const) {
+        await expect(assertInstallPreflight({ installDir: testDir, force: true, router })).rejects.toMatchObject({
+          code: 'unsupported_nextjs_router',
+        });
+      }
       expect(readdirSync(testDir)).toEqual(before);
       expect(mockConfirm).not.toHaveBeenCalled();
     });

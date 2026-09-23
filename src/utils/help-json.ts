@@ -2153,7 +2153,7 @@ const commands: CommandSchema[] = [
       {
         name: 'router',
         type: 'string',
-        description: 'Use Next.js App Router (App Router only; Pages Router is not supported)',
+        description: 'Use Next.js App Router in mixed projects (Pages-only projects are refused)',
         choices: ['app'],
         required: false,
         hidden: false,

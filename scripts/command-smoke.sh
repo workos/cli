@@ -111,13 +111,13 @@ case "$err" in
 esac
 if [ "$code" -eq 1 ] && [ "$json_ok" -eq 1 ]; then pass "unknown command exits 1 with structured error"; else fail "unknown command contract (exit $code, want 1): $err"; fi
 
-# Unsupported Pages Router installs must stop before provisioning, even with --force.
+# Unsupported Pages Router installs must stop before provisioning, even with --force --router app.
 pages_project="$SANDBOX/pages-project"
 mkdir -p "$pages_project/src/pages"
 printf '%s\n' 'export default function App() {}' >"$pages_project/src/pages/_app.tsx"
 printf '%s\n' '{"dependencies":{"next":"16.0.0"}}' >"$pages_project/package.json"
 for command in install integrate dashboard; do
-  err=$("$BIN" "$command" --install-dir "$pages_project" --force --json --insecure-storage 2>&1 >/dev/null)
+  err=$("$BIN" "$command" --install-dir "$pages_project" --force --router app --json --insecure-storage 2>&1 >/dev/null)
   code=$?
   case "$err" in
     *'"code":"unsupported_nextjs_router"'*) json_ok=1 ;;
