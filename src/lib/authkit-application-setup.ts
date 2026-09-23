@@ -255,6 +255,8 @@ export async function configureAuthkitApplication(
     const homepageValue = setup.homepageUrl ?? (original.appHomepageUrl || new URL(setup.redirectUri).origin);
     const needsHomepage = original.appHomepageUrl !== homepageValue;
     if (needsInitiate || needsHomepage) {
+      // Best-effort recheck: UpdateUserlandApplicationInput has no version or
+      // expected-value precondition, so this is not an atomic compare-and-set.
       const current = await readApplication();
       if (
         current.id !== original.id ||
@@ -269,12 +271,13 @@ export async function configureAuthkitApplication(
       ) {
         return pending('The homepage URL changed during setup. It was not overwritten.');
       }
-      if ((needsInitiate && !current.initiateLoginUri) || (needsHomepage && current.appHomepageUrl !== homepageValue)) {
+      const updateHomepage = needsHomepage && current.appHomepageUrl !== homepageValue;
+      if ((needsInitiate && !current.initiateLoginUri) || updateHomepage) {
         const saved = await request<{ updateUserlandApplication: { __typename: string } }>('updateAuthkitApplication', {
           input: {
             applicationId: original.id,
             ...(needsInitiate && !current.initiateLoginUri ? { initiateLoginUri: setup.initiateLoginUri } : {}),
-            ...(needsHomepage ? { appHomepageUrl: homepageValue } : {}),
+            ...(updateHomepage ? { appHomepageUrl: homepageValue } : {}),
           },
         });
         if (saved.updateUserlandApplication.__typename !== 'UserlandApplicationUpdated')

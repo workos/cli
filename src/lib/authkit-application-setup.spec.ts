@@ -267,6 +267,32 @@ describe('native application URL setup', () => {
     expect(writes()).toHaveLength(0);
   });
 
+  it('omits a homepage already satisfied at recheck from an initiate-login update', async () => {
+    delete application.appHomepageUrl;
+    application.logoutUris = [{ uri: setup.signOutUri, isDefault: true }];
+    const original = vi.mocked(dashboardGraphqlRequest).getMockImplementation()!;
+    vi.mocked(dashboardGraphqlRequest).mockImplementation(async (name, options) => {
+      if (name === 'updateAuthkitApplication') {
+        // A dashboard edit lands after the final read but before the mutation.
+        application.appHomepageUrl = 'https://concurrent.example/';
+      }
+      const result = await original(name, options);
+      if (name === 'defaultAuthkitApplication' && !application.appHomepageUrl) {
+        // Another setup supplied our default before the pre-write recheck.
+        application.appHomepageUrl = 'http://localhost:4000';
+      }
+      return result;
+    });
+    const result = await configureAuthkitApplication(setup, setup.clientId);
+    expect(writes()[0][1].variables?.input).toEqual({
+      applicationId: 'app_1',
+      initiateLoginUri: setup.initiateLoginUri,
+    });
+    expect(application.appHomepageUrl).toBe('https://concurrent.example/');
+    expect(result.verified).toBe(false);
+    expect(result.reason).toContain('read-back');
+  });
+
   it('does not verify a homepage write until read-back matches', async () => {
     delete application.appHomepageUrl;
     const original = vi.mocked(dashboardGraphqlRequest).getMockImplementation()!;
