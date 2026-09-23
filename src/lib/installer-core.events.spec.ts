@@ -1,30 +1,20 @@
 /**
  * Event Sequence Tests
  *
- * These tests verify that the wizard state machine emits events correctly
- * and that CLI/Dashboard modes receive identical event sequences.
+ * These tests verify that the installer state machine emits events correctly.
  *
  * IMPORTANT: These tests use mocked actors and do NOT test the full integration.
- * Before releasing, manually test both modes against a real project:
+ * Before releasing, manually test against a real project:
  *
  * ```bash
- * # Test CLI mode
  * cd /tmp && npx create-next-app@latest test-app --typescript --yes
- * cd test-app && wizard --skip-auth
- *
- * # Test Dashboard mode
- * cd /tmp/test-app && wizard dashboard --skip-auth
- *
- * # Verify both modes:
- * # - Show same progress steps
- * # - Create same files
- * # - Emit exactly one 'complete' event (check logs)
+ * cd test-app && workos install --skip-auth
  * ```
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createActor, fromPromise } from 'xstate';
 import { installerMachine } from './installer-core.js';
-import { createEventCapture, compareEventSequences, filterDeterministicEvents } from './installer-core.test-utils.js';
+import { createEventCapture } from './installer-core.test-utils.js';
 import type { InstallerOptions } from '../utils/types.js';
 import type {
   DetectionOutput,
@@ -77,7 +67,6 @@ function createTestOptions(overrides?: Partial<InstallerOptions>): InstallerOpti
     local: true,
     ci: false,
     skipAuth: false,
-    dashboard: false,
     emitter: null!, // Will be set per test
     apiKey: 'sk_test_123',
     clientId: 'client_test_123',
@@ -115,132 +104,11 @@ async function runMachineToCompletion(
   });
 }
 
-describe('Event Sequence Parity', () => {
+describe('Installer event sequences', () => {
   let mockActors: ReturnType<typeof createMockActors>;
 
   beforeEach(() => {
     mockActors = createMockActors();
-  });
-
-  describe('CLI vs Dashboard mode', () => {
-    it('emits identical event sequences for happy path', async () => {
-      // Run with CLI mode (dashboard: false)
-      const cliCapture = createEventCapture();
-      const cliOptions = createTestOptions({ dashboard: false });
-      await runMachineToCompletion(cliOptions, mockActors, cliCapture);
-      const cliEvents = filterDeterministicEvents(cliCapture.getEventTypes());
-
-      // Reset mocks to ensure identical behavior
-      mockActors = createMockActors();
-
-      // Run with Dashboard mode (dashboard: true)
-      const dashCapture = createEventCapture();
-      const dashOptions = createTestOptions({ dashboard: true });
-      await runMachineToCompletion(dashOptions, mockActors, dashCapture);
-      const dashEvents = filterDeterministicEvents(dashCapture.getEventTypes());
-
-      // Compare sequences
-      const result = compareEventSequences(cliEvents, dashEvents);
-      expect(result.match, result.diff).toBe(true);
-    });
-
-    it('emits identical events when skipping auth', async () => {
-      const cliCapture = createEventCapture();
-      await runMachineToCompletion(createTestOptions({ dashboard: false, skipAuth: true }), mockActors, cliCapture);
-      const cliEvents = cliCapture.getEventTypes();
-
-      mockActors = createMockActors();
-
-      const dashCapture = createEventCapture();
-      await runMachineToCompletion(createTestOptions({ dashboard: true, skipAuth: true }), mockActors, dashCapture);
-      const dashEvents = dashCapture.getEventTypes();
-
-      const result = compareEventSequences(cliEvents, dashEvents);
-      expect(result.match, result.diff).toBe(true);
-    });
-
-    it('emits identical events with dirty git (confirmed)', async () => {
-      // Mock dirty git status - override checkGitStatus with dirty result
-      const dirtyMockActors = {
-        ...createMockActors(),
-        checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => ({
-          isClean: false,
-          files: ['file1.ts', 'file2.ts'],
-        })),
-      };
-
-      const cliCapture = createEventCapture();
-      const cliOptions = createTestOptions({ dashboard: false, skipAuth: true });
-
-      const machineWithActors = installerMachine.provide({
-        actors: dirtyMockActors,
-      });
-
-      const cliActor = createActor(machineWithActors, {
-        input: {
-          emitter: cliCapture.emitter,
-          options: { ...cliOptions, emitter: cliCapture.emitter },
-        },
-      });
-
-      // Start machine and handle git confirmation
-      await new Promise<void>((resolve) => {
-        cliActor.subscribe({
-          complete: () => resolve(),
-        });
-
-        cliActor.start();
-        cliActor.send({ type: 'START' });
-
-        // Simulate user confirming git status after a tick
-        setTimeout(() => {
-          cliActor.send({ type: 'GIT_CONFIRMED' });
-        }, 50);
-      });
-
-      const cliEvents = cliCapture.getEventTypes();
-
-      // Reset and run dashboard mode
-      const dashMockActors = {
-        ...createMockActors(),
-        checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => ({
-          isClean: false,
-          files: ['file1.ts', 'file2.ts'],
-        })),
-      };
-
-      const dashCapture = createEventCapture();
-      const dashOptions = createTestOptions({ dashboard: true, skipAuth: true });
-
-      const dashMachine = installerMachine.provide({
-        actors: dashMockActors,
-      });
-
-      const dashActor = createActor(dashMachine, {
-        input: {
-          emitter: dashCapture.emitter,
-          options: { ...dashOptions, emitter: dashCapture.emitter },
-        },
-      });
-
-      await new Promise<void>((resolve) => {
-        dashActor.subscribe({
-          complete: () => resolve(),
-        });
-
-        dashActor.start();
-        dashActor.send({ type: 'START' });
-
-        setTimeout(() => {
-          dashActor.send({ type: 'GIT_CONFIRMED' });
-        }, 50);
-      });
-
-      const dashEvents = dashCapture.getEventTypes();
-
-      const result = compareEventSequences(cliEvents, dashEvents);
-      expect(result.match, result.diff).toBe(true);
-    });
   });
 
   describe('event correctness', () => {

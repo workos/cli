@@ -10,7 +10,6 @@ export interface CliOptions {
   retry: number;
   noRetry: boolean;
   sequential: boolean;
-  noDashboard: boolean;
   noFail: boolean;
   noCorrection: boolean;
   quality: boolean;
@@ -60,7 +59,6 @@ export function parseArgs(args: string[]): CliOptions {
     retry: 2,
     noRetry: false,
     sequential: false,
-    noDashboard: false,
     noFail: false,
     noCorrection: false,
     quality: false,
@@ -147,8 +145,6 @@ export function parseArgs(args: string[]): CliOptions {
       options.state = state;
     } else if (arg === '--sequential') {
       options.sequential = true;
-    } else if (arg === '--no-dashboard') {
-      options.noDashboard = true;
     } else if (arg === '--no-fail') {
       options.noFail = true;
     } else if (arg === '--no-correction') {
@@ -199,8 +195,6 @@ Options:
   --no-retry          Disable retries
 
   --sequential        Run scenarios sequentially (disable parallelism)
-
-  --no-dashboard      Disable live dashboard, use sequential logging
 
   --no-fail           Exit 0 even if success criteria thresholds not met
 

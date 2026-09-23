@@ -67,12 +67,7 @@ export type InstallerOptions = {
   redirectUri?: string;
 
   /**
-   * [Experimental] Enable visual dashboard mode
-   */
-  dashboard?: boolean;
-
-  /**
-   * Event emitter for dashboard mode
+   * Event emitter for installer state machine events
    */
   emitter?: import('../lib/events.js').InstallerEventEmitter;
 

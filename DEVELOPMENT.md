@@ -19,7 +19,7 @@ src/
 │   ├── workos-api.ts         # Generic WorkOS REST API client
 │   ├── credential-proxy.ts   # Token refresh proxy for long sessions
 │   ├── ensure-auth.ts        # Startup auth guard
-│   └── adapters/             # CLI and dashboard adapters
+│   └── adapters/             # CLI and headless adapters
 ├── commands/
 │   ├── env.ts                # workos env (add/remove/switch/list)
 │   ├── organization.ts       # workos organization (create/update/get/list/delete)
@@ -29,7 +29,6 @@ src/
 │   ├── auth-status.ts        # workos auth status
 │   ├── login.ts              # workos auth login
 │   └── logout.ts             # workos auth logout
-├── dashboard/                # Ink/React TUI components
 ├── nextjs/                   # Next.js installer agent
 ├── react/                    # React SPA installer agent
 ├── react-router/             # React Router installer agent
@@ -61,7 +60,7 @@ bun run dev
 
 # Test installer in another project
 cd /path/to/test/nextjs-app
-workos dashboard
+workos install
 
 # Test management commands
 workos env add sandbox sk_test_xxx
@@ -94,7 +93,6 @@ bun run test:watch
 - **Target:** ES2022
 - **Module:** NodeNext (ESM)
 - **Strict mode** enabled
-- **JSX:** react-jsx (for Ink/React dashboard)
 
 ## Output Mode vs Interaction Mode
 
@@ -148,22 +146,6 @@ for a non-host platform; the same value must be used for both `generate` and
 the compile, which `bun run build` (via `scripts/build.ts` + the `prebuild`
 hook) guarantees.
 
-### Why `react-devtools-core` is a devDependency
-
-Nothing in `src/` imports `react-devtools-core`, but it is required to
-**build**, not to run. The dashboard TUI (`src/dashboard/`) uses `ink`, whose
-reconciler does a runtime-gated `await import('./devtools.js')` that only fires
-when `DEV=true`; `devtools.js` then _statically_ imports `react-devtools-core`.
-`bun build --compile` follows that static import at bundle time and cannot prove
-the `DEV` branch is dead, so removing the devDependency fails the compile with
-`error: Could not resolve: "react-devtools-core"` (do not "clean it up"). As a
-result it is also bundled into every shipped binary, costing ~742 KiB
-(measured: 72,512,032 → 71,752,480 bytes when excluded). Do **not** try to trim
-it with `--external react-devtools-core`: that compiles, but bun resolves the
-external eagerly and the standalone binary then crashes on _every_ command
-(even `--version`) with `Cannot find package 'react-devtools-core'`. The ~742 KiB
-is the price of keeping the compile green and the dev-mode fallback graceful.
-
 ### Updating Integration Instructions
 
 The installer prompt in `agent-runner.ts` tells Claude to:
@@ -190,7 +172,7 @@ export function redactCredentials(obj: any): any {
 
 **Manual testing:**
 
-1. Run installer in a test app: `workos dashboard`
+1. Run installer in a test app: `workos install`
 2. Check logs at `~/.workos/logs/workos-{timestamp}.log`
 3. Verify integration works in test app
 

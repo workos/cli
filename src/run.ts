@@ -68,7 +68,6 @@ function buildOptions(argv: InstallerArgs): InstallerOptions {
     clientId: merged.clientId,
     homepageUrl: merged.homepageUrl,
     redirectUri: merged.redirectUri,
-    dashboard: merged.dashboard ?? false,
     inspect: merged.inspect ?? false,
     noValidate: merged.noValidate ?? merged.validate === false,
     noCommit: merged.noCommit ?? merged.commit === false,

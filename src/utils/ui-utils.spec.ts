@@ -121,11 +121,6 @@ describe('getOrAskForWorkOSCredentials — credential-source-aware copy', () => 
     }
   });
 
-  it('stays silent in dashboard mode', async () => {
-    await getOrAskForWorkOSCredentials({ ...base, dashboard: true, credentialSource: 'cli' });
-    expect(ui.log.info).not.toHaveBeenCalled();
-  });
-
   it('stays silent in JSON output mode (no human copy into JSON)', async () => {
     setOutputMode('json');
     await getOrAskForWorkOSCredentials({ ...base, credentialSource: 'cli' });
