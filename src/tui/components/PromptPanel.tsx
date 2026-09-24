@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { ConfirmInput, PasswordInput, TextInput } from '@inkjs/ui';
-import { CANCEL, type SelectOption, type UiPromptRequest, type ValidateFn } from '../../utils/ui.js';
+import { CANCEL, type SelectOption, type UiLine, type UiPromptRequest, type ValidateFn } from '../../utils/ui.js';
 import { colors, glyphs } from '../theme.js';
 import { wrapText } from '../wrap.js';
 
@@ -10,9 +10,14 @@ const DEFAULT_VISIBLE_OPTIONS = 7;
 
 type Answer = (value: unknown) => void;
 
-/** Rows the panel draws: a rule, the wrapped question, then its input. */
-export function promptHeight(request: UiPromptRequest, width: number, maxOptions = DEFAULT_VISIBLE_OPTIONS): number {
-  const rule = 1;
+/** Rows the panel draws: a rule, what the question is about, the question, then its input. */
+export function promptHeight(
+  request: UiPromptRequest,
+  width: number,
+  maxOptions = DEFAULT_VISIBLE_OPTIONS,
+  maxContext = Number.POSITIVE_INFINITY,
+): number {
+  const rule = 1 + Math.min(request.context?.length ?? 0, maxContext);
   const question = wrapText(`? ${request.message.replace(ANSI, '')}`, Math.max(10, width)).length;
   switch (request.kind) {
     case 'confirm':
@@ -172,15 +177,41 @@ function TextPrompt({
   );
 }
 
+/** Context lines, trimmed to `max` rows with the overflow counted on the last one. */
+function PromptContext({ context, max }: { context: readonly UiLine[]; max: number }) {
+  if (context.length === 0 || max < 1) return null;
+  const fits = context.length <= max;
+  const shown = fits ? context : context.slice(0, max - 1);
+  const hidden = context.length - shown.length;
+  return (
+    <>
+      {shown.map((line, i) => (
+        <Text key={i} wrap="truncate-end">
+          {line.rendered}
+        </Text>
+      ))}
+      {hidden > 0 ? <Text color={colors.muted}>{`  … ${hidden} more`}</Text> : null}
+    </>
+  );
+}
+
 interface PromptPanelProps {
   request: UiPromptRequest;
   answer: Answer;
   width: number;
   /** Most option rows a select may show in the space available. */
   maxOptions?: number;
+  /** Most rows of context above the question; the rest collapse into "… N more". */
+  maxContext?: number;
 }
 
-export function PromptPanel({ request, answer, width, maxOptions = DEFAULT_VISIBLE_OPTIONS }: PromptPanelProps) {
+export function PromptPanel({
+  request,
+  answer,
+  width,
+  maxOptions = DEFAULT_VISIBLE_OPTIONS,
+  maxContext = Number.POSITIVE_INFINITY,
+}: PromptPanelProps) {
   // Esc cancels, and so does ctrl-c while a question is open, the same as the
   // plain CLI's prompts.
   useInput((input, key) => {
@@ -202,6 +233,8 @@ export function PromptPanel({ request, answer, width, maxOptions = DEFAULT_VISIB
   return (
     <Box flexDirection="column" width={width} flexShrink={0}>
       <Text color={colors.brand}>{'─'.repeat(Math.max(1, width))}</Text>
+      {/* What the caller printed before asking, e.g. the files behind "Continue anyway?" */}
+      <PromptContext context={request.context ?? []} max={maxContext} />
       {body}
     </Box>
   );

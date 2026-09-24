@@ -394,6 +394,64 @@ describe('UI host', () => {
     expect(order).toEqual(['open:first', 'open:second']);
   });
 
+  it('attaches what was printed just before a prompt as its context', async () => {
+    const { host, requests } = fakeHost(() => false);
+    setUiHost(host);
+
+    ui.log.warn('You have uncommitted or untracked files:');
+    ui.log.info('  src/a.ts');
+    ui.log.info('');
+    ui.log.info('  src/b.ts');
+    await ui.confirm({ message: 'Continue anyway?', initialValue: false });
+
+    expect(requests[0].context?.map((l) => [l.kind, l.message])).toEqual([
+      ['warn', 'You have uncommitted or untracked files:'],
+      ['info', '  src/a.ts'],
+      ['info', '  src/b.ts'],
+    ]);
+  });
+
+  it('does not attach lines printed in an earlier run', async () => {
+    const { host, requests } = fakeHost();
+    setUiHost(host);
+
+    ui.log.success('Authenticated');
+    await new Promise((r) => setTimeout(r, 0));
+    await ui.confirm({ message: 'Commit the changes?' });
+
+    expect(requests[0]).not.toHaveProperty('context');
+  });
+
+  it('keeps each queued prompt paired with the lines printed before it was called', async () => {
+    const opened: UiPromptRequest[] = [];
+    let resolveFirst!: (v: unknown) => void;
+    setUiHost({
+      line: () => {},
+      status: () => {},
+      prompt: (request) => {
+        opened.push(request);
+        return opened.length === 1 ? new Promise((r) => (resolveFirst = r)) : Promise.resolve(true);
+      },
+    });
+
+    ui.log.info('about the first');
+    const first = ui.select({ message: 'First?', options: [{ value: 'a' }] });
+    ui.log.warn('about the second');
+    const second = ui.confirm({ message: 'Second?' });
+    await new Promise((r) => setTimeout(r, 0));
+    resolveFirst('a');
+    await Promise.all([first, second]);
+
+    expect(opened.map((r) => r.context?.map((l) => l.message))).toEqual([['about the first'], ['about the second']]);
+  });
+
+  it('never collects context without a host', async () => {
+    ui.log.warn('printed to the terminal');
+    vi.mocked(inquirer.confirm).mockResolvedValue(true);
+    await ui.confirm({ message: 'q' });
+    expect(vi.mocked(inquirer.confirm).mock.calls[0][0]).not.toHaveProperty('context');
+  });
+
   it('goes back to the terminal after the host is removed', () => {
     const { host, lines } = fakeHost();
     setUiHost(host);
