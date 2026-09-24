@@ -3,7 +3,19 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { InstallerOptions } from '../utils/types.js';
-import { configureInstallEnvironment, reportAppUrlSetup } from './run-with-core.js';
+import {
+  configureInstallEnvironment,
+  configureOtherApplicationUrls,
+  NO_SIGN_IN_ROUTE_REASON,
+  reportAppUrlSetup,
+} from './run-with-core.js';
+import { configureAuthkitApplication } from './authkit-application-setup.js';
+import { InstallDeclinedError } from './installer-errors.js';
+
+vi.mock('./authkit-application-setup.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./authkit-application-setup.js')>()),
+  configureAuthkitApplication: vi.fn(),
+}));
 import { createInstallerEventEmitter } from './events.js';
 import { readProjectEnvCredentials } from './project-env.js';
 
@@ -234,6 +246,20 @@ describe('dashboard checklist reporting', () => {
     ]);
   });
 
+  it('reports only the other two URLs when the environment step already reported the callback', async () => {
+    const { emitter, events } = record();
+    const { initiateLoginUri: _omitted, ...withoutSignIn } = setup;
+    await reportAppUrlSetup(emitter, async () => ({ ...withoutSignIn, verified: true, callbackRegistered: true }), {
+      includeRedirect: false,
+    });
+    expect(events).toEqual([
+      'app-urls:step initiate-login-uri started',
+      'app-urls:step sign-out-uri started',
+      `app-urls:step initiate-login-uri skipped (${NO_SIGN_IN_ROUTE_REASON})`,
+      'app-urls:step sign-out-uri done',
+    ]);
+  });
+
   it('leaves the items running when setup throws, so the failed install fails them', async () => {
     const { emitter, events } = record();
     await expect(
@@ -246,5 +272,88 @@ describe('dashboard checklist reporting', () => {
       'app-urls:step initiate-login-uri started',
       'app-urls:step sign-out-uri started',
     ]);
+  });
+});
+
+describe('application URLs for SDKs other than Next.js', () => {
+  beforeEach(() => {
+    vi.mocked(configureAuthkitApplication).mockReset();
+    vi.mocked(configureAuthkitApplication).mockImplementation(async (setup) => ({
+      ...setup,
+      verified: true,
+      callbackRegistered: true,
+    }));
+  });
+
+  it("saves a server SDK's fixed sign-in route and the origin as the sign-out URI", async () => {
+    const result = await configureOtherApplicationUrls(
+      { options, integration: 'go', emitter: createInstallerEventEmitter() },
+      'client_a',
+      'sk_test_a',
+    );
+    expect(vi.mocked(configureAuthkitApplication)).toHaveBeenCalledWith(
+      {
+        clientId: 'client_a',
+        redirectUri: 'http://localhost:8080/auth/callback',
+        signOutUri: 'http://localhost:8080/',
+        initiateLoginUri: 'http://localhost:8080/auth/login',
+        verified: false,
+      },
+      'client_a',
+      'sk_test_a',
+    );
+    expect(result?.verified).toBe(true);
+  });
+
+  it('saves only the sign-out URI for an SDK without a fixed sign-in route', async () => {
+    await configureOtherApplicationUrls(
+      { options, integration: 'react-router', emitter: createInstallerEventEmitter() },
+      'client_a',
+      'sk_test_a',
+    );
+    expect(vi.mocked(configureAuthkitApplication).mock.calls[0][0]).not.toHaveProperty('initiateLoginUri');
+  });
+
+  it('saves the Vite /sign-in route once the app serves it', async () => {
+    await mkdir(join(directory, 'src'), { recursive: true });
+    await writeFile(join(directory, 'package.json'), '{"dependencies":{"@workos-inc/authkit-react":"1"}}');
+    await writeFile(join(directory, '.env.local'), 'VITE_WORKOS_CLIENT_ID=client_a\n');
+    await writeFile(
+      join(directory, 'src/main.tsx'),
+      "import { AuthKitProvider, useAuth } from '@workos-inc/authkit-react';\n<AuthKitProvider><App /></AuthKitProvider>;\n",
+    );
+    await writeFile(
+      join(directory, 'src/App.tsx'),
+      "if (window.location.pathname === '/sign-in') signIn();\nconst { signIn } = useAuth();\n",
+    );
+    await configureOtherApplicationUrls(
+      { options, integration: 'react', emitter: createInstallerEventEmitter() },
+      'client_a',
+      'sk_test_a',
+    );
+    expect(vi.mocked(configureAuthkitApplication).mock.calls[0][0].initiateLoginUri).toBe(
+      'http://localhost:5173/sign-in',
+    );
+  });
+
+  it('does not point the dashboard at a Vite /sign-in route the app lacks', async () => {
+    await configureOtherApplicationUrls(
+      { options, integration: 'react', emitter: createInstallerEventEmitter() },
+      'client_a',
+      'sk_test_a',
+    );
+    expect(vi.mocked(configureAuthkitApplication).mock.calls[0][0]).not.toHaveProperty('initiateLoginUri');
+  });
+
+  it('leaves the settings for the dashboard instead of failing the install', async () => {
+    vi.mocked(configureAuthkitApplication).mockRejectedValue(
+      new InstallDeclinedError('Automatic URL setup is restricted to sandbox environments.', 'callback_unregistered'),
+    );
+    const emitter = createInstallerEventEmitter();
+    const events: string[] = [];
+    emitter.on('app-urls:step', ({ step, status, detail }) => events.push(`${step} ${status} ${detail ?? ''}`.trim()));
+    const result = await configureOtherApplicationUrls({ options, integration: 'go', emitter }, 'client_a');
+    expect(result?.verified).toBe(false);
+    expect(events).toContain('sign-out-uri skipped Automatic URL setup is restricted to sandbox environments.');
   });
 });

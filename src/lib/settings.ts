@@ -33,6 +33,8 @@ export interface InstallerConfig {
     [key: string]: {
       port: number;
       callbackPath: string;
+      /** The app route that starts sign-in (Initiate login URI), when the SDK guide fixes one. */
+      signInPath?: string;
     };
   };
   legacy: {

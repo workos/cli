@@ -4,7 +4,7 @@ import { join } from 'path';
 import fg from 'fast-glob';
 import type { ValidationResult, ValidationRules, ValidationIssue } from './types.js';
 import { runBuildValidation } from './build-validator.js';
-import { detectPort } from '../port-detection.js';
+import { detectPort, getSignInPath } from '../port-detection.js';
 import { nextjsRoutePath, findNextjsSignInPage } from '../../integrations/nextjs/utils.js';
 import nextjsRules from './rules/nextjs.json' with { type: 'json' };
 import reactRouterRules from './rules/react-router.json' with { type: 'json' };
@@ -258,6 +258,10 @@ export async function validateFrameworkSpecific(framework: string, projectDir: s
     }
     case 'react':
       await validateReactProviderWrapping(projectDir, issues);
+      await validateClientSignInRoute(framework, projectDir, issues);
+      break;
+    case 'vanilla-js':
+      await validateClientSignInRoute(framework, projectDir, issues);
       break;
     case 'react-router':
       await validateReactRouterRedirectUri(projectDir, issues);
@@ -270,6 +274,39 @@ export async function validateFrameworkSpecific(framework: string, projectDir: s
   }
 
   return issues;
+}
+
+/**
+ * Client-only apps have no route files to match, so look for the sign-in path
+ * in the source, or a page that serves it. The installer saves this route as
+ * the Initiate login URI.
+ */
+async function validateClientSignInRoute(framework: string, projectDir: string, issues: ValidationIssue[]) {
+  const signInPath = getSignInPath(framework as Parameters<typeof getSignInPath>[0]);
+  if (!signInPath) return;
+  const segment = signInPath.replace(/^\/|\/$/g, '');
+  const pages = await fg(
+    [`${segment}.html`, `${segment}/index.html`, `public/${segment}.html`, `public/${segment}/index.html`],
+    { cwd: projectDir },
+  );
+  if (pages.length > 0) return;
+  const sources = await fg(['**/*.{ts,tsx,js,jsx,mjs,html,htm}'], {
+    cwd: projectDir,
+    ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.*/**'],
+  });
+  for (const file of sources) {
+    try {
+      if ((await readFile(join(projectDir, file), 'utf-8')).includes(signInPath)) return;
+    } catch {
+      // Unreadable file - keep looking
+    }
+  }
+  issues.push({
+    type: 'file',
+    severity: 'error',
+    message: `No ${signInPath} route starts sign-in`,
+    hint: `Add a public ${signInPath} client route that calls the SDK's signIn() on load. The installer saves it as the Initiate login URI.`,
+  });
 }
 
 /**

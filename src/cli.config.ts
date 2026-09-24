@@ -39,10 +39,12 @@ export const config = {
     nextjs: {
       port: 3000,
       callbackPath: '/auth/callback',
+      signInPath: '/sign-in',
     },
     react: {
       port: 5173,
       callbackPath: '/callback',
+      signInPath: '/sign-in',
     },
     tanstackStart: {
       port: 3000,
@@ -55,14 +57,17 @@ export const config = {
     vanillaJs: {
       port: 5173,
       callbackPath: '/callback',
+      signInPath: '/sign-in',
     },
     python: {
       port: 8000,
       callbackPath: '/auth/callback/',
+      signInPath: '/auth/login/',
     },
     ruby: {
       port: 3000,
       callbackPath: '/auth/callback',
+      signInPath: '/auth/login',
     },
     php: {
       port: 8000,
@@ -71,22 +76,27 @@ export const config = {
     phpLaravel: {
       port: 8000,
       callbackPath: '/auth/callback',
+      signInPath: '/login',
     },
     go: {
       port: 8080,
       callbackPath: '/auth/callback',
+      signInPath: '/auth/login',
     },
     dotnet: {
       port: 5000,
       callbackPath: '/auth/callback',
+      signInPath: '/auth/login',
     },
     elixir: {
       port: 4000,
       callbackPath: '/auth/callback',
+      signInPath: '/auth/sign-in',
     },
     kotlin: {
       port: 8080,
       callbackPath: '/auth/callback',
+      signInPath: '/auth/login',
     },
   },
 

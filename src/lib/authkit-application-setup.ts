@@ -7,12 +7,14 @@ import { dashboardGraphqlRequest } from './dashboard-graphql.js';
 import { getOperation, resolveExecutableDocument } from '../catalog/operation.js';
 import { InstallDeclinedError } from './installer-errors.js';
 import { setHomepageUrl } from './workos-management.js';
+import { getSignInPath } from './port-detection.js';
 
 export interface AuthkitApplicationSetup {
   clientId: string;
   redirectUri: string;
   signOutUri: string;
-  initiateLoginUri: string;
+  /** Absent when the framework has no fixed sign-in route to point at. */
+  initiateLoginUri?: string;
   homepageUrl?: string;
   verified: boolean;
   /** The callback was registered; this alone does not verify the other URLs or browser flows. */
@@ -44,13 +46,28 @@ export async function readNextjsApplicationSetup(
   const clientId = env.WORKOS_CLIENT_ID;
   const redirectUri = env.NEXT_PUBLIC_WORKOS_REDIRECT_URI;
   if (!clientId || !redirectUri) throw new Error('Missing AuthKit client ID or callback URL in .env.local.');
+  return buildApplicationSetup({ clientId, redirectUri, homepageUrl, signInPath: getSignInPath('nextjs') });
+}
+
+/** Derive the sign-out and initiate login URIs from the app's callback origin. */
+export function buildApplicationSetup({
+  clientId,
+  redirectUri,
+  homepageUrl,
+  signInPath,
+}: {
+  clientId: string;
+  redirectUri: string;
+  homepageUrl?: string;
+  signInPath?: string;
+}): AuthkitApplicationSetup {
   const callback = new URL(redirectUri);
   if (!['http:', 'https:'].includes(callback.protocol) || callback.username || callback.password || callback.hash) {
     throw new Error('The AuthKit callback must be an HTTP(S) URL without credentials or a fragment.');
   }
-  if (callback.pathname.replace(/\/$/, '') === '/sign-in') {
+  if (signInPath !== undefined && callback.pathname.replace(/\/$/, '') === signInPath.replace(/\/$/, '')) {
     throw new Error(
-      'The OAuth callback cannot use /sign-in; that route starts authentication. Use a separate callback.',
+      `The OAuth callback cannot use ${signInPath}; that route starts authentication. Use a separate callback.`,
     );
   }
   if (homepageUrl !== undefined) {
@@ -64,7 +81,7 @@ export async function readNextjsApplicationSetup(
     redirectUri,
     ...(homepageUrl !== undefined ? { homepageUrl } : {}),
     signOutUri: `${callback.origin}/`,
-    initiateLoginUri: `${callback.origin}/sign-in`,
+    ...(signInPath !== undefined ? { initiateLoginUri: `${callback.origin}${signInPath}` } : {}),
     verified: false,
   };
 }
@@ -219,7 +236,10 @@ export async function configureAuthkitApplication(
     const reasons: string[] = [];
     const defaults = original.logoutUris.filter((uri) => uri.isDefault);
     const signOutConflict = defaults.length > 1 || defaults.some((uri) => !isSignOutDestination(uri.uri));
-    const initiateConflict = !!original.initiateLoginUri && original.initiateLoginUri !== setup.initiateLoginUri;
+    const initiateConflict =
+      setup.initiateLoginUri !== undefined &&
+      !!original.initiateLoginUri &&
+      original.initiateLoginUri !== setup.initiateLoginUri;
     if (signOutConflict)
       reasons.push(
         'An existing sign-out default differs from this app. It was left unchanged; confirm the intended default in the dashboard.',
@@ -251,7 +271,8 @@ export async function configureAuthkitApplication(
       if (saved.setUserlandApplicationLogoutUris.__typename !== 'LogoutUrisSet')
         return pending('Could not save the sign-out URL. Check the dashboard before continuing.');
     }
-    const needsInitiate = !initiateConflict && original.initiateLoginUri !== setup.initiateLoginUri;
+    const needsInitiate =
+      setup.initiateLoginUri !== undefined && !initiateConflict && original.initiateLoginUri !== setup.initiateLoginUri;
     const homepageValue = setup.homepageUrl ?? (original.appHomepageUrl || new URL(setup.redirectUri).origin);
     const needsHomepage = original.appHomepageUrl !== homepageValue;
     if (needsInitiate || needsHomepage) {
@@ -297,7 +318,7 @@ export async function configureAuthkitApplication(
       ) ||
       saved.logoutUris.filter((uri) => uri.isDefault).length !== 1 ||
       !saved.logoutUris.some((uri) => isSignOutDestination(uri.uri) && uri.isDefault) ||
-      saved.initiateLoginUri !== setup.initiateLoginUri ||
+      (setup.initiateLoginUri !== undefined && saved.initiateLoginUri !== setup.initiateLoginUri) ||
       saved.appHomepageUrl !== homepageValue
     )
       return pending(

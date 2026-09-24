@@ -749,6 +749,47 @@ describe('validateInstallation', () => {
     });
   });
 
+  describe('client-only sign-in route validation', () => {
+    const signInIssue = (issues: { message: string }[]) => issues.find((i) => i.message.includes('/sign-in route'));
+
+    it('fails a React SPA without a /sign-in route', async () => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(join(testDir, 'src', 'App.tsx'), 'const { signIn } = useAuth();');
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      expect(signInIssue(result.issues)?.severity).toBe('error');
+      expect(result.passed).toBe(false);
+    });
+
+    it('accepts a React SPA whose source serves /sign-in', async () => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(join(testDir, 'src', 'App.tsx'), '<Route path="/sign-in" element={<SignIn />} />');
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      expect(signInIssue(result.issues)).toBeUndefined();
+    });
+
+    it('accepts a vanilla JS app with a sign-in page', async () => {
+      mkdirSync(join(testDir, 'sign-in'), { recursive: true });
+      writeFileSync(join(testDir, 'sign-in', 'index.html'), '<script>authkit.signIn()</script>');
+
+      const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
+
+      expect(signInIssue(result.issues)).toBeUndefined();
+    });
+
+    it('ignores /sign-in mentions inside node_modules', async () => {
+      mkdirSync(join(testDir, 'node_modules', 'pkg'), { recursive: true });
+      writeFileSync(join(testDir, 'node_modules', 'pkg', 'index.js'), "location.assign('/sign-in')");
+
+      const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
+
+      expect(signInIssue(result.issues)).toBeDefined();
+    });
+  });
+
   describe('duplicate env var detection', () => {
     it('detects conflicting values between .env and .env.local', async () => {
       writeFileSync(

@@ -107,6 +107,29 @@ describe('installer prompt', () => {
     }
   });
 
+  const promptFor = async (integration: FrameworkConfig['metadata']['integration'], skillName: string) => {
+    await runAgentInstaller({ ...config, metadata: { ...config.metadata, integration, skillName } }, options);
+    return vi.mocked(runAgent).mock.calls[0][1];
+  };
+
+  it('tells a client-only app to add a /sign-in route that starts sign-in on load', async () => {
+    const prompt = await promptFor('react', 'workos-authkit-react');
+    expect(prompt).toContain('## Sign-in route (Initiate login URI)');
+    expect(prompt).toContain('the app origin plus /sign-in');
+    expect(prompt).toContain('add a /sign-in client route');
+  });
+
+  it("pins a server SDK to its guide's sign-in route without the client-only steps", async () => {
+    const prompt = await promptFor('kotlin', 'workos-kotlin');
+    expect(prompt).toContain('the app origin plus /auth/login');
+    expect(prompt).not.toContain('client route');
+  });
+
+  it('adds no sign-in section when the framework has no fixed route', async () => {
+    const prompt = await promptFor('react-router', 'workos-authkit-react-router');
+    expect(prompt).not.toContain('## Sign-in route (Initiate login URI)');
+  });
+
   it('declines Pages Router before requesting credentials, writing files, or starting the agent', async () => {
     const framework = {
       ...config,

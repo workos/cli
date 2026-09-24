@@ -18,7 +18,11 @@ vi.mock('../catalog/operation.js', () => ({
 import { refreshIfExpired } from './command-auth.js';
 import { fetchTeamEnvironments } from './environment-target.js';
 import { dashboardGraphqlRequest } from './dashboard-graphql.js';
-import { configureAuthkitApplication, readNextjsApplicationSetup } from './authkit-application-setup.js';
+import {
+  buildApplicationSetup,
+  configureAuthkitApplication,
+  readNextjsApplicationSetup,
+} from './authkit-application-setup.js';
 import { applicationSetupNextSteps } from './completion-data.js';
 
 const setup = {
@@ -184,6 +188,24 @@ describe('native application URL setup', () => {
       expect(options.environmentId).toBe('env_app');
     expect(vi.mocked(dashboardGraphqlRequest).mock.calls.at(-1)?.[0]).toBe('defaultAuthkitApplication');
     expect(writes()).toHaveLength(2);
+  });
+
+  it('sets the sign-out URI and leaves the initiate login URI alone when the app has no sign-in route', async () => {
+    const { initiateLoginUri: _omitted, ...withoutSignIn } = setup;
+    const result = await configureAuthkitApplication(withoutSignIn, setup.clientId);
+    expect(result.verified).toBe(true);
+    expect(application.logoutUris).toContainEqual({ uri: setup.signOutUri, isDefault: true });
+    expect(application.initiateLoginUri).toBeNull();
+    for (const [name, options] of writes())
+      if (name === 'updateAuthkitApplication') expect(options.variables?.input).not.toHaveProperty('initiateLoginUri');
+  });
+
+  it('does not report an existing initiate login URI as a conflict when the app has no sign-in route', async () => {
+    application.initiateLoginUri = 'http://localhost:4000/login';
+    const { initiateLoginUri: _omitted, ...withoutSignIn } = setup;
+    const result = await configureAuthkitApplication(withoutSignIn, setup.clientId);
+    expect(result.verified).toBe(true);
+    expect(application.initiateLoginUri).toBe('http://localhost:4000/login');
   });
 
   it('fills an empty dashboard homepage with the callback origin', async () => {
@@ -581,5 +603,24 @@ describe('app URL derivation', () => {
       'WORKOS_CLIENT_ID=client_app\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/sign-in\n',
     );
     await expect(readNextjsApplicationSetup(directory)).rejects.toThrow('cannot use /sign-in');
+  });
+
+  it("builds a framework's initiate login URI from its own sign-in path", () => {
+    const result = buildApplicationSetup({
+      clientId: 'client_app',
+      redirectUri: 'http://localhost:8080/auth/callback',
+      signInPath: '/auth/login',
+    });
+    expect(result.initiateLoginUri).toBe('http://localhost:8080/auth/login');
+    expect(result.signOutUri).toBe('http://localhost:8080/');
+  });
+
+  it('omits the initiate login URI when the framework has no fixed sign-in path', () => {
+    const result = buildApplicationSetup({
+      clientId: 'client_app',
+      redirectUri: 'http://localhost:3000/auth/callback',
+    });
+    expect(result).not.toHaveProperty('initiateLoginUri');
+    expect(result.signOutUri).toBe('http://localhost:3000/');
   });
 });

@@ -34,6 +34,11 @@ export function getCallbackPath(integration: Integration): string {
   return settings.frameworks[settingsKey]?.callbackPath ?? DEFAULT_CALLBACK_PATH;
 }
 
+/** The route that starts sign-in, or undefined when the SDK guide does not fix one. */
+export function getSignInPath(integration: Integration): string | undefined {
+  return settings.frameworks[INTEGRATION_TO_SETTINGS_KEY[integration]]?.signInPath;
+}
+
 /**
  * Parse port from Vite config file.
  * Looks for server.port in vite.config.{ts,js,mjs}

@@ -6,6 +6,7 @@ import type { CompletionData, InstallerEventEmitter, SetupItemId, SetupItemStatu
 import { buildCompletionData, applicationSetupNextSteps } from './completion-data.js';
 import {
   readNextjsApplicationSetup,
+  buildApplicationSetup,
   configureAuthkitApplication,
   type AuthkitApplicationSetup,
 } from './authkit-application-setup.js';
@@ -59,7 +60,8 @@ import {
   getNextJsRouter,
   assertNextjsSignInRouteAvailable,
 } from '../integrations/nextjs/utils.js';
-import { detectPort, getCallbackPath } from './port-detection.js';
+import { detectPort, getCallbackPath, getSignInPath } from './port-detection.js';
+import { InstallDeclinedError } from './installer-errors.js';
 import { writeEnvLocal } from './env-writer.js';
 import { getRegistry } from './registry.js';
 import { observeHostFailure } from './host-probe.js';
@@ -246,6 +248,8 @@ export async function configureInstallEnvironment(
   step('env-vars', 'done');
 }
 
+export const NO_SIGN_IN_ROUTE_REASON = 'This framework has no fixed sign-in route to use.';
+
 /**
  * Report the app URLs `configure` sets (the dashboard checklist's redirect,
  * initiate login, and sign-out URIs) as `app-urls:step` events.
@@ -253,22 +257,66 @@ export async function configureInstallEnvironment(
  * `configureAuthkitApplication` throws when the callback isn't registered,
  * which fails the install (and the items still running with it). When it
  * returns, the callback is registered; the other two are verified together or
- * not at all, with one reason covering both.
+ * not at all, with one reason covering both. Pass `includeRedirect: false`
+ * when the environment step already reported the callback.
  */
 export async function reportAppUrlSetup(
   emitter: Pick<InstallerEventEmitter, 'emit'>,
   configure: () => Promise<AuthkitApplicationSetup>,
+  { includeRedirect = true }: { includeRedirect?: boolean } = {},
 ): Promise<AuthkitApplicationSetup> {
   const step = (id: SetupItemId, status: SetupItemStatus, detail?: string) =>
     emitter.emit('app-urls:step', { step: id, status, ...(detail ? { detail } : {}) });
-  for (const id of ['redirect-uri', 'initiate-login-uri', 'sign-out-uri'] as const) step(id, 'started');
+  const ids = ['initiate-login-uri', 'sign-out-uri'] as const;
+  for (const id of includeRedirect ? (['redirect-uri', ...ids] as const) : ids) step(id, 'started');
   const setup = await configure();
-  step('redirect-uri', 'done');
-  for (const id of ['initiate-login-uri', 'sign-out-uri'] as const) {
-    if (setup.verified) step(id, 'done');
+  if (includeRedirect) step('redirect-uri', 'done');
+  for (const id of ids) {
+    if (id === 'initiate-login-uri' && setup.initiateLoginUri === undefined)
+      step(id, 'skipped', NO_SIGN_IN_ROUTE_REASON);
+    else if (setup.verified) step(id, 'done');
     else step(id, 'skipped', setup.reason);
   }
   return setup;
+}
+
+/**
+ * Set the sign-out and initiate login URIs for SDKs other than Next.js, after
+ * the agent has written the app. The environment step already registered the
+ * callback over the API key, so a failure here leaves the settings for the
+ * dashboard instead of failing an install whose code is done.
+ */
+export async function configureOtherApplicationUrls(
+  context: Pick<InstallerMachineContext, 'options' | 'integration' | 'emitter'>,
+  clientId: string,
+  apiKey?: string,
+): Promise<AuthkitApplicationSetup | undefined> {
+  const { options: installerOptions, integration } = context;
+  if (!integration || integration === 'nextjs') return undefined;
+  const port = detectPort(integration, installerOptions.installDir);
+  const redirectUri = installerOptions.redirectUri || `http://localhost:${port}${getCallbackPath(integration)}`;
+  // Point the dashboard at the sign-in route only when the app checks out.
+  const validation = await validateInstallation(integration, installerOptions.installDir, { runBuild: false });
+  let setup: AuthkitApplicationSetup;
+  try {
+    setup = buildApplicationSetup({
+      clientId,
+      redirectUri,
+      homepageUrl: installerOptions.homepageUrl,
+      signInPath: validation.passed ? getSignInPath(integration) : undefined,
+    });
+  } catch {
+    return undefined;
+  }
+  return reportAppUrlSetup(
+    context.emitter,
+    () =>
+      configureAuthkitApplication(setup, clientId, apiKey).catch((error: unknown) => {
+        if (!(error instanceof InstallDeclinedError)) throw error;
+        return { ...setup, verified: false, reason: error.message };
+      }),
+    { includeRedirect: false },
+  );
 }
 
 /** Pick the installer adapter for this process's output mode and terminal. */
@@ -473,13 +521,16 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
             applicationSetup = await reportAppUrlSetup(context.emitter, () =>
               configureAuthkitApplication(setup, credentials?.clientId ?? '', credentials?.apiKey),
             );
+          } else if (credentials?.clientId) {
+            applicationSetup = await configureOtherApplicationUrls(context, credentials.clientId, credentials.apiKey);
           }
           return {
             success: true,
             applicationSetup,
-            summary: applicationSetup
-              ? ['App code installed.', ...applicationSetupNextSteps(applicationSetup)].join('\n')
-              : summary || `Successfully installed WorkOS AuthKit for ${integration}!`,
+            summary:
+              integration === 'nextjs' && applicationSetup
+                ? ['App code installed.', ...applicationSetupNextSteps(applicationSetup)].join('\n')
+                : summary || `Successfully installed WorkOS AuthKit for ${integration}!`,
           };
         } catch (error) {
           return {

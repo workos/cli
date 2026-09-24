@@ -10,7 +10,9 @@ export function applicationSetupNextSteps(setup: AuthkitApplicationSetup): strin
       : `Application setup is incomplete: ${setup.reason ?? 'Settings have not been verified.'}`,
     `Redirect URI: ${setup.redirectUri} (${setup.callbackRegistered || setup.verified ? 'registered' : 'not registered or verified'})`,
     `Sign-out URI: ${setup.signOutUri}`,
-    `Initiate login URI: ${setup.initiateLoginUri} (starts sign-in; never use the callback URI)`,
+    setup.initiateLoginUri !== undefined
+      ? `Initiate login URI: ${setup.initiateLoginUri} (starts sign-in; never use the callback URI)`
+      : 'Initiate login URI: not set. Point it at the app route that starts sign-in (never the callback URI).',
     ...(setup.homepageUrl !== undefined ? [`Homepage URL: ${setup.homepageUrl}`] : []),
     'Test sign-in, sign-out, protected-page access, and a password-reset or invitation login before calling the integration complete.',
   ];
