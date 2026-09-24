@@ -267,9 +267,11 @@ export function createRunModel(options: RunModelOptions): RunModel {
     }
   }
 
-  /** Any dashboard setting left for the user to check. */
+  /** Any dashboard setting left for the user to check: not set, not verified, or failed. */
   function needsAttention(): boolean {
-    return [...substatus.values()].some((items) => [...items.values()].includes('attention'));
+    return [...substatus.values()].some((items) =>
+      [...items.values()].some((s) => s === 'attention' || s === 'failed'),
+    );
   }
 
   function changed(): void {

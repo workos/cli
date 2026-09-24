@@ -120,13 +120,20 @@ describe('resolveAdapterKind', () => {
   let saved: Array<[NodeJS.ReadStream | NodeJS.WriteStream, string, PropertyDescriptor | undefined]> = [];
   const originalTerm = process.env.TERM;
 
-  function terminal(opts: { stdinTTY: boolean; stdoutTTY: boolean; columns: number; rows: number }) {
+  function terminal(opts: {
+    stdinTTY: boolean;
+    stdoutTTY: boolean;
+    stderrTTY?: boolean;
+    columns: number;
+    rows: number;
+  }) {
     const set = (stream: NodeJS.ReadStream | NodeJS.WriteStream, key: string, value: unknown) => {
       saved.push([stream, key, Object.getOwnPropertyDescriptor(stream, key)]);
       Object.defineProperty(stream, key, { value, configurable: true });
     };
     set(process.stdin, 'isTTY', opts.stdinTTY);
     set(process.stdout, 'isTTY', opts.stdoutTTY);
+    set(process.stderr, 'isTTY', opts.stderrTTY ?? true);
     set(process.stdout, 'columns', opts.columns);
     set(process.stdout, 'rows', opts.rows);
   }
@@ -156,6 +163,9 @@ describe('resolveAdapterKind', () => {
     expect(resolveAdapterKind({})).toBe('tui');
     expect(resolveAdapterKind({ noTui: true })).toBe('cli');
     terminal({ stdinTTY: true, stdoutTTY: true, columns: 79, rows: 24 });
+    expect(resolveAdapterKind({})).toBe('cli');
+    // `2> errors.log`: errors stay on stderr, so plain output.
+    terminal({ stdinTTY: true, stdoutTTY: true, stderrTTY: false, columns: 120, rows: 40 });
     expect(resolveAdapterKind({})).toBe('cli');
   });
 

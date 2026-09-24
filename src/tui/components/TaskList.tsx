@@ -160,7 +160,7 @@ export function ProgressLine({ tasks, width }: { tasks: TaskView[]; width: numbe
     );
   } else if (next) {
     // Done, unless a WorkOS setting still needs a look in the dashboard.
-    const check = tasks.some((t) => t.subtasks?.some((s) => s.status === 'attention'));
+    const check = tasks.some((t) => t.subtasks?.some((s) => s.status === 'attention' || s.status === 'failed'));
     line = (
       <Text wrap="truncate-end">
         {check ? (

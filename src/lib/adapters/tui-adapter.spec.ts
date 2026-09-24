@@ -239,6 +239,24 @@ describe('TuiAdapter', () => {
     expect(stdout.output().split(LEAVE_FULLSCREEN).length).toBe(2);
   });
 
+  it.each(['SIGTERM', 'SIGHUP'] as const)(
+    'restores the terminal on %s, which emits no exit event, then dies of it',
+    async (signal) => {
+      const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+      const listeners = process.listenerCount(signal);
+      await adapter.start();
+      await waitFor(() => expect(frame()).toContain('WorkOS AuthKit installer'));
+      process.emit(signal, signal);
+
+      expect(stdout.output().lastIndexOf(LEAVE_FULLSCREEN)).toBeGreaterThan(stdout.output().indexOf(ENTER_FULLSCREEN));
+      expect(stdin.rawMode).toBe(false);
+      expect(getUiHost()).toBeNull();
+      expect(kill).toHaveBeenCalledWith(process.pid, signal);
+      // Its handler is gone, so the re-raised signal gets the default: exit.
+      expect(process.listenerCount(signal)).toBe(listeners);
+    },
+  );
+
   it('undoes a start that fails partway, leaving nothing hijacked', async () => {
     const exitHooks = process.listeners('exit').length;
     vi.spyOn(CLIAdapter.prototype, 'start').mockRejectedValueOnce(new Error('boom'));

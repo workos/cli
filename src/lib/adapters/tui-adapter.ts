@@ -42,6 +42,7 @@ export interface TuiAdapterConfig extends AdapterConfig {
 }
 
 const INDENT = '  ';
+const TERMINATING_SIGNALS = ['SIGTERM', 'SIGHUP'] as const;
 /** Events after which the agent is no longer working (validation follows it). */
 const AGENT_ENDS = ['validation:start', 'agent:success', 'agent:failure', 'complete'] as const;
 const ANSI = /\x1b\[[0-9;]*m/g;
@@ -117,8 +118,11 @@ export class TuiAdapter implements InstallerAdapter {
       this.emitter.on('agent:start', this.agentStarted);
       for (const event of AGENT_ENDS) this.emitter.on(event, this.agentEnded);
       // Covers every way out that skips stop(): process.exit() from a handler,
-      // the plain CLI's SIGINT handler, an uncaught error.
+      // the plain CLI's SIGINT handler, an uncaught error. A signal that
+      // terminates by default (kill, a closed terminal) emits no 'exit', so
+      // those restore the terminal themselves.
       process.on('exit', this.teardown);
+      for (const signal of TERMINATING_SIGNALS) process.on(signal, this.terminated);
 
       writeNow(this.stdout, ENTER_FULLSCREEN);
       this.ink = render(
@@ -164,6 +168,7 @@ export class TuiAdapter implements InstallerAdapter {
     if (!this.active) return;
     this.active = false;
     process.off('exit', this.teardown);
+    for (const signal of TERMINATING_SIGNALS) process.off(signal, this.terminated);
 
     // A prompt nobody will answer now must not leave its caller hanging.
     this.settle(CANCEL);
@@ -186,6 +191,12 @@ export class TuiAdapter implements InstallerAdapter {
 
     const transcript = this.transcript.splice(0);
     if (transcript.length) writeNow(this.stdout, `${transcript.join('\n')}\n`);
+  };
+
+  /** Restore the terminal, then die of the signal as if it had never been caught. */
+  private readonly terminated = (signal: NodeJS.Signals): void => {
+    this.teardown();
+    process.kill(process.pid, signal);
   };
 
   // ── UI host ─────────────────────────────────────────────────────────────
