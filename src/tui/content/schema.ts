@@ -32,7 +32,6 @@ export type TaskId = (typeof TASK_IDS)[number];
  * placeholder.
  */
 export const WALKTHROUGH_PARAMS: Partial<Record<InstallerEventName, readonly string[]>> = {
-  'auth:failure': [],
   'scaffold:start': ['packageManager'],
   'detection:complete': ['framework'],
   'git:dirty': ['count'],
