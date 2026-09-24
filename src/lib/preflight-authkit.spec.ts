@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,7 +9,7 @@ import { setOutputMode } from '../utils/output.js';
 // Mock the UI facade — the interactive branch prompts, which has no place in a unit test.
 const mockConfirm = vi.fn();
 const mockUi = {
-  log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), step: vi.fn(), success: vi.fn() },
+  log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), step: vi.fn(), success: vi.fn(), detail: vi.fn() },
   rows: vi.fn(),
   confirm: (...args: unknown[]) => mockConfirm(...args),
   // Mirrors the real facade: only the CANCEL symbol counts as a cancellation.
@@ -17,7 +17,8 @@ const mockUi = {
 };
 vi.mock('../utils/ui.js', () => ({ default: mockUi }));
 
-const { assertNoExistingAuthKit, detectExistingAuthKit } = await import('./preflight-authkit.js');
+const { assertInstallPreflight, assertNoExistingAuthKit, detectExistingAuthKit } =
+  await import('./preflight-authkit.js');
 
 function writePackageJson(dir: string, deps: Record<string, string>, devDeps?: Record<string, string>): void {
   writeFileSync(
@@ -42,6 +43,72 @@ describe('preflight-authkit', () => {
     resetInteractionModeForTests();
     setOutputMode('human');
     errorSpy.mockRestore();
+  });
+
+  describe('unsupported Next.js routers', () => {
+    it.each(['pages', 'src/pages'])('declines a %s-only project even with --force', async (pages) => {
+      writePackageJson(testDir, { next: '16.0.0' });
+      mkdirSync(join(testDir, pages), { recursive: true });
+      writeFileSync(join(testDir, pages, '_app.tsx'), 'export default function App() {}');
+      const before = readdirSync(testDir);
+      for (const router of [undefined, 'app'] as const) {
+        await expect(assertInstallPreflight({ installDir: testDir, force: true, router })).rejects.toMatchObject({
+          code: 'unsupported_nextjs_router',
+        });
+      }
+      expect(readdirSync(testDir)).toEqual(before);
+      expect(mockConfirm).not.toHaveBeenCalled();
+    });
+
+    it.each([true, false])(
+      'rejects runtime Pages selection before provisioning (Next.js manifest: %s)',
+      async (hasManifest) => {
+        if (hasManifest) writePackageJson(testDir, { next: '16.0.0' });
+        const before = readdirSync(testDir);
+        const runtimeOptions = JSON.parse(JSON.stringify({ installDir: testDir, router: 'pages', force: true }));
+        await expect(assertInstallPreflight(runtimeOptions)).rejects.toMatchObject({
+          code: 'unsupported_nextjs_router',
+        });
+        expect(readdirSync(testDir)).toEqual(before);
+        expect(mockConfirm).not.toHaveBeenCalled();
+      },
+    );
+
+    it('allows pages/api-only projects using the same detection as the installer', async () => {
+      writePackageJson(testDir, { next: '16.0.0' });
+      mkdirSync(join(testDir, 'pages/api'), { recursive: true });
+      writeFileSync(join(testDir, 'pages/api/health.ts'), 'export default function handler() {}');
+      await expect(assertInstallPreflight({ installDir: testDir })).resolves.toBeUndefined();
+      expect(mockUi.log.warn).not.toHaveBeenCalled();
+    });
+
+    it.each(['app/sign-in', 'src/app/(auth)/sign-in'])(
+      'declines an existing %s page without modifying it',
+      async (path) => {
+        writePackageJson(testDir, { next: '16.0.0' });
+        mkdirSync(join(testDir, path), { recursive: true });
+        writeFileSync(join(testDir, path, 'page.tsx'), 'export default function ExistingLogin() {}');
+        await expect(assertInstallPreflight({ installDir: testDir, force: true })).rejects.toMatchObject({
+          code: 'conflicting_sign_in_route',
+        });
+        expect(readdirSync(join(testDir, path))).toEqual(['page.tsx']);
+      },
+    );
+
+    it('does not mistake a non-Next.js pages directory for a Pages Router project', async () => {
+      writePackageJson(testDir, { react: '19.0.0' });
+      mkdirSync(join(testDir, 'pages'));
+      await expect(assertInstallPreflight({ installDir: testDir })).resolves.toBeUndefined();
+    });
+
+    it('allows mixed-router projects', async () => {
+      writePackageJson(testDir, { next: '16.0.0' });
+      mkdirSync(join(testDir, 'pages'));
+      mkdirSync(join(testDir, 'app'));
+      writeFileSync(join(testDir, 'pages/_app.tsx'), 'export default function App() {}');
+      writeFileSync(join(testDir, 'app/layout.tsx'), 'export default function Layout() {}');
+      await expect(assertInstallPreflight({ installDir: testDir })).resolves.toBeUndefined();
+    });
   });
 
   describe('detectExistingAuthKit', () => {

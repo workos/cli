@@ -131,8 +131,8 @@ export type InstallerOptions = {
    */
   pm?: string;
 
-  /** Next.js router to target when detection is ambiguous (from --router). */
-  router?: 'app' | 'pages';
+  /** Select App Router in mixed projects; Pages-only projects remain unsupported. */
+  router?: 'app';
 };
 
 export interface Feature {

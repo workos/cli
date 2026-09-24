@@ -13,6 +13,12 @@
       "mustContain": ["handleAuth", "@workos-inc/authkit-nextjs"]
     },
     {
+      "path": "{,src/}app/**/sign-in/route.{ts,tsx,js,jsx}",
+      "urlPath": "/sign-in",
+      "mustContain": ["getSignInUrl", "@workos-inc/authkit-nextjs", "redirect", "GET"],
+      "severity": "error"
+    },
+    {
       "path": "{,src/}{middleware,proxy}.{ts,js}",
       "mustContainAny": ["authkitMiddleware", "authkit"]
     },

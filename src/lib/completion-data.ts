@@ -1,6 +1,20 @@
 import type { CompletionData } from './events.js';
 import type { DevCommandResult } from './dev-command.js';
 import type { Integration } from './constants.js';
+import type { AuthkitApplicationSetup } from './authkit-application-setup.js';
+
+export function applicationSetupNextSteps(setup: AuthkitApplicationSetup): string[] {
+  return [
+    setup.verified
+      ? 'Application URLs were read back and verified; browser flows are not yet tested.'
+      : `Application setup is incomplete: ${setup.reason ?? 'Settings have not been verified.'}`,
+    `Redirect URI: ${setup.redirectUri} (${setup.callbackRegistered || setup.verified ? 'registered' : 'not registered or verified'})`,
+    `Sign-out URI: ${setup.signOutUri}`,
+    `Initiate login URI: ${setup.initiateLoginUri} (starts sign-in; never use the callback URI)`,
+    ...(setup.homepageUrl !== undefined ? [`Homepage URL: ${setup.homepageUrl}`] : []),
+    'Test sign-in, sign-out, protected-page access, and a password-reset or invitation login before calling the integration complete.',
+  ];
+}
 
 /**
  * Machine-context slice needed to build completion data.
@@ -30,6 +44,7 @@ export interface CompletionDataDeps {
    * Resolved by the caller, which owns the config lookup.
    */
   claimCommand?: string;
+  applicationSetup?: AuthkitApplicationSetup;
 }
 
 /**
@@ -68,7 +83,13 @@ export async function buildCompletionData(ctx: CompletionContext, deps: Completi
     devCommand,
     url,
     files,
-    nextSteps: [...claim, ...concrete, ...framework],
+    nextSteps: [
+      ...claim,
+      ...(deps.applicationSetup ? applicationSetupNextSteps(deps.applicationSetup) : []),
+      ...concrete,
+      ...framework,
+    ],
+    ...(deps.applicationSetup ? { applicationSetup: deps.applicationSetup } : {}),
     docsUrl: deps.docsUrl,
     dashboardUrl: deps.dashboardUrl,
     signInSnippet: deps.signInSnippet,

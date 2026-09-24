@@ -5,6 +5,7 @@ import fg from 'fast-glob';
 import type { ValidationResult, ValidationRules, ValidationIssue } from './types.js';
 import { runBuildValidation } from './build-validator.js';
 import { detectPort } from '../port-detection.js';
+import { nextjsRoutePath, findNextjsSignInPage } from '../../integrations/nextjs/utils.js';
 import nextjsRules from './rules/nextjs.json' with { type: 'json' };
 import reactRouterRules from './rules/react-router.json' with { type: 'json' };
 import reactRules from './rules/react.json' with { type: 'json' };
@@ -168,6 +169,9 @@ export async function validateFiles(rules: ValidationRules, projectDir: string):
     let matches: string[];
     try {
       matches = await fg(rule.path, { cwd: projectDir });
+      if (rules.framework === 'nextjs' && rule.urlPath) {
+        matches = matches.filter((file) => nextjsRoutePath(file) === rule.urlPath);
+      }
     } catch {
       // Invalid glob pattern - skip
       continue;
@@ -200,7 +204,7 @@ export async function validateFiles(rules: ValidationRules, projectDir: string):
           if (!content.includes(pattern)) {
             issues.push({
               type: 'pattern',
-              severity: 'warning',
+              severity: rule.severity ?? 'warning',
               message: `File ${matches[0]} missing expected pattern: "${pattern}"`,
               hint: `Ensure ${matches[0]} contains: ${pattern}`,
             });
@@ -214,7 +218,7 @@ export async function validateFiles(rules: ValidationRules, projectDir: string):
         if (!hasAny) {
           issues.push({
             type: 'pattern',
-            severity: 'warning',
+            severity: rule.severity ?? 'warning',
             message: `File ${matches[0]} missing one of: ${rule.mustContainAny.join(', ')}`,
             hint: `Ensure ${matches[0]} contains one of these patterns`,
           });
@@ -238,11 +242,20 @@ export async function validateFrameworkSpecific(framework: string, projectDir: s
 
   // Framework-specific validations
   switch (framework) {
-    case 'nextjs':
+    case 'nextjs': {
+      const signInPage = await findNextjsSignInPage(projectDir);
+      if (signInPage)
+        issues.push({
+          type: 'file',
+          severity: 'error',
+          message: `Page ${signInPage} conflicts with the required /sign-in route handler`,
+          hint: 'Keep the existing page unchanged and configure AuthKit manually, or move it before running the installer.',
+        });
       await validateNextjsRedirectUri(projectDir, issues);
       await validateNextjsMiddlewarePlacement(projectDir, issues);
       await validateCookiePasswordLength(projectDir, issues, 'WORKOS_COOKIE_PASSWORD');
       break;
+    }
     case 'react':
       await validateReactProviderWrapping(projectDir, issues);
       break;
@@ -326,19 +339,8 @@ async function validateNextjsRedirectUri(projectDir: string, issues: ValidationI
   // Remove leading slash for path matching
   const routePath = callbackPath.replace(/^\//, '');
 
-  // Check if route file exists at expected location (Next.js App Router)
-  const routePatterns = [
-    `app/${routePath}/route.ts`,
-    `app/${routePath}/route.tsx`,
-    `app/${routePath}/route.js`,
-    `app/${routePath}/route.jsx`,
-    `src/app/${routePath}/route.ts`,
-    `src/app/${routePath}/route.tsx`,
-    `src/app/${routePath}/route.js`,
-    `src/app/${routePath}/route.jsx`,
-  ];
-
-  const routeExists = routePatterns.some((pattern) => existsSync(join(projectDir, pattern)));
+  const routeFiles = await fg('{,src/}app/**/route.{ts,tsx,js,jsx}', { cwd: projectDir });
+  const routeExists = routeFiles.some((file) => nextjsRoutePath(file) === callbackPath);
 
   if (!routeExists) {
     // Check what routes DO exist to give a better hint
@@ -352,7 +354,7 @@ async function validateNextjsRedirectUri(projectDir: string, issues: ValidationI
     let hint = `Create a route handler at app/${routePath}/route.ts`;
     if (existingRoutes.length > 0) {
       // Found a route at a different path - likely the mismatch
-      const actualPath = '/' + existingRoutes[0].replace(/^(src\/)?app\//, '').replace(/\/route\.(ts|tsx|js|jsx)$/, '');
+      const actualPath = nextjsRoutePath(existingRoutes[0]);
       hint =
         `Found callback route at ${existingRoutes[0]} but redirect URI points to ${callbackPath}. Either:\n` +
         `  1. Change NEXT_PUBLIC_WORKOS_REDIRECT_URI to ${new URL(redirectUri).origin}${actualPath}\n` +

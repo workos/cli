@@ -3,7 +3,9 @@ import open from 'open';
 import { installerMachine } from './installer-core.js';
 import { createInstallerEventEmitter } from './events.js';
 import type { CompletionData } from './events.js';
-import { buildCompletionData } from './completion-data.js';
+import { buildCompletionData, applicationSetupNextSteps } from './completion-data.js';
+import { readNextjsApplicationSetup, configureAuthkitApplication } from './authkit-application-setup.js';
+import { validateInstallation } from './validation/index.js';
 import { resolveDevCommand } from './dev-command.js';
 import { getConfig as getInstallerSettings } from './settings.js';
 import { CLIAdapter } from './adapters/cli-adapter.js';
@@ -48,6 +50,11 @@ import {
   generatePrDescription as generatePrDescriptionAi,
 } from './ai-content.js';
 import { autoConfigureWorkOSEnvironment } from './workos-management.js';
+import {
+  assertSupportedNextJsRouter,
+  getNextJsRouter,
+  assertNextjsSignInRouteAvailable,
+} from '../integrations/nextjs/utils.js';
 import { detectPort, getCallbackPath } from './port-detection.js';
 import { writeEnvLocal } from './env-writer.js';
 import { getRegistry } from './registry.js';
@@ -176,6 +183,41 @@ export function resolveCredentialSource(
   return backfilledFromProjectEnv ? 'env' : options.credentialSource;
 }
 
+export async function configureInstallEnvironment(
+  context: Pick<InstallerMachineContext, 'options' | 'integration' | 'credentials'>,
+): Promise<void> {
+  const { options: installerOptions, integration, credentials } = context;
+  if (!integration || !credentials) throw new Error('Missing integration or credentials');
+
+  const registry = await getRegistry();
+  const mod = registry.get(integration);
+  if (mod?.config.metadata.language !== 'javascript') return;
+
+  if (integration === 'nextjs') {
+    assertSupportedNextJsRouter(await getNextJsRouter(installerOptions));
+    await assertNextjsSignInRouteAvailable(installerOptions.installDir);
+  }
+
+  const port = detectPort(integration, installerOptions.installDir);
+  const redirectUri = installerOptions.redirectUri || `http://localhost:${port}${getCallbackPath(integration)}`;
+  // Next.js URL writes happen after code validation. That step chooses ONE
+  // target: the dashboard application, or an API-key-only callback without a session.
+  const requiresApiKey = ['tanstack-start', 'react-router'].includes(integration);
+  if (credentials.apiKey && requiresApiKey) {
+    await autoConfigureWorkOSEnvironment(credentials.apiKey, integration, port, {
+      homepageUrl: installerOptions.homepageUrl,
+      redirectUri: installerOptions.redirectUri,
+    });
+  }
+
+  const redirectUriKey = integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
+  writeEnvLocal(installerOptions.installDir, {
+    ...(credentials.apiKey ? { WORKOS_API_KEY: credentials.apiKey } : {}),
+    WORKOS_CLIENT_ID: credentials.clientId,
+    [redirectUriKey]: redirectUri,
+  });
+}
+
 export async function runWithCore(options: InstallerOptions): Promise<void> {
   // Initialize debug/logging early so we capture all failures
   initLogFile();
@@ -302,43 +344,9 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         return { isClean: files.length === 0, files };
       }),
 
-      configureEnvironment: fromPromise<void, { context: InstallerMachineContext }>(async ({ input }) => {
-        const { context } = input;
-        const { options: installerOptions, integration, credentials } = context;
-
-        if (!integration || !credentials) {
-          throw new Error('Missing integration or credentials');
-        }
-
-        // Non-JS integrations own their env file writing (e.g. Python writes
-        // .env inside its own run()). Skip here so we don't leak a .env.local
-        // with JS-flavored vars (WORKOS_COOKIE_PASSWORD, wrong redirect port).
-        const registry = await getRegistry();
-        const mod = registry.get(integration);
-        if (mod?.config.metadata.language !== 'javascript') {
-          return;
-        }
-
-        const port = detectPort(integration, installerOptions.installDir);
-        const callbackPath = getCallbackPath(integration);
-        const redirectUri = installerOptions.redirectUri || `http://localhost:${port}${callbackPath}`;
-
-        const requiresApiKey = ['nextjs', 'tanstack-start', 'react-router'].includes(integration);
-        if (credentials.apiKey && requiresApiKey) {
-          await autoConfigureWorkOSEnvironment(credentials.apiKey, integration, port, {
-            homepageUrl: installerOptions.homepageUrl,
-            redirectUri: installerOptions.redirectUri,
-          });
-        }
-
-        const redirectUriKey = integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
-
-        writeEnvLocal(installerOptions.installDir, {
-          ...(credentials.apiKey ? { WORKOS_API_KEY: credentials.apiKey } : {}),
-          WORKOS_CLIENT_ID: credentials.clientId,
-          [redirectUriKey]: redirectUri,
-        });
-      }),
+      configureEnvironment: fromPromise<void, { context: InstallerMachineContext }>(({ input }) =>
+        configureInstallEnvironment(input.context),
+      ),
 
       runAgent: fromPromise<AgentOutput, { context: InstallerMachineContext }>(async ({ input }) => {
         const { context } = input;
@@ -351,15 +359,51 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         try {
           const agentOptions: InstallerOptions = {
             ...installerOptions,
+            ...(integration === 'nextjs' ? { router: 'app' as const } : {}),
             apiKey: credentials?.apiKey,
             clientId: credentials?.clientId,
             credentialSource: context.credentialSource,
             emitter: context.emitter,
           };
           const summary = await runIntegrationInstallerFn(integration, agentOptions);
+          let applicationSetup;
+          if (integration === 'nextjs') {
+            applicationSetup = await readNextjsApplicationSetup(
+              installerOptions.installDir,
+              installerOptions.homepageUrl,
+            );
+            const expectedRedirectUri =
+              installerOptions.redirectUri ||
+              `http://localhost:${detectPort(integration, installerOptions.installDir)}${getCallbackPath(integration)}`;
+            if (applicationSetup.redirectUri !== expectedRedirectUri) {
+              throw new Error(
+                'The app callback URL changed during installation. Confirm it before configuring WorkOS.',
+              );
+            }
+            // Even --no-validate must not point the dashboard at a missing route.
+            const validation = await validateInstallation(integration, installerOptions.installDir, {
+              runBuild: false,
+            });
+            if (!validation.passed) {
+              throw new Error(
+                `Application setup is incomplete:\n${validation.issues
+                  .filter((issue) => issue.severity === 'error')
+                  .map((issue) => `${issue.message}. ${issue.hint ?? ''}`)
+                  .join('\n')}`,
+              );
+            }
+            applicationSetup = await configureAuthkitApplication(
+              applicationSetup,
+              credentials?.clientId ?? '',
+              credentials?.apiKey,
+            );
+          }
           return {
             success: true,
-            summary: summary || `Successfully installed WorkOS AuthKit for ${integration}!`,
+            applicationSetup,
+            summary: applicationSetup
+              ? ['App code installed.', ...applicationSetupNextSteps(applicationSetup)].join('\n')
+              : summary || `Successfully installed WorkOS AuthKit for ${integration}!`,
           };
         } catch (error) {
           return {
@@ -371,7 +415,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
 
       buildCompletion: fromPromise<CompletionData | undefined, { context: InstallerMachineContext }>(
         async ({ input }) => {
-          const { integration, changedFiles, options: installerOptions, credentials } = input.context;
+          const { integration, changedFiles, options: installerOptions, credentials, applicationSetup } = input.context;
           if (!integration) return undefined;
           try {
             const registry = await getRegistry();
@@ -403,6 +447,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
                 frameworkNextSteps: cfg?.ui.getOutroNextSteps?.({}) ?? [],
                 signInSnippet: cfg?.ui.getSignInSnippet?.({}),
                 claimCommand: usedUnclaimedEnv ? formatWorkOSCommand('profile claim') : undefined,
+                applicationSetup,
               },
             );
           } catch {

@@ -19,12 +19,6 @@ vi.mock('../../utils/ui.js', () => ({
   },
 }));
 
-// Passthrough — the guard itself is covered by ui-utils.spec.ts; here we only
-// need ui.select's resolved value to flow through in the human path.
-vi.mock('../../utils/ui-utils.js', () => ({
-  abortIfCancelled: vi.fn(async (p) => await p),
-}));
-
 const fg = (await import('fast-glob')).default;
 const ui = (await import('../../utils/ui.js')).default;
 const { getNextJsRouter, NextJsRouter } = await import('./utils.js');
@@ -71,15 +65,14 @@ describe('getNextJsRouter', () => {
     expect(ui.select).not.toHaveBeenCalled();
   });
 
-  it('ambiguous detection in human mode prompts and uses the answer', async () => {
+  it('mixed-router detection uses App Router without offering unsupported Pages Router', async () => {
     setInteractionMode({ mode: 'human', source: 'default' });
     mockDetection({ pages: true, app: true });
-    vi.mocked(ui.select).mockResolvedValueOnce(NextJsRouter.PAGES_ROUTER as never);
 
     const result = await getNextJsRouter({ installDir: '/proj' });
 
-    expect(result).toBe(NextJsRouter.PAGES_ROUTER);
-    expect(ui.select).toHaveBeenCalledOnce();
+    expect(result).toBe(NextJsRouter.APP_ROUTER);
+    expect(ui.select).not.toHaveBeenCalled();
   });
 
   it('ambiguous detection in agent mode defaults to app router with a warning (no prompt)', async () => {
@@ -104,23 +97,31 @@ describe('getNextJsRouter', () => {
     expect(ui.log.warn).toHaveBeenCalled();
   });
 
-  it('--router pages overrides ambiguous detection with no prompt', async () => {
-    setInteractionMode({ mode: 'human', source: 'default' });
-    mockDetection({ pages: true, app: true });
-
-    const result = await getNextJsRouter({ installDir: '/proj', router: 'pages' });
-
-    expect(result).toBe(NextJsRouter.PAGES_ROUTER);
+  it('does not warn about nonexistent Pages Router routes in a fresh project', async () => {
+    mockDetection({ pages: false, app: false });
+    expect(await getNextJsRouter({ installDir: '/proj' })).toBe(NextJsRouter.APP_ROUTER);
+    expect(ui.log.warn).not.toHaveBeenCalled();
     expect(ui.select).not.toHaveBeenCalled();
   });
 
-  it('--router app wins over detection with no prompt', async () => {
-    setInteractionMode({ mode: 'human', source: 'default' });
-    mockDetection({ pages: true, app: false });
+  it.each(['pages', 'unknown', '', null, false, 0])(
+    'rejects unsupported runtime router input %j before detection',
+    async (router) => {
+      const input = JSON.parse(JSON.stringify({ installDir: '/proj', router }));
+      await expect(getNextJsRouter(input)).rejects.toMatchObject({ code: 'unsupported_nextjs_router' });
+      expect(fg).not.toHaveBeenCalled();
+      expect(ui.select).not.toHaveBeenCalled();
+    },
+  );
 
-    const result = await getNextJsRouter({ installDir: '/proj', router: 'app' });
-
-    expect(result).toBe(NextJsRouter.APP_ROUTER);
+  it.each([
+    { pages: true, app: false, expected: NextJsRouter.PAGES_ROUTER },
+    { pages: true, app: true, expected: NextJsRouter.APP_ROUTER },
+    { pages: false, app: true, expected: NextJsRouter.APP_ROUTER },
+    { pages: false, app: false, expected: NextJsRouter.APP_ROUTER },
+  ])('--router app respects detection ($pages pages, $app app)', async ({ pages, app, expected }) => {
+    mockDetection({ pages, app });
+    expect(await getNextJsRouter({ installDir: '/proj', router: 'app' })).toBe(expected);
     expect(ui.select).not.toHaveBeenCalled();
   });
 });

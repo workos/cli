@@ -173,6 +173,32 @@ describe('summary-box', () => {
       expect(result).toContain('Start dev server to test authentication');
     });
 
+    it('labels pending dashboard configuration rather than claiming complete setup', () => {
+      const result = strip(
+        renderCompletionSummary(
+          true,
+          undefined,
+          makeCompletion({
+            applicationSetup: {
+              clientId: 'client_app',
+              redirectUri: 'http://localhost:8080/callback',
+              signOutUri: 'http://localhost:8080/',
+              initiateLoginUri: 'http://localhost:8080/sign-in',
+              verified: false,
+            },
+            nextSteps: ['Configure Initiate login URI: http://localhost:8080/sign-in'],
+          }),
+        ),
+      );
+      expect(result).toContain('App code installed; WorkOS setup required');
+      expect(result).toContain('http://localhost:8080/sign-in');
+    });
+
+    it('retains manual setup instructions when structured completion data is unavailable', () => {
+      const result = strip(renderCompletionSummary(true, 'Application setup is incomplete: configure /sign-in'));
+      expect(result).toContain('Application setup is incomplete: configure /sign-in');
+    });
+
     it('renders the failure summary', () => {
       const result = strip(renderCompletionSummary(false, 'Something went wrong'));
 
