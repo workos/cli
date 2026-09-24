@@ -4,7 +4,8 @@ WorkOS CLI for installing AuthKit integrations and managing WorkOS resources (or
 
 ## Architecture
 
-- Two adapters (CLI, Headless) subscribe to `InstallerEventEmitter` state machine events; Headless is used in JSON mode, CLI otherwise
+- Three adapters subscribe to `InstallerEventEmitter` state machine events, chosen by `selectInstallerAdapter()`: Headless in JSON mode; the full-screen TUI (`src/tui/`, Ink) for a human at an interactive terminal of at least 80×24 unless `--no-tui`; CLI otherwise. The TUI adapter wraps the CLI adapter and redirects `ui` output/prompts via `setUiHost()`, so prompt logic lives in one place
+- Full-screen installer copy (tips, announcements, walkthrough, task labels) is data in `src/tui/content/installer-content.json`, validated by tests
 - `OutputMode` (`human`/`json`) resolved once at startup in `bin.ts`, drives all formatting
 - `installerCanUseTool()` in `agent-interface.ts` restricts Bash to safe commands only
 - Config/credentials stored in system keyring with file fallback
@@ -111,7 +112,7 @@ All commands automatically emit a `command` telemetry event with name, duration,
 
 **Do:**
 
-- Follow the adapter pattern (`CLI`, `Headless`) in `src/integrations/` when adding framework installers
+- Follow the adapter pattern (`CLI`, `TUI`, `Headless`) in `src/integrations/` when adding framework installers
 - Use `InstallerEventEmitter` for state machine events -- see existing adapters for examples
 - Add both human and JSON output modes -- check `OutputMode` usage in `src/bin.ts`
 - Follow existing command patterns in `src/commands/organization.ts` when adding resource commands

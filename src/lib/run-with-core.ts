@@ -9,6 +9,7 @@ import { validateInstallation } from './validation/index.js';
 import { resolveDevCommand } from './dev-command.js';
 import { getConfig as getInstallerSettings } from './settings.js';
 import { CLIAdapter } from './adapters/cli-adapter.js';
+import { selectInstallerAdapter, type InstallerAdapterKind } from './adapters/select-adapter.js';
 import type { InstallerAdapter } from './adapters/types.js';
 import type { InstallerOptions } from '../utils/types.js';
 import { getInteractionMode, isAgentMode, isCiMode } from '../utils/interaction-mode.js';
@@ -217,6 +218,21 @@ export async function configureInstallEnvironment(
   });
 }
 
+/** Pick the installer adapter for this process's output mode and terminal. */
+export function resolveAdapterKind(options: Pick<InstallerOptions, 'ci' | 'noTui'>): InstallerAdapterKind {
+  return selectInstallerAdapter({
+    json: isJsonMode(),
+    interaction: getInteractionMode().mode,
+    ci: Boolean(options.ci),
+    stdinTTY: Boolean(process.stdin.isTTY),
+    stdoutTTY: Boolean(process.stdout.isTTY),
+    columns: process.stdout.columns ?? 0,
+    rows: process.stdout.rows ?? 0,
+    noTui: Boolean(options.noTui),
+    term: process.env.TERM,
+  });
+}
+
 export async function runWithCore(options: InstallerOptions): Promise<void> {
   // Initialize debug/logging early so we capture all failures
   initLogFile();
@@ -264,7 +280,10 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   // until you confirm" contract. Those sessions keep the CLIAdapter, which now
   // fails fast with a clear `prompt_unavailable` error on the first prompt
   // (see CLIAdapter's handler-error catch) instead of hanging or auto-writing.
-  const headlessMode = isJsonMode();
+  // A person at a real terminal of at least 80x24 gets the full-screen
+  // installer unless they pass --no-tui.
+  const adapterKind = resolveAdapterKind(augmentedOptions);
+  const headlessMode = adapterKind === 'headless';
 
   let adapter: InstallerAdapter;
   if (headlessMode) {
@@ -282,6 +301,15 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         noGitCheck: augmentedOptions.noGitCheck,
         ci: augmentedOptions.ci,
       },
+    });
+  } else if (adapterKind === 'tui') {
+    // Loaded on demand so Ink and React stay off every other path.
+    const { TuiAdapter } = await import('./adapters/tui-adapter.js');
+    adapter = new TuiAdapter({
+      emitter,
+      sendEvent,
+      debug: augmentedOptions.debug,
+      installDir: augmentedOptions.installDir,
     });
   } else {
     adapter = new CLIAdapter({ emitter, sendEvent, debug: augmentedOptions.debug });
@@ -623,11 +651,18 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   // guards JSON mode, project-owned keys, and single-profile configs.
   if (!headlessMode && !augmentedOptions.apiKey && !process.env.WORKOS_API_KEY) {
     const { maybePickInstallEnvironment } = await import('./resolve-install-credentials.js');
-    await maybePickInstallEnvironment(getActiveEnvironment(), augmentedOptions.installDir);
+    try {
+      await maybePickInstallEnvironment(getActiveEnvironment(), augmentedOptions.installDir);
+    } catch (error) {
+      // Cancelling the picker ends the run before the try/finally below, so
+      // release the adapter here (the full-screen one owns the terminal).
+      await adapter.stop();
+      throw error;
+    }
   }
 
   analytics.configureAuthFromAvailableSources();
-  const mode = headlessMode ? 'headless' : 'cli';
+  const mode = adapterKind;
   analytics.sessionStart(mode, getVersion());
 
   let installerStatus: 'success' | 'error' | 'cancelled' = 'success';

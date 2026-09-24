@@ -19,7 +19,7 @@ src/
 │   ├── workos-api.ts         # Generic WorkOS REST API client
 │   ├── credential-proxy.ts   # Token refresh proxy for long sessions
 │   ├── ensure-auth.ts        # Startup auth guard
-│   └── adapters/             # CLI and headless adapters
+│   └── adapters/             # CLI, full-screen (TUI), and headless adapters
 ├── commands/
 │   ├── env.ts                # workos env (add/remove/switch/list)
 │   ├── organization.ts       # workos organization (create/update/get/list/delete)
@@ -29,6 +29,9 @@ src/
 │   ├── auth-status.ts        # workos auth status
 │   ├── login.ts              # workos auth login
 │   └── logout.ts             # workos auth logout
+├── tui/                      # Full-screen installer (Ink/React)
+│   ├── content/              # Swappable tips, news, walkthrough copy (see README there)
+│   └── model/                # Event-driven run model (no Ink)
 ├── nextjs/                   # Next.js installer agent
 ├── react/                    # React SPA installer agent
 ├── react-router/             # React Router installer agent
@@ -146,6 +149,19 @@ for a non-host platform; the same value must be used for both `generate` and
 the compile, which `bun run build` (via `scripts/build.ts` + the `prebuild`
 hook) guarantees.
 
+### Why `react-devtools-core` is a devDependency
+
+Nothing in `src/` imports `react-devtools-core`, but it is required to
+**build**, not to run. The full-screen installer (`src/tui/`) uses `ink`, whose
+reconciler does a runtime-gated `await import('./devtools.js')` that only fires
+when `DEV=true`; `devtools.js` then _statically_ imports `react-devtools-core`.
+`bun build --compile` follows that static import at bundle time and cannot prove
+the `DEV` branch is dead, so removing the devDependency fails the compile with
+`error: Could not resolve: "react-devtools-core"` (do not "clean it up"). Do
+**not** try to trim it with `--external react-devtools-core`: that compiles, but
+bun resolves the external eagerly and the standalone binary then crashes on
+_every_ command (even `--version`) with `Cannot find package 'react-devtools-core'`.
+
 ### Updating Integration Instructions
 
 The installer prompt in `agent-runner.ts` tells Claude to:
@@ -172,9 +188,19 @@ export function redactCredentials(obj: any): any {
 
 **Manual testing:**
 
-1. Run installer in a test app: `workos install`
+1. Run installer in a test app: `workos install` (full-screen), and `workos install --no-tui` (plain)
 2. Check logs at `~/.workos/logs/workos-{timestamp}.log`
 3. Verify integration works in test app
+
+**Full-screen installer:** the view lives in `src/tui/`. Its text (tips, news,
+walkthrough copy, task labels) is data in `src/tui/content/installer-content.json`;
+edit that and run `bun run test src/tui/content`. The adapter
+(`src/lib/adapters/tui-adapter.ts`) wraps the CLI adapter, so prompt behavior
+never forks: it routes `ui` output and prompts into the view through
+`setUiHost()`. Render tests draw into fake streams
+(`src/tui/ink-streams.test-utils.ts`); check a real terminal at about 80×24 and
+in a large window, and confirm the terminal is restored after success, failure,
+and ctrl-c.
 
 **What to test:**
 

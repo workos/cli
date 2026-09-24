@@ -25,6 +25,9 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
 
+    // JSX for the full-screen installer (Ink/React)
+    "jsx": "react-jsx",
+
     // Output
     "rootDir": "./src",
     "outDir": "./dist",
