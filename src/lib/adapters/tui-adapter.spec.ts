@@ -98,6 +98,38 @@ describe('TuiAdapter', () => {
     await waitFor(() => expect(sendEvent).toHaveBeenCalledWith({ type: 'BRANCH_CONTINUE' }));
   });
 
+  it('picks the option the arrow keys moved to, even when enter follows faster than a redraw', async () => {
+    await adapter.start();
+    emitter.emit('branch:prompt', { branch: 'main' });
+    await waitFor(() => expect(frame()).toContain('› Create feat/add-workos-authkit'));
+    // One chunk, like a fast typist or a paste: no render between the keys.
+    stdin.press(KEY.down);
+    stdin.press(KEY.enter);
+    await waitFor(() => expect(sendEvent).toHaveBeenCalled());
+    expect(sendEvent).toHaveBeenCalledWith({ type: 'BRANCH_CONTINUE' });
+    expect(sendEvent).not.toHaveBeenCalledWith({ type: 'BRANCH_CREATE' });
+  });
+
+  it.each(['text', 'password'] as const)(
+    'submits a %s answer pasted with its trailing newline, like the plain CLI',
+    async (kind) => {
+      await adapter.start();
+      const answer = ui[kind]({ message: 'Paste your API key' });
+      await waitFor(() => expect(frame()).toContain('Paste your API key'));
+      stdin.press('sk_test_abc123\r'); // one chunk: a paste
+      expect(await answer).toBe('sk_test_abc123');
+    },
+  );
+
+  it('keeps every key typed faster than a redraw', async () => {
+    await adapter.start();
+    const answer = ui.text({ message: 'Name?' });
+    await waitFor(() => expect(frame()).toContain('Name?'));
+    // Separate chunks with no render between them: typing ahead.
+    for (const key of ['a', 'c', KEY.left, 'b', 'x', '\x7f', KEY.right, KEY.enter]) stdin.press(key);
+    expect(await answer).toBe('abc');
+  });
+
   it('cancels an open question on esc, the same as cancelling it in the plain CLI', async () => {
     await adapter.start();
     emitter.emit('postinstall:commit:prompt', {});
