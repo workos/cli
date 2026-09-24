@@ -9,6 +9,10 @@ vi.mock('./api-key.js', () => ({
   resolveApiKey: vi.fn(),
 }));
 vi.mock('./environment-target.js', () => ({ fetchTeamEnvironments: vi.fn() }));
+vi.mock('./config-store.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./config-store.js')>()),
+  getActiveEnvironment: vi.fn(),
+}));
 vi.mock('./dashboard-graphql.js', () => ({ dashboardGraphqlRequest: vi.fn() }));
 vi.mock('../catalog/operation.js', () => ({
   getOperation: (name: string) => ({ name }),
@@ -16,6 +20,7 @@ vi.mock('../catalog/operation.js', () => ({
 }));
 
 import { refreshIfExpired } from './command-auth.js';
+import { getActiveEnvironment } from './config-store.js';
 import { fetchTeamEnvironments } from './environment-target.js';
 import { dashboardGraphqlRequest } from './dashboard-graphql.js';
 import { configureAuthkitApplication, readNextjsApplicationSetup } from './authkit-application-setup.js';
@@ -192,65 +197,117 @@ describe('native application URL setup', () => {
     expect(application.appHomepageUrl).toBe('http://localhost:4000');
   });
 
-  it('fills an empty API-only homepage with the callback origin', async () => {
-    vi.mocked(refreshIfExpired).mockResolvedValue(null);
-    const request = vi.fn(async () => Response.json({ url: null }));
-    vi.stubGlobal('fetch', request);
-    const result = await configureAuthkitApplication(setup, setup.clientId, 'sk_test_unclaimed');
-    expect(request).toHaveBeenCalledWith(
-      'https://api.workos.com/user_management/app_homepage_url',
-      expect.objectContaining({
-        method: 'PUT',
-        headers: expect.objectContaining({ Authorization: 'Bearer sk_test_unclaimed' }),
-        body: JSON.stringify({ url: 'http://localhost:4000' }),
-      }),
-    );
-    expect(result.callbackRegistered).toBe(true);
-    expect(result.verified).toBe(false);
-    expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
-  });
-
-  it('preserves an existing API-only homepage unless explicitly overridden', async () => {
-    vi.mocked(refreshIfExpired).mockResolvedValue(null);
-    const request = vi.fn(async () => Response.json({ url: 'https://existing.example/' }));
-    vi.stubGlobal('fetch', request);
-    await configureAuthkitApplication(setup, setup.clientId, 'sk_test_unclaimed');
-    expect(request).toHaveBeenCalledTimes(2); // Callback POST and homepage GET, no PUT.
-    request.mockClear();
-    await configureAuthkitApplication(
-      { ...setup, homepageUrl: 'https://requested.example/' },
-      setup.clientId,
-      'sk_test_unclaimed',
-    );
-    expect(request).toHaveBeenCalledWith(
-      'https://api.workos.com/user_management/app_homepage_url',
-      expect.objectContaining({ method: 'PUT', body: JSON.stringify({ url: 'https://requested.example/' }) }),
-    );
-    expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
-  });
-
-  it.each(['http', 'network', 'invalid-json', 'missing-url', 'put'])(
-    'reports API-only homepage %s failures without losing the callback or switching targets',
-    async (failure) => {
-      vi.mocked(refreshIfExpired).mockResolvedValue(null);
-      const request = vi.fn(async (_url: string, init: RequestInit) => {
+  describe('homepage without a dashboard session', () => {
+    // What the API really does: it can PUT the homepage but has no GET, which
+    // answers exactly like an unknown route. A mock that returns a readable
+    // homepage would test a branch production never reaches.
+    const NOT_FOUND = () =>
+      Response.json({ message: 'The requested resource was not found', error: 'Not Found' }, { status: 404 });
+    const api = (put: () => Response | Promise<Response> = () => Response.json({})) =>
+      vi.fn(async (_url: string, init: RequestInit) => {
         if (init.method === 'POST') return Response.json({});
-        if (failure === 'network') throw new Error('private details');
-        if (failure === 'invalid-json') return new Response('invalid');
-        if (failure === 'missing-url') return Response.json({});
-        if (failure === 'put' && init.method === 'GET') return Response.json({ url: null });
-        return Response.json({ message: 'private details' }, { status: 403 });
+        if (init.method === 'GET') return NOT_FOUND();
+        return put();
       });
+    const homepagePuts = (request: ReturnType<typeof api>) =>
+      request.mock.calls.filter(([url, init]) => url.endsWith('/app_homepage_url') && init.method === 'PUT');
+    const unclaimed = (apiKey: string) =>
+      vi.mocked(getActiveEnvironment).mockReturnValue({
+        type: 'unclaimed',
+        name: 'even-dinosaur-96',
+        apiKey,
+        clientId: setup.clientId,
+        claimToken: 'claim_token',
+      } as ReturnType<typeof getActiveEnvironment>);
+
+    beforeEach(() => {
+      vi.mocked(refreshIfExpired).mockResolvedValue(null);
+    });
+
+    it('sets it for an unclaimed environment, whose dashboard nobody can have used', async () => {
+      unclaimed('sk_test_unclaimed');
+      const request = api();
       vi.stubGlobal('fetch', request);
       const result = await configureAuthkitApplication(setup, setup.clientId, 'sk_test_unclaimed');
+
+      expect(homepagePuts(request)).toEqual([
+        [
+          'https://api.workos.com/user_management/app_homepage_url',
+          expect.objectContaining({
+            headers: expect.objectContaining({ Authorization: 'Bearer sk_test_unclaimed' }),
+            body: JSON.stringify({ url: 'http://localhost:4000' }),
+          }),
+        ],
+      ]);
       expect(result.callbackRegistered).toBe(true);
       expect(result.verified).toBe(false);
-      expect(result.reason).toContain('homepage setup failed');
-      expect(result.reason).not.toContain('private details');
-      expect(request.mock.calls.filter(([, init]) => init.method === 'PUT')).toHaveLength(failure === 'put' ? 1 : 0);
+      expect(result.reason).not.toContain('homepage setup failed');
+      expect(result.reason).toContain('Sign-out URI and Initiate login URI still require');
       expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
-    },
-  );
+    });
+
+    it.each([
+      ['a claimed environment', { type: 'claimed', name: 'Sandbox', apiKey: 'sk_test_key' }],
+      [
+        'another environment’s key',
+        { type: 'unclaimed', name: 'x', apiKey: 'sk_test_other', clientId: 'c', claimToken: 't' },
+      ],
+      ['no stored environment', null],
+    ])('leaves it for the dashboard with %s, where someone may have set one', async (_, stored) => {
+      vi.mocked(getActiveEnvironment).mockReturnValue(stored as ReturnType<typeof getActiveEnvironment>);
+      const request = api();
+      vi.stubGlobal('fetch', request);
+      const result = await configureAuthkitApplication(setup, setup.clientId, 'sk_test_key');
+
+      expect(homepagePuts(request)).toEqual([]);
+      expect(result.callbackRegistered).toBe(true);
+      expect(result.reason).toContain('Homepage URL, Sign-out URI and Initiate login URI still require');
+      expect(result.reason).not.toContain('failed');
+    });
+
+    it("doesn't write when the stored environment can't be read", async () => {
+      vi.mocked(getActiveEnvironment).mockImplementation(() => {
+        throw new Error('keyring locked');
+      });
+      const request = api();
+      vi.stubGlobal('fetch', request);
+      const result = await configureAuthkitApplication(setup, setup.clientId, 'sk_test_key');
+      expect(homepagePuts(request)).toEqual([]);
+      expect(result.callbackRegistered).toBe(true);
+    });
+
+    it('sets the homepage the user asked for (--homepage-url) on any environment', async () => {
+      const request = api();
+      vi.stubGlobal('fetch', request);
+      await configureAuthkitApplication(
+        { ...setup, homepageUrl: 'https://requested.example/' },
+        setup.clientId,
+        'sk_test_key',
+      );
+      expect(homepagePuts(request)).toEqual([
+        [expect.any(String), expect.objectContaining({ body: JSON.stringify({ url: 'https://requested.example/' }) })],
+      ]);
+    });
+
+    it.each(['http', 'network'])(
+      'reports a %s failure writing it without losing the callback or leaking details',
+      async (failure) => {
+        unclaimed('sk_test_unclaimed');
+        const request = api(() => {
+          if (failure === 'network') throw new Error('private details');
+          return Response.json({ message: 'private details' }, { status: 403 });
+        });
+        vi.stubGlobal('fetch', request);
+        const result = await configureAuthkitApplication(setup, setup.clientId, 'sk_test_unclaimed');
+        expect(result.callbackRegistered).toBe(true);
+        expect(result.verified).toBe(false);
+        expect(result.reason).toContain('homepage setup failed');
+        expect(result.reason).not.toContain('private details');
+        expect(homepagePuts(request)).toHaveLength(1);
+        expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
+      },
+    );
+  });
 
   it('does not overwrite a homepage filled concurrently during dashboard setup', async () => {
     delete application.appHomepageUrl;
@@ -349,12 +406,13 @@ describe('native application URL setup', () => {
     vi.mocked(fetchTeamEnvironments).mockResolvedValue([
       { id: 'env_other', name: 'Other team', clientId: 'client_other', sandbox: true },
     ]);
-    const request = vi.fn(async (_url: string, _init: RequestInit) => Response.json({ url: null }));
+    const request = vi.fn(async (_url: string, _init: RequestInit) => Response.json({}));
     vi.stubGlobal('fetch', request);
     const result = await configureAuthkitApplication(setup, setup.clientId, 'sk_test_team_a');
     expect(result.callbackRegistered).toBe(true);
     expect(result.verified).toBe(false);
-    expect(request).toHaveBeenCalledTimes(3);
+    // Just the callback: not an unclaimed environment, so the homepage is left alone.
+    expect(request).toHaveBeenCalledTimes(1);
     for (const [, init] of request.mock.calls) {
       expect(init.headers).toMatchObject({ Authorization: 'Bearer sk_test_team_a' });
     }

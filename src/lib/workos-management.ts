@@ -101,35 +101,24 @@ async function createCorsOrigin(apiKey: string, origin: string): Promise<{ succe
 /**
  * Set the app homepage URL in WorkOS, skipping the write when it already matches.
  *
- * The homepage URL is a single-valued setting, so an unconditional PUT silently
- * overwrites whatever a logged-in user already had configured. Reading first
- * makes the common case a no-op that reports itself honestly.
- *
- * With preserveExisting, only fill a confirmed empty homepage; failed reads
- * must not turn an implicit default into an overwrite. Legacy callers retain
- * the read-failure fallback to PUT.
+ * The homepage URL is a single-valued setting, so this overwrites whatever is
+ * there. The read is best effort: the REST API has no GET for this endpoint
+ * today (it answers 404, like an unknown route), so the write normally goes
+ * ahead. Callers that must not overwrite need another way to know nothing is
+ * set (see configureAuthkitApplication).
  */
 export async function setHomepageUrl(
   apiKey: string,
   url: string,
-  { preserveExisting = false }: { preserveExisting?: boolean } = {},
 ): Promise<{ success: boolean; alreadyExists: boolean }> {
   try {
     const current = await workosRequest('GET', HOMEPAGE_URL_ENDPOINT, apiKey);
     if (current.ok) {
       const data = (await current.json()) as { url?: string } | null;
-      if (preserveExisting && (!data || !('url' in data) || (data.url != null && typeof data.url !== 'string'))) {
-        throw new Error('Could not read the current homepage URL.');
-      }
-      if (data?.url === url || (preserveExisting && data?.url)) {
-        return { success: true, alreadyExists: true };
-      }
-    } else if (preserveExisting) {
-      throw new Error('Could not read the current homepage URL.');
+      if (data?.url === url) return { success: true, alreadyExists: true };
     }
-  } catch (error) {
-    if (preserveExisting) throw error;
-    // Legacy callers fall through to the write on read failures.
+  } catch {
+    // A failed read falls through to the write.
   }
 
   const response = await workosRequest('PUT', HOMEPAGE_URL_ENDPOINT, apiKey, { url });

@@ -7,6 +7,7 @@ import { dashboardGraphqlRequest } from './dashboard-graphql.js';
 import { getOperation, resolveExecutableDocument } from '../catalog/operation.js';
 import { InstallDeclinedError } from './installer-errors.js';
 import { setHomepageUrl } from './workos-management.js';
+import { getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
 
 export interface AuthkitApplicationSetup {
   clientId: string;
@@ -33,6 +34,17 @@ interface Application {
   logoutUris: Uri[];
   initiateLoginUri: string | null;
   appHomepageUrl?: string | null;
+}
+
+/** Whether `apiKey` is the key of the stored, still-unclaimed environment. */
+function isUnclaimedEnvironmentKey(apiKey: string): boolean {
+  try {
+    const environment = getActiveEnvironment();
+    return !!environment && isUnclaimedEnvironment(environment) && environment.apiKey === apiKey;
+  } catch {
+    // Keyring unavailable: unknown, so don't write.
+    return false;
+  }
 }
 
 /** Use the app's saved callback, not the active profile or a guessed localhost port. */
@@ -113,10 +125,17 @@ export async function configureAuthkitApplication(
       return pending('Could not register the callback URL. Check the API key and connection, then retry setup.');
     }
     callbackRegistered = true;
+    // The REST API can set the homepage but not read it, so with only an API
+    // key the current value is unknown. Write it only where nothing can be
+    // overwritten: a homepage the user asked for, or an unclaimed
+    // environment, whose dashboard nobody can open until it's claimed.
+    if (setup.homepageUrl === undefined && !isUnclaimedEnvironmentKey(apiKey)) {
+      return pending(
+        'Callback registered using the API key. Homepage URL, Sign-out URI and Initiate login URI still require dashboard setup and verification. Sign in to the correct team (and claim the environment if needed) to manage those settings.',
+      );
+    }
     try {
-      await setHomepageUrl(apiKey, setup.homepageUrl ?? new URL(setup.redirectUri).origin, {
-        preserveExisting: setup.homepageUrl === undefined,
-      });
+      await setHomepageUrl(apiKey, setup.homepageUrl ?? new URL(setup.redirectUri).origin);
     } catch {
       return pending(
         'Callback registered using the API key, but homepage setup failed. Check the Homepage URL, Sign-out URI and Initiate login URI in the dashboard.',
