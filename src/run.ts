@@ -20,7 +20,6 @@ export type InstallerArgs = {
   clientId?: string;
   homepageUrl?: string;
   redirectUri?: string;
-  dashboard?: boolean;
   inspect?: boolean;
   noValidate?: boolean;
   validate?: boolean;

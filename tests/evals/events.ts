@@ -21,20 +21,12 @@ export interface ScenarioCompleteEvent extends ScenarioEvent {
   agentOutput?: string;
 }
 
-export interface RunProgressEvent {
-  completed: number;
-  total: number;
-  running: number;
-  elapsed: number;
-}
-
 export type EvalEventType =
   | 'scenario:start'
   | 'scenario:retry'
   | 'scenario:pass'
   | 'scenario:fail'
   | 'scenario:complete'
-  | 'run:progress'
   | 'run:complete';
 
 export class EvalEventEmitter extends EventEmitter {
@@ -54,10 +46,6 @@ export class EvalEventEmitter extends EventEmitter {
   emitScenarioFail(event: ScenarioCompleteEvent): void {
     this.emit('scenario:fail', event);
     this.emit('scenario:complete', event);
-  }
-
-  emitProgress(event: RunProgressEvent): void {
-    this.emit('run:progress', event);
   }
 
   emitRunComplete(): void {
