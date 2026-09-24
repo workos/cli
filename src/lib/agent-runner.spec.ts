@@ -125,7 +125,7 @@ describe('installer prompt', () => {
     expect(prompt).toContain('## Sign-in route (Initiate login URI)');
     expect(prompt).toContain('the app origin plus /login');
     expect(prompt).toContain('add a /login client route');
-    expect(prompt).toContain('set redirectUri on AuthKitProvider or createClient()');
+    expect(prompt).toContain('add it to .env.local under the build tool');
   });
 
   it("pins a server SDK to its guide's sign-in route without the client-only steps", async () => {

@@ -284,54 +284,112 @@ export async function validateFrameworkSpecific(framework: string, projectDir: s
  */
 async function validateClientOnlyApp(framework: string, projectDir: string, issues: ValidationIssue[]) {
   const signInPath = getSignInPath(framework);
-  const found = await clientSourceMatches(projectDir, signInPath ? [signInPath, 'redirectUri'] : ['redirectUri']);
-  if (signInPath && !found.has(signInPath) && !(await hasSignInPage(projectDir, signInPath)))
+  const route = signInPath ? signInRouteDeclaration(signInPath) : undefined;
+  let hasRoute = false;
+  let setsRedirectUri = false;
+  const redirectEnvNames = new Set<string>();
+  await scanClientSource(projectDir, (content) => {
+    hasRoute ||= !!route?.test(content);
+    setsRedirectUri ||= content.includes('redirectUri');
+    for (const match of content.matchAll(REDIRECT_ENV_REFERENCE)) redirectEnvNames.add(match[1]);
+  });
+  if (signInPath && !hasRoute && !(await hasSignInPage(projectDir, signInPath)))
     issues.push({
       type: 'file',
       severity: 'error',
       message: `No ${signInPath} route starts sign-in`,
-      hint: `Add a public ${signInPath} client route that calls the SDK's signIn() on load. The installer saves it as the Initiate login URI.`,
+      hint: `Register a public ${signInPath} client route that calls the SDK's signIn() on load. A link to ${signInPath} is not a route. The installer saves it as the Initiate login URI.`,
     });
-  if (!found.has('redirectUri'))
+  if (!setsRedirectUri)
     issues.push({
       type: 'pattern',
       severity: 'error',
       message: 'The AuthKit client does not set redirectUri',
       hint: 'Pass WORKOS_REDIRECT_URI (with the build tool env prefix) as redirectUri to AuthKitProvider or createClient(). The SDK default, the page origin, is not registered.',
     });
+  if (redirectEnvNames.size === 0) return;
+  const envContent = await readClientEnvFiles(projectDir);
+  for (const name of redirectEnvNames) {
+    if (!/^(VITE_|REACT_APP_)/.test(name))
+      issues.push({
+        type: 'env',
+        severity: 'error',
+        message: `${name} is not exposed to client code`,
+        hint: 'Use the build tool prefix (for example, VITE_WORKOS_REDIRECT_URI) in both the code and .env.local.',
+      });
+    else if (!new RegExp(`^${name}=.+`, 'm').test(envContent))
+      issues.push({
+        type: 'env',
+        severity: 'error',
+        message: `Missing environment variable: ${name}`,
+        hint: `The client reads ${name} as its redirect URI. Add ${name} to .env.local with the WORKOS_REDIRECT_URI value.`,
+      });
+  }
 }
 
-/** Whether a client-only app serves `signInPath`, from its source or a static page. */
+/** A client-side env var the app reads its redirect URI from, e.g. import.meta.env.VITE_WORKOS_REDIRECT_URI. */
+const REDIRECT_ENV_REFERENCE = /(?:import\.meta\.env|process\.env)\.(\w*WORKOS_REDIRECT_URI)\b/g;
+
+/** Vite and CRA read these in development. */
+const CLIENT_ENV_FILES = ['.env', '.env.local', '.env.development', '.env.development.local'];
+
+async function readClientEnvFiles(projectDir: string): Promise<string> {
+  const contents = await Promise.all(
+    CLIENT_ENV_FILES.map((file) => readFile(join(projectDir, file), 'utf-8').catch(() => '')),
+  );
+  return contents.join('\n');
+}
+
+/**
+ * Matches code that serves `signInPath` as a route, not a link to it: router
+ * config (`path="/login"`, `path: '/login'`, `createFileRoute('/login')`) or a
+ * pathname check (`pathname === '/login'`, `case '/login'`).
+ */
+function signInRouteDeclaration(signInPath: string): RegExp {
+  const path = signInPath.replace(/\/$/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const quoted = `['"\`]${path}/?['"\`]`;
+  return new RegExp(
+    `(?:\\bpath\\s*[:=]\\s*\\{?\\s*|pathname\\s*={2,3}\\s*|\\bcase\\s+|\\bcreate(?:File)?Route\\(\\s*)${quoted}`,
+  );
+}
+
+/** Whether a client-only app serves `signInPath`, from a route in its source or a static page. */
 export async function hasClientSignInRoute(projectDir: string, signInPath: string): Promise<boolean> {
-  return (await clientSourceMatches(projectDir, [signInPath])).size > 0 || hasSignInPage(projectDir, signInPath);
+  const route = signInRouteDeclaration(signInPath);
+  let found = false;
+  await scanClientSource(projectDir, (content) => {
+    found ||= route.test(content);
+  });
+  return found || hasSignInPage(projectDir, signInPath);
 }
 
+/** A static page at the sign-in path, e.g. login/index.html, that starts sign-in. */
 async function hasSignInPage(projectDir: string, signInPath: string): Promise<boolean> {
   const segment = signInPath.replace(/^\/|\/$/g, '');
   const pages = await fg(
     [`${segment}.html`, `${segment}/index.html`, `public/${segment}.html`, `public/${segment}/index.html`],
     { cwd: projectDir },
   );
-  return pages.length > 0;
+  for (const page of pages) {
+    if ((await readFile(join(projectDir, page), 'utf-8').catch(() => '')).includes('signIn')) return true;
+  }
+  return false;
 }
 
-async function clientSourceMatches(projectDir: string, needles: string[]): Promise<Set<string>> {
+const SCAN_CONCURRENCY = 32;
+
+/** Read the app's own source files, a bounded batch at a time. */
+async function scanClientSource(projectDir: string, visit: (content: string) => void): Promise<void> {
   const sources = await fg(['**/*.{ts,tsx,js,jsx,mjs,html,htm}'], {
     cwd: projectDir,
     ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.*/**'],
   });
-  const found = new Set<string>();
-  await Promise.all(
-    sources.map(async (file) => {
-      try {
-        const content = await readFile(join(projectDir, file), 'utf-8');
-        for (const needle of needles) if (content.includes(needle)) found.add(needle);
-      } catch {
-        // Unreadable file - skip it
-      }
-    }),
-  );
-  return found;
+  for (let i = 0; i < sources.length; i += SCAN_CONCURRENCY) {
+    const batch = await Promise.all(
+      sources.slice(i, i + SCAN_CONCURRENCY).map((file) => readFile(join(projectDir, file), 'utf-8').catch(() => '')),
+    );
+    batch.forEach(visit);
+  }
 }
 
 /**

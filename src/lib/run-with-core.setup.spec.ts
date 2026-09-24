@@ -349,6 +349,17 @@ describe('application URLs for SDKs other than Next.js', () => {
     );
   });
 
+  it('does not save a Vite /login route the app only links to', async () => {
+    await mkdir(join(directory, 'src'), { recursive: true });
+    await writeFile(join(directory, 'src/App.tsx'), '<a href="/login">Sign in</a>');
+    await configureOtherApplicationUrls(
+      { options, integration: 'react', emitter: createInstallerEventEmitter() },
+      'client_a',
+      'sk_test_a',
+    );
+    expect(vi.mocked(configureAuthkitApplication).mock.calls[0][0]).not.toHaveProperty('initiateLoginUri');
+  });
+
   it('does not point the dashboard at a Vite /login route the app lacks, and says why', async () => {
     const emitter = createInstallerEventEmitter();
     const events: string[] = [];

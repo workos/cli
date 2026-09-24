@@ -790,6 +790,57 @@ describe('validateInstallation', () => {
       expect(signInIssue(result.issues)).toBeDefined();
     });
 
+    it('does not treat a link to /login as the route', async () => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(join(testDir, 'src', 'App.tsx'), '<a href="/login">Sign in</a>');
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      expect(signInIssue(result.issues)?.severity).toBe('error');
+    });
+
+    it('does not accept a /login page that never starts sign-in', async () => {
+      mkdirSync(join(testDir, 'login'), { recursive: true });
+      writeFileSync(join(testDir, 'login', 'index.html'), '<h1>Log in</h1>');
+
+      const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
+
+      expect(signInIssue(result.issues)).toBeDefined();
+    });
+
+    it('fails when the prefixed redirect URI the client reads is not set', async () => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'src', 'main.tsx'),
+        '<AuthKitProvider redirectUri={import.meta.env.VITE_WORKOS_REDIRECT_URI}><App /></AuthKitProvider>',
+      );
+      writeFileSync(join(testDir, '.env.local'), 'WORKOS_REDIRECT_URI=http://localhost:5173/callback\n');
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      expect(result.issues).toContainEqual(
+        expect.objectContaining({
+          severity: 'error',
+          message: 'Missing environment variable: VITE_WORKOS_REDIRECT_URI',
+        }),
+      );
+    });
+
+    it('fails when the client reads an unprefixed redirect URI Vite never exposes', async () => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'src', 'main.ts'),
+        'createClient(clientId, { redirectUri: import.meta.env.WORKOS_REDIRECT_URI });',
+      );
+      writeFileSync(join(testDir, '.env.local'), 'WORKOS_REDIRECT_URI=http://localhost:5173/callback\n');
+
+      const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
+
+      expect(result.issues).toContainEqual(
+        expect.objectContaining({ message: 'WORKOS_REDIRECT_URI is not exposed to client code' }),
+      );
+    });
+
     it('fails a client app that leaves redirectUri at the SDK default', async () => {
       mkdirSync(join(testDir, 'src'), { recursive: true });
       writeFileSync(
@@ -808,6 +859,7 @@ describe('validateInstallation', () => {
         join(testDir, 'src', 'main.ts'),
         'createClient(clientId, { redirectUri: import.meta.env.VITE_WORKOS_REDIRECT_URI });',
       );
+      writeFileSync(join(testDir, '.env.local'), 'VITE_WORKOS_REDIRECT_URI=http://localhost:5173/callback\n');
 
       const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
 
