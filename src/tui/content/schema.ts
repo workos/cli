@@ -21,9 +21,18 @@ export const TASK_IDS = [
   'configure',
   'install',
   'verify',
+  'app-urls',
   'finish',
+  'first-sign-up',
 ] as const;
 export type TaskId = (typeof TASK_IDS)[number];
+
+/**
+ * Dashboard checklist items, in the dashboard's AuthKit checklist order. Ids
+ * match the installer's `config:step` and `app-urls:step` events.
+ */
+export const SUBTASK_IDS = ['env-vars', 'redirect-uri', 'initiate-login-uri', 'sign-out-uri', 'cors-origin'] as const;
+export type SubtaskId = (typeof SUBTASK_IDS)[number];
 
 /**
  * Placeholders each narrated event can fill, e.g. `{branch}` for
@@ -55,7 +64,7 @@ export const WALKTHROUGH_PARAMS: Partial<Record<InstallerEventName, readonly str
  */
 export const WALKTHROUGH_VARIANTS: Partial<Record<InstallerEventName, readonly string[]>> = {
   'validation:complete': ['passed', 'failed'],
-  complete: ['success', 'failure', 'cancelled'],
+  complete: ['success', 'setup-required', 'failure', 'cancelled'],
 };
 
 const PLACEHOLDER = /\{([a-zA-Z][a-zA-Z0-9]*)\}/g;
@@ -113,6 +122,8 @@ export const installerContentSchema = z
     tasks: z.strictObject(
       Object.fromEntries(TASK_IDS.map((t) => [t, taskSchema])) as Record<TaskId, typeof taskSchema>,
     ),
+    /** Labels for the "Configure WorkOS" sub-steps (the dashboard's checklist wording). */
+    subtasks: z.strictObject(Object.fromEntries(SUBTASK_IDS.map((t) => [t, text])) as Record<SubtaskId, typeof text>),
     walkthrough: z.record(z.string(), copySchema),
     tips: z.array(tipSchema),
     announcements: z.array(announcementSchema),

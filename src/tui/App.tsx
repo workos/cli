@@ -8,9 +8,9 @@ import { useEffect, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import type { RunModel } from './model/run-model.js';
 import { useRunSnapshot, useTerminalSize } from './hooks.js';
-import { colors, MIN_COLUMNS, MIN_ROWS } from './theme.js';
+import { colors, MIN_COLUMNS, MIN_ROWS, SIDE_BY_SIDE_MIN_COLUMNS, SIDE_BY_SIDE_MIN_ROWS } from './theme.js';
 import { COMPACT_HEADER_ROWS, FULL_HEADER_ROWS, Header } from './components/Header.js';
-import { TaskList } from './components/TaskList.js';
+import { ProgressLine, TaskList } from './components/TaskList.js';
 import { Walkthrough } from './components/Walkthrough.js';
 import { PromptPanel, promptHeight } from './components/PromptPanel.js';
 import { StatusBar } from './components/StatusBar.js';
@@ -102,20 +102,31 @@ export function InstallerApp({ model, answer, interrupt, projectName, tipInterva
     );
   }
 
+  const visibleTasks = snapshot.tasks.filter((t) => t.status !== 'skipped');
   const promptRows = snapshot.prompt ? promptHeight(snapshot.prompt, width, maxOptions, maxContext) + 1 : 0;
   const bodyRows = Math.max(minBody, inner - headerRows - 1 - promptRows - 1);
+  // Walkthrough on the left, checklist on the right, when both fit.
+  const sideBySide = columns >= SIDE_BY_SIDE_MIN_COLUMNS && rows >= SIDE_BY_SIDE_MIN_ROWS;
   const taskWidth = columns >= 110 ? 34 : 30;
-  const walkthroughWidth = width - taskWidth - 2;
+  const walkthroughWidth = sideBySide ? width - taskWidth - 2 : width;
 
   return (
     <Box flexDirection="column" width={columns} height={height} paddingX={1} paddingTop={TOP_MARGIN}>
       <Header snapshot={snapshot} columns={width} compact={compact} projectName={projectName} tipIndex={tipIndex} />
       <Box height={1} flexShrink={0} />
-      <Box height={bodyRows} flexShrink={0}>
-        <TaskList tasks={snapshot.tasks.filter((t) => t.status !== 'skipped')} width={taskWidth} height={bodyRows} />
-        <Box width={2} flexShrink={0} />
-        <Walkthrough entries={snapshot.walkthrough} width={walkthroughWidth} height={bodyRows} />
-      </Box>
+      {sideBySide ? (
+        <Box height={bodyRows} flexShrink={0}>
+          <Walkthrough entries={snapshot.walkthrough} width={walkthroughWidth} height={bodyRows} />
+          <Box width={2} flexShrink={0} />
+          <TaskList tasks={visibleTasks} width={taskWidth} height={bodyRows} />
+        </Box>
+      ) : (
+        <Box flexDirection="column" height={bodyRows} flexShrink={0}>
+          <Walkthrough entries={snapshot.walkthrough} width={walkthroughWidth} height={bodyRows - 2} />
+          <Box height={1} flexShrink={0} />
+          <ProgressLine tasks={visibleTasks} width={width} />
+        </Box>
+      )}
       {prompt ? <Box height={1} flexShrink={0} /> : null}
       {prompt}
       <Box flexGrow={1} />
