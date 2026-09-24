@@ -1,4 +1,5 @@
 import type { Integration } from './constants.js';
+import type { SetupItemId, SetupItemStatus } from './events.js';
 import type { EnvironmentConfig } from './config-store.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from './constants.js';
 import { analytics } from '../utils/analytics.js';
@@ -179,6 +180,8 @@ export interface AutoConfigOptions {
   homepageUrl?: string;
   /** Custom redirect URI (defaults to framework convention) */
   redirectUri?: string;
+  /** Told as each checklist item starts and resolves. */
+  onStep?: (step: SetupItemId, status: SetupItemStatus, detail?: string) => void;
 }
 
 /**
@@ -205,10 +208,26 @@ export async function autoConfigureWorkOSEnvironment(
 
   ui.log.step('Configuring WorkOS dashboard settings...');
 
+  const onStep = options.onStep ?? (() => {});
+  // Report each item as it resolves, not when the whole batch does.
+  const track = <T extends { alreadyExists: boolean }>(step: SetupItemId, write: Promise<T>): Promise<T> => {
+    onStep(step, 'started');
+    return write.then(
+      (result) => {
+        onStep(step, result.alreadyExists ? 'already-set' : 'done');
+        return result;
+      },
+      (error: unknown) => {
+        onStep(step, 'failed', error instanceof Error ? error.message : String(error));
+        throw error;
+      },
+    );
+  };
+
   try {
     const [redirectUri, corsOrigin, homepageUrl] = await Promise.all([
-      createRedirectUri(apiKey, callbackUrl),
-      createCorsOrigin(apiKey, baseUrl),
+      track('redirect-uri', createRedirectUri(apiKey, callbackUrl)),
+      track('cors-origin', createCorsOrigin(apiKey, baseUrl)),
       setHomepageUrl(apiKey, homepageUrlValue),
     ]);
 

@@ -323,4 +323,29 @@ describe('workos-management', () => {
       expect(rowFor('Environment').value).toBe('the API key supplied to this run');
     });
   });
+
+  describe('checklist reporting', () => {
+    it('reports each item as it resolves', async () => {
+      stubFetch(() => jsonResponse(200, { url: 'http://elsewhere' }));
+      const steps: string[] = [];
+      await autoConfigureWorkOSEnvironment(API_KEY, INTEGRATION, PORT, {
+        onStep: (step, status) => steps.push(`${step}:${status}`),
+      });
+      expect(steps).toEqual(['redirect-uri:started', 'cors-origin:started', 'redirect-uri:done', 'cors-origin:done']);
+    });
+
+    it('reports a failed write with its error and keeps the existing failure handling', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => jsonResponse(500, { message: 'boom' })),
+      );
+      const steps: string[] = [];
+      const result = await autoConfigureWorkOSEnvironment(API_KEY, INTEGRATION, PORT, {
+        onStep: (step, status) => steps.push(`${step}:${status}`),
+      });
+      expect(result).toBeNull();
+      expect(steps).toContain('redirect-uri:failed');
+      expect(steps).toContain('cors-origin:failed');
+    });
+  });
 });
