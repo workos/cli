@@ -1,5 +1,5 @@
 import { Box, Text } from 'ink';
-import { compactLogoRows, logoRows, LOGO_WIDTH } from '../logo.js';
+import { compactLogoRows, logoRows, LOGO_WIDTH } from '../../utils/logomark.js';
 import { colors } from '../theme.js';
 import type { RunSnapshot } from '../model/run-model.js';
 import { TipsCard } from './TipsCard.js';
