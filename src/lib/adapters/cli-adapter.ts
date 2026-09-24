@@ -105,16 +105,15 @@ export class CLIAdapter implements InstallerAdapter {
       ui.intro('WorkOS', 'AuthKit installer');
     }
 
-    // Handle Ctrl+C gracefully
+    // Let the machine finish cancellation and runWithCore flush telemetry and
+    // stop the adapter. Exiting here would preempt its later SIGINT listener.
     const handleSigInt = () => {
       this.promptAbort?.abort();
       if (this.spinner) {
         this.spinner.stop('Cancelled');
         this.spinner = null;
       }
-      ui.log.warn('Installer cancelled');
-      ui.outro('Your project was not modified');
-      process.exit(0);
+      this.sendEvent({ type: 'CANCEL' });
     };
     process.on('SIGINT', handleSigInt);
     this.sigIntHandler = handleSigInt;

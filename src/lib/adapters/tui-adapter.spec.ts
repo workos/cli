@@ -5,6 +5,8 @@ import { ENTER_FULLSCREEN, LEAVE_FULLSCREEN } from '../../tui/terminal.js';
 import { FakeStdin, FakeStdout, KEY, stripAnsi, waitFor } from '../../tui/ink-streams.test-utils.js';
 import { TuiAdapter } from './tui-adapter.js';
 import { CLIAdapter } from './cli-adapter.js';
+import { createActor, fromPromise } from 'xstate';
+import { installerMachine } from '../installer-core.js';
 
 let emitter: InstallerEventEmitter;
 let sendEvent: ReturnType<typeof vi.fn>;
@@ -138,23 +140,46 @@ describe('TuiAdapter', () => {
     await waitFor(() => expect(sendEvent).toHaveBeenCalledWith({ type: 'COMMIT_DECLINED' }));
   });
 
-  it('sends ctrl-c down the existing SIGINT → CANCEL path', async () => {
+  it('lets ctrl-c finish machine cancellation before the adapter stops', async () => {
     const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
-    // Stands in for runWithCore's SIGINT handler, which sends CANCEL to the machine.
-    const runWithCoreSigint = () => sendEvent({ type: 'CANCEL' });
-    process.on('SIGINT', runWithCoreSigint);
+    const aborted = vi.fn();
+    const machine = installerMachine.provide({
+      actors: {
+        checkAuthentication: fromPromise<void>(({ signal }) => {
+          signal.addEventListener('abort', aborted, { once: true });
+          return new Promise(() => {});
+        }),
+      },
+    });
+    const actor = createActor(machine, {
+      input: { emitter, options: { installDir: '/work/my-app' } },
+    });
+    sendEvent.mockImplementation((event) => actor.send(event));
+    const complete = vi.fn();
+    actor.subscribe({ complete });
+    // Match runWithCore: its listener is registered AFTER adapter.start().
+    const runWithCoreSigint = vi.fn(() => actor.send({ type: 'CANCEL' }));
     try {
       await adapter.start();
+      process.on('SIGINT', runWithCoreSigint);
+      actor.start();
+      actor.send({ type: 'START' });
+      expect(actor.getSnapshot().value).toBe('authenticating');
       await waitFor(() => expect(frame()).toContain('ctrl-c cancel'));
       stdin.press(KEY.ctrlC);
-      await waitFor(() => expect(exit).toHaveBeenCalledWith(0));
-      expect(sendEvent).toHaveBeenCalledWith({ type: 'CANCEL' });
+      await waitFor(() => expect(complete).toHaveBeenCalledOnce());
+      expect(runWithCoreSigint).toHaveBeenCalledOnce();
+      expect(actor.getSnapshot().value).toBe('cancelled');
+      expect(aborted).toHaveBeenCalledOnce();
+      expect(exit).not.toHaveBeenCalled();
+      await adapter.stop();
+      expect(afterExit()).toContain('cancelled');
+      expect(getUiHost()).toBeNull();
+      expect(stdin.rawMode).toBe(false);
     } finally {
       process.off('SIGINT', runWithCoreSigint);
+      actor.stop();
     }
-    await adapter.stop();
-    // The plain CLI's cancel message survives into the scrollback.
-    expect(afterExit()).toContain('Installer cancelled');
   });
 
   it('shows the device-flow code and waiting status', async () => {
