@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "frameworks": {
+    "dotnet": ".NET",
+    "elixir": "Phoenix",
+    "go": "Go",
+    "kotlin": "Spring Boot",
+    "nextjs": "Next.js",
+    "node": "Express",
+    "php": "PHP",
+    "php-laravel": "Laravel",
+    "python": "Django",
+    "react": "React",
+    "react-router": "React Router",
+    "ruby": "Rails",
+    "sveltekit": "SvelteKit",
+    "tanstack-start": "TanStack Start",
+    "vanilla-js": "JavaScript"
+  },
+  "tasks": {
+    "sign-in": { "label": "Sign in to WorkOS", "activeLabel": "Signing in to WorkOS" },
+    "scaffold": { "label": "Create a new app", "activeLabel": "Creating a new app" },
+    "inspect": { "label": "Look over your project", "activeLabel": "Looking over your project" },
+    "credentials": { "label": "Connect a WorkOS environment", "activeLabel": "Connecting a WorkOS environment" },
+    "configure": { "label": "Configure WorkOS", "activeLabel": "Configuring WorkOS" },
+    "install": { "label": "Add AuthKit to your code", "activeLabel": "Adding AuthKit to your code" },
+    "verify": { "label": "Check the changes", "activeLabel": "Checking the changes" },
+    "finish": { "label": "Wrap up", "activeLabel": "Wrapping up" }
+  },
+  "walkthrough": {
+    "auth:checking": "First, I'm making sure you're signed in to WorkOS.",
+    "auth:success": "You're signed in.",
+    "auth:failure": "I couldn't confirm your WorkOS sign-in.",
+    "scaffold:prompt": "This folder is empty, so I can create a new Next.js app here for you.",
+    "scaffold:start": "Creating a new Next.js app with {packageManager}. This can take a minute.",
+    "scaffold:complete": "Your new app is ready.",
+    "scaffold:failed": "Creating the app didn't work.",
+    "detection:start": "Now I'm looking around your project to see what it's built with.",
+    "detection:complete": "This is a {framework} app. I know how to set that up.",
+    "detection:none": "I couldn't tell which framework this project uses.",
+    "git:dirty": "You have uncommitted changes (files: {count}), so I'll check with you before going further.",
+    "git:dirty:confirmed": "Okay, carrying on. I'll leave your existing changes alone.",
+    "branch:protected": "You're on {branch}. I'll ask whether to put these changes on their own branch.",
+    "branch:created": "I made a new branch, {branch}, so these changes stay separate.",
+    "credentials:gathering": "Next, I need the WorkOS keys for your app.",
+    "credentials:found": "I'll use the WorkOS keys you already have.",
+    "credentials:env:found": "Found your WorkOS keys in {file}.",
+    "device:started": "Open {url} in your browser and enter the code {code} to connect this computer to WorkOS.",
+    "device:success": "Connected. Thanks!",
+    "staging:fetching": "Getting your WorkOS environment ready.",
+    "staging:success": "Your WorkOS environment is ready.",
+    "credentials:request": "Paste your WorkOS keys below. You'll find them at dashboard.workos.com.",
+    "config:start": "Setting up WorkOS for this app: redirect URIs, sign-in settings, and environment variables.",
+    "config:complete": "WorkOS is configured.",
+    "agent:start": "Now the AuthKit agent is adding sign-in to your code. This usually takes a few minutes, so it's a good time for a coffee.",
+    "agent:retry": "Trying that again (attempt {attempt} of {maxRetries}).",
+    "agent:success": "The code changes are done.",
+    "agent:failure": "The agent ran into a problem.",
+    "file:write": "Created {path}",
+    "file:edit": "Updated {path}",
+    "agent:tool": "Ran {command}",
+    "validation:start": "Double-checking the changes.",
+    "validation:complete": {
+      "passed": "Everything checks out.",
+      "failed": "A few things are worth a look (issues: {count}). They'll be listed when this screen closes."
+    },
+    "postinstall:changes": "Files changed: {count}.",
+    "postinstall:commit:success": "Committed: {message}",
+    "postinstall:pr:success": "Pull request opened: {url}",
+    "postinstall:manual": "The GitHub CLI isn't installed, so here's how to open the pull request yourself.",
+    "complete": {
+      "success": "All done. AuthKit is installed.",
+      "failure": "The install didn't finish. The details will be shown when this screen closes.",
+      "cancelled": "Stopped. The installer was cancelled."
+    }
+  },
+  "tips": [
+    {
+      "id": "sso",
+      "title": "Add Enterprise SSO",
+      "body": "Let your customers sign in with Okta, Entra ID, Google Workspace, and more.",
+      "url": "https://workos.com/docs/sso"
+    },
+    {
+      "id": "admin-portal",
+      "title": "Let IT admins set up SSO themselves",
+      "body": "Send a customer's IT team a link to the Admin Portal instead of a setup call.",
+      "command": "workos portal generate-link --intent sso --org <org_id>",
+      "url": "https://workos.com/docs/admin-portal"
+    },
+    {
+      "id": "directory-sync",
+      "title": "Sync users from your customers' directories",
+      "body": "Directory Sync keeps users and groups up to date from Okta, Entra ID, and Google.",
+      "url": "https://workos.com/docs/directory-sync"
+    },
+    {
+      "id": "organizations",
+      "title": "Group users into organizations",
+      "body": "Organizations are how WorkOS models your customers. Create one right from your terminal.",
+      "command": "workos organization create"
+    },
+    {
+      "id": "roles",
+      "title": "Add roles and permissions",
+      "body": "Define roles once and check them in your app with role-based access control.",
+      "command": "workos role create",
+      "url": "https://workos.com/docs/rbac"
+    },
+    {
+      "id": "branding",
+      "title": "Make AuthKit look like your app",
+      "body": "Set your logo and colors so the sign-in page feels like home.",
+      "command": "workos branding set",
+      "url": "https://workos.com/docs/authkit/branding"
+    },
+    {
+      "id": "passkeys",
+      "title": "Turn on passkeys",
+      "body": "Let users sign in with Face ID, Touch ID, or a security key.",
+      "url": "https://workos.com/docs/authkit/passkeys"
+    },
+    {
+      "id": "audit-logs",
+      "title": "Keep an audit trail",
+      "body": "Record who did what, and let your customers export it for their compliance teams.",
+      "url": "https://workos.com/docs/audit-logs"
+    },
+    {
+      "id": "skills",
+      "title": "Teach your coding agent WorkOS",
+      "body": "Install WorkOS skills so your coding agent knows the APIs and best practices.",
+      "command": "workos skills install"
+    },
+    {
+      "id": "doctor",
+      "title": "Something not working?",
+      "body": "The doctor checks your AuthKit setup and explains what to fix.",
+      "command": "workos doctor"
+    },
+    {
+      "id": "nextjs-guide",
+      "title": "AuthKit for Next.js",
+      "body": "See how to protect routes and read the signed-in user in your Next.js app.",
+      "url": "https://workos.com/docs/authkit/nextjs",
+      "frameworks": ["nextjs"]
+    },
+    {
+      "id": "react-guide",
+      "title": "AuthKit for React",
+      "body": "See how to read the signed-in user and protect parts of your React app.",
+      "url": "https://workos.com/docs/authkit/react",
+      "frameworks": ["react"]
+    }
+  ],
+  "announcements": [
+    {
+      "id": "changelog",
+      "title": "See what's new at WorkOS",
+      "body": "New features and improvements ship every week.",
+      "url": "https://workos.com/changelog"
+    },
+    {
+      "id": "cli-resources",
+      "title": "Run your whole WorkOS account from the CLI",
+      "body": "Manage organizations, users, roles, webhooks, and more without leaving your terminal.",
+      "command": "workos --help"
+    }
+  ]
+}
