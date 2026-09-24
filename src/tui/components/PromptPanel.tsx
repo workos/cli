@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { ConfirmInput } from '@inkjs/ui';
+import stringWidth from 'string-width';
 import { CANCEL, type SelectOption, type UiLine, type UiPromptRequest, type ValidateFn } from '../../utils/ui.js';
 import { colors, glyphs } from '../theme.js';
 import { wrapText } from '../wrap.js';
@@ -139,6 +140,33 @@ function SelectPrompt({
   );
 }
 
+/** Display width in terminal cells; a wide glyph (CJK, emoji) counts as two. */
+function cellWidth(char: string): number {
+  return Math.max(1, stringWidth(char));
+}
+
+/**
+ * The widest run of `cells` that fits in `width` columns while keeping the cell
+ * at `cursor` visible. Grows left from the cursor first (so the tail stays in
+ * view while typing), then fills any remaining room to the right.
+ */
+function viewport(cells: string[], cursor: number, width: number): { start: number; end: number } {
+  if (cells.length === 0) return { start: 0, end: 0 };
+  const pos = Math.min(Math.max(0, cursor), cells.length - 1);
+  let used = cellWidth(cells[pos]);
+  let start = pos;
+  while (start > 0 && used + cellWidth(cells[start - 1]) <= width) {
+    start--;
+    used += cellWidth(cells[start]);
+  }
+  let end = pos + 1;
+  while (end < cells.length && used + cellWidth(cells[end]) <= width) {
+    used += cellWidth(cells[end]);
+    end++;
+  }
+  return { start, end };
+}
+
 /**
  * A one-line text input that can't drop keys.
  *
@@ -151,11 +179,14 @@ function SelectPrompt({
 function LineInput({
   mask,
   placeholder,
+  width,
   onChange,
   onSubmit,
 }: {
   mask?: string;
   placeholder?: string;
+  /** Columns available to the value, so a long entry scrolls instead of wrapping. */
+  width: number;
   onChange: () => void;
   onSubmit: (value: string) => void;
 }) {
@@ -193,20 +224,28 @@ function LineInput({
   });
 
   const { value, cursor } = shown;
+  const view = Math.max(1, width);
   if (!value && placeholder) {
+    const cells = Array.from(placeholder);
+    const { end } = viewport(cells, 0, view);
+    const [head, ...rest] = cells.slice(0, end);
     return (
       <Text>
-        <Text inverse>{placeholder[0]}</Text>
-        <Text color={colors.muted}>{placeholder.slice(1)}</Text>
+        <Text inverse>{head}</Text>
+        <Text color={colors.muted}>{rest.join('')}</Text>
       </Text>
     );
   }
-  const chars = Array.from(value).map((c) => mask ?? c);
+  // A trailing cell carries the cursor when it sits past the last character.
+  const cells = Array.from(value).map((c) => mask ?? c);
+  if (cursor >= cells.length) cells.push(' ');
+  const pos = Math.min(cursor, cells.length - 1);
+  const { start, end } = viewport(cells, pos, view);
   return (
     <Text>
-      {chars.slice(0, cursor).join('')}
-      <Text inverse>{chars[cursor] ?? ' '}</Text>
-      {chars.slice(cursor + 1).join('')}
+      {cells.slice(start, pos).join('')}
+      <Text inverse>{cells[pos] ?? ' '}</Text>
+      {cells.slice(pos + 1, end).join('')}
     </Text>
   );
 }
@@ -249,6 +288,8 @@ function TextPrompt({
         <LineInput
           mask={request.kind === 'password' ? '*' : undefined}
           placeholder={placeholder}
+          // The pointer glyph and its trailing space take two columns.
+          width={width - 2}
           onChange={clearError}
           onSubmit={(value) => void submit(value)}
         />

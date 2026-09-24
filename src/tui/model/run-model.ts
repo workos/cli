@@ -421,7 +421,7 @@ export function createRunModel(options: RunModelOptions): RunModel {
       narrate('validation:start');
     },
     'validation:complete': ({ passed, issueCount }) => {
-      setTask('verify', 'completed');
+      setTask('verify', passed ? 'completed' : 'failed');
       narrate(
         'validation:complete',
         { count: issueCount },

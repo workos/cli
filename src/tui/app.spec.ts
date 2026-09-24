@@ -8,6 +8,8 @@ import { InstallerApp } from './App.js';
 import { loadInstallerContent } from './content/index.js';
 import { createRunModel } from './model/run-model.js';
 import { compactLogoRows, LOGO_MASK } from '../utils/logomark.js';
+import { glyphs } from './theme.js';
+import stringWidth from 'string-width';
 import { FakeStdin, FakeStdout, KEY, settle, stripAnsi, waitFor } from './ink-streams.test-utils.js';
 
 const content = loadInstallerContent();
@@ -466,6 +468,81 @@ describe('full-screen installer interaction', () => {
     await settle();
     stdin.press(KEY.enter);
     await waitFor(() => expect(answer).toHaveBeenCalledWith('sk_secret'));
+  });
+
+  // Helpers for the horizontal-viewport regression tests below.
+  const inputRow = (stdout: FakeStdout) =>
+    frameAt(stdout)
+      .split('\n')
+      .find((l) => l.includes(glyphs.pointer)) ?? '';
+  const bodyRows = (stdout: FakeStdout) =>
+    frameAt(stdout)
+      .split('\n')
+      .filter((l) => !l.includes(glyphs.pointer));
+
+  it.each(['text', 'password'] as const)('keeps a long %s value on one row', async (kind) => {
+    const answer = vi.fn();
+    const { model, stdout, stdin } = mount(80, 24, { answer });
+    model.setPrompt({ kind, message: 'Paste a token:' });
+    await waitFor(() => expect(frameAt(stdout)).toContain('Paste a token:'));
+
+    const long = `START-${'abcdefghij'.repeat(20)}-END`;
+    const visibleTail = kind === 'password' ? '*'.repeat(10) : long.slice(-10);
+    stdin.press(long);
+    // The freshly typed tail stays visible next to the cursor…
+    await waitFor(() => expect(inputRow(stdout)).toContain(visibleTail));
+    await settle();
+    // …the input never wraps past the 80-column budget…
+    expect(inputRow(stdout).length).toBeLessThanOrEqual(80);
+    // …and the value never spills onto another line.
+    expect(bodyRows(stdout).some((l) => l.includes(kind === 'password' ? '**********' : 'abcdefghij'))).toBe(false);
+    if (kind === 'password') expect(frameAt(stdout)).not.toContain('abcdefghij');
+
+    // The full value is submitted intact despite only a window being shown.
+    stdin.press(KEY.enter);
+    await waitFor(() => expect(answer).toHaveBeenCalledWith(long));
+  });
+
+  it('scrolls the viewport back to the start when the cursor moves home', async () => {
+    const answer = vi.fn();
+    const { model, stdout, stdin } = mount(80, 24, { answer });
+    model.setPrompt({ kind: 'text', message: 'Token?' });
+    await waitFor(() => expect(frameAt(stdout)).toContain('Token?'));
+    const long = `START-${'0123456789'.repeat(12)}-END`;
+    stdin.press(long);
+    await waitFor(() => expect(inputRow(stdout)).toContain('-END'));
+    expect(inputRow(stdout)).not.toContain('START-');
+    for (let i = 0; i < long.length; i++) stdin.press(KEY.left);
+    await waitFor(() => expect(inputRow(stdout)).toContain('START-'));
+    expect(inputRow(stdout)).not.toContain('-END');
+    expect(inputRow(stdout).length).toBeLessThanOrEqual(80);
+    stdin.press('X');
+    stdin.press(KEY.enter);
+    await waitFor(() => expect(answer).toHaveBeenCalledWith(`X${long}`));
+  });
+
+  it('clips a long placeholder to one row', async () => {
+    const { model, stdout } = mount(80, 24);
+    model.setPrompt({ kind: 'text', message: 'Path?', placeholder: 'x'.repeat(200) });
+    await waitFor(() => expect(frameAt(stdout)).toContain('Path?'));
+    await settle();
+    expect(inputRow(stdout).length).toBeLessThanOrEqual(80);
+    expect(bodyRows(stdout).some((l) => l.includes('xxxx'))).toBe(false);
+  });
+
+  it('measures wide Unicode by display width so it fits one row', async () => {
+    const answer = vi.fn();
+    const { model, stdout, stdin } = mount(80, 24, { answer });
+    model.setPrompt({ kind: 'text', message: 'Name?' });
+    await waitFor(() => expect(frameAt(stdout)).toContain('Name?'));
+    const wide = '中'.repeat(100); // each renders two columns → 200 cells
+    stdin.press(wide);
+    await waitFor(() => expect(inputRow(stdout)).toContain('中'));
+    await settle();
+    expect(stringWidth(inputRow(stdout))).toBeLessThanOrEqual(80);
+    expect(bodyRows(stdout).some((l) => l.includes('中'))).toBe(false);
+    stdin.press(KEY.enter);
+    await waitFor(() => expect(answer).toHaveBeenCalledWith(wide));
   });
 
   it('cancels an open prompt with esc or ctrl-c, without interrupting the run', async () => {

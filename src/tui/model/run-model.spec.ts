@@ -211,7 +211,8 @@ describe('run model: tasks follow real installer events', () => {
     expect(command.length).toBeLessThanOrEqual('Ran '.length + 80);
     expect(command.endsWith('…')).toBe(true);
 
-    expect(statuses(final)).toMatchObject({ install: 'completed', verify: 'completed' });
+    // validation:complete reported passed: false, so verify must settle as failed.
+    expect(statuses(final)).toMatchObject({ install: 'completed', verify: 'failed' });
     expect(final.tasks.map((t) => t.id)).toEqual([
       'sign-in',
       'inspect',
@@ -225,6 +226,44 @@ describe('run model: tasks follow real installer events', () => {
     const issue = final.walkthrough.find((e) => e.text.includes('issues: 2'));
     expect(issue?.tone).toBe('warning');
     expectMonotonic(run.history);
+  });
+
+  it('does not mark verify completed when blocking validation fails (passed: false)', async () => {
+    // A blocking validation/security finding surfaces as validation:complete
+    // with passed: false; the agent then fails so the run ends unsuccessfully.
+    const runAgent = fromPromise<AgentOutput, { context: InstallerMachineContext }>(async ({ input }) => {
+      const e = input.context.emitter;
+      e.emit('validation:start', { framework: 'nextjs' });
+      e.emit('validation:complete', { passed: false, issueCount: 2, durationMs: 5 });
+      return { success: false, error: new Error('blocked by security gate') };
+    });
+    const run = start(options(), actors({ runAgent }));
+    await run.done;
+    const final = run.model.getSnapshot();
+
+    // The verify step must reflect the failed validation, not report success.
+    expect(statuses(final)).toMatchObject({ install: 'completed', verify: 'failed' });
+    const issue = final.walkthrough.find((e) => e.text.includes('issues: 2'));
+    expect(issue?.tone).toBe('warning');
+    expectMonotonic(run.history);
+  });
+
+  it('marks verify completed when validation ultimately passes after retries', async () => {
+    // Non-blocking validation self-corrects across retries and the final
+    // validation:complete reports passed: true, so verify settles as completed.
+    const runAgent = fromPromise<AgentOutput, { context: InstallerMachineContext }>(async ({ input }) => {
+      const e = input.context.emitter;
+      e.emit('validation:start', { framework: 'nextjs' });
+      e.emit('validation:retry:start', { attempt: 1 });
+      e.emit('validation:retry:complete', { attempt: 1, passed: false });
+      e.emit('validation:retry:start', { attempt: 2 });
+      e.emit('validation:retry:complete', { attempt: 2, passed: true });
+      e.emit('validation:complete', { passed: true, issueCount: 0, durationMs: 5 });
+      return { success: true, summary: 'Done!' };
+    });
+    const run = start(options(), actors({ runAgent }));
+    await run.done;
+    expect(statuses(run.model.getSnapshot())).toMatchObject({ install: 'completed', verify: 'completed' });
   });
 
   it('fails the install task when the agent fails', async () => {

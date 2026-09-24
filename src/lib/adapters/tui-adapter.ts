@@ -119,10 +119,9 @@ export class TuiAdapter implements InstallerAdapter {
       // spinner starts and closes before it prints the agent's final line.
       this.emitter.on('agent:start', this.agentStarted);
       for (const event of AGENT_ENDS) this.emitter.on(event, this.agentEnded);
-      // Covers every way out that skips stop(): process.exit() from a handler,
-      // the plain CLI's SIGINT handler, an uncaught error. A signal that
-      // terminates by default (kill, a closed terminal) emits no 'exit', so
-      // those restore the terminal themselves.
+      // Covers every way out that skips stop(): process.exit() from a handler
+      // or an uncaught error. A signal that terminates by default (kill, a
+      // closed terminal) emits no 'exit', so those restore the terminal themselves.
       process.on('exit', this.teardown);
       for (const signal of TERMINATING_SIGNALS) process.on(signal, this.terminated);
 
