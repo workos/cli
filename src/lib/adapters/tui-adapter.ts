@@ -93,6 +93,8 @@ export class TuiAdapter implements InstallerAdapter {
   // While the agent works, its step-by-step lines stay out of the transcript.
   private agentWorking = false;
   private hiddenAgentLines = 0;
+  // Where the hidden lines went; printed after the agent's closing line.
+  private logPointer: string | null = null;
 
   constructor(config: TuiAdapterConfig) {
     this.config = config;
@@ -186,6 +188,7 @@ export class TuiAdapter implements InstallerAdapter {
     this.emitter.off('agent:start', this.agentStarted);
     for (const event of AGENT_ENDS) this.emitter.off(event, this.agentEnded);
     this.agentEnded();
+    this.flushLogPointer();
     this.model?.dispose();
     this.model = null;
 
@@ -232,20 +235,30 @@ export class TuiAdapter implements InstallerAdapter {
       return;
     }
     this.transcript.push(text);
+    this.flushLogPointer();
+  }
+
+  private flushLogPointer(): void {
+    if (this.logPointer) this.transcript.push(this.logPointer);
+    this.logPointer = null;
   }
 
   private readonly agentStarted = (): void => {
     this.agentWorking = true;
   };
 
-  /** Close the agent window; say where its hidden lines went, if any. */
+  /**
+   * Close the agent window. This runs just before the CLI adapter prints the
+   * agent's closing line ("Agent completed"), so the note on where the hidden
+   * lines went waits for that line.
+   */
   private readonly agentEnded = (): void => {
     if (!this.agentWorking) return;
     this.agentWorking = false;
     if (this.hiddenAgentLines > 0) {
       const log = getLogFilePath();
       const where = log ? `: ${log.startsWith(homedir()) ? `~${log.slice(homedir().length)}` : log}` : '';
-      this.transcript.push(`${INDENT}${chalk.dim(`› The agent's step-by-step log is in the installer log${where}`)}`);
+      this.logPointer = `${INDENT}${chalk.dim(`› The agent's step-by-step log is in the installer log${where}`)}`;
     }
     this.hiddenAgentLines = 0;
   };
