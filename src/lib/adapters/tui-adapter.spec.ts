@@ -221,7 +221,13 @@ describe('TuiAdapter', () => {
     expect(scrollback).toContain('Agent completed');
     expect(scrollback).toContain("The agent's step-by-step log is in the installer log");
     // Everything after the agent stays, in order.
-    const order = ['Agent completed', 'Callback has no route', 'Hint: Move the route', 'Validation found 1 issue(s)'];
+    const order = [
+      'Agent completed',
+      "The agent's step-by-step log is in the installer log",
+      'Callback has no route',
+      'Hint: Move the route',
+      'Validation found 1 issue(s)',
+    ];
     const at = order.map((text) => scrollback.indexOf(text));
     expect(at.every((i, n) => i > -1 && (n === 0 || i > at[n - 1]))).toBe(true);
     expect(scrollback).toContain('WorkOS AuthKit Installed');
