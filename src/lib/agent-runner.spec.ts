@@ -112,11 +112,12 @@ describe('installer prompt', () => {
     return vi.mocked(runAgent).mock.calls[0][1];
   };
 
-  it('tells a client-only app to add a /sign-in route that starts sign-in on load', async () => {
+  it('tells a client-only app to add a /login route and pass its redirect URI', async () => {
     const prompt = await promptFor('react', 'workos-authkit-react');
     expect(prompt).toContain('## Sign-in route (Initiate login URI)');
-    expect(prompt).toContain('the app origin plus /sign-in');
-    expect(prompt).toContain('add a /sign-in client route');
+    expect(prompt).toContain('the app origin plus /login');
+    expect(prompt).toContain('add a /login client route');
+    expect(prompt).toContain('set redirectUri on AuthKitProvider or createClient()');
   });
 
   it("pins a server SDK to its guide's sign-in route without the client-only steps", async () => {
@@ -125,8 +126,19 @@ describe('installer prompt', () => {
     expect(prompt).not.toContain('client route');
   });
 
-  it('adds no sign-in section when the framework has no fixed route', async () => {
-    const prompt = await promptFor('react-router', 'workos-authkit-react-router');
+  it.each([
+    ['react-router', '/login'],
+    ['tanstack-start', '/api/auth/sign-in'],
+    ['sveltekit', '/sign-in'],
+    ['node', '/login'],
+    ['php', '/login.php'],
+  ])('pins %s to its documented sign-in route %s', async (integration, path) => {
+    const prompt = await promptFor(integration, `workos-${integration}`);
+    expect(prompt).toContain(`the app origin plus ${path}.`);
+  });
+
+  it('leaves Next.js to its own sign-in instructions', async () => {
+    const prompt = await promptFor('nextjs', 'workos-authkit-nextjs');
     expect(prompt).not.toContain('## Sign-in route (Initiate login URI)');
   });
 

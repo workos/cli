@@ -19,6 +19,7 @@ import { initializeAgent, runAgent } from '../../lib/agent-interface.js';
 import { autoConfigureWorkOSEnvironment } from '../../lib/workos-management.js';
 import { validateInstallation } from '../../lib/validation/index.js';
 import { getReference } from '../../lib/skills-assets.js';
+import { buildSignInSection } from '../../lib/sign-in-route.js';
 
 export const config: FrameworkConfig = {
   metadata: {
@@ -127,7 +128,7 @@ The following WorkOS credentials should be configured in appsettings.Development
 
 ${refContent}
 
-Report your progress using [STATUS] prefixes.
+${buildSignInSection(config.metadata.integration)}Report your progress using [STATUS] prefixes.
 
 Begin integration now.`;
 

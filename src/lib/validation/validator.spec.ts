@@ -750,9 +750,10 @@ describe('validateInstallation', () => {
   });
 
   describe('client-only sign-in route validation', () => {
-    const signInIssue = (issues: { message: string }[]) => issues.find((i) => i.message.includes('/sign-in route'));
+    const signInIssue = (issues: { message: string }[]) => issues.find((i) => i.message.includes('/login route'));
+    const redirectIssue = (issues: { message: string }[]) => issues.find((i) => i.message.includes('redirectUri'));
 
-    it('fails a React SPA without a /sign-in route', async () => {
+    it('fails a React SPA without a /login route', async () => {
       mkdirSync(join(testDir, 'src'), { recursive: true });
       writeFileSync(join(testDir, 'src', 'App.tsx'), 'const { signIn } = useAuth();');
 
@@ -762,9 +763,9 @@ describe('validateInstallation', () => {
       expect(result.passed).toBe(false);
     });
 
-    it('accepts a React SPA whose source serves /sign-in', async () => {
+    it('accepts a React SPA whose source serves /login', async () => {
       mkdirSync(join(testDir, 'src'), { recursive: true });
-      writeFileSync(join(testDir, 'src', 'App.tsx'), '<Route path="/sign-in" element={<SignIn />} />');
+      writeFileSync(join(testDir, 'src', 'App.tsx'), '<Route path="/login" element={<Login />} />');
 
       const result = await validateInstallation('react', testDir, { runBuild: false });
 
@@ -772,21 +773,45 @@ describe('validateInstallation', () => {
     });
 
     it('accepts a vanilla JS app with a sign-in page', async () => {
-      mkdirSync(join(testDir, 'sign-in'), { recursive: true });
-      writeFileSync(join(testDir, 'sign-in', 'index.html'), '<script>authkit.signIn()</script>');
+      mkdirSync(join(testDir, 'login'), { recursive: true });
+      writeFileSync(join(testDir, 'login', 'index.html'), '<script>authkit.signIn()</script>');
 
       const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
 
       expect(signInIssue(result.issues)).toBeUndefined();
     });
 
-    it('ignores /sign-in mentions inside node_modules', async () => {
+    it('ignores /login mentions inside node_modules', async () => {
       mkdirSync(join(testDir, 'node_modules', 'pkg'), { recursive: true });
-      writeFileSync(join(testDir, 'node_modules', 'pkg', 'index.js'), "location.assign('/sign-in')");
+      writeFileSync(join(testDir, 'node_modules', 'pkg', 'index.js'), "location.assign('/login')");
 
       const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
 
       expect(signInIssue(result.issues)).toBeDefined();
+    });
+
+    it('fails a client app that leaves redirectUri at the SDK default', async () => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'src', 'main.tsx'),
+        '<AuthKitProvider clientId="client_test"><App /></AuthKitProvider>',
+      );
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      expect(redirectIssue(result.issues)?.severity).toBe('error');
+    });
+
+    it('accepts a client app that passes redirectUri', async () => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'src', 'main.ts'),
+        'createClient(clientId, { redirectUri: import.meta.env.VITE_WORKOS_REDIRECT_URI });',
+      );
+
+      const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
+
+      expect(redirectIssue(result.issues)).toBeUndefined();
     });
   });
 

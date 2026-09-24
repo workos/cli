@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { detectPort, getCallbackPath } from './port-detection.js';
+import { detectPort, getCallbackPath, getSignInPath } from './port-detection.js';
+import { buildSignInSection } from './sign-in-route.js';
 
 describe('port-detection — python/Django defaults', () => {
   let dir: string;
@@ -224,4 +225,35 @@ describe('port-detection — vite frameworks', () => {
       expect(detectPort(framework, dir)).toBe(5173);
     },
   );
+});
+
+describe('sign-in routes from the SDK docs', () => {
+  it('uses the SvelteKit README defaults', () => {
+    expect(detectPort('sveltekit', '/nonexistent')).toBe(5173);
+    expect(getCallbackPath('sveltekit')).toBe('/callback');
+    expect(getSignInPath('sveltekit')).toBe('/sign-in');
+  });
+
+  it.each([
+    ['nextjs', '/sign-in'],
+    ['react', '/login'],
+    ['vanilla-js', '/login'],
+    ['react-router', '/login'],
+    ['tanstack-start', '/api/auth/sign-in'],
+    ['node', '/login'],
+    ['python', '/auth/login/'],
+    ['ruby', '/auth/login'],
+    ['php', '/login.php'],
+    ['php-laravel', '/login'],
+    ['go', '/auth/login'],
+    ['dotnet', '/auth/login'],
+    ['kotlin', '/auth/login'],
+    ['elixir', '/auth/sign-in'],
+  ])('%s starts sign-in at %s', (integration, path) => {
+    expect(getSignInPath(integration)).toBe(path);
+  });
+
+  it.each(['ruby', 'go', 'dotnet', 'elixir'])('gives the custom %s prompt the route to pin', (integration) => {
+    expect(buildSignInSection(integration)).toContain(`the app origin plus ${getSignInPath(integration)}.`);
+  });
 });

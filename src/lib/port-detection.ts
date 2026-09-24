@@ -11,6 +11,8 @@ const INTEGRATION_TO_SETTINGS_KEY: Record<string, string> = {
   'tanstack-start': 'tanstackStart',
   'react-router': 'reactRouter',
   'vanilla-js': 'vanillaJs',
+  sveltekit: 'sveltekit',
+  node: 'node',
   python: 'python',
   ruby: 'ruby',
   php: 'php',
@@ -233,6 +235,7 @@ export function detectPort(integration: Integration, installDir: string): number
     case 'react':
     case 'react-router':
     case 'vanilla-js':
+    case 'sveltekit':
       // Vite-based frameworks
       detectedPort = parseViteConfigPortFromDir(installDir);
       break;

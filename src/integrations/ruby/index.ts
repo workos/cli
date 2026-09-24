@@ -9,6 +9,7 @@ import { initializeAgent, runAgent } from '../../lib/agent-interface.js';
 import { getOrAskForWorkOSCredentials } from '../../utils/ui-utils.js';
 import { autoConfigureWorkOSEnvironment } from '../../lib/workos-management.js';
 import { getReference } from '../../lib/skills-assets.js';
+import { buildSignInSection } from '../../lib/sign-in-route.js';
 
 export const config: FrameworkConfig = {
   metadata: {
@@ -114,7 +115,7 @@ The following environment variables are needed (create a .env file if one does n
 
 ${refContent}
 
-Report your progress using [STATUS] prefixes.
+${buildSignInSection(config.metadata.integration)}Report your progress using [STATUS] prefixes.
 
 Begin integration now.`;
 

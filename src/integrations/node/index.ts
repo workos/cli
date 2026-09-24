@@ -41,7 +41,7 @@ export const config: FrameworkConfig = {
     getOutroChanges: () => [
       'Analyzed your Express project structure',
       'Installed and configured @workos-inc/node SDK',
-      'Created authentication routes (/auth/login, /auth/callback, /auth/logout)',
+      'Created authentication routes (/login, /auth/callback, /logout)',
       'Configured session management',
     ],
     getOutroNextSteps: () => [

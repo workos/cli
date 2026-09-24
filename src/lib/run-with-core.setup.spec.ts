@@ -305,7 +305,7 @@ describe('application URLs for SDKs other than Next.js', () => {
     expect(result?.verified).toBe(true);
   });
 
-  it('saves only the sign-out URI for an SDK without a fixed sign-in route', async () => {
+  it('leaves out the initiate login URI when the app fails validation', async () => {
     await configureOtherApplicationUrls(
       { options, integration: 'react-router', emitter: createInstallerEventEmitter() },
       'client_a',
@@ -314,7 +314,7 @@ describe('application URLs for SDKs other than Next.js', () => {
     expect(vi.mocked(configureAuthkitApplication).mock.calls[0][0]).not.toHaveProperty('initiateLoginUri');
   });
 
-  it('saves the Vite /sign-in route once the app serves it', async () => {
+  it('saves the Vite /login route once the app serves it', async () => {
     await mkdir(join(directory, 'src'), { recursive: true });
     await writeFile(join(directory, 'package.json'), '{"dependencies":{"@workos-inc/authkit-react":"1"}}');
     await writeFile(join(directory, '.env.local'), 'VITE_WORKOS_CLIENT_ID=client_a\n');
@@ -324,7 +324,11 @@ describe('application URLs for SDKs other than Next.js', () => {
     );
     await writeFile(
       join(directory, 'src/App.tsx'),
-      "if (window.location.pathname === '/sign-in') signIn();\nconst { signIn } = useAuth();\n",
+      "if (window.location.pathname === '/login') signIn();\nconst { signIn } = useAuth();\n",
+    );
+    await writeFile(
+      join(directory, 'src/config.ts'),
+      'export const redirectUri = import.meta.env.VITE_WORKOS_REDIRECT_URI;\n',
     );
     await configureOtherApplicationUrls(
       { options, integration: 'react', emitter: createInstallerEventEmitter() },
@@ -332,11 +336,11 @@ describe('application URLs for SDKs other than Next.js', () => {
       'sk_test_a',
     );
     expect(vi.mocked(configureAuthkitApplication).mock.calls[0][0].initiateLoginUri).toBe(
-      'http://localhost:5173/sign-in',
+      'http://localhost:5173/login',
     );
   });
 
-  it('does not point the dashboard at a Vite /sign-in route the app lacks', async () => {
+  it('does not point the dashboard at a Vite /login route the app lacks', async () => {
     await configureOtherApplicationUrls(
       { options, integration: 'react', emitter: createInstallerEventEmitter() },
       'client_a',

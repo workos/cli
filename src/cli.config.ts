@@ -44,20 +44,22 @@ export const config = {
     react: {
       port: 5173,
       callbackPath: '/callback',
-      signInPath: '/sign-in',
+      signInPath: '/login',
     },
     tanstackStart: {
       port: 3000,
       callbackPath: '/api/auth/callback',
+      signInPath: '/api/auth/sign-in',
     },
     reactRouter: {
       port: 5173,
       callbackPath: '/callback',
+      signInPath: '/login',
     },
     vanillaJs: {
       port: 5173,
       callbackPath: '/callback',
-      signInPath: '/sign-in',
+      signInPath: '/login',
     },
     python: {
       port: 8000,
@@ -72,6 +74,7 @@ export const config = {
     php: {
       port: 8000,
       callbackPath: '/auth/callback',
+      signInPath: '/login.php',
     },
     phpLaravel: {
       port: 8000,
@@ -92,6 +95,16 @@ export const config = {
       port: 4000,
       callbackPath: '/auth/callback',
       signInPath: '/auth/sign-in',
+    },
+    sveltekit: {
+      port: 5173,
+      callbackPath: '/callback',
+      signInPath: '/sign-in',
+    },
+    node: {
+      port: 3000,
+      callbackPath: '/auth/callback',
+      signInPath: '/login',
     },
     kotlin: {
       port: 8080,

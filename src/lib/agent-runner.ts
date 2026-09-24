@@ -20,7 +20,8 @@ import { initializeAgent, runAgent, type RetryConfig } from './agent-interface.j
 import { uploadEnvironmentVariablesStep } from '../steps/index.js';
 import { autoConfigureWorkOSEnvironment } from './workos-management.js';
 import { assertSupportedNextJsRouter, assertNextjsSignInRouteAvailable } from '../integrations/nextjs/utils.js';
-import { detectPort, getCallbackPath, getSignInPath } from './port-detection.js';
+import { detectPort, getCallbackPath } from './port-detection.js';
+import { buildSignInSection } from './sign-in-route.js';
 import { writeEnvLocal } from './env-writer.js';
 
 /**
@@ -359,26 +360,6 @@ Do not claim the full integration or browser flows are verified. Report code imp
 ${signInSection}Report your progress using [STATUS] prefixes.
 
 Begin integration now.`;
-}
-
-const CLIENT_ONLY_INTEGRATIONS = new Set(['react', 'vanilla-js']);
-
-/** Pin the sign-in route the installer saves as the Initiate login URI (Next.js has its own section). */
-function buildSignInSection(integration: FrameworkConfig['metadata']['integration']): string {
-  const signInPath = getSignInPath(integration);
-  if (!signInPath || integration === 'nextjs') return '';
-  const lines = [
-    '## Sign-in route (Initiate login URI)',
-    '',
-    `After you finish, the installer sets the WorkOS Initiate login URI to the app origin plus ${signInPath}. AuthKit sends users there when sign-in starts outside the app, such as from a password-reset email or an invitation. The route must exist at exactly ${signInPath}, must be public, and must start AuthKit sign-in through the SDK. It is never the callback route.`,
-  ];
-  if (CLIENT_ONLY_INTEGRATIONS.has(integration)) {
-    lines.push(
-      '',
-      `This is a client-only app, so add a ${signInPath} client route that calls the SDK's redirect-based signIn() as soon as the AuthKit client is ready, without a click. Pass through the query parameters that the SDK README says signIn() accepts (for example, a login hint or invitation token). If the app has a client router, register ${signInPath} in it. If it has none, check window.location.pathname at startup. Keep the existing sign-in button. Do not add a server route or change the callback handling.`,
-    );
-  }
-  return `${lines.join('\n')}\n\n`;
 }
 
 function buildCompletionSummary(config: FrameworkConfig, changes: string[], nextSteps: string[]): string {

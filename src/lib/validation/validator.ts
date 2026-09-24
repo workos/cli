@@ -259,9 +259,11 @@ export async function validateFrameworkSpecific(framework: string, projectDir: s
     case 'react':
       await validateReactProviderWrapping(projectDir, issues);
       await validateClientSignInRoute(framework, projectDir, issues);
+      await validateClientRedirectUri(projectDir, issues);
       break;
     case 'vanilla-js':
       await validateClientSignInRoute(framework, projectDir, issues);
+      await validateClientRedirectUri(projectDir, issues);
       break;
     case 'react-router':
       await validateReactRouterRedirectUri(projectDir, issues);
@@ -289,24 +291,42 @@ async function validateClientSignInRoute(framework: string, projectDir: string, 
     [`${segment}.html`, `${segment}/index.html`, `public/${segment}.html`, `public/${segment}/index.html`],
     { cwd: projectDir },
   );
-  if (pages.length > 0) return;
-  const sources = await fg(['**/*.{ts,tsx,js,jsx,mjs,html,htm}'], {
-    cwd: projectDir,
-    ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.*/**'],
-  });
-  for (const file of sources) {
-    try {
-      if ((await readFile(join(projectDir, file), 'utf-8')).includes(signInPath)) return;
-    } catch {
-      // Unreadable file - keep looking
-    }
-  }
+  if (pages.length > 0 || (await clientSourceContains(projectDir, signInPath))) return;
   issues.push({
     type: 'file',
     severity: 'error',
     message: `No ${signInPath} route starts sign-in`,
     hint: `Add a public ${signInPath} client route that calls the SDK's signIn() on load. The installer saves it as the Initiate login URI.`,
   });
+}
+
+/**
+ * The client SDKs default their redirect URI to the page origin, but the
+ * installer registers WORKOS_REDIRECT_URI, so the app must pass it.
+ */
+async function validateClientRedirectUri(projectDir: string, issues: ValidationIssue[]) {
+  if (await clientSourceContains(projectDir, 'redirectUri')) return;
+  issues.push({
+    type: 'pattern',
+    severity: 'error',
+    message: 'The AuthKit client does not set redirectUri',
+    hint: 'Pass WORKOS_REDIRECT_URI (with the build tool env prefix) as redirectUri to AuthKitProvider or createClient(). The SDK default, the page origin, is not registered.',
+  });
+}
+
+async function clientSourceContains(projectDir: string, needle: string): Promise<boolean> {
+  const sources = await fg(['**/*.{ts,tsx,js,jsx,mjs,html,htm}'], {
+    cwd: projectDir,
+    ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.*/**'],
+  });
+  for (const file of sources) {
+    try {
+      if ((await readFile(join(projectDir, file), 'utf-8')).includes(needle)) return true;
+    } catch {
+      // Unreadable file - keep looking
+    }
+  }
+  return false;
 }
 
 /**
