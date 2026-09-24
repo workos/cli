@@ -115,7 +115,7 @@ The following environment variables are needed (create a .env file if one does n
 
 ${refContent}
 
-${buildSignInSection(config.metadata.integration)}Report your progress using [STATUS] prefixes.
+${buildSignInSection(config)}Report your progress using [STATUS] prefixes.
 
 Begin integration now.`;
 

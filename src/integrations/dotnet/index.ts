@@ -128,7 +128,7 @@ The following WorkOS credentials should be configured in appsettings.Development
 
 ${refContent}
 
-${buildSignInSection(config.metadata.integration)}Report your progress using [STATUS] prefixes.
+${buildSignInSection(config)}Report your progress using [STATUS] prefixes.
 
 Begin integration now.`;
 

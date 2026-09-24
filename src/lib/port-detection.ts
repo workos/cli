@@ -36,6 +36,17 @@ export function getCallbackPath(integration: Integration): string {
   return settings.frameworks[settingsKey]?.callbackPath ?? DEFAULT_CALLBACK_PATH;
 }
 
+/** The app's OAuth callback: the explicit override, else localhost on the detected port. */
+export function resolveRedirectUri(
+  integration: Integration,
+  { installDir, redirectUri }: { installDir: string; redirectUri?: string },
+  port?: number,
+): string {
+  return (
+    redirectUri || `http://localhost:${port ?? detectPort(integration, installDir)}${getCallbackPath(integration)}`
+  );
+}
+
 /** The route that starts sign-in, or undefined when the SDK guide does not fix one. */
 export function getSignInPath(integration: Integration): string | undefined {
   return settings.frameworks[INTEGRATION_TO_SETTINGS_KEY[integration]]?.signInPath;

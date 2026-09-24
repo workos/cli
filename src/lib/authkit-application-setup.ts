@@ -13,8 +13,9 @@ export interface AuthkitApplicationSetup {
   clientId: string;
   redirectUri: string;
   signOutUri: string;
-  /** Absent when the framework has no fixed sign-in route to point at. */
+  /** Absent when there is no sign-in route to point at; `initiateLoginReason` says why. */
   initiateLoginUri?: string;
+  initiateLoginReason?: string;
   homepageUrl?: string;
   verified: boolean;
   /** The callback was registered; this alone does not verify the other URLs or browser flows. */
@@ -236,10 +237,10 @@ export async function configureAuthkitApplication(
     const reasons: string[] = [];
     const defaults = original.logoutUris.filter((uri) => uri.isDefault);
     const signOutConflict = defaults.length > 1 || defaults.some((uri) => !isSignOutDestination(uri.uri));
-    const initiateConflict =
-      setup.initiateLoginUri !== undefined &&
-      !!original.initiateLoginUri &&
-      original.initiateLoginUri !== setup.initiateLoginUri;
+    // True when this app has an initiate login URI that `uri` does not already hold.
+    const differsFromInitiate = (uri: string | null) =>
+      setup.initiateLoginUri !== undefined && uri !== setup.initiateLoginUri;
+    const initiateConflict = !!original.initiateLoginUri && differsFromInitiate(original.initiateLoginUri);
     if (signOutConflict)
       reasons.push(
         'An existing sign-out default differs from this app. It was left unchanged; confirm the intended default in the dashboard.',
@@ -271,8 +272,7 @@ export async function configureAuthkitApplication(
       if (saved.setUserlandApplicationLogoutUris.__typename !== 'LogoutUrisSet')
         return pending('Could not save the sign-out URL. Check the dashboard before continuing.');
     }
-    const needsInitiate =
-      setup.initiateLoginUri !== undefined && !initiateConflict && original.initiateLoginUri !== setup.initiateLoginUri;
+    const needsInitiate = !original.initiateLoginUri && differsFromInitiate(original.initiateLoginUri);
     const homepageValue = setup.homepageUrl ?? (original.appHomepageUrl || new URL(setup.redirectUri).origin);
     const needsHomepage = original.appHomepageUrl !== homepageValue;
     if (needsInitiate || needsHomepage) {
@@ -318,7 +318,7 @@ export async function configureAuthkitApplication(
       ) ||
       saved.logoutUris.filter((uri) => uri.isDefault).length !== 1 ||
       !saved.logoutUris.some((uri) => isSignOutDestination(uri.uri) && uri.isDefault) ||
-      (setup.initiateLoginUri !== undefined && saved.initiateLoginUri !== setup.initiateLoginUri) ||
+      differsFromInitiate(saved.initiateLoginUri) ||
       saved.appHomepageUrl !== homepageValue
     )
       return pending(

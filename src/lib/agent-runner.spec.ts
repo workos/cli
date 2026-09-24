@@ -108,7 +108,15 @@ describe('installer prompt', () => {
   });
 
   const promptFor = async (integration: FrameworkConfig['metadata']['integration'], skillName: string) => {
-    await runAgentInstaller({ ...config, metadata: { ...config.metadata, integration, skillName } }, options);
+    const requiresApiKey = !['react', 'vanilla-js'].includes(integration);
+    await runAgentInstaller(
+      {
+        ...config,
+        metadata: { ...config.metadata, integration, skillName },
+        environment: { ...config.environment, requiresApiKey },
+      },
+      options,
+    );
     return vi.mocked(runAgent).mock.calls[0][1];
   };
 

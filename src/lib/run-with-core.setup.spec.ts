@@ -249,9 +249,16 @@ describe('dashboard checklist reporting', () => {
   it('reports only the other two URLs when the environment step already reported the callback', async () => {
     const { emitter, events } = record();
     const { initiateLoginUri: _omitted, ...withoutSignIn } = setup;
-    await reportAppUrlSetup(emitter, async () => ({ ...withoutSignIn, verified: true, callbackRegistered: true }), {
-      includeRedirect: false,
-    });
+    await reportAppUrlSetup(
+      emitter,
+      async () => ({
+        ...withoutSignIn,
+        initiateLoginReason: NO_SIGN_IN_ROUTE_REASON,
+        verified: true,
+        callbackRegistered: true,
+      }),
+      { includeRedirect: false },
+    );
     expect(events).toEqual([
       'app-urls:step initiate-login-uri started',
       'app-urls:step sign-out-uri started',
@@ -305,13 +312,15 @@ describe('application URLs for SDKs other than Next.js', () => {
     expect(result?.verified).toBe(true);
   });
 
-  it('leaves out the initiate login URI when the app fails validation', async () => {
+  it("saves a server SDK's documented route without scanning its source", async () => {
     await configureOtherApplicationUrls(
       { options, integration: 'react-router', emitter: createInstallerEventEmitter() },
       'client_a',
       'sk_test_a',
     );
-    expect(vi.mocked(configureAuthkitApplication).mock.calls[0][0]).not.toHaveProperty('initiateLoginUri');
+    expect(vi.mocked(configureAuthkitApplication).mock.calls[0][0].initiateLoginUri).toBe(
+      'http://localhost:5173/login',
+    );
   });
 
   it('saves the Vite /login route once the app serves it', async () => {
@@ -340,13 +349,26 @@ describe('application URLs for SDKs other than Next.js', () => {
     );
   });
 
-  it('does not point the dashboard at a Vite /login route the app lacks', async () => {
-    await configureOtherApplicationUrls(
-      { options, integration: 'react', emitter: createInstallerEventEmitter() },
-      'client_a',
-      'sk_test_a',
-    );
+  it('does not point the dashboard at a Vite /login route the app lacks, and says why', async () => {
+    const emitter = createInstallerEventEmitter();
+    const events: string[] = [];
+    emitter.on('app-urls:step', ({ step, status, detail }) => events.push(`${step} ${status} ${detail ?? ''}`.trim()));
+    await configureOtherApplicationUrls({ options, integration: 'react', emitter }, 'client_a', 'sk_test_a');
     expect(vi.mocked(configureAuthkitApplication).mock.calls[0][0]).not.toHaveProperty('initiateLoginUri');
+    expect(events).toContain('initiate-login-uri skipped The app has no /login route that starts sign-in.');
+  });
+
+  it('shows an unusable callback URL in the checklist instead of dropping it', async () => {
+    const emitter = createInstallerEventEmitter();
+    const events: string[] = [];
+    emitter.on('app-urls:step', ({ step, status }) => events.push(`${step} ${status}`));
+    const result = await configureOtherApplicationUrls(
+      { options: { ...options, redirectUri: 'ftp://localhost/callback' }, integration: 'go', emitter },
+      'client_a',
+    );
+    expect(result).toBeUndefined();
+    expect(events).toEqual(['initiate-login-uri skipped', 'sign-out-uri skipped']);
+    expect(configureAuthkitApplication).not.toHaveBeenCalled();
   });
 
   it('leaves the settings for the dashboard instead of failing the install', async () => {

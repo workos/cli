@@ -60,7 +60,8 @@ import {
   getNextJsRouter,
   assertNextjsSignInRouteAvailable,
 } from '../integrations/nextjs/utils.js';
-import { detectPort, getCallbackPath, getSignInPath } from './port-detection.js';
+import { detectPort, getSignInPath, resolveRedirectUri } from './port-detection.js';
+import { hasClientSignInRoute } from './validation/validator.js';
 import { InstallDeclinedError } from './installer-errors.js';
 import { writeEnvLocal } from './env-writer.js';
 import { getRegistry } from './registry.js';
@@ -232,7 +233,7 @@ export async function configureInstallEnvironment(
   // Non-JavaScript agents write their own env files in the project's format.
   if (!isJavascript) return;
 
-  const redirectUri = installerOptions.redirectUri || `http://localhost:${port}${getCallbackPath(integration)}`;
+  const redirectUri = resolveRedirectUri(integration, installerOptions, port);
 
   const redirectUriKey = integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
   try {
@@ -271,12 +272,11 @@ export async function reportAppUrlSetup(
   for (const id of includeRedirect ? (['redirect-uri', ...ids] as const) : ids) step(id, 'started');
   const setup = await configure();
   if (includeRedirect) step('redirect-uri', 'done');
-  for (const id of ids) {
-    if (id === 'initiate-login-uri' && setup.initiateLoginUri === undefined)
-      step(id, 'skipped', NO_SIGN_IN_ROUTE_REASON);
-    else if (setup.verified) step(id, 'done');
-    else step(id, 'skipped', setup.reason);
-  }
+  const settle = (id: SetupItemId) => (setup.verified ? step(id, 'done') : step(id, 'skipped', setup.reason));
+  if (setup.initiateLoginUri === undefined)
+    step('initiate-login-uri', 'skipped', setup.initiateLoginReason ?? setup.reason);
+  else settle('initiate-login-uri');
+  settle('sign-out-uri');
   return setup;
 }
 
@@ -293,19 +293,29 @@ export async function configureOtherApplicationUrls(
 ): Promise<AuthkitApplicationSetup | undefined> {
   const { options: installerOptions, integration } = context;
   if (!integration || integration === 'nextjs') return undefined;
-  const port = detectPort(integration, installerOptions.installDir);
-  const redirectUri = installerOptions.redirectUri || `http://localhost:${port}${getCallbackPath(integration)}`;
-  // Point the dashboard at the sign-in route only when the app checks out.
-  const validation = await validateInstallation(integration, installerOptions.installDir, { runBuild: false });
+  let signInPath = getSignInPath(integration);
+  let initiateLoginReason = signInPath ? undefined : NO_SIGN_IN_ROUTE_REASON;
+  // A client-only route has no file the guide fixes, so save it only once the app serves it.
+  const clientOnly = (await getRegistry()).get(integration)?.config.environment.requiresApiKey === false;
+  if (signInPath && clientOnly && !(await hasClientSignInRoute(installerOptions.installDir, signInPath))) {
+    initiateLoginReason = `The app has no ${signInPath} route that starts sign-in.`;
+    signInPath = undefined;
+  }
   let setup: AuthkitApplicationSetup;
   try {
-    setup = buildApplicationSetup({
-      clientId,
-      redirectUri,
-      homepageUrl: installerOptions.homepageUrl,
-      signInPath: validation.passed ? getSignInPath(integration) : undefined,
-    });
-  } catch {
+    setup = {
+      ...buildApplicationSetup({
+        clientId,
+        redirectUri: resolveRedirectUri(integration, installerOptions),
+        homepageUrl: installerOptions.homepageUrl,
+        signInPath,
+      }),
+      ...(initiateLoginReason ? { initiateLoginReason } : {}),
+    };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    for (const step of ['initiate-login-uri', 'sign-out-uri'] as const)
+      context.emitter.emit('app-urls:step', { step, status: 'skipped', detail });
     return undefined;
   }
   return reportAppUrlSetup(
@@ -497,9 +507,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
               installerOptions.installDir,
               installerOptions.homepageUrl,
             );
-            const expectedRedirectUri =
-              installerOptions.redirectUri ||
-              `http://localhost:${detectPort(integration, installerOptions.installDir)}${getCallbackPath(integration)}`;
+            const expectedRedirectUri = resolveRedirectUri(integration, installerOptions);
             if (applicationSetup.redirectUri !== expectedRedirectUri) {
               throw new Error(
                 'The app callback URL changed during installation. Confirm it before configuring WorkOS.',

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { detectPort, getCallbackPath, getSignInPath } from './port-detection.js';
 import { buildSignInSection } from './sign-in-route.js';
+import type { FrameworkConfig } from './framework-config.js';
 
 describe('port-detection — python/Django defaults', () => {
   let dir: string;
@@ -253,7 +254,15 @@ describe('sign-in routes from the SDK docs', () => {
     expect(getSignInPath(integration)).toBe(path);
   });
 
-  it.each(['ruby', 'go', 'dotnet', 'elixir'])('gives the custom %s prompt the route to pin', (integration) => {
-    expect(buildSignInSection(integration)).toContain(`the app origin plus ${getSignInPath(integration)}.`);
-  });
+  it.each(['ruby', 'go', 'dotnet', 'elixir', 'python'])(
+    'gives the custom %s prompt the route to pin',
+    (integration) => {
+      expect(
+        buildSignInSection({
+          metadata: { integration } as FrameworkConfig['metadata'],
+          environment: { requiresApiKey: true } as FrameworkConfig['environment'],
+        }),
+      ).toContain(`the app origin plus ${getSignInPath(integration)}.`);
+    },
+  );
 });

@@ -173,7 +173,7 @@ Note: For Elixir/Phoenix, these should be read via System.get_env() in config/ru
 
 ${refContent}
 
-${buildSignInSection(config.metadata.integration)}Report your progress using [STATUS] prefixes.
+${buildSignInSection(config)}Report your progress using [STATUS] prefixes.
 
 Begin integration now.`;
 }

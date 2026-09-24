@@ -258,12 +258,10 @@ export async function validateFrameworkSpecific(framework: string, projectDir: s
     }
     case 'react':
       await validateReactProviderWrapping(projectDir, issues);
-      await validateClientSignInRoute(framework, projectDir, issues);
-      await validateClientRedirectUri(projectDir, issues);
+      await validateClientOnlyApp(framework, projectDir, issues);
       break;
     case 'vanilla-js':
-      await validateClientSignInRoute(framework, projectDir, issues);
-      await validateClientRedirectUri(projectDir, issues);
+      await validateClientOnlyApp(framework, projectDir, issues);
       break;
     case 'react-router':
       await validateReactRouterRedirectUri(projectDir, issues);
@@ -279,54 +277,61 @@ export async function validateFrameworkSpecific(framework: string, projectDir: s
 }
 
 /**
- * Client-only apps have no route files to match, so look for the sign-in path
- * in the source, or a page that serves it. The installer saves this route as
- * the Initiate login URI.
+ * Client-only apps have no route files to match, so scan the source once for
+ * the sign-in route (saved as the Initiate login URI) and for `redirectUri`:
+ * the SDKs default to the page origin, but the installer registers
+ * WORKOS_REDIRECT_URI.
  */
-async function validateClientSignInRoute(framework: string, projectDir: string, issues: ValidationIssue[]) {
-  const signInPath = getSignInPath(framework as Parameters<typeof getSignInPath>[0]);
-  if (!signInPath) return;
+async function validateClientOnlyApp(framework: string, projectDir: string, issues: ValidationIssue[]) {
+  const signInPath = getSignInPath(framework);
+  const found = await clientSourceMatches(projectDir, signInPath ? [signInPath, 'redirectUri'] : ['redirectUri']);
+  if (signInPath && !found.has(signInPath) && !(await hasSignInPage(projectDir, signInPath)))
+    issues.push({
+      type: 'file',
+      severity: 'error',
+      message: `No ${signInPath} route starts sign-in`,
+      hint: `Add a public ${signInPath} client route that calls the SDK's signIn() on load. The installer saves it as the Initiate login URI.`,
+    });
+  if (!found.has('redirectUri'))
+    issues.push({
+      type: 'pattern',
+      severity: 'error',
+      message: 'The AuthKit client does not set redirectUri',
+      hint: 'Pass WORKOS_REDIRECT_URI (with the build tool env prefix) as redirectUri to AuthKitProvider or createClient(). The SDK default, the page origin, is not registered.',
+    });
+}
+
+/** Whether a client-only app serves `signInPath`, from its source or a static page. */
+export async function hasClientSignInRoute(projectDir: string, signInPath: string): Promise<boolean> {
+  return (await clientSourceMatches(projectDir, [signInPath])).size > 0 || hasSignInPage(projectDir, signInPath);
+}
+
+async function hasSignInPage(projectDir: string, signInPath: string): Promise<boolean> {
   const segment = signInPath.replace(/^\/|\/$/g, '');
   const pages = await fg(
     [`${segment}.html`, `${segment}/index.html`, `public/${segment}.html`, `public/${segment}/index.html`],
     { cwd: projectDir },
   );
-  if (pages.length > 0 || (await clientSourceContains(projectDir, signInPath))) return;
-  issues.push({
-    type: 'file',
-    severity: 'error',
-    message: `No ${signInPath} route starts sign-in`,
-    hint: `Add a public ${signInPath} client route that calls the SDK's signIn() on load. The installer saves it as the Initiate login URI.`,
-  });
+  return pages.length > 0;
 }
 
-/**
- * The client SDKs default their redirect URI to the page origin, but the
- * installer registers WORKOS_REDIRECT_URI, so the app must pass it.
- */
-async function validateClientRedirectUri(projectDir: string, issues: ValidationIssue[]) {
-  if (await clientSourceContains(projectDir, 'redirectUri')) return;
-  issues.push({
-    type: 'pattern',
-    severity: 'error',
-    message: 'The AuthKit client does not set redirectUri',
-    hint: 'Pass WORKOS_REDIRECT_URI (with the build tool env prefix) as redirectUri to AuthKitProvider or createClient(). The SDK default, the page origin, is not registered.',
-  });
-}
-
-async function clientSourceContains(projectDir: string, needle: string): Promise<boolean> {
+async function clientSourceMatches(projectDir: string, needles: string[]): Promise<Set<string>> {
   const sources = await fg(['**/*.{ts,tsx,js,jsx,mjs,html,htm}'], {
     cwd: projectDir,
     ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.*/**'],
   });
-  for (const file of sources) {
-    try {
-      if ((await readFile(join(projectDir, file), 'utf-8')).includes(needle)) return true;
-    } catch {
-      // Unreadable file - keep looking
-    }
-  }
-  return false;
+  const found = new Set<string>();
+  await Promise.all(
+    sources.map(async (file) => {
+      try {
+        const content = await readFile(join(projectDir, file), 'utf-8');
+        for (const needle of needles) if (content.includes(needle)) found.add(needle);
+      } catch {
+        // Unreadable file - skip it
+      }
+    }),
+  );
+  return found;
 }
 
 /**
