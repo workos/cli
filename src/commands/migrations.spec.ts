@@ -2,9 +2,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const mockParseAsync = vi.fn();
 const mockName = vi.fn();
+const mockLoadRuntimeBundle = vi.fn();
 
 vi.mock('@workos/migrations/dist/cli/index.js', () => ({
   program: { parseAsync: mockParseAsync, name: mockName },
+}));
+
+vi.mock('../lib/runtime-assets.js', () => ({
+  loadRuntimeBundle: mockLoadRuntimeBundle,
 }));
 
 const { getMigrationsPassthroughArgs, runMigrations } = await import('./migrations.js');
@@ -12,6 +17,7 @@ const { getMigrationsPassthroughArgs, runMigrations } = await import('./migratio
 describe('runMigrations', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockLoadRuntimeBundle.mockResolvedValue(null);
     delete process.env.WORKOS_SECRET_KEY;
     delete process.env.WORKOS_API_URL;
   });
@@ -72,6 +78,27 @@ describe('runMigrations', () => {
       await runMigrations(['wizard']);
       expect(mockName).toHaveBeenCalledWith('workos migrations');
     });
+  });
+
+  it('uses the runtime bundle program when it exposes the commander surface', async () => {
+    const bundleParseAsync = vi.fn();
+    const bundleName = vi.fn();
+    mockLoadRuntimeBundle.mockResolvedValue({ program: { parseAsync: bundleParseAsync, name: bundleName } });
+
+    await runMigrations(['wizard']);
+
+    expect(mockLoadRuntimeBundle).toHaveBeenCalledWith('migrations');
+    expect(bundleName).toHaveBeenCalledTimes(1);
+    expect(bundleParseAsync).toHaveBeenCalledWith(['wizard'], { from: 'user' });
+    expect(mockParseAsync).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the compiled-in program when the bundle lacks the expected export', async () => {
+    mockLoadRuntimeBundle.mockResolvedValue({ program: { notCommander: true } });
+
+    await runMigrations(['wizard']);
+
+    expect(mockParseAsync).toHaveBeenCalledWith(['wizard'], { from: 'user' });
   });
 
   it('sets WORKOS_API_URL when apiBaseUrl is provided', async () => {
