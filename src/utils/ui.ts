@@ -24,14 +24,51 @@ import { palette } from './cli-symbols.js';
 // resource commands), which is most invocations. import() is module-cached, so
 // only the first prompt pays.
 
-// ── Dashboard mode ──────────────────────────────────────────────────────────
-// When true, suppress all human output (the Dashboard adapter drives its own UI).
-let dashboardMode = false;
-export function setDashboardMode(enabled: boolean): void {
-  dashboardMode = enabled;
+// ── UI host ─────────────────────────────────────────────────────────────────
+// A host (the full-screen installer) takes over where output and prompts go.
+// With no host, everything below prints to the terminal exactly as before.
+
+/** The log level a line was printed at, so a host can style or surface it. */
+export type UiLineKind = 'plain' | 'info' | 'step' | 'success' | 'warn' | 'error' | 'hint' | 'detail';
+
+export interface UiLine {
+  kind: UiLineKind;
+  /** The caller's text, unstyled. Empty for a blank line. */
+  message: string;
+  /** The styled line ui would have printed, without the leading indent. */
+  rendered: string;
+  /** Where the line would have gone. */
+  stream: 'stdout' | 'stderr';
 }
-export function isDashboardMode(): boolean {
-  return dashboardMode;
+
+export type UiPromptRequest =
+  | ({ kind: 'confirm' } & ConfirmOptions)
+  | ({ kind: 'select' } & SelectOptions<unknown>)
+  | ({ kind: 'text' } & TextOptions)
+  | ({ kind: 'password' } & PasswordOptions);
+
+export interface UiHost {
+  /** A line ui would have printed. */
+  line(line: UiLine): void;
+  /** The running spinner's message, or null when no spinner is running. */
+  status(message: string | null): void;
+  /**
+   * Answer a prompt: a boolean for confirm, the chosen option's value for
+   * select, a string for text/password, or CANCEL. Must resolve CANCEL when
+   * `request.signal` aborts. Only one prompt is open at a time.
+   */
+  prompt(request: UiPromptRequest): Promise<unknown>;
+}
+
+let uiHost: UiHost | null = null;
+
+/** Route all ui output and prompts to `host`, or back to the terminal with null. */
+export function setUiHost(host: UiHost | null): void {
+  uiHost = host;
+}
+
+export function getUiHost(): UiHost | null {
+  return uiHost;
 }
 
 // Brand palette (shared with summary-box via cli-symbols). chalk auto-disables
@@ -51,18 +88,24 @@ export function pill(label: string, kind: 'info' | 'warn' = 'info'): string {
 
 const INDENT = '  ';
 
-// Every stdout write routes through line()/blank(), which are the single
-// dashboard-mode guard — so no output surface below has to re-check the flag.
-/** Print one indented line to stdout (suppressed in dashboard mode). */
-function line(text = ''): void {
-  if (dashboardMode) return;
-  console.log(INDENT + text);
+// Every stdout write routes through emit(), the single point where a UI host
+// takes over — so no output surface below has to check for one.
+function emit(kind: UiLineKind, message: string, rendered: string, terminal = INDENT + rendered): void {
+  if (uiHost) {
+    uiHost.line({ kind, message, rendered, stream: 'stdout' });
+    return;
+  }
+  console.log(terminal);
 }
 
-/** Print a vertical blank line (suppressed in dashboard mode). */
+/** Print one indented line to stdout. */
+function line(text = ''): void {
+  emit('plain', text, text);
+}
+
+/** Print a vertical blank line. */
 function blank(): void {
-  if (dashboardMode) return;
-  console.log('');
+  emit('plain', '', '', '');
 }
 
 // ── Output surface ───────────────────────────────────────────────────────────
@@ -98,16 +141,16 @@ function note(message: string): void {
 }
 
 const log = {
-  info: (m: string) => line(m),
-  step: (m: string) => line(`${accent('›')} ${m}`),
-  success: (m: string) => line(`${green('✓')} ${m}`),
-  warn: (m: string) => line(`${yellow('!')} ${m}`),
-  warning: (m: string) => line(`${yellow('!')} ${m}`),
-  error: (m: string) => line(`${red('✗')} ${m}`),
+  info: (m: string) => emit('info', m, m),
+  step: (m: string) => emit('step', m, `${accent('›')} ${m}`),
+  success: (m: string) => emit('success', m, `${green('✓')} ${m}`),
+  warn: (m: string) => emit('warn', m, `${yellow('!')} ${m}`),
+  warning: (m: string) => emit('warn', m, `${yellow('!')} ${m}`),
+  error: (m: string) => emit('error', m, `${red('✗')} ${m}`),
   /** A muted, low-priority aside (opt-out hints, "run X later"). One dim line. */
-  hint: (m: string) => line(dim(m)),
+  hint: (m: string) => emit('hint', m, dim(m)),
   /** A nested sub-step, indented one level under its parent line. */
-  detail: (m: string) => line(`  ${dim('›')} ${dim(m)}`),
+  detail: (m: string) => emit('detail', m, `  ${dim('›')} ${dim(m)}`),
 };
 
 // ── Aligned key/value rows ────────────────────────────────────────────────────
@@ -128,7 +171,7 @@ export interface Row {
  * property of the whole set, so callers pass every row at once.
  */
 function rows(items: Row[]): void {
-  if (dashboardMode || items.length === 0) return;
+  if (items.length === 0) return;
   const width = Math.max(...items.map((i) => i.key.length));
   const paint: Record<RowStatusKind, (s: string) => string> = { ok: green, muted: dim, warn: yellow };
   for (const it of items) {
@@ -158,12 +201,18 @@ interface PausableSpinner {
 }
 let activeSpinner: PausableSpinner | null = null;
 
-/** spinner: start(msg) / message(msg) / stop(msg, code). */
+/**
+ * spinner: start(msg) / message(msg) / stop(msg, code).
+ *
+ * With a UI host, the spinner reports its message through `host.status()` and
+ * never animates; `stop()` still records its final line.
+ */
 function spinner(): Spinner {
   let timer: ReturnType<typeof setInterval> | undefined;
   let frame = 0;
   let text = '';
-  const isTty = Boolean(process.stdout.isTTY) && !dashboardMode;
+  let hosted = false;
+  const isTty = Boolean(process.stdout.isTTY);
   const render = () => {
     process.stdout.write(`\r${INDENT}${dim(SPINNER_FRAMES[(frame = (frame + 1) % SPINNER_FRAMES.length)])} ${text}`);
   };
@@ -179,7 +228,11 @@ function spinner(): Spinner {
   const handle: Spinner & PausableSpinner = {
     start(message = '') {
       text = message;
-      if (dashboardMode) return;
+      if (uiHost) {
+        hosted = true;
+        uiHost.status(text);
+        return;
+      }
       if (isTty) {
         tick();
         activeSpinner = handle;
@@ -189,6 +242,7 @@ function spinner(): Spinner {
     },
     message(message: string) {
       text = message;
+      if (hosted) uiHost?.status(text);
     },
     stop(message?: string, code = 0) {
       if (timer) {
@@ -196,10 +250,14 @@ function spinner(): Spinner {
         timer = undefined;
       }
       if (activeSpinner === handle) activeSpinner = null;
-      if (dashboardMode) return;
-      clearLine();
-      const glyph = code === 0 ? green('✓') : red('✗');
-      line(`${glyph} ${message ?? text}`);
+      if (hosted) {
+        hosted = false;
+        uiHost?.status(null);
+      } else {
+        clearLine();
+      }
+      const final = message ?? text;
+      emit(code === 0 ? 'success' : 'error', final, `${code === 0 ? green('✓') : red('✗')} ${final}`);
     },
     // Halt + erase without printing a final line (e.g. an orphaned spinner from
     // a failed step being cleared before a prompt), and deregister so a prompt
@@ -210,7 +268,11 @@ function spinner(): Spinner {
         timer = undefined;
       }
       if (activeSpinner === handle) activeSpinner = null;
-      if (dashboardMode) return;
+      if (hosted) {
+        hosted = false;
+        uiHost?.status(null);
+        return;
+      }
       clearLine();
     },
     // Pause/resume let a prompt borrow the terminal: pause clears the spinner
@@ -226,7 +288,7 @@ function spinner(): Spinner {
     resume() {
       // Only resume if this handle is still the active spinner — never resurrect
       // a spinner that was stopped or cleared while the prompt was open.
-      if (activeSpinner === handle && !dashboardMode) tick();
+      if (activeSpinner === handle) tick();
     },
   };
   return handle;
@@ -248,7 +310,10 @@ export function isCancel(value: unknown): value is symbol {
 
 /** Print a cancellation line. */
 export function cancel(message = 'Cancelled'): void {
-  if (dashboardMode) return;
+  if (uiHost) {
+    uiHost.line({ kind: 'plain', message, rendered: dim(message), stream: 'stderr' });
+    return;
+  }
   console.error(INDENT + dim(message));
 }
 
@@ -288,6 +353,12 @@ export class PromptUnavailableError extends Error {
  */
 let promptChain: Promise<unknown> = Promise.resolve();
 
+/** Hand a prompt to the UI host, short-circuiting one whose signal already aborted. */
+async function hostPrompt<T>(host: UiHost, request: UiPromptRequest): Promise<T | symbol> {
+  if (request.signal?.aborted) return CANCEL;
+  return (await host.prompt(request)) as T | symbol;
+}
+
 async function withPrompt<T>(run: () => Promise<T>): Promise<T> {
   if (isJsonMode()) {
     throw new PromptUnavailableError(
@@ -321,7 +392,9 @@ async function withPrompt<T>(run: () => Promise<T>): Promise<T> {
  * Adapt the validate contract (return error string / Error when invalid,
  * undefined when valid) to @inquirer's (return true when valid, string when not).
  */
-type ValidateFn = (value: string) => string | Error | undefined | void | Promise<string | Error | undefined | void>;
+export type ValidateFn = (
+  value: string,
+) => string | Error | undefined | void | Promise<string | Error | undefined | void>;
 function adaptValidate(validate?: ValidateFn) {
   if (!validate) return undefined;
   return async (value: string): Promise<boolean | string> => {
@@ -333,13 +406,14 @@ function adaptValidate(validate?: ValidateFn) {
 
 // ── Input surface (@inquirer under the hood) ─────────────────────
 
-interface ConfirmOptions {
+export interface ConfirmOptions {
   message: string;
   initialValue?: boolean;
   signal?: AbortSignal;
 }
 async function confirm(options: ConfirmOptions): Promise<boolean | symbol> {
   return withPrompt(async () => {
+    if (uiHost) return hostPrompt<boolean>(uiHost, { kind: 'confirm', ...options });
     const { confirm: inquirerConfirm } = await import('@inquirer/prompts');
     try {
       return await inquirerConfirm(
@@ -353,14 +427,14 @@ async function confirm(options: ConfirmOptions): Promise<boolean | symbol> {
   });
 }
 
-interface SelectOption<T> {
+export interface SelectOption<T> {
   value: T;
   label?: string;
   hint?: string;
   /** Not selectable; a string renders as the reason next to the row. */
   disabled?: boolean | string;
 }
-interface SelectOptions<T> {
+export interface SelectOptions<T> {
   message: string;
   options: ReadonlyArray<SelectOption<T>>;
   initialValue?: T;
@@ -369,6 +443,7 @@ interface SelectOptions<T> {
 }
 async function select<T>(options: SelectOptions<T>): Promise<T | symbol> {
   return withPrompt(async () => {
+    if (uiHost) return hostPrompt<T>(uiHost, { kind: 'select', ...(options as SelectOptions<unknown>) });
     const { select: inquirerSelect } = await import('@inquirer/prompts');
     try {
       return await inquirerSelect<T>(
@@ -392,7 +467,7 @@ async function select<T>(options: SelectOptions<T>): Promise<T | symbol> {
   });
 }
 
-interface TextOptions {
+export interface TextOptions {
   message: string;
   placeholder?: string;
   defaultValue?: string;
@@ -402,6 +477,7 @@ interface TextOptions {
 }
 async function text(options: TextOptions): Promise<string | symbol> {
   return withPrompt(async () => {
+    if (uiHost) return hostPrompt<string>(uiHost, { kind: 'text', ...options });
     // @inquirer/input has no placeholder concept, and mapping it to `default`
     // would auto-submit the hint as the real value on an empty enter. Fold it
     // into the message so the hint survives (rendered as ghost text previously).
@@ -423,13 +499,14 @@ async function text(options: TextOptions): Promise<string | symbol> {
   });
 }
 
-interface PasswordOptions {
+export interface PasswordOptions {
   message: string;
   validate?: ValidateFn;
   signal?: AbortSignal;
 }
 async function password(options: PasswordOptions): Promise<string | symbol> {
   return withPrompt(async () => {
+    if (uiHost) return hostPrompt<string>(uiHost, { kind: 'password', ...options });
     const { password: inquirerPassword } = await import('@inquirer/prompts');
     try {
       return await inquirerPassword(
