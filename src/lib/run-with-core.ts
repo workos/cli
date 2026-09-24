@@ -200,7 +200,8 @@ export async function configureInstallEnvironment(
 
   const registry = await getRegistry();
   const mod = registry.get(integration);
-  if (mod?.config.metadata.language !== 'javascript') return;
+  if (!mod) return;
+  const isJavascript = mod.config.metadata.language === 'javascript';
 
   if (integration === 'nextjs') {
     assertSupportedNextJsRouter(await getNextJsRouter(installerOptions));
@@ -208,22 +209,28 @@ export async function configureInstallEnvironment(
   }
 
   const port = detectPort(integration, installerOptions.installDir);
-  const redirectUri = installerOptions.redirectUri || `http://localhost:${port}${getCallbackPath(integration)}`;
   // Next.js URL writes happen after code validation. That step chooses ONE
   // target: the dashboard application, or an API-key-only callback without a session.
-  const requiresApiKey = ['tanstack-start', 'react-router'].includes(integration);
-  step('env-vars', 'started');
-  if (credentials.apiKey && requiresApiKey) {
+  // Every other server-side SDK registers its URLs here: the integration's own
+  // run() skips it because this machine passes it the credentials.
+  const registersUrls = mod.config.environment.requiresApiKey && integration !== 'nextjs';
+  if (isJavascript) step('env-vars', 'started');
+  if (credentials.apiKey && registersUrls) {
     await autoConfigureWorkOSEnvironment(credentials.apiKey, integration, port, {
       homepageUrl: installerOptions.homepageUrl,
       redirectUri: installerOptions.redirectUri,
       onStep: step,
     });
-  } else if (requiresApiKey) {
+  } else if (registersUrls) {
     for (const id of ['redirect-uri', 'cors-origin'] as const) {
       step(id, 'skipped', 'No API key was available for this install.');
     }
   }
+
+  // Non-JavaScript agents write their own env files in the project's format.
+  if (!isJavascript) return;
+
+  const redirectUri = installerOptions.redirectUri || `http://localhost:${port}${getCallbackPath(integration)}`;
 
   const redirectUriKey = integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
   try {

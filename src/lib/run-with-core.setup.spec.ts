@@ -134,6 +134,47 @@ describe('dashboard checklist reporting', () => {
     ]);
   });
 
+  const registeredPaths = () => fetchSpy.mock.calls.map(([url]) => new URL(String(url)).pathname);
+
+  it('registers the redirect URI and CORS origin for every server-side SDK', async () => {
+    const { emitter, events } = record();
+    await configureInstallEnvironment({
+      options,
+      integration: 'sveltekit',
+      credentials: { apiKey: 'sk_test_a', clientId: 'client_a' },
+      emitter,
+    });
+    expect(registeredPaths()).toEqual(
+      expect.arrayContaining(['/user_management/redirect_uris', '/user_management/cors_origins']),
+    );
+    expect(events).toContain('config:step redirect-uri done');
+    expect(events).toContain('config:step env-vars done');
+  });
+
+  it('registers the URLs for a non-JavaScript SDK without writing .env.local', async () => {
+    const { emitter, events } = record();
+    await configureInstallEnvironment({
+      options,
+      integration: 'ruby',
+      credentials: { apiKey: 'sk_test_a', clientId: 'client_a' },
+      emitter,
+    });
+    const redirect = fetchSpy.mock.calls.find(([url]) => String(url).endsWith('/user_management/redirect_uris'));
+    expect(JSON.parse(String(redirect?.[1]?.body))).toEqual({ uri: 'http://localhost:3000/auth/callback' });
+    expect(events).toContain('config:step redirect-uri done');
+    expect(events.some((event) => event.includes('env-vars'))).toBe(false);
+    await expect(readFile(join(directory, '.env.local'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('registers nothing for a client-only SDK', async () => {
+    await configureInstallEnvironment({
+      options,
+      integration: 'react',
+      credentials: { apiKey: 'sk_test_a', clientId: 'client_a' },
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it('says why the redirect URI and CORS origin were not set without an API key', async () => {
     const { emitter, events } = record();
     await configureInstallEnvironment({
