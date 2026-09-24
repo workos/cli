@@ -574,6 +574,10 @@ describe('run model: the dashboard checklist', () => {
       'initiate-login-uri': 'attention',
       'sign-out-uri': 'attention',
     });
+    // The task shares its settings' `!` and doesn't count as done.
+    expect(statuses(model.getSnapshot())['app-urls']).toBe('attention');
+    const counted = countedTasks(model.getSnapshot().tasks);
+    expect(counted.filter((t) => t.status === 'completed')).toHaveLength(counted.length - 1);
     const notices = model.getSnapshot().walkthrough.filter((e) => e.kind === 'notice');
     expect(notices).toEqual([
       expect.objectContaining({
@@ -594,6 +598,7 @@ describe('run model: the dashboard checklist', () => {
     emitter.emit('state:exit', { state: 'configuring' });
     emitter.emit('state:enter', { state: 'complete' });
     emitter.emit('complete', { success: true });
+    expect(statuses(model.getSnapshot()).configure).toBe('attention');
     expect(model.getSnapshot().walkthrough.at(-1)).toMatchObject({
       tone: 'warning',
       text: content.walkthrough.complete['setup-required'],

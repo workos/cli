@@ -210,11 +210,16 @@ export function createRunModel(options: RunModelOptions): RunModel {
     return {
       tasks: TASK_IDS.filter((id) => shown.has(id)).map((id) => {
         const subtasks = id === 'configure' || id === 'app-urls' ? subtaskViews(id) : undefined;
+        const taskStatus = status.get(id)!;
+        // A finished task with a setting left to check isn't done: it gets the
+        // same `!` as that setting and stays out of "N of M done".
+        const flagged =
+          taskStatus === 'completed' && subtasks?.some((s) => s.status === 'attention' || s.status === 'failed');
         return {
           id,
           label: content.tasks[id].label,
           activeLabel: content.tasks[id].activeLabel,
-          status: status.get(id)!,
+          status: flagged ? 'attention' : taskStatus,
           ...(subtasks ? { subtasks } : {}),
         };
       }),
