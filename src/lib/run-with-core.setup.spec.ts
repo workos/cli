@@ -166,12 +166,30 @@ describe('dashboard checklist reporting', () => {
     await expect(readFile(join(directory, '.env.local'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
-  it('registers nothing for a client-only SDK', async () => {
+  it.each(['react', 'vanilla-js'] as const)(
+    'registers the Vite callback and CORS origin for the client-only %s SDK',
+    async (integration) => {
+      await configureInstallEnvironment({
+        options,
+        integration,
+        credentials: { apiKey: 'sk_test_a', clientId: 'client_a' },
+      });
+      const bodyFor = (path: string) =>
+        JSON.parse(String(fetchSpy.mock.calls.find(([url]) => String(url).endsWith(path))?.[1]?.body));
+      expect(bodyFor('/user_management/redirect_uris')).toEqual({ uri: 'http://localhost:5173/callback' });
+      expect(bodyFor('/user_management/cors_origins')).toEqual({ origin: 'http://localhost:5173' });
+    },
+  );
+
+  it('says why a client-only SDK without an API key has no URLs registered', async () => {
+    const { emitter, events } = record();
     await configureInstallEnvironment({
       options,
       integration: 'react',
-      credentials: { apiKey: 'sk_test_a', clientId: 'client_a' },
+      credentials: { clientId: 'client_a' },
+      emitter,
     });
+    expect(events).toContain('config:step redirect-uri skipped (No API key was available for this install.)');
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 

@@ -211,9 +211,9 @@ export async function configureInstallEnvironment(
   const port = detectPort(integration, installerOptions.installDir);
   // Next.js URL writes happen after code validation. That step chooses ONE
   // target: the dashboard application, or an API-key-only callback without a session.
-  // Every other server-side SDK registers its URLs here: the integration's own
-  // run() skips it because this machine passes it the credentials.
-  const registersUrls = mod.config.environment.requiresApiKey && integration !== 'nextjs';
+  // Every other SDK registers its URLs here, client-only ones included: the
+  // integration's own run() skips it because this machine passes it the credentials.
+  const registersUrls = integration !== 'nextjs';
   if (isJavascript) step('env-vars', 'started');
   if (credentials.apiKey && registersUrls) {
     await autoConfigureWorkOSEnvironment(credentials.apiKey, integration, port, {
