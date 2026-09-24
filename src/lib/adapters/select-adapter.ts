@@ -11,6 +11,8 @@ export interface AdapterSelectionInput {
   ci: boolean;
   stdinTTY: boolean;
   stdoutTTY: boolean;
+  /** Redirected stderr means someone is capturing errors: keep them on it. */
+  stderrTTY: boolean;
   columns: number;
   rows: number;
   /** --no-tui */
@@ -29,7 +31,7 @@ export interface AdapterSelectionInput {
 export function selectInstallerAdapter(input: AdapterSelectionInput): InstallerAdapterKind {
   if (input.json) return 'headless';
   if (input.interaction !== 'human' || input.ci) return 'cli';
-  if (!input.stdinTTY || !input.stdoutTTY) return 'cli';
+  if (!input.stdinTTY || !input.stdoutTTY || !input.stderrTTY) return 'cli';
   if (input.noTui) return 'cli';
   if (input.term === 'dumb') return 'cli';
   if (input.columns < MIN_COLUMNS || input.rows < MIN_ROWS) return 'cli';

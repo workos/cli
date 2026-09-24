@@ -587,6 +587,19 @@ describe('run model: the dashboard checklist', () => {
     });
   });
 
+  it("doesn't end on all done when a setting failed but the install carried on", () => {
+    const { emitter, model } = configuring();
+    emitter.emit('config:step', { step: 'redirect-uri', status: 'started' });
+    emitter.emit('config:step', { step: 'redirect-uri', status: 'failed', detail: 'Request failed (403)' });
+    emitter.emit('state:exit', { state: 'configuring' });
+    emitter.emit('state:enter', { state: 'complete' });
+    emitter.emit('complete', { success: true });
+    expect(model.getSnapshot().walkthrough.at(-1)).toMatchObject({
+      tone: 'warning',
+      text: content.walkthrough.complete['setup-required'],
+    });
+  });
+
   it('explains a failed item and fails the ones still running when the install errors', () => {
     const { emitter, model } = configuring();
     for (const step of ['env-vars', 'redirect-uri', 'cors-origin'] as const) {

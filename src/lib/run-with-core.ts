@@ -272,6 +272,7 @@ export function resolveAdapterKind(options: Pick<InstallerOptions, 'ci' | 'noTui
     ci: Boolean(options.ci),
     stdinTTY: Boolean(process.stdin.isTTY),
     stdoutTTY: Boolean(process.stdout.isTTY),
+    stderrTTY: Boolean(process.stderr.isTTY),
     columns: process.stdout.columns ?? 0,
     rows: process.stdout.rows ?? 0,
     noTui: Boolean(options.noTui),
