@@ -29,6 +29,19 @@ export interface CompletionData {
   applicationSetup?: import('./authkit-application-setup.js').AuthkitApplicationSetup;
 }
 
+/**
+ * A WorkOS setting, named for the dashboard's AuthKit checklist ("Add
+ * environment variables", "Set redirect URI", …).
+ */
+export type SetupItemId = 'env-vars' | 'redirect-uri' | 'initiate-login-uri' | 'sign-out-uri' | 'cors-origin';
+/** `skipped`: not set, or not verified; `detail` says why and what to do. */
+export type SetupItemStatus = 'started' | 'done' | 'already-set' | 'skipped' | 'failed';
+export interface SetupItemEvent {
+  step: SetupItemId;
+  status: SetupItemStatus;
+  detail?: string;
+}
+
 export interface InstallerEvents {
   status: { message: string };
   output: { text: string; isError?: boolean };
@@ -85,6 +98,10 @@ export interface InstallerEvents {
   'staging:error': { message: string; statusCode?: number };
   'config:start': Record<string, never>;
   'config:complete': Record<string, never>;
+  /** A setting the configure step (before the agent) started or resolved. */
+  'config:step': SetupItemEvent;
+  /** An app URL set once the agent's routes exist (Next.js) started or resolved. */
+  'app-urls:step': SetupItemEvent;
   'agent:start': Record<string, never>;
   'agent:progress': { step: string; detail?: string };
   'agent:success': { summary?: string };
@@ -187,6 +204,8 @@ const INSTALLER_EVENT_REGISTRY = {
   'staging:error': true,
   'config:start': true,
   'config:complete': true,
+  'config:step': true,
+  'app-urls:step': true,
   'agent:start': true,
   'agent:progress': true,
   'agent:success': true,
