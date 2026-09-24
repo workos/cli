@@ -421,6 +421,40 @@ describe('full-screen installer interaction', () => {
     await waitFor(() => expect(answer).toHaveBeenCalledWith('client_123'));
   });
 
+  it('edits by character, so an emoji is one step', async () => {
+    const answer = vi.fn();
+    const { model, stdout, stdin } = mount(100, 30, { answer });
+    model.setPrompt({ kind: 'text', message: 'Team name?' });
+    await waitFor(() => expect(frameAt(stdout)).toContain('Team name?'));
+    for (const key of ['a', '😀', 'b', KEY.left, '\x7f', KEY.enter]) stdin.press(key);
+    await waitFor(() => expect(answer).toHaveBeenCalledWith('ab'));
+  });
+
+  it("ignores keys that arrive as escape sequences Ink doesn't name", async () => {
+    const answer = vi.fn();
+    const { model, stdout, stdin } = mount(100, 30, { answer });
+    model.setPrompt({ kind: 'text', message: 'Team name?' });
+    await waitFor(() => expect(frameAt(stdout)).toContain('Team name?'));
+    for (const key of ['a', '\x1b[H', '\x1b[F', 'b', KEY.enter]) stdin.press(key);
+    await waitFor(() => expect(answer).toHaveBeenCalledWith('ab'));
+  });
+
+  it('shows a validator that throws as the error, instead of crashing', async () => {
+    const answer = vi.fn();
+    const { model, stdout, stdin } = mount(100, 30, { answer });
+    model.setPrompt({
+      kind: 'text',
+      message: 'Client ID?',
+      validate: async () => {
+        throw new Error('Could not check that client ID');
+      },
+    });
+    await waitFor(() => expect(frameAt(stdout)).toContain('Client ID?'));
+    stdin.press('client_1\r');
+    await waitFor(() => expect(frameAt(stdout)).toContain('✗ Could not check that client ID'));
+    expect(answer).not.toHaveBeenCalled();
+  });
+
   it('masks password input', async () => {
     const answer = vi.fn();
     const { model, stdout, stdin } = mount(100, 30, { answer });

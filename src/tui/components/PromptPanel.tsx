@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { ConfirmInput, PasswordInput, TextInput } from '@inkjs/ui';
+import { ConfirmInput } from '@inkjs/ui';
 import { CANCEL, type SelectOption, type UiLine, type UiPromptRequest, type ValidateFn } from '../../utils/ui.js';
 import { colors, glyphs } from '../theme.js';
 import { wrapText } from '../wrap.js';
@@ -92,13 +92,18 @@ function SelectPrompt({
   const preferred = options.findIndex((o) => selectable(o) && o.value === request.initialValue);
   const initial = preferred >= 0 ? preferred : Math.max(0, options.findIndex(selectable));
   const [focus, setFocus] = useState(initial);
+  // Keys can arrive faster than Ink re-subscribes this handler after a render
+  // (a fast ↓ then enter, or a paste), and a stale handler would pick the
+  // option from before the move. The ref is always current.
+  const focusRef = useRef(initial);
   const visibleCount = visibleOptions(request, maxOptions);
   const start = Math.min(Math.max(0, focus - visibleCount + 1), Math.max(0, options.length - visibleCount));
 
   const move = (step: number) => {
     for (let i = 1; i <= options.length; i++) {
-      const next = (focus + step * i + options.length) % options.length;
+      const next = (focusRef.current + step * i + options.length) % options.length;
       if (selectable(options[next])) {
+        focusRef.current = next;
         setFocus(next);
         return;
       }
@@ -106,9 +111,10 @@ function SelectPrompt({
   };
 
   useInput((input, key) => {
+    const current = focusRef.current;
     if (key.upArrow || input === 'k') move(-1);
     else if (key.downArrow || input === 'j') move(1);
-    else if (key.return && selectable(options[focus])) answer(options[focus].value);
+    else if (key.return && selectable(options[current])) answer(options[current].value);
   });
 
   return (
@@ -133,6 +139,78 @@ function SelectPrompt({
   );
 }
 
+/**
+ * A one-line text input that can't drop keys.
+ *
+ * @inkjs/ui's TextInput keeps its value in state that only catches up after a
+ * render, so keys arriving faster than that (typing ahead, a paste) read a
+ * stale value, and a paste ending in a newline was inserted as text instead of
+ * submitting. Here the value lives in a ref that every key reads and writes
+ * immediately, and a newline anywhere in a chunk submits what precedes it.
+ */
+function LineInput({
+  mask,
+  placeholder,
+  onChange,
+  onSubmit,
+}: {
+  mask?: string;
+  placeholder?: string;
+  onChange: () => void;
+  onSubmit: (value: string) => void;
+}) {
+  const [shown, setShown] = useState({ value: '', cursor: 0 });
+  const state = useRef(shown);
+  const set = (next: { value: string; cursor: number }) => {
+    state.current = next;
+    setShown(next);
+    onChange();
+  };
+
+  // The cursor counts characters (code points), so an emoji is one step.
+  useInput((input, key) => {
+    const { value, cursor } = state.current;
+    const chars = Array.from(value);
+    if (key.return) return onSubmit(value);
+    if (key.leftArrow) return set({ value, cursor: Math.max(0, cursor - 1) });
+    if (key.rightArrow) return set({ value, cursor: Math.min(chars.length, cursor + 1) });
+    if (key.backspace || key.delete) {
+      if (cursor > 0) {
+        chars.splice(cursor - 1, 1);
+        set({ value: chars.join(''), cursor: cursor - 1 });
+      }
+      return;
+    }
+    if (!input || key.ctrl || key.meta || key.escape || key.tab || key.upArrow || key.downArrow) return;
+    // A key Ink doesn't name (Home, End, F-keys) arrives as its escape sequence.
+    if (input.startsWith('\x1b')) return;
+    const newline = input.search(/[\r\n]/);
+    const typed = Array.from(newline >= 0 ? input.slice(0, newline) : input);
+    chars.splice(cursor, 0, ...typed);
+    const next = { value: chars.join(''), cursor: cursor + typed.length };
+    set(next);
+    if (newline >= 0) onSubmit(next.value);
+  });
+
+  const { value, cursor } = shown;
+  if (!value && placeholder) {
+    return (
+      <Text>
+        <Text inverse>{placeholder[0]}</Text>
+        <Text color={colors.muted}>{placeholder.slice(1)}</Text>
+      </Text>
+    );
+  }
+  const chars = Array.from(value).map((c) => mask ?? c);
+  return (
+    <Text>
+      {chars.slice(0, cursor).join('')}
+      <Text inverse>{chars[cursor] ?? ' '}</Text>
+      {chars.slice(cursor + 1).join('')}
+    </Text>
+  );
+}
+
 function TextPrompt({
   request,
   answer,
@@ -143,15 +221,19 @@ function TextPrompt({
   width: number;
 }) {
   const [error, setError] = useState<string | null>(null);
-  // Must be stable: @inkjs/ui calls onChange from an effect keyed on its
-  // identity, so a fresh function each render would clear the error it just set.
   const clearError = useCallback(() => setError(null), []);
   const fallback = request.kind === 'text' ? (request.defaultValue ?? request.initialValue) : undefined;
   const placeholder = request.kind === 'text' ? (request.placeholder ?? fallback) : undefined;
 
   const submit = async (typed: string) => {
     const value = typed === '' && fallback !== undefined ? fallback : typed;
-    const verdict = await (request.validate as ValidateFn | undefined)?.(value);
+    let verdict: unknown;
+    try {
+      verdict = await (request.validate as ValidateFn | undefined)?.(value);
+    } catch (error) {
+      // A validator that throws is saying no; it mustn't crash the installer.
+      verdict = error;
+    }
     if (verdict != null) {
       setError(verdict instanceof Error ? verdict.message : String(verdict));
       return;
@@ -164,11 +246,12 @@ function TextPrompt({
       <Question message={request.message} width={width} />
       <Box>
         <Text color={colors.brand}>{`${glyphs.pointer} `}</Text>
-        {request.kind === 'password' ? (
-          <PasswordInput onChange={clearError} onSubmit={submit} />
-        ) : (
-          <TextInput placeholder={placeholder} onChange={clearError} onSubmit={submit} />
-        )}
+        <LineInput
+          mask={request.kind === 'password' ? '*' : undefined}
+          placeholder={placeholder}
+          onChange={clearError}
+          onSubmit={(value) => void submit(value)}
+        />
       </Box>
       <Text color={colors.error} wrap="truncate-end">
         {error ? `${glyphs.failed} ${error}` : ' '}
