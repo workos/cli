@@ -2,7 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { detectSingleIntegration, resolveCredentialSource } from './run-with-core.js';
+import { detectSingleIntegration, resolveAdapterKind, resolveCredentialSource } from './run-with-core.js';
+import { setOutputMode } from '../utils/output.js';
+import { resetInteractionModeForTests, setInteractionMode } from '../utils/interaction-mode.js';
 
 describe('detectSingleIntegration', () => {
   let dir: string;
@@ -111,5 +113,57 @@ describe('resolveCredentialSource', () => {
 
   it('leaves an unset caller source unset when there is nothing to backfill', () => {
     expect(resolveCredentialSource({}, {})).toBeUndefined();
+  });
+});
+
+describe('resolveAdapterKind', () => {
+  let saved: Array<[NodeJS.ReadStream | NodeJS.WriteStream, string, PropertyDescriptor | undefined]> = [];
+  const originalTerm = process.env.TERM;
+
+  function terminal(opts: { stdinTTY: boolean; stdoutTTY: boolean; columns: number; rows: number }) {
+    const set = (stream: NodeJS.ReadStream | NodeJS.WriteStream, key: string, value: unknown) => {
+      saved.push([stream, key, Object.getOwnPropertyDescriptor(stream, key)]);
+      Object.defineProperty(stream, key, { value, configurable: true });
+    };
+    set(process.stdin, 'isTTY', opts.stdinTTY);
+    set(process.stdout, 'isTTY', opts.stdoutTTY);
+    set(process.stdout, 'columns', opts.columns);
+    set(process.stdout, 'rows', opts.rows);
+  }
+
+  beforeEach(() => {
+    saved = [];
+    process.env.TERM = 'xterm-256color';
+    resetInteractionModeForTests();
+    setOutputMode('human');
+  });
+
+  afterEach(() => {
+    for (const [stream, key, desc] of saved.reverse()) {
+      if (desc) Object.defineProperty(stream, key, desc);
+      else delete (stream as unknown as Record<string, unknown>)[key];
+    }
+    if (originalTerm === undefined) delete process.env.TERM;
+    else process.env.TERM = originalTerm;
+    resetInteractionModeForTests();
+    setOutputMode('human');
+  });
+
+  // The full decision matrix is covered by select-adapter.spec.ts; these prove
+  // runWithCore feeds it the real process state and flags.
+  it('reads the terminal and flags from the running process', () => {
+    terminal({ stdinTTY: true, stdoutTTY: true, columns: 80, rows: 24 });
+    expect(resolveAdapterKind({})).toBe('tui');
+    expect(resolveAdapterKind({ noTui: true })).toBe('cli');
+    terminal({ stdinTTY: true, stdoutTTY: true, columns: 79, rows: 24 });
+    expect(resolveAdapterKind({})).toBe('cli');
+  });
+
+  it('reads the output and interaction modes', () => {
+    terminal({ stdinTTY: true, stdoutTTY: true, columns: 120, rows: 40 });
+    setInteractionMode({ mode: 'agent', source: 'flag' });
+    expect(resolveAdapterKind({})).toBe('cli');
+    setOutputMode('json');
+    expect(resolveAdapterKind({})).toBe('headless');
   });
 });

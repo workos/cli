@@ -39,7 +39,7 @@ export interface SessionStartEvent extends BaseTelemetryEvent {
   type: 'session.start';
   attributes: {
     'installer.version': string;
-    'installer.mode': 'cli' | 'headless';
+    'installer.mode': 'cli' | 'tui' | 'headless';
     'workos.user_id'?: string;
     'workos.org_id'?: string;
   } & EnvFingerprint;

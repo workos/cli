@@ -28,7 +28,7 @@ export class Analytics {
   private sessionId: string;
   private sessionStartTime: Date;
   private distinctId?: string;
-  private mode?: 'cli' | 'headless';
+  private mode?: 'cli' | 'tui' | 'headless';
   private authMode: AuthMode = 'none';
 
   // Agent metrics tracking
@@ -210,7 +210,7 @@ export class Analytics {
     };
   }
 
-  sessionStart(mode: 'cli' | 'headless', version: string) {
+  sessionStart(mode: 'cli' | 'tui' | 'headless', version: string) {
     if (!this.isEnabled()) return;
 
     this.mode = mode;
