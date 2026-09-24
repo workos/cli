@@ -165,6 +165,36 @@ describe('TuiAdapter', () => {
     expect(stdin.rawMode).toBe(false);
   });
 
+  it("leaves the agent's play-by-play out of the scrollback, keeping what matters", async () => {
+    await adapter.start();
+    emitter.emit('agent:start', {});
+    emitter.emit('agent:progress', { step: 'Phase 2: Installing SDK' });
+    emitter.emit('agent:tool', { kind: 'command', detail: 'pnpm add @workos-inc/authkit-nextjs' });
+    emitter.emit('file:write', { path: '/work/my-app/app/callback/route.ts' });
+    ui.log.warn('The build printed a warning');
+    emitter.emit('validation:start', { framework: 'nextjs' });
+    emitter.emit('validation:issues', {
+      issues: [{ type: 'file', severity: 'error', message: 'Callback has no route', hint: 'Move the route' }],
+    });
+    emitter.emit('validation:complete', { passed: false, issueCount: 1, durationMs: 1 });
+    emitter.emit('complete', { success: true, summary: 'AuthKit is set up.' });
+    await adapter.stop();
+
+    const scrollback = afterExit();
+    expect(scrollback).not.toContain('pnpm add');
+    expect(scrollback).not.toContain('app/callback/route.ts');
+    expect(scrollback).not.toContain('Phase 2');
+    // Warnings and errors from inside the agent's run stay.
+    expect(scrollback).toContain('The build printed a warning');
+    expect(scrollback).toContain('Agent completed');
+    expect(scrollback).toContain("The agent's step-by-step log is in the installer log");
+    // Everything after the agent stays, in order.
+    const order = ['Agent completed', 'Callback has no route', 'Hint: Move the route', 'Validation found 1 issue(s)'];
+    const at = order.map((text) => scrollback.indexOf(text));
+    expect(at.every((i, n) => i > -1 && (n === 0 || i > at[n - 1]))).toBe(true);
+    expect(scrollback).toContain('WorkOS AuthKit Installed');
+  });
+
   it('restores the terminal from the exit hook when the process exits without stop()', async () => {
     await adapter.start();
     const hooks = process.listeners('exit');

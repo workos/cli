@@ -8,11 +8,14 @@
  * run model turns installer events into the task list and walkthrough, and
  * Ink draws it all on the alternate screen.
  *
- * Nothing the plain CLI would have printed is lost: it's collected while the
- * full screen is up and printed to the normal screen when it closes, so the
- * scrollback ends with the same summary a plain run leaves.
+ * What the plain CLI prints is collected while the full screen is up and
+ * printed to the normal screen when it closes: the answers, the settings it
+ * made, every warning and error, and the same summary a plain run leaves. The
+ * one thing left out is the agent's play-by-play (each command and file while
+ * it works); the scrollback points to the log file that has it.
  */
 
+import { homedir } from 'node:os';
 import { basename } from 'node:path';
 import { format } from 'node:util';
 import { createElement } from 'react';
@@ -26,6 +29,7 @@ import { createRunModel, type RunModel } from '../../tui/model/run-model.js';
 import { loadInstallerContent } from '../../tui/content/index.js';
 import { InstallerApp } from '../../tui/App.js';
 import { ENTER_FULLSCREEN, LEAVE_FULLSCREEN, releaseStdin, writeNow } from '../../tui/terminal.js';
+import { getLogFilePath } from '../../utils/debug.js';
 
 export interface TuiAdapterConfig extends AdapterConfig {
   /** Project directory, for relative file paths and the header. */
@@ -38,6 +42,8 @@ export interface TuiAdapterConfig extends AdapterConfig {
 }
 
 const INDENT = '  ';
+/** Events after which the agent is no longer working (validation follows it). */
+const AGENT_ENDS = ['validation:start', 'agent:success', 'agent:failure', 'complete'] as const;
 const ANSI = /\x1b\[[0-9;]*m/g;
 const CONSOLE_METHODS = ['log', 'info', 'warn', 'error', 'debug'] as const;
 type ConsoleMethod = (typeof CONSOLE_METHODS)[number];
@@ -83,6 +89,9 @@ export class TuiAdapter implements InstallerAdapter {
   private transcript: string[] = [];
   private savedConsole: Partial<Record<ConsoleMethod, (...args: unknown[]) => void>> = {};
   private active = false;
+  // While the agent works, its step-by-step lines stay out of the transcript.
+  private agentWorking = false;
+  private hiddenAgentLines = 0;
 
   constructor(config: TuiAdapterConfig) {
     this.config = config;
@@ -103,6 +112,10 @@ export class TuiAdapter implements InstallerAdapter {
       });
       this.captureConsole();
       setUiHost(this.host);
+      // Before the CLI adapter subscribes, so the agent window opens before its
+      // spinner starts and closes before it prints the agent's final line.
+      this.emitter.on('agent:start', this.agentStarted);
+      for (const event of AGENT_ENDS) this.emitter.on(event, this.agentEnded);
       // Covers every way out that skips stop(): process.exit() from a handler,
       // the plain CLI's SIGINT handler, an uncaught error.
       process.on('exit', this.teardown);
@@ -165,6 +178,9 @@ export class TuiAdapter implements InstallerAdapter {
 
     setUiHost(null);
     this.restoreConsole();
+    this.emitter.off('agent:start', this.agentStarted);
+    for (const event of AGENT_ENDS) this.emitter.off(event, this.agentEnded);
+    this.agentEnded();
     this.model?.dispose();
     this.model = null;
 
@@ -176,7 +192,7 @@ export class TuiAdapter implements InstallerAdapter {
 
   private readonly host: UiHost = {
     line: (line: UiLine) => {
-      this.transcript.push(line.rendered ? INDENT + line.rendered : '');
+      this.record(line.rendered ? INDENT + line.rendered : '', line.kind === 'warn' || line.kind === 'error');
       // Warnings and errors also show in the walkthrough. A line ending in ':'
       // only introduces a list that follows, so it would read as broken there.
       const message = line.message.replace(ANSI, '').trim();
@@ -195,6 +211,33 @@ export class TuiAdapter implements InstallerAdapter {
   };
 
   private readonly answer = (value: unknown): void => this.settle(value);
+
+  // ── Transcript ──────────────────────────────────────────────────────────
+
+  /** Keep a line for the scrollback, unless it's the agent's play-by-play. */
+  private record(text: string, important: boolean): void {
+    if (this.agentWorking && !important) {
+      this.hiddenAgentLines++;
+      return;
+    }
+    this.transcript.push(text);
+  }
+
+  private readonly agentStarted = (): void => {
+    this.agentWorking = true;
+  };
+
+  /** Close the agent window; say where its hidden lines went, if any. */
+  private readonly agentEnded = (): void => {
+    if (!this.agentWorking) return;
+    this.agentWorking = false;
+    if (this.hiddenAgentLines > 0) {
+      const log = getLogFilePath();
+      const where = log ? `: ${log.startsWith(homedir()) ? `~${log.slice(homedir().length)}` : log}` : '';
+      this.transcript.push(`${INDENT}${chalk.dim(`› The agent's step-by-step log is in the installer log${where}`)}`);
+    }
+    this.hiddenAgentLines = 0;
+  };
 
   private settle(value: unknown): void {
     const pending = this.pending;
@@ -215,7 +258,7 @@ export class TuiAdapter implements InstallerAdapter {
     for (const method of CONSOLE_METHODS) {
       this.savedConsole[method] = console[method];
       console[method] = (...args: unknown[]) => {
-        this.transcript.push(format(...args));
+        this.record(format(...args), method === 'warn' || method === 'error');
       };
     }
   }
