@@ -12,7 +12,7 @@ import type {
   WorkspaceCheckOutput,
 } from '../../lib/installer-core.types.js';
 import { WALKTHROUGH_PARAMS, loadInstallerContent, parseInstallerContent, placeholdersOf } from '../content/index.js';
-import { createRunModel, type RunModel, type RunSnapshot, type TaskStatus } from './run-model.js';
+import { countedTasks, createRunModel, type RunModel, type RunSnapshot, type TaskStatus } from './run-model.js';
 
 const content = loadInstallerContent();
 const INSTALL_DIR = '/work/my-app';
@@ -98,6 +98,8 @@ const RANK: Record<TaskStatus, number> = {
   skipped: 2,
   failed: 2,
   cancelled: 2,
+  next: 2,
+  attention: 2,
 };
 
 /** A task only ever moves forward: pending → in_progress → a final state. */
@@ -126,6 +128,7 @@ describe('run model: tasks follow real installer events', () => {
       configure: 'pending',
       install: 'pending',
       finish: 'pending',
+      'first-sign-up': 'pending',
     });
     expect(snapshot.outcome).toBeNull();
   });
@@ -142,6 +145,8 @@ describe('run model: tasks follow real installer events', () => {
       configure: 'completed',
       install: 'completed',
       finish: 'completed',
+      // The installer's done; the first sign-up is the user's next step.
+      'first-sign-up': 'next',
     });
     expect(final.outcome).toBe('success');
     expect(final.integration).toBe('nextjs');
@@ -215,6 +220,7 @@ describe('run model: tasks follow real installer events', () => {
       'install',
       'verify',
       'finish',
+      'first-sign-up',
     ]);
     const issue = final.walkthrough.find((e) => e.text.includes('issues: 2'));
     expect(issue?.tone).toBe('warning');
@@ -230,7 +236,13 @@ describe('run model: tasks follow real installer events', () => {
     await run.done;
     const final = run.model.getSnapshot();
 
-    expect(statuses(final)).toMatchObject({ configure: 'completed', install: 'failed', finish: 'pending' });
+    expect(statuses(final)).toMatchObject({
+      configure: 'completed',
+      install: 'failed',
+      finish: 'pending',
+      // Only a finished install makes the first sign-up the next step.
+      'first-sign-up': 'pending',
+    });
     expect(final.outcome).toBe('failure');
     expect(texts(final, 'narration')).toContain(content.walkthrough['agent:failure']);
     expect(final.walkthrough.at(-1)).toMatchObject({
@@ -452,5 +464,157 @@ describe('run model: tips, prompt, status, notices', () => {
       'Open https://w.os/d?c=1 in your browser and enter the code ABCD to connect this computer to WorkOS.',
       'Found your WorkOS keys in .env.local.',
     ]);
+  });
+});
+
+describe('run model: the dashboard checklist', () => {
+  function configuring() {
+    const emitter = createInstallerEventEmitter();
+    emitter.on('error', () => {});
+    const model = createRunModel({ emitter, content });
+    emitter.emit('state:enter', { state: 'configuring' });
+    emitter.emit('config:start', {});
+    return { emitter, model };
+  }
+  /** Through the configure step and into the agent's validation, like a Next.js run. */
+  function validating() {
+    const { emitter, model } = configuring();
+    emitter.emit('config:step', { step: 'env-vars', status: 'started' });
+    emitter.emit('config:step', { step: 'env-vars', status: 'done' });
+    emitter.emit('state:exit', { state: 'configuring' });
+    emitter.emit('state:enter', { state: 'runningAgent' });
+    emitter.emit('validation:start', { framework: 'nextjs' });
+    emitter.emit('validation:complete', { passed: true, issueCount: 0, durationMs: 1 });
+    return { emitter, model };
+  }
+  const APP_URLS = ['redirect-uri', 'initiate-login-uri', 'sign-out-uri'] as const;
+  const task = (model: RunModel, id: string) => model.getSnapshot().tasks.find((t) => t.id === id);
+  const subStatuses = (model: RunModel, id: string) =>
+    Object.fromEntries((task(model, id)?.subtasks ?? []).map((s) => [s.id, s.status]));
+
+  it("lists the reported items under Configure WorkOS, in the dashboard's order and words", () => {
+    const { emitter, model } = configuring();
+    expect(task(model, 'configure')?.subtasks).toBeUndefined();
+
+    // Reported out of order; shown in the dashboard's.
+    for (const step of ['cors-origin', 'env-vars', 'redirect-uri'] as const) {
+      emitter.emit('config:step', { step, status: 'started' });
+    }
+    expect(task(model, 'configure')?.subtasks?.map((s) => s.label)).toEqual([
+      'Add environment variables',
+      'Set redirect URI',
+      'Set CORS origin',
+    ]);
+
+    emitter.emit('config:step', { step: 'redirect-uri', status: 'done' });
+    emitter.emit('config:step', { step: 'cors-origin', status: 'already-set' });
+    expect(subStatuses(model, 'configure')).toEqual({
+      'env-vars': 'in_progress',
+      'redirect-uri': 'completed',
+      'cors-origin': 'completed',
+    });
+  });
+
+  it('collapses back to one row once every item landed', () => {
+    const { emitter, model } = configuring();
+    for (const step of ['env-vars', 'redirect-uri', 'cors-origin'] as const) {
+      emitter.emit('config:step', { step, status: 'started' });
+      emitter.emit('config:step', { step, status: 'done' });
+    }
+    expect(task(model, 'configure')?.subtasks).toHaveLength(3); // still configuring
+
+    emitter.emit('state:exit', { state: 'configuring' });
+    emitter.emit('state:enter', { state: 'runningAgent' });
+    expect(task(model, 'configure')?.status).toBe('completed');
+    expect(task(model, 'configure')?.subtasks).toBeUndefined();
+  });
+
+  it('connects the app URLs after the agent, as their own task', () => {
+    const { emitter, model } = validating();
+    expect(task(model, 'app-urls')).toBeUndefined();
+
+    for (const step of APP_URLS) emitter.emit('app-urls:step', { step, status: 'started' });
+    expect(task(model, 'verify')?.status).toBe('completed');
+    expect(task(model, 'app-urls')?.status).toBe('in_progress');
+    expect(task(model, 'app-urls')?.subtasks?.map((s) => s.label)).toEqual([
+      'Set redirect URI',
+      'Set initiate login URI',
+      'Set sign-out URI',
+    ]);
+    expect(model.getSnapshot().walkthrough.at(-1)?.text).toBe(content.walkthrough['app-urls:step']);
+
+    for (const step of APP_URLS) emitter.emit('app-urls:step', { step, status: 'done' });
+    emitter.emit('state:exit', { state: 'runningAgent' });
+    emitter.emit('state:enter', { state: 'postInstall' });
+    expect(task(model, 'app-urls')?.status).toBe('completed');
+    expect(task(model, 'app-urls')?.subtasks).toBeUndefined();
+    expect(
+      model
+        .getSnapshot()
+        .tasks.map((t) => t.id)
+        .slice(-3),
+    ).toEqual(['app-urls', 'finish', 'first-sign-up']);
+  });
+
+  it('keeps unverified items open with one line for their shared reason, and ends on a warning', () => {
+    const { emitter, model } = validating();
+    const reason = 'Callback registered using the API key. Sign in to the correct team to manage those settings.';
+    for (const step of APP_URLS) emitter.emit('app-urls:step', { step, status: 'started' });
+    emitter.emit('app-urls:step', { step: 'redirect-uri', status: 'done' });
+    emitter.emit('app-urls:step', { step: 'initiate-login-uri', status: 'skipped', detail: reason });
+    emitter.emit('app-urls:step', { step: 'sign-out-uri', status: 'skipped', detail: reason });
+    emitter.emit('state:exit', { state: 'runningAgent' });
+    emitter.emit('state:enter', { state: 'postInstall' });
+    emitter.emit('state:exit', { state: 'postInstall' });
+    emitter.emit('state:enter', { state: 'complete' });
+    emitter.emit('complete', { success: true });
+
+    expect(subStatuses(model, 'app-urls')).toEqual({
+      'redirect-uri': 'completed',
+      'initiate-login-uri': 'attention',
+      'sign-out-uri': 'attention',
+    });
+    const notices = model.getSnapshot().walkthrough.filter((e) => e.kind === 'notice');
+    expect(notices).toEqual([
+      expect.objectContaining({
+        tone: 'warning',
+        text: `Check in the WorkOS dashboard: set initiate login URI and set sign-out URI. ${reason}`,
+      }),
+    ]);
+    expect(model.getSnapshot().walkthrough.at(-1)).toMatchObject({
+      tone: 'warning',
+      text: content.walkthrough.complete['setup-required'],
+    });
+  });
+
+  it('explains a failed item and fails the ones still running when the install errors', () => {
+    const { emitter, model } = configuring();
+    for (const step of ['env-vars', 'redirect-uri', 'cors-origin'] as const) {
+      emitter.emit('config:step', { step, status: 'started' });
+    }
+    emitter.emit('config:step', { step: 'redirect-uri', status: 'failed', detail: 'Request failed (500)' });
+    expect(model.getSnapshot().walkthrough.at(-1)).toMatchObject({
+      tone: 'error',
+      text: "Couldn't set redirect URI. Request failed (500). Set it in the WorkOS dashboard.",
+    });
+
+    emitter.emit('state:exit', { state: 'configuring' });
+    emitter.emit('state:enter', { state: 'error' });
+    expect(task(model, 'configure')?.status).toBe('failed');
+    expect(subStatuses(model, 'configure')).toMatchObject({ 'env-vars': 'failed', 'cors-origin': 'failed' });
+  });
+
+  it('shows no items when the installer reports none (non-JS integrations)', () => {
+    const { emitter, model } = configuring();
+    emitter.emit('config:complete', {});
+    emitter.emit('state:exit', { state: 'configuring' });
+    emitter.emit('state:enter', { state: 'runningAgent' });
+    expect(task(model, 'configure')?.subtasks).toBeUndefined();
+  });
+
+  it("doesn't count the first sign-up toward done", () => {
+    const tasks = createRunModel({ emitter: createInstallerEventEmitter(), content }).getSnapshot().tasks;
+    expect(tasks.map((t) => t.id)).toContain('first-sign-up');
+    expect(countedTasks(tasks).map((t) => t.id)).not.toContain('first-sign-up');
   });
 });

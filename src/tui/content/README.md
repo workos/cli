@@ -47,5 +47,9 @@ branch, {branch}."`. The allowed placeholders per event are in
 `activeLabel` shown while that step runs. Which events move a task is code
 (`src/tui/model/`), so the set of task ids is fixed.
 
+`subtasks` labels the dashboard checklist items shown under "Configure WorkOS"
+and "Connect your app's URLs" while they run. Keep them in the dashboard's
+words ("Set redirect URI"), so the two checklists read the same.
+
 The tests reject unknown events, placeholders, frameworks, duplicate ids, and
 bad dates, with a message naming the exact field.

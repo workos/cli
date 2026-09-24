@@ -98,12 +98,22 @@ describe.each([
       expect(painted.length).toBe(LOGO_MASK.length);
     }
 
-    // Tasks: done, in progress (active label), and pending.
-    expect(frame).toMatch(/✔ Sign in to WorkOS/);
-    expect(frame).toMatch(/✔ Look over your project/);
-    expect(frame).toContain(content.tasks.install.activeLabel!);
-    expect(frame).toMatch(/○ Wrap up/);
-    expect(frame).toContain('4 of 6 done');
+    if (columns >= 100 && rows >= 30) {
+      // Room for both: walkthrough on the left, checklist on the right.
+      expect(frame).toMatch(/✔ Sign in to WorkOS/);
+      expect(frame).toMatch(/✔ Look over your project/);
+      expect(frame).toContain(content.tasks.install.activeLabel!);
+      expect(frame).toMatch(/○ Wrap up/);
+      expect(frame).toMatch(/○ Complete your first sign-up/);
+      expect(frame).toContain('4 of 6 done');
+      const heads = lines.find((l) => l.includes('Tasks'))!;
+      expect(heads.indexOf("What's happening")).toBeGreaterThan(-1);
+      expect(heads.indexOf('Tasks')).toBeGreaterThan(heads.indexOf("What's happening"));
+    } else {
+      // Too small for both: the walkthrough keeps the room, the checklist is one line.
+      expect(frame).not.toContain('Tasks');
+      expect(frame).toContain(`${content.tasks.install.activeLabel} · 4 of 6 done`);
+    }
 
     // Walkthrough, in plain English.
     expect(frame).toContain("What's happening");
@@ -184,6 +194,103 @@ describe.each([
       expect(frameAt(stdout)).toContain(content.tasks.install.activeLabel!);
     },
   );
+});
+
+describe('checklist', () => {
+  function configuring(emitter: ReturnType<typeof createInstallerEventEmitter>) {
+    emitter.emit('state:enter', { state: 'authenticating' });
+    emitter.emit('state:exit', { state: 'authenticating' });
+    emitter.emit('state:enter', { state: 'preparing' });
+    emitter.emit('state:exit', { state: 'preparing' });
+    emitter.emit('state:enter', { state: 'gatheringCredentials' });
+    emitter.emit('state:exit', { state: 'gatheringCredentials' });
+    emitter.emit('state:enter', { state: 'configuring' });
+    for (const step of ['env-vars', 'redirect-uri', 'cors-origin'] as const) {
+      emitter.emit('config:step', { step, status: 'started' });
+    }
+    emitter.emit('config:step', { step: 'env-vars', status: 'done' });
+    emitter.emit('config:step', { step: 'redirect-uri', status: 'done' });
+  }
+
+  it("expands Configure WorkOS into the dashboard's items, indented under it", async () => {
+    const { emitter, stdout } = mount(120, 40);
+    configuring(emitter);
+    await waitFor(() => expect(frameAt(stdout)).toContain('Set CORS origin'));
+    const lines = frameAt(stdout).split('\n');
+    const at = (text: string) => lines.findIndex((l) => l.includes(text));
+    const col = (text: string) => lines[at(text)].indexOf(text);
+
+    expect(at('Configuring WorkOS')).toBeGreaterThan(-1);
+    const items = ['Add environment variables', 'Set redirect URI', 'Set CORS origin'];
+    items.forEach((item, i) => expect(at(item), item).toBe(at('Configuring WorkOS') + 1 + i));
+    // Indented one level under the parent.
+    expect(col('Add environment variables')).toBe(col('Configuring WorkOS') + 2);
+    expect(lines[at('Add environment variables')]).toMatch(/✔ Add environment variables/);
+    expect(lines[at('Set CORS origin')]).not.toMatch(/✔ Set CORS origin/);
+  });
+
+  it('names the running sub-step on the progress line when the terminal is small', async () => {
+    const { emitter, stdout } = mount(80, 24);
+    configuring(emitter);
+    await waitFor(() =>
+      expect(frameAt(stdout)).toContain(`${content.tasks.configure.activeLabel} · Set CORS origin · 3 of 6 done`),
+    );
+  });
+
+  it('connects the app URLs after the agent and flags the ones to check in the dashboard', async () => {
+    const { emitter, stdout } = mount(120, 40);
+    emitter.emit('state:enter', { state: 'runningAgent' });
+    for (const step of ['redirect-uri', 'initiate-login-uri', 'sign-out-uri'] as const) {
+      emitter.emit('app-urls:step', { step, status: 'started' });
+    }
+    emitter.emit('app-urls:step', { step: 'redirect-uri', status: 'done' });
+    emitter.emit('app-urls:step', { step: 'sign-out-uri', status: 'skipped', detail: 'Not verified.' });
+    await waitFor(() => expect(frameAt(stdout)).toContain('! Set sign-out URI'));
+    const frame = frameAt(stdout);
+    expect(frame).toContain(content.tasks['app-urls'].activeLabel!);
+    expect(frame).toMatch(/✔ Set redirect URI/);
+    expect(frame).toContain('Check in the WorkOS dashboard: set sign-out URI. Not verified.');
+  });
+
+  it("doesn't say all done on the small-terminal line while a setting needs a look", async () => {
+    const { emitter, stdout } = mount(80, 24);
+    emitter.emit('state:enter', { state: 'runningAgent' });
+    emitter.emit('app-urls:step', { step: 'sign-out-uri', status: 'started' });
+    emitter.emit('app-urls:step', { step: 'sign-out-uri', status: 'skipped', detail: 'Not verified.' });
+    emitter.emit('state:exit', { state: 'runningAgent' });
+    emitter.emit('state:enter', { state: 'postInstall' });
+    emitter.emit('state:enter', { state: 'complete' });
+    await waitFor(() =>
+      expect(frameAt(stdout)).toContain('! Check your WorkOS settings · → Complete your first sign-up'),
+    );
+    expect(frameAt(stdout)).not.toContain('All done');
+  });
+
+  it('ends on the first sign-up as the next step', async () => {
+    for (const [columns, rows, expected] of [
+      [120, 40, '→ Complete your first sign-up'],
+      [80, 24, '✔ All done · → Complete your first sign-up'],
+    ] as const) {
+      const { emitter, stdout } = mount(columns, rows);
+      emitter.emit('state:enter', { state: 'runningAgent' });
+      emitter.emit('state:exit', { state: 'runningAgent' });
+      emitter.emit('state:enter', { state: 'postInstall' });
+      emitter.emit('state:enter', { state: 'complete' });
+      await waitFor(() => expect(frameAt(stdout)).toContain(expected));
+      instance?.unmount();
+    }
+  });
+
+  it.each([
+    [100, 30, true],
+    [99, 40, false],
+    [120, 29, false],
+  ])('at %i×%i shows the checklist beside the walkthrough: %s', async (columns, rows, sideBySide) => {
+    const { emitter, stdout } = mount(columns, rows);
+    progress(emitter);
+    await waitFor(() => expect(frameAt(stdout)).toContain("What's happening"));
+    expect(frameAt(stdout).includes('Tasks')).toBe(sideBySide);
+  });
 });
 
 describe('full-screen installer interaction', () => {

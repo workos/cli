@@ -22,6 +22,7 @@ export const glyphs = {
   bullet: '·',
   warning: '!',
   tip: '◆',
+  next: '→',
 } as const;
 
 export const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -29,3 +30,10 @@ export const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', 
 /** Smallest terminal the full-screen installer lays out in. */
 export const MIN_COLUMNS = 80;
 export const MIN_ROWS = 24;
+
+/**
+ * Below this the checklist doesn't fit beside the walkthrough; the walkthrough
+ * keeps the room and the checklist becomes one progress line.
+ */
+export const SIDE_BY_SIDE_MIN_COLUMNS = 100;
+export const SIDE_BY_SIDE_MIN_ROWS = 30;

@@ -18,14 +18,52 @@
     "vanilla-js": "JavaScript"
   },
   "tasks": {
-    "sign-in": { "label": "Sign in to WorkOS", "activeLabel": "Signing in to WorkOS" },
-    "scaffold": { "label": "Create a new app", "activeLabel": "Creating a new app" },
-    "inspect": { "label": "Look over your project", "activeLabel": "Looking over your project" },
-    "credentials": { "label": "Connect a WorkOS environment", "activeLabel": "Connecting a WorkOS environment" },
-    "configure": { "label": "Configure WorkOS", "activeLabel": "Configuring WorkOS" },
-    "install": { "label": "Add AuthKit to your code", "activeLabel": "Adding AuthKit to your code" },
-    "verify": { "label": "Check the changes", "activeLabel": "Checking the changes" },
-    "finish": { "label": "Wrap up", "activeLabel": "Wrapping up" }
+    "sign-in": {
+      "label": "Sign in to WorkOS",
+      "activeLabel": "Signing in to WorkOS"
+    },
+    "scaffold": {
+      "label": "Create a new app",
+      "activeLabel": "Creating a new app"
+    },
+    "inspect": {
+      "label": "Look over your project",
+      "activeLabel": "Looking over your project"
+    },
+    "credentials": {
+      "label": "Connect a WorkOS environment",
+      "activeLabel": "Connecting a WorkOS environment"
+    },
+    "configure": {
+      "label": "Configure WorkOS",
+      "activeLabel": "Configuring WorkOS"
+    },
+    "install": {
+      "label": "Add AuthKit to your code",
+      "activeLabel": "Adding AuthKit to your code"
+    },
+    "verify": {
+      "label": "Check the changes",
+      "activeLabel": "Checking the changes"
+    },
+    "app-urls": {
+      "label": "Connect your app's URLs",
+      "activeLabel": "Connecting your app's URLs"
+    },
+    "finish": {
+      "label": "Wrap up",
+      "activeLabel": "Wrapping up"
+    },
+    "first-sign-up": {
+      "label": "Complete your first sign-up"
+    }
+  },
+  "subtasks": {
+    "env-vars": "Add environment variables",
+    "redirect-uri": "Set redirect URI",
+    "initiate-login-uri": "Set initiate login URI",
+    "sign-out-uri": "Set sign-out URI",
+    "cors-origin": "Set CORS origin"
   },
   "walkthrough": {
     "auth:checking": "First, I'm making sure you're signed in to WorkOS.",
@@ -50,7 +88,7 @@
     "staging:fetching": "Getting your WorkOS environment ready.",
     "staging:success": "Your WorkOS environment is ready.",
     "credentials:request": "Paste your WorkOS keys below. You'll find them at dashboard.workos.com.",
-    "config:start": "Setting up WorkOS for this app: redirect URIs, sign-in settings, and environment variables.",
+    "config:start": "Setting up WorkOS for this app.",
     "config:complete": "WorkOS is configured.",
     "agent:start": "Now the AuthKit agent is adding sign-in to your code. This usually takes a few minutes, so it's a good time for a coffee.",
     "agent:retry": "Trying that again (attempt {attempt} of {maxRetries}).",
@@ -64,12 +102,14 @@
       "passed": "Everything checks out.",
       "failed": "A few things are worth a look (issues: {count}). They'll be listed when this screen closes."
     },
+    "app-urls:step": "Your app's routes are in place, so now I'm pointing WorkOS at them.",
     "postinstall:changes": "Files changed: {count}.",
     "postinstall:commit:success": "Committed: {message}",
     "postinstall:pr:success": "Pull request opened: {url}",
     "postinstall:manual": "The GitHub CLI isn't installed, so here's how to open the pull request yourself.",
     "complete": {
-      "success": "All done. AuthKit is installed.",
+      "success": "All done. AuthKit is installed. Start your app and complete your first sign-up.",
+      "setup-required": "The code is in. Some WorkOS settings need a look in the dashboard (listed above). Then start your app and complete your first sign-up.",
       "failure": "The install didn't finish. The details will be shown when this screen closes.",
       "cancelled": "Stopped. The installer was cancelled."
     }
