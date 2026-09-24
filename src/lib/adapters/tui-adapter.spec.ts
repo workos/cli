@@ -156,6 +156,10 @@ describe('TuiAdapter', () => {
     const scrollback = afterExit();
     expect(scrollback).toContain('✔ Continue anyway? Yes');
     expect(scrollback).toContain('WorkOS AuthKit Installed');
+    // The view already showed the logo; the scrollback doesn't repeat the opener.
+    expect(scrollback).not.toContain('AuthKit installer');
+    expect(scrollback).not.toContain('▄▄██');
+    expect(scrollback.trimStart().startsWith('! You have uncommitted or untracked files:')).toBe(true);
     expect(getUiHost()).toBeNull();
     expect(console.log).toBe(originalLog);
     expect(stdin.rawMode).toBe(false);

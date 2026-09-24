@@ -7,7 +7,7 @@ import { CANCEL, type UiPromptRequest } from '../utils/ui.js';
 import { InstallerApp } from './App.js';
 import { loadInstallerContent } from './content/index.js';
 import { createRunModel } from './model/run-model.js';
-import { compactLogoRows, LOGO_MASK } from './logo.js';
+import { compactLogoRows, LOGO_MASK } from '../utils/logomark.js';
 import { FakeStdin, FakeStdout, KEY, settle, stripAnsi, waitFor } from './ink-streams.test-utils.js';
 
 const content = loadInstallerContent();

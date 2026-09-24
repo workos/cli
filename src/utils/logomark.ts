@@ -1,5 +1,7 @@
 /**
- * The WorkOS logomark as terminal cells, matching Arc's startup header.
+ * The WorkOS logomark as terminal cells, matching Arc's startup header. The
+ * one brand mark in the CLI: the full-screen installer's header and the plain
+ * CLI's opener both draw it.
  *
  * Arc rasterizes workos.svg at 22 cells wide and paints the covered cells with
  * a blurple background, because block glyphs can leave seams in some

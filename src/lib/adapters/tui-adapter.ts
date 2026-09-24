@@ -126,8 +126,12 @@ export class TuiAdapter implements InstallerAdapter {
         },
       );
 
-      // Last, so its brand mark and handlers land inside the full screen.
+      // Last, so its handlers land inside the full screen. What it prints on
+      // start is its opener (the brand mark): the view already shows the logo,
+      // so the scrollback shouldn't repeat it.
+      const openerStart = this.transcript.length;
       await this.cli.start();
+      this.transcript.splice(openerStart);
     } catch (error) {
       // Don't leave the terminal, console, or ui hijacked by a half-started view.
       await this.cli.stop();
