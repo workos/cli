@@ -92,6 +92,15 @@ export const KEY = {
   right: '\x1b[C',
 } as const;
 
+/**
+ * Let React flush passive effects. Ink re-subscribes input handlers in an
+ * effect after each render, so a keypress sent the instant a frame appears can
+ * reach the previous handler. A person never types that fast; tests wait this out.
+ */
+export function settle(ms = 30): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 /** Poll until `check` passes (Ink renders asynchronously). */
 export async function waitFor(check: () => boolean | void, timeoutMs = 2000): Promise<void> {
   const deadline = Date.now() + timeoutMs;

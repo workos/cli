@@ -28,6 +28,9 @@ export interface InstallerAppProps {
 /** Rows at which the full-size logo fits alongside everything else. */
 const FULL_LOGO_MIN_ROWS = 36;
 const MIN_BODY_ROWS = 8;
+/** An open question may squeeze the body further; the task list windows itself. */
+const MIN_BODY_ROWS_WITH_PROMPT = 6;
+const TOP_MARGIN = 1;
 
 // A fresh key per prompt so each question starts with empty input state.
 const promptKeys = new WeakMap<object, number>();
@@ -58,13 +61,22 @@ export function InstallerApp({ model, answer, interrupt, projectName, tipInterva
     { isActive: !snapshot.prompt },
   );
 
+  // Margins: one column each side, one row on top, and the bottom row left
+  // empty (drawing one short of the screen keeps Ink's redraw incremental).
   const width = Math.max(20, columns - 2);
-  const height = Math.max(1, rows - 1); // one short of the screen keeps Ink's redraw incremental
+  const height = Math.max(1, rows - 1);
+  const inner = Math.max(1, height - TOP_MARGIN);
   const compact = rows < FULL_LOGO_MIN_ROWS;
   const headerRows = compact ? COMPACT_HEADER_ROWS : FULL_HEADER_ROWS;
+  const minBody = snapshot.prompt ? MIN_BODY_ROWS_WITH_PROMPT : MIN_BODY_ROWS;
   // Room for a select's options: what's left after the header, a minimal
   // body, the gaps, the rule, the question, and the status line.
-  const maxOptions = Math.max(3, height - headerRows - MIN_BODY_ROWS - 6);
+  const maxOptions = Math.max(3, inner - headerRows - minBody - 6);
+  // The question always fits; the context above it takes what's left.
+  const promptRoom = inner - headerRows - 1 - minBody - 1 - 1;
+  const maxContext = snapshot.prompt
+    ? Math.max(1, promptRoom - promptHeight(snapshot.prompt, width, maxOptions, 0))
+    : 0;
   const prompt = snapshot.prompt ? (
     <PromptPanel
       key={keyFor(snapshot.prompt)}
@@ -72,12 +84,13 @@ export function InstallerApp({ model, answer, interrupt, projectName, tipInterva
       answer={answer}
       width={width}
       maxOptions={maxOptions}
+      maxContext={maxContext}
     />
   ) : null;
 
   if (columns < MIN_COLUMNS || rows < MIN_ROWS) {
     return (
-      <Box flexDirection="column" width={columns} height={height} paddingX={1}>
+      <Box flexDirection="column" width={columns} height={height} paddingX={1} paddingTop={TOP_MARGIN}>
         <Text color={colors.brand} bold>
           WorkOS AuthKit installer
         </Text>
@@ -89,13 +102,13 @@ export function InstallerApp({ model, answer, interrupt, projectName, tipInterva
     );
   }
 
-  const promptRows = snapshot.prompt ? promptHeight(snapshot.prompt, width, maxOptions) + 1 : 0;
-  const bodyRows = Math.max(MIN_BODY_ROWS, height - headerRows - 1 - promptRows - 1);
+  const promptRows = snapshot.prompt ? promptHeight(snapshot.prompt, width, maxOptions, maxContext) + 1 : 0;
+  const bodyRows = Math.max(minBody, inner - headerRows - 1 - promptRows - 1);
   const taskWidth = columns >= 110 ? 34 : 30;
   const walkthroughWidth = width - taskWidth - 2;
 
   return (
-    <Box flexDirection="column" width={columns} height={height} paddingX={1}>
+    <Box flexDirection="column" width={columns} height={height} paddingX={1} paddingTop={TOP_MARGIN}>
       <Header snapshot={snapshot} columns={width} compact={compact} projectName={projectName} tipIndex={tipIndex} />
       <Box height={1} flexShrink={0} />
       <Box height={bodyRows} flexShrink={0}>

@@ -75,6 +75,13 @@ describe('TuiAdapter', () => {
 
     await waitFor(() => expect(frame()).toContain('? Continue anyway?'));
     expect(frame()).toContain('You have uncommitted changes (files: 2)');
+    // The question comes with the list the plain CLI prints above it.
+    const lines = frame().split('\n');
+    const at = (text: string) => lines.findIndex((l) => l.includes(text));
+    expect(at('! You have uncommitted or untracked files:')).toBeGreaterThan(-1);
+    expect(at('a.ts')).toBeGreaterThan(at('! You have uncommitted or untracked files:'));
+    expect(at('b.ts')).toBe(at('a.ts') + 1);
+    expect(at('? Continue anyway?')).toBe(at('b.ts') + 1);
     stdin.press('n');
     await waitFor(() => expect(sendEvent).toHaveBeenCalledWith({ type: 'GIT_CANCELLED' }));
     await waitFor(() => expect(frame()).not.toContain('? Continue anyway?'));

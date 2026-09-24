@@ -41,11 +41,19 @@ export interface UiLine {
   stream: 'stdout' | 'stderr';
 }
 
-export type UiPromptRequest =
+export type UiPromptRequest = (
   | ({ kind: 'confirm' } & ConfirmOptions)
   | ({ kind: 'select' } & SelectOptions<unknown>)
   | ({ kind: 'text' } & TextOptions)
-  | ({ kind: 'password' } & PasswordOptions);
+  | ({ kind: 'password' } & PasswordOptions)
+) & {
+  /**
+   * What the caller printed right before asking (same synchronous run), e.g.
+   * the file list behind "Continue anyway?". On a terminal those lines sit
+   * above the question; a host has to show them with it. Absent when empty.
+   */
+  context?: readonly UiLine[];
+};
 
 export interface UiHost {
   /** A line ui would have printed. */
@@ -92,10 +100,40 @@ const INDENT = '  ';
 // takes over — so no output surface below has to check for one.
 function emit(kind: UiLineKind, message: string, rendered: string, terminal = INDENT + rendered): void {
   if (uiHost) {
-    uiHost.line({ kind, message, rendered, stream: 'stdout' });
+    const line: UiLine = { kind, message, rendered, stream: 'stdout' };
+    rememberForPrompt(line);
+    uiHost.line(line);
     return;
   }
   console.log(terminal);
+}
+
+// Callers print what a question is about, then ask, in one synchronous run
+// ("You have uncommitted files:" + the list, then "Continue anyway?"). With a
+// host, keep this run's lines so a prompt called in it can carry them as
+// context. The next microtask clears them, so earlier output never leaks in.
+const MAX_PROMPT_CONTEXT = 8;
+let recentLines: UiLine[] = [];
+let recentClearScheduled = false;
+
+function rememberForPrompt(line: UiLine): void {
+  if (!line.message.trim()) return;
+  recentLines.push(line);
+  if (!recentClearScheduled) {
+    recentClearScheduled = true;
+    queueMicrotask(() => {
+      recentLines = [];
+      recentClearScheduled = false;
+    });
+  }
+}
+
+/** Claim this run's lines for the prompt being called now. */
+function takePromptContext(): { context?: readonly UiLine[] } {
+  if (!uiHost || recentLines.length === 0) return {};
+  const context = recentLines.slice(-MAX_PROMPT_CONTEXT);
+  recentLines = [];
+  return { context };
 }
 
 /** Print one indented line to stdout. */
@@ -412,8 +450,9 @@ export interface ConfirmOptions {
   signal?: AbortSignal;
 }
 async function confirm(options: ConfirmOptions): Promise<boolean | symbol> {
+  const context = takePromptContext();
   return withPrompt(async () => {
-    if (uiHost) return hostPrompt<boolean>(uiHost, { kind: 'confirm', ...options });
+    if (uiHost) return hostPrompt<boolean>(uiHost, { kind: 'confirm', ...options, ...context });
     const { confirm: inquirerConfirm } = await import('@inquirer/prompts');
     try {
       return await inquirerConfirm(
@@ -442,8 +481,9 @@ export interface SelectOptions<T> {
   signal?: AbortSignal;
 }
 async function select<T>(options: SelectOptions<T>): Promise<T | symbol> {
+  const context = takePromptContext();
   return withPrompt(async () => {
-    if (uiHost) return hostPrompt<T>(uiHost, { kind: 'select', ...(options as SelectOptions<unknown>) });
+    if (uiHost) return hostPrompt<T>(uiHost, { kind: 'select', ...(options as SelectOptions<unknown>), ...context });
     const { select: inquirerSelect } = await import('@inquirer/prompts');
     try {
       return await inquirerSelect<T>(
@@ -476,8 +516,9 @@ export interface TextOptions {
   signal?: AbortSignal;
 }
 async function text(options: TextOptions): Promise<string | symbol> {
+  const context = takePromptContext();
   return withPrompt(async () => {
-    if (uiHost) return hostPrompt<string>(uiHost, { kind: 'text', ...options });
+    if (uiHost) return hostPrompt<string>(uiHost, { kind: 'text', ...options, ...context });
     // @inquirer/input has no placeholder concept, and mapping it to `default`
     // would auto-submit the hint as the real value on an empty enter. Fold it
     // into the message so the hint survives (rendered as ghost text previously).
@@ -505,8 +546,9 @@ export interface PasswordOptions {
   signal?: AbortSignal;
 }
 async function password(options: PasswordOptions): Promise<string | symbol> {
+  const context = takePromptContext();
   return withPrompt(async () => {
-    if (uiHost) return hostPrompt<string>(uiHost, { kind: 'password', ...options });
+    if (uiHost) return hostPrompt<string>(uiHost, { kind: 'password', ...options, ...context });
     const { password: inquirerPassword } = await import('@inquirer/prompts');
     try {
       return await inquirerPassword(

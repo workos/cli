@@ -8,7 +8,7 @@ import { InstallerApp } from './App.js';
 import { loadInstallerContent } from './content/index.js';
 import { createRunModel } from './model/run-model.js';
 import { compactLogoRows, LOGO_MASK } from './logo.js';
-import { FakeStdin, FakeStdout, KEY, stripAnsi, waitFor } from './ink-streams.test-utils.js';
+import { FakeStdin, FakeStdout, KEY, settle, stripAnsi, waitFor } from './ink-streams.test-utils.js';
 
 const content = loadInstallerContent();
 const BLURPLE_BG = '\x1b[48;2;99;99;241m';
@@ -115,6 +115,14 @@ describe.each([
     // Fits the screen: one row short, nothing wider than the terminal.
     expect(lines.length).toBeLessThanOrEqual(rows);
     for (const line of lines) expect([...line].length).toBeLessThanOrEqual(columns);
+
+    // Margins: a blank row on top, and one clear column on each side.
+    expect(lines[0].trim()).toBe('');
+    expect(lines[1].trim()).not.toBe('');
+    for (const line of lines.filter((l) => l.trim())) {
+      expect(line.startsWith(' '), line).toBe(true);
+      expect([...line.trimEnd()].length, line).toBeLessThanOrEqual(columns - 1);
+    }
   });
 });
 
@@ -130,6 +138,26 @@ describe.each([
       options: Array.from({ length: 12 }, (_, i) => ({ value: i, label: `Environment ${i + 1}`, hint: 'staging' })),
     },
     { kind: 'text', message: 'Enter your WorkOS Client ID:', placeholder: 'client_...' },
+    {
+      kind: 'confirm',
+      message: 'Continue anyway?',
+      initialValue: false,
+      context: [
+        {
+          kind: 'warn',
+          message: 'You have uncommitted or untracked files:',
+          rendered: '! You have uncommitted or untracked files:',
+          stream: 'stdout',
+        },
+        ...['README.md', 'next.config.ts', 'package.json', 'src/', 'tsconfig.json'].map((f) => ({
+          kind: 'info' as const,
+          message: `  - ${f}`,
+          rendered: `  - ${f}`,
+          stream: 'stdout' as const,
+        })),
+        { kind: 'info', message: '  ... and 2 more', rendered: '  ... and 2 more', stream: 'stdout' },
+      ],
+    },
   ];
 
   it.each(questions.map((q) => [q.kind, q] as const))(
@@ -141,7 +169,16 @@ describe.each([
       await waitFor(() => expect(frameAt(stdout)).toContain(question.message));
       const lines = frameAt(stdout).split('\n');
       expect(lines.length).toBeLessThanOrEqual(rows - 1);
+      expect(lines[0].trim()).toBe('');
       expect(lines.at(-1)).toMatch(/esc cancel/);
+      if (question.context) {
+        // The question and its answer line always fit; context above it may collapse.
+        const ask = lines.findIndex((l) => l.includes('? Continue anyway?'));
+        expect(ask).toBeGreaterThan(-1);
+        expect(lines[ask + 1]).toContain('y/N');
+        expect(lines[ask - 1]).toMatch(/… \d+ more|\.\.\. and 2 more/);
+        expect(frameAt(stdout)).toContain('! You have uncommitted or untracked files:');
+      }
       for (const line of lines) expect([...line].length).toBeLessThanOrEqual(columns);
       // However tight, the task in progress stays in view.
       expect(frameAt(stdout)).toContain(content.tasks.install.activeLabel!);
@@ -159,6 +196,37 @@ describe('full-screen installer interaction', () => {
     expect(frameAt(stdout)).toContain('Y/n');
     stdin.press('y');
     await waitFor(() => expect(answer).toHaveBeenCalledWith(true));
+  });
+
+  it('shows what the question is about right above it', async () => {
+    const answer = vi.fn();
+    const { model, stdout, stdin } = mount(100, 30, { answer });
+    model.setPrompt({
+      kind: 'confirm',
+      message: 'Continue anyway?',
+      initialValue: false,
+      context: [
+        {
+          kind: 'warn',
+          message: 'You have uncommitted or untracked files:',
+          rendered: '! You have uncommitted or untracked files:',
+          stream: 'stdout',
+        },
+        { kind: 'info', message: '  src/app/page.tsx', rendered: '  src/app/page.tsx', stream: 'stdout' },
+        { kind: 'info', message: '  ... and 5 more', rendered: '  ... and 5 more', stream: 'stdout' },
+      ],
+    });
+
+    await waitFor(() => expect(frameAt(stdout)).toContain('? Continue anyway?'));
+    const lines = frameAt(stdout).split('\n');
+    const at = (text: string) => lines.findIndex((l) => l.includes(text));
+    expect(at('! You have uncommitted or untracked files:')).toBeGreaterThan(-1);
+    expect(at('src/app/page.tsx')).toBe(at('! You have uncommitted') + 1);
+    expect(at('... and 5 more')).toBe(at('src/app/page.tsx') + 1);
+    expect(at('? Continue anyway?')).toBe(at('... and 5 more') + 1);
+    expect(lines.at(-1)).toMatch(/esc cancel/);
+    stdin.press('n');
+    await waitFor(() => expect(answer).toHaveBeenCalledWith(false));
   });
 
   it('confirms the default on enter and declines with n', async () => {
@@ -227,6 +295,7 @@ describe('full-screen installer interaction', () => {
     // Wait for each keystroke to land before the next, as a person typing would.
     stdin.press('oops');
     await waitFor(() => expect(frameAt(stdout)).toContain('› oops'));
+    await settle();
     stdin.press(KEY.enter);
     await waitFor(() => expect(frameAt(stdout)).toContain('✗ Client ID should start with "client_"'));
     expect(answer).not.toHaveBeenCalled();
@@ -234,9 +303,11 @@ describe('full-screen installer interaction', () => {
     for (let i = 4; i > 0; i--) {
       stdin.press('\x7f'); // backspace
       await waitFor(() => expect(frameAt(stdout)).toContain(`› ${'oops'.slice(0, i - 1)}`));
+      await settle();
     }
     stdin.press('client_123');
     await waitFor(() => expect(frameAt(stdout)).toContain('› client_123'));
+    await settle();
     // Typing clears the error.
     expect(frameAt(stdout)).not.toContain('should start with');
     stdin.press(KEY.enter);
@@ -251,6 +322,7 @@ describe('full-screen installer interaction', () => {
     stdin.press('sk_secret');
     await waitFor(() => expect(frameAt(stdout)).toContain('*********'));
     expect(frameAt(stdout)).not.toContain('sk_secret');
+    await settle();
     stdin.press(KEY.enter);
     await waitFor(() => expect(answer).toHaveBeenCalledWith('sk_secret'));
   });
