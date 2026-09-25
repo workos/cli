@@ -3465,6 +3465,11 @@ async function runCli(): Promise<void> {
   try {
     await parser.parseAsync(rawArgs);
 
+    // Offer to refresh stale CLI-installed skills. Self-gating (human TTY only,
+    // once per bundled version) and best-effort — never affects the outcome.
+    const { maybeOfferSkillsUpdate } = await import('./commands/setup.js');
+    await maybeOfferSkillsUpdate(commandName);
+
     process.exitCode = 0;
     commandOutcome = {
       success: true,
