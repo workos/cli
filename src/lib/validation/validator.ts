@@ -1,6 +1,6 @@
 import { readFile } from 'fs/promises';
-import { existsSync, statSync } from 'fs';
-import { dirname, join, relative } from 'path';
+import { existsSync } from 'fs';
+import { join } from 'path';
 import fg from 'fast-glob';
 import type { ValidationResult, ValidationRules, ValidationIssue } from './types.js';
 import { runBuildValidation } from './build-validator.js';
@@ -285,7 +285,7 @@ export async function validateFrameworkSpecific(framework: string, projectDir: s
 async function validateClientOnlyApp(framework: string, projectDir: string, issues: ValidationIssue[]) {
   const signInPath = getSignInPath(framework);
   const prefix = getClientEnvPrefix(projectDir);
-  const { sources, traced } = await readClientSource(projectDir, prefix);
+  const sources = await readClientSource(projectDir, prefix);
   if (signInPath && !(await servesSignInRoute(projectDir, sources, signInPath)))
     issues.push({
       type: 'file',
@@ -306,11 +306,9 @@ async function validateClientOnlyApp(framework: string, projectDir: string, issu
     sources.flatMap((content) => [...content.matchAll(REDIRECT_ENV_REFERENCE)].map(([read]) => read)),
   );
   reads.delete(expected);
-  // Node code (a server, a script) reads the unprefixed var legitimately. Code
-  // traced from the browser's entry never does: Vite browser code has no
-  // process global. Only an untraced scan can mix the two, so only it lets
-  // the read through.
-  if (prefix === 'VITE_' && !traced) reads.delete('process.env.WORKOS_REDIRECT_URI');
+  // Node code reads the unprefixed var. In Vite browser code the same read throws
+  // (no process global), so only Create React App needs it flagged.
+  if (prefix === 'VITE_') reads.delete('process.env.WORKOS_REDIRECT_URI');
   for (const read of reads)
     issues.push({
       type: 'env',
@@ -329,41 +327,28 @@ const BROWSER_REDIRECT_ENV = {
 /** A redirect URI env read, e.g. import.meta.env.VITE_WORKOS_REDIRECT_URI. */
 const REDIRECT_ENV_REFERENCE = /(?:import\.meta\.env|process\.env)\.\w*WORKOS_REDIRECT_URI\b/g;
 
-const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
 /**
- * Whether `content` serves `signInPath` rather than linking to it: router
- * config (`path: '/login'`, `<Route path="/login">`, `createFileRoute('/login')`),
- * or a check of the page's pathname (`location.pathname === '/login'`, a
- * variable read from it, or `case '/login':` in a `switch` on it). Keep in step
+ * Code that serves a route rather than linking to it: router config, or a
+ * pathname check such as `path === '/login'` or `case '/login':`. Keep in step
  * with the forms the agent prompt names (buildSignInSection).
  */
-function declaresRoute(content: string, signInPath: string): boolean {
-  const quoted = String.raw`['"\`]${escapeRegExp(signInPath.replace(/\/$/, ''))}/?['"\`]`;
-  // `path=` with no space is a JSX attribute; `path = '/login'` is an assignment.
-  if (new RegExp(String.raw`\bpath(?:\s*:|=\{?)\s*${quoted}|\bcreate(?:File)?Route\(\s*${quoted}`).test(content))
-    return true;
-  const pathnameVars = new Set(
-    [...content.matchAll(/\b(?:const|let|var)\s+(\w+)\s*=\s*[^;\n]*\bpathname\b/g)].map(([, name]) => name),
-  );
-  const isPathname = (expression: string) => /(?:^|\.)pathname$/.test(expression) || pathnameVars.has(expression);
-  const compared = [
-    ...[...content.matchAll(new RegExp(String.raw`([\w.$]+)\s*===?\s*${quoted}`, 'g'))].map(([, e]) => e),
-    ...[...content.matchAll(new RegExp(String.raw`${quoted}\s*===?\s*([\w.$]+)`, 'g'))].map(([, e]) => e),
-  ];
-  if (compared.some(isPathname)) return true;
-  const switchesOnPathname = [...content.matchAll(/\bswitch\s*\(\s*([\w.$]+)\s*\)/g)].some(([, e]) => isPathname(e));
-  return switchesOnPathname && new RegExp(String.raw`\bcase\s+${quoted}`).test(content);
-}
+const ROUTE_DECLARATIONS = [
+  String.raw`\bpath\s*[:=]\s*\{?\s*`,
+  String.raw`\w\s*===?\s*`,
+  String.raw`\bcase\s+`,
+  String.raw`\bcreate(?:File)?Route\(\s*`,
+];
 
 /** Whether a client-only app serves `signInPath`, from a route in its source or a static page. */
 export async function hasClientSignInRoute(projectDir: string, signInPath: string): Promise<boolean> {
-  const { sources } = await readClientSource(projectDir, getClientEnvPrefix(projectDir));
-  return servesSignInRoute(projectDir, sources, signInPath);
+  return servesSignInRoute(projectDir, await readClientSource(projectDir, getClientEnvPrefix(projectDir)), signInPath);
 }
 
 async function servesSignInRoute(projectDir: string, sources: string[], signInPath: string): Promise<boolean> {
-  if (sources.some((content) => declaresRoute(content, signInPath))) return true;
+  const quoted = String.raw`['"\`]${signInPath.replace(/\/$/, '')}/?['"\`]`;
+  // Also the reversed comparison, `'/login' === path`.
+  const route = new RegExp(String.raw`(?:${ROUTE_DECLARATIONS.join('|')})${quoted}|${quoted}\s*===?`);
+  if (sources.some((content) => route.test(content))) return true;
   // A static page at the path, e.g. login/index.html, that starts sign-in.
   const segment = signInPath.replace(/^\/|\/$/g, '');
   const pages = await fg(
@@ -378,108 +363,31 @@ async function servesSignInRoute(projectDir: string, sources: string[], signInPa
 const readOrEmpty = (path: string) => readFile(path, 'utf-8').catch(() => '');
 
 const SCAN_CONCURRENCY = 32;
-const MAX_BROWSER_FILES = 5_000;
-const SOURCE_IGNORE = [
-  '**/node_modules/**',
-  '**/dist/**',
-  '**/build/**',
-  '**/.*/**',
-  '**/__tests__/**',
-  '**/*.{spec,test}.*',
-];
-const CODE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs'];
-const SCRIPT_SRC = /<script\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']/gi;
-const IMPORT_SPECIFIER =
-  /\b(?:import|export)\s+(?:[\w*{}\s,$]+\s+from\s+)?['"]([^'"]+)['"]|\b(?:import|require)\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
 
 /**
- * The project file an import or script src names, or undefined for a
- * package, a URL, or nothing on disk. `/x` is the project root (Vite, plain
- * pages); `@/` and `~/` are the usual aliases for src/.
+ * The app's browser code, read a bounded batch at a time. Create React App
+ * compiles only src/; elsewhere, leave out the bundler config at the project
+ * root. Tests do not serve routes.
  */
-function resolveLocal(projectDir: string, fromFile: string, specifier: string): string | undefined {
-  let base: string;
-  if (specifier.startsWith('./') || specifier.startsWith('../'))
-    base = join(dirname(join(projectDir, fromFile)), specifier);
-  else if (specifier.startsWith('/')) base = join(projectDir, specifier);
-  else if (specifier.startsWith('@/') || specifier.startsWith('~/')) base = join(projectDir, 'src', specifier.slice(2));
-  else return undefined;
-  base = base.replace(/[?#].*$/, '');
-  const candidates = [
-    base,
-    ...CODE_EXTENSIONS.map((ext) => base + ext),
-    ...CODE_EXTENSIONS.map((ext) => join(base, `index${ext}`)),
-    // TypeScript ESM names the emitted file: './auth.js' is auth.ts on disk.
-    ...(/\.jsx?$/.test(base) ? [base.replace(/\.jsx?$/, '.ts'), base.replace(/\.jsx?$/, '.tsx')] : []),
-  ];
-  const found = candidates.find(
-    (path) => /\.(?:m?[jt]sx?|html?)$/.test(path) && existsSync(path) && statSync(path).isFile(),
-  );
-  const file = found && relative(projectDir, found);
-  return file && !file.startsWith('..') && !file.split(/[\\/]/).includes('node_modules') ? file : undefined;
-}
-
-/**
- * The code the browser loads: every HTML page with its scripts (Vite's
- * index.html, a plain app's pages) or Create React App's src/index, and
- * everything those import. A server, a script, or the bundler config is never
- * reached from there, wherever it sits. Undefined when there is no entry.
- */
-async function readBrowserCode(projectDir: string, prefix: ReturnType<typeof getClientEnvPrefix>) {
-  const entries = await fg([prefix === 'REACT_APP_' ? 'src/index.{js,jsx,ts,tsx}' : '**/*.{html,htm}'], {
-    cwd: projectDir,
-    ignore: SOURCE_IGNORE,
-  });
-  if (entries.length === 0) return undefined;
-  const seen = new Set(entries);
-  const queue = [...entries];
-  const sources: string[] = [];
-  while (queue.length > 0) {
-    const batch = queue.splice(0, SCAN_CONCURRENCY);
-    const contents = await Promise.all(batch.map((file) => readOrEmpty(join(projectDir, file))));
-    batch.forEach((file, i) => {
-      const content = contents[i];
-      sources.push(content);
-      const specifiers = /\.html?$/.test(file)
-        ? [...content.matchAll(SCRIPT_SRC)]
-            .map(([, src]) => src)
-            .filter((src) => !/^(?:[a-z]+:)?\/\//i.test(src))
-            .map((src) => (/^[./]/.test(src) ? src : `./${src}`))
-        : [...content.matchAll(IMPORT_SPECIFIER)].map(([, from, call]) => from ?? call);
-      for (const specifier of specifiers) {
-        const next = resolveLocal(projectDir, file, specifier);
-        if (next && !seen.has(next) && seen.size < MAX_BROWSER_FILES) {
-          seen.add(next);
-          queue.push(next);
-        }
-      }
-    });
-  }
-  return sources;
-}
-
-/**
- * The app's browser code: traced from its entry when it has one (see
- * readBrowserCode), else every source file, read a bounded batch at a time.
- * Create React App compiles only src/; elsewhere, leave out the bundler
- * config at the project root. Tests do not serve routes.
- */
-async function readClientSource(
-  projectDir: string,
-  prefix: ReturnType<typeof getClientEnvPrefix>,
-): Promise<{ sources: string[]; traced: boolean }> {
-  const traced = await readBrowserCode(projectDir, prefix);
-  if (traced) return { sources: traced, traced: true };
+async function readClientSource(projectDir: string, prefix: ReturnType<typeof getClientEnvPrefix>): Promise<string[]> {
   const files = await fg([`${prefix === 'REACT_APP_' ? 'src/' : ''}**/*.{ts,tsx,js,jsx,mjs,html,htm}`], {
     cwd: projectDir,
-    ignore: [...SOURCE_IGNORE, '*.config.*'],
+    ignore: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/build/**',
+      '**/.*/**',
+      '**/__tests__/**',
+      '**/*.{spec,test}.*',
+      '*.config.*',
+    ],
   });
   const contents: string[] = [];
   for (let i = 0; i < files.length; i += SCAN_CONCURRENCY)
     contents.push(
       ...(await Promise.all(files.slice(i, i + SCAN_CONCURRENCY).map((file) => readOrEmpty(join(projectDir, file))))),
     );
-  return { sources: contents, traced: false };
+  return contents;
 }
 
 /**

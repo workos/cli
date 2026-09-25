@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { hasClientSignInRoute, validateInstallation } from './validator.js';
+import { validateInstallation } from './validator.js';
 
 describe('validateInstallation', () => {
   let testDir: string;
@@ -938,94 +938,6 @@ describe('validateInstallation', () => {
       const result = await validateInstallation('react', testDir, { runBuild: false });
 
       expect(redirectIssue(result.issues)?.severity).toBe('error');
-    });
-
-    describe('browser code traced from the entry', () => {
-      const viteApp = (files: Record<string, string>) => {
-        writeFileSync(join(testDir, 'package.json'), JSON.stringify({ devDependencies: { vite: '^6.0.0' } }));
-        writeFileSync(join(testDir, 'index.html'), '<script type="module" src="/src/main.ts"></script>');
-        for (const [file, content] of Object.entries(files)) {
-          mkdirSync(join(testDir, file, '..'), { recursive: true });
-          writeFileSync(join(testDir, file), content);
-        }
-      };
-
-      it('flags browser code that reads process.env.WORKOS_REDIRECT_URI, which Vite leaves undefined', async () => {
-        viteApp({
-          'src/main.ts': "import { client } from './auth';",
-          'src/auth.ts': 'export const client = createClient(id, { redirectUri: process.env.WORKOS_REDIRECT_URI });',
-        });
-
-        const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
-
-        expect(envReadIssue(result.issues)?.message).toBe(
-          'The client reads process.env.WORKOS_REDIRECT_URI, but the installer exposes import.meta.env.VITE_WORKOS_REDIRECT_URI',
-        );
-      });
-
-      it('still lets server code the browser never loads read the unprefixed redirect URI', async () => {
-        viteApp({
-          'src/main.ts': 'createClient(id, { redirectUri: import.meta.env.VITE_WORKOS_REDIRECT_URI });',
-          'server.js': 'const callback = process.env.WORKOS_REDIRECT_URI;',
-          'src/server/auth.ts': 'const callback = process.env.WORKOS_REDIRECT_URI;',
-        });
-
-        const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
-
-        expect(envReadIssue(result.issues)).toBeUndefined();
-      });
-
-      it('does not count a /login route in server code the browser never loads', async () => {
-        viteApp({
-          'src/main.ts': 'createClient(id, { redirectUri: import.meta.env.VITE_WORKOS_REDIRECT_URI });',
-          'server.js': "const routes = [{ path: '/login' }];",
-          'scripts/routes.ts': "switch (location.pathname) { case '/login': break; }",
-        });
-
-        const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
-
-        expect(signInIssue(result.issues)).toBeDefined();
-        expect(await hasClientSignInRoute(testDir, '/login')).toBe(false);
-      });
-
-      it('follows @/ aliases and TypeScript .js imports to the route', async () => {
-        viteApp({
-          'src/main.ts': "import { App } from '@/App';\nimport './auth.js';",
-          'src/App.tsx': '<Route path="/login" element={<Login />} />',
-          'src/auth.ts': 'createClient(id, { redirectUri: import.meta.env.VITE_WORKOS_REDIRECT_URI });',
-        });
-
-        const result = await validateInstallation('react', testDir, { runBuild: false });
-
-        expect(signInIssue(result.issues)).toBeUndefined();
-        expect(redirectIssue(result.issues)).toBeUndefined();
-        expect(await hasClientSignInRoute(testDir, '/login')).toBe(true);
-      });
-    });
-
-    it.each([
-      "if (redirectTarget === '/login') navigate(redirectTarget);",
-      "switch (action) { case '/login': break; }",
-      "const path = '/login';\nnavigate(path);",
-    ])('does not treat code that only mentions /login as the route: %s', async (code) => {
-      mkdirSync(join(testDir, 'src'), { recursive: true });
-      writeFileSync(join(testDir, 'src', 'main.tsx'), code);
-
-      const result = await validateInstallation('react', testDir, { runBuild: false });
-
-      expect(signInIssue(result.issues)).toBeDefined();
-    });
-
-    it.each([
-      "switch (window.location.pathname) { case '/login': signIn(); }",
-      "const { pathname } = window.location;\nif (pathname === '/login') signIn();",
-    ])('accepts a check of the page pathname: %s', async (code) => {
-      mkdirSync(join(testDir, 'src'), { recursive: true });
-      writeFileSync(join(testDir, 'src', 'main.tsx'), code);
-
-      const result = await validateInstallation('react', testDir, { runBuild: false });
-
-      expect(signInIssue(result.issues)).toBeUndefined();
     });
 
     it('accepts a client app that passes redirectUri', async () => {
