@@ -308,7 +308,7 @@ export async function configureOtherApplicationUrls(
   // A client-only route has no file the guide fixes, so save it only once the app serves it.
   const clientOnly = (await getRegistry()).get(integration)?.config.environment.requiresApiKey === false;
   if (signInPath && clientOnly && !(await hasClientSignInRoute(installerOptions.installDir, signInPath))) {
-    initiateLoginReason = `The app has no ${signInPath} route that starts sign-in.`;
+    initiateLoginReason = `Could not confirm a ${signInPath} client route that starts sign-in. Check the route before setting the Initiate login URI.`;
     signInPath = undefined;
   }
   let setup: AuthkitApplicationSetup;

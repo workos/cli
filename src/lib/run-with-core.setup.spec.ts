@@ -410,7 +410,9 @@ describe('application URLs for SDKs other than Next.js', () => {
     emitter.on('app-urls:step', ({ step, status, detail }) => events.push(`${step} ${status} ${detail ?? ''}`.trim()));
     await configureOtherApplicationUrls({ options, integration: 'react', emitter }, 'client_a', 'sk_test_a');
     expect(vi.mocked(configureAuthkitApplication).mock.calls[0][0]).not.toHaveProperty('initiateLoginUri');
-    expect(events).toContain('initiate-login-uri skipped The app has no /login route that starts sign-in.');
+    expect(events).toContain(
+      'initiate-login-uri skipped Could not confirm a /login client route that starts sign-in. Check the route before setting the Initiate login URI.',
+    );
   });
 
   it('shows an unusable callback URL in the checklist instead of dropping it', async () => {

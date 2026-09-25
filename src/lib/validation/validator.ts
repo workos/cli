@@ -1,4 +1,4 @@
-import { readFile } from 'fs/promises';
+import { open, readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import fg from 'fast-glob';
@@ -285,7 +285,16 @@ export async function validateFrameworkSpecific(framework: string, projectDir: s
 async function validateClientOnlyApp(framework: string, projectDir: string, issues: ValidationIssue[]) {
   const signInPath = getSignInPath(framework);
   const prefix = getClientEnvPrefix(projectDir);
-  const sources = await readClientSource(projectDir, prefix);
+  const { sources, complete } = await readClientSource(projectDir, prefix);
+  if (!complete) {
+    issues.push({
+      type: 'file',
+      severity: 'warning',
+      message: 'Client source checks were incomplete; automatic sign-in URL setup will be skipped',
+      hint: 'The check is limited to 256 source files, 256 KiB per file, and 4 MiB total. Check the sign-in route and callback manually.',
+    });
+    return;
+  }
   if (signInPath && !(await servesSignInRoute(projectDir, sources, signInPath)))
     issues.push({
       type: 'file',
@@ -306,9 +315,6 @@ async function validateClientOnlyApp(framework: string, projectDir: string, issu
     sources.flatMap((content) => [...content.matchAll(REDIRECT_ENV_REFERENCE)].map(([read]) => read)),
   );
   reads.delete(expected);
-  // Node code reads the unprefixed var. In Vite browser code the same read throws
-  // (no process global), so only Create React App needs it flagged.
-  if (prefix === 'VITE_') reads.delete('process.env.WORKOS_REDIRECT_URI');
   for (const read of reads)
     issues.push({
       type: 'env',
@@ -328,66 +334,115 @@ const BROWSER_REDIRECT_ENV = {
 const REDIRECT_ENV_REFERENCE = /(?:import\.meta\.env|process\.env)\.\w*WORKOS_REDIRECT_URI\b/g;
 
 /**
- * Code that serves a route rather than linking to it: router config, or a
- * pathname check such as `path === '/login'` or `case '/login':`. Keep in step
- * with the forms the agent prompt names (buildSignInSection).
+ * Conservative source evidence, not a browser-flow test. Recognize the forms
+ * named in buildSignInSection; arbitrary comparisons, switch cases and menu
+ * data are not routes. Unsupported forms remain a manual setup step.
  */
-const ROUTE_DECLARATIONS = [
-  String.raw`\bpath\s*[:=]\s*\{?\s*`,
-  String.raw`\w\s*===?\s*`,
-  String.raw`\bcase\s+`,
-  String.raw`\bcreate(?:File)?Route\(\s*`,
-];
+function declaresClientRoute(content: string, quoted: string): boolean {
+  const router = new RegExp(
+    String.raw`<Route\b[^>]*\bpath\s*=\s*\{?\s*${quoted}|\bcreateFileRoute\(\s*${quoted}|\bpath\s*:\s*${quoted}\s*,\s*(?:element|Component|component)\s*:`,
+  );
+  if (router.test(content)) return true;
+  const aliases = [
+    ...content.matchAll(/\b(?:const|let|var)\s+(\w+)\s*=\s*(?:window\.)?location\.pathname\s*(?:;|\n|$)/g),
+  ].map(([, name]) => name);
+  const pathname = String.raw`(?<![\w$.])(?:window\.location\.pathname|location\.pathname${aliases.map((name) => `|${name}`).join('')})(?![\w$])`;
+  return new RegExp(String.raw`${pathname}\s*===?\s*${quoted}|${quoted}\s*===?\s*${pathname}`).test(content);
+}
 
-/** Whether a client-only app serves `signInPath`, from a route in its source or a static page. */
+/** Whether the supported client source forms provide evidence of a sign-in route. */
 export async function hasClientSignInRoute(projectDir: string, signInPath: string): Promise<boolean> {
-  return servesSignInRoute(projectDir, await readClientSource(projectDir, getClientEnvPrefix(projectDir)), signInPath);
+  const { sources, complete } = await readClientSource(projectDir, getClientEnvPrefix(projectDir));
+  return complete && servesSignInRoute(projectDir, sources, signInPath);
 }
 
 async function servesSignInRoute(projectDir: string, sources: string[], signInPath: string): Promise<boolean> {
-  const quoted = String.raw`['"\`]${signInPath.replace(/\/$/, '')}/?['"\`]`;
-  // Also the reversed comparison, `'/login' === path`.
-  const route = new RegExp(String.raw`(?:${ROUTE_DECLARATIONS.join('|')})${quoted}|${quoted}\s*===?`);
-  if (sources.some((content) => route.test(content))) return true;
+  const escaped = signInPath.replace(/\/$/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const quoted = String.raw`['"\`]${escaped}/?['"\`]`;
+  // A route declaration without any SDK sign-in call is insufficient evidence.
+  if (
+    sources.some((content) => /\bsignIn\s*\(/.test(content)) &&
+    sources.some((content) => declaresClientRoute(content, quoted))
+  )
+    return true;
   // A static page at the path, e.g. login/index.html, that starts sign-in.
   const segment = signInPath.replace(/^\/|\/$/g, '');
   const pages = await fg(
     [`${segment}.html`, `${segment}/index.html`, `public/${segment}.html`, `public/${segment}/index.html`],
     { cwd: projectDir },
   );
-  return (await Promise.all(pages.map((page) => readOrEmpty(join(projectDir, page))))).some((content) =>
-    content.includes('signIn'),
-  );
+  for (const page of pages) {
+    const content = await readBoundedSource(join(projectDir, page), MAX_SOURCE_BYTES);
+    if (content !== undefined && /\bsignIn\s*\(/.test(content)) return true;
+  }
+  return false;
 }
 
-const readOrEmpty = (path: string) => readFile(path, 'utf-8').catch(() => '');
+const MAX_SOURCE_FILES = 256;
+const MAX_SOURCE_BYTES = 256 * 1024;
+const MAX_SCAN_BYTES = 4 * 1024 * 1024;
 
-const SCAN_CONCURRENCY = 32;
+/** Read at most limit + 1 bytes, rather than loading a huge file before checking. */
+async function readBoundedSource(path: string, limit: number): Promise<string | undefined> {
+  try {
+    const handle = await open(path, 'r');
+    try {
+      const bytes = Buffer.alloc(limit + 1);
+      let length = 0;
+      while (length < bytes.length) {
+        const { bytesRead } = await handle.read(bytes, length, bytes.length - length, null);
+        if (bytesRead === 0) break;
+        length += bytesRead;
+      }
+      return length > limit ? undefined : bytes.subarray(0, length).toString('utf8');
+    } finally {
+      await handle.close();
+    }
+  } catch {
+    return undefined;
+  }
+}
 
 /**
- * The app's browser code, read a bounded batch at a time. Create React App
- * compiles only src/; elsewhere, leave out the bundler config at the project
- * root. Tests do not serve routes.
+ * Bounded checks of conventional client source roots, not an import resolver.
+ * Server-only paths and other workspace packages are deliberately excluded.
+ * Keep src/auth.config.ts: unlike the root bundler config, it can be browser code.
+ * Any truncated/unreadable scan cannot authorize saving the sign-in destination.
  */
-async function readClientSource(projectDir: string, prefix: ReturnType<typeof getClientEnvPrefix>): Promise<string[]> {
-  const files = await fg([`${prefix === 'REACT_APP_' ? 'src/' : ''}**/*.{ts,tsx,js,jsx,mjs,html,htm}`], {
-    cwd: projectDir,
-    ignore: [
-      '**/node_modules/**',
-      '**/dist/**',
-      '**/build/**',
-      '**/.*/**',
-      '**/__tests__/**',
-      '**/*.{spec,test}.*',
-      '*.config.*',
-    ],
-  });
-  const contents: string[] = [];
-  for (let i = 0; i < files.length; i += SCAN_CONCURRENCY)
-    contents.push(
-      ...(await Promise.all(files.slice(i, i + SCAN_CONCURRENCY).map((file) => readOrEmpty(join(projectDir, file))))),
-    );
-  return contents;
+async function readClientSource(
+  projectDir: string,
+  prefix: ReturnType<typeof getClientEnvPrefix>,
+): Promise<{ sources: string[]; complete: boolean }> {
+  const extension = '*.{ts,tsx,js,jsx,mjs,html,htm}';
+  const files = fg.stream(
+    prefix === 'REACT_APP_' ? [`src/**/${extension}`] : [extension, `{src,app,client}/**/${extension}`],
+    {
+      cwd: projectDir,
+      followSymbolicLinks: false,
+      suppressErrors: false,
+      ignore: [
+        '**/{node_modules,dist,build,coverage,server,api,functions,scripts,packages,examples,fixtures,__tests__}/**',
+        '**/.*/**',
+        '**/*.{spec,test,server}.*',
+        '**/server.*',
+        '*.config.*',
+      ],
+    },
+  );
+  const sources: string[] = [];
+  let remaining = MAX_SCAN_BYTES;
+  try {
+    for await (const file of files) {
+      if (sources.length >= MAX_SOURCE_FILES) return { sources, complete: false };
+      const content = await readBoundedSource(join(projectDir, String(file)), Math.min(MAX_SOURCE_BYTES, remaining));
+      if (content === undefined) return { sources, complete: false };
+      remaining -= Buffer.byteLength(content);
+      sources.push(content);
+    }
+  } catch {
+    return { sources, complete: false };
+  }
+  return { sources, complete: true };
 }
 
 /**
