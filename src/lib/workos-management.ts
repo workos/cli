@@ -7,6 +7,7 @@ import { formatWorkOSCommand } from '../utils/command-invocation.js';
 import ui from '../utils/ui.js';
 import { getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
 import { getCallbackPath } from './port-detection.js';
+import { createClaimNonce } from './unclaimed-env-api.js';
 
 const WORKOS_API_BASE = 'https://api.workos.com';
 
@@ -147,6 +148,25 @@ export async function setHomepageUrl(
   return { success: true, alreadyExists: false };
 }
 
+/** Best-effort live claim check; this is not atomic with the later homepage write. */
+export async function isUnclaimedEnvironmentKey(apiKey: string, clientId?: string): Promise<boolean> {
+  try {
+    const environment = getActiveEnvironment();
+    if (
+      !environment ||
+      !isUnclaimedEnvironment(environment) ||
+      environment.apiKey !== apiKey ||
+      (clientId !== undefined && environment.clientId !== clientId)
+    )
+      return false;
+    const claim = await createClaimNonce(environment.clientId, environment.claimToken);
+    return !claim.alreadyClaimed;
+  } catch {
+    // Unavailable keyring or claim status: unknown, so leave the homepage alone.
+    return false;
+  }
+}
+
 /**
  * Where the credentials being used came from, so the rows below say *where* the
  * writes landed and not just what was written.
@@ -161,17 +181,6 @@ export async function setHomepageUrl(
  * store entirely, and naming an untouched environment is exactly the confusion
  * this row exists to prevent.
  */
-/** Whether `apiKey` is the key of the stored, still-unclaimed environment. */
-export function isUnclaimedEnvironmentKey(apiKey: string): boolean {
-  try {
-    const environment = getActiveEnvironment();
-    return !!environment && isUnclaimedEnvironment(environment) && environment.apiKey === apiKey;
-  } catch {
-    // Keyring unavailable: unknown, so treat it as claimed.
-    return false;
-  }
-}
-
 function describeCredentialProvenance(apiKey: string): string {
   let activeEnv: EnvironmentConfig | null = null;
   try {
@@ -245,11 +254,11 @@ export async function autoConfigureWorkOSEnvironment(
 
   // The homepage is one value per environment, and the REST API can set it
   // but not read it (the GET answers 404), so this step can't tell whether
-  // someone already chose one. Write it only when nothing can be overwritten:
-  // the user asked for it (--homepage-url), or the environment is unclaimed,
-  // so nobody has had its dashboard. With a login, the later dashboard step
-  // reads the current value and fills an empty one.
-  const writeHomepage = Boolean(options.homepageUrl) || isUnclaimedEnvironmentKey(apiKey);
+  // someone already chose one. Write only an explicit homepage or a default
+  // for an environment the server still reports as unclaimed. Local claim
+  // status can be stale. With a login, the later dashboard step reads the
+  // current value and fills an empty one.
+  const writeHomepage = Boolean(options.homepageUrl) || (await isUnclaimedEnvironmentKey(apiKey));
 
   ui.log.step('Configuring WorkOS dashboard settings...');
 

@@ -158,10 +158,10 @@ export async function configureAuthkitApplication(
       }
     }
     // REST cannot read the current homepage. Only an explicit override or the
-    // stored active unclaimed key authorizes replacing this single-valued setting.
-    if (setup.homepageUrl === undefined && !isUnclaimedEnvironmentKey(apiKey)) {
+    // matching stored environment confirmed still unclaimed authorizes a default.
+    if (setup.homepageUrl === undefined && !(await isUnclaimedEnvironmentKey(apiKey, setup.clientId))) {
       return pending(
-        'Callback registered using the API key. Homepage URL was left unchanged because its current value cannot be read and this key does not match the stored active unclaimed environment. Supply --homepage-url to override it. Sign-out URI and Initiate login URI still require dashboard setup and verification.',
+        'Callback registered using the API key. Homepage URL was left unchanged because its current value cannot be read and the environment could not be confirmed as unclaimed. Supply --homepage-url to override it. Sign-out URI and Initiate login URI still require dashboard setup and verification.',
       );
     }
     try {
