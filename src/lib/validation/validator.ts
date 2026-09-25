@@ -292,7 +292,7 @@ async function validateClientOnlyApp(framework: string, projectDir: string, issu
       message: `No ${signInPath} route starts sign-in`,
       hint: `Register a public ${signInPath} client route that calls the SDK's signIn() on load. A link to ${signInPath} is not a route. The installer saves it as the Initiate login URI.`,
     });
-  if (!sources.some((content) => content.includes('redirectUri')))
+  if (!sources.some(({ content }) => content.includes('redirectUri')))
     issues.push({
       type: 'pattern',
       severity: 'error',
@@ -302,7 +302,10 @@ async function validateClientOnlyApp(framework: string, projectDir: string, issu
   const prefix = getClientEnvPrefix(projectDir);
   if (!prefix) return;
   const written = `${prefix}WORKOS_REDIRECT_URI`;
-  const read = new Set(sources.flatMap((content) => [...content.matchAll(REDIRECT_ENV_REFERENCE)].map((m) => m[1])));
+  // Only browser code must read the prefixed var; vite.config.ts or a script may read the unprefixed one.
+  const browserSources = prefix === 'VITE_' ? sources : sources.filter(({ file }) => file.startsWith('src/'));
+  const pattern = prefix === 'VITE_' ? VITE_REDIRECT_ENV_REFERENCE : CRA_REDIRECT_ENV_REFERENCE;
+  const read = new Set(browserSources.flatMap(({ content }) => [...content.matchAll(pattern)].map((m) => m[1])));
   read.delete(written);
   for (const name of read)
     issues.push({
@@ -313,8 +316,9 @@ async function validateClientOnlyApp(framework: string, projectDir: string, issu
     });
 }
 
-/** A client-side env var the app reads its redirect URI from, e.g. import.meta.env.VITE_WORKOS_REDIRECT_URI. */
-const REDIRECT_ENV_REFERENCE = /(?:import\.meta\.env|process\.env)\.(\w*WORKOS_REDIRECT_URI)\b/g;
+/** How browser code reads its redirect URI: Vite through import.meta.env, Create React App through process.env in src/. */
+const VITE_REDIRECT_ENV_REFERENCE = /import\.meta\.env\.(\w*WORKOS_REDIRECT_URI)\b/g;
+const CRA_REDIRECT_ENV_REFERENCE = /process\.env\.(\w*WORKOS_REDIRECT_URI)\b/g;
 
 /** Code that serves a route rather than linking to it: router config or a pathname check. */
 const ROUTE_DECLARATIONS = [
@@ -329,9 +333,9 @@ export async function hasClientSignInRoute(projectDir: string, signInPath: strin
   return servesSignInRoute(projectDir, await readClientSource(projectDir), signInPath);
 }
 
-async function servesSignInRoute(projectDir: string, sources: string[], signInPath: string): Promise<boolean> {
+async function servesSignInRoute(projectDir: string, sources: ClientSource[], signInPath: string): Promise<boolean> {
   const route = new RegExp(`(?:${ROUTE_DECLARATIONS.join('|')})['"\`]${signInPath.replace(/\/$/, '')}/?['"\`]`);
-  if (sources.some((content) => route.test(content))) return true;
+  if (sources.some(({ content }) => route.test(content))) return true;
   // A static page at the path, e.g. login/index.html, that starts sign-in.
   const segment = signInPath.replace(/^\/|\/$/g, '');
   const pages = await fg(
@@ -347,18 +351,27 @@ const readOrEmpty = (path: string) => readFile(path, 'utf-8').catch(() => '');
 
 const SCAN_CONCURRENCY = 32;
 
+interface ClientSource {
+  file: string;
+  content: string;
+}
+
 /** The app's own source files, read a bounded batch at a time. */
-async function readClientSource(projectDir: string): Promise<string[]> {
+async function readClientSource(projectDir: string): Promise<ClientSource[]> {
   const files = await fg(['**/*.{ts,tsx,js,jsx,mjs,html,htm}'], {
     cwd: projectDir,
     ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.*/**'],
   });
-  const contents: string[] = [];
+  const sources: ClientSource[] = [];
   for (let i = 0; i < files.length; i += SCAN_CONCURRENCY)
-    contents.push(
-      ...(await Promise.all(files.slice(i, i + SCAN_CONCURRENCY).map((file) => readOrEmpty(join(projectDir, file))))),
+    sources.push(
+      ...(await Promise.all(
+        files
+          .slice(i, i + SCAN_CONCURRENCY)
+          .map(async (file) => ({ file, content: await readOrEmpty(join(projectDir, file)) })),
+      )),
     );
-  return contents;
+  return sources;
 }
 
 /**

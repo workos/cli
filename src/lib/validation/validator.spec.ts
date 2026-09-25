@@ -829,6 +829,37 @@ describe('validateInstallation', () => {
       },
     );
 
+    it('lets vite.config.ts read the unprefixed redirect URI', async () => {
+      writeFileSync(join(testDir, 'package.json'), JSON.stringify({ devDependencies: { vite: '^6.0.0' } }));
+      writeFileSync(join(testDir, 'vite.config.ts'), 'const callback = process.env.WORKOS_REDIRECT_URI;');
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'src', 'main.ts'),
+        'createClient(clientId, { redirectUri: import.meta.env.VITE_WORKOS_REDIRECT_URI });',
+      );
+
+      const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
+
+      expect(result.issues.some((i) => i.message.startsWith('The client reads'))).toBe(false);
+    });
+
+    it('flags a Create React App client that reads the unprefixed redirect URI', async () => {
+      writeFileSync(join(testDir, 'package.json'), JSON.stringify({ dependencies: { 'react-scripts': '5.0.1' } }));
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'src', 'index.tsx'),
+        '<AuthKitProvider redirectUri={process.env.WORKOS_REDIRECT_URI}><App /></AuthKitProvider>',
+      );
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      expect(result.issues).toContainEqual(
+        expect.objectContaining({
+          message: 'The client reads WORKOS_REDIRECT_URI, but the installer writes REACT_APP_WORKOS_REDIRECT_URI',
+        }),
+      );
+    });
+
     it('fails a client app that leaves redirectUri at the SDK default', async () => {
       mkdirSync(join(testDir, 'src'), { recursive: true });
       writeFileSync(
