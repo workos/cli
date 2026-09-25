@@ -18,7 +18,8 @@ const SUPPLIED_KEY_PROVENANCE = 'the API key supplied to this run';
 export interface AutoConfigResult {
   redirectUri: { success: boolean; alreadyExists: boolean };
   corsOrigin: { success: boolean; alreadyExists: boolean };
-  homepageUrl: { success: boolean; alreadyExists: boolean };
+  /** Absent when the homepage was left alone (see `autoConfigureWorkOSEnvironment`). */
+  homepageUrl?: { success: boolean; alreadyExists: boolean };
 }
 
 interface FetchError {
@@ -157,6 +158,17 @@ export async function setHomepageUrl(
  * store entirely, and naming an untouched environment is exactly the confusion
  * this row exists to prevent.
  */
+/** Whether `apiKey` is the key of the stored, still-unclaimed environment. */
+export function isUnclaimedEnvironmentKey(apiKey: string): boolean {
+  try {
+    const environment = getActiveEnvironment();
+    return !!environment && isUnclaimedEnvironment(environment) && environment.apiKey === apiKey;
+  } catch {
+    // Keyring unavailable: unknown, so treat it as claimed.
+    return false;
+  }
+}
+
 function describeCredentialProvenance(apiKey: string): string {
   let activeEnv: EnvironmentConfig | null = null;
   try {
@@ -228,6 +240,14 @@ export async function autoConfigureWorkOSEnvironment(
     return null;
   }
 
+  // The homepage is one value per environment, and the REST API can set it
+  // but not read it (the GET answers 404), so this step can't tell whether
+  // someone already chose one. Write it only when nothing can be overwritten:
+  // the user asked for it (--homepage-url), or the environment is unclaimed,
+  // so nobody has had its dashboard. With a login, the later dashboard step
+  // reads the current value and fills an empty one.
+  const writeHomepage = Boolean(options.homepageUrl) || isUnclaimedEnvironmentKey(apiKey);
+
   ui.log.step('Configuring WorkOS dashboard settings...');
 
   // Report each item as it resolves, not when the whole batch does.
@@ -249,7 +269,7 @@ export async function autoConfigureWorkOSEnvironment(
     const [redirectUri, corsOrigin, homepageUrl] = await Promise.all([
       track('redirect-uri', createRedirectUri(apiKey, callbackUrl)),
       track('cors-origin', createCorsOrigin(apiKey, baseUrl)),
-      setHomepageUrl(apiKey, homepageUrlValue),
+      writeHomepage ? setHomepageUrl(apiKey, homepageUrlValue) : undefined,
     ]);
 
     const results: AutoConfigResult = { redirectUri, corsOrigin, homepageUrl };
@@ -260,7 +280,7 @@ export async function autoConfigureWorkOSEnvironment(
       port,
       redirectUri: redirectUri.alreadyExists ? 'existed' : 'created',
       corsOrigin: corsOrigin.alreadyExists ? 'existed' : 'created',
-      homepageUrl: homepageUrl.alreadyExists ? 'existed' : 'updated',
+      homepageUrl: !homepageUrl ? 'skipped' : homepageUrl.alreadyExists ? 'existed' : 'updated',
     });
 
     // Aligned key/value feedback: value in accent, a dim status for "already
@@ -281,12 +301,19 @@ export async function autoConfigureWorkOSEnvironment(
         status: corsOrigin.alreadyExists ? 'already set' : 'created',
         statusKind: corsOrigin.alreadyExists ? 'muted' : 'ok',
       },
-      {
-        key: 'Homepage URL',
-        value: homepageUrlValue,
-        status: homepageUrl.alreadyExists ? 'already set' : 'updated',
-        statusKind: homepageUrl.alreadyExists ? 'muted' : 'ok',
-      },
+      homepageUrl
+        ? {
+            key: 'Homepage URL',
+            value: homepageUrlValue,
+            status: homepageUrl.alreadyExists ? 'already set' : 'updated',
+            statusKind: homepageUrl.alreadyExists ? 'muted' : 'ok',
+          }
+        : {
+            key: 'Homepage URL',
+            value: homepageUrlValue,
+            status: 'not changed; check the dashboard',
+            statusKind: 'warn',
+          },
     ]);
 
     return results;
