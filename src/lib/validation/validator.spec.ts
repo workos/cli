@@ -768,7 +768,10 @@ describe('validateInstallation', () => {
     it('accepts a React SPA whose source serves /login', async () => {
       mkdirSync(join(testDir, 'src'), { recursive: true });
       writeFileSync(join(testDir, 'src', 'App.tsx'), '<Route path="/login" element={<Login />} />');
-      writeFileSync(join(testDir, 'src', 'Login.tsx'), 'function Login() { useEffect(() => { signIn(); }, []); }');
+      writeFileSync(
+        join(testDir, 'src', 'Login.tsx'),
+        "function Login() { useEffect(() => { if (window.location.pathname === '/login') signIn(); }, []); }",
+      );
 
       const result = await validateInstallation('react', testDir, { runBuild: false });
 
@@ -819,7 +822,7 @@ describe('validateInstallation', () => {
       mkdirSync(join(testDir, 'src'), { recursive: true });
       writeFileSync(
         join(testDir, 'src', 'auth.config.ts'),
-        "export const routes = [{ path: '/login', component: Login }];\nfunction Login() { signIn(); }\nexport const redirectUri = import.meta.env.VITE_WORKOS_REDIRECT_URI;",
+        "export const routes = [{ path: '/login', component: Login }];\nfunction Login() { useEffect(() => { if (window.location.pathname === '/login') signIn(); }, []); }\nexport const redirectUri = import.meta.env.VITE_WORKOS_REDIRECT_URI;",
       );
 
       const result = await validateInstallation('react', testDir, { runBuild: false });

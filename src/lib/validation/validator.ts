@@ -4,6 +4,7 @@ import { join } from 'path';
 import fg from 'fast-glob';
 import type { ValidationResult, ValidationRules, ValidationIssue } from './types.js';
 import { runBuildValidation } from './build-validator.js';
+import { hasClientSignInBehavior } from './client-sign-in.js';
 import { detectPort, getClientEnvPrefix, getSignInPath } from '../port-detection.js';
 import { nextjsRoutePath, findNextjsSignInPage } from '../../integrations/nextjs/utils.js';
 import nextjsRules from './rules/nextjs.json' with { type: 'json' };
@@ -289,7 +290,7 @@ async function validateClientOnlyApp(framework: string, projectDir: string, issu
   if (!complete) {
     issues.push({
       type: 'file',
-      severity: 'warning',
+      severity: 'error',
       message: 'Client source checks were incomplete; automatic sign-in URL setup will be skipped',
       hint: 'The check is limited to 256 source files, 256 KiB per file, and 4 MiB total. Check the sign-in route and callback manually.',
     });
@@ -300,7 +301,7 @@ async function validateClientOnlyApp(framework: string, projectDir: string, issu
       type: 'file',
       severity: 'error',
       message: `No ${signInPath} route starts sign-in`,
-      hint: `Register a public ${signInPath} client route that calls the SDK's signIn() on load. A link to ${signInPath} is not a route. The installer saves it as the Initiate login URI.`,
+      hint: `At startup or in a mount effect, call signIn() inside an if (window.location.pathname === '${signInPath}') branch once AuthKit is ready. A route declaration or unrelated sign-in button is not enough.`,
     });
   if (!sources.some((content) => content.includes('redirectUri')))
     issues.push({
@@ -333,23 +334,6 @@ const BROWSER_REDIRECT_ENV = {
 /** A redirect URI env read, e.g. import.meta.env.VITE_WORKOS_REDIRECT_URI. */
 const REDIRECT_ENV_REFERENCE = /(?:import\.meta\.env|process\.env)\.\w*WORKOS_REDIRECT_URI\b/g;
 
-/**
- * Conservative source evidence, not a browser-flow test. Recognize the forms
- * named in buildSignInSection; arbitrary comparisons, switch cases and menu
- * data are not routes. Unsupported forms remain a manual setup step.
- */
-function declaresClientRoute(content: string, quoted: string): boolean {
-  const router = new RegExp(
-    String.raw`<Route\b[^>]*\bpath\s*=\s*\{?\s*${quoted}|\bcreateFileRoute\(\s*${quoted}|\bpath\s*:\s*${quoted}\s*,\s*(?:element|Component|component)\s*:`,
-  );
-  if (router.test(content)) return true;
-  const aliases = [
-    ...content.matchAll(/\b(?:const|let|var)\s+(\w+)\s*=\s*(?:window\.)?location\.pathname\s*(?:;|\n|$)/g),
-  ].map(([, name]) => name);
-  const pathname = String.raw`(?<![\w$.])(?:window\.location\.pathname|location\.pathname${aliases.map((name) => `|${name}`).join('')})(?![\w$])`;
-  return new RegExp(String.raw`${pathname}\s*===?\s*${quoted}|${quoted}\s*===?\s*${pathname}`).test(content);
-}
-
 /** Whether the supported client source forms provide evidence of a sign-in route. */
 export async function hasClientSignInRoute(projectDir: string, signInPath: string): Promise<boolean> {
   const { sources, complete } = await readClientSource(projectDir, getClientEnvPrefix(projectDir));
@@ -357,14 +341,7 @@ export async function hasClientSignInRoute(projectDir: string, signInPath: strin
 }
 
 async function servesSignInRoute(projectDir: string, sources: string[], signInPath: string): Promise<boolean> {
-  const escaped = signInPath.replace(/\/$/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const quoted = String.raw`['"\`]${escaped}/?['"\`]`;
-  // A route declaration without any SDK sign-in call is insufficient evidence.
-  if (
-    sources.some((content) => /\bsignIn\s*\(/.test(content)) &&
-    sources.some((content) => declaresClientRoute(content, quoted))
-  )
-    return true;
+  if (sources.some((content) => hasClientSignInBehavior(content, signInPath))) return true;
   // A static page at the path, e.g. login/index.html, that starts sign-in.
   const segment = signInPath.replace(/^\/|\/$/g, '');
   const pages = await fg(
@@ -373,7 +350,7 @@ async function servesSignInRoute(projectDir: string, sources: string[], signInPa
   );
   for (const page of pages) {
     const content = await readBoundedSource(join(projectDir, page), MAX_SOURCE_BYTES);
-    if (content !== undefined && /\bsignIn\s*\(/.test(content)) return true;
+    if (content !== undefined && hasClientSignInBehavior(content, signInPath, true)) return true;
   }
   return false;
 }

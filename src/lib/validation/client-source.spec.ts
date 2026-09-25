@@ -65,8 +65,8 @@ it.each([
   login,
   "const current = window.location.pathname; if(current === '/login') authkit.signIn();",
   "if ('/login' === location.pathname) authkit.signIn();",
-  '<Route path="/login" element={<Login />} />; function Login() { signIn(); }',
-  "const routes = [{path: '/login', component: Login}]; function Login() {signIn();}",
+  "function Login() { useEffect(() => { if (window.location.pathname === '/login') signIn(); }, []); return null; }",
+  "function App() { useEffect(() => { if (!loading && window.location.pathname === '/login') void signIn(); }, [loading]); return null; }",
 ])('accepts supported route evidence and a sign-in call: %s', async (source) => {
   await file('src/auth.config.tsx', source);
   expect(await hasClientSignInRoute(project, '/login')).toBe(true);
@@ -82,6 +82,14 @@ it('does not need to resolve inline imports or custom aliases to inspect convent
   expect(result.issues.some((issue) => issue.message === 'The AuthKit client does not set redirectUri')).toBe(false);
 });
 
+it('does not let a sign-in button in a different file qualify the login route', async () => {
+  await file('src/routes.tsx', '<Route path="/login" element={<h1>Hello</h1>} />');
+  await file('src/button.tsx', 'export const button = <button onClick={() => signIn()}>Sign in</button>;');
+  expect(await hasClientSignInRoute(project, '/login')).toBe(false);
+  const result = await validateInstallation('react', project, { runBuild: false });
+  expect(result.issues.some((issue) => issue.message.includes('/login route'))).toBe(true);
+});
+
 it('does not scan other workspaces as this app', async () => {
   await file('src/main.ts', client);
   await file('packages/another-app/src/main.ts', login);
@@ -92,9 +100,10 @@ describe('bounded scan', () => {
   async function incomplete() {
     expect(await hasClientSignInRoute(project, '/login')).toBe(false);
     const result = await validateInstallation('vanilla-js', project, { runBuild: false });
+    expect(result.passed).toBe(false);
     expect(result.issues).toContainEqual(
       expect.objectContaining({
-        severity: 'warning',
+        severity: 'error',
         message: 'Client source checks were incomplete; automatic sign-in URL setup will be skipped',
       }),
     );
