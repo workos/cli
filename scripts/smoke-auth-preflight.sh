@@ -14,7 +14,7 @@ report() {
 }
 
 if [ -z "${WORKOS_SMOKE_API_KEY:-}" ]; then
-  report false 'Live authenticated checks NOT RUN: WORKOS_SMOKE_API_KEY is missing. Credential/API configuration needs investigation (fork PRs may have no secrets).'
+  report false '::warning::Live authenticated checks NOT RUN: WORKOS_SMOKE_API_KEY is missing. Credential/API configuration needs investigation (fork PRs may have no secrets).'
   exit 0
 fi
 

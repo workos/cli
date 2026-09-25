@@ -119,6 +119,7 @@ describe('smoke authentication preflight (localhost only)', () => {
     expect(result.outputs).toBe('usable=false\n');
     expect(result.notes).toContain('NOT RUN');
     expect(result.notes).toContain('Credential/API configuration needs investigation');
+    expect(result.stdout).toContain('::warning::');
     expect(local.requests).toHaveLength(0);
   });
 
