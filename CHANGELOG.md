@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0](https://github.com/workos/cli/compare/v0.22.0...v0.23.0) (2026-09-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* `workos install --dashboard` / `-d` and `workos dashboard` are removed. Use `workos install`.
+
+### Features
+
+* **install:** full-screen installer with a dashboard-aligned checklist ([#247](https://github.com/workos/cli/issues/247)) ([db7eace](https://github.com/workos/cli/commit/db7eace65f156b90e40d91c9111e8bd4403f21c6))
+
+
+### Bug Fixes
+
+* **deps:** update minor and patch updates ([#242](https://github.com/workos/cli/issues/242)) ([26c7905](https://github.com/workos/cli/commit/26c79056c0eda297be3e8dac08a0ac5a4f047fb8))
+* **deps:** upgrade WorkOS packages and migrate SDK calls ([#243](https://github.com/workos/cli/issues/243)) ([7f6eac2](https://github.com/workos/cli/commit/7f6eac23b961c1c6ddeaf564682e90c9813ebc56))
+* **install:** configure and verify AuthKit application URLs ([#244](https://github.com/workos/cli/issues/244)) ([77a78ac](https://github.com/workos/cli/commit/77a78ac84b9fcf782a2020dc118f39d2955d091e))
+* **install:** configure sandbox application URLs across SDKs ([#250](https://github.com/workos/cli/issues/250)) ([586b2fa](https://github.com/workos/cli/commit/586b2fa1b88a9631accd4b4d69f28468a4f08760))
+* **install:** support current TanStack Start setup and callback registration ([#253](https://github.com/workos/cli/issues/253)) ([c69ccd2](https://github.com/workos/cli/commit/c69ccd20b8fac75b90dd43ec51443c494ceec459))
+* **install:** verify claim status before setting a default homepage ([#252](https://github.com/workos/cli/issues/252)) ([60578d0](https://github.com/workos/cli/commit/60578d0cabb63407dce8bd16198dbae4ee805414))
+* isolate diagnostic subprocess working directories ([#238](https://github.com/workos/cli/issues/238)) ([601079d](https://github.com/workos/cli/commit/601079dbc48e52faa2655086c4880e0d44f1e8f0))
+
+
+### Code Refactoring
+
+* remove the Ink dashboard TUI ([#246](https://github.com/workos/cli/issues/246)) ([8b92fd5](https://github.com/workos/cli/commit/8b92fd5f4ae7bd1a1213b1864fc3d9c321b394d7))
+
 ## [0.22.0](https://github.com/workos/cli/compare/v0.21.1...v0.22.0) (2026-08-27)
 
 
