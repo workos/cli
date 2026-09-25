@@ -355,26 +355,31 @@ const readOrEmpty = (path: string) => readFile(path, 'utf-8').catch(() => '');
 
 const SCAN_CONCURRENCY = 32;
 
+const NOT_BROWSER_CODE = ['**/node_modules/**', '**/__tests__/**', '**/*.{spec,test}.*'];
+
 /**
- * The app's browser code, read a bounded batch at a time. Config files,
- * scripts, server code and tests run in Node, so they may read unprefixed
- * env vars and do not serve routes.
+ * The app's browser code, read a bounded batch at a time. Create React App
+ * compiles only src/. Elsewhere, leave out the Node files at the project root
+ * (bundler config, a server, scripts): they may read unprefixed env vars and
+ * do not serve routes. Config files inside src/ stay in.
  */
 async function readClientSource(projectDir: string): Promise<string[]> {
-  const files = await fg(['**/*.{ts,tsx,js,jsx,mjs,html,htm}'], {
-    cwd: projectDir,
-    ignore: [
-      '**/node_modules/**',
-      '**/dist/**',
-      '**/build/**',
-      '**/.*/**',
-      '**/*.config.*',
-      '**/scripts/**',
-      '**/server/**',
-      '**/__tests__/**',
-      '**/*.{spec,test}.*',
-    ],
-  });
+  const files =
+    getClientEnvPrefix(projectDir) === 'REACT_APP_'
+      ? await fg(['src/**/*.{ts,tsx,js,jsx,mjs}'], { cwd: projectDir, ignore: NOT_BROWSER_CODE })
+      : await fg(['**/*.{ts,tsx,js,jsx,mjs,html,htm}'], {
+          cwd: projectDir,
+          ignore: [
+            ...NOT_BROWSER_CODE,
+            '**/dist/**',
+            '**/build/**',
+            '**/.*/**',
+            '*.config.*',
+            'server.*',
+            'server/**',
+            'scripts/**',
+          ],
+        });
   const contents: string[] = [];
   for (let i = 0; i < files.length; i += SCAN_CONCURRENCY)
     contents.push(
