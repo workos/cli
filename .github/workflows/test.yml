@@ -81,6 +81,7 @@ jobs:
       # is a dedicated staging-environment API key; fork PRs receive no
       # secrets, so this skips there instead of failing.
       - name: Smoke test authenticated commands
+        id: authenticated-smoke
         env:
           WORKOS_API_KEY: ${{ secrets.WORKOS_SMOKE_API_KEY }}
           # Optional: set when the smoke key belongs to a non-default API host
@@ -95,6 +96,34 @@ jobs:
             export WORKOS_API_URL="$WORKOS_SMOKE_API_URL"
           fi
           sh scripts/command-smoke.sh ./dist/workos
+
+      # Independent, read-only control when the CLI smoke fails: distinguish
+      # CLI credential handling from the API rejecting the CI credential.
+      # Never log the credential, response body, or full response headers.
+      - name: Diagnose smoke authentication without the CLI
+        if: ${{ failure() && steps.authenticated-smoke.outcome == 'failure' }}
+        env:
+          WORKOS_API_KEY: ${{ secrets.WORKOS_SMOKE_API_KEY }}
+          WORKOS_SMOKE_API_URL: ${{ secrets.WORKOS_SMOKE_API_URL }}
+        run: |
+          set +x
+          if [ -z "$WORKOS_API_KEY" ]; then
+            echo "Direct API probe skipped: smoke credential unavailable"
+            exit 0
+          fi
+          headers=$(mktemp)
+          trap 'rm -f "$headers"' EXIT
+          base="${WORKOS_SMOKE_API_URL:-https://api.workos.com}"
+          curl_exit=0
+          status=$(curl --silent --connect-timeout 10 --max-time 20 \
+            --proto '=http,https' \
+            --header "Authorization: Bearer $WORKOS_API_KEY" \
+            --dump-header "$headers" --output /dev/null \
+            --write-out '%{http_code}' \
+            "${base%/}/connections?limit=1" 2>/dev/null) || curl_exit=$?
+          printf 'Direct GET /connections: HTTP %s; curl exit %s\n' "$status" "$curl_exit"
+          # No --location: do not follow redirects with credentials.
+          awk 'tolower($1) == "x-request-id:" { gsub(/\r/, "", $2); if ($2 ~ /^[A-Za-z0-9_-]+$/) print "API request ID: " $2 }' "$headers"
 
       # Publish the generated packages to a throwaway local registry and run
       # the real user flows — `npx workos`, `npm install -g workos`, platform
