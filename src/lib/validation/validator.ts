@@ -284,7 +284,8 @@ export async function validateFrameworkSpecific(framework: string, projectDir: s
  */
 async function validateClientOnlyApp(framework: string, projectDir: string, issues: ValidationIssue[]) {
   const signInPath = getSignInPath(framework);
-  const sources = await readClientSource(projectDir);
+  const prefix = getClientEnvPrefix(projectDir);
+  const sources = await readClientSource(projectDir, prefix);
   if (signInPath && !(await servesSignInRoute(projectDir, sources, signInPath)))
     issues.push({
       type: 'file',
@@ -299,7 +300,6 @@ async function validateClientOnlyApp(framework: string, projectDir: string, issu
       message: 'The AuthKit client does not set redirectUri',
       hint: 'Pass the installed WORKOS_REDIRECT_URI env var as redirectUri to AuthKitProvider or createClient(). The SDK default, the page origin, is not registered.',
     });
-  const prefix = getClientEnvPrefix(projectDir);
   if (!prefix) return;
   const expected = BROWSER_REDIRECT_ENV[prefix];
   const reads = new Set(
@@ -334,7 +334,7 @@ const ROUTE_DECLARATIONS = [
 
 /** Whether a client-only app serves `signInPath`, from a route in its source or a static page. */
 export async function hasClientSignInRoute(projectDir: string, signInPath: string): Promise<boolean> {
-  return servesSignInRoute(projectDir, await readClientSource(projectDir), signInPath);
+  return servesSignInRoute(projectDir, await readClientSource(projectDir, getClientEnvPrefix(projectDir)), signInPath);
 }
 
 async function servesSignInRoute(projectDir: string, sources: string[], signInPath: string): Promise<boolean> {
@@ -355,31 +355,28 @@ const readOrEmpty = (path: string) => readFile(path, 'utf-8').catch(() => '');
 
 const SCAN_CONCURRENCY = 32;
 
-const NOT_BROWSER_CODE = ['**/node_modules/**', '**/__tests__/**', '**/*.{spec,test}.*'];
-
 /**
  * The app's browser code, read a bounded batch at a time. Create React App
  * compiles only src/. Elsewhere, leave out the Node files at the project root
  * (bundler config, a server, scripts): they may read unprefixed env vars and
  * do not serve routes. Config files inside src/ stay in.
  */
-async function readClientSource(projectDir: string): Promise<string[]> {
-  const files =
-    getClientEnvPrefix(projectDir) === 'REACT_APP_'
-      ? await fg(['src/**/*.{ts,tsx,js,jsx,mjs}'], { cwd: projectDir, ignore: NOT_BROWSER_CODE })
-      : await fg(['**/*.{ts,tsx,js,jsx,mjs,html,htm}'], {
-          cwd: projectDir,
-          ignore: [
-            ...NOT_BROWSER_CODE,
-            '**/dist/**',
-            '**/build/**',
-            '**/.*/**',
-            '*.config.*',
-            'server.*',
-            'server/**',
-            'scripts/**',
-          ],
-        });
+async function readClientSource(projectDir: string, prefix: ReturnType<typeof getClientEnvPrefix>): Promise<string[]> {
+  const files = await fg([`${prefix === 'REACT_APP_' ? 'src/' : ''}**/*.{ts,tsx,js,jsx,mjs,html,htm}`], {
+    cwd: projectDir,
+    ignore: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/build/**',
+      '**/.*/**',
+      '**/__tests__/**',
+      '**/*.{spec,test}.*',
+      '*.config.*',
+      'server.*',
+      'server/**',
+      'scripts/**',
+    ],
+  });
   const contents: string[] = [];
   for (let i = 0; i < files.length; i += SCAN_CONCURRENCY)
     contents.push(

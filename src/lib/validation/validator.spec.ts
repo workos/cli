@@ -752,6 +752,8 @@ describe('validateInstallation', () => {
   describe('client-only sign-in route validation', () => {
     const signInIssue = (issues: { message: string }[]) => issues.find((i) => i.message.includes('/login route'));
     const redirectIssue = (issues: { message: string }[]) => issues.find((i) => i.message.includes('redirectUri'));
+    const envReadIssue = (issues: { message: string }[]) =>
+      issues.find((i) => i.message.startsWith('The client reads'));
 
     it('fails a React SPA without a /login route', async () => {
       mkdirSync(join(testDir, 'src'), { recursive: true });
@@ -824,7 +826,7 @@ describe('validateInstallation', () => {
 
       const result = await validateInstallation('react', testDir, { runBuild: false });
 
-      expect(result.issues.some((i) => i.message.startsWith('The client reads'))).toBe(false);
+      expect(envReadIssue(result.issues)).toBeUndefined();
     });
 
     it('ignores a /login route declared only in a test file', async () => {
@@ -856,7 +858,7 @@ describe('validateInstallation', () => {
 
       const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
 
-      expect(result.issues.some((i) => i.message.startsWith('The client reads'))).toBe(false);
+      expect(envReadIssue(result.issues)).toBeUndefined();
     });
 
     it.each([
