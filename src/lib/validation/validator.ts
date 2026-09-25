@@ -357,9 +357,9 @@ const SCAN_CONCURRENCY = 32;
 
 /**
  * The app's browser code, read a bounded batch at a time. Create React App
- * compiles only src/. Elsewhere, leave out the Node files at the project root
- * (bundler config, a server, scripts): they may read unprefixed env vars and
- * do not serve routes. Config files inside src/ stay in.
+ * compiles only src/. Leave out Node code, which may read unprefixed env vars
+ * and does not serve routes: server code at any depth, and bundler config and
+ * scripts at the project root. Config files and scripts inside src/ stay in.
  */
 async function readClientSource(projectDir: string, prefix: ReturnType<typeof getClientEnvPrefix>): Promise<string[]> {
   const files = await fg([`${prefix === 'REACT_APP_' ? 'src/' : ''}**/*.{ts,tsx,js,jsx,mjs,html,htm}`], {
@@ -372,8 +372,8 @@ async function readClientSource(projectDir: string, prefix: ReturnType<typeof ge
       '**/__tests__/**',
       '**/*.{spec,test}.*',
       '*.config.*',
-      'server.*',
-      'server/**',
+      '**/server.*',
+      '**/server/**',
       'scripts/**',
     ],
   });

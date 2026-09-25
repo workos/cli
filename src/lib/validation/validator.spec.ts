@@ -815,6 +815,23 @@ describe('validateInstallation', () => {
       expect(redirectIssue(result.issues)).toBeUndefined();
     });
 
+    it.each(['src/server/auth.ts', 'src/server.ts'])(
+      'lets Vite server code in %s read the unprefixed redirect URI',
+      async (file) => {
+        writeFileSync(join(testDir, 'package.json'), JSON.stringify({ devDependencies: { vite: '^6.0.0' } }));
+        mkdirSync(join(testDir, 'src', 'server'), { recursive: true });
+        writeFileSync(join(testDir, file), 'const callback = process.env.WORKOS_REDIRECT_URI;');
+        writeFileSync(
+          join(testDir, 'src', 'main.ts'),
+          'createClient(clientId, { redirectUri: import.meta.env.VITE_WORKOS_REDIRECT_URI });',
+        );
+
+        const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
+
+        expect(envReadIssue(result.issues)).toBeUndefined();
+      },
+    );
+
     it('lets a Create React App server outside src/ read the unprefixed redirect URI', async () => {
       writeFileSync(join(testDir, 'package.json'), JSON.stringify({ dependencies: { 'react-scripts': '5.0.1' } }));
       writeFileSync(join(testDir, 'server.js'), 'const callback = process.env.WORKOS_REDIRECT_URI;');
