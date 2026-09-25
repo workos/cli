@@ -18,7 +18,7 @@ export function buildSignInSection({
   if (!environment.requiresApiKey) {
     lines.push(
       '',
-      `This is a client-only app, so add a ${signInPath} client route that calls the SDK's signIn() as soon as the AuthKit client is ready, without a click (for example, in a useEffect). AuthKit keeps password-reset and invitation details through this redirect, so signIn() needs no extra arguments. If the app has a client router, register ${signInPath} in it. If it has none, check window.location.pathname at startup. Keep the existing sign-in button. Do not add a server route.`,
+      `This is a client-only app, so add a ${signInPath} client route that calls the SDK's signIn() as soon as the AuthKit client is ready, without a click (for example, in a useEffect). AuthKit keeps password-reset and invitation details through this redirect, so signIn() needs no extra arguments. If the app has a client router, register it there (for example path: '${signInPath}' or <Route path="${signInPath}">). If it has none, compare window.location.pathname === '${signInPath}' at startup. The installer checks for one of these forms before it saves the Initiate login URI. Keep the existing sign-in button. Do not add a server route.`,
       '',
       "The installer registers WORKOS_REDIRECT_URI as the app's Redirect URI. The SDK defaults to the page origin instead, so pass that value explicitly. The installer also writes it to .env.local under the bundler's env prefix (VITE_WORKOS_REDIRECT_URI for Vite, REACT_APP_WORKOS_REDIRECT_URI for Create React App), with the client ID beside it. Read that variable and set it as redirectUri on AuthKitProvider or createClient().",
     );

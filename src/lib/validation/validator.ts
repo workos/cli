@@ -329,7 +329,8 @@ const REDIRECT_ENV_REFERENCE = /(?:import\.meta\.env|process\.env)\.\w*WORKOS_RE
 
 /**
  * Code that serves a route rather than linking to it: router config, or a
- * pathname check such as `path === '/login'` or `case '/login':`.
+ * pathname check such as `path === '/login'` or `case '/login':`. Keep in step
+ * with the forms the agent prompt names (buildSignInSection).
  */
 const ROUTE_DECLARATIONS = [
   String.raw`\bpath\s*[:=]\s*\{?\s*`,
@@ -344,9 +345,9 @@ export async function hasClientSignInRoute(projectDir: string, signInPath: strin
 }
 
 async function servesSignInRoute(projectDir: string, sources: string[], signInPath: string): Promise<boolean> {
-  const quoted = `['"\`]${signInPath.replace(/\/$/, '')}/?['"\`]`;
+  const quoted = String.raw`['"\`]${signInPath.replace(/\/$/, '')}/?['"\`]`;
   // Also the reversed comparison, `'/login' === path`.
-  const route = new RegExp(`(?:${ROUTE_DECLARATIONS.join('|')})${quoted}|${quoted}\\s*===?`);
+  const route = new RegExp(String.raw`(?:${ROUTE_DECLARATIONS.join('|')})${quoted}|${quoted}\s*===?`);
   if (sources.some((content) => route.test(content))) return true;
   // A static page at the path, e.g. login/index.html, that starts sign-in.
   const segment = signInPath.replace(/^\/|\/$/g, '');

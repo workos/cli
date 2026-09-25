@@ -125,6 +125,7 @@ describe('installer prompt', () => {
     expect(prompt).toContain('## Sign-in route (Initiate login URI)');
     expect(prompt).toContain('the app origin plus /login');
     expect(prompt).toContain('add a /login client route');
+    expect(prompt).toContain("compare window.location.pathname === '/login' at startup");
     expect(prompt).toContain('VITE_WORKOS_REDIRECT_URI for Vite');
   });
 
