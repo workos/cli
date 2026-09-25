@@ -327,10 +327,13 @@ const BROWSER_REDIRECT_ENV = {
 /** A redirect URI env read, e.g. import.meta.env.VITE_WORKOS_REDIRECT_URI. */
 const REDIRECT_ENV_REFERENCE = /(?:import\.meta\.env|process\.env)\.\w*WORKOS_REDIRECT_URI\b/g;
 
-/** Code that serves a route rather than linking to it: router config or a pathname check. */
+/**
+ * Code that serves a route rather than linking to it: router config, or a
+ * pathname check such as `path === '/login'` or `case '/login':`.
+ */
 const ROUTE_DECLARATIONS = [
   String.raw`\bpath\s*[:=]\s*\{?\s*`,
-  String.raw`pathname\s*===?\s*`,
+  String.raw`\w\s*===?\s*`,
   String.raw`\bcase\s+`,
   String.raw`\bcreate(?:File)?Route\(\s*`,
 ];
@@ -341,7 +344,9 @@ export async function hasClientSignInRoute(projectDir: string, signInPath: strin
 }
 
 async function servesSignInRoute(projectDir: string, sources: string[], signInPath: string): Promise<boolean> {
-  const route = new RegExp(`(?:${ROUTE_DECLARATIONS.join('|')})['"\`]${signInPath.replace(/\/$/, '')}/?['"\`]`);
+  const quoted = `['"\`]${signInPath.replace(/\/$/, '')}/?['"\`]`;
+  // Also the reversed comparison, `'/login' === path`.
+  const route = new RegExp(`(?:${ROUTE_DECLARATIONS.join('|')})${quoted}|${quoted}\\s*===?`);
   if (sources.some((content) => route.test(content))) return true;
   // A static page at the path, e.g. login/index.html, that starts sign-in.
   const segment = signInPath.replace(/^\/|\/$/g, '');

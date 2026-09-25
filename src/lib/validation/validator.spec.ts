@@ -792,6 +792,18 @@ describe('validateInstallation', () => {
       expect(signInIssue(result.issues)).toBeDefined();
     });
 
+    it.each([
+      "const path = window.location.pathname;\nif (path === '/login') return <Login />;",
+      "if ('/login' === location.pathname) signIn();",
+    ])('accepts a pathname check through any variable: %s', async (code) => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(join(testDir, 'src', 'main.tsx'), code);
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      expect(signInIssue(result.issues)).toBeUndefined();
+    });
+
     it('does not treat a link to /login as the route', async () => {
       mkdirSync(join(testDir, 'src'), { recursive: true });
       writeFileSync(join(testDir, 'src', 'App.tsx'), '<a href="/login">Sign in</a>');
