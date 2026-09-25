@@ -808,38 +808,26 @@ describe('validateInstallation', () => {
       expect(signInIssue(result.issues)).toBeDefined();
     });
 
-    it('fails when the prefixed redirect URI the client reads is not set', async () => {
-      mkdirSync(join(testDir, 'src'), { recursive: true });
-      writeFileSync(
-        join(testDir, 'src', 'main.tsx'),
-        '<AuthKitProvider redirectUri={import.meta.env.VITE_WORKOS_REDIRECT_URI}><App /></AuthKitProvider>',
-      );
-      writeFileSync(join(testDir, '.env.local'), 'WORKOS_REDIRECT_URI=http://localhost:5173/callback\n');
+    it.each(['WORKOS_REDIRECT_URI', 'REACT_APP_WORKOS_REDIRECT_URI'])(
+      'fails when a Vite client reads %s instead of the var the installer writes',
+      async (name) => {
+        writeFileSync(join(testDir, 'package.json'), JSON.stringify({ devDependencies: { vite: '^6.0.0' } }));
+        mkdirSync(join(testDir, 'src'), { recursive: true });
+        writeFileSync(
+          join(testDir, 'src', 'main.ts'),
+          `createClient(clientId, { redirectUri: import.meta.env.${name} });`,
+        );
 
-      const result = await validateInstallation('react', testDir, { runBuild: false });
+        const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
 
-      expect(result.issues).toContainEqual(
-        expect.objectContaining({
-          severity: 'error',
-          message: 'Missing environment variable: VITE_WORKOS_REDIRECT_URI',
-        }),
-      );
-    });
-
-    it('fails when the client reads an unprefixed redirect URI Vite never exposes', async () => {
-      mkdirSync(join(testDir, 'src'), { recursive: true });
-      writeFileSync(
-        join(testDir, 'src', 'main.ts'),
-        'createClient(clientId, { redirectUri: import.meta.env.WORKOS_REDIRECT_URI });',
-      );
-      writeFileSync(join(testDir, '.env.local'), 'WORKOS_REDIRECT_URI=http://localhost:5173/callback\n');
-
-      const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
-
-      expect(result.issues).toContainEqual(
-        expect.objectContaining({ message: 'WORKOS_REDIRECT_URI is not exposed to client code' }),
-      );
-    });
+        expect(result.issues).toContainEqual(
+          expect.objectContaining({
+            severity: 'error',
+            message: `The client reads ${name}, but the installer writes VITE_WORKOS_REDIRECT_URI`,
+          }),
+        );
+      },
+    );
 
     it('fails a client app that leaves redirectUri at the SDK default', async () => {
       mkdirSync(join(testDir, 'src'), { recursive: true });

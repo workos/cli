@@ -178,6 +178,29 @@ describe('dashboard checklist reporting', () => {
     await expect(readFile(join(directory, '.env.local'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  it('writes the client ID and callback under the Vite prefix for a client-only app', async () => {
+    await writeFile(join(directory, 'package.json'), JSON.stringify({ devDependencies: { vite: '^6.0.0' } }));
+    await configureInstallEnvironment({
+      options,
+      integration: 'react',
+      credentials: { clientId: 'client_a' },
+    });
+    const env = await readFile(join(directory, '.env.local'), 'utf8');
+    expect(env).toContain('VITE_WORKOS_CLIENT_ID=client_a');
+    expect(env).toContain('VITE_WORKOS_REDIRECT_URI=http://localhost:5173/callback');
+    expect(env).toContain('WORKOS_REDIRECT_URI=http://localhost:5173/callback');
+  });
+
+  it('writes no prefixed vars for a server SDK', async () => {
+    await writeFile(join(directory, 'package.json'), JSON.stringify({ devDependencies: { vite: '^6.0.0' } }));
+    await configureInstallEnvironment({
+      options,
+      integration: 'react-router',
+      credentials: { clientId: 'client_a' },
+    });
+    expect(await readFile(join(directory, '.env.local'), 'utf8')).not.toContain('VITE_WORKOS');
+  });
+
   it.each(['react', 'vanilla-js'] as const)(
     'registers the Vite callback and CORS origin for the client-only %s SDK',
     async (integration) => {

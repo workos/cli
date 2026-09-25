@@ -47,6 +47,23 @@ export function resolveRedirectUri(
   );
 }
 
+/** The env prefix a client bundler exposes to browser code: Vite, then Create React App. */
+export function getClientEnvPrefix(installDir: string): 'VITE_' | 'REACT_APP_' | undefined {
+  let deps: Record<string, string> = {};
+  try {
+    const pkg = JSON.parse(fs.readFileSync(join(installDir, 'package.json'), 'utf-8'));
+    deps = { ...pkg.dependencies, ...pkg.devDependencies };
+  } catch {
+    // No readable package.json - rely on the Vite config check
+  }
+  if (
+    deps.vite ||
+    ['vite.config.ts', 'vite.config.js', 'vite.config.mjs'].some((f) => fs.existsSync(join(installDir, f)))
+  )
+    return 'VITE_';
+  return deps['react-scripts'] ? 'REACT_APP_' : undefined;
+}
+
 /** The route that starts sign-in, or undefined when the SDK guide does not fix one. */
 export function getSignInPath(integration: Integration): string | undefined {
   return settings.frameworks[INTEGRATION_TO_SETTINGS_KEY[integration]]?.signInPath;

@@ -4,7 +4,7 @@ import { join } from 'path';
 import fg from 'fast-glob';
 import type { ValidationResult, ValidationRules, ValidationIssue } from './types.js';
 import { runBuildValidation } from './build-validator.js';
-import { detectPort, getSignInPath } from '../port-detection.js';
+import { detectPort, getClientEnvPrefix, getSignInPath } from '../port-detection.js';
 import { nextjsRoutePath, findNextjsSignInPage } from '../../integrations/nextjs/utils.js';
 import nextjsRules from './rules/nextjs.json' with { type: 'json' };
 import reactRouterRules from './rules/react-router.json' with { type: 'json' };
@@ -277,119 +277,88 @@ export async function validateFrameworkSpecific(framework: string, projectDir: s
 }
 
 /**
- * Client-only apps have no route files to match, so scan the source once for
+ * Client-only apps have no route files to match, so check their source for
  * the sign-in route (saved as the Initiate login URI) and for `redirectUri`:
  * the SDKs default to the page origin, but the installer registers
- * WORKOS_REDIRECT_URI.
+ * WORKOS_REDIRECT_URI and writes it under the bundler's env prefix.
  */
 async function validateClientOnlyApp(framework: string, projectDir: string, issues: ValidationIssue[]) {
   const signInPath = getSignInPath(framework);
-  const route = signInPath ? signInRouteDeclaration(signInPath) : undefined;
-  let hasRoute = false;
-  let setsRedirectUri = false;
-  const redirectEnvNames = new Set<string>();
-  await scanClientSource(projectDir, (content) => {
-    hasRoute ||= !!route?.test(content);
-    setsRedirectUri ||= content.includes('redirectUri');
-    for (const match of content.matchAll(REDIRECT_ENV_REFERENCE)) redirectEnvNames.add(match[1]);
-  });
-  if (signInPath && !hasRoute && !(await hasSignInPage(projectDir, signInPath)))
+  const sources = await readClientSource(projectDir);
+  if (signInPath && !(await servesSignInRoute(projectDir, sources, signInPath)))
     issues.push({
       type: 'file',
       severity: 'error',
       message: `No ${signInPath} route starts sign-in`,
       hint: `Register a public ${signInPath} client route that calls the SDK's signIn() on load. A link to ${signInPath} is not a route. The installer saves it as the Initiate login URI.`,
     });
-  if (!setsRedirectUri)
+  if (!sources.some((content) => content.includes('redirectUri')))
     issues.push({
       type: 'pattern',
       severity: 'error',
       message: 'The AuthKit client does not set redirectUri',
-      hint: 'Pass WORKOS_REDIRECT_URI (with the build tool env prefix) as redirectUri to AuthKitProvider or createClient(). The SDK default, the page origin, is not registered.',
+      hint: 'Pass the installed WORKOS_REDIRECT_URI env var as redirectUri to AuthKitProvider or createClient(). The SDK default, the page origin, is not registered.',
     });
-  if (redirectEnvNames.size === 0) return;
-  const envContent = await readClientEnvFiles(projectDir);
-  for (const name of redirectEnvNames) {
-    if (!/^(VITE_|REACT_APP_)/.test(name))
-      issues.push({
-        type: 'env',
-        severity: 'error',
-        message: `${name} is not exposed to client code`,
-        hint: 'Use the build tool prefix (for example, VITE_WORKOS_REDIRECT_URI) in both the code and .env.local.',
-      });
-    else if (!new RegExp(`^${name}=.+`, 'm').test(envContent))
-      issues.push({
-        type: 'env',
-        severity: 'error',
-        message: `Missing environment variable: ${name}`,
-        hint: `The client reads ${name} as its redirect URI. Add ${name} to .env.local with the WORKOS_REDIRECT_URI value.`,
-      });
-  }
+  const prefix = getClientEnvPrefix(projectDir);
+  if (!prefix) return;
+  const written = `${prefix}WORKOS_REDIRECT_URI`;
+  const read = new Set(sources.flatMap((content) => [...content.matchAll(REDIRECT_ENV_REFERENCE)].map((m) => m[1])));
+  read.delete(written);
+  for (const name of read)
+    issues.push({
+      type: 'env',
+      severity: 'error',
+      message: `The client reads ${name}, but the installer writes ${written}`,
+      hint: `Read ${written} as the redirect URI.`,
+    });
 }
 
 /** A client-side env var the app reads its redirect URI from, e.g. import.meta.env.VITE_WORKOS_REDIRECT_URI. */
 const REDIRECT_ENV_REFERENCE = /(?:import\.meta\.env|process\.env)\.(\w*WORKOS_REDIRECT_URI)\b/g;
 
-/** Vite and CRA read these in development. */
-const CLIENT_ENV_FILES = ['.env', '.env.local', '.env.development', '.env.development.local'];
-
-async function readClientEnvFiles(projectDir: string): Promise<string> {
-  const contents = await Promise.all(
-    CLIENT_ENV_FILES.map((file) => readFile(join(projectDir, file), 'utf-8').catch(() => '')),
-  );
-  return contents.join('\n');
-}
-
-/**
- * Matches code that serves `signInPath` as a route, not a link to it: router
- * config (`path="/login"`, `path: '/login'`, `createFileRoute('/login')`) or a
- * pathname check (`pathname === '/login'`, `case '/login'`).
- */
-function signInRouteDeclaration(signInPath: string): RegExp {
-  const path = signInPath.replace(/\/$/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const quoted = `['"\`]${path}/?['"\`]`;
-  return new RegExp(
-    `(?:\\bpath\\s*[:=]\\s*\\{?\\s*|pathname\\s*={2,3}\\s*|\\bcase\\s+|\\bcreate(?:File)?Route\\(\\s*)${quoted}`,
-  );
-}
+/** Code that serves a route rather than linking to it: router config or a pathname check. */
+const ROUTE_DECLARATIONS = [
+  String.raw`\bpath\s*[:=]\s*\{?\s*`,
+  String.raw`pathname\s*===?\s*`,
+  String.raw`\bcase\s+`,
+  String.raw`\bcreate(?:File)?Route\(\s*`,
+];
 
 /** Whether a client-only app serves `signInPath`, from a route in its source or a static page. */
 export async function hasClientSignInRoute(projectDir: string, signInPath: string): Promise<boolean> {
-  const route = signInRouteDeclaration(signInPath);
-  let found = false;
-  await scanClientSource(projectDir, (content) => {
-    found ||= route.test(content);
-  });
-  return found || hasSignInPage(projectDir, signInPath);
+  return servesSignInRoute(projectDir, await readClientSource(projectDir), signInPath);
 }
 
-/** A static page at the sign-in path, e.g. login/index.html, that starts sign-in. */
-async function hasSignInPage(projectDir: string, signInPath: string): Promise<boolean> {
+async function servesSignInRoute(projectDir: string, sources: string[], signInPath: string): Promise<boolean> {
+  const route = new RegExp(`(?:${ROUTE_DECLARATIONS.join('|')})['"\`]${signInPath.replace(/\/$/, '')}/?['"\`]`);
+  if (sources.some((content) => route.test(content))) return true;
+  // A static page at the path, e.g. login/index.html, that starts sign-in.
   const segment = signInPath.replace(/^\/|\/$/g, '');
   const pages = await fg(
     [`${segment}.html`, `${segment}/index.html`, `public/${segment}.html`, `public/${segment}/index.html`],
     { cwd: projectDir },
   );
-  for (const page of pages) {
-    if ((await readFile(join(projectDir, page), 'utf-8').catch(() => '')).includes('signIn')) return true;
-  }
-  return false;
+  return (await Promise.all(pages.map((page) => readOrEmpty(join(projectDir, page))))).some((content) =>
+    content.includes('signIn'),
+  );
 }
+
+const readOrEmpty = (path: string) => readFile(path, 'utf-8').catch(() => '');
 
 const SCAN_CONCURRENCY = 32;
 
-/** Read the app's own source files, a bounded batch at a time. */
-async function scanClientSource(projectDir: string, visit: (content: string) => void): Promise<void> {
-  const sources = await fg(['**/*.{ts,tsx,js,jsx,mjs,html,htm}'], {
+/** The app's own source files, read a bounded batch at a time. */
+async function readClientSource(projectDir: string): Promise<string[]> {
+  const files = await fg(['**/*.{ts,tsx,js,jsx,mjs,html,htm}'], {
     cwd: projectDir,
     ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.*/**'],
   });
-  for (let i = 0; i < sources.length; i += SCAN_CONCURRENCY) {
-    const batch = await Promise.all(
-      sources.slice(i, i + SCAN_CONCURRENCY).map((file) => readFile(join(projectDir, file), 'utf-8').catch(() => '')),
+  const contents: string[] = [];
+  for (let i = 0; i < files.length; i += SCAN_CONCURRENCY)
+    contents.push(
+      ...(await Promise.all(files.slice(i, i + SCAN_CONCURRENCY).map((file) => readOrEmpty(join(projectDir, file))))),
     );
-    batch.forEach(visit);
-  }
+  return contents;
 }
 
 /**

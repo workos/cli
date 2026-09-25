@@ -60,7 +60,7 @@ import {
   getNextJsRouter,
   assertNextjsSignInRouteAvailable,
 } from '../integrations/nextjs/utils.js';
-import { detectPort, getSignInPath, resolveRedirectUri } from './port-detection.js';
+import { detectPort, getClientEnvPrefix, getSignInPath, resolveRedirectUri } from './port-detection.js';
 import { hasClientSignInRoute } from './validation/validator.js';
 import { InstallDeclinedError } from './installer-errors.js';
 import { writeEnvLocal } from './env-writer.js';
@@ -236,11 +236,21 @@ export async function configureInstallEnvironment(
   const redirectUri = resolveRedirectUri(integration, installerOptions, port);
 
   const redirectUriKey = integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
+  // Client bundlers expose only prefixed vars to browser code.
+  const clientPrefix = mod.config.environment.requiresApiKey
+    ? undefined
+    : getClientEnvPrefix(installerOptions.installDir);
   try {
     writeEnvLocal(installerOptions.installDir, {
       ...(credentials.apiKey ? { WORKOS_API_KEY: credentials.apiKey } : {}),
       WORKOS_CLIENT_ID: credentials.clientId,
       [redirectUriKey]: redirectUri,
+      ...(clientPrefix
+        ? {
+            [`${clientPrefix}WORKOS_CLIENT_ID`]: credentials.clientId,
+            [`${clientPrefix}WORKOS_REDIRECT_URI`]: redirectUri,
+          }
+        : {}),
     });
   } catch (error) {
     step('env-vars', 'failed', error instanceof Error ? error.message : String(error));
