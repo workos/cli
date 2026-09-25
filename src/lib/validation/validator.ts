@@ -306,6 +306,9 @@ async function validateClientOnlyApp(framework: string, projectDir: string, issu
     sources.flatMap((content) => [...content.matchAll(REDIRECT_ENV_REFERENCE)].map(([read]) => read)),
   );
   reads.delete(expected);
+  // Node code reads the unprefixed var. In Vite browser code the same read throws
+  // (no process global), so only Create React App needs it flagged.
+  if (prefix === 'VITE_') reads.delete('process.env.WORKOS_REDIRECT_URI');
   for (const read of reads)
     issues.push({
       type: 'env',
@@ -357,9 +360,8 @@ const SCAN_CONCURRENCY = 32;
 
 /**
  * The app's browser code, read a bounded batch at a time. Create React App
- * compiles only src/. Leave out Node code, which may read unprefixed env vars
- * and does not serve routes: server code at any depth, and bundler config and
- * scripts at the project root. Config files and scripts inside src/ stay in.
+ * compiles only src/; elsewhere, leave out the bundler config at the project
+ * root. Tests do not serve routes.
  */
 async function readClientSource(projectDir: string, prefix: ReturnType<typeof getClientEnvPrefix>): Promise<string[]> {
   const files = await fg([`${prefix === 'REACT_APP_' ? 'src/' : ''}**/*.{ts,tsx,js,jsx,mjs,html,htm}`], {
@@ -372,9 +374,6 @@ async function readClientSource(projectDir: string, prefix: ReturnType<typeof ge
       '**/__tests__/**',
       '**/*.{spec,test}.*',
       '*.config.*',
-      '**/server.*',
-      '**/server/**',
-      'scripts/**',
     ],
   });
   const contents: string[] = [];

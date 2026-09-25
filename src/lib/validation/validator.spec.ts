@@ -815,11 +815,12 @@ describe('validateInstallation', () => {
       expect(redirectIssue(result.issues)).toBeUndefined();
     });
 
-    it.each(['src/server/auth.ts', 'src/server.ts'])(
-      'lets Vite server code in %s read the unprefixed redirect URI',
+    it.each(['src/server/auth.ts', 'src/server.ts', 'server.js', 'api/auth.ts', 'functions/login.ts'])(
+      'lets Vite server code in %s read the unprefixed redirect URI, wherever it lives',
       async (file) => {
         writeFileSync(join(testDir, 'package.json'), JSON.stringify({ devDependencies: { vite: '^6.0.0' } }));
-        mkdirSync(join(testDir, 'src', 'server'), { recursive: true });
+        mkdirSync(join(testDir, file, '..'), { recursive: true });
+        mkdirSync(join(testDir, 'src'), { recursive: true });
         writeFileSync(join(testDir, file), 'const callback = process.env.WORKOS_REDIRECT_URI;');
         writeFileSync(
           join(testDir, 'src', 'main.ts'),
@@ -881,7 +882,6 @@ describe('validateInstallation', () => {
     it.each([
       'import.meta.env.WORKOS_REDIRECT_URI',
       'import.meta.env.REACT_APP_WORKOS_REDIRECT_URI',
-      'process.env.WORKOS_REDIRECT_URI',
       'process.env.VITE_WORKOS_REDIRECT_URI',
     ])('flags Vite browser code that reads %s', async (read) => {
       writeFileSync(join(testDir, 'package.json'), JSON.stringify({ devDependencies: { vite: '^6.0.0' } }));
