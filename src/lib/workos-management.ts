@@ -184,9 +184,15 @@ export interface AutoConfigOptions {
   onStep?: (step: SetupItemId, status: SetupItemStatus, detail?: string) => void;
 }
 
+/** Why local-development URLs are never written with a production key. */
+export const SANDBOX_ONLY_REASON =
+  'Automatic setup only runs on sandbox environments (sk_test_ keys). Set production URLs in the WorkOS dashboard.';
+
 /**
  * Auto-configure WorkOS dashboard settings for local development.
  * Sets redirect URI, CORS origin, and homepage URL via the WorkOS API.
+ * Sandbox keys only: these are localhost URLs, and a production key can reach
+ * the installer from a flag, the project's env file, or the active profile.
  *
  * @param apiKey - WorkOS API key (sk_xxx)
  * @param integration - Framework integration type
@@ -205,10 +211,25 @@ export async function autoConfigureWorkOSEnvironment(
   const callbackPath = getCallbackPath(integration);
   const callbackUrl = options.redirectUri || `${baseUrl}${callbackPath}`;
   const homepageUrlValue = options.homepageUrl || baseUrl;
+  const onStep = options.onStep ?? (() => {});
+
+  // The key's prefix is the one local fact the API enforces; a profile's
+  // `type` is only a local label. Checked here, not in a caller, because
+  // several callers (the installer machine, agent-runner, some integrations'
+  // own run()) reach this function.
+  if (!apiKey.startsWith('sk_test_')) {
+    for (const step of ['redirect-uri', 'cors-origin'] as const) onStep(step, 'skipped', SANDBOX_ONLY_REASON);
+    ui.log.warn(SANDBOX_ONLY_REASON);
+    analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
+      action: 'workos environment auto-config skipped',
+      integration,
+      reason: 'non-sandbox key',
+    });
+    return null;
+  }
 
   ui.log.step('Configuring WorkOS dashboard settings...');
 
-  const onStep = options.onStep ?? (() => {});
   // Report each item as it resolves, not when the whole batch does.
   const track = <T extends { alreadyExists: boolean }>(step: SetupItemId, write: Promise<T>): Promise<T> => {
     onStep(step, 'started');

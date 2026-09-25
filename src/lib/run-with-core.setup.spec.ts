@@ -11,6 +11,7 @@ import {
 } from './run-with-core.js';
 import { configureAuthkitApplication } from './authkit-application-setup.js';
 import { InstallDeclinedError } from './installer-errors.js';
+import { SANDBOX_ONLY_REASON } from './workos-management.js';
 
 vi.mock('./authkit-application-setup.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./authkit-application-setup.js')>()),
@@ -162,6 +163,26 @@ describe('dashboard checklist reporting', () => {
     expect(events).toContain('config:step redirect-uri done');
     expect(events).toContain('config:step env-vars done');
   });
+
+  it.each(['sveltekit', 'go'])(
+    'writes no localhost URLs to a production environment for %s, and says why',
+    async (integration) => {
+      const { emitter, events } = record();
+      await configureInstallEnvironment({
+        options,
+        integration,
+        credentials: { apiKey: 'sk_live_a', clientId: 'client_a' },
+        emitter,
+      });
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(events).toEqual(
+        expect.arrayContaining([
+          `config:step redirect-uri skipped (${SANDBOX_ONLY_REASON})`,
+          `config:step cors-origin skipped (${SANDBOX_ONLY_REASON})`,
+        ]),
+      );
+    },
+  );
 
   it('registers the URLs for a non-JavaScript SDK without writing .env.local', async () => {
     const { emitter, events } = record();

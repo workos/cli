@@ -17,7 +17,7 @@ vi.mock('../utils/analytics.js', () => ({
 
 const { analytics } = await import('../utils/analytics.js');
 const ui = (await import('../utils/ui.js')).default;
-const { autoConfigureWorkOSEnvironment } = await import('./workos-management.js');
+const { autoConfigureWorkOSEnvironment, SANDBOX_ONLY_REASON } = await import('./workos-management.js');
 
 const API_KEY = 'sk_test_123';
 const HOMEPAGE_ENDPOINT = 'https://api.workos.com/user_management/app_homepage_url';
@@ -290,11 +290,11 @@ describe('workos-management', () => {
     });
 
     it('does not name a stored environment whose key did not do the writes', async () => {
-      // `--api-key sk_live_prod...` bypasses the store: the writes landed in the
+      // `--api-key sk_test_other...` bypasses the store: the writes landed in the
       // supplied key's environment, not the stored active one.
       getActiveEnvironment.mockReturnValue(unclaimedEnv);
 
-      await autoConfigureWorkOSEnvironment('sk_live_prod_999', INTEGRATION, PORT);
+      await autoConfigureWorkOSEnvironment('sk_test_other_999', INTEGRATION, PORT);
 
       const value = rowFor('Environment').value;
       expect(value).toBe('the API key supplied to this run');
@@ -305,7 +305,7 @@ describe('workos-management', () => {
     it('does not name a claimed stored environment whose key did not do the writes', async () => {
       getActiveEnvironment.mockReturnValue(claimedEnv);
 
-      await autoConfigureWorkOSEnvironment('sk_live_prod_999', INTEGRATION, PORT);
+      await autoConfigureWorkOSEnvironment('sk_test_other_999', INTEGRATION, PORT);
 
       const value = rowFor('Environment').value;
       expect(value).toBe('the API key supplied to this run');
@@ -321,6 +321,38 @@ describe('workos-management', () => {
 
       expect(result).not.toBeNull();
       expect(rowFor('Environment').value).toBe('the API key supplied to this run');
+    });
+  });
+
+  describe('production keys', () => {
+    it.each([
+      ['a live key', 'sk_live_prod_999'],
+      ['an unrecognized key', 'sk_prod_999'],
+    ])('writes nothing with %s and reports each item as skipped', async (_, apiKey) => {
+      const { calls } = stubFetch(() => jsonResponse(200, {}));
+      const steps: string[] = [];
+
+      const result = await autoConfigureWorkOSEnvironment(apiKey, INTEGRATION, PORT, {
+        onStep: (step, status, detail) => steps.push(`${step}:${status}:${detail}`),
+      });
+
+      expect(result).toBeNull();
+      expect(calls).toEqual([]);
+      expect(steps).toEqual([
+        `redirect-uri:skipped:${SANDBOX_ONLY_REASON}`,
+        `cors-origin:skipped:${SANDBOX_ONLY_REASON}`,
+      ]);
+      expect(ui.log.warn).toHaveBeenCalledWith(SANDBOX_ONLY_REASON);
+      expect(ui.rows).not.toHaveBeenCalled();
+    });
+
+    it('writes nothing with a live key even when it is the active profile', async () => {
+      getActiveEnvironment.mockReturnValue({ name: 'production', type: 'production', apiKey: 'sk_live_active' });
+      const { calls } = stubFetch(() => jsonResponse(200, {}));
+
+      await autoConfigureWorkOSEnvironment('sk_live_active', INTEGRATION, PORT);
+
+      expect(calls).toEqual([]);
     });
   });
 
