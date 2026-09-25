@@ -1,6 +1,87 @@
 import { describe, expect, it } from 'vitest';
 import { hasClientSignInBehavior } from './client-sign-in.js';
 
+describe('mounted route component', () => {
+  it.each([
+    'function Login() { useEffect(() => { signIn(); }, []); return null; }',
+    'function Login() { useEffect(() => { if (isLoading) return; signIn(); }, [isLoading]); return null; }',
+    'function Login() { useEffect(() => { if (loading) { return; } void signIn(); }, [loading]); return null; }',
+    'const Login = () => { React.useEffect(() => { if (!isLoading) signIn(); }, [isLoading]); return null; };',
+    'const Login = function() { useEffect(() => { if (!loading) void authkit.signIn(); }, [loading]); return null; };',
+  ])('accepts supported component definitions and readiness guards: %s', (component) => {
+    expect(hasClientSignInBehavior(`${component} const routes = [{path: '/login', Component: Login}];`, '/login')).toBe(
+      true,
+    );
+  });
+
+  it.each([
+    'function Login() { return <button onClick={() => signIn()}>Login</button>; }',
+    'function Login() { function unused() { useEffect(() => signIn(), []); } return null; }',
+    'function Login() { function unused() { signIn(); } useEffect(() => {}, []); return null; }',
+    'function Login() { useEffect(() => { function unused() { signIn(); } }, []); return null; }',
+    'function Login() { useEffect(() => { return; signIn(); }, []); return null; }',
+    'function Login() { return null; useEffect(() => signIn(), []); }',
+    'function Login() { useEffect(() => { if (false) signIn(); }, []); return null; }',
+    'function Login() { useEffect(() => { /* signIn(); */ }, []); return null; }',
+    'function Login() { return null; } function Unrelated() { useEffect(() => signIn(), []); }',
+    'const Login = memo(() => { useEffect(() => signIn(), []); return null; });',
+    'import Login from "./missing"; function Unrelated() { useEffect(() => signIn(), []); }',
+  ])('rejects a route component without a direct sign-in effect: %s', (component) => {
+    expect(
+      hasClientSignInBehavior(`${component} const routes = [{path: '/login', element: <Login />}];`, '/login'),
+    ).toBe(false);
+  });
+
+  it.each([
+    'function App(Login) { return <Route path="/login" element={<Login />} />; }',
+    'function App({ Login }) { return <Route path="/login" element={<Login />} />; }',
+    'function App() { const Login = () => null; return <Route path="/login" element={<Login />} />; }',
+    'function App() { if (true) { var Login = () => null; } return <Route path="/login" element={<Login />} />; }',
+    'try { fail(); } catch (Login) { const route = <Route path="/login" element={<Login />} />; }',
+    'for (const Login of pages) { const route = <Route path="/login" element={<Login />} />; }',
+    'const route = <Route path="/login" element={<h1>Login</h1>} />;',
+    'const route = <Route path="/other" element={<Login />} />;',
+    'const route = <Route path="/login" element={<Login />} {...overrides} />;',
+    "const route = {path: '/login', Component: Login, ...overrides};",
+    "const route = {path: '/login', element: <h1>Login</h1>, Component: Login};",
+    'Login = () => null; const route = <Route path="/login" element={<Login />} />;',
+    '// <Route path="/login" element={<Login />} />',
+  ])('does not use an unrelated or shadowed Login binding: %s', (route) => {
+    expect(
+      hasClientSignInBehavior(`function Login() { useEffect(() => signIn(), []); return null; } ${route}`, '/login'),
+    ).toBe(false);
+  });
+
+  it('resolves a component declared in the route module’s local scope', () => {
+    expect(
+      hasClientSignInBehavior(
+        `function App() {
+      const Login = () => { useEffect(() => signIn(), []); return null; };
+      return <Route path="/login" element={<Login />} />;
+    }`,
+        '/login',
+      ),
+    ).toBe(true);
+  });
+
+  it.each([
+    '<Route path="/login" element={<Login />} />',
+    "const routes = [{ path: '/login', element: <Login /> }];",
+    "const routes = [{ path: '/login', Component: Login }];",
+    "const routes = [{ path: '/login', component: Login }];",
+  ])('accepts the effect belonging to %s without a second pathname guard', (route) => {
+    expect(
+      hasClientSignInBehavior(
+        `
+      function Login() { useEffect(() => signIn(), []); return null; }
+      ${route.startsWith('<') ? `function App() { return ${route}; }` : route}
+    `,
+        '/login',
+      ),
+    ).toBe(true);
+  });
+});
+
 describe('sign-in belongs to the matching pathname branch', () => {
   it.each([
     "if (window.location.pathname === '/login') signIn();",

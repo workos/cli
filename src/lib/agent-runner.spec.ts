@@ -127,6 +127,8 @@ describe('installer prompt', () => {
     expect(prompt).toContain('add a /login client route');
     expect(prompt).toContain("if (window.location.pathname === '/login') { void signIn(); }");
     expect(prompt).toContain('Keep the call directly in that branch, not in a click handler or another function.');
+    expect(prompt).toContain('does not need a second pathname guard');
+    expect(prompt).toContain('relative default or named import');
     expect(prompt).toContain('VITE_WORKOS_REDIRECT_URI for Vite');
   });
 

@@ -4,7 +4,7 @@ import { join } from 'path';
 import fg from 'fast-glob';
 import type { ValidationResult, ValidationRules, ValidationIssue } from './types.js';
 import { runBuildValidation } from './build-validator.js';
-import { hasClientSignInBehavior } from './client-sign-in.js';
+import { hasClientSignInBehavior, hasClientSignInBehaviorInSources, type ClientSource } from './client-sign-in.js';
 import { detectPort, getClientEnvPrefix, getSignInPath } from '../port-detection.js';
 import { nextjsRoutePath, findNextjsSignInPage } from '../../integrations/nextjs/utils.js';
 import nextjsRules from './rules/nextjs.json' with { type: 'json' };
@@ -301,9 +301,9 @@ async function validateClientOnlyApp(framework: string, projectDir: string, issu
       type: 'file',
       severity: 'error',
       message: `No ${signInPath} route starts sign-in`,
-      hint: `At startup or in a mount effect, call signIn() inside an if (window.location.pathname === '${signInPath}') branch once AuthKit is ready. A route declaration or unrelated sign-in button is not enough.`,
+      hint: `Call signIn() once AuthKit is ready in the mounted ${signInPath} route component's useEffect, or at startup/in an effect inside an if (window.location.pathname === '${signInPath}') branch. A route declaration or unrelated sign-in button is not enough.`,
     });
-  if (!sources.some((content) => content.includes('redirectUri')))
+  if (!sources.some(({ content }) => content.includes('redirectUri')))
     issues.push({
       type: 'pattern',
       severity: 'error',
@@ -313,7 +313,7 @@ async function validateClientOnlyApp(framework: string, projectDir: string, issu
   if (!prefix) return;
   const expected = BROWSER_REDIRECT_ENV[prefix];
   const reads = new Set(
-    sources.flatMap((content) => [...content.matchAll(REDIRECT_ENV_REFERENCE)].map(([read]) => read)),
+    sources.flatMap(({ content }) => [...content.matchAll(REDIRECT_ENV_REFERENCE)].map(([read]) => read)),
   );
   reads.delete(expected);
   for (const read of reads)
@@ -340,8 +340,8 @@ export async function hasClientSignInRoute(projectDir: string, signInPath: strin
   return complete && servesSignInRoute(projectDir, sources, signInPath);
 }
 
-async function servesSignInRoute(projectDir: string, sources: string[], signInPath: string): Promise<boolean> {
-  if (sources.some((content) => hasClientSignInBehavior(content, signInPath))) return true;
+async function servesSignInRoute(projectDir: string, sources: ClientSource[], signInPath: string): Promise<boolean> {
+  if (hasClientSignInBehaviorInSources(sources, signInPath)) return true;
   // A static page at the path, e.g. login/index.html, that starts sign-in.
   const segment = signInPath.replace(/^\/|\/$/g, '');
   const pages = await fg(
@@ -381,7 +381,8 @@ async function readBoundedSource(path: string, limit: number): Promise<string | 
 }
 
 /**
- * Bounded checks of conventional client source roots, not an import resolver.
+ * Bounded checks of conventional client source roots. Retain filenames so route
+ * component imports can resolve within this set without expanding the scan.
  * Server-only paths and other workspace packages are deliberately excluded.
  * Keep src/auth.config.ts: unlike the root bundler config, it can be browser code.
  * Any truncated/unreadable scan cannot authorize saving the sign-in destination.
@@ -389,7 +390,7 @@ async function readBoundedSource(path: string, limit: number): Promise<string | 
 async function readClientSource(
   projectDir: string,
   prefix: ReturnType<typeof getClientEnvPrefix>,
-): Promise<{ sources: string[]; complete: boolean }> {
+): Promise<{ sources: ClientSource[]; complete: boolean }> {
   const extension = '*.{ts,tsx,js,jsx,mjs,html,htm}';
   const files = fg.stream(
     prefix === 'REACT_APP_' ? [`src/**/${extension}`] : [extension, `{src,app,client}/**/${extension}`],
@@ -406,7 +407,7 @@ async function readClientSource(
       ],
     },
   );
-  const sources: string[] = [];
+  const sources: ClientSource[] = [];
   let remaining = MAX_SCAN_BYTES;
   try {
     for await (const file of files) {
@@ -414,7 +415,7 @@ async function readClientSource(
       const content = await readBoundedSource(join(projectDir, String(file)), Math.min(MAX_SOURCE_BYTES, remaining));
       if (content === undefined) return { sources, complete: false };
       remaining -= Buffer.byteLength(content);
-      sources.push(content);
+      sources.push({ file: String(file).replaceAll('\\', '/'), content });
     }
   } catch {
     return { sources, complete: false };
