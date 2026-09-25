@@ -302,10 +302,12 @@ async function validateClientOnlyApp(framework: string, projectDir: string, issu
   const prefix = getClientEnvPrefix(projectDir);
   if (!prefix) return;
   const written = `${prefix}WORKOS_REDIRECT_URI`;
-  // Only browser code must read the prefixed var; vite.config.ts or a script may read the unprefixed one.
-  const browserSources = prefix === 'VITE_' ? sources : sources.filter(({ file }) => file.startsWith('src/'));
-  const pattern = prefix === 'VITE_' ? VITE_REDIRECT_ENV_REFERENCE : CRA_REDIRECT_ENV_REFERENCE;
-  const read = new Set(browserSources.flatMap(({ content }) => [...content.matchAll(pattern)].map((m) => m[1])));
+  const { reference, isBrowserFile } = BROWSER_REDIRECT_ENV[prefix];
+  const read = new Set(
+    sources
+      .filter(({ file }) => isBrowserFile(file))
+      .flatMap(({ content }) => [...content.matchAll(reference)].map((m) => m[1])),
+  );
   read.delete(written);
   for (const name of read)
     issues.push({
@@ -316,9 +318,21 @@ async function validateClientOnlyApp(framework: string, projectDir: string, issu
     });
 }
 
-/** How browser code reads its redirect URI: Vite through import.meta.env, Create React App through process.env in src/. */
-const VITE_REDIRECT_ENV_REFERENCE = /import\.meta\.env\.(\w*WORKOS_REDIRECT_URI)\b/g;
-const CRA_REDIRECT_ENV_REFERENCE = /process\.env\.(\w*WORKOS_REDIRECT_URI)\b/g;
+/**
+ * How each bundler's browser code reads its redirect URI. Only browser code
+ * must read the prefixed var; vite.config.ts or a script may read the
+ * unprefixed one.
+ */
+const BROWSER_REDIRECT_ENV = {
+  VITE_: { reference: /import\.meta\.env\.(\w*WORKOS_REDIRECT_URI)\b/g, isBrowserFile: () => true },
+  REACT_APP_: {
+    reference: /process\.env\.(\w*WORKOS_REDIRECT_URI)\b/g,
+    isBrowserFile: (file: string) => file.startsWith('src/'),
+  },
+} satisfies Record<
+  NonNullable<ReturnType<typeof getClientEnvPrefix>>,
+  { reference: RegExp; isBrowserFile: (file: string) => boolean }
+>;
 
 /** Code that serves a route rather than linking to it: router config or a pathname check. */
 const ROUTE_DECLARATIONS = [
@@ -368,7 +382,7 @@ async function readClientSource(projectDir: string): Promise<ClientSource[]> {
       ...(await Promise.all(
         files
           .slice(i, i + SCAN_CONCURRENCY)
-          .map(async (file) => ({ file, content: await readOrEmpty(join(projectDir, file)) })),
+          .map((file) => readOrEmpty(join(projectDir, file)).then((content) => ({ file, content }))),
       )),
     );
   return sources;
