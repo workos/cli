@@ -2,7 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { validateInstallation } from './validator.js';
+import { validateFiles, validateInstallation, validatePackages } from './validator.js';
+import type { FileRule, PackageRule } from './types.js';
+import tanstackRules from './rules/tanstack-start.json' with { type: 'json' };
 
 describe('validateInstallation', () => {
   let testDir: string;
@@ -273,6 +275,59 @@ describe('validateInstallation', () => {
   });
 
   describe('pattern validation', () => {
+    it.each(['a', 'z'])('checks all TanStack source and callback matches (valid file: %s)', async (valid) => {
+      mkdirSync(join(testDir, 'src/routes'), { recursive: true });
+      for (const name of ['a', 'z']) {
+        writeFileSync(join(testDir, `src/${name}.ts`), name === valid ? 'authkitMiddleware()' : 'export {};');
+        writeFileSync(
+          join(testDir, `src/routes/${name}.callback.tsx`),
+          name === valid ? 'handleCallbackRoute()' : 'export {};',
+        );
+      }
+      expect(await validateFiles(tanstackRules, testDir)).toEqual([]);
+    });
+
+    it.each(['a', 'z'])('accepts a later file satisfying both pattern constraints (valid file: %s)', async (valid) => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      for (const name of ['a', 'z'])
+        writeFileSync(join(testDir, `src/${name}.ts`), name === valid ? 'getSignInUrl redirect GET' : 'export {};');
+      const files: FileRule[] = [
+        {
+          path: 'src/*.ts',
+          mustContain: ['getSignInUrl', 'redirect'],
+          mustContainAny: ['GET', 'POST'],
+        },
+      ];
+      expect(await validateFiles({ framework: 'test', packages: [], envVars: [], files }, testDir)).toEqual([]);
+    });
+
+    it('does not combine incomplete files into one valid handler', async () => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(join(testDir, 'src/a.ts'), 'getSignInUrl redirect');
+      writeFileSync(join(testDir, 'src/z.ts'), 'GET');
+      const files: FileRule[] = [
+        {
+          path: 'src/*.ts',
+          mustContain: ['getSignInUrl', 'redirect'],
+          mustContainAny: ['GET', 'POST'],
+          severity: 'error',
+        },
+      ];
+      const issues = await validateFiles({ framework: 'test', packages: [], envVars: [], files }, testDir);
+      expect(issues.length).toBeGreaterThan(0);
+      expect(issues.every((issue) => issue.type === 'pattern' && issue.severity === 'error')).toBe(true);
+    });
+
+    it('still warns when no TanStack match contains the expected calls', async () => {
+      mkdirSync(join(testDir, 'src/routes'), { recursive: true });
+      writeFileSync(join(testDir, 'src/a.ts'), 'export {};');
+      writeFileSync(join(testDir, 'src/routes/a.callback.tsx'), 'export {};');
+      writeFileSync(join(testDir, 'src/routes/z.callback.tsx'), 'export {};');
+      const issues = await validateFiles(tanstackRules, testDir);
+      expect(issues).toHaveLength(2);
+      expect(issues.every((issue) => issue.type === 'pattern' && issue.severity === 'warning')).toBe(true);
+    });
+
     it('detects missing pattern in file', async () => {
       writeFileSync(
         join(testDir, 'package.json'),
@@ -479,6 +534,95 @@ describe('validateInstallation', () => {
 
       const mismatchIssue = result.issues.find((i) => i.message.includes('no matching route file'));
       expect(mismatchIssue).toBeUndefined();
+    });
+  });
+
+  describe('TanStack validation regressions', () => {
+    function fixture(root: string, route: string, extension: string) {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({
+          dependencies: {
+            '@workos/authkit-tanstack-react-start': '^1.0.0',
+            '@tanstack/react-start': '^1.0.0',
+          },
+        }),
+      );
+      writeFileSync(
+        join(testDir, '.env.local'),
+        `WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nWORKOS_REDIRECT_URI=https://example.com/api/auth/callback\nWORKOS_COOKIE_PASSWORD=${'x'.repeat(32)}\n`,
+      );
+      mkdirSync(join(testDir, root, 'routes', route, '..'), { recursive: true });
+      writeFileSync(join(testDir, root, 'routes', `${route}.${extension}`), 'handleCallback(); getAuth();');
+      writeFileSync(join(testDir, root, `start.${extension}`), 'authkitMiddleware();');
+    }
+
+    const layouts = [
+      'api/auth/callback',
+      'api.auth.callback',
+      'api/auth/callback/index',
+      'api/auth/callback/route',
+      'api.auth.callback.index',
+    ];
+    const cases = ['app', 'src'].flatMap((root) =>
+      layouts.flatMap((route) => ['ts', 'tsx', 'js', 'jsx'].map((ext) => [root, route, ext])),
+    );
+    it.each(cases)('accepts %s/routes/%s.%s', async (root, route, ext) => {
+      fixture(root, route, ext);
+      const result = await validateInstallation('tanstack-start', testDir, { runBuild: false });
+      expect(result.issues).toEqual([]);
+      expect(result.passed).toBe(true);
+    });
+
+    it.each(['app', 'src'].flatMap((root) => layouts.map((route) => [root, route])))(
+      'gives a useful mismatch hint for %s/routes/%s',
+      async (root, route) => {
+        fixture(root, route, 'tsx');
+        writeFileSync(join(testDir, '.env.local'), 'WORKOS_REDIRECT_URI=https://example.com/wrong/callback\n');
+        const result = await validateInstallation('tanstack-start', testDir, { runBuild: false });
+        const issue = result.issues.find((i) => i.message.includes('no matching route file'));
+        expect(issue?.severity).toBe('error');
+        expect(issue?.hint).toContain(`${root}/routes/${route}.tsx`);
+        expect(issue?.hint).toContain('https://example.com/api/auth/callback');
+      },
+    );
+
+    it('still rejects genuinely missing packages and callback files', async () => {
+      fixture('src', 'api/auth/callback', 'tsx');
+      rmSync(join(testDir, 'src/routes'), { recursive: true });
+      writeFileSync(join(testDir, 'package.json'), JSON.stringify({ dependencies: {} }));
+      const result = await validateInstallation('tanstack-start', testDir, { runBuild: false });
+      expect(result.passed).toBe(false);
+      expect(result.issues.filter((i) => i.type === 'package')).toHaveLength(2);
+      expect(result.issues.some((i) => i.message.startsWith('Missing file:') && i.message.includes('callback'))).toBe(
+        true,
+      );
+      expect(result.issues.some((i) => i.message.includes('no matching route file'))).toBe(true);
+    });
+  });
+
+  describe('generic package alternates', () => {
+    const locations = [undefined, 'any', 'dependencies', 'devDependencies'] as const;
+    it.each(
+      locations.flatMap((location) =>
+        ['dependencies', 'devDependencies'].flatMap((installedIn) =>
+          ['primary', 'alternate'].map((name) => ({ location, installedIn, name })),
+        ),
+      ),
+    )('respects $location for $name in $installedIn', async ({ location, installedIn, name }) => {
+      writeFileSync(join(testDir, 'package.json'), JSON.stringify({ [installedIn]: { [name]: '1.0.0' } }));
+      const rule = { name: 'primary', alternates: ['alternate'], location };
+      const issues = await validatePackages({ framework: 'test', packages: [rule], files: [], envVars: [] }, testDir);
+      expect(issues).toHaveLength(!location || location === 'any' || location === installedIn ? 0 : 1);
+    });
+
+    it('reports a missing package with alternate installation guidance', async () => {
+      writeFileSync(join(testDir, 'package.json'), '{}');
+      const rule: PackageRule = { name: 'primary', alternates: ['alternate'], location: 'devDependencies' };
+      const issues = await validatePackages({ framework: 'test', packages: [rule], files: [], envVars: [] }, testDir);
+      expect(issues[0]).toMatchObject({ type: 'package', severity: 'error', message: 'Missing package: primary' });
+      expect(issues[0].hint).toContain('alternate');
+      expect(issues[0].hint).toContain('--save-dev');
     });
   });
 

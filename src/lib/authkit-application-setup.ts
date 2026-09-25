@@ -235,7 +235,9 @@ export async function configureAuthkitApplication(
     // other apps may block their own updates, but must not block basic sign-in.
     if (!original.redirectUris.some((uri) => uri.uri === setup.redirectUri)) {
       const input = {
-        applicationId: original.id,
+        // This mutation's applicationId targets an IDP application. The matched
+        // environment targets the default userland app read and verified above.
+        environmentId,
         redirectUris: [
           ...original.redirectUris,
           { uri: setup.redirectUri, isDefault: original.redirectUris.length === 0 },

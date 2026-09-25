@@ -98,11 +98,14 @@ beforeEach(() => {
     }
     if (name === 'setRedirectUris') {
       const input = options.variables!.input as {
-        applicationId: string;
+        environmentId: string;
         redirectUris: typeof application.redirectUris;
         dryRun: boolean;
       };
-      expect(input.applicationId).toBe('app_1');
+      // applicationId here resolves an AuthKit IDP application, not the userland
+      // app returned by defaultAuthkitApplication. Match the live API contract.
+      if ('applicationId' in input) throw new Error("Application not found: 'app_1'.");
+      expect(input.environmentId).toBe('env_app');
       if (!input.dryRun) application.redirectUris = input.redirectUris;
       return { setRedirectUris: { __typename: 'RedirectUrisSet' } };
     }
@@ -814,9 +817,16 @@ describe('native application URL setup', () => {
     for (const [, options] of vi.mocked(dashboardGraphqlRequest).mock.calls) {
       expect(options.environmentId).toBe('env_app');
     }
-    for (const [, options] of writes()) {
-      expect(options.variables?.input).toMatchObject({ applicationId: 'app_1' });
+    for (const [name, options] of writes()) {
+      expect(options.variables?.input).toMatchObject(
+        name === 'setRedirectUris' ? { environmentId: 'env_app' } : { applicationId: 'app_1' },
+      );
     }
+    const redirectCalls = vi.mocked(dashboardGraphqlRequest).mock.calls.filter(([name]) => name === 'setRedirectUris');
+    expect(redirectCalls.map(([, options]) => options.variables?.input)).toEqual([
+      { environmentId: 'env_app', redirectUris: [{ uri: setup.redirectUri, isDefault: true }], dryRun: true },
+      { environmentId: 'env_app', redirectUris: [{ uri: setup.redirectUri, isDefault: true }], dryRun: false },
+    ]);
   });
 
   it('fails if the callback write reports success but read-back is missing it', async () => {

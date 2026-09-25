@@ -18,6 +18,7 @@ export interface ValidationResult {
 // Rule definitions (matches JSON schema)
 export interface PackageRule {
   name: string;
+  alternates?: string[]; // accepted package names in the same dependency location
   location?: 'dependencies' | 'devDependencies' | 'any'; // default: 'any'
 }
 
