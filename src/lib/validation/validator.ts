@@ -189,43 +189,46 @@ export async function validateFiles(rules: ValidationRules, projectDir: string):
       continue;
     }
 
-    // Check content patterns
+    // Any matching file may satisfy the rule, but its patterns must occur together.
     if (rule.mustContain || rule.mustContainAny) {
-      const filePath = join(projectDir, matches[0]);
-      let content: string;
-      try {
-        content = await readFile(filePath, 'utf-8');
-      } catch {
-        // File read error - skip content checks
-        continue;
-      }
+      let patternIssues: ValidationIssue[] | undefined;
+      for (const file of matches) {
+        let content: string;
+        try {
+          content = await readFile(join(projectDir, file), 'utf-8');
+        } catch {
+          // A failed read must not hide another matching file.
+          continue;
+        }
 
-      // All must be present
-      if (rule.mustContain) {
-        for (const pattern of rule.mustContain) {
+        const fileIssues: ValidationIssue[] = [];
+        for (const pattern of rule.mustContain ?? []) {
           if (!content.includes(pattern)) {
-            issues.push({
+            fileIssues.push({
               type: 'pattern',
               severity: rule.severity ?? 'warning',
-              message: `File ${matches[0]} missing expected pattern: "${pattern}"`,
-              hint: `Ensure ${matches[0]} contains: ${pattern}`,
+              message: `File ${file} missing expected pattern: "${pattern}"`,
+              hint: `Ensure ${file} contains: ${pattern}`,
             });
           }
         }
-      }
-
-      // At least one must be present
-      if (rule.mustContainAny) {
-        const hasAny = rule.mustContainAny.some((p) => content.includes(p));
-        if (!hasAny) {
-          issues.push({
+        if (rule.mustContainAny && !rule.mustContainAny.some((pattern) => content.includes(pattern))) {
+          fileIssues.push({
             type: 'pattern',
             severity: rule.severity ?? 'warning',
-            message: `File ${matches[0]} missing one of: ${rule.mustContainAny.join(', ')}`,
-            hint: `Ensure ${matches[0]} contains one of these patterns`,
+            message: `File ${file} missing one of: ${rule.mustContainAny.join(', ')}`,
+            hint: `Ensure ${file} contains one of these patterns`,
           });
         }
+
+        if (fileIssues.length === 0) {
+          patternIssues = [];
+          break;
+        }
+        // Retain one file's actionable diagnostics only if no match satisfies the rule.
+        patternIssues ??= fileIssues;
       }
+      issues.push(...(patternIssues ?? []));
     }
   }
 

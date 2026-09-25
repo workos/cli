@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { validateInstallation, validatePackages } from './validator.js';
-import type { PackageRule } from './types.js';
+import { validateFiles, validateInstallation, validatePackages } from './validator.js';
+import type { FileRule, PackageRule } from './types.js';
+import tanstackRules from './rules/tanstack-start.json' with { type: 'json' };
 
 describe('validateInstallation', () => {
   let testDir: string;
@@ -274,6 +275,59 @@ describe('validateInstallation', () => {
   });
 
   describe('pattern validation', () => {
+    it.each(['a', 'z'])('checks all TanStack source and callback matches (valid file: %s)', async (valid) => {
+      mkdirSync(join(testDir, 'src/routes'), { recursive: true });
+      for (const name of ['a', 'z']) {
+        writeFileSync(join(testDir, `src/${name}.ts`), name === valid ? 'authkitMiddleware()' : 'export {};');
+        writeFileSync(
+          join(testDir, `src/routes/${name}.callback.tsx`),
+          name === valid ? 'handleCallbackRoute()' : 'export {};',
+        );
+      }
+      expect(await validateFiles(tanstackRules, testDir)).toEqual([]);
+    });
+
+    it.each(['a', 'z'])('accepts a later file satisfying both pattern constraints (valid file: %s)', async (valid) => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      for (const name of ['a', 'z'])
+        writeFileSync(join(testDir, `src/${name}.ts`), name === valid ? 'getSignInUrl redirect GET' : 'export {};');
+      const files: FileRule[] = [
+        {
+          path: 'src/*.ts',
+          mustContain: ['getSignInUrl', 'redirect'],
+          mustContainAny: ['GET', 'POST'],
+        },
+      ];
+      expect(await validateFiles({ framework: 'test', packages: [], envVars: [], files }, testDir)).toEqual([]);
+    });
+
+    it('does not combine incomplete files into one valid handler', async () => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(join(testDir, 'src/a.ts'), 'getSignInUrl redirect');
+      writeFileSync(join(testDir, 'src/z.ts'), 'GET');
+      const files: FileRule[] = [
+        {
+          path: 'src/*.ts',
+          mustContain: ['getSignInUrl', 'redirect'],
+          mustContainAny: ['GET', 'POST'],
+          severity: 'error',
+        },
+      ];
+      const issues = await validateFiles({ framework: 'test', packages: [], envVars: [], files }, testDir);
+      expect(issues.length).toBeGreaterThan(0);
+      expect(issues.every((issue) => issue.type === 'pattern' && issue.severity === 'error')).toBe(true);
+    });
+
+    it('still warns when no TanStack match contains the expected calls', async () => {
+      mkdirSync(join(testDir, 'src/routes'), { recursive: true });
+      writeFileSync(join(testDir, 'src/a.ts'), 'export {};');
+      writeFileSync(join(testDir, 'src/routes/a.callback.tsx'), 'export {};');
+      writeFileSync(join(testDir, 'src/routes/z.callback.tsx'), 'export {};');
+      const issues = await validateFiles(tanstackRules, testDir);
+      expect(issues).toHaveLength(2);
+      expect(issues.every((issue) => issue.type === 'pattern' && issue.severity === 'warning')).toBe(true);
+    });
+
     it('detects missing pattern in file', async () => {
       writeFileSync(
         join(testDir, 'package.json'),
