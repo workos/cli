@@ -6,7 +6,7 @@ import { fetchTeamEnvironments } from './environment-target.js';
 import { dashboardGraphqlRequest } from './dashboard-graphql.js';
 import { getOperation, resolveExecutableDocument } from '../catalog/operation.js';
 import { InstallDeclinedError } from './installer-errors.js';
-import { isUnclaimedEnvironmentKey, setHomepageUrl } from './workos-management.js';
+import { createCorsOrigin, isUnclaimedEnvironmentKey, setHomepageUrl } from './workos-management.js';
 import { getSignInPath } from './port-detection.js';
 
 export interface AuthkitApplicationSetup {
@@ -17,6 +17,9 @@ export interface AuthkitApplicationSetup {
   initiateLoginUri?: string;
   initiateLoginReason?: string;
   homepageUrl?: string;
+  /** Browser origin to add without replacing existing allowed origins. */
+  corsOrigin?: string;
+  corsRegistered?: boolean;
   verified: boolean;
   /** The callback was registered; this alone does not verify the other URLs or browser flows. */
   callbackRegistered?: boolean;
@@ -36,6 +39,7 @@ interface Application {
   logoutUris: Uri[];
   initiateLoginUri: string | null;
   appHomepageUrl?: string | null;
+  webOrigins?: { origin: string }[];
 }
 
 /** Use the app's saved callback, not the active profile or a guessed localhost port. */
@@ -105,6 +109,8 @@ export async function configureAuthkitApplication(
         'No client sign-in route is available. Add a sign-in route and configure the Initiate login URI in the dashboard.',
     };
   }
+  // Never trust incoming registration flags; they belong to an earlier attempt.
+  setup = { ...setup, ...(setup.corsOrigin !== undefined ? { corsRegistered: false } : {}) };
   let callbackRegistered = false;
   const pending = (reason: string): AuthkitApplicationSetup => {
     if (!callbackRegistered) {
@@ -139,6 +145,16 @@ export async function configureAuthkitApplication(
       return pending('Could not register the callback URL. Check the API key and connection, then retry setup.');
     }
     callbackRegistered = true;
+    if (setup.corsOrigin !== undefined) {
+      try {
+        await createCorsOrigin(apiKey, setup.corsOrigin);
+        setup = { ...setup, corsRegistered: true };
+      } catch {
+        return pending(
+          'Callback registered using the API key, but CORS origin setup failed. Check the application URLs in the dashboard.',
+        );
+      }
+    }
     // REST cannot read the current homepage. Only an explicit override or the
     // stored active unclaimed key authorizes replacing this single-valued setting.
     if (setup.homepageUrl === undefined && !isUnclaimedEnvironmentKey(apiKey)) {
@@ -247,6 +263,39 @@ export async function configureAuthkitApplication(
     }
     callbackRegistered = true;
 
+    if (setup.corsOrigin !== undefined) {
+      const originsOf = (app: Application): string[] => {
+        if (!Array.isArray(app.webOrigins) || !app.webOrigins.every((entry) => typeof entry.origin === 'string'))
+          throw new Error('Application web origins unavailable');
+        return app.webOrigins.map((entry) => entry.origin);
+      };
+      const existing = originsOf(original);
+      if (!existing.includes(setup.corsOrigin)) {
+        // This replaces the list: merge, validate, recheck, then read back.
+        // Like redirects, the API offers no atomic compare-and-set precondition.
+        const input = { applicationId: original.id, origins: [...existing, setup.corsOrigin] };
+        const validated = await request<{ setUserlandApplicationWebOrigins: { __typename: string } }>(
+          'setAuthkitApplicationWebOrigins',
+          { input: { ...input, dryRun: true } },
+        );
+        if (validated.setUserlandApplicationWebOrigins.__typename !== 'WebOriginsSet')
+          return pending('CORS origin validation failed. Existing origins were left unchanged.');
+        if (JSON.stringify(await readApplication()) !== JSON.stringify(original))
+          return pending('Application settings changed during setup. Recheck them before applying changes.');
+        const written = await request<{ setUserlandApplicationWebOrigins: { __typename: string } }>(
+          'setAuthkitApplicationWebOrigins',
+          { input: { ...input, dryRun: false } },
+        );
+        if (written.setUserlandApplicationWebOrigins.__typename !== 'WebOriginsSet')
+          return pending('Could not save the CORS origin. Check the dashboard before continuing.');
+        const saved = await readApplication();
+        if (saved.id !== original.id || !input.origins.every((origin) => originsOf(saved).includes(origin)))
+          return pending('CORS read-back did not match the required settings.');
+        original = saved;
+      }
+      setup = { ...setup, corsRegistered: true };
+    }
+
     const reasons: string[] = setup.initiateLoginUri === undefined ? [setup.initiateLoginReason!] : [];
     const defaults = original.logoutUris.filter((uri) => uri.isDefault);
     const signOutConflict = defaults.length > 1 || defaults.some((uri) => !isSignOutDestination(uri.uri));
@@ -321,6 +370,14 @@ export async function configureAuthkitApplication(
     const saved = await readApplication();
     callbackRegistered = saved.id === original.id && saved.redirectUris.some((uri) => uri.uri === setup.redirectUri);
     if (!callbackRegistered) return pending('Callback read-back did not match the required settings.');
+    if (
+      setup.corsOrigin !== undefined &&
+      (!saved.webOrigins?.some((entry) => entry.origin === setup.corsOrigin) ||
+        !original.webOrigins?.every((old) => saved.webOrigins?.some((entry) => entry.origin === old.origin)))
+    ) {
+      setup = { ...setup, corsRegistered: false };
+      return pending('CORS read-back did not match the required settings.');
+    }
     if (reasons.length) return pending(reasons.join(' '));
     if (
       !original.redirectUris.every((old) =>

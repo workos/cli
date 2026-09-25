@@ -54,7 +54,6 @@ import {
   generateCommitMessage as generateCommitMessageAi,
   generatePrDescription as generatePrDescriptionAi,
 } from './ai-content.js';
-import { autoConfigureWorkOSEnvironment } from './workos-management.js';
 import {
   assertSupportedNextJsRouter,
   getNextJsRouter,
@@ -62,7 +61,6 @@ import {
 } from '../integrations/nextjs/utils.js';
 import { detectPort, getClientEnvPrefix, getSignInPath, resolveRedirectUri } from './port-detection.js';
 import { hasClientSignInRoute } from './validation/validator.js';
-import { InstallDeclinedError } from './installer-errors.js';
 import { writeEnvLocal } from './env-writer.js';
 import { getRegistry } from './registry.js';
 import { observeHostFailure } from './host-probe.js';
@@ -212,23 +210,10 @@ export async function configureInstallEnvironment(
   }
 
   const port = detectPort(integration, installerOptions.installDir);
-  // Next.js URL writes happen after code validation. That step chooses ONE
-  // target: the dashboard application, or an API-key-only callback without a session.
-  // Every other SDK registers its URLs here, client-only ones included: the
-  // integration's own run() skips it because this machine passes it the credentials.
-  const registersUrls = integration !== 'nextjs';
+  // All URL writes wait until after the agent. Select one target then, even if
+  // credentials and the dashboard session refer to different environments or
+  // the session changes between preparation and application setup.
   if (isJavascript) step('env-vars', 'started');
-  if (credentials.apiKey && registersUrls) {
-    await autoConfigureWorkOSEnvironment(credentials.apiKey, integration, port, {
-      homepageUrl: installerOptions.homepageUrl,
-      redirectUri: installerOptions.redirectUri,
-      onStep: step,
-    });
-  } else if (registersUrls) {
-    for (const id of ['redirect-uri', 'cors-origin'] as const) {
-      step(id, 'skipped', 'No API key was available for this install.');
-    }
-  }
 
   // Non-JavaScript agents write their own env files in the project's format.
   if (!isJavascript) return;
@@ -267,21 +252,23 @@ export const NO_SIGN_IN_ROUTE_REASON = 'This framework has no fixed sign-in rout
  *
  * `configureAuthkitApplication` throws when the callback isn't registered,
  * which fails the install (and the items still running with it). When it
- * returns, the callback is registered; the other two are verified together or
- * not at all, with one reason covering both. Pass `includeRedirect: false`
- * when the environment step already reported the callback.
+ * returns, the callback is registered; CORS has its own registration result,
+ * while the remaining settings share the overall verification result.
  */
 export async function reportAppUrlSetup(
   emitter: Pick<InstallerEventEmitter, 'emit'>,
   configure: () => Promise<AuthkitApplicationSetup>,
-  { includeRedirect = true }: { includeRedirect?: boolean } = {},
+  { includeRedirect = true, includeCors = false }: { includeRedirect?: boolean; includeCors?: boolean } = {},
 ): Promise<AuthkitApplicationSetup> {
   const step = (id: SetupItemId, status: SetupItemStatus, detail?: string) =>
     emitter.emit('app-urls:step', { step: id, status, ...(detail ? { detail } : {}) });
   const ids = ['initiate-login-uri', 'sign-out-uri'] as const;
   for (const id of includeRedirect ? (['redirect-uri', ...ids] as const) : ids) step(id, 'started');
+  if (includeCors) step('cors-origin', 'started');
   const setup = await configure();
   if (includeRedirect) step('redirect-uri', 'done');
+  if (includeCors)
+    step('cors-origin', setup.corsRegistered ? 'done' : 'skipped', setup.corsRegistered ? undefined : setup.reason);
   const settle = (id: SetupItemId) => (setup.verified ? step(id, 'done') : step(id, 'skipped', setup.reason));
   if (setup.initiateLoginUri === undefined)
     step('initiate-login-uri', 'skipped', setup.initiateLoginReason ?? setup.reason);
@@ -291,10 +278,8 @@ export async function reportAppUrlSetup(
 }
 
 /**
- * Set the sign-out and initiate login URIs for SDKs other than Next.js, after
- * the agent has written the app. The environment step already registered the
- * callback over the API key, so a failure here leaves the settings for the
- * dashboard instead of failing an install whose code is done.
+ * Configure all URLs for SDKs other than Next.js after the agent, using one
+ * target selected here. An unregistered callback fails the install.
  */
 export async function configureOtherApplicationUrls(
   context: Pick<InstallerMachineContext, 'options' | 'integration' | 'emitter'>,
@@ -311,32 +296,19 @@ export async function configureOtherApplicationUrls(
     initiateLoginReason = `Could not confirm a ${signInPath} client route that starts sign-in. Check the route before setting the Initiate login URI.`;
     signInPath = undefined;
   }
-  let setup: AuthkitApplicationSetup;
-  try {
-    setup = {
-      ...buildApplicationSetup({
-        clientId,
-        redirectUri: resolveRedirectUri(integration, installerOptions),
-        homepageUrl: installerOptions.homepageUrl,
-        signInPath,
-      }),
-      ...(initiateLoginReason ? { initiateLoginReason } : {}),
-    };
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    for (const step of ['initiate-login-uri', 'sign-out-uri'] as const)
-      context.emitter.emit('app-urls:step', { step, status: 'skipped', detail });
-    return undefined;
-  }
-  return reportAppUrlSetup(
-    context.emitter,
-    () =>
-      configureAuthkitApplication(setup, clientId, apiKey).catch((error: unknown) => {
-        if (!(error instanceof InstallDeclinedError)) throw error;
-        return { ...setup, verified: false, reason: error.message };
-      }),
-    { includeRedirect: false },
-  );
+  const setup: AuthkitApplicationSetup = {
+    ...buildApplicationSetup({
+      clientId,
+      redirectUri: resolveRedirectUri(integration, installerOptions),
+      homepageUrl: installerOptions.homepageUrl,
+      signInPath,
+    }),
+    corsOrigin: `http://localhost:${detectPort(integration, installerOptions.installDir)}`,
+    ...(initiateLoginReason ? { initiateLoginReason } : {}),
+  };
+  return reportAppUrlSetup(context.emitter, () => configureAuthkitApplication(setup, clientId, apiKey), {
+    includeCors: true,
+  });
 }
 
 /** Pick the installer adapter for this process's output mode and terminal. */

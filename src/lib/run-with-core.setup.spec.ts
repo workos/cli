@@ -11,7 +11,6 @@ import {
 } from './run-with-core.js';
 import { configureAuthkitApplication } from './authkit-application-setup.js';
 import { InstallDeclinedError } from './installer-errors.js';
-import { SANDBOX_ONLY_REASON } from './workos-management.js';
 
 vi.mock('./authkit-application-setup.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./authkit-application-setup.js')>()),
@@ -129,7 +128,7 @@ describe('dashboard checklist reporting', () => {
     expect(events).toEqual(['config:step env-vars started', 'config:step env-vars done']);
   });
 
-  it('reports the redirect URI and CORS origin as they land for React Router', async () => {
+  it('defers React Router URL events until after the agent', async () => {
     const { emitter, events } = record();
     await configureInstallEnvironment({
       options,
@@ -137,19 +136,11 @@ describe('dashboard checklist reporting', () => {
       credentials: { apiKey: 'sk_test_a', clientId: 'client_a' },
       emitter,
     });
-    expect(events).toEqual([
-      'config:step env-vars started',
-      'config:step redirect-uri started',
-      'config:step cors-origin started',
-      'config:step redirect-uri done',
-      'config:step cors-origin done',
-      'config:step env-vars done',
-    ]);
+    expect(events).toEqual(['config:step env-vars started', 'config:step env-vars done']);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  const registeredPaths = () => fetchSpy.mock.calls.map(([url]) => new URL(String(url)).pathname);
-
-  it('registers the redirect URI and CORS origin for every server-side SDK', async () => {
+  it('defers URL writes for other server-side SDKs', async () => {
     const { emitter, events } = record();
     await configureInstallEnvironment({
       options,
@@ -157,34 +148,24 @@ describe('dashboard checklist reporting', () => {
       credentials: { apiKey: 'sk_test_a', clientId: 'client_a' },
       emitter,
     });
-    expect(registeredPaths()).toEqual(
-      expect.arrayContaining(['/user_management/redirect_uris', '/user_management/cors_origins']),
-    );
-    expect(events).toContain('config:step redirect-uri done');
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(events.some((event) => event.includes('redirect-uri'))).toBe(false);
     expect(events).toContain('config:step env-vars done');
   });
 
-  it.each(['sveltekit', 'go'])(
-    'writes no localhost URLs to a production environment for %s, and says why',
-    async (integration) => {
-      const { emitter, events } = record();
-      await configureInstallEnvironment({
-        options,
-        integration,
-        credentials: { apiKey: 'sk_live_a', clientId: 'client_a' },
-        emitter,
-      });
-      expect(fetchSpy).not.toHaveBeenCalled();
-      expect(events).toEqual(
-        expect.arrayContaining([
-          `config:step redirect-uri skipped (${SANDBOX_ONLY_REASON})`,
-          `config:step cors-origin skipped (${SANDBOX_ONLY_REASON})`,
-        ]),
-      );
-    },
-  );
+  it.each(['sveltekit', 'go'])('defers production URL handling for %s', async (integration) => {
+    const { emitter, events } = record();
+    await configureInstallEnvironment({
+      options,
+      integration,
+      credentials: { apiKey: 'sk_live_a', clientId: 'client_a' },
+      emitter,
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(events.every((event) => event.includes('env-vars'))).toBe(true);
+  });
 
-  it('registers the URLs for a non-JavaScript SDK without writing .env.local', async () => {
+  it('defers non-JavaScript URLs without writing .env.local', async () => {
     const { emitter, events } = record();
     await configureInstallEnvironment({
       options,
@@ -192,9 +173,8 @@ describe('dashboard checklist reporting', () => {
       credentials: { apiKey: 'sk_test_a', clientId: 'client_a' },
       emitter,
     });
-    const redirect = fetchSpy.mock.calls.find(([url]) => String(url).endsWith('/user_management/redirect_uris'));
-    expect(JSON.parse(String(redirect?.[1]?.body))).toEqual({ uri: 'http://localhost:3000/auth/callback' });
-    expect(events).toContain('config:step redirect-uri done');
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
     expect(events.some((event) => event.includes('env-vars'))).toBe(false);
     await expect(readFile(join(directory, '.env.local'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
@@ -223,21 +203,18 @@ describe('dashboard checklist reporting', () => {
   });
 
   it.each(['react', 'vanilla-js'] as const)(
-    'registers the Vite callback and CORS origin for the client-only %s SDK',
+    'defers callback and CORS writes for the client-only %s SDK',
     async (integration) => {
       await configureInstallEnvironment({
         options,
         integration,
         credentials: { apiKey: 'sk_test_a', clientId: 'client_a' },
       });
-      const bodyFor = (path: string) =>
-        JSON.parse(String(fetchSpy.mock.calls.find(([url]) => String(url).endsWith(path))?.[1]?.body));
-      expect(bodyFor('/user_management/redirect_uris')).toEqual({ uri: 'http://localhost:5173/callback' });
-      expect(bodyFor('/user_management/cors_origins')).toEqual({ origin: 'http://localhost:5173' });
+      expect(fetchSpy).not.toHaveBeenCalled();
     },
   );
 
-  it('says why a client-only SDK without an API key has no URLs registered', async () => {
+  it('does not prematurely skip client-only URLs without an API key', async () => {
     const { emitter, events } = record();
     await configureInstallEnvironment({
       options,
@@ -245,11 +222,11 @@ describe('dashboard checklist reporting', () => {
       credentials: { clientId: 'client_a' },
       emitter,
     });
-    expect(events).toContain('config:step redirect-uri skipped (No API key was available for this install.)');
+    expect(events).toEqual(['config:step env-vars started', 'config:step env-vars done']);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('says why the redirect URI and CORS origin were not set without an API key', async () => {
+  it('does not prematurely skip server URLs without an API key', async () => {
     const { emitter, events } = record();
     await configureInstallEnvironment({
       options,
@@ -257,8 +234,7 @@ describe('dashboard checklist reporting', () => {
       credentials: { clientId: 'client_a' },
       emitter,
     });
-    expect(events).toContain('config:step redirect-uri skipped (No API key was available for this install.)');
-    expect(events).toContain('config:step cors-origin skipped (No API key was available for this install.)');
+    expect(events).toEqual(['config:step env-vars started', 'config:step env-vars done']);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -272,6 +248,28 @@ describe('dashboard checklist reporting', () => {
       'app-urls:step initiate-login-uri done',
       'app-urls:step sign-out-uri done',
     ]);
+  });
+
+  it.each([true, false])('reports CORS independently of pending dashboard settings (%s)', async (corsRegistered) => {
+    const { emitter, events } = record();
+    await reportAppUrlSetup(
+      emitter,
+      async () => ({
+        ...setup,
+        corsOrigin: 'http://localhost:5173',
+        corsRegistered,
+        callbackRegistered: true,
+        verified: false,
+        reason: 'Manual setup needed.',
+      }),
+      { includeCors: true },
+    );
+    expect(events).toContain('app-urls:step redirect-uri done');
+    expect(events).toContain('app-urls:step cors-origin started');
+    expect(events).toContain(
+      corsRegistered ? 'app-urls:step cors-origin done' : 'app-urls:step cors-origin skipped (Manual setup needed.)',
+    );
+    expect(events).toContain('app-urls:step sign-out-uri skipped (Manual setup needed.)');
   });
 
   it('flags the unverified URLs with the setup reason', async () => {
@@ -347,6 +345,7 @@ describe('application URLs for SDKs other than Next.js', () => {
         clientId: 'client_a',
         redirectUri: 'http://localhost:8080/auth/callback',
         signOutUri: 'http://localhost:8080/',
+        corsOrigin: 'http://localhost:8080',
         initiateLoginUri: 'http://localhost:8080/auth/login',
         verified: false,
       },
@@ -415,28 +414,32 @@ describe('application URLs for SDKs other than Next.js', () => {
     );
   });
 
-  it('shows an unusable callback URL in the checklist instead of dropping it', async () => {
+  it('rejects an unusable callback URL before any setup', async () => {
     const emitter = createInstallerEventEmitter();
     const events: string[] = [];
     emitter.on('app-urls:step', ({ step, status }) => events.push(`${step} ${status}`));
-    const result = await configureOtherApplicationUrls(
-      { options: { ...options, redirectUri: 'ftp://localhost/callback' }, integration: 'go', emitter },
-      'client_a',
-    );
-    expect(result).toBeUndefined();
-    expect(events).toEqual(['initiate-login-uri skipped', 'sign-out-uri skipped']);
+    await expect(
+      configureOtherApplicationUrls(
+        { options: { ...options, redirectUri: 'ftp://localhost/callback' }, integration: 'go', emitter },
+        'client_a',
+      ),
+    ).rejects.toThrow('HTTP(S)');
+    expect(events).toEqual([]);
     expect(configureAuthkitApplication).not.toHaveBeenCalled();
   });
 
-  it('leaves the settings for the dashboard instead of failing the install', async () => {
+  it('fails the install if the deferred callback cannot be registered', async () => {
     vi.mocked(configureAuthkitApplication).mockRejectedValue(
       new InstallDeclinedError('Automatic URL setup is restricted to sandbox environments.', 'callback_unregistered'),
     );
     const emitter = createInstallerEventEmitter();
     const events: string[] = [];
     emitter.on('app-urls:step', ({ step, status, detail }) => events.push(`${step} ${status} ${detail ?? ''}`.trim()));
-    const result = await configureOtherApplicationUrls({ options, integration: 'go', emitter }, 'client_a');
-    expect(result?.verified).toBe(false);
-    expect(events).toContain('sign-out-uri skipped Automatic URL setup is restricted to sandbox environments.');
+    await expect(configureOtherApplicationUrls({ options, integration: 'go', emitter }, 'client_a')).rejects.toThrow(
+      'restricted to sandbox',
+    );
+    expect(events).toContain('redirect-uri started');
+    expect(events).toContain('cors-origin started');
+    expect(events.some((event) => event.includes('done'))).toBe(false);
   });
 });

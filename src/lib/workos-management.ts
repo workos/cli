@@ -84,7 +84,10 @@ async function createRedirectUri(apiKey: string, uri: string): Promise<{ success
  * Create a CORS origin in WorkOS.
  * Returns success on 201 or 409 (already exists).
  */
-async function createCorsOrigin(apiKey: string, origin: string): Promise<{ success: boolean; alreadyExists: boolean }> {
+export async function createCorsOrigin(
+  apiKey: string,
+  origin: string,
+): Promise<{ success: boolean; alreadyExists: boolean }> {
   const response = await workosRequest('POST', '/user_management/cors_origins', apiKey, { origin });
 
   if (response.ok) {

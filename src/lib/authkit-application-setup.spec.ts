@@ -28,6 +28,8 @@ import {
   configureAuthkitApplication,
   readNextjsApplicationSetup,
 } from './authkit-application-setup.js';
+import { configureInstallEnvironment, configureOtherApplicationUrls } from './run-with-core.js';
+import { createInstallerEventEmitter } from './events.js';
 import { applicationSetupNextSteps } from './completion-data.js';
 
 const setup = {
@@ -44,6 +46,7 @@ let application: {
   logoutUris: { id?: string; uri: string; isDefault: boolean }[];
   initiateLoginUri: string | null;
   appHomepageUrl?: string;
+  webOrigins: { origin: string }[];
 };
 const writes = () =>
   vi
@@ -68,6 +71,7 @@ beforeEach(() => {
   ]);
   application = {
     id: 'app_1',
+    webOrigins: [{ origin: 'https://custom.example' }],
     clientId: setup.clientId,
     redirectUris: [{ uri: setup.redirectUri, isDefault: true }],
     logoutUris: [{ id: 'uri_old', uri: 'https://old.example/', isDefault: false }],
@@ -76,6 +80,12 @@ beforeEach(() => {
   };
   vi.mocked(dashboardGraphqlRequest).mockImplementation(async (name, options) => {
     if (name === 'defaultAuthkitApplication') return { defaultUserlandApplication: structuredClone(application) };
+    if (name === 'setAuthkitApplicationWebOrigins') {
+      const input = options.variables!.input as { applicationId: string; origins: string[]; dryRun: boolean };
+      expect(input.applicationId).toBe('app_1');
+      if (!input.dryRun) application.webOrigins = input.origins.map((origin) => ({ origin }));
+      return { setUserlandApplicationWebOrigins: { __typename: 'WebOriginsSet' } };
+    }
     if (name === 'setAuthkitApplicationLogoutUris') {
       const input = options.variables!.input as {
         applicationId: string;
@@ -114,6 +124,153 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('native application URL setup', () => {
+  it.each([false, true])(
+    'uses only client B dashboard even when session appears after preparation (%s)',
+    async (lateSession) => {
+      const directory = await mkdtemp(join(tmpdir(), 'single-target-'));
+      const request = vi.fn(async () => Response.json({ url: null }));
+      vi.stubGlobal('fetch', request);
+      const context = {
+        options: { installDir: directory, debug: false, forceInstall: false, local: false, ci: true, skipAuth: true },
+        integration: 'sveltekit',
+        credentials: { apiKey: 'sk_test_environment_a', clientId: setup.clientId },
+        emitter: createInstallerEventEmitter(),
+      };
+      try {
+        if (lateSession) vi.mocked(refreshIfExpired).mockResolvedValue(null);
+        await configureInstallEnvironment(context);
+        expect(request).not.toHaveBeenCalled();
+        vi.mocked(refreshIfExpired).mockResolvedValue({ accessToken: 'session_b', refreshed: false });
+        const result = await configureOtherApplicationUrls(context, setup.clientId, context.credentials.apiKey);
+        expect(result?.corsRegistered).toBe(true);
+        expect(writes().map(([name]) => name)).toContain('setAuthkitApplicationWebOrigins');
+        expect(writes().map(([name]) => name)).toContain('setRedirectUris');
+        expect(request).not.toHaveBeenCalled();
+        for (const [, options] of vi.mocked(dashboardGraphqlRequest).mock.calls) {
+          expect(options.environmentId).toBe('env_app');
+          expect(options.token).toBe('session_b');
+        }
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+  );
+  it('appends dashboard CORS without replacing custom origins and is idempotent', async () => {
+    const withCors = { ...setup, corsOrigin: 'http://localhost:4000' };
+    expect((await configureAuthkitApplication(withCors, setup.clientId)).corsRegistered).toBe(true);
+    expect(application.webOrigins).toEqual([{ origin: 'https://custom.example' }, { origin: withCors.corsOrigin }]);
+    const corsCalls = () =>
+      vi.mocked(dashboardGraphqlRequest).mock.calls.filter(([name]) => name === 'setAuthkitApplicationWebOrigins');
+    expect(corsCalls().map(([, options]) => options.variables!.input)).toEqual([
+      { applicationId: 'app_1', origins: ['https://custom.example', withCors.corsOrigin], dryRun: true },
+      { applicationId: 'app_1', origins: ['https://custom.example', withCors.corsOrigin], dryRun: false },
+    ]);
+    expect((await configureAuthkitApplication(withCors, setup.clientId)).corsRegistered).toBe(true);
+    expect(corsCalls()).toHaveLength(2);
+  });
+
+  it.each(['validation', 'race', 'readback', 'missing'])(
+    'refuses unsafe dashboard CORS (%s) without API fallback',
+    async (failure) => {
+      const original = vi.mocked(dashboardGraphqlRequest).getMockImplementation()!;
+      if (failure === 'missing') delete (application as Partial<typeof application>).webOrigins;
+      vi.mocked(dashboardGraphqlRequest).mockImplementation(async (name, options) => {
+        if (name === 'setAuthkitApplicationWebOrigins') {
+          const input = options.variables!.input as { dryRun: boolean };
+          if (failure === 'validation')
+            return { setUserlandApplicationWebOrigins: { __typename: 'MalformedWebOrigin' } };
+          if (failure === 'race' && input.dryRun) application.webOrigins.push({ origin: 'https://concurrent.example' });
+          if (failure === 'readback' && !input.dryRun)
+            return { setUserlandApplicationWebOrigins: { __typename: 'WebOriginsSet' } };
+        }
+        return original(name, options);
+      });
+      const result = await configureAuthkitApplication(
+        { ...setup, corsOrigin: 'http://localhost:4000' },
+        setup.clientId,
+        'sk_test_environment_a',
+      );
+      expect(result.callbackRegistered).toBe(true);
+      expect(result.corsRegistered).toBe(false);
+      expect(result.verified).toBe(false);
+      expect(fetch).not.toHaveBeenCalled();
+      if (failure !== 'readback') expect(writes()).toHaveLength(0);
+    },
+  );
+
+  it('registers API-only CORS before leaving an unreadable existing homepage unchanged', async () => {
+    vi.mocked(refreshIfExpired).mockResolvedValue(null);
+    const request = vi.fn(async () => Response.json({}));
+    vi.stubGlobal('fetch', request);
+    const result = await configureAuthkitApplication(
+      { ...setup, corsOrigin: 'http://localhost:4000' },
+      setup.clientId,
+      'sk_test_environment_a',
+    );
+    expect(result.corsRegistered).toBe(true);
+    expect(request.mock.calls.map(([url]) => url)).toEqual([
+      'https://api.workos.com/user_management/redirect_uris',
+      'https://api.workos.com/user_management/cors_origins',
+    ]);
+    expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
+  });
+
+  it.each(['explicit', 'unclaimed'])('preserves API-only fresh-install CORS and homepage setup (%s)', async (kind) => {
+    vi.mocked(refreshIfExpired).mockResolvedValue(null);
+    if (kind === 'unclaimed')
+      vi.mocked(getActiveEnvironment).mockReturnValue({
+        name: 'Unclaimed',
+        type: 'unclaimed',
+        apiKey: 'sk_test_environment_a',
+        clientId: setup.clientId,
+        claimToken: 'claim',
+      });
+    const request = vi.fn(async (_url: string, init: RequestInit) =>
+      init.method === 'GET' ? new Response(null, { status: 404 }) : Response.json({}),
+    );
+    vi.stubGlobal('fetch', request);
+    const result = await configureAuthkitApplication(
+      {
+        ...setup,
+        corsOrigin: 'http://localhost:4000',
+        ...(kind === 'explicit' ? { homepageUrl: 'http://localhost:4000' } : {}),
+      },
+      setup.clientId,
+      'sk_test_environment_a',
+    );
+    expect(result).toMatchObject({ callbackRegistered: true, corsRegistered: true, verified: false });
+    expect(request).toHaveBeenCalledWith(
+      'https://api.workos.com/user_management/app_homepage_url',
+      expect.objectContaining({ method: 'PUT', body: JSON.stringify({ url: 'http://localhost:4000' }) }),
+    );
+    expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, 'sk_live_production'])(
+    'does not write API-only CORS without a sandbox key (%s)',
+    async (apiKey) => {
+      vi.mocked(refreshIfExpired).mockResolvedValue(null);
+      await expect(
+        configureAuthkitApplication({ ...setup, corsOrigin: 'http://localhost:4000' }, setup.clientId, apiKey),
+      ).rejects.toThrow(/Callback/);
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps production dashboard CORS read-only', async () => {
+    vi.mocked(fetchTeamEnvironments).mockResolvedValue([
+      { id: 'env_app', name: 'Production', sandbox: false, clientId: setup.clientId },
+    ]);
+    const result = await configureAuthkitApplication(
+      { ...setup, corsOrigin: 'http://localhost:4000' },
+      setup.clientId,
+      'sk_test_environment_a',
+    );
+    expect(result.corsRegistered).toBe(false);
+    expect(writes()).toHaveLength(0);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('registers the callback with an API key without a dashboard session', async () => {
     vi.mocked(refreshIfExpired).mockResolvedValue(null);
     const request = vi.fn(async () => Response.json({ url: null }));
