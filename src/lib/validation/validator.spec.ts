@@ -823,7 +823,7 @@ describe('validateInstallation', () => {
         expect(result.issues).toContainEqual(
           expect.objectContaining({
             severity: 'error',
-            message: `The client reads ${name}, but the installer writes VITE_WORKOS_REDIRECT_URI`,
+            message: `The client reads import.meta.env.${name}, but the installer exposes import.meta.env.VITE_WORKOS_REDIRECT_URI`,
           }),
         );
       },
@@ -843,6 +843,27 @@ describe('validateInstallation', () => {
       expect(result.issues.some((i) => i.message.startsWith('The client reads'))).toBe(false);
     });
 
+    it.each(['WORKOS_REDIRECT_URI', 'VITE_WORKOS_REDIRECT_URI'])(
+      'flags Vite browser code that reads process.env.%s',
+      async (name) => {
+        writeFileSync(join(testDir, 'package.json'), JSON.stringify({ devDependencies: { vite: '^6.0.0' } }));
+        mkdirSync(join(testDir, 'src'), { recursive: true });
+        writeFileSync(
+          join(testDir, 'src', 'main.tsx'),
+          `<AuthKitProvider redirectUri={process.env.${name}}><App /></AuthKitProvider>`,
+        );
+
+        const result = await validateInstallation('react', testDir, { runBuild: false });
+
+        expect(result.issues).toContainEqual(
+          expect.objectContaining({
+            severity: 'error',
+            message: `The client reads process.env.${name}, but the installer exposes import.meta.env.VITE_WORKOS_REDIRECT_URI`,
+          }),
+        );
+      },
+    );
+
     it('flags a Create React App client that reads the unprefixed redirect URI', async () => {
       writeFileSync(join(testDir, 'package.json'), JSON.stringify({ dependencies: { 'react-scripts': '5.0.1' } }));
       mkdirSync(join(testDir, 'src'), { recursive: true });
@@ -855,7 +876,8 @@ describe('validateInstallation', () => {
 
       expect(result.issues).toContainEqual(
         expect.objectContaining({
-          message: 'The client reads WORKOS_REDIRECT_URI, but the installer writes REACT_APP_WORKOS_REDIRECT_URI',
+          message:
+            'The client reads process.env.WORKOS_REDIRECT_URI, but the installer exposes process.env.REACT_APP_WORKOS_REDIRECT_URI',
         }),
       );
     });

@@ -301,38 +301,36 @@ async function validateClientOnlyApp(framework: string, projectDir: string, issu
     });
   const prefix = getClientEnvPrefix(projectDir);
   if (!prefix) return;
-  const written = `${prefix}WORKOS_REDIRECT_URI`;
-  const { reference, isBrowserFile } = BROWSER_REDIRECT_ENV[prefix];
-  const read = new Set(
-    sources
-      .filter(({ file }) => isBrowserFile(file))
-      .flatMap(({ content }) => [...content.matchAll(reference)].map((m) => m[1])),
+  const expected = BROWSER_REDIRECT_ENV[prefix];
+  const reads = new Set(
+    sources.flatMap(({ file, content }) =>
+      [...content.matchAll(REDIRECT_ENV_REFERENCE)]
+        .filter(([, access]) => access === 'import.meta.env' || file.startsWith('src/'))
+        .map(([read]) => read),
+    ),
   );
-  read.delete(written);
-  for (const name of read)
+  reads.delete(expected);
+  for (const read of reads)
     issues.push({
       type: 'env',
       severity: 'error',
-      message: `The client reads ${name}, but the installer writes ${written}`,
-      hint: `Read ${written} as the redirect URI.`,
+      message: `The client reads ${read}, but the installer exposes ${expected}`,
+      hint: `Read ${expected} as the redirect URI.`,
     });
 }
 
-/**
- * How each bundler's browser code reads its redirect URI. Only browser code
- * must read the prefixed var; vite.config.ts or a script may read the
- * unprefixed one.
- */
+/** The one expression each bundler's browser code must use to read the installed redirect URI. */
 const BROWSER_REDIRECT_ENV = {
-  VITE_: { reference: /import\.meta\.env\.(\w*WORKOS_REDIRECT_URI)\b/g, isBrowserFile: () => true },
-  REACT_APP_: {
-    reference: /process\.env\.(\w*WORKOS_REDIRECT_URI)\b/g,
-    isBrowserFile: (file: string) => file.startsWith('src/'),
-  },
-} satisfies Record<
-  NonNullable<ReturnType<typeof getClientEnvPrefix>>,
-  { reference: RegExp; isBrowserFile: (file: string) => boolean }
->;
+  VITE_: 'import.meta.env.VITE_WORKOS_REDIRECT_URI',
+  REACT_APP_: 'process.env.REACT_APP_WORKOS_REDIRECT_URI',
+} satisfies Record<NonNullable<ReturnType<typeof getClientEnvPrefix>>, string>;
+
+/**
+ * A redirect URI env read. `import.meta.env` only exists in browser code;
+ * `process.env` counts only in src/, so vite.config.ts or a script may still
+ * read the unprefixed var.
+ */
+const REDIRECT_ENV_REFERENCE = /(import\.meta\.env|process\.env)\.\w*WORKOS_REDIRECT_URI\b/g;
 
 /** Code that serves a route rather than linking to it: router config or a pathname check. */
 const ROUTE_DECLARATIONS = [
