@@ -15,7 +15,6 @@ import { KotlinGrader } from './graders/kotlin.grader.js';
 import { ElixirGrader } from './graders/elixir.grader.js';
 import { saveResults } from './history.js';
 import { ParallelRunner } from './parallel-runner.js';
-import { renderDashboard } from './dashboard/index.js';
 import { LogWriter } from './log-writer.js';
 import { validateResults, type ValidationResult } from './success-criteria.js';
 import { captureVersionMetadata } from './versioning.js';
@@ -114,7 +113,6 @@ export interface ExtendedEvalOptions extends EvalOptions {
   keep?: boolean;
   keepOnFail?: boolean;
   retry?: number;
-  noDashboard?: boolean;
   debug?: boolean;
   noFail?: boolean;
   noCorrection?: boolean;
@@ -158,22 +156,7 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
     },
   });
 
-  // Determine output mode: dashboard for TTY, logging otherwise
-  const useDashboard = !options.noDashboard && process.stdout.isTTY;
-
-  let dashboard: { unmount: () => void } | null = null;
-  if (useDashboard) {
-    dashboard = renderDashboard({
-      scenarios: scenarios.map((s) => ({ framework: s.framework, state: s.state })),
-      concurrency: runner.getConcurrency(),
-    });
-  }
-
   const results = await runner.run();
-
-  if (dashboard) {
-    dashboard.unmount();
-  }
 
   // Quality grading (optional, only for passing scenarios with key files)
   if (options.quality) {

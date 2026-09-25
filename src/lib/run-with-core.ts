@@ -9,7 +9,6 @@ import { validateInstallation } from './validation/index.js';
 import { resolveDevCommand } from './dev-command.js';
 import { getConfig as getInstallerSettings } from './settings.js';
 import { CLIAdapter } from './adapters/cli-adapter.js';
-import { DashboardAdapter } from './adapters/dashboard-adapter.js';
 import type { InstallerAdapter } from './adapters/types.js';
 import type { InstallerOptions } from '../utils/types.js';
 import { getInteractionMode, isAgentMode, isCiMode } from '../utils/interaction-mode.js';
@@ -226,7 +225,6 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   }
   logInfo('Wizard starting with options:', {
     debug: options.debug,
-    dashboard: options.dashboard,
     local: options.local,
     ci: options.ci,
     skipAuth: options.skipAuth,
@@ -266,8 +264,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   // until you confirm" contract. Those sessions keep the CLIAdapter, which now
   // fails fast with a clear `prompt_unavailable` error on the first prompt
   // (see CLIAdapter's handler-error catch) instead of hanging or auto-writing.
-  // --dashboard keeps its own adapter even under --json.
-  const headlessMode = isJsonMode() && !options.dashboard;
+  const headlessMode = isJsonMode();
 
   let adapter: InstallerAdapter;
   if (headlessMode) {
@@ -286,8 +283,6 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         ci: augmentedOptions.ci,
       },
     });
-  } else if (options.dashboard) {
-    adapter = new DashboardAdapter({ emitter, sendEvent, debug: augmentedOptions.debug });
   } else {
     adapter = new CLIAdapter({ emitter, sendEvent, debug: augmentedOptions.debug });
   }
@@ -632,7 +627,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   }
 
   analytics.configureAuthFromAvailableSources();
-  const mode = headlessMode ? 'headless' : augmentedOptions.dashboard ? 'tui' : 'cli';
+  const mode = headlessMode ? 'headless' : 'cli';
   analytics.sessionStart(mode, getVersion());
 
   let installerStatus: 'success' | 'error' | 'cancelled' = 'success';

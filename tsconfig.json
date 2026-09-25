@@ -25,9 +25,6 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
 
-    // JSX for React/Ink dashboard
-    "jsx": "react-jsx",
-
     // Output
     "rootDir": "./src",
     "outDir": "./dist",

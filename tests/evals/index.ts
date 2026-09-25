@@ -57,7 +57,6 @@ async function main() {
           keepOnFail: options.keepOnFail,
           retry: options.retry,
           sequential: options.sequential,
-          noDashboard: options.noDashboard,
           debug: options.debug,
           noFail: options.noFail,
           noCorrection: options.noCorrection,

@@ -45,31 +45,10 @@ export class ParallelRunner {
   }
 
   async run(): Promise<EvalResult[]> {
-    const startTime = Date.now();
-    let completed = 0;
     const limit = pLimit(this.concurrency);
-
-    // Emit progress updates every 500ms
-    const progressInterval = setInterval(() => {
-      evalEvents.emitProgress({
-        completed,
-        total: this.scenarios.length,
-        running: this.activeFixtures.size,
-        elapsed: Date.now() - startTime,
-      });
-    }, 500);
-
-    const tasks = this.scenarios.map((scenario) =>
-      limit(async () => {
-        const result = await this.runScenario(scenario);
-        completed++;
-        return result;
-      }),
-    );
-
+    const tasks = this.scenarios.map((scenario) => limit(() => this.runScenario(scenario)));
     const results = await Promise.allSettled(tasks);
 
-    clearInterval(progressInterval);
     evalEvents.emitRunComplete();
 
     return results.map((result, i) => {

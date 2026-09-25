@@ -289,7 +289,7 @@ describe('Analytics', () => {
 
     describe('sessionStart', () => {
       it('queues session.start event with version and mode', () => {
-        analytics.sessionStart('tui', '2.0.0');
+        analytics.sessionStart('cli', '2.0.0');
 
         expect(mockQueueEvent).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -297,7 +297,7 @@ describe('Analytics', () => {
             sessionId: 'test-session-id-123',
             attributes: expect.objectContaining({
               'installer.version': '2.0.0',
-              'installer.mode': 'tui',
+              'installer.mode': 'cli',
             }),
           }),
         );
@@ -382,7 +382,7 @@ describe('Analytics', () => {
       });
 
       it('includes env fingerprint and installer.mode', async () => {
-        analytics.sessionStart('tui', '1.0.0');
+        analytics.sessionStart('cli', '1.0.0');
         mockQueueEvent.mockClear();
 
         await analytics.shutdown('success');
@@ -393,7 +393,7 @@ describe('Analytics', () => {
         expect(event.attributes).toHaveProperty('env.runtime_version');
         expect(event.attributes).toHaveProperty('env.shell');
         expect(typeof event.attributes['env.ci']).toBe('boolean');
-        expect(event.attributes['installer.mode']).toBe('tui');
+        expect(event.attributes['installer.mode']).toBe('cli');
       });
     });
 

@@ -232,12 +232,6 @@ const installerOptions = {
     describe: 'Force install packages even if peer dependency checks fail',
     type: 'boolean' as const,
   },
-  dashboard: {
-    alias: 'd',
-    default: false,
-    describe: 'Run with visual dashboard mode',
-    type: 'boolean' as const,
-  },
   branch: {
     default: true,
     describe: 'Create a new branch for changes (use --no-branch to skip)',
@@ -353,7 +347,7 @@ async function runCli(): Promise<void> {
     })
     .middleware(async (argv) => {
       // Warn about unclaimed environments before management commands.
-      // Excluded: auth/claim/install/setup/dashboard handle their own credential
+      // Excluded: auth/claim/install/setup handle their own credential
       // or onboarding flows; skills/doctor/profile/debug are utility commands
       // where the warning is unnecessary. Both the canonical name and its
       // alias are listed — this matches argv._[0], the token as typed.
@@ -372,7 +366,6 @@ async function runCli(): Promise<void> {
           'setup',
           'debug',
           'internal',
-          'dashboard',
           'emulate',
           'dev',
           'migrations',
@@ -3403,24 +3396,6 @@ async function runCli(): Promise<void> {
       },
     )
     .command(
-      'dashboard',
-      false, // hidden from help
-      (yargs) => yargs.options(installerOptions),
-      async (argv) => {
-        await applyInsecureStorage(argv.insecureStorage);
-        // Guard first, before credential resolution — see the `install` handler above.
-        const preflight = await import('./lib/preflight-authkit.js');
-        await preflight.assertInstallPreflight({
-          installDir: argv.installDir ?? process.cwd(),
-          force: argv.force,
-          router: argv.router,
-        });
-        await resolveInstallCredentials(argv.apiKey, argv.installDir, argv.skipAuth, ensureAuthenticated);
-        const { handleInstall } = await import('./commands/install.js');
-        await handleInstall({ ...argv, dashboard: true });
-      },
-    )
-    .command(
       ['$0'],
       'WorkOS AuthKit CLI',
       // `--force` must be registered here too: this parser is .strict(), so
@@ -3459,7 +3434,7 @@ async function runCli(): Promise<void> {
         await resolveInstallCredentials(undefined, undefined, false, ensureAuthenticated);
 
         const { handleInstall } = await import('./commands/install.js');
-        await handleInstall({ ...argv, dashboard: false });
+        await handleInstall(argv);
       },
     )
     .strict()

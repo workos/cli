@@ -75,7 +75,6 @@ function createTestActor(overrides?: Partial<InstallerOptions>, actorOverrides?:
     local: true,
     ci: false,
     skipAuth: false,
-    dashboard: false,
     emitter,
     ...overrides,
   };
@@ -180,7 +179,6 @@ describe('InstallerCore State Machine', () => {
         local: true,
         ci: false,
         skipAuth: false,
-        dashboard: false,
         emitter,
       };
 
@@ -225,7 +223,6 @@ describe('InstallerCore State Machine', () => {
         local: true,
         ci: false,
         skipAuth: true,
-        dashboard: false,
         emitter,
       };
 
@@ -278,7 +275,6 @@ describe('InstallerCore State Machine', () => {
         local: true,
         ci: false,
         skipAuth: true,
-        dashboard: false,
         emitter,
       };
 
@@ -345,7 +341,6 @@ describe('InstallerCore State Machine', () => {
         local: true,
         ci: false,
         skipAuth: true,
-        dashboard: false,
         emitter,
         apiKey: 'sk_test_123',
         clientId: 'client_123',
@@ -398,7 +393,6 @@ describe('InstallerCore State Machine', () => {
         local: true,
         ci: false,
         skipAuth: true,
-        dashboard: false,
         emitter,
         // No credentials provided - should wait for CREDENTIALS_SUBMITTED
       };
@@ -454,7 +448,6 @@ describe('InstallerCore State Machine', () => {
         local: true,
         ci: false,
         skipAuth: true,
-        dashboard: false,
         emitter,
         apiKey: 'sk_test_provisioned',
         clientId: 'client_provisioned',
@@ -486,7 +479,6 @@ describe('InstallerCore State Machine', () => {
         local: true,
         ci: false,
         skipAuth: true,
-        dashboard: false,
         emitter,
         apiKey: 'sk_test_flag',
         clientId: 'client_flag',
@@ -517,7 +509,6 @@ describe('InstallerCore State Machine', () => {
         local: true,
         ci: false,
         skipAuth: true,
-        dashboard: false,
         emitter,
         // No CLI credentials — forces credential gathering flow
       };
@@ -569,7 +560,6 @@ describe('InstallerCore State Machine', () => {
         local: true,
         ci: false,
         skipAuth: true,
-        dashboard: false,
         emitter,
       };
 

@@ -420,7 +420,6 @@ export async function ensurePackageIsInstalled(
   packageJson: PackageDotJson,
   packageId: string,
   packageName: string,
-  options?: Pick<InstallerOptions, 'dashboard'>,
 ): Promise<void> {
   return traceStep('ensure-package-installed', async () => {
     const installed = hasPackageInstalled(packageId, packageJson);
@@ -428,11 +427,6 @@ export async function ensurePackageIsInstalled(
     analytics.setTag(`${packageName.toLowerCase()}-installed`, installed);
 
     if (!installed) {
-      // In dashboard mode, auto-continue (integration was already detected)
-      if (options?.dashboard) {
-        return;
-      }
-
       const continueWithoutPackage = await abortIfCancelled(
         ui.confirm({
           message: `${packageName} does not seem to be installed. Do you still want to continue?`,
@@ -545,7 +539,7 @@ export function isUsingTypeScript({ installDir }: Pick<InstallerOptions, 'instal
  * @param requireApiKey - Whether API key is needed (false for client-only SDKs like React, Vanilla JS)
  */
 export async function getOrAskForWorkOSCredentials(
-  _options: Pick<InstallerOptions, 'ci' | 'apiKey' | 'clientId' | 'installDir' | 'dashboard' | 'credentialSource'>,
+  _options: Pick<InstallerOptions, 'ci' | 'apiKey' | 'clientId' | 'installDir' | 'credentialSource'>,
   requireApiKey: boolean = true,
 ): Promise<{
   apiKey: string;
@@ -554,7 +548,7 @@ export async function getOrAskForWorkOSCredentials(
   let apiKey = _options.apiKey;
   let clientId = _options.clientId;
 
-  // If credentials provided via CLI (e.g., CI mode or dashboard mode), use them
+  // If credentials provided via CLI (e.g., CI mode), use them
   if ((!requireApiKey || apiKey) && clientId) {
     // Say "you provided" only when the user actually supplied credentials
     // (cli/manual, or an unknown source). For device/stored/env the state
@@ -563,7 +557,7 @@ export async function getOrAskForWorkOSCredentials(
     // this never pollutes JSON/NDJSON.
     const source = _options.credentialSource;
     const userProvided = source === 'cli' || source === 'manual' || source === undefined;
-    if (!_options.dashboard && !isJsonMode() && userProvided) {
+    if (!isJsonMode() && userProvided) {
       ui.log.info('Using the WorkOS credentials you provided');
     }
     return { apiKey: apiKey || '', clientId };
@@ -581,9 +575,7 @@ export async function getOrAskForWorkOSCredentials(
 
       // Use existing credentials if both are present (or API key not required)
       if (existingClientId && (!requireApiKey || existingApiKey)) {
-        if (!_options.dashboard) {
-          ui.log.success(`Found existing WorkOS credentials in .env.local`);
-        }
+        ui.log.success(`Found existing WorkOS credentials in .env.local`);
         return {
           apiKey: existingApiKey || '',
           clientId: existingClientId,

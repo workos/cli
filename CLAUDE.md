@@ -4,7 +4,7 @@ WorkOS CLI for installing AuthKit integrations and managing WorkOS resources (or
 
 ## Architecture
 
-- Three adapters (CLI, Dashboard, Headless) subscribe to `InstallerEventEmitter` state machine events, selected by TTY detection
+- Two adapters (CLI, Headless) subscribe to `InstallerEventEmitter` state machine events; Headless is used in JSON mode, CLI otherwise
 - `OutputMode` (`human`/`json`) resolved once at startup in `bin.ts`, drives all formatting
 - `installerCanUseTool()` in `agent-interface.ts` restricts Bash to safe commands only
 - Config/credentials stored in system keyring with file fallback
@@ -103,7 +103,7 @@ All commands automatically emit a `command` telemetry event with name, duration,
 
 **Exiting with errors:** Use `exitWithError()` or `exitWithCode()` from handlers — they throw `CliExit` which the lifecycle catches, classifies, and records.
 
-**Skip list**: Commands in `SKIP_TELEMETRY_COMMANDS` (`command-telemetry.ts`) are excluded from command-level telemetry because they have their own session-based telemetry. Currently: `install`, `dashboard`, `root` (the default `$0` handler).
+**Skip list**: Commands in `SKIP_TELEMETRY_COMMANDS` (`command-telemetry.ts`) are excluded from command-level telemetry because they have their own session-based telemetry. Currently: `install`, `root` (the default `$0` handler).
 
 **Aliases**: if you register a command with multiple names (e.g., `['organization', 'org']`), add the alias to `src/lib/command-aliases.ts` so metrics don't fragment.
 
@@ -111,7 +111,7 @@ All commands automatically emit a `command` telemetry event with name, duration,
 
 **Do:**
 
-- Follow the adapter pattern (`CLI`, `Dashboard`, `Headless`) in `src/integrations/` when adding framework installers
+- Follow the adapter pattern (`CLI`, `Headless`) in `src/integrations/` when adding framework installers
 - Use `InstallerEventEmitter` for state machine events -- see existing adapters for examples
 - Add both human and JSON output modes -- check `OutputMode` usage in `src/bin.ts`
 - Follow existing command patterns in `src/commands/organization.ts` when adding resource commands

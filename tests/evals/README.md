@@ -60,7 +60,6 @@ Use `--no-fail` to run without exit code validation.
 --no-retry          Disable retries
 --no-fail           Don't exit 1 on threshold failure
 --sequential        Run scenarios sequentially (disable parallelism)
---no-dashboard      Disable live dashboard, use sequential logging
 --json              Output as JSON
 --help, -h          Show help
 ```

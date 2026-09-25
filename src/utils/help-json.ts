@@ -2110,15 +2110,6 @@ const commands: CommandSchema[] = [
         hidden: false,
       },
       {
-        name: 'dashboard',
-        type: 'boolean',
-        description: 'Run with visual dashboard mode',
-        required: false,
-        default: false,
-        alias: 'd',
-        hidden: false,
-      },
-      {
         name: 'branch',
         type: 'boolean',
         description: 'Create a new branch for changes (use --no-branch to skip)',

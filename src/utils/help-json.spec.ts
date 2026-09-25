@@ -76,12 +76,6 @@ describe('help-json', () => {
       expect(router?.description).toContain('Pages-only projects are refused');
     });
 
-    it('does not include hidden dashboard command', () => {
-      const tree = buildCommandTree();
-      const names = (tree as { commands: { name: string }[] }).commands.map((c) => c.name);
-      expect(names).not.toContain('dashboard');
-    });
-
     it('includes global options with types and defaults', () => {
       const tree = buildCommandTree();
       const opts = (tree as { options: { name: string; type: string; default?: unknown }[] }).options;

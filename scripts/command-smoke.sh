@@ -116,7 +116,7 @@ pages_project="$SANDBOX/pages-project"
 mkdir -p "$pages_project/src/pages"
 printf '%s\n' 'export default function App() {}' >"$pages_project/src/pages/_app.tsx"
 printf '%s\n' '{"dependencies":{"next":"16.0.0"}}' >"$pages_project/package.json"
-for command in install integrate dashboard; do
+for command in install integrate; do
   err=$("$BIN" "$command" --install-dir "$pages_project" --force --router app --json --insecure-storage 2>&1 >/dev/null)
   code=$?
   case "$err" in
