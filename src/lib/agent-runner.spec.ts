@@ -125,10 +125,11 @@ describe('installer prompt', () => {
     expect(prompt).toContain('## Sign-in route (Initiate login URI)');
     expect(prompt).toContain('the app origin plus /login');
     expect(prompt).toContain('add a /login client route');
-    expect(prompt).toContain("if (window.location.pathname === '/login') { void signIn(); }");
-    expect(prompt).toContain('Keep the call directly in that branch, not in a click handler or another function.');
-    expect(prompt).toContain('does not need a second pathname guard');
-    expect(prompt).toContain('relative default or named import');
+    expect(prompt).toContain("Use the app's existing router and component conventions");
+    expect(prompt).toContain('without a click');
+    expect(prompt).toContain('leaves the Initiate login URI unchanged');
+    expect(prompt).toContain('confirm automatic sign-in in the browser');
+    expect(prompt).not.toContain('relative default or named import');
     expect(prompt).toContain('VITE_WORKOS_REDIRECT_URI for Vite');
   });
 

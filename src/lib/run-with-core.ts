@@ -60,7 +60,6 @@ import {
   assertNextjsSignInRouteAvailable,
 } from '../integrations/nextjs/utils.js';
 import { detectPort, getClientEnvPrefix, getSignInPath, resolveRedirectUri } from './port-detection.js';
-import { hasClientSignInRoute } from './validation/validator.js';
 import { writeEnvLocal } from './env-writer.js';
 import { getRegistry } from './registry.js';
 import { observeHostFailure } from './host-probe.js';
@@ -252,8 +251,8 @@ export const NO_SIGN_IN_ROUTE_REASON = 'This framework has no fixed sign-in rout
  *
  * `configureAuthkitApplication` throws when the callback isn't registered,
  * which fails the install (and the items still running with it). When it
- * returns, the callback is registered; CORS has its own registration result,
- * while the remaining settings share the overall verification result.
+ * returns, the callback is registered; CORS and sign-out have their own results,
+ * so pending initiate-login setup does not hide settings already saved.
  */
 export async function reportAppUrlSetup(
   emitter: Pick<InstallerEventEmitter, 'emit'>,
@@ -273,7 +272,8 @@ export async function reportAppUrlSetup(
   if (setup.initiateLoginUri === undefined)
     step('initiate-login-uri', 'skipped', setup.initiateLoginReason ?? setup.reason);
   else settle('initiate-login-uri');
-  settle('sign-out-uri');
+  if (setup.signOutRegistered) step('sign-out-uri', 'done');
+  else settle('sign-out-uri');
   return setup;
 }
 
@@ -288,24 +288,25 @@ export async function configureOtherApplicationUrls(
 ): Promise<AuthkitApplicationSetup | undefined> {
   const { options: installerOptions, integration } = context;
   if (!integration || integration === 'nextjs') return undefined;
-  let signInPath = getSignInPath(integration);
-  let initiateLoginReason = signInPath ? undefined : NO_SIGN_IN_ROUTE_REASON;
-  // A client-only route has no file the guide fixes, so save it only once the app serves it.
+  const signInPath = getSignInPath(integration);
   const clientOnly = (await getRegistry()).get(integration)?.config.environment.requiresApiKey === false;
-  if (signInPath && clientOnly && !(await hasClientSignInRoute(installerOptions.installDir, signInPath))) {
-    initiateLoginReason = `Could not confirm a ${signInPath} client route that starts sign-in. Check the route before setting the Initiate login URI.`;
-    signInPath = undefined;
-  }
+  const redirectUri = resolveRedirectUri(integration, installerOptions);
   const setup: AuthkitApplicationSetup = {
     ...buildApplicationSetup({
       clientId,
-      redirectUri: resolveRedirectUri(integration, installerOptions),
+      redirectUri,
       homepageUrl: installerOptions.homepageUrl,
       signInPath,
     }),
-    corsOrigin: `http://localhost:${detectPort(integration, installerOptions.installDir)}`,
-    ...(initiateLoginReason ? { initiateLoginReason } : {}),
+    corsOrigin: new URL(redirectUri).origin,
+    ...(!signInPath ? { initiateLoginReason: NO_SIGN_IN_ROUTE_REASON } : {}),
   };
+  // Source patterns cannot prove that a client route is mounted and starts sign-in.
+  // Keep generating the route, but leave this dashboard setting for a browser check.
+  if (signInPath && clientOnly) {
+    delete setup.initiateLoginUri;
+    setup.initiateLoginReason = `Client-side ${signInPath} requires browser verification. Confirm it starts sign-in without a click, then set the Initiate login URI in the WorkOS dashboard. The existing setting was left unchanged.`;
+  }
   return reportAppUrlSetup(context.emitter, () => configureAuthkitApplication(setup, clientId, apiKey), {
     includeCors: true,
   });

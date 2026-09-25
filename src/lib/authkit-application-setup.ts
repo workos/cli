@@ -20,6 +20,8 @@ export interface AuthkitApplicationSetup {
   /** Browser origin to add without replacing existing allowed origins. */
   corsOrigin?: string;
   corsRegistered?: boolean;
+  /** Sign-out was read back independently of pending initiate-login setup. */
+  signOutRegistered?: boolean;
   verified: boolean;
   /** The callback was registered; this alone does not verify the other URLs or browser flows. */
   callbackRegistered?: boolean;
@@ -110,7 +112,7 @@ export async function configureAuthkitApplication(
     };
   }
   // Never trust incoming registration flags; they belong to an earlier attempt.
-  setup = { ...setup, ...(setup.corsOrigin !== undefined ? { corsRegistered: false } : {}) };
+  setup = { ...setup, signOutRegistered: false, ...(setup.corsOrigin !== undefined ? { corsRegistered: false } : {}) };
   let callbackRegistered = false;
   const pending = (reason: string): AuthkitApplicationSetup => {
     if (!callbackRegistered) {
@@ -378,22 +380,27 @@ export async function configureAuthkitApplication(
       setup = { ...setup, corsRegistered: false };
       return pending('CORS read-back did not match the required settings.');
     }
-    if (reasons.length) return pending(reasons.join(' '));
+    setup = {
+      ...setup,
+      signOutRegistered:
+        saved.logoutUris.filter((uri) => uri.isDefault).length === 1 &&
+        saved.logoutUris.some((uri) => isSignOutDestination(uri.uri) && uri.isDefault) &&
+        original.logoutUris.every((old) =>
+          saved.logoutUris.some((uri) => uri.uri === old.uri && (!old.isDefault || uri.isDefault)),
+        ),
+    };
     if (
       !original.redirectUris.every((old) =>
         saved.redirectUris.some((uri) => uri.uri === old.uri && (!old.isDefault || uri.isDefault)),
       ) ||
-      !original.logoutUris.every((old) =>
-        saved.logoutUris.some((uri) => uri.uri === old.uri && (!old.isDefault || uri.isDefault)),
-      ) ||
-      saved.logoutUris.filter((uri) => uri.isDefault).length !== 1 ||
-      !saved.logoutUris.some((uri) => isSignOutDestination(uri.uri) && uri.isDefault) ||
+      !setup.signOutRegistered ||
       differsFromInitiate(saved.initiateLoginUri) ||
       saved.appHomepageUrl !== homepageValue
     )
-      return pending(
+      reasons.push(
         'URL read-back did not match the required settings. Check the dashboard before testing authentication.',
       );
+    if (reasons.length) return pending(reasons.join(' '));
     return {
       ...setup,
       signOutUri: saved.logoutUris.find((uri) => uri.isDefault)!.uri,

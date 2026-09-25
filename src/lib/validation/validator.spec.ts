@@ -749,23 +749,23 @@ describe('validateInstallation', () => {
     });
   });
 
-  describe('client-only sign-in route validation', () => {
+  describe('client-only configuration checks', () => {
     const signInIssue = (issues: { message: string }[]) => issues.find((i) => i.message.includes('/login route'));
     const redirectIssue = (issues: { message: string }[]) => issues.find((i) => i.message.includes('redirectUri'));
     const envReadIssue = (issues: { message: string }[]) =>
       issues.find((i) => i.message.startsWith('The client reads'));
 
-    it('fails a React SPA without a /login route', async () => {
+    it('requests browser verification rather than declaring a React route missing', async () => {
       mkdirSync(join(testDir, 'src'), { recursive: true });
       writeFileSync(join(testDir, 'src', 'App.tsx'), 'const { signIn } = useAuth();');
 
       const result = await validateInstallation('react', testDir, { runBuild: false });
 
-      expect(signInIssue(result.issues)?.severity).toBe('error');
-      expect(result.passed).toBe(false);
+      expect(signInIssue(result.issues)?.severity).toBe('warning');
+      expect(signInIssue(result.issues)?.message).toContain('requires browser verification');
     });
 
-    it('accepts a React SPA whose source serves /login', async () => {
+    it('does not claim to verify a React route from source patterns', async () => {
       mkdirSync(join(testDir, 'src'), { recursive: true });
       writeFileSync(join(testDir, 'src', 'App.tsx'), '<Route path="/login" element={<Login />} />');
       writeFileSync(
@@ -775,16 +775,16 @@ describe('validateInstallation', () => {
 
       const result = await validateInstallation('react', testDir, { runBuild: false });
 
-      expect(signInIssue(result.issues)).toBeUndefined();
+      expect(signInIssue(result.issues)?.severity).toBe('warning');
     });
 
-    it('accepts a vanilla JS app with a sign-in page', async () => {
+    it('requests browser verification even for a static sign-in page', async () => {
       mkdirSync(join(testDir, 'login'), { recursive: true });
       writeFileSync(join(testDir, 'login', 'index.html'), '<script>authkit.signIn()</script>');
 
       const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
 
-      expect(signInIssue(result.issues)).toBeUndefined();
+      expect(signInIssue(result.issues)?.severity).toBe('warning');
     });
 
     it('ignores /login mentions inside node_modules', async () => {
@@ -799,13 +799,13 @@ describe('validateInstallation', () => {
     it.each([
       "const path = window.location.pathname;\nif (path === '/login') signIn();",
       "if ('/login' === location.pathname) signIn();",
-    ])('accepts a pathname check through any variable: %s', async (code) => {
+    ])('leaves pathname behavior to browser verification: %s', async (code) => {
       mkdirSync(join(testDir, 'src'), { recursive: true });
       writeFileSync(join(testDir, 'src', 'main.tsx'), code);
 
       const result = await validateInstallation('react', testDir, { runBuild: false });
 
-      expect(signInIssue(result.issues)).toBeUndefined();
+      expect(signInIssue(result.issues)?.severity).toBe('warning');
     });
 
     it('does not treat a link to /login as the route', async () => {
@@ -814,7 +814,7 @@ describe('validateInstallation', () => {
 
       const result = await validateInstallation('react', testDir, { runBuild: false });
 
-      expect(signInIssue(result.issues)?.severity).toBe('error');
+      expect(signInIssue(result.issues)?.severity).toBe('warning');
     });
 
     it('reads AuthKit setup from a config file inside src/', async () => {
@@ -827,7 +827,7 @@ describe('validateInstallation', () => {
 
       const result = await validateInstallation('react', testDir, { runBuild: false });
 
-      expect(signInIssue(result.issues)).toBeUndefined();
+      expect(signInIssue(result.issues)?.severity).toBe('warning');
       expect(redirectIssue(result.issues)).toBeUndefined();
     });
 

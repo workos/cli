@@ -366,6 +366,8 @@ describe('native application URL setup', () => {
     const result = await configureAuthkitApplication(withoutSignIn, setup.clientId);
     expect(result.verified).toBe(false);
     expect(result.callbackRegistered).toBe(true);
+    expect(result.signOutRegistered).toBe(true);
+    expect(applicationSetupNextSteps(result)).toContain(`Sign-out URI: ${setup.signOutUri} (registered)`);
     expect(result.initiateLoginReason).toContain('No client sign-in route');
     expect(result.reason).toBe(result.initiateLoginReason);
     expect(application.appHomepageUrl).toBe('http://localhost:4000');
@@ -385,6 +387,42 @@ describe('native application URL setup', () => {
     expect(result.reason).toBe(initiateLoginReason);
     expect(result.reason).not.toContain('differs from this app');
     expect(application.initiateLoginUri).toBe('http://localhost:4000/login');
+    expect(applicationSetupNextSteps(result)).toContain(
+      `Initiate login URI: not configured by the installer. ${initiateLoginReason}`,
+    );
+  });
+
+  it('does not mark sign-out registered when its readback fails and initiate login is pending', async () => {
+    const { initiateLoginUri: _omitted, ...withoutSignIn } = setup;
+    const respond = vi.mocked(dashboardGraphqlRequest).getMockImplementation()!;
+    vi.mocked(dashboardGraphqlRequest).mockImplementation(async (name, options) => {
+      if (name === 'setAuthkitApplicationLogoutUris')
+        return { setUserlandApplicationLogoutUris: { __typename: 'LogoutUrisSet' } };
+      return respond(name, options);
+    });
+    const result = await configureAuthkitApplication(withoutSignIn, setup.clientId);
+    expect(result.verified).toBe(false);
+    expect(result.signOutRegistered).toBe(false);
+    expect(result.reason).toContain('URL read-back did not match');
+    expect(result.reason).toContain('No client sign-in route');
+    expect(applicationSetupNextSteps(result)).toContain(
+      `Sign-out URI: ${setup.signOutUri} (not registered or verified)`,
+    );
+  });
+
+  it('does not trust a sign-out result from a previous attempt on the API-only path', async () => {
+    vi.mocked(refreshIfExpired).mockResolvedValue(null);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 201 })),
+    );
+    const result = await configureAuthkitApplication(
+      { ...setup, signOutRegistered: true },
+      setup.clientId,
+      'sk_test_a',
+    );
+    expect(result.signOutRegistered).toBe(false);
+    expect(result.verified).toBe(false);
   });
 
   it('fills an empty dashboard homepage with the callback origin', async () => {

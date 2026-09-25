@@ -272,6 +272,21 @@ describe('dashboard checklist reporting', () => {
     expect(events).toContain('app-urls:step sign-out-uri skipped (Manual setup needed.)');
   });
 
+  it('reports saved sign-out independently of pending client login verification', async () => {
+    const { emitter, events } = record();
+    const { initiateLoginUri: _omitted, ...withoutSignIn } = setup;
+    await reportAppUrlSetup(emitter, async () => ({
+      ...withoutSignIn,
+      verified: false,
+      callbackRegistered: true,
+      signOutRegistered: true,
+      initiateLoginReason: 'Check /login in the browser.',
+      reason: 'Check /login in the browser.',
+    }));
+    expect(events).toContain('app-urls:step sign-out-uri done');
+    expect(events).toContain('app-urls:step initiate-login-uri skipped (Check /login in the browser.)');
+  });
+
   it('flags the unverified URLs with the setup reason', async () => {
     const { emitter, events } = record();
     const result = await reportAppUrlSetup(emitter, async () => ({
@@ -366,31 +381,38 @@ describe('application URLs for SDKs other than Next.js', () => {
     );
   });
 
-  it('saves the Vite /login route once the app serves it', async () => {
-    await mkdir(join(directory, 'src'), { recursive: true });
-    await writeFile(join(directory, 'package.json'), '{"dependencies":{"@workos-inc/authkit-react":"1"}}');
-    await writeFile(join(directory, '.env.local'), 'VITE_WORKOS_CLIENT_ID=client_a\n');
-    await writeFile(
-      join(directory, 'src/main.tsx'),
-      "import { AuthKitProvider, useAuth } from '@workos-inc/authkit-react';\n<AuthKitProvider><App /></AuthKitProvider>;\n",
-    );
-    await writeFile(
-      join(directory, 'src/App.tsx'),
-      "if (window.location.pathname === '/login') signIn();\nconst { signIn } = useAuth();\n",
-    );
-    await writeFile(
-      join(directory, 'src/config.ts'),
-      'export const redirectUri = import.meta.env.VITE_WORKOS_REDIRECT_URI;\n',
-    );
-    await configureOtherApplicationUrls(
-      { options, integration: 'react', emitter: createInstallerEventEmitter() },
-      'client_a',
-      'sk_test_a',
-    );
-    expect(vi.mocked(configureAuthkitApplication).mock.calls[0][0].initiateLoginUri).toBe(
-      'http://localhost:5173/login',
-    );
-  });
+  it.each(['react', 'vanilla-js'])(
+    'leaves %s initiate login unchanged even when source looks correct',
+    async (integration) => {
+      await mkdir(join(directory, 'src'), { recursive: true });
+      await writeFile(join(directory, 'package.json'), '{"dependencies":{"@workos-inc/authkit-react":"1"}}');
+      await writeFile(join(directory, '.env.local'), 'VITE_WORKOS_CLIENT_ID=client_a\n');
+      await writeFile(
+        join(directory, 'src/main.tsx'),
+        "import { AuthKitProvider, useAuth } from '@workos-inc/authkit-react';\n<AuthKitProvider><App /></AuthKitProvider>;\n",
+      );
+      await writeFile(
+        join(directory, 'src/App.tsx'),
+        "if (window.location.pathname === '/login') signIn();\nconst { signIn } = useAuth();\n",
+      );
+      await writeFile(
+        join(directory, 'src/config.ts'),
+        'export const redirectUri = import.meta.env.VITE_WORKOS_REDIRECT_URI;\n',
+      );
+      await configureOtherApplicationUrls(
+        { options, integration, emitter: createInstallerEventEmitter() },
+        'client_a',
+        'sk_test_a',
+      );
+      expect(vi.mocked(configureAuthkitApplication).mock.calls[0][0]).not.toHaveProperty('initiateLoginUri');
+      expect(vi.mocked(configureAuthkitApplication).mock.calls[0][0]).toMatchObject({
+        redirectUri: 'http://localhost:5173/callback',
+        corsOrigin: 'http://localhost:5173',
+        signOutUri: 'http://localhost:5173/',
+        initiateLoginReason: expect.stringContaining('requires browser verification'),
+      });
+    },
+  );
 
   it('does not save a Vite /login route the app only links to', async () => {
     await mkdir(join(directory, 'src'), { recursive: true });
@@ -403,15 +425,47 @@ describe('application URLs for SDKs other than Next.js', () => {
     expect(vi.mocked(configureAuthkitApplication).mock.calls[0][0]).not.toHaveProperty('initiateLoginUri');
   });
 
-  it('does not point the dashboard at a Vite /login route the app lacks, and says why', async () => {
+  it('reports client route verification as pending, not a missing route', async () => {
     const emitter = createInstallerEventEmitter();
     const events: string[] = [];
     emitter.on('app-urls:step', ({ step, status, detail }) => events.push(`${step} ${status} ${detail ?? ''}`.trim()));
     await configureOtherApplicationUrls({ options, integration: 'react', emitter }, 'client_a', 'sk_test_a');
     expect(vi.mocked(configureAuthkitApplication).mock.calls[0][0]).not.toHaveProperty('initiateLoginUri');
     expect(events).toContain(
-      'initiate-login-uri skipped Could not confirm a /login client route that starts sign-in. Check the route before setting the Initiate login URI.',
+      'initiate-login-uri skipped Client-side /login requires browser verification. Confirm it starts sign-in without a click, then set the Initiate login URI in the WorkOS dashboard. The existing setting was left unchanged.',
     );
+  });
+
+  it('uses the explicit callback origin for CORS as well as sign-out', async () => {
+    await configureOtherApplicationUrls(
+      {
+        options: { ...options, redirectUri: 'https://dev.example.com/callback' },
+        integration: 'react',
+        emitter: createInstallerEventEmitter(),
+      },
+      'client_a',
+      'sk_test_a',
+    );
+    expect(vi.mocked(configureAuthkitApplication).mock.calls[0][0]).toMatchObject({
+      redirectUri: 'https://dev.example.com/callback',
+      corsOrigin: 'https://dev.example.com',
+      signOutUri: 'https://dev.example.com/',
+    });
+  });
+
+  it('still rejects a callback that collides with the client login route', async () => {
+    await expect(
+      configureOtherApplicationUrls(
+        {
+          options: { ...options, redirectUri: 'http://localhost:5173/login' },
+          integration: 'react',
+          emitter: createInstallerEventEmitter(),
+        },
+        'client_a',
+        'sk_test_a',
+      ),
+    ).rejects.toThrow('The OAuth callback cannot use /login');
+    expect(configureAuthkitApplication).not.toHaveBeenCalled();
   });
 
   it('rejects an unusable callback URL before any setup', async () => {

@@ -718,7 +718,7 @@ OAuth credentials are stored in the system keychain (with `~/.workos/credentials
 5. **Uses AI** (Claude) to install the SDK and create auth routes, middleware, and UI
 6. **Checks** the generated integration
 7. **Configures sandbox URLs** after the agent, using one WorkOS target: the client-ID-matched dashboard application, or the API-key-only fallback. Existing settings are preserved unless an explicit override is allowed; unsupported or unverified settings are reported for manual setup.
-8. **Reports** what was configured and what still needs attention. Test sign-in, sign-out, and invitation/password-reset flows in the browser before treating the integration as complete.
+8. **Reports** what was configured and what still needs attention. For React and vanilla JS, the agent creates `/login`, but the installer leaves the Initiate login URI unchanged: open `/login` while signed out, confirm it starts sign-in without a click, then set that URL in the WorkOS dashboard. Static source checks cannot verify client routing; unsupported layouts or scan limits do not by themselves fail installation. Test sign-in, sign-out, and invitation/password-reset flows in the browser before treating the integration as complete.
 
 ## Telemetry
 

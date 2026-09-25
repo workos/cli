@@ -4,7 +4,6 @@ import { join } from 'path';
 import fg from 'fast-glob';
 import type { ValidationResult, ValidationRules, ValidationIssue } from './types.js';
 import { runBuildValidation } from './build-validator.js';
-import { hasClientSignInBehavior, hasClientSignInBehaviorInSources, type ClientSource } from './client-sign-in.js';
 import { detectPort, getClientEnvPrefix, getSignInPath } from '../port-detection.js';
 import { nextjsRoutePath, findNextjsSignInPage } from '../../integrations/nextjs/utils.js';
 import nextjsRules from './rules/nextjs.json' with { type: 'json' };
@@ -277,33 +276,26 @@ export async function validateFrameworkSpecific(framework: string, projectDir: s
   return issues;
 }
 
-/**
- * Client-only apps have no route files to match, so check their source for
- * the sign-in route (saved as the Initiate login URI) and for `redirectUri`:
- * the SDKs default to the page origin, but the installer registers
- * WORKOS_REDIRECT_URI and writes it under the bundler's env prefix.
- */
+/** Check callback configuration, not whether arbitrary client routes execute. */
 async function validateClientOnlyApp(framework: string, projectDir: string, issues: ValidationIssue[]) {
   const signInPath = getSignInPath(framework);
   const prefix = getClientEnvPrefix(projectDir);
+  if (signInPath)
+    issues.push({
+      type: 'file',
+      severity: 'warning',
+      message: `Client-side ${signInPath} route requires browser verification`,
+      hint: `Open ${signInPath} while signed out and confirm it starts AuthKit sign-in without a click. Then set the app origin plus ${signInPath} as the Initiate login URI in the WorkOS dashboard; the installer leaves that setting unchanged.`,
+    });
   const { sources, complete } = await readClientSource(projectDir, prefix);
-  if (!complete) {
+  if (!complete)
     issues.push({
       type: 'file',
-      severity: 'error',
-      message: 'Client source checks were incomplete; automatic sign-in URL setup will be skipped',
-      hint: 'The check is limited to 256 source files, 256 KiB per file, and 4 MiB total. Check the sign-in route and callback manually.',
+      severity: 'warning',
+      message: 'Client source checks were incomplete; callback configuration could not be fully checked',
+      hint: 'The check is limited to 256 source files, 256 KiB per file, and 4 MiB total. Check that the SDK uses the installed redirect URI in the browser.',
     });
-    return;
-  }
-  if (signInPath && !(await servesSignInRoute(projectDir, sources, signInPath)))
-    issues.push({
-      type: 'file',
-      severity: 'error',
-      message: `No ${signInPath} route starts sign-in`,
-      hint: `Call signIn() once AuthKit is ready in the mounted ${signInPath} route component's useEffect, or at startup/in an effect inside an if (window.location.pathname === '${signInPath}') branch. A route declaration or unrelated sign-in button is not enough.`,
-    });
-  if (!sources.some(({ content }) => content.includes('redirectUri')))
+  if (complete && !sources.some((content) => content.includes('redirectUri')))
     issues.push({
       type: 'pattern',
       severity: 'error',
@@ -313,7 +305,7 @@ async function validateClientOnlyApp(framework: string, projectDir: string, issu
   if (!prefix) return;
   const expected = BROWSER_REDIRECT_ENV[prefix];
   const reads = new Set(
-    sources.flatMap(({ content }) => [...content.matchAll(REDIRECT_ENV_REFERENCE)].map(([read]) => read)),
+    sources.flatMap((content) => [...content.matchAll(REDIRECT_ENV_REFERENCE)].map(([read]) => read)),
   );
   reads.delete(expected);
   for (const read of reads)
@@ -333,27 +325,6 @@ const BROWSER_REDIRECT_ENV = {
 
 /** A redirect URI env read, e.g. import.meta.env.VITE_WORKOS_REDIRECT_URI. */
 const REDIRECT_ENV_REFERENCE = /(?:import\.meta\.env|process\.env)\.\w*WORKOS_REDIRECT_URI\b/g;
-
-/** Whether the supported client source forms provide evidence of a sign-in route. */
-export async function hasClientSignInRoute(projectDir: string, signInPath: string): Promise<boolean> {
-  const { sources, complete } = await readClientSource(projectDir, getClientEnvPrefix(projectDir));
-  return complete && servesSignInRoute(projectDir, sources, signInPath);
-}
-
-async function servesSignInRoute(projectDir: string, sources: ClientSource[], signInPath: string): Promise<boolean> {
-  if (hasClientSignInBehaviorInSources(sources, signInPath)) return true;
-  // A static page at the path, e.g. login/index.html, that starts sign-in.
-  const segment = signInPath.replace(/^\/|\/$/g, '');
-  const pages = await fg(
-    [`${segment}.html`, `${segment}/index.html`, `public/${segment}.html`, `public/${segment}/index.html`],
-    { cwd: projectDir },
-  );
-  for (const page of pages) {
-    const content = await readBoundedSource(join(projectDir, page), MAX_SOURCE_BYTES);
-    if (content !== undefined && hasClientSignInBehavior(content, signInPath, true)) return true;
-  }
-  return false;
-}
 
 const MAX_SOURCE_FILES = 256;
 const MAX_SOURCE_BYTES = 256 * 1024;
@@ -381,16 +352,15 @@ async function readBoundedSource(path: string, limit: number): Promise<string | 
 }
 
 /**
- * Bounded checks of conventional client source roots. Retain filenames so route
- * component imports can resolve within this set without expanding the scan.
+ * Bounded checks of conventional client source roots, not a module resolver.
  * Server-only paths and other workspace packages are deliberately excluded.
  * Keep src/auth.config.ts: unlike the root bundler config, it can be browser code.
- * Any truncated/unreadable scan cannot authorize saving the sign-in destination.
+ * Incomplete scans are inconclusive, not evidence of missing configuration.
  */
 async function readClientSource(
   projectDir: string,
   prefix: ReturnType<typeof getClientEnvPrefix>,
-): Promise<{ sources: ClientSource[]; complete: boolean }> {
+): Promise<{ sources: string[]; complete: boolean }> {
   const extension = '*.{ts,tsx,js,jsx,mjs,html,htm}';
   const files = fg.stream(
     prefix === 'REACT_APP_' ? [`src/**/${extension}`] : [extension, `{src,app,client}/**/${extension}`],
@@ -407,7 +377,7 @@ async function readClientSource(
       ],
     },
   );
-  const sources: ClientSource[] = [];
+  const sources: string[] = [];
   let remaining = MAX_SCAN_BYTES;
   try {
     for await (const file of files) {
@@ -415,7 +385,7 @@ async function readClientSource(
       const content = await readBoundedSource(join(projectDir, String(file)), Math.min(MAX_SOURCE_BYTES, remaining));
       if (content === undefined) return { sources, complete: false };
       remaining -= Buffer.byteLength(content);
-      sources.push({ file: String(file).replaceAll('\\', '/'), content });
+      sources.push(content);
     }
   } catch {
     return { sources, complete: false };
