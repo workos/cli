@@ -39,54 +39,77 @@ export const config = {
     nextjs: {
       port: 3000,
       callbackPath: '/auth/callback',
+      signInPath: '/sign-in',
     },
     react: {
       port: 5173,
       callbackPath: '/callback',
+      signInPath: '/login',
     },
     tanstackStart: {
       port: 3000,
       callbackPath: '/api/auth/callback',
+      signInPath: '/api/auth/sign-in',
     },
     reactRouter: {
       port: 5173,
       callbackPath: '/callback',
+      signInPath: '/login',
     },
     vanillaJs: {
       port: 5173,
       callbackPath: '/callback',
+      signInPath: '/login',
     },
     python: {
       port: 8000,
       callbackPath: '/auth/callback/',
+      signInPath: '/auth/login/',
     },
     ruby: {
       port: 3000,
       callbackPath: '/auth/callback',
+      signInPath: '/auth/login',
     },
     php: {
       port: 8000,
       callbackPath: '/auth/callback',
+      signInPath: '/login.php',
     },
     phpLaravel: {
       port: 8000,
       callbackPath: '/auth/callback',
+      signInPath: '/login',
     },
     go: {
       port: 8080,
       callbackPath: '/auth/callback',
+      signInPath: '/auth/login',
     },
     dotnet: {
       port: 5000,
       callbackPath: '/auth/callback',
+      signInPath: '/auth/login',
     },
     elixir: {
       port: 4000,
       callbackPath: '/auth/callback',
+      signInPath: '/auth/sign-in',
+    },
+    sveltekit: {
+      port: 5173,
+      callbackPath: '/callback',
+      signInPath: '/sign-in',
+    },
+    node: {
+      port: 3000,
+      callbackPath: '/auth/callback',
+      signInPath: '/login',
     },
     kotlin: {
       port: 8080,
       callbackPath: '/auth/callback',
+      signInPath: '/auth/login',
     },
   },
 

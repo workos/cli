@@ -9,8 +9,13 @@ export function applicationSetupNextSteps(setup: AuthkitApplicationSetup): strin
       ? 'Application URLs were read back and verified; browser flows are not yet tested.'
       : `Application setup is incomplete: ${setup.reason ?? 'Settings have not been verified.'}`,
     `Redirect URI: ${setup.redirectUri} (${setup.callbackRegistered || setup.verified ? 'registered' : 'not registered or verified'})`,
-    `Sign-out URI: ${setup.signOutUri}`,
-    `Initiate login URI: ${setup.initiateLoginUri} (starts sign-in; never use the callback URI)`,
+    ...(setup.corsOrigin !== undefined
+      ? [`CORS origin: ${setup.corsOrigin} (${setup.corsRegistered ? 'registered' : 'not registered or verified'})`]
+      : []),
+    `Sign-out URI: ${setup.signOutUri} (${setup.signOutRegistered || setup.verified ? 'registered' : 'not registered or verified'})`,
+    setup.initiateLoginUri !== undefined
+      ? `Initiate login URI: ${setup.initiateLoginUri} (starts sign-in; never use the callback URI)`
+      : `Initiate login URI: not configured by the installer. ${setup.initiateLoginReason ?? 'Verify the app route starts sign-in before setting it in the dashboard (never use the callback URI).'}`,
     ...(setup.homepageUrl !== undefined ? [`Homepage URL: ${setup.homepageUrl}`] : []),
     'Test sign-in, sign-out, protected-page access, and a password-reset or invitation login before calling the integration complete.',
   ];

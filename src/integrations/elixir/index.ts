@@ -9,6 +9,7 @@ import { getOrAskForWorkOSCredentials } from '../../utils/ui-utils.js';
 import { initializeAgent, runAgent } from '../../lib/agent-interface.js';
 import { writeEnvLocal } from '../../lib/env-writer.js';
 import { getReference } from '../../lib/skills-assets.js';
+import { buildSignInSection } from '../../lib/sign-in-route.js';
 
 export const config: FrameworkConfig = {
   metadata: {
@@ -172,7 +173,7 @@ Note: For Elixir/Phoenix, these should be read via System.get_env() in config/ru
 
 ${refContent}
 
-Report your progress using [STATUS] prefixes.
+${buildSignInSection(config)}Report your progress using [STATUS] prefixes.
 
 Begin integration now.`;
 }

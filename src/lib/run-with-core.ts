@@ -6,6 +6,7 @@ import type { CompletionData, InstallerEventEmitter, SetupItemId, SetupItemStatu
 import { buildCompletionData, applicationSetupNextSteps } from './completion-data.js';
 import {
   readNextjsApplicationSetup,
+  buildApplicationSetup,
   configureAuthkitApplication,
   type AuthkitApplicationSetup,
 } from './authkit-application-setup.js';
@@ -53,13 +54,12 @@ import {
   generateCommitMessage as generateCommitMessageAi,
   generatePrDescription as generatePrDescriptionAi,
 } from './ai-content.js';
-import { autoConfigureWorkOSEnvironment } from './workos-management.js';
 import {
   assertSupportedNextJsRouter,
   getNextJsRouter,
   assertNextjsSignInRouteAvailable,
 } from '../integrations/nextjs/utils.js';
-import { detectPort, getCallbackPath } from './port-detection.js';
+import { detectPort, getClientEnvPrefix, getSignInPath, resolveRedirectUri } from './port-detection.js';
 import { writeEnvLocal } from './env-writer.js';
 import { getRegistry } from './registry.js';
 import { observeHostFailure } from './host-probe.js';
@@ -200,7 +200,8 @@ export async function configureInstallEnvironment(
 
   const registry = await getRegistry();
   const mod = registry.get(integration);
-  if (mod?.config.metadata.language !== 'javascript') return;
+  if (!mod) return;
+  const isJavascript = mod.config.metadata.language === 'javascript';
 
   if (integration === 'nextjs') {
     assertSupportedNextJsRouter(await getNextJsRouter(installerOptions));
@@ -208,29 +209,32 @@ export async function configureInstallEnvironment(
   }
 
   const port = detectPort(integration, installerOptions.installDir);
-  const redirectUri = installerOptions.redirectUri || `http://localhost:${port}${getCallbackPath(integration)}`;
-  // Next.js URL writes happen after code validation. That step chooses ONE
-  // target: the dashboard application, or an API-key-only callback without a session.
-  const requiresApiKey = ['tanstack-start', 'react-router'].includes(integration);
-  step('env-vars', 'started');
-  if (credentials.apiKey && requiresApiKey) {
-    await autoConfigureWorkOSEnvironment(credentials.apiKey, integration, port, {
-      homepageUrl: installerOptions.homepageUrl,
-      redirectUri: installerOptions.redirectUri,
-      onStep: step,
-    });
-  } else if (requiresApiKey) {
-    for (const id of ['redirect-uri', 'cors-origin'] as const) {
-      step(id, 'skipped', 'No API key was available for this install.');
-    }
-  }
+  // All URL writes wait until after the agent. Select one target then, even if
+  // credentials and the dashboard session refer to different environments or
+  // the session changes between preparation and application setup.
+  if (isJavascript) step('env-vars', 'started');
+
+  // Non-JavaScript agents write their own env files in the project's format.
+  if (!isJavascript) return;
+
+  const redirectUri = resolveRedirectUri(integration, installerOptions, port);
 
   const redirectUriKey = integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
+  // Client bundlers expose only prefixed vars to browser code.
+  const clientPrefix = mod.config.environment.requiresApiKey
+    ? undefined
+    : getClientEnvPrefix(installerOptions.installDir);
   try {
     writeEnvLocal(installerOptions.installDir, {
       ...(credentials.apiKey ? { WORKOS_API_KEY: credentials.apiKey } : {}),
       WORKOS_CLIENT_ID: credentials.clientId,
       [redirectUriKey]: redirectUri,
+      ...(clientPrefix
+        ? {
+            [`${clientPrefix}WORKOS_CLIENT_ID`]: credentials.clientId,
+            [`${clientPrefix}WORKOS_REDIRECT_URI`]: redirectUri,
+          }
+        : {}),
     });
   } catch (error) {
     step('env-vars', 'failed', error instanceof Error ? error.message : String(error));
@@ -239,29 +243,73 @@ export async function configureInstallEnvironment(
   step('env-vars', 'done');
 }
 
+export const NO_SIGN_IN_ROUTE_REASON = 'This framework has no fixed sign-in route to use.';
+
 /**
  * Report the app URLs `configure` sets (the dashboard checklist's redirect,
  * initiate login, and sign-out URIs) as `app-urls:step` events.
  *
  * `configureAuthkitApplication` throws when the callback isn't registered,
  * which fails the install (and the items still running with it). When it
- * returns, the callback is registered; the other two are verified together or
- * not at all, with one reason covering both.
+ * returns, the callback is registered; CORS and sign-out have their own results,
+ * so pending initiate-login setup does not hide settings already saved.
  */
 export async function reportAppUrlSetup(
   emitter: Pick<InstallerEventEmitter, 'emit'>,
   configure: () => Promise<AuthkitApplicationSetup>,
+  { includeRedirect = true, includeCors = false }: { includeRedirect?: boolean; includeCors?: boolean } = {},
 ): Promise<AuthkitApplicationSetup> {
   const step = (id: SetupItemId, status: SetupItemStatus, detail?: string) =>
     emitter.emit('app-urls:step', { step: id, status, ...(detail ? { detail } : {}) });
-  for (const id of ['redirect-uri', 'initiate-login-uri', 'sign-out-uri'] as const) step(id, 'started');
+  const ids = ['initiate-login-uri', 'sign-out-uri'] as const;
+  for (const id of includeRedirect ? (['redirect-uri', ...ids] as const) : ids) step(id, 'started');
+  if (includeCors) step('cors-origin', 'started');
   const setup = await configure();
-  step('redirect-uri', 'done');
-  for (const id of ['initiate-login-uri', 'sign-out-uri'] as const) {
-    if (setup.verified) step(id, 'done');
-    else step(id, 'skipped', setup.reason);
-  }
+  if (includeRedirect) step('redirect-uri', 'done');
+  if (includeCors)
+    step('cors-origin', setup.corsRegistered ? 'done' : 'skipped', setup.corsRegistered ? undefined : setup.reason);
+  const settle = (id: SetupItemId) => (setup.verified ? step(id, 'done') : step(id, 'skipped', setup.reason));
+  if (setup.initiateLoginUri === undefined)
+    step('initiate-login-uri', 'skipped', setup.initiateLoginReason ?? setup.reason);
+  else settle('initiate-login-uri');
+  if (setup.signOutRegistered) step('sign-out-uri', 'done');
+  else settle('sign-out-uri');
   return setup;
+}
+
+/**
+ * Configure all URLs for SDKs other than Next.js after the agent, using one
+ * target selected here. An unregistered callback fails the install.
+ */
+export async function configureOtherApplicationUrls(
+  context: Pick<InstallerMachineContext, 'options' | 'integration' | 'emitter'>,
+  clientId: string,
+  apiKey?: string,
+): Promise<AuthkitApplicationSetup | undefined> {
+  const { options: installerOptions, integration } = context;
+  if (!integration || integration === 'nextjs') return undefined;
+  const signInPath = getSignInPath(integration);
+  const clientOnly = (await getRegistry()).get(integration)?.config.environment.requiresApiKey === false;
+  const redirectUri = resolveRedirectUri(integration, installerOptions);
+  const setup: AuthkitApplicationSetup = {
+    ...buildApplicationSetup({
+      clientId,
+      redirectUri,
+      homepageUrl: installerOptions.homepageUrl,
+      signInPath,
+    }),
+    corsOrigin: new URL(redirectUri).origin,
+    ...(!signInPath ? { initiateLoginReason: NO_SIGN_IN_ROUTE_REASON } : {}),
+  };
+  // Source patterns cannot prove that a client route is mounted and starts sign-in.
+  // Keep generating the route, but leave this dashboard setting for a browser check.
+  if (signInPath && clientOnly) {
+    delete setup.initiateLoginUri;
+    setup.initiateLoginReason = `Client-side ${signInPath} requires browser verification. Confirm it starts sign-in without a click, then set the Initiate login URI in the WorkOS dashboard. The existing setting was left unchanged.`;
+  }
+  return reportAppUrlSetup(context.emitter, () => configureAuthkitApplication(setup, clientId, apiKey), {
+    includeCors: true,
+  });
 }
 
 /** Pick the installer adapter for this process's output mode and terminal. */
@@ -442,9 +490,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
               installerOptions.installDir,
               installerOptions.homepageUrl,
             );
-            const expectedRedirectUri =
-              installerOptions.redirectUri ||
-              `http://localhost:${detectPort(integration, installerOptions.installDir)}${getCallbackPath(integration)}`;
+            const expectedRedirectUri = resolveRedirectUri(integration, installerOptions);
             if (applicationSetup.redirectUri !== expectedRedirectUri) {
               throw new Error(
                 'The app callback URL changed during installation. Confirm it before configuring WorkOS.',
@@ -466,13 +512,16 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
             applicationSetup = await reportAppUrlSetup(context.emitter, () =>
               configureAuthkitApplication(setup, credentials?.clientId ?? '', credentials?.apiKey),
             );
+          } else if (credentials?.clientId) {
+            applicationSetup = await configureOtherApplicationUrls(context, credentials.clientId, credentials.apiKey);
           }
           return {
             success: true,
             applicationSetup,
-            summary: applicationSetup
-              ? ['App code installed.', ...applicationSetupNextSteps(applicationSetup)].join('\n')
-              : summary || `Successfully installed WorkOS AuthKit for ${integration}!`,
+            summary:
+              integration === 'nextjs' && applicationSetup
+                ? ['App code installed.', ...applicationSetupNextSteps(applicationSetup)].join('\n')
+                : summary || `Successfully installed WorkOS AuthKit for ${integration}!`,
           };
         } catch (error) {
           return {

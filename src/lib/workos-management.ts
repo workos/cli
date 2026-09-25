@@ -18,7 +18,8 @@ const SUPPLIED_KEY_PROVENANCE = 'the API key supplied to this run';
 export interface AutoConfigResult {
   redirectUri: { success: boolean; alreadyExists: boolean };
   corsOrigin: { success: boolean; alreadyExists: boolean };
-  homepageUrl: { success: boolean; alreadyExists: boolean };
+  /** Absent when the homepage was left alone (see `autoConfigureWorkOSEnvironment`). */
+  homepageUrl?: { success: boolean; alreadyExists: boolean };
 }
 
 interface FetchError {
@@ -83,7 +84,10 @@ async function createRedirectUri(apiKey: string, uri: string): Promise<{ success
  * Create a CORS origin in WorkOS.
  * Returns success on 201 or 409 (already exists).
  */
-async function createCorsOrigin(apiKey: string, origin: string): Promise<{ success: boolean; alreadyExists: boolean }> {
+export async function createCorsOrigin(
+  apiKey: string,
+  origin: string,
+): Promise<{ success: boolean; alreadyExists: boolean }> {
   const response = await workosRequest('POST', '/user_management/cors_origins', apiKey, { origin });
 
   if (response.ok) {
@@ -157,6 +161,17 @@ export async function setHomepageUrl(
  * store entirely, and naming an untouched environment is exactly the confusion
  * this row exists to prevent.
  */
+/** Whether `apiKey` is the key of the stored, still-unclaimed environment. */
+export function isUnclaimedEnvironmentKey(apiKey: string): boolean {
+  try {
+    const environment = getActiveEnvironment();
+    return !!environment && isUnclaimedEnvironment(environment) && environment.apiKey === apiKey;
+  } catch {
+    // Keyring unavailable: unknown, so treat it as claimed.
+    return false;
+  }
+}
+
 function describeCredentialProvenance(apiKey: string): string {
   let activeEnv: EnvironmentConfig | null = null;
   try {
@@ -184,9 +199,15 @@ export interface AutoConfigOptions {
   onStep?: (step: SetupItemId, status: SetupItemStatus, detail?: string) => void;
 }
 
+/** Why local-development URLs are never written with a production key. */
+export const SANDBOX_ONLY_REASON =
+  'Automatic setup only runs on sandbox environments (sk_test_ keys). Set production URLs in the WorkOS dashboard.';
+
 /**
  * Auto-configure WorkOS dashboard settings for local development.
  * Sets redirect URI, CORS origin, and homepage URL via the WorkOS API.
+ * Sandbox keys only: these are localhost URLs, and a production key can reach
+ * the installer from a flag, the project's env file, or the active profile.
  *
  * @param apiKey - WorkOS API key (sk_xxx)
  * @param integration - Framework integration type
@@ -205,10 +226,33 @@ export async function autoConfigureWorkOSEnvironment(
   const callbackPath = getCallbackPath(integration);
   const callbackUrl = options.redirectUri || `${baseUrl}${callbackPath}`;
   const homepageUrlValue = options.homepageUrl || baseUrl;
+  const onStep = options.onStep ?? (() => {});
+
+  // The key's prefix is the one local fact the API enforces; a profile's
+  // `type` is only a local label. Checked here, not in a caller, because
+  // several callers (the installer machine, agent-runner, some integrations'
+  // own run()) reach this function.
+  if (!apiKey.startsWith('sk_test_')) {
+    for (const step of ['redirect-uri', 'cors-origin'] as const) onStep(step, 'skipped', SANDBOX_ONLY_REASON);
+    ui.log.warn(SANDBOX_ONLY_REASON);
+    analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
+      action: 'workos environment auto-config skipped',
+      integration,
+      reason: 'non-sandbox key',
+    });
+    return null;
+  }
+
+  // The homepage is one value per environment, and the REST API can set it
+  // but not read it (the GET answers 404), so this step can't tell whether
+  // someone already chose one. Write it only when nothing can be overwritten:
+  // the user asked for it (--homepage-url), or the environment is unclaimed,
+  // so nobody has had its dashboard. With a login, the later dashboard step
+  // reads the current value and fills an empty one.
+  const writeHomepage = Boolean(options.homepageUrl) || isUnclaimedEnvironmentKey(apiKey);
 
   ui.log.step('Configuring WorkOS dashboard settings...');
 
-  const onStep = options.onStep ?? (() => {});
   // Report each item as it resolves, not when the whole batch does.
   const track = <T extends { alreadyExists: boolean }>(step: SetupItemId, write: Promise<T>): Promise<T> => {
     onStep(step, 'started');
@@ -228,7 +272,7 @@ export async function autoConfigureWorkOSEnvironment(
     const [redirectUri, corsOrigin, homepageUrl] = await Promise.all([
       track('redirect-uri', createRedirectUri(apiKey, callbackUrl)),
       track('cors-origin', createCorsOrigin(apiKey, baseUrl)),
-      setHomepageUrl(apiKey, homepageUrlValue),
+      writeHomepage ? setHomepageUrl(apiKey, homepageUrlValue) : undefined,
     ]);
 
     const results: AutoConfigResult = { redirectUri, corsOrigin, homepageUrl };
@@ -239,7 +283,7 @@ export async function autoConfigureWorkOSEnvironment(
       port,
       redirectUri: redirectUri.alreadyExists ? 'existed' : 'created',
       corsOrigin: corsOrigin.alreadyExists ? 'existed' : 'created',
-      homepageUrl: homepageUrl.alreadyExists ? 'existed' : 'updated',
+      homepageUrl: !homepageUrl ? 'skipped' : homepageUrl.alreadyExists ? 'existed' : 'updated',
     });
 
     // Aligned key/value feedback: value in accent, a dim status for "already
@@ -260,12 +304,19 @@ export async function autoConfigureWorkOSEnvironment(
         status: corsOrigin.alreadyExists ? 'already set' : 'created',
         statusKind: corsOrigin.alreadyExists ? 'muted' : 'ok',
       },
-      {
-        key: 'Homepage URL',
-        value: homepageUrlValue,
-        status: homepageUrl.alreadyExists ? 'already set' : 'updated',
-        statusKind: homepageUrl.alreadyExists ? 'muted' : 'ok',
-      },
+      homepageUrl
+        ? {
+            key: 'Homepage URL',
+            value: homepageUrlValue,
+            status: homepageUrl.alreadyExists ? 'already set' : 'updated',
+            statusKind: homepageUrl.alreadyExists ? 'muted' : 'ok',
+          }
+        : {
+            key: 'Homepage URL',
+            value: homepageUrlValue,
+            status: 'not changed; check the dashboard',
+            statusKind: 'warn',
+          },
     ]);
 
     return results;

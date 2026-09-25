@@ -13,6 +13,7 @@ import { autoConfigureWorkOSEnvironment } from '../../lib/workos-management.js';
 import { validateInstallation } from '../../lib/validation/index.js';
 import { parseEnvFile } from '../../utils/env-parser.js';
 import { getReference } from '../../lib/skills-assets.js';
+import { buildSignInSection } from '../../lib/sign-in-route.js';
 
 /** Default port for Go HTTP servers */
 const GO_DEFAULT_PORT = 8080;
@@ -184,7 +185,7 @@ The following environment variables have been configured in .env:
 
 ${refContent}
 
-Report your progress using [STATUS] prefixes.
+${buildSignInSection(config)}Report your progress using [STATUS] prefixes.
 
 Begin integration now.`;
 

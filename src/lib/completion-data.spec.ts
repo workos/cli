@@ -70,6 +70,26 @@ describe('buildCompletionData', () => {
     );
   });
 
+  it.each([true, false])(
+    'retains optional camelCase CORS status in public completion data (%s)',
+    async (corsRegistered) => {
+      const applicationSetup = {
+        clientId: 'client_app',
+        redirectUri: 'http://localhost:5173/callback',
+        signOutUri: 'http://localhost:5173/',
+        corsOrigin: 'http://localhost:5173',
+        corsRegistered,
+        callbackRegistered: true,
+        verified: false,
+      };
+      const data = await buildCompletionData({ integration: 'react', installDir }, { ...baseDeps, applicationSetup });
+      expect(JSON.parse(JSON.stringify(data)).applicationSetup).toEqual(applicationSetup);
+      expect(data.nextSteps).toContain(
+        `CORS origin: http://localhost:5173 (${corsRegistered ? 'registered' : 'not registered or verified'})`,
+      );
+    },
+  );
+
   it('respects a Vite server.port override for react', async () => {
     writePackageJson({ scripts: { dev: 'vite' }, dependencies: { react: '18.0.0', vite: '5.0.0' } });
     writeFile('vite.config.ts', 'export default { server: { port: 8080 } };');

@@ -1,10 +1,10 @@
-import { readFile } from 'fs/promises';
+import { open, readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import fg from 'fast-glob';
 import type { ValidationResult, ValidationRules, ValidationIssue } from './types.js';
 import { runBuildValidation } from './build-validator.js';
-import { detectPort } from '../port-detection.js';
+import { detectPort, getClientEnvPrefix, getSignInPath } from '../port-detection.js';
 import { nextjsRoutePath, findNextjsSignInPage } from '../../integrations/nextjs/utils.js';
 import nextjsRules from './rules/nextjs.json' with { type: 'json' };
 import reactRouterRules from './rules/react-router.json' with { type: 'json' };
@@ -258,6 +258,10 @@ export async function validateFrameworkSpecific(framework: string, projectDir: s
     }
     case 'react':
       await validateReactProviderWrapping(projectDir, issues);
+      await validateClientOnlyApp(framework, projectDir, issues);
+      break;
+    case 'vanilla-js':
+      await validateClientOnlyApp(framework, projectDir, issues);
       break;
     case 'react-router':
       await validateReactRouterRedirectUri(projectDir, issues);
@@ -270,6 +274,123 @@ export async function validateFrameworkSpecific(framework: string, projectDir: s
   }
 
   return issues;
+}
+
+/** Check callback configuration, not whether arbitrary client routes execute. */
+async function validateClientOnlyApp(framework: string, projectDir: string, issues: ValidationIssue[]) {
+  const signInPath = getSignInPath(framework);
+  const prefix = getClientEnvPrefix(projectDir);
+  if (signInPath)
+    issues.push({
+      type: 'file',
+      severity: 'warning',
+      message: `Client-side ${signInPath} route requires browser verification`,
+      hint: `Open ${signInPath} while signed out and confirm it starts AuthKit sign-in without a click. Then set the app origin plus ${signInPath} as the Initiate login URI in the WorkOS dashboard; the installer leaves that setting unchanged.`,
+    });
+  const { sources, complete } = await readClientSource(projectDir, prefix);
+  if (!complete)
+    issues.push({
+      type: 'file',
+      severity: 'warning',
+      message: 'Client source checks were incomplete; callback configuration could not be fully checked',
+      hint: 'The check is limited to 256 source files, 256 KiB per file, and 4 MiB total. Check that the SDK uses the installed redirect URI in the browser.',
+    });
+  if (complete && !sources.some((content) => content.includes('redirectUri')))
+    issues.push({
+      type: 'pattern',
+      severity: 'error',
+      message: 'The AuthKit client does not set redirectUri',
+      hint: 'Pass the installed WORKOS_REDIRECT_URI env var as redirectUri to AuthKitProvider or createClient(). The SDK default, the page origin, is not registered.',
+    });
+  if (!prefix) return;
+  const expected = BROWSER_REDIRECT_ENV[prefix];
+  const reads = new Set(
+    sources.flatMap((content) => [...content.matchAll(REDIRECT_ENV_REFERENCE)].map(([read]) => read)),
+  );
+  reads.delete(expected);
+  for (const read of reads)
+    issues.push({
+      type: 'env',
+      severity: 'error',
+      message: `The client reads ${read}, but the installer exposes ${expected}`,
+      hint: `Read ${expected} as the redirect URI.`,
+    });
+}
+
+/** The one expression each bundler's browser code must use to read the installed redirect URI. */
+const BROWSER_REDIRECT_ENV = {
+  VITE_: 'import.meta.env.VITE_WORKOS_REDIRECT_URI',
+  REACT_APP_: 'process.env.REACT_APP_WORKOS_REDIRECT_URI',
+} satisfies Record<NonNullable<ReturnType<typeof getClientEnvPrefix>>, string>;
+
+/** A redirect URI env read, e.g. import.meta.env.VITE_WORKOS_REDIRECT_URI. */
+const REDIRECT_ENV_REFERENCE = /(?:import\.meta\.env|process\.env)\.\w*WORKOS_REDIRECT_URI\b/g;
+
+const MAX_SOURCE_FILES = 256;
+const MAX_SOURCE_BYTES = 256 * 1024;
+const MAX_SCAN_BYTES = 4 * 1024 * 1024;
+
+/** Read at most limit + 1 bytes, rather than loading a huge file before checking. */
+async function readBoundedSource(path: string, limit: number): Promise<string | undefined> {
+  try {
+    const handle = await open(path, 'r');
+    try {
+      const bytes = Buffer.alloc(limit + 1);
+      let length = 0;
+      while (length < bytes.length) {
+        const { bytesRead } = await handle.read(bytes, length, bytes.length - length, null);
+        if (bytesRead === 0) break;
+        length += bytesRead;
+      }
+      return length > limit ? undefined : bytes.subarray(0, length).toString('utf8');
+    } finally {
+      await handle.close();
+    }
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Bounded checks of conventional client source roots, not a module resolver.
+ * Server-only paths and other workspace packages are deliberately excluded.
+ * Keep src/auth.config.ts: unlike the root bundler config, it can be browser code.
+ * Incomplete scans are inconclusive, not evidence of missing configuration.
+ */
+async function readClientSource(
+  projectDir: string,
+  prefix: ReturnType<typeof getClientEnvPrefix>,
+): Promise<{ sources: string[]; complete: boolean }> {
+  const extension = '*.{ts,tsx,js,jsx,mjs,html,htm}';
+  const files = fg.stream(
+    prefix === 'REACT_APP_' ? [`src/**/${extension}`] : [extension, `{src,app,client}/**/${extension}`],
+    {
+      cwd: projectDir,
+      followSymbolicLinks: false,
+      suppressErrors: false,
+      ignore: [
+        '**/{node_modules,dist,build,coverage,server,api,functions,scripts,packages,examples,fixtures,__tests__}/**',
+        '**/.*/**',
+        '**/*.{spec,test,server}.*',
+        '**/server.*',
+        '*.config.*',
+      ],
+    },
+  );
+  const sources: string[] = [];
+  let remaining = MAX_SCAN_BYTES;
+  try {
+    for await (const file of files) {
+      if (sources.length >= MAX_SOURCE_FILES) return { sources, complete: false };
+      const content = await readBoundedSource(join(projectDir, String(file)), Math.min(MAX_SOURCE_BYTES, remaining));
+      if (content === undefined) return { sources, complete: false };
+      remaining -= Buffer.byteLength(content);
+      sources.push(content);
+    }
+  } catch {
+    return { sources, complete: false };
+  }
+  return { sources, complete: true };
 }
 
 /**

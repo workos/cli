@@ -107,6 +107,54 @@ describe('installer prompt', () => {
     }
   });
 
+  const promptFor = async (integration: FrameworkConfig['metadata']['integration'], skillName: string) => {
+    const requiresApiKey = !['react', 'vanilla-js'].includes(integration);
+    await runAgentInstaller(
+      {
+        ...config,
+        metadata: { ...config.metadata, integration, skillName },
+        environment: { ...config.environment, requiresApiKey },
+      },
+      options,
+    );
+    return vi.mocked(runAgent).mock.calls[0][1];
+  };
+
+  it('tells a client-only app to add a /login route and pass its redirect URI', async () => {
+    const prompt = await promptFor('react', 'workos-authkit-react');
+    expect(prompt).toContain('## Sign-in route (Initiate login URI)');
+    expect(prompt).toContain('the app origin plus /login');
+    expect(prompt).toContain('add a /login client route');
+    expect(prompt).toContain("Use the app's existing router and component conventions");
+    expect(prompt).toContain('without a click');
+    expect(prompt).toContain('leaves the Initiate login URI unchanged');
+    expect(prompt).toContain('confirm automatic sign-in in the browser');
+    expect(prompt).not.toContain('relative default or named import');
+    expect(prompt).toContain('VITE_WORKOS_REDIRECT_URI for Vite');
+  });
+
+  it("pins a server SDK to its guide's sign-in route without the client-only steps", async () => {
+    const prompt = await promptFor('kotlin', 'workos-kotlin');
+    expect(prompt).toContain('the app origin plus /auth/login');
+    expect(prompt).not.toContain('client route');
+  });
+
+  it.each([
+    ['react-router', '/login'],
+    ['tanstack-start', '/api/auth/sign-in'],
+    ['sveltekit', '/sign-in'],
+    ['node', '/login'],
+    ['php', '/login.php'],
+  ])('pins %s to its documented sign-in route %s', async (integration, path) => {
+    const prompt = await promptFor(integration, `workos-${integration}`);
+    expect(prompt).toContain(`the app origin plus ${path}.`);
+  });
+
+  it('leaves Next.js to its own sign-in instructions', async () => {
+    const prompt = await promptFor('nextjs', 'workos-authkit-nextjs');
+    expect(prompt).not.toContain('## Sign-in route (Initiate login URI)');
+  });
+
   it('declines Pages Router before requesting credentials, writing files, or starting the agent', async () => {
     const framework = {
       ...config,

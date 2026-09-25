@@ -3,6 +3,10 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
+vi.mock('./config-store.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./config-store.js')>()),
+  getActiveEnvironment: vi.fn(),
+}));
 vi.mock('./command-auth.js', () => ({ refreshIfExpired: vi.fn() }));
 vi.mock('./api-key.js', () => ({
   resolveApiBaseUrl: () => 'https://api.workos.com',
@@ -15,10 +19,17 @@ vi.mock('../catalog/operation.js', () => ({
   resolveExecutableDocument: (operation: { name: string }) => operation.name,
 }));
 
+import { getActiveEnvironment } from './config-store.js';
 import { refreshIfExpired } from './command-auth.js';
 import { fetchTeamEnvironments } from './environment-target.js';
 import { dashboardGraphqlRequest } from './dashboard-graphql.js';
-import { configureAuthkitApplication, readNextjsApplicationSetup } from './authkit-application-setup.js';
+import {
+  buildApplicationSetup,
+  configureAuthkitApplication,
+  readNextjsApplicationSetup,
+} from './authkit-application-setup.js';
+import { configureInstallEnvironment, configureOtherApplicationUrls } from './run-with-core.js';
+import { createInstallerEventEmitter } from './events.js';
 import { applicationSetupNextSteps } from './completion-data.js';
 
 const setup = {
@@ -35,6 +46,7 @@ let application: {
   logoutUris: { id?: string; uri: string; isDefault: boolean }[];
   initiateLoginUri: string | null;
   appHomepageUrl?: string;
+  webOrigins: { origin: string }[];
 };
 const writes = () =>
   vi
@@ -46,12 +58,20 @@ const writes = () =>
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => {
+      throw new Error('Unexpected network request');
+    }),
+  );
+  vi.mocked(getActiveEnvironment).mockReturnValue(null);
   vi.mocked(refreshIfExpired).mockResolvedValue({ accessToken: 'test-token', refreshed: false });
   vi.mocked(fetchTeamEnvironments).mockResolvedValue([
     { id: 'env_app', name: 'Sandbox', sandbox: true, clientId: setup.clientId },
   ]);
   application = {
     id: 'app_1',
+    webOrigins: [{ origin: 'https://custom.example' }],
     clientId: setup.clientId,
     redirectUris: [{ uri: setup.redirectUri, isDefault: true }],
     logoutUris: [{ id: 'uri_old', uri: 'https://old.example/', isDefault: false }],
@@ -60,6 +80,12 @@ beforeEach(() => {
   };
   vi.mocked(dashboardGraphqlRequest).mockImplementation(async (name, options) => {
     if (name === 'defaultAuthkitApplication') return { defaultUserlandApplication: structuredClone(application) };
+    if (name === 'setAuthkitApplicationWebOrigins') {
+      const input = options.variables!.input as { applicationId: string; origins: string[]; dryRun: boolean };
+      expect(input.applicationId).toBe('app_1');
+      if (!input.dryRun) application.webOrigins = input.origins.map((origin) => ({ origin }));
+      return { setUserlandApplicationWebOrigins: { __typename: 'WebOriginsSet' } };
+    }
     if (name === 'setAuthkitApplicationLogoutUris') {
       const input = options.variables!.input as {
         applicationId: string;
@@ -98,6 +124,153 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('native application URL setup', () => {
+  it.each([false, true])(
+    'uses only client B dashboard even when session appears after preparation (%s)',
+    async (lateSession) => {
+      const directory = await mkdtemp(join(tmpdir(), 'single-target-'));
+      const request = vi.fn(async () => Response.json({ url: null }));
+      vi.stubGlobal('fetch', request);
+      const context = {
+        options: { installDir: directory, debug: false, forceInstall: false, local: false, ci: true, skipAuth: true },
+        integration: 'sveltekit',
+        credentials: { apiKey: 'sk_test_environment_a', clientId: setup.clientId },
+        emitter: createInstallerEventEmitter(),
+      };
+      try {
+        if (lateSession) vi.mocked(refreshIfExpired).mockResolvedValue(null);
+        await configureInstallEnvironment(context);
+        expect(request).not.toHaveBeenCalled();
+        vi.mocked(refreshIfExpired).mockResolvedValue({ accessToken: 'session_b', refreshed: false });
+        const result = await configureOtherApplicationUrls(context, setup.clientId, context.credentials.apiKey);
+        expect(result?.corsRegistered).toBe(true);
+        expect(writes().map(([name]) => name)).toContain('setAuthkitApplicationWebOrigins');
+        expect(writes().map(([name]) => name)).toContain('setRedirectUris');
+        expect(request).not.toHaveBeenCalled();
+        for (const [, options] of vi.mocked(dashboardGraphqlRequest).mock.calls) {
+          expect(options.environmentId).toBe('env_app');
+          expect(options.token).toBe('session_b');
+        }
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+  );
+  it('appends dashboard CORS without replacing custom origins and is idempotent', async () => {
+    const withCors = { ...setup, corsOrigin: 'http://localhost:4000' };
+    expect((await configureAuthkitApplication(withCors, setup.clientId)).corsRegistered).toBe(true);
+    expect(application.webOrigins).toEqual([{ origin: 'https://custom.example' }, { origin: withCors.corsOrigin }]);
+    const corsCalls = () =>
+      vi.mocked(dashboardGraphqlRequest).mock.calls.filter(([name]) => name === 'setAuthkitApplicationWebOrigins');
+    expect(corsCalls().map(([, options]) => options.variables!.input)).toEqual([
+      { applicationId: 'app_1', origins: ['https://custom.example', withCors.corsOrigin], dryRun: true },
+      { applicationId: 'app_1', origins: ['https://custom.example', withCors.corsOrigin], dryRun: false },
+    ]);
+    expect((await configureAuthkitApplication(withCors, setup.clientId)).corsRegistered).toBe(true);
+    expect(corsCalls()).toHaveLength(2);
+  });
+
+  it.each(['validation', 'race', 'readback', 'missing'])(
+    'refuses unsafe dashboard CORS (%s) without API fallback',
+    async (failure) => {
+      const original = vi.mocked(dashboardGraphqlRequest).getMockImplementation()!;
+      if (failure === 'missing') delete (application as Partial<typeof application>).webOrigins;
+      vi.mocked(dashboardGraphqlRequest).mockImplementation(async (name, options) => {
+        if (name === 'setAuthkitApplicationWebOrigins') {
+          const input = options.variables!.input as { dryRun: boolean };
+          if (failure === 'validation')
+            return { setUserlandApplicationWebOrigins: { __typename: 'MalformedWebOrigin' } };
+          if (failure === 'race' && input.dryRun) application.webOrigins.push({ origin: 'https://concurrent.example' });
+          if (failure === 'readback' && !input.dryRun)
+            return { setUserlandApplicationWebOrigins: { __typename: 'WebOriginsSet' } };
+        }
+        return original(name, options);
+      });
+      const result = await configureAuthkitApplication(
+        { ...setup, corsOrigin: 'http://localhost:4000' },
+        setup.clientId,
+        'sk_test_environment_a',
+      );
+      expect(result.callbackRegistered).toBe(true);
+      expect(result.corsRegistered).toBe(false);
+      expect(result.verified).toBe(false);
+      expect(fetch).not.toHaveBeenCalled();
+      if (failure !== 'readback') expect(writes()).toHaveLength(0);
+    },
+  );
+
+  it('registers API-only CORS before leaving an unreadable existing homepage unchanged', async () => {
+    vi.mocked(refreshIfExpired).mockResolvedValue(null);
+    const request = vi.fn(async () => Response.json({}));
+    vi.stubGlobal('fetch', request);
+    const result = await configureAuthkitApplication(
+      { ...setup, corsOrigin: 'http://localhost:4000' },
+      setup.clientId,
+      'sk_test_environment_a',
+    );
+    expect(result.corsRegistered).toBe(true);
+    expect(request.mock.calls.map(([url]) => url)).toEqual([
+      'https://api.workos.com/user_management/redirect_uris',
+      'https://api.workos.com/user_management/cors_origins',
+    ]);
+    expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
+  });
+
+  it.each(['explicit', 'unclaimed'])('preserves API-only fresh-install CORS and homepage setup (%s)', async (kind) => {
+    vi.mocked(refreshIfExpired).mockResolvedValue(null);
+    if (kind === 'unclaimed')
+      vi.mocked(getActiveEnvironment).mockReturnValue({
+        name: 'Unclaimed',
+        type: 'unclaimed',
+        apiKey: 'sk_test_environment_a',
+        clientId: setup.clientId,
+        claimToken: 'claim',
+      });
+    const request = vi.fn(async (_url: string, init: RequestInit) =>
+      init.method === 'GET' ? new Response(null, { status: 404 }) : Response.json({}),
+    );
+    vi.stubGlobal('fetch', request);
+    const result = await configureAuthkitApplication(
+      {
+        ...setup,
+        corsOrigin: 'http://localhost:4000',
+        ...(kind === 'explicit' ? { homepageUrl: 'http://localhost:4000' } : {}),
+      },
+      setup.clientId,
+      'sk_test_environment_a',
+    );
+    expect(result).toMatchObject({ callbackRegistered: true, corsRegistered: true, verified: false });
+    expect(request).toHaveBeenCalledWith(
+      'https://api.workos.com/user_management/app_homepage_url',
+      expect.objectContaining({ method: 'PUT', body: JSON.stringify({ url: 'http://localhost:4000' }) }),
+    );
+    expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, 'sk_live_production'])(
+    'does not write API-only CORS without a sandbox key (%s)',
+    async (apiKey) => {
+      vi.mocked(refreshIfExpired).mockResolvedValue(null);
+      await expect(
+        configureAuthkitApplication({ ...setup, corsOrigin: 'http://localhost:4000' }, setup.clientId, apiKey),
+      ).rejects.toThrow(/Callback/);
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps production dashboard CORS read-only', async () => {
+    vi.mocked(fetchTeamEnvironments).mockResolvedValue([
+      { id: 'env_app', name: 'Production', sandbox: false, clientId: setup.clientId },
+    ]);
+    const result = await configureAuthkitApplication(
+      { ...setup, corsOrigin: 'http://localhost:4000' },
+      setup.clientId,
+      'sk_test_environment_a',
+    );
+    expect(result.corsRegistered).toBe(false);
+    expect(writes()).toHaveLength(0);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('registers the callback with an API key without a dashboard session', async () => {
     vi.mocked(refreshIfExpired).mockResolvedValue(null);
     const request = vi.fn(async () => Response.json({ url: null }));
@@ -186,15 +359,90 @@ describe('native application URL setup', () => {
     expect(writes()).toHaveLength(2);
   });
 
+  it('sets the sign-out URI and leaves the initiate login URI alone when the app has no sign-in route', async () => {
+    const { initiateLoginUri: _omitted, ...withoutSignIn } = setup;
+    application.redirectUris = [];
+    delete application.appHomepageUrl;
+    const result = await configureAuthkitApplication(withoutSignIn, setup.clientId);
+    expect(result.verified).toBe(false);
+    expect(result.callbackRegistered).toBe(true);
+    expect(result.signOutRegistered).toBe(true);
+    expect(applicationSetupNextSteps(result)).toContain(`Sign-out URI: ${setup.signOutUri} (registered)`);
+    expect(result.initiateLoginReason).toContain('No client sign-in route');
+    expect(result.reason).toBe(result.initiateLoginReason);
+    expect(application.appHomepageUrl).toBe('http://localhost:4000');
+    expect(application.logoutUris).toContainEqual({ uri: setup.signOutUri, isDefault: true });
+    expect(application.initiateLoginUri).toBeNull();
+    for (const [name, options] of writes())
+      if (name === 'updateAuthkitApplication') expect(options.variables?.input).not.toHaveProperty('initiateLoginUri');
+  });
+
+  it('does not report an existing initiate login URI as a conflict when the app has no sign-in route', async () => {
+    application.initiateLoginUri = 'http://localhost:4000/login';
+    const { initiateLoginUri: _omitted, ...withoutSignIn } = setup;
+    const initiateLoginReason = 'The client sign-in route is missing.';
+    const result = await configureAuthkitApplication({ ...withoutSignIn, initiateLoginReason }, setup.clientId);
+    expect(result.verified).toBe(false);
+    expect(result.initiateLoginReason).toBe(initiateLoginReason);
+    expect(result.reason).toBe(initiateLoginReason);
+    expect(result.reason).not.toContain('differs from this app');
+    expect(application.initiateLoginUri).toBe('http://localhost:4000/login');
+    expect(applicationSetupNextSteps(result)).toContain(
+      `Initiate login URI: not configured by the installer. ${initiateLoginReason}`,
+    );
+  });
+
+  it('does not mark sign-out registered when its readback fails and initiate login is pending', async () => {
+    const { initiateLoginUri: _omitted, ...withoutSignIn } = setup;
+    const respond = vi.mocked(dashboardGraphqlRequest).getMockImplementation()!;
+    vi.mocked(dashboardGraphqlRequest).mockImplementation(async (name, options) => {
+      if (name === 'setAuthkitApplicationLogoutUris')
+        return { setUserlandApplicationLogoutUris: { __typename: 'LogoutUrisSet' } };
+      return respond(name, options);
+    });
+    const result = await configureAuthkitApplication(withoutSignIn, setup.clientId);
+    expect(result.verified).toBe(false);
+    expect(result.signOutRegistered).toBe(false);
+    expect(result.reason).toContain('URL read-back did not match');
+    expect(result.reason).toContain('No client sign-in route');
+    expect(applicationSetupNextSteps(result)).toContain(
+      `Sign-out URI: ${setup.signOutUri} (not registered or verified)`,
+    );
+  });
+
+  it('does not trust a sign-out result from a previous attempt on the API-only path', async () => {
+    vi.mocked(refreshIfExpired).mockResolvedValue(null);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 201 })),
+    );
+    const result = await configureAuthkitApplication(
+      { ...setup, signOutRegistered: true },
+      setup.clientId,
+      'sk_test_a',
+    );
+    expect(result.signOutRegistered).toBe(false);
+    expect(result.verified).toBe(false);
+  });
+
   it('fills an empty dashboard homepage with the callback origin', async () => {
     delete application.appHomepageUrl;
     expect((await configureAuthkitApplication(setup, setup.clientId)).verified).toBe(true);
     expect(application.appHomepageUrl).toBe('http://localhost:4000');
   });
 
-  it('fills an empty API-only homepage with the callback origin', async () => {
+  it('writes the API-only homepage for the matching stored unclaimed key despite GET 404', async () => {
     vi.mocked(refreshIfExpired).mockResolvedValue(null);
-    const request = vi.fn(async () => Response.json({ url: null }));
+    vi.mocked(getActiveEnvironment).mockReturnValue({
+      name: 'Unclaimed',
+      type: 'unclaimed',
+      apiKey: 'sk_test_unclaimed',
+      clientId: setup.clientId,
+      claimToken: 'claim',
+    });
+    const request = vi.fn(async (_url: string, init: RequestInit) =>
+      init.method === 'GET' ? new Response(null, { status: 404 }) : Response.json({}),
+    );
     vi.stubGlobal('fetch', request);
     const result = await configureAuthkitApplication(setup, setup.clientId, 'sk_test_unclaimed');
     expect(request).toHaveBeenCalledWith(
@@ -210,44 +458,72 @@ describe('native application URL setup', () => {
     expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
   });
 
-  it('preserves an existing API-only homepage unless explicitly overridden', async () => {
-    vi.mocked(refreshIfExpired).mockResolvedValue(null);
-    const request = vi.fn(async () => Response.json({ url: 'https://existing.example/' }));
-    vi.stubGlobal('fetch', request);
-    await configureAuthkitApplication(setup, setup.clientId, 'sk_test_unclaimed');
-    expect(request).toHaveBeenCalledTimes(2); // Callback POST and homepage GET, no PUT.
-    request.mockClear();
-    await configureAuthkitApplication(
-      { ...setup, homepageUrl: 'https://requested.example/' },
-      setup.clientId,
-      'sk_test_unclaimed',
-    );
-    expect(request).toHaveBeenCalledWith(
-      'https://api.workos.com/user_management/app_homepage_url',
-      expect.objectContaining({ method: 'PUT', body: JSON.stringify({ url: 'https://requested.example/' }) }),
-    );
-    expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
-  });
+  it.each(['unknown', 'claimed', 'different-unclaimed', 'unavailable'])(
+    'skips the unknown API-only homepage for a %s key unless explicitly overridden',
+    async (kind) => {
+      vi.mocked(refreshIfExpired).mockResolvedValue(null);
+      if (kind === 'claimed')
+        vi.mocked(getActiveEnvironment).mockReturnValue({
+          name: 'Sandbox',
+          type: 'sandbox',
+          apiKey: 'sk_test_unclaimed',
+        });
+      if (kind === 'different-unclaimed')
+        vi.mocked(getActiveEnvironment).mockReturnValue({
+          name: 'Unclaimed',
+          type: 'unclaimed',
+          apiKey: 'sk_test_other',
+          clientId: setup.clientId,
+          claimToken: 'claim',
+        });
+      if (kind === 'unavailable')
+        vi.mocked(getActiveEnvironment).mockImplementation(() => {
+          throw new Error('keyring unavailable');
+        });
+      const request = vi.fn(async (_url: string, init: RequestInit) =>
+        init.method === 'GET' ? new Response(null, { status: 404 }) : Response.json({}),
+      );
+      vi.stubGlobal('fetch', request);
+      const result = await configureAuthkitApplication(setup, setup.clientId, 'sk_test_unclaimed');
+      expect(result).toMatchObject({ callbackRegistered: true, verified: false });
+      expect(result.reason).toContain('Homepage URL was left unchanged');
+      expect(result.reason).not.toContain('homepage setup failed');
+      expect(request).toHaveBeenCalledTimes(1); // Callback POST only: no homepage GET or PUT.
+      request.mockClear();
+      await configureAuthkitApplication(
+        { ...setup, homepageUrl: 'https://requested.example/' },
+        setup.clientId,
+        'sk_test_unclaimed',
+      );
+      expect(request).toHaveBeenCalledWith(
+        'https://api.workos.com/user_management/app_homepage_url',
+        expect.objectContaining({ method: 'PUT', body: JSON.stringify({ url: 'https://requested.example/' }) }),
+      );
+      expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
+    },
+  );
 
-  it.each(['http', 'network', 'invalid-json', 'missing-url', 'put'])(
+  it.each(['http', 'network'])(
     'reports API-only homepage %s failures without losing the callback or switching targets',
     async (failure) => {
       vi.mocked(refreshIfExpired).mockResolvedValue(null);
       const request = vi.fn(async (_url: string, init: RequestInit) => {
         if (init.method === 'POST') return Response.json({});
+        if (init.method === 'GET') return new Response(null, { status: 404 });
         if (failure === 'network') throw new Error('private details');
-        if (failure === 'invalid-json') return new Response('invalid');
-        if (failure === 'missing-url') return Response.json({});
-        if (failure === 'put' && init.method === 'GET') return Response.json({ url: null });
         return Response.json({ message: 'private details' }, { status: 403 });
       });
       vi.stubGlobal('fetch', request);
-      const result = await configureAuthkitApplication(setup, setup.clientId, 'sk_test_unclaimed');
+      const result = await configureAuthkitApplication(
+        { ...setup, homepageUrl: 'https://requested.example/' },
+        setup.clientId,
+        'sk_test_unclaimed',
+      );
       expect(result.callbackRegistered).toBe(true);
       expect(result.verified).toBe(false);
       expect(result.reason).toContain('homepage setup failed');
       expect(result.reason).not.toContain('private details');
-      expect(request.mock.calls.filter(([, init]) => init.method === 'PUT')).toHaveLength(failure === 'put' ? 1 : 0);
+      expect(request.mock.calls.filter(([, init]) => init.method === 'PUT')).toHaveLength(1);
       expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
     },
   );
@@ -354,7 +630,7 @@ describe('native application URL setup', () => {
     const result = await configureAuthkitApplication(setup, setup.clientId, 'sk_test_team_a');
     expect(result.callbackRegistered).toBe(true);
     expect(result.verified).toBe(false);
-    expect(request).toHaveBeenCalledTimes(3);
+    expect(request).toHaveBeenCalledTimes(1);
     for (const [, init] of request.mock.calls) {
       expect(init.headers).toMatchObject({ Authorization: 'Bearer sk_test_team_a' });
     }
@@ -581,5 +857,24 @@ describe('app URL derivation', () => {
       'WORKOS_CLIENT_ID=client_app\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/sign-in\n',
     );
     await expect(readNextjsApplicationSetup(directory)).rejects.toThrow('cannot use /sign-in');
+  });
+
+  it("builds a framework's initiate login URI from its own sign-in path", () => {
+    const result = buildApplicationSetup({
+      clientId: 'client_app',
+      redirectUri: 'http://localhost:8080/auth/callback',
+      signInPath: '/auth/login',
+    });
+    expect(result.initiateLoginUri).toBe('http://localhost:8080/auth/login');
+    expect(result.signOutUri).toBe('http://localhost:8080/');
+  });
+
+  it('omits the initiate login URI when the framework has no fixed sign-in path', () => {
+    const result = buildApplicationSetup({
+      clientId: 'client_app',
+      redirectUri: 'http://localhost:3000/auth/callback',
+    });
+    expect(result).not.toHaveProperty('initiateLoginUri');
+    expect(result.signOutUri).toBe('http://localhost:3000/');
   });
 });

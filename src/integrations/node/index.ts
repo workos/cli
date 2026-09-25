@@ -3,6 +3,7 @@ import type { FrameworkConfig } from '../../lib/framework-config.js';
 import type { InstallerOptions } from '../../utils/types.js';
 import { enableDebugLogs } from '../../utils/debug.js';
 import { getPackageVersion } from '../../utils/package-json.js';
+import { getCallbackPath, getSignInPath } from '../../lib/port-detection.js';
 
 export const config: FrameworkConfig = {
   metadata: {
@@ -41,7 +42,7 @@ export const config: FrameworkConfig = {
     getOutroChanges: () => [
       'Analyzed your Express project structure',
       'Installed and configured @workos-inc/node SDK',
-      'Created authentication routes (/auth/login, /auth/callback, /auth/logout)',
+      `Created authentication routes (${getSignInPath('node')}, ${getCallbackPath('node')}, /logout)`,
       'Configured session management',
     ],
     getOutroNextSteps: () => [

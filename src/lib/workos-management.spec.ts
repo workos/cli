@@ -17,7 +17,7 @@ vi.mock('../utils/analytics.js', () => ({
 
 const { analytics } = await import('../utils/analytics.js');
 const ui = (await import('../utils/ui.js')).default;
-const { autoConfigureWorkOSEnvironment } = await import('./workos-management.js');
+const { autoConfigureWorkOSEnvironment, SANDBOX_ONLY_REASON } = await import('./workos-management.js');
 
 const API_KEY = 'sk_test_123';
 const HOMEPAGE_ENDPOINT = 'https://api.workos.com/user_management/app_homepage_url';
@@ -116,6 +116,12 @@ describe('workos-management', () => {
   });
 
   describe('setHomepageUrl read-then-write', () => {
+    // The homepage is only written where nothing can be overwritten; an
+    // unclaimed environment is one (see 'homepage without a user choice').
+    beforeEach(() => {
+      getActiveEnvironment.mockReturnValue(unclaimedEnv);
+    });
+
     it('skips the PUT when the current homepage URL already matches', async () => {
       const { calls } = stubFetch(() => jsonResponse(200, { url: BASE_URL }));
 
@@ -290,11 +296,11 @@ describe('workos-management', () => {
     });
 
     it('does not name a stored environment whose key did not do the writes', async () => {
-      // `--api-key sk_live_prod...` bypasses the store: the writes landed in the
+      // `--api-key sk_test_other...` bypasses the store: the writes landed in the
       // supplied key's environment, not the stored active one.
       getActiveEnvironment.mockReturnValue(unclaimedEnv);
 
-      await autoConfigureWorkOSEnvironment('sk_live_prod_999', INTEGRATION, PORT);
+      await autoConfigureWorkOSEnvironment('sk_test_other_999', INTEGRATION, PORT);
 
       const value = rowFor('Environment').value;
       expect(value).toBe('the API key supplied to this run');
@@ -305,7 +311,7 @@ describe('workos-management', () => {
     it('does not name a claimed stored environment whose key did not do the writes', async () => {
       getActiveEnvironment.mockReturnValue(claimedEnv);
 
-      await autoConfigureWorkOSEnvironment('sk_live_prod_999', INTEGRATION, PORT);
+      await autoConfigureWorkOSEnvironment('sk_test_other_999', INTEGRATION, PORT);
 
       const value = rowFor('Environment').value;
       expect(value).toBe('the API key supplied to this run');
@@ -321,6 +327,93 @@ describe('workos-management', () => {
 
       expect(result).not.toBeNull();
       expect(rowFor('Environment').value).toBe('the API key supplied to this run');
+    });
+  });
+
+  describe('homepage without a user choice', () => {
+    it('leaves the homepage of a claimed environment alone and says so', async () => {
+      getActiveEnvironment.mockReturnValue(claimedEnv);
+      const { calls } = stubFetch(() => jsonResponse(404, {}));
+
+      const result = await autoConfigureWorkOSEnvironment(API_KEY, INTEGRATION, PORT);
+
+      expect(homepageCalls(calls, 'GET')).toHaveLength(0);
+      expect(homepageCalls(calls, 'PUT')).toHaveLength(0);
+      expect(result).not.toBeNull();
+      expect(result?.homepageUrl).toBeUndefined();
+      expect(rowFor('Homepage URL')).toMatchObject({ value: BASE_URL, statusKind: 'warn' });
+      expect(analytics.capture).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ homepageUrl: 'skipped' }),
+      );
+    });
+
+    it.each([
+      ['no stored environment', () => null],
+      ['another environment’s unclaimed key', () => ({ ...unclaimedEnv, apiKey: 'sk_test_other' })],
+      [
+        'an unreadable keyring',
+        () => {
+          throw new Error('keyring locked');
+        },
+      ],
+    ])('leaves it alone with %s', async (_, active) => {
+      getActiveEnvironment.mockImplementation(active as () => EnvironmentConfig | null);
+      const { calls } = stubFetch(() => jsonResponse(404, {}));
+
+      await autoConfigureWorkOSEnvironment(API_KEY, INTEGRATION, PORT);
+
+      expect(homepageCalls(calls, 'PUT')).toHaveLength(0);
+    });
+
+    it('sets it on an unclaimed environment, whose dashboard nobody has used', async () => {
+      getActiveEnvironment.mockReturnValue(unclaimedEnv);
+      const { calls } = stubFetch((method) => (method === 'GET' ? jsonResponse(404, {}) : jsonResponse(200, {})));
+
+      await autoConfigureWorkOSEnvironment(API_KEY, INTEGRATION, PORT);
+
+      expect(homepageCalls(calls, 'PUT')).toHaveLength(1);
+    });
+
+    it('sets the homepage the user asked for (--homepage-url) on any environment', async () => {
+      getActiveEnvironment.mockReturnValue(claimedEnv);
+      const { calls } = stubFetch((method) => (method === 'GET' ? jsonResponse(404, {}) : jsonResponse(200, {})));
+
+      await autoConfigureWorkOSEnvironment(API_KEY, INTEGRATION, PORT, { homepageUrl: 'https://app.example.com' });
+
+      expect(homepageCalls(calls, 'PUT')).toHaveLength(1);
+    });
+  });
+
+  describe('production keys', () => {
+    it.each([
+      ['a live key', 'sk_live_prod_999'],
+      ['an unrecognized key', 'sk_prod_999'],
+    ])('writes nothing with %s and reports each item as skipped', async (_, apiKey) => {
+      const { calls } = stubFetch(() => jsonResponse(200, {}));
+      const steps: string[] = [];
+
+      const result = await autoConfigureWorkOSEnvironment(apiKey, INTEGRATION, PORT, {
+        onStep: (step, status, detail) => steps.push(`${step}:${status}:${detail}`),
+      });
+
+      expect(result).toBeNull();
+      expect(calls).toEqual([]);
+      expect(steps).toEqual([
+        `redirect-uri:skipped:${SANDBOX_ONLY_REASON}`,
+        `cors-origin:skipped:${SANDBOX_ONLY_REASON}`,
+      ]);
+      expect(ui.log.warn).toHaveBeenCalledWith(SANDBOX_ONLY_REASON);
+      expect(ui.rows).not.toHaveBeenCalled();
+    });
+
+    it('writes nothing with a live key even when it is the active profile', async () => {
+      getActiveEnvironment.mockReturnValue({ name: 'production', type: 'production', apiKey: 'sk_live_active' });
+      const { calls } = stubFetch(() => jsonResponse(200, {}));
+
+      await autoConfigureWorkOSEnvironment('sk_live_active', INTEGRATION, PORT);
+
+      expect(calls).toEqual([]);
     });
   });
 

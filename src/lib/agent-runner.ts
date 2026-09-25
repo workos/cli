@@ -20,7 +20,8 @@ import { initializeAgent, runAgent, type RetryConfig } from './agent-interface.j
 import { uploadEnvironmentVariablesStep } from '../steps/index.js';
 import { autoConfigureWorkOSEnvironment } from './workos-management.js';
 import { assertSupportedNextJsRouter, assertNextjsSignInRouteAvailable } from '../integrations/nextjs/utils.js';
-import { detectPort, getCallbackPath } from './port-detection.js';
+import { detectPort, resolveRedirectUri } from './port-detection.js';
+import { buildSignInSection } from './sign-in-route.js';
 import { writeEnvLocal } from './env-writer.js';
 
 /**
@@ -85,9 +86,7 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
   // Write environment variables to .env.local BEFORE agent runs
   // Skip if caller already handled this (prevents double-writing)
   if (!callerHandledConfig) {
-    const port = detectPort(config.metadata.integration, options.installDir);
-    const callbackPath = getCallbackPath(config.metadata.integration);
-    const redirectUri = options.redirectUri || `http://localhost:${port}${callbackPath}`;
+    const redirectUri = resolveRedirectUri(config.metadata.integration, options);
 
     // Next.js requires NEXT_PUBLIC_ prefix for client-side env vars
     const redirectUriKey =
@@ -321,6 +320,7 @@ async function buildIntegrationPrompt(
     'WORKOS_COOKIE_PASSWORD',
   ];
   const envVarList = envVars.map((v) => `- ${v}`).join('\n');
+  const signInSection = buildSignInSection(config);
 
   return `You are integrating WorkOS AuthKit into this ${config.metadata.name} application.
 
@@ -355,7 +355,7 @@ Do not claim the full integration or browser flows are verified. Report code imp
     : ''
 }
 
-Report your progress using [STATUS] prefixes.
+${signInSection}Report your progress using [STATUS] prefixes.
 
 Begin integration now.`;
 }

@@ -713,12 +713,12 @@ OAuth credentials are stored in the system keychain (with `~/.workos/credentials
 
 1. **Detects** your framework and project structure
 2. **Resolves credentials** — uses existing config, or auto-provisions an unclaimed environment if none found
-3. **Auto-configures** WorkOS dashboard (redirect URI, CORS, homepage URL)
+3. **Prepares** local environment variables securely
 4. **Fetches** latest SDK documentation from workos.com
-5. **Uses AI** (Claude) to generate integration code
-6. **Installs** SDK with detected package manager
-7. **Creates** auth routes, middleware, and UI
-8. **Configures** environment variables securely
+5. **Uses AI** (Claude) to install the SDK and create auth routes, middleware, and UI
+6. **Checks** the generated integration
+7. **Configures sandbox URLs** after the agent, using one WorkOS target: the client-ID-matched dashboard application, or the API-key-only fallback. Existing settings are preserved unless an explicit override is allowed; unsupported or unverified settings are reported for manual setup.
+8. **Reports** what was configured and what still needs attention. For React and vanilla JS, the agent creates `/login`, but the installer leaves the Initiate login URI unchanged: open `/login` while signed out, confirm it starts sign-in without a click, then set that URL in the WorkOS dashboard. Static source checks cannot verify client routing; unsupported layouts or scan limits do not by themselves fail installation. Test sign-in, sign-out, and invitation/password-reset flows in the browser before treating the integration as complete.
 
 ## Telemetry
 

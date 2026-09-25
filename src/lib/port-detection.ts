@@ -11,6 +11,8 @@ const INTEGRATION_TO_SETTINGS_KEY: Record<string, string> = {
   'tanstack-start': 'tanstackStart',
   'react-router': 'reactRouter',
   'vanilla-js': 'vanillaJs',
+  sveltekit: 'sveltekit',
+  node: 'node',
   python: 'python',
   ruby: 'ruby',
   php: 'php',
@@ -32,6 +34,39 @@ function getDefaultPort(integration: Integration): number {
 export function getCallbackPath(integration: Integration): string {
   const settingsKey = INTEGRATION_TO_SETTINGS_KEY[integration];
   return settings.frameworks[settingsKey]?.callbackPath ?? DEFAULT_CALLBACK_PATH;
+}
+
+/** The app's OAuth callback: the explicit override, else localhost on the detected port. */
+export function resolveRedirectUri(
+  integration: Integration,
+  { installDir, redirectUri }: { installDir: string; redirectUri?: string },
+  port?: number,
+): string {
+  return (
+    redirectUri || `http://localhost:${port ?? detectPort(integration, installDir)}${getCallbackPath(integration)}`
+  );
+}
+
+/** The env prefix a client bundler exposes to browser code: Vite, then Create React App. */
+export function getClientEnvPrefix(installDir: string): 'VITE_' | 'REACT_APP_' | undefined {
+  let deps: Record<string, string> = {};
+  try {
+    const pkg = JSON.parse(fs.readFileSync(join(installDir, 'package.json'), 'utf-8'));
+    deps = { ...pkg.dependencies, ...pkg.devDependencies };
+  } catch {
+    // No readable package.json - rely on the Vite config check
+  }
+  if (
+    deps.vite ||
+    ['vite.config.ts', 'vite.config.js', 'vite.config.mjs'].some((f) => fs.existsSync(join(installDir, f)))
+  )
+    return 'VITE_';
+  return deps['react-scripts'] ? 'REACT_APP_' : undefined;
+}
+
+/** The route that starts sign-in, or undefined when the SDK guide does not fix one. */
+export function getSignInPath(integration: Integration): string | undefined {
+  return settings.frameworks[INTEGRATION_TO_SETTINGS_KEY[integration]]?.signInPath;
 }
 
 /**
@@ -228,6 +263,7 @@ export function detectPort(integration: Integration, installDir: string): number
     case 'react':
     case 'react-router':
     case 'vanilla-js':
+    case 'sveltekit':
       // Vite-based frameworks
       detectedPort = parseViteConfigPortFromDir(installDir);
       break;
