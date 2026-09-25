@@ -6,7 +6,7 @@ import { fetchTeamEnvironments } from './environment-target.js';
 import { dashboardGraphqlRequest } from './dashboard-graphql.js';
 import { getOperation, resolveExecutableDocument } from '../catalog/operation.js';
 import { InstallDeclinedError } from './installer-errors.js';
-import { setHomepageUrl } from './workos-management.js';
+import { isUnclaimedEnvironmentKey, setHomepageUrl } from './workos-management.js';
 import { getSignInPath } from './port-detection.js';
 
 export interface AuthkitApplicationSetup {
@@ -97,6 +97,14 @@ export async function configureAuthkitApplication(
   expectedClientId: string,
   apiKey?: string,
 ): Promise<AuthkitApplicationSetup> {
+  if (setup.initiateLoginUri === undefined) {
+    setup = {
+      ...setup,
+      initiateLoginReason:
+        setup.initiateLoginReason ??
+        'No client sign-in route is available. Add a sign-in route and configure the Initiate login URI in the dashboard.',
+    };
+  }
   let callbackRegistered = false;
   const pending = (reason: string): AuthkitApplicationSetup => {
     if (!callbackRegistered) {
@@ -131,10 +139,15 @@ export async function configureAuthkitApplication(
       return pending('Could not register the callback URL. Check the API key and connection, then retry setup.');
     }
     callbackRegistered = true;
+    // REST cannot read the current homepage. Only an explicit override or the
+    // stored active unclaimed key authorizes replacing this single-valued setting.
+    if (setup.homepageUrl === undefined && !isUnclaimedEnvironmentKey(apiKey)) {
+      return pending(
+        'Callback registered using the API key. Homepage URL was left unchanged because its current value cannot be read and this key does not match the stored active unclaimed environment. Supply --homepage-url to override it. Sign-out URI and Initiate login URI still require dashboard setup and verification.',
+      );
+    }
     try {
-      await setHomepageUrl(apiKey, setup.homepageUrl ?? new URL(setup.redirectUri).origin, {
-        preserveExisting: setup.homepageUrl === undefined,
-      });
+      await setHomepageUrl(apiKey, setup.homepageUrl ?? new URL(setup.redirectUri).origin);
     } catch {
       return pending(
         'Callback registered using the API key, but homepage setup failed. Check the Homepage URL, Sign-out URI and Initiate login URI in the dashboard.',
@@ -234,7 +247,7 @@ export async function configureAuthkitApplication(
     }
     callbackRegistered = true;
 
-    const reasons: string[] = [];
+    const reasons: string[] = setup.initiateLoginUri === undefined ? [setup.initiateLoginReason!] : [];
     const defaults = original.logoutUris.filter((uri) => uri.isDefault);
     const signOutConflict = defaults.length > 1 || defaults.some((uri) => !isSignOutDestination(uri.uri));
     // True when this app has an initiate login URI that `uri` does not already hold.
