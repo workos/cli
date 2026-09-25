@@ -9,7 +9,10 @@ vi.mock('@inquirer/prompts', () => ({
 
 const inquirer = await import('@inquirer/prompts');
 const ui = (await import('./ui.js')).default;
-const { isCancel, CANCEL, setDashboardMode } = await import('./ui.js');
+const uiModule = await import('./ui.js');
+const { isCancel, CANCEL, setUiHost } = uiModule;
+type UiHost = import('./ui.js').UiHost;
+type UiPromptRequest = import('./ui.js').UiPromptRequest;
 
 function namedError(name: string): Error {
   const e = new Error(name);
@@ -20,7 +23,7 @@ function namedError(name: string): Error {
 let stdinTtyDesc: PropertyDescriptor | undefined;
 beforeEach(() => {
   vi.clearAllMocks();
-  setDashboardMode(false);
+  setUiHost(null);
   // Prompts route through withPrompt, which refuses to open on a non-TTY stdin.
   // Simulate an interactive terminal so the adapter/cancellation tests exercise
   // the real prompt path (individual tests override this to test the guard).
@@ -196,25 +199,267 @@ describe('prompt coordination (withPrompt)', () => {
   });
 });
 
-describe('dashboard mode suppresses output', () => {
+describe('UI host', () => {
   let logSpy: ReturnType<typeof vi.spyOn>;
+  let errorSpy: ReturnType<typeof vi.spyOn>;
+  let writeSpy: ReturnType<typeof vi.spyOn>;
+  const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
+
+  function fakeHost(answer: (request: UiPromptRequest) => unknown = () => true) {
+    const lines: Array<{ kind: string; message: string; rendered: string; stream: string }> = [];
+    const statuses: Array<string | null> = [];
+    const requests: UiPromptRequest[] = [];
+    const host: UiHost = {
+      line: (l) => lines.push({ ...l, rendered: strip(l.rendered) }),
+      status: (m) => statuses.push(m),
+      prompt: async (request) => {
+        requests.push(request);
+        return answer(request);
+      },
+    };
+    return { host, lines, statuses, requests };
+  }
+
   beforeEach(() => {
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
   });
-  afterEach(() => logSpy.mockRestore());
-
-  it('no-ops log/intro/note when dashboard mode is on', () => {
-    setDashboardMode(true);
-    ui.log.info('hi');
-    ui.intro('title');
-    ui.note('body');
-    expect(logSpy).not.toHaveBeenCalled();
+  afterEach(() => {
+    setUiHost(null);
+    logSpy.mockRestore();
+    errorSpy.mockRestore();
+    writeSpy.mockRestore();
   });
 
-  it('writes when dashboard mode is off', () => {
-    setDashboardMode(false);
+  it('no longer exposes the removed dashboard-mode flag', () => {
+    expect('setDashboardMode' in uiModule).toBe(false);
+    expect('isDashboardMode' in uiModule).toBe(false);
+  });
+
+  it('prints to the terminal when no host is registered', () => {
     ui.log.success('done');
-    expect(logSpy).toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    expect(strip(String(logSpy.mock.calls[0][0]))).toBe('  ✓ done');
+  });
+
+  it('routes every output helper to the host with its level, and prints nothing', () => {
+    const { host, lines } = fakeHost();
+    setUiHost(host);
+
+    ui.log.info('plain info');
+    ui.log.step('a step');
+    ui.log.success('it worked');
+    ui.log.warn('careful');
+    ui.log.warning('also careful');
+    ui.log.error('it broke');
+    ui.log.hint('psst');
+    ui.log.detail('nested');
+    ui.intro('WorkOS', 'installer');
+    ui.rows([{ key: 'Client ID', value: 'client_123', status: 'created' }]);
+    ui.cancel('Stopped');
+
+    expect(logSpy).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
+    expect(lines.slice(0, 8)).toEqual([
+      { kind: 'info', message: 'plain info', rendered: 'plain info', stream: 'stdout' },
+      { kind: 'step', message: 'a step', rendered: '› a step', stream: 'stdout' },
+      { kind: 'success', message: 'it worked', rendered: '✓ it worked', stream: 'stdout' },
+      { kind: 'warn', message: 'careful', rendered: '! careful', stream: 'stdout' },
+      { kind: 'warn', message: 'also careful', rendered: '! also careful', stream: 'stdout' },
+      { kind: 'error', message: 'it broke', rendered: '✗ it broke', stream: 'stdout' },
+      { kind: 'hint', message: 'psst', rendered: 'psst', stream: 'stdout' },
+      { kind: 'detail', message: 'nested', rendered: '  › nested', stream: 'stdout' },
+    ]);
+    // intro: blank, title line, blank
+    expect(lines.slice(8, 11).map((l) => l.rendered)).toEqual(['', 'WorkOS  ·  installer', '']);
+    expect(lines[11].rendered).toMatch(/^✓ Client ID {2}client_123 {2}created$/);
+    expect(lines[12]).toEqual({ kind: 'plain', message: 'Stopped', rendered: 'Stopped', stream: 'stderr' });
+  });
+
+  it('reports spinner progress as status and records the final line', () => {
+    const { host, lines, statuses } = fakeHost();
+    setUiHost(host);
+
+    const s = ui.spinner();
+    s.start('Working');
+    s.message('Still working');
+    s.stop('Done');
+    const failed = ui.spinner();
+    failed.start('Pushing');
+    failed.stop('Push failed', 1);
+    const cleared = ui.spinner();
+    cleared.start('Waiting');
+    cleared.clear();
+
+    expect(statuses).toEqual(['Working', 'Still working', null, 'Pushing', null, 'Waiting', null]);
+    expect(lines).toEqual([
+      { kind: 'success', message: 'Done', rendered: '✓ Done', stream: 'stdout' },
+      { kind: 'error', message: 'Push failed', rendered: '✗ Push failed', stream: 'stdout' },
+    ]);
+    // No animation frames were written to the terminal.
+    expect(writeSpy).not.toHaveBeenCalled();
+  });
+
+  it('delegates each prompt kind to the host with the same call shape, not to inquirer', async () => {
+    const validate = (v: string) => (v ? undefined : 'required');
+    const { host, requests } = fakeHost((r) => (r.kind === 'confirm' ? false : r.kind === 'select' ? 'b' : 'typed'));
+    setUiHost(host);
+
+    await expect(ui.confirm({ message: 'Continue?', initialValue: true })).resolves.toBe(false);
+    await expect(
+      ui.select({
+        message: 'Pick',
+        options: [{ value: 'a' }, { value: 'b', label: 'B', hint: 'second' }],
+        initialValue: 'b',
+      }),
+    ).resolves.toBe('b');
+    await expect(ui.text({ message: 'Name', placeholder: 'client_...', validate })).resolves.toBe('typed');
+    await expect(ui.password({ message: 'Key', validate })).resolves.toBe('typed');
+
+    expect(requests).toEqual([
+      { kind: 'confirm', message: 'Continue?', initialValue: true },
+      {
+        kind: 'select',
+        message: 'Pick',
+        options: [{ value: 'a' }, { value: 'b', label: 'B', hint: 'second' }],
+        initialValue: 'b',
+      },
+      { kind: 'text', message: 'Name', placeholder: 'client_...', validate },
+      { kind: 'password', message: 'Key', validate },
+    ]);
+    expect(inquirer.confirm).not.toHaveBeenCalled();
+    expect(inquirer.select).not.toHaveBeenCalled();
+    expect(inquirer.input).not.toHaveBeenCalled();
+    expect(inquirer.password).not.toHaveBeenCalled();
+  });
+
+  it('passes CANCEL from the host through unchanged', async () => {
+    const { host } = fakeHost(() => CANCEL);
+    setUiHost(host);
+    const answer = await ui.confirm({ message: 'q' });
+    expect(isCancel(answer)).toBe(true);
+  });
+
+  it('returns CANCEL for an already-aborted signal without opening the host prompt', async () => {
+    const { host, requests } = fakeHost();
+    setUiHost(host);
+    const controller = new AbortController();
+    controller.abort();
+    const answer = await ui.select({ message: 'q', options: [{ value: 'x' }], signal: controller.signal });
+    expect(isCancel(answer)).toBe(true);
+    expect(requests).toEqual([]);
+  });
+
+  it('keeps the --json and non-TTY guards in front of the host', async () => {
+    const { host, requests } = fakeHost();
+    setUiHost(host);
+
+    const { setOutputMode } = await import('./output.js');
+    setOutputMode('json');
+    try {
+      await expect(ui.confirm({ message: 'q' })).rejects.toMatchObject({
+        name: 'PromptUnavailableError',
+        reason: 'json',
+      });
+    } finally {
+      setOutputMode('human');
+    }
+
+    Object.defineProperty(process.stdin, 'isTTY', { value: false, configurable: true });
+    await expect(ui.text({ message: 'q' })).rejects.toMatchObject({ name: 'PromptUnavailableError', reason: 'no-tty' });
+    expect(requests).toEqual([]);
+  });
+
+  it('opens host prompts one at a time', async () => {
+    const order: string[] = [];
+    let resolveFirst!: (v: boolean) => void;
+    setUiHost({
+      line: () => {},
+      status: () => {},
+      prompt: (request) => {
+        order.push(`open:${request.message}`);
+        if (request.message === 'first') return new Promise<boolean>((resolve) => (resolveFirst = resolve));
+        return Promise.resolve(true);
+      },
+    });
+
+    const p1 = ui.confirm({ message: 'first' });
+    const p2 = ui.confirm({ message: 'second' });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(order).toEqual(['open:first']);
+
+    resolveFirst(true);
+    await Promise.all([p1, p2]);
+    expect(order).toEqual(['open:first', 'open:second']);
+  });
+
+  it('attaches what was printed just before a prompt as its context', async () => {
+    const { host, requests } = fakeHost(() => false);
+    setUiHost(host);
+
+    ui.log.warn('You have uncommitted or untracked files:');
+    ui.log.info('  src/a.ts');
+    ui.log.info('');
+    ui.log.info('  src/b.ts');
+    await ui.confirm({ message: 'Continue anyway?', initialValue: false });
+
+    expect(requests[0].context?.map((l) => [l.kind, l.message])).toEqual([
+      ['warn', 'You have uncommitted or untracked files:'],
+      ['info', '  src/a.ts'],
+      ['info', '  src/b.ts'],
+    ]);
+  });
+
+  it('does not attach lines printed in an earlier run', async () => {
+    const { host, requests } = fakeHost();
+    setUiHost(host);
+
+    ui.log.success('Authenticated');
+    await new Promise((r) => setTimeout(r, 0));
+    await ui.confirm({ message: 'Commit the changes?' });
+
+    expect(requests[0]).not.toHaveProperty('context');
+  });
+
+  it('keeps each queued prompt paired with the lines printed before it was called', async () => {
+    const opened: UiPromptRequest[] = [];
+    let resolveFirst!: (v: unknown) => void;
+    setUiHost({
+      line: () => {},
+      status: () => {},
+      prompt: (request) => {
+        opened.push(request);
+        return opened.length === 1 ? new Promise((r) => (resolveFirst = r)) : Promise.resolve(true);
+      },
+    });
+
+    ui.log.info('about the first');
+    const first = ui.select({ message: 'First?', options: [{ value: 'a' }] });
+    ui.log.warn('about the second');
+    const second = ui.confirm({ message: 'Second?' });
+    await new Promise((r) => setTimeout(r, 0));
+    resolveFirst('a');
+    await Promise.all([first, second]);
+
+    expect(opened.map((r) => r.context?.map((l) => l.message))).toEqual([['about the first'], ['about the second']]);
+  });
+
+  it('never collects context without a host', async () => {
+    ui.log.warn('printed to the terminal');
+    vi.mocked(inquirer.confirm).mockResolvedValue(true);
+    await ui.confirm({ message: 'q' });
+    expect(vi.mocked(inquirer.confirm).mock.calls[0][0]).not.toHaveProperty('context');
+  });
+
+  it('goes back to the terminal after the host is removed', () => {
+    const { host, lines } = fakeHost();
+    setUiHost(host);
+    ui.log.info('to host');
+    setUiHost(null);
+    ui.log.info('to terminal');
+    expect(lines.map((l) => l.message)).toEqual(['to host']);
+    expect(strip(String(logSpy.mock.calls[0][0]))).toBe('  to terminal');
   });
 });
 

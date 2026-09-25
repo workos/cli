@@ -1,0 +1,136 @@
+/**
+ * The full-screen installer: WorkOS logo and a rotating tips & news card up
+ * top, the task list beside a plain-English walkthrough, any open question
+ * below them, and a status line at the bottom.
+ */
+
+import { useEffect, useState } from 'react';
+import { Box, Text, useInput } from 'ink';
+import type { RunModel } from './model/run-model.js';
+import { useRunSnapshot, useTerminalSize } from './hooks.js';
+import { colors, MIN_COLUMNS, MIN_ROWS, SIDE_BY_SIDE_MIN_COLUMNS, SIDE_BY_SIDE_MIN_ROWS } from './theme.js';
+import { COMPACT_HEADER_ROWS, FULL_HEADER_ROWS, Header } from './components/Header.js';
+import { ProgressLine, TaskList } from './components/TaskList.js';
+import { Walkthrough } from './components/Walkthrough.js';
+import { PromptPanel, promptHeight } from './components/PromptPanel.js';
+import { StatusBar } from './components/StatusBar.js';
+
+export interface InstallerAppProps {
+  model: RunModel;
+  /** Answer the open prompt (a value or CANCEL). */
+  answer: (value: unknown) => void;
+  /** ctrl-c with no prompt open. */
+  interrupt: () => void;
+  projectName: string;
+  tipIntervalMs?: number;
+}
+
+/** Rows at which the full-size logo fits alongside everything else. */
+const FULL_LOGO_MIN_ROWS = 36;
+const MIN_BODY_ROWS = 8;
+/** An open question may squeeze the body further; the task list windows itself. */
+const MIN_BODY_ROWS_WITH_PROMPT = 6;
+const TOP_MARGIN = 1;
+
+// A fresh key per prompt so each question starts with empty input state.
+const promptKeys = new WeakMap<object, number>();
+let nextPromptKey = 0;
+function keyFor(prompt: object): number {
+  let key = promptKeys.get(prompt);
+  if (key === undefined) promptKeys.set(prompt, (key = nextPromptKey++));
+  return key;
+}
+
+export function InstallerApp({ model, answer, interrupt, projectName, tipIntervalMs = 12_000 }: InstallerAppProps) {
+  const snapshot = useRunSnapshot(model);
+  const [columns, rows] = useTerminalSize();
+  const [tipIndex, setTipIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => setTipIndex((i) => i + 1), tipIntervalMs);
+    return () => clearInterval(timer);
+  }, [tipIntervalMs]);
+
+  // The open prompt owns the keyboard; otherwise ctrl-c cancels and ←/→ page tips.
+  useInput(
+    (input, key) => {
+      if (key.ctrl && input === 'c') interrupt();
+      else if (key.rightArrow) setTipIndex((i) => i + 1);
+      else if (key.leftArrow) setTipIndex((i) => i - 1);
+    },
+    { isActive: !snapshot.prompt },
+  );
+
+  // Margins: one column each side, one row on top, and the bottom row left
+  // empty (drawing one short of the screen keeps Ink's redraw incremental).
+  const width = Math.max(20, columns - 2);
+  const height = Math.max(1, rows - 1);
+  const inner = Math.max(1, height - TOP_MARGIN);
+  const compact = rows < FULL_LOGO_MIN_ROWS;
+  const headerRows = compact ? COMPACT_HEADER_ROWS : FULL_HEADER_ROWS;
+  const minBody = snapshot.prompt ? MIN_BODY_ROWS_WITH_PROMPT : MIN_BODY_ROWS;
+  // Room for a select's options: what's left after the header, a minimal
+  // body, the gaps, the rule, the question, and the status line.
+  const maxOptions = Math.max(3, inner - headerRows - minBody - 6);
+  // The question always fits; the context above it takes what's left.
+  const promptRoom = inner - headerRows - 1 - minBody - 1 - 1;
+  const maxContext = snapshot.prompt
+    ? Math.max(1, promptRoom - promptHeight(snapshot.prompt, width, maxOptions, 0))
+    : 0;
+  const prompt = snapshot.prompt ? (
+    <PromptPanel
+      key={keyFor(snapshot.prompt)}
+      request={snapshot.prompt}
+      answer={answer}
+      width={width}
+      maxOptions={maxOptions}
+      maxContext={maxContext}
+    />
+  ) : null;
+
+  if (columns < MIN_COLUMNS || rows < MIN_ROWS) {
+    return (
+      <Box flexDirection="column" width={columns} height={height} paddingX={1} paddingTop={TOP_MARGIN}>
+        <Text color={colors.brand} bold>
+          WorkOS AuthKit installer
+        </Text>
+        <Text wrap="wrap">{`Make this window at least ${MIN_COLUMNS}×${MIN_ROWS} to see the installer (it's ${columns}×${rows}).`}</Text>
+        <Box flexGrow={1} />
+        {prompt}
+        <StatusBar snapshot={snapshot} width={width} />
+      </Box>
+    );
+  }
+
+  const visibleTasks = snapshot.tasks.filter((t) => t.status !== 'skipped');
+  const promptRows = snapshot.prompt ? promptHeight(snapshot.prompt, width, maxOptions, maxContext) + 1 : 0;
+  const bodyRows = Math.max(minBody, inner - headerRows - 1 - promptRows - 1);
+  // Walkthrough on the left, checklist on the right, when both fit.
+  const sideBySide = columns >= SIDE_BY_SIDE_MIN_COLUMNS && rows >= SIDE_BY_SIDE_MIN_ROWS;
+  const taskWidth = columns >= 110 ? 34 : 30;
+  const walkthroughWidth = sideBySide ? width - taskWidth - 2 : width;
+
+  return (
+    <Box flexDirection="column" width={columns} height={height} paddingX={1} paddingTop={TOP_MARGIN}>
+      <Header snapshot={snapshot} columns={width} compact={compact} projectName={projectName} tipIndex={tipIndex} />
+      <Box height={1} flexShrink={0} />
+      {sideBySide ? (
+        <Box height={bodyRows} flexShrink={0}>
+          <Walkthrough entries={snapshot.walkthrough} width={walkthroughWidth} height={bodyRows} />
+          <Box width={2} flexShrink={0} />
+          <TaskList tasks={visibleTasks} width={taskWidth} height={bodyRows} />
+        </Box>
+      ) : (
+        <Box flexDirection="column" height={bodyRows} flexShrink={0}>
+          <Walkthrough entries={snapshot.walkthrough} width={walkthroughWidth} height={bodyRows - 2} />
+          <Box height={1} flexShrink={0} />
+          <ProgressLine tasks={visibleTasks} width={width} />
+        </Box>
+      )}
+      {prompt ? <Box height={1} flexShrink={0} /> : null}
+      {prompt}
+      <Box flexGrow={1} />
+      <StatusBar snapshot={snapshot} width={width} />
+    </Box>
+  );
+}

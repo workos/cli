@@ -550,8 +550,20 @@ workos install [options]
   --create-pr             Auto-create pull request after installation
   --no-git-check          Skip git dirty working tree check
   --force-install         Force install packages even if peer dependency checks fail
+  --no-tui                Use plain line-by-line output instead of the full-screen installer
   --debug                 Enable verbose logging
 ```
+
+**Full-screen installer:** In an interactive terminal of at least 80×24,
+`workos install` opens a full-screen view: a plain-English walkthrough of what
+it's doing, a task list beside it that follows the dashboard's AuthKit
+checklist, and tips and WorkOS news, with every question asked inline. Below
+100×30 the task list becomes a single progress line under the walkthrough. When
+it closes, your answers, the settings it made, any warnings or errors, and the
+same summary a plain run prints stay in your scrollback; the agent's
+step-by-step output is left to the log in `~/.workos/logs/`. Pass `--no-tui` for
+plain output. Smaller terminals, piped input/output, CI and agent modes, and
+`--json` always use plain or JSON output.
 
 **Empty directories:** Running `workos install` in an empty directory scaffolds a new Next.js app with `create-next-app` (App Router, TypeScript, Tailwind, `src/`) and then wires AuthKit into it. This only happens when the directory is empty or contains nothing but VCS/editor metadata (`.git`, `.gitignore`, `LICENSE`, `.idea`, and similar). Any project file — including a `README.md` or a `package.json` — opts out, and the installer treats the directory as an existing project. Interactive runs confirm first (default yes); non-interactive/headless runs (or `--scaffold`) scaffold automatically and report `"scaffolded": true`. The package manager is resolved from how you invoked the CLI (`npm_config_user_agent`) unless you pass `--pm`.
 

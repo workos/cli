@@ -2142,6 +2142,14 @@ const commands: CommandSchema[] = [
         hidden: false,
       },
       {
+        name: 'tui',
+        type: 'boolean',
+        description: 'Use the full-screen installer in an interactive terminal (use --no-tui for plain output)',
+        required: false,
+        default: true,
+        hidden: false,
+      },
+      {
         name: 'router',
         type: 'string',
         description: 'Use Next.js App Router in mixed projects (Pages-only projects are refused)',

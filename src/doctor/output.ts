@@ -3,8 +3,7 @@ import { homedir } from 'os';
 import { createAgents } from '../commands/install-skill.js';
 import type { InteractionModeSource } from '../utils/interaction-mode.js';
 import type { DoctorReport, Issue } from './types.js';
-import { renderSummaryBox, type SummaryBoxItem } from '../utils/summary-box.js';
-import type { LockExpression } from '../utils/lock-art.js';
+import { renderSummaryBox, type SummaryBoxItem, type SummaryTone } from '../utils/summary-box.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 export interface FormatOptions {
@@ -253,12 +252,8 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
 
   console.log('');
 
-  // Summary box with lock character
-  const expression: LockExpression = report.summary.healthy
-    ? 'success'
-    : report.summary.errors > 0
-      ? 'error'
-      : 'warning';
+  // Summary box: its title line carries the outcome
+  const tone: SummaryTone = report.summary.healthy ? 'success' : report.summary.errors > 0 ? 'error' : 'warning';
 
   const title = report.summary.healthy
     ? 'WorkOS Integration Healthy'
@@ -273,7 +268,7 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
 
   console.log(
     renderSummaryBox({
-      expression,
+      tone,
       title,
       items,
       footer: `${formatWorkOSCommand('doctor --copy')} | https://workos.com/docs`,

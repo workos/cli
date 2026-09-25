@@ -29,6 +29,19 @@ export interface CompletionData {
   applicationSetup?: import('./authkit-application-setup.js').AuthkitApplicationSetup;
 }
 
+/**
+ * A WorkOS setting, named for the dashboard's AuthKit checklist ("Add
+ * environment variables", "Set redirect URI", …).
+ */
+export type SetupItemId = 'env-vars' | 'redirect-uri' | 'initiate-login-uri' | 'sign-out-uri' | 'cors-origin';
+/** `skipped`: not set, or not verified; `detail` says why and what to do. */
+export type SetupItemStatus = 'started' | 'done' | 'already-set' | 'skipped' | 'failed';
+export interface SetupItemEvent {
+  step: SetupItemId;
+  status: SetupItemStatus;
+  detail?: string;
+}
+
 export interface InstallerEvents {
   status: { message: string };
   output: { text: string; isError?: boolean };
@@ -85,6 +98,10 @@ export interface InstallerEvents {
   'staging:error': { message: string; statusCode?: number };
   'config:start': Record<string, never>;
   'config:complete': Record<string, never>;
+  /** A setting the configure step (before the agent) started or resolved. */
+  'config:step': SetupItemEvent;
+  /** An app URL set once the agent's routes exist (Next.js) started or resolved. */
+  'app-urls:step': SetupItemEvent;
   'agent:start': Record<string, never>;
   'agent:progress': { step: string; detail?: string };
   'agent:success': { summary?: string };
@@ -136,6 +153,101 @@ export interface InstallerEvents {
 }
 
 export type InstallerEventName = keyof InstallerEvents;
+
+/**
+ * Runtime list of every installer event name, for validating data that refers
+ * to events by name (e.g. the full-screen installer's walkthrough copy).
+ * `satisfies` makes the compiler reject a missing or unknown key, so this can't
+ * drift from `InstallerEvents`.
+ */
+const INSTALLER_EVENT_REGISTRY = {
+  status: true,
+  output: true,
+  'file:write': true,
+  'file:edit': true,
+  'prompt:request': true,
+  'prompt:response': true,
+  'confirm:request': true,
+  'confirm:response': true,
+  'credentials:request': true,
+  'credentials:response': true,
+  complete: true,
+  error: true,
+  'state:enter': true,
+  'state:exit': true,
+  'auth:checking': true,
+  'auth:required': true,
+  'auth:success': true,
+  'auth:failure': true,
+  'detection:start': true,
+  'detection:complete': true,
+  'detection:none': true,
+  'git:checking': true,
+  'git:clean': true,
+  'git:dirty': true,
+  'git:dirty:confirmed': true,
+  'git:dirty:cancelled': true,
+  'credentials:gathering': true,
+  'credentials:found': true,
+  'credentials:env:detected': true,
+  'credentials:env:prompt': true,
+  'credentials:env:scanning': true,
+  'credentials:env:found': true,
+  'credentials:env:notfound': true,
+  'device:started': true,
+  'device:polling': true,
+  'device:success': true,
+  'device:timeout': true,
+  'device:error': true,
+  'staging:fetching': true,
+  'staging:success': true,
+  'staging:error': true,
+  'config:start': true,
+  'config:complete': true,
+  'config:step': true,
+  'app-urls:step': true,
+  'agent:start': true,
+  'agent:progress': true,
+  'agent:success': true,
+  'agent:failure': true,
+  'agent:retry': true,
+  'agent:tool': true,
+  'validation:retry:start': true,
+  'validation:retry:complete': true,
+  'validation:start': true,
+  'validation:issues': true,
+  'validation:complete': true,
+  'scaffold:checking': true,
+  'scaffold:prompt': true,
+  'scaffold:start': true,
+  'scaffold:progress': true,
+  'scaffold:complete': true,
+  'scaffold:failed': true,
+  'scaffold:skipped': true,
+  'branch:checking': true,
+  'branch:protected': true,
+  'branch:prompt': true,
+  'branch:created': true,
+  'branch:create:failed': true,
+  'branch:skipped': true,
+  'postinstall:changes': true,
+  'postinstall:nochanges': true,
+  'postinstall:commit:prompt': true,
+  'postinstall:commit:generating': true,
+  'postinstall:commit:committing': true,
+  'postinstall:commit:success': true,
+  'postinstall:commit:failed': true,
+  'postinstall:pr:prompt': true,
+  'postinstall:pr:generating': true,
+  'postinstall:pr:pushing': true,
+  'postinstall:pr:creating': true,
+  'postinstall:pr:success': true,
+  'postinstall:pr:failed': true,
+  'postinstall:push:failed': true,
+  'postinstall:manual': true,
+} as const satisfies Record<InstallerEventName, true>;
+
+export const INSTALLER_EVENT_NAMES = Object.keys(INSTALLER_EVENT_REGISTRY) as InstallerEventName[];
 
 export class InstallerEventEmitter extends EventEmitter {
   emit<K extends InstallerEventName>(event: K, payload: InstallerEvents[K]): boolean {

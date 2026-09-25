@@ -2,13 +2,18 @@ import { createActor, fromPromise } from 'xstate';
 import open from 'open';
 import { installerMachine } from './installer-core.js';
 import { createInstallerEventEmitter } from './events.js';
-import type { CompletionData } from './events.js';
+import type { CompletionData, InstallerEventEmitter, SetupItemId, SetupItemStatus } from './events.js';
 import { buildCompletionData, applicationSetupNextSteps } from './completion-data.js';
-import { readNextjsApplicationSetup, configureAuthkitApplication } from './authkit-application-setup.js';
+import {
+  readNextjsApplicationSetup,
+  configureAuthkitApplication,
+  type AuthkitApplicationSetup,
+} from './authkit-application-setup.js';
 import { validateInstallation } from './validation/index.js';
 import { resolveDevCommand } from './dev-command.js';
 import { getConfig as getInstallerSettings } from './settings.js';
 import { CLIAdapter } from './adapters/cli-adapter.js';
+import { selectInstallerAdapter, type InstallerAdapterKind } from './adapters/select-adapter.js';
 import type { InstallerAdapter } from './adapters/types.js';
 import type { InstallerOptions } from '../utils/types.js';
 import { getInteractionMode, isAgentMode, isCiMode } from '../utils/interaction-mode.js';
@@ -183,10 +188,15 @@ export function resolveCredentialSource(
 }
 
 export async function configureInstallEnvironment(
-  context: Pick<InstallerMachineContext, 'options' | 'integration' | 'credentials'>,
+  context: Pick<InstallerMachineContext, 'options' | 'integration' | 'credentials'> &
+    Partial<Pick<InstallerMachineContext, 'emitter'>>,
 ): Promise<void> {
   const { options: installerOptions, integration, credentials } = context;
   if (!integration || !credentials) throw new Error('Missing integration or credentials');
+  // Each item of the dashboard's AuthKit checklist reports as it goes, so the
+  // full-screen installer can tick it off.
+  const step = (id: SetupItemId, status: SetupItemStatus, detail?: string) =>
+    context.emitter?.emit('config:step', { step: id, status, ...(detail ? { detail } : {}) });
 
   const registry = await getRegistry();
   const mod = registry.get(integration);
@@ -202,18 +212,71 @@ export async function configureInstallEnvironment(
   // Next.js URL writes happen after code validation. That step chooses ONE
   // target: the dashboard application, or an API-key-only callback without a session.
   const requiresApiKey = ['tanstack-start', 'react-router'].includes(integration);
+  step('env-vars', 'started');
   if (credentials.apiKey && requiresApiKey) {
     await autoConfigureWorkOSEnvironment(credentials.apiKey, integration, port, {
       homepageUrl: installerOptions.homepageUrl,
       redirectUri: installerOptions.redirectUri,
+      onStep: step,
     });
+  } else if (requiresApiKey) {
+    for (const id of ['redirect-uri', 'cors-origin'] as const) {
+      step(id, 'skipped', 'No API key was available for this install.');
+    }
   }
 
   const redirectUriKey = integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
-  writeEnvLocal(installerOptions.installDir, {
-    ...(credentials.apiKey ? { WORKOS_API_KEY: credentials.apiKey } : {}),
-    WORKOS_CLIENT_ID: credentials.clientId,
-    [redirectUriKey]: redirectUri,
+  try {
+    writeEnvLocal(installerOptions.installDir, {
+      ...(credentials.apiKey ? { WORKOS_API_KEY: credentials.apiKey } : {}),
+      WORKOS_CLIENT_ID: credentials.clientId,
+      [redirectUriKey]: redirectUri,
+    });
+  } catch (error) {
+    step('env-vars', 'failed', error instanceof Error ? error.message : String(error));
+    throw error;
+  }
+  step('env-vars', 'done');
+}
+
+/**
+ * Report the app URLs `configure` sets (the dashboard checklist's redirect,
+ * initiate login, and sign-out URIs) as `app-urls:step` events.
+ *
+ * `configureAuthkitApplication` throws when the callback isn't registered,
+ * which fails the install (and the items still running with it). When it
+ * returns, the callback is registered; the other two are verified together or
+ * not at all, with one reason covering both.
+ */
+export async function reportAppUrlSetup(
+  emitter: Pick<InstallerEventEmitter, 'emit'>,
+  configure: () => Promise<AuthkitApplicationSetup>,
+): Promise<AuthkitApplicationSetup> {
+  const step = (id: SetupItemId, status: SetupItemStatus, detail?: string) =>
+    emitter.emit('app-urls:step', { step: id, status, ...(detail ? { detail } : {}) });
+  for (const id of ['redirect-uri', 'initiate-login-uri', 'sign-out-uri'] as const) step(id, 'started');
+  const setup = await configure();
+  step('redirect-uri', 'done');
+  for (const id of ['initiate-login-uri', 'sign-out-uri'] as const) {
+    if (setup.verified) step(id, 'done');
+    else step(id, 'skipped', setup.reason);
+  }
+  return setup;
+}
+
+/** Pick the installer adapter for this process's output mode and terminal. */
+export function resolveAdapterKind(options: Pick<InstallerOptions, 'ci' | 'noTui'>): InstallerAdapterKind {
+  return selectInstallerAdapter({
+    json: isJsonMode(),
+    interaction: getInteractionMode().mode,
+    ci: Boolean(options.ci),
+    stdinTTY: Boolean(process.stdin.isTTY),
+    stdoutTTY: Boolean(process.stdout.isTTY),
+    stderrTTY: Boolean(process.stderr.isTTY),
+    columns: process.stdout.columns ?? 0,
+    rows: process.stdout.rows ?? 0,
+    noTui: Boolean(options.noTui),
+    term: process.env.TERM,
   });
 }
 
@@ -264,7 +327,10 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   // until you confirm" contract. Those sessions keep the CLIAdapter, which now
   // fails fast with a clear `prompt_unavailable` error on the first prompt
   // (see CLIAdapter's handler-error catch) instead of hanging or auto-writing.
-  const headlessMode = isJsonMode();
+  // A person at a real terminal of at least 80x24 gets the full-screen
+  // installer unless they pass --no-tui.
+  const adapterKind = resolveAdapterKind(augmentedOptions);
+  const headlessMode = adapterKind === 'headless';
 
   let adapter: InstallerAdapter;
   if (headlessMode) {
@@ -282,6 +348,15 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         noGitCheck: augmentedOptions.noGitCheck,
         ci: augmentedOptions.ci,
       },
+    });
+  } else if (adapterKind === 'tui') {
+    // Loaded on demand so Ink and React stay off every other path.
+    const { TuiAdapter } = await import('./adapters/tui-adapter.js');
+    adapter = new TuiAdapter({
+      emitter,
+      sendEvent,
+      debug: augmentedOptions.debug,
+      installDir: augmentedOptions.installDir,
     });
   } else {
     adapter = new CLIAdapter({ emitter, sendEvent, debug: augmentedOptions.debug });
@@ -387,10 +462,9 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
                   .join('\n')}`,
               );
             }
-            applicationSetup = await configureAuthkitApplication(
-              applicationSetup,
-              credentials?.clientId ?? '',
-              credentials?.apiKey,
+            const setup = applicationSetup;
+            applicationSetup = await reportAppUrlSetup(context.emitter, () =>
+              configureAuthkitApplication(setup, credentials?.clientId ?? '', credentials?.apiKey),
             );
           }
           return {
@@ -623,11 +697,18 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   // guards JSON mode, project-owned keys, and single-profile configs.
   if (!headlessMode && !augmentedOptions.apiKey && !process.env.WORKOS_API_KEY) {
     const { maybePickInstallEnvironment } = await import('./resolve-install-credentials.js');
-    await maybePickInstallEnvironment(getActiveEnvironment(), augmentedOptions.installDir);
+    try {
+      await maybePickInstallEnvironment(getActiveEnvironment(), augmentedOptions.installDir);
+    } catch (error) {
+      // Cancelling the picker ends the run before the try/finally below, so
+      // release the adapter here (the full-screen one owns the terminal).
+      await adapter.stop();
+      throw error;
+    }
   }
 
   analytics.configureAuthFromAvailableSources();
-  const mode = headlessMode ? 'headless' : 'cli';
+  const mode = adapterKind;
   analytics.sessionStart(mode, getVersion());
 
   let installerStatus: 'success' | 'error' | 'cancelled' = 'success';

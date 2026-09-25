@@ -31,6 +31,8 @@ export type InstallerArgs = {
   noGitCheck?: boolean;
   gitCheck?: boolean;
   direct?: boolean;
+  tui?: boolean;
+  noTui?: boolean;
   scaffold?: boolean;
   pm?: string;
   router?: 'app';
@@ -74,6 +76,7 @@ function buildOptions(argv: InstallerArgs): InstallerOptions {
     createPr: merged.createPr ?? false,
     noGitCheck: merged.noGitCheck ?? merged.gitCheck === false,
     direct: merged.direct ?? false,
+    noTui: merged.noTui ?? merged.tui === false,
     scaffold: merged.scaffold ?? false,
     pm: merged.pm,
     router: merged.router,

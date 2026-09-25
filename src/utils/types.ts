@@ -67,6 +67,11 @@ export type InstallerOptions = {
   redirectUri?: string;
 
   /**
+   * Use the plain CLI output instead of the full-screen installer (--no-tui).
+   */
+  noTui?: boolean;
+
+  /**
    * Event emitter for installer state machine events
    */
   emitter?: import('../lib/events.js').InstallerEventEmitter;

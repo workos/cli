@@ -167,6 +167,15 @@ const forceOption = {
   },
 } as const;
 
+/** Shared by `install` and the bare `workos` installer prompt. */
+const tuiOption = {
+  tui: {
+    default: true,
+    describe: 'Use the full-screen installer in an interactive terminal (use --no-tui for plain output)',
+    type: 'boolean' as const,
+  },
+} as const;
+
 const installerOptions = {
   direct: {
     alias: 'D',
@@ -268,6 +277,7 @@ const installerOptions = {
     type: 'string' as const,
   },
   ...forceOption,
+  ...tuiOption,
 };
 
 // Check for updates (blocks up to 500ms, skip in JSON/non-human modes to keep machine streams clean)
@@ -3400,7 +3410,7 @@ async function runCli(): Promise<void> {
       'WorkOS AuthKit CLI',
       // `--force` must be registered here too: this parser is .strict(), so
       // `npx workos --force` would die as an unknown argument otherwise.
-      (yargs) => yargs.options({ ...insecureStorageOption, ...forceOption }),
+      (yargs) => yargs.options({ ...insecureStorageOption, ...forceOption, ...tuiOption }),
       async (argv) => {
         // Non-human modes: emit machine-readable command tree (JSON) or the
         // fully-configured parser help (human non-TTY edge) instead of prompting.

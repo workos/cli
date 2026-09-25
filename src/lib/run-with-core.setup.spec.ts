@@ -3,7 +3,8 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { InstallerOptions } from '../utils/types.js';
-import { configureInstallEnvironment } from './run-with-core.js';
+import { configureInstallEnvironment, reportAppUrlSetup } from './run-with-core.js';
+import { createInstallerEventEmitter } from './events.js';
 import { readProjectEnvCredentials } from './project-env.js';
 
 let directory: string;
@@ -89,5 +90,102 @@ describe('Next.js environment preparation', () => {
     });
     expect(inputOptions.router).toBeUndefined();
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('dashboard checklist reporting', () => {
+  const record = () => {
+    const emitter = createInstallerEventEmitter();
+    const events: string[] = [];
+    for (const name of ['config:step', 'app-urls:step'] as const) {
+      emitter.on(name, ({ step, status, detail }) =>
+        events.push(`${name} ${step} ${status}${detail ? ` (${detail})` : ''}`),
+      );
+    }
+    return { emitter, events };
+  };
+
+  it('reports only the environment variables for Next.js, whose URLs are set after the agent', async () => {
+    const { emitter, events } = record();
+    await configureInstallEnvironment({
+      options,
+      integration: 'nextjs',
+      credentials: { apiKey: 'sk_test_a', clientId: 'client_a' },
+      emitter,
+    });
+    expect(events).toEqual(['config:step env-vars started', 'config:step env-vars done']);
+  });
+
+  it('reports the redirect URI and CORS origin as they land for React Router', async () => {
+    const { emitter, events } = record();
+    await configureInstallEnvironment({
+      options,
+      integration: 'react-router',
+      credentials: { apiKey: 'sk_test_a', clientId: 'client_a' },
+      emitter,
+    });
+    expect(events).toEqual([
+      'config:step env-vars started',
+      'config:step redirect-uri started',
+      'config:step cors-origin started',
+      'config:step redirect-uri done',
+      'config:step cors-origin done',
+      'config:step env-vars done',
+    ]);
+  });
+
+  it('says why the redirect URI and CORS origin were not set without an API key', async () => {
+    const { emitter, events } = record();
+    await configureInstallEnvironment({
+      options,
+      integration: 'react-router',
+      credentials: { clientId: 'client_a' },
+      emitter,
+    });
+    expect(events).toContain('config:step redirect-uri skipped (No API key was available for this install.)');
+    expect(events).toContain('config:step cors-origin skipped (No API key was available for this install.)');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  const setup = { clientId: 'client_a', redirectUri: 'x', signOutUri: 'y', initiateLoginUri: 'z' };
+
+  it('ticks all three app URLs when the setup is verified', async () => {
+    const { emitter, events } = record();
+    await reportAppUrlSetup(emitter, async () => ({ ...setup, verified: true, callbackRegistered: true }));
+    expect(events.slice(3)).toEqual([
+      'app-urls:step redirect-uri done',
+      'app-urls:step initiate-login-uri done',
+      'app-urls:step sign-out-uri done',
+    ]);
+  });
+
+  it('flags the unverified URLs with the setup reason', async () => {
+    const { emitter, events } = record();
+    const result = await reportAppUrlSetup(emitter, async () => ({
+      ...setup,
+      verified: false,
+      callbackRegistered: true,
+      reason: 'Sign in to manage those settings.',
+    }));
+    expect(result.verified).toBe(false);
+    expect(events.slice(3)).toEqual([
+      'app-urls:step redirect-uri done',
+      'app-urls:step initiate-login-uri skipped (Sign in to manage those settings.)',
+      'app-urls:step sign-out-uri skipped (Sign in to manage those settings.)',
+    ]);
+  });
+
+  it('leaves the items running when setup throws, so the failed install fails them', async () => {
+    const { emitter, events } = record();
+    await expect(
+      reportAppUrlSetup(emitter, async () => {
+        throw new Error('Callback URL is not registered or verified.');
+      }),
+    ).rejects.toThrow('not registered');
+    expect(events).toEqual([
+      'app-urls:step redirect-uri started',
+      'app-urls:step initiate-login-uri started',
+      'app-urls:step sign-out-uri started',
+    ]);
   });
 });
