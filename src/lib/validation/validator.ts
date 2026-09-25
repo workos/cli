@@ -292,7 +292,7 @@ async function validateClientOnlyApp(framework: string, projectDir: string, issu
       message: `No ${signInPath} route starts sign-in`,
       hint: `Register a public ${signInPath} client route that calls the SDK's signIn() on load. A link to ${signInPath} is not a route. The installer saves it as the Initiate login URI.`,
     });
-  if (!sources.some(({ content }) => content.includes('redirectUri')))
+  if (!sources.some((content) => content.includes('redirectUri')))
     issues.push({
       type: 'pattern',
       severity: 'error',
@@ -303,11 +303,7 @@ async function validateClientOnlyApp(framework: string, projectDir: string, issu
   if (!prefix) return;
   const expected = BROWSER_REDIRECT_ENV[prefix];
   const reads = new Set(
-    sources.flatMap(({ file, content }) =>
-      [...content.matchAll(REDIRECT_ENV_REFERENCE)]
-        .filter(([, access]) => access === 'import.meta.env' || file.startsWith('src/'))
-        .map(([read]) => read),
-    ),
+    sources.flatMap((content) => [...content.matchAll(REDIRECT_ENV_REFERENCE)].map(([read]) => read)),
   );
   reads.delete(expected);
   for (const read of reads)
@@ -325,12 +321,8 @@ const BROWSER_REDIRECT_ENV = {
   REACT_APP_: 'process.env.REACT_APP_WORKOS_REDIRECT_URI',
 } satisfies Record<NonNullable<ReturnType<typeof getClientEnvPrefix>>, string>;
 
-/**
- * A redirect URI env read. `import.meta.env` only exists in browser code;
- * `process.env` counts only in src/, so vite.config.ts or a script may still
- * read the unprefixed var.
- */
-const REDIRECT_ENV_REFERENCE = /(import\.meta\.env|process\.env)\.\w*WORKOS_REDIRECT_URI\b/g;
+/** A redirect URI env read, e.g. import.meta.env.VITE_WORKOS_REDIRECT_URI. */
+const REDIRECT_ENV_REFERENCE = /(?:import\.meta\.env|process\.env)\.\w*WORKOS_REDIRECT_URI\b/g;
 
 /** Code that serves a route rather than linking to it: router config or a pathname check. */
 const ROUTE_DECLARATIONS = [
@@ -345,9 +337,9 @@ export async function hasClientSignInRoute(projectDir: string, signInPath: strin
   return servesSignInRoute(projectDir, await readClientSource(projectDir), signInPath);
 }
 
-async function servesSignInRoute(projectDir: string, sources: ClientSource[], signInPath: string): Promise<boolean> {
+async function servesSignInRoute(projectDir: string, sources: string[], signInPath: string): Promise<boolean> {
   const route = new RegExp(`(?:${ROUTE_DECLARATIONS.join('|')})['"\`]${signInPath.replace(/\/$/, '')}/?['"\`]`);
-  if (sources.some(({ content }) => route.test(content))) return true;
+  if (sources.some((content) => route.test(content))) return true;
   // A static page at the path, e.g. login/index.html, that starts sign-in.
   const segment = signInPath.replace(/^\/|\/$/g, '');
   const pages = await fg(
@@ -363,27 +355,32 @@ const readOrEmpty = (path: string) => readFile(path, 'utf-8').catch(() => '');
 
 const SCAN_CONCURRENCY = 32;
 
-interface ClientSource {
-  file: string;
-  content: string;
-}
-
-/** The app's own source files, read a bounded batch at a time. */
-async function readClientSource(projectDir: string): Promise<ClientSource[]> {
+/**
+ * The app's browser code, read a bounded batch at a time. Config files,
+ * scripts, server code and tests run in Node, so they may read unprefixed
+ * env vars and do not serve routes.
+ */
+async function readClientSource(projectDir: string): Promise<string[]> {
   const files = await fg(['**/*.{ts,tsx,js,jsx,mjs,html,htm}'], {
     cwd: projectDir,
-    ignore: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/.*/**'],
+    ignore: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/build/**',
+      '**/.*/**',
+      '**/*.config.*',
+      '**/scripts/**',
+      '**/server/**',
+      '**/__tests__/**',
+      '**/*.{spec,test}.*',
+    ],
   });
-  const sources: ClientSource[] = [];
+  const contents: string[] = [];
   for (let i = 0; i < files.length; i += SCAN_CONCURRENCY)
-    sources.push(
-      ...(await Promise.all(
-        files
-          .slice(i, i + SCAN_CONCURRENCY)
-          .map((file) => readOrEmpty(join(projectDir, file)).then((content) => ({ file, content }))),
-      )),
+    contents.push(
+      ...(await Promise.all(files.slice(i, i + SCAN_CONCURRENCY).map((file) => readOrEmpty(join(projectDir, file))))),
     );
-  return sources;
+  return contents;
 }
 
 /**

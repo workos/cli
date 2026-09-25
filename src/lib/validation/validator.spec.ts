@@ -799,6 +799,15 @@ describe('validateInstallation', () => {
       expect(signInIssue(result.issues)?.severity).toBe('error');
     });
 
+    it('ignores a /login route declared only in a test file', async () => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(join(testDir, 'src', 'App.test.tsx'), '<Route path="/login" element={<Login />} />');
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      expect(signInIssue(result.issues)).toBeDefined();
+    });
+
     it('does not accept a /login page that never starts sign-in', async () => {
       mkdirSync(join(testDir, 'login'), { recursive: true });
       writeFileSync(join(testDir, 'login', 'index.html'), '<h1>Log in</h1>');
@@ -807,27 +816,6 @@ describe('validateInstallation', () => {
 
       expect(signInIssue(result.issues)).toBeDefined();
     });
-
-    it.each(['WORKOS_REDIRECT_URI', 'REACT_APP_WORKOS_REDIRECT_URI'])(
-      'fails when a Vite client reads %s instead of the var the installer writes',
-      async (name) => {
-        writeFileSync(join(testDir, 'package.json'), JSON.stringify({ devDependencies: { vite: '^6.0.0' } }));
-        mkdirSync(join(testDir, 'src'), { recursive: true });
-        writeFileSync(
-          join(testDir, 'src', 'main.ts'),
-          `createClient(clientId, { redirectUri: import.meta.env.${name} });`,
-        );
-
-        const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
-
-        expect(result.issues).toContainEqual(
-          expect.objectContaining({
-            severity: 'error',
-            message: `The client reads import.meta.env.${name}, but the installer exposes import.meta.env.VITE_WORKOS_REDIRECT_URI`,
-          }),
-        );
-      },
-    );
 
     it('lets vite.config.ts read the unprefixed redirect URI', async () => {
       writeFileSync(join(testDir, 'package.json'), JSON.stringify({ devDependencies: { vite: '^6.0.0' } }));
@@ -843,26 +831,25 @@ describe('validateInstallation', () => {
       expect(result.issues.some((i) => i.message.startsWith('The client reads'))).toBe(false);
     });
 
-    it.each(['WORKOS_REDIRECT_URI', 'VITE_WORKOS_REDIRECT_URI'])(
-      'flags Vite browser code that reads process.env.%s',
-      async (name) => {
-        writeFileSync(join(testDir, 'package.json'), JSON.stringify({ devDependencies: { vite: '^6.0.0' } }));
-        mkdirSync(join(testDir, 'src'), { recursive: true });
-        writeFileSync(
-          join(testDir, 'src', 'main.tsx'),
-          `<AuthKitProvider redirectUri={process.env.${name}}><App /></AuthKitProvider>`,
-        );
+    it.each([
+      'import.meta.env.WORKOS_REDIRECT_URI',
+      'import.meta.env.REACT_APP_WORKOS_REDIRECT_URI',
+      'process.env.WORKOS_REDIRECT_URI',
+      'process.env.VITE_WORKOS_REDIRECT_URI',
+    ])('flags Vite browser code that reads %s', async (read) => {
+      writeFileSync(join(testDir, 'package.json'), JSON.stringify({ devDependencies: { vite: '^6.0.0' } }));
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(join(testDir, 'src', 'main.ts'), `createClient(clientId, { redirectUri: ${read} });`);
 
-        const result = await validateInstallation('react', testDir, { runBuild: false });
+      const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
 
-        expect(result.issues).toContainEqual(
-          expect.objectContaining({
-            severity: 'error',
-            message: `The client reads process.env.${name}, but the installer exposes import.meta.env.VITE_WORKOS_REDIRECT_URI`,
-          }),
-        );
-      },
-    );
+      expect(result.issues).toContainEqual(
+        expect.objectContaining({
+          severity: 'error',
+          message: `The client reads ${read}, but the installer exposes import.meta.env.VITE_WORKOS_REDIRECT_URI`,
+        }),
+      );
+    });
 
     it('flags a Create React App client that reads the unprefixed redirect URI', async () => {
       writeFileSync(join(testDir, 'package.json'), JSON.stringify({ dependencies: { 'react-scripts': '5.0.1' } }));
