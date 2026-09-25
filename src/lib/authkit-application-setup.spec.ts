@@ -225,9 +225,10 @@ describe('native application URL setup', () => {
         clientId: setup.clientId,
         claimToken: 'claim',
       });
-    const request = vi.fn(async (_url: string, init: RequestInit) =>
-      init.method === 'GET' ? new Response(null, { status: 404 }) : Response.json({}),
-    );
+    const request = vi.fn(async (url: string, init: RequestInit) => {
+      if (url.endsWith('/claim-nonces')) return Response.json({ nonce: 'claim_nonce' });
+      return init.method === 'GET' ? new Response(null, { status: 404 }) : Response.json({});
+    });
     vi.stubGlobal('fetch', request);
     const result = await configureAuthkitApplication(
       {
@@ -440,11 +441,24 @@ describe('native application URL setup', () => {
       clientId: setup.clientId,
       claimToken: 'claim',
     });
-    const request = vi.fn(async (_url: string, init: RequestInit) =>
-      init.method === 'GET' ? new Response(null, { status: 404 }) : Response.json({}),
-    );
+    const request = vi.fn(async (url: string, init: RequestInit) => {
+      if (url.endsWith('/claim-nonces')) return Response.json({ nonce: 'claim_nonce' });
+      return init.method === 'GET' ? new Response(null, { status: 404 }) : Response.json({});
+    });
     vi.stubGlobal('fetch', request);
     const result = await configureAuthkitApplication(setup, setup.clientId, 'sk_test_unclaimed');
+    expect(request).toHaveBeenCalledWith(
+      'https://api.workos.com/x/one-shot-environments/claim-nonces',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ client_id: setup.clientId, claim_token: 'claim' }),
+      }),
+    );
+    expect(request.mock.calls.filter(([, init]) => init.method !== 'GET').map(([url]) => url)).toEqual([
+      'https://api.workos.com/user_management/redirect_uris',
+      'https://api.workos.com/x/one-shot-environments/claim-nonces',
+      'https://api.workos.com/user_management/app_homepage_url',
+    ]);
     expect(request).toHaveBeenCalledWith(
       'https://api.workos.com/user_management/app_homepage_url',
       expect.objectContaining({
@@ -458,7 +472,50 @@ describe('native application URL setup', () => {
     expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
   });
 
-  it.each(['unknown', 'claimed', 'different-unclaimed', 'unavailable'])(
+  it.each([
+    ['claimed externally', () => Response.json({ already_claimed: true })],
+    ['claim conflict', () => new Response(null, { status: 409 })],
+    ['invalid claim token', () => new Response(null, { status: 401 })],
+    ['missing environment', () => new Response(null, { status: 404 })],
+    ['rate limited', () => new Response(null, { status: 429 })],
+    ['server error', () => new Response(null, { status: 500 })],
+    ['invalid response', () => Response.json({})],
+    ['network failure', () => Promise.reject(new Error('private details'))],
+    ['timeout', () => Promise.reject(new DOMException('private details', 'AbortError'))],
+  ] as const)('preserves the API-only homepage when live claim status reports %s', async (_, claim) => {
+    vi.mocked(refreshIfExpired).mockResolvedValue(null);
+    vi.mocked(getActiveEnvironment).mockReturnValue({
+      name: 'Unclaimed',
+      type: 'unclaimed',
+      apiKey: 'sk_test_unclaimed',
+      clientId: setup.clientId,
+      claimToken: 'claim',
+    });
+    const request = vi.fn(async (url: string) => (url.endsWith('/claim-nonces') ? claim() : Response.json({})));
+    vi.stubGlobal('fetch', request);
+
+    const result = await configureAuthkitApplication(setup, setup.clientId, 'sk_test_unclaimed');
+
+    expect(request.mock.calls.some(([url]) => url.endsWith('/app_homepage_url'))).toBe(false);
+    expect(result.callbackRegistered).toBe(true);
+    expect(result.verified).toBe(false);
+    expect(result.reason).toContain('Homepage URL was left unchanged');
+    expect(result.reason).not.toContain('private details');
+
+    request.mockClear();
+    await configureAuthkitApplication(
+      { ...setup, homepageUrl: 'https://requested.example/' },
+      setup.clientId,
+      'sk_test_unclaimed',
+    );
+    expect(request.mock.calls.some(([url]) => url.endsWith('/claim-nonces'))).toBe(false);
+    expect(request).toHaveBeenCalledWith(
+      'https://api.workos.com/user_management/app_homepage_url',
+      expect.objectContaining({ method: 'PUT', body: JSON.stringify({ url: 'https://requested.example/' }) }),
+    );
+  });
+
+  it.each(['unknown', 'claimed', 'different-unclaimed', 'different-client', 'unavailable'])(
     'skips the unknown API-only homepage for a %s key unless explicitly overridden',
     async (kind) => {
       vi.mocked(refreshIfExpired).mockResolvedValue(null);
@@ -474,6 +531,14 @@ describe('native application URL setup', () => {
           type: 'unclaimed',
           apiKey: 'sk_test_other',
           clientId: setup.clientId,
+          claimToken: 'claim',
+        });
+      if (kind === 'different-client')
+        vi.mocked(getActiveEnvironment).mockReturnValue({
+          name: 'Unclaimed',
+          type: 'unclaimed',
+          apiKey: 'sk_test_unclaimed',
+          clientId: 'client_other',
           claimToken: 'claim',
         });
       if (kind === 'unavailable')

@@ -58,6 +58,7 @@ function stubFetch(homepage: (method: string) => Response | Promise<Response>): 
   const stub = vi.fn(async (url: string, init: { method: string }) => {
     calls.push({ url, method: init.method });
     if (url === HOMEPAGE_ENDPOINT) return homepage(init.method);
+    if (url.endsWith('/claim-nonces')) return Response.json({ nonce: 'claim_nonce' });
     return jsonResponse(201, {});
   });
   vi.stubGlobal('fetch', stub);
@@ -192,6 +193,7 @@ describe('workos-management', () => {
       vi.stubGlobal(
         'fetch',
         vi.fn(async (url: string, init: { method: string; body?: string }) => {
+          if (url.endsWith('/claim-nonces')) return Response.json({ nonce: 'claim_nonce' });
           if (url === HOMEPAGE_ENDPOINT && init.method === 'GET') bodies.push(init.body);
           return jsonResponse(200, { url: BASE_URL });
         }),
@@ -207,6 +209,7 @@ describe('workos-management', () => {
       vi.stubGlobal(
         'fetch',
         vi.fn(async (url: string, init: { method: string; headers: Record<string, string> }) => {
+          if (url.endsWith('/claim-nonces')) return Response.json({ nonce: 'claim_nonce' });
           if (url === HOMEPAGE_ENDPOINT) {
             seen.push({ method: init.method, contentType: init.headers['Content-Type'] });
           }
@@ -366,13 +369,35 @@ describe('workos-management', () => {
       expect(homepageCalls(calls, 'PUT')).toHaveLength(0);
     });
 
-    it('sets it on an unclaimed environment, whose dashboard nobody has used', async () => {
+    it.each([
+      ['claimed elsewhere', () => Response.json({ already_claimed: true })],
+      ['claim conflict', () => new Response(null, { status: 409 })],
+      ['unavailable claim status', () => new Response(null, { status: 500 })],
+    ] as const)('preserves the homepage for a locally unclaimed profile with %s', async (_, claim) => {
+      getActiveEnvironment.mockReturnValue(unclaimedEnv);
+      const request = vi.fn(async (url: string) => (url.endsWith('/claim-nonces') ? claim() : Response.json({})));
+      vi.stubGlobal('fetch', request);
+
+      const result = await autoConfigureWorkOSEnvironment(API_KEY, INTEGRATION, PORT);
+
+      expect(result).not.toBeNull();
+      expect(result?.redirectUri.success).toBe(true);
+      expect(result?.corsOrigin.success).toBe(true);
+      expect(result?.homepageUrl).toBeUndefined();
+      expect(request.mock.calls.some(([url]) => url === HOMEPAGE_ENDPOINT)).toBe(false);
+      expect(rowFor('Homepage URL')).toMatchObject({ status: 'not changed; check the dashboard' });
+    });
+
+    it('sets it after confirming the stored environment is still unclaimed', async () => {
       getActiveEnvironment.mockReturnValue(unclaimedEnv);
       const { calls } = stubFetch((method) => (method === 'GET' ? jsonResponse(404, {}) : jsonResponse(200, {})));
 
       await autoConfigureWorkOSEnvironment(API_KEY, INTEGRATION, PORT);
 
       expect(homepageCalls(calls, 'PUT')).toHaveLength(1);
+      expect(calls.findIndex(({ url }) => url.endsWith('/claim-nonces'))).toBeLessThan(
+        calls.findIndex(({ url, method }) => url === HOMEPAGE_ENDPOINT && method === 'PUT'),
+      );
     });
 
     it('sets the homepage the user asked for (--homepage-url) on any environment', async () => {
@@ -382,6 +407,7 @@ describe('workos-management', () => {
       await autoConfigureWorkOSEnvironment(API_KEY, INTEGRATION, PORT, { homepageUrl: 'https://app.example.com' });
 
       expect(homepageCalls(calls, 'PUT')).toHaveLength(1);
+      expect(calls.some(({ url }) => url.endsWith('/claim-nonces'))).toBe(false);
     });
   });
 
