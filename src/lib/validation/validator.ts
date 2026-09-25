@@ -105,12 +105,14 @@ export async function validatePackages(rules: ValidationRules, projectDir: strin
     const location = rule.location || 'any';
     const searchIn = location === 'any' ? allDeps : location === 'dependencies' ? deps : devDeps;
 
-    if (!searchIn[rule.name]) {
+    if (![rule.name, ...(rule.alternates || [])].some((name) => searchIn[name])) {
       issues.push({
         type: 'package',
         severity: 'error',
         message: `Missing package: ${rule.name}`,
-        hint: `Run: npm install ${rule.name}`,
+        hint: `Run: npm install ${location === 'devDependencies' ? '--save-dev ' : ''}${rule.name}${
+          rule.alternates?.length ? ` (or one of: ${rule.alternates.join(', ')})` : ''
+        }`,
       });
     }
   }
@@ -595,7 +597,8 @@ async function validateReactRouterRedirectUri(projectDir: string, issues: Valida
  * Validates that the TanStack Start redirect URI matches an existing callback route.
  *
  * TanStack Start uses file-based routing:
- * - /auth/callback → app/routes/auth/callback.tsx
+ * Checks conventional nested, flat, index, and route files under app/routes or src/routes.
+ * Custom router configuration and runtime handler behavior are not inferred from source.
  */
 async function validateTanstackStartRedirectUri(projectDir: string, issues: ValidationIssue[]): Promise<void> {
   const envPath = join(projectDir, '.env.local');
@@ -631,38 +634,40 @@ async function validateTanstackStartRedirectUri(projectDir: string, issues: Vali
 
   const routePath = callbackPath.replace(/^\//, '');
 
-  // TanStack Start route patterns
-  const routePatterns = [
-    `app/routes/${routePath}.tsx`,
-    `app/routes/${routePath}.ts`,
-    `app/routes/${routePath}.jsx`,
-    `app/routes/${routePath}.js`,
-    `app/routes/${routePath}/index.tsx`,
-    `app/routes/${routePath}/index.ts`,
-    `app/routes/${routePath}/index.jsx`,
-    `app/routes/${routePath}/index.js`,
-  ];
+  const dotPath = routePath.replace(/\//g, '.');
+  const routePatterns = ['app', 'src'].flatMap((root) =>
+    [routePath, dotPath].flatMap((path) =>
+      ['', '/index', '/route', '.index', '.route'].flatMap((suffix) =>
+        ['ts', 'tsx', 'js', 'jsx'].map((ext) => `${root}/routes/${path}${suffix}.${ext}`),
+      ),
+    ),
+  );
 
   const routeExists = routePatterns.some((pattern) => existsSync(join(projectDir, pattern)));
 
   if (!routeExists) {
-    const existingRoutes = await fg(['app/routes/**/*callback*.{ts,tsx,js,jsx}'], {
-      cwd: projectDir,
-    });
+    const existingRoutes = await fg(
+      [
+        '{app,src}/routes/**/*callback*.{ts,tsx,js,jsx}',
+        '{app,src}/routes/**/*callback*/{index,route}.{ts,tsx,js,jsx}',
+      ],
+      { cwd: projectDir },
+    );
 
-    let hint = `Create a route at app/routes/${routePath}.tsx`;
+    let hint = `Create a route at app/routes/${routePath}.tsx or src/routes/${routePath}.tsx`;
     if (existingRoutes.length > 0) {
       const actualFile = existingRoutes[0];
       const actualPath =
         '/' +
         actualFile
-          .replace(/^app\/routes\//, '')
+          .replace(/^(app|src)\/routes\//, '')
           .replace(/\.(tsx?|jsx?)$/, '')
-          .replace(/\/index$/, '');
+          .replace(/\./g, '/')
+          .replace(/\/(index|route)$/, '');
       hint =
         `Found callback route at ${actualFile} but redirect URI points to ${callbackPath}. Either:\n` +
         `  1. Change WORKOS_REDIRECT_URI to ${new URL(redirectUri).origin}${actualPath}\n` +
-        `  2. Move the route to app/routes/${routePath}.tsx`;
+        `  2. Move the route to app/routes/${routePath}.tsx or src/routes/${routePath}.tsx`;
     }
 
     issues.push({
