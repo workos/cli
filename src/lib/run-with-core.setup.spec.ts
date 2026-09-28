@@ -366,6 +366,7 @@ describe('application URLs for SDKs other than Next.js', () => {
       },
       'client_a',
       'sk_test_a',
+      { adoptCredentials: undefined, interactive: !options.ci },
     );
     expect(result?.verified).toBe(true);
   });

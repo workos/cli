@@ -95,6 +95,23 @@ describe('handleInstall', () => {
       });
     });
 
+    it.each([
+      ['auth_required', 4],
+      ['cancelled', 2],
+    ] as const)('preserves %s exit conventions in human and JSON modes', async (code, exitCode) => {
+      const { InstallDeclinedError } = await import('../lib/installer-errors.js');
+      vi.mocked(runInstaller).mockRejectedValue(
+        new InstallDeclinedError('Callback unverified; recover access or configure manually.', code),
+      );
+      for (const json of [false, true]) {
+        vi.mocked(isJsonMode).mockReturnValue(json);
+        await expect(handleInstall({ _: ['install'], $0: 'workos' } as any)).rejects.toMatchObject({ exitCode });
+        if (json)
+          expect(exitWithError).toHaveBeenCalledWith({ code, message: expect.stringContaining('Callback unverified') });
+      }
+      expect(maybeRunSetupAfter).not.toHaveBeenCalled();
+    });
+
     it('exits non-zero without extra output in human mode (guidance already printed)', async () => {
       const { InstallDeclinedError } = await import('../lib/installer-errors.js');
       vi.mocked(runInstaller).mockRejectedValue(new InstallDeclinedError('Next.js 14 is unsupported'));
