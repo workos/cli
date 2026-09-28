@@ -79,19 +79,22 @@ export async function run(options: InstallerOptions): Promise<string> {
   });
 
   // Get WorkOS credentials
-  const { apiKey, clientId: _clientId } = await getOrAskForWorkOSCredentials(
-    options,
-    config.environment.requiresApiKey,
-  );
+  let { apiKey, clientId } = await getOrAskForWorkOSCredentials(options, config.environment.requiresApiKey);
 
   // Auto-configure WorkOS environment (redirect URI, CORS, homepage) if not already done
   const callerHandledConfig = Boolean(options.apiKey || options.clientId);
   if (!callerHandledConfig && apiKey) {
     const port = 3000; // Rails default
-    await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, port, {
+    const result = await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, port, {
+      clientId,
+      interactive: !options.ci,
       homepageUrl: options.homepageUrl,
       redirectUri: options.redirectUri,
     });
+    if (result?.recoveredCredentials) {
+      ({ apiKey, clientId } = result.recoveredCredentials);
+      Object.assign(options, result.recoveredCredentials);
+    }
   }
 
   // Build prompt for the agent
@@ -108,7 +111,7 @@ export async function run(options: InstallerOptions): Promise<string> {
 
 The following environment variables are needed (create a .env file if one does not exist):
 - WORKOS_API_KEY
-- WORKOS_CLIENT_ID
+- WORKOS_CLIENT_ID=${clientId}
 - WORKOS_REDIRECT_URI=${redirectUri}
 
 ## Integration Instructions

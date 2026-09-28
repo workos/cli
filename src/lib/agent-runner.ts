@@ -65,7 +65,7 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
   }
 
   // Get WorkOS credentials (API key optional for client-only SDKs)
-  const { apiKey, clientId } = await getOrAskForWorkOSCredentials(options, config.environment.requiresApiKey);
+  let { apiKey, clientId } = await getOrAskForWorkOSCredentials(options, config.environment.requiresApiKey);
 
   // Check if caller (state machine) already configured WorkOS environment
   // If credentials were passed via options, the caller handled config+env writing
@@ -77,10 +77,16 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
   // dashboard targeting or the API-only callback path, never both.
   if (!callerHandledConfig && apiKey && config.environment.requiresApiKey && config.metadata.integration !== 'nextjs') {
     const port = detectPort(config.metadata.integration, options.installDir);
-    await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, port, {
+    const result = await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, port, {
+      clientId,
+      interactive: !options.ci,
       homepageUrl: options.homepageUrl,
       redirectUri: options.redirectUri,
     });
+    if (result?.recoveredCredentials) {
+      ({ apiKey, clientId } = result.recoveredCredentials);
+      Object.assign(options, result.recoveredCredentials);
+    }
   }
 
   // Write environment variables to .env.local BEFORE agent runs
