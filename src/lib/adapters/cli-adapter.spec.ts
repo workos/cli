@@ -318,7 +318,7 @@ describe('CLIAdapter', () => {
       }
     });
 
-    it('restarts the spinner on the last phase message after logging a file op', async () => {
+    it('leaves spinner ownership to the facade when logging a file op', async () => {
       await adapter.start();
       const ui = await import('../../utils/ui.js');
       const spinnerMock = { start: vi.fn(), stop: vi.fn(), message: vi.fn(), clear: vi.fn() };
@@ -328,8 +328,10 @@ describe('CLIAdapter', () => {
       emitter.emit('agent:progress', { step: 'Configuring middleware' });
       emitter.emit('file:write', { path: '/proj/src/auth.ts', content: 'x' });
 
-      expect(spinnerMock.stop).toHaveBeenCalled();
-      expect(spinnerMock.start).toHaveBeenCalledWith('Configuring middleware');
+      expect(spinnerMock.stop).not.toHaveBeenCalled();
+      expect(spinnerMock.start).toHaveBeenCalledTimes(1);
+      expect(spinnerMock.message).toHaveBeenCalledWith('Configuring middleware');
+      expect(ui.default.log.step).toHaveBeenCalledWith(expect.stringContaining('src/auth.ts'));
     });
 
     it('renders Bash tool calls as step lines (agent:tool)', async () => {
