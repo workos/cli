@@ -127,9 +127,22 @@ describe('isolated pinned preparation', () => {
     vi.mocked(execFileNoThrow).mockResolvedValue({ status: 0, stdout: 'ruby 4.0.7', stderr: '' });
     const result = await preflightFizzy(target);
     expect(result.runtimeAvailable).toBe(false);
+    expect(result.prepared).toBe(false);
     expect(result.acceptance).toBe('unverified');
     expect(execFileNoThrow).toHaveBeenCalledTimes(2);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('preflight verifies the prepared source and fails closed if the archive changes', async () => {
+    await prepareFizzyFixture(target, archive);
+    expect(await preflightFizzy(target)).toMatchObject({
+      prepared: true,
+      runtimeAvailable: true,
+      acceptance: 'unverified',
+    });
+    await writeFile(join(target, 'source.tar.gz'), 'changed');
+    expect(await preflightFizzy(target)).toMatchObject({ prepared: false });
+    await expect(bootstrapFizzy(target)).rejects.toThrow('source/runtime prerequisites unavailable');
   });
 
   it('bootstraps only fresh test schema, never upstream scripts or seeds/reset', async () => {

@@ -210,8 +210,7 @@ The following environment variables have been configured in ${JS_FRAMEWORKS.incl
 - WORKOS_API_KEY
 - WORKOS_CLIENT_ID
 ${this.options.redirectUri ? `- WORKOS_REDIRECT_URI=${this.options.redirectUri}\n` : ''}
-Ensure the app loads this file before SDK initialization. Never print or commit credentials.
-For an existing authentication system, preserve identity/session/account boundaries and existing login methods. Do not invent account linking, auto-creation or membership/role assignment: ask for approved policy and leave unsupported behavior pending. Require visible login/account/logout controls, idempotent repeat login and protected access denied after logout. A source match is not behavioral evidence.
+${this.framework === 'ruby' ? 'Ensure the app loads this file before SDK initialization. Never print or commit credentials.\nFor an existing authentication system, preserve identity/session/account boundaries and existing login methods. Do not invent account linking, auto-creation or membership/role assignment: ask for approved policy and leave unsupported behavior pending. Require visible login/account/logout controls, idempotent repeat login and protected access denied after logout. A source match is not behavioral evidence.' : ''}
 
 ## Your Task
 Use the \`${skillName}\` skill to integrate WorkOS AuthKit into this application.

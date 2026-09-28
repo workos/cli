@@ -102,10 +102,27 @@ export async function preflightFizzy(root: string) {
       detail: result.stdout.trim() || result.stderr.trim(),
     });
   }
+  const runtimeAvailable = checks.every((check) => check.available);
+  let prepared = false;
+  try {
+    const metadata = JSON.parse(await readFile(join(root, 'artifacts/fixture.json'), 'utf8'));
+    const archive = await readFile(join(root, 'source.tar.gz'));
+    prepared =
+      metadata.commit === fixture.commit &&
+      createHash('sha256').update(archive).digest('hex') === fixture.archiveSha256;
+  } catch {
+    // Missing preparation is an unavailable prerequisite, not a successful check.
+  }
+  checks.push({
+    name: 'pinned source archive',
+    available: prepared,
+    detail: prepared ? fixture.commit : 'Missing or mismatched prepared archive/metadata',
+  });
   return {
     fixture: fixture.commit,
     checks,
-    runtimeAvailable: checks.every((check) => check.available),
+    prepared,
+    runtimeAvailable,
     acceptance: 'unverified',
     blockers: [
       'Account-linking/membership/creation/coexistence policy requires approval',
@@ -128,7 +145,9 @@ export async function bootstrapFizzy(root: string): Promise<void> {
       throw new Error('Refusing an existing database or SaaS marker');
     }
   }
-  if (!(await preflightFizzy(root)).runtimeAvailable) throw new Error('Fizzy runtime prerequisites unavailable');
+  const preflight = await preflightFizzy(root);
+  if (!preflight.prepared || !preflight.runtimeAvailable)
+    throw new Error('Fizzy source/runtime prerequisites unavailable');
   await command(root, 'bundle', ['install']);
   await command(root, 'bundle', ['exec', 'rails', 'db:prepare']);
   await writeFile(

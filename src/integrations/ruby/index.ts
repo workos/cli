@@ -170,6 +170,7 @@ Begin integration now.`;
 
   const lines: string[] = [
     'Ruby agent finished. Application behavior and hosted AuthKit flows are not verified.',
+    `Credentials and callback written to ${envFile}; runtime loading is not verified.`,
     `Requested callback: ${redirectUri}`,
     'Application URL registration is handled separately by the installer after this step.',
     '',

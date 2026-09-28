@@ -67,54 +67,62 @@ afterEach(async () => {
   if (directory) await rm(directory, { recursive: true, force: true });
 });
 
-it('runs the real Ruby installer before the common URL path and reports the explicit origin without claiming verification', async () => {
-  directory = await mkdtemp(join(tmpdir(), 'ruby-orchestration-'));
-  await mkdir(join(directory, 'config'));
-  await writeFile(join(directory, 'Gemfile'), 'gem "rails"');
-  await writeFile(join(directory, 'config/puma.rb'), 'port 3000');
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(() => {
-      throw new Error('Unexpected network');
-    }),
-  );
-  const output: string[] = [];
-  vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
-    output.push(String(chunk));
-    return true;
-  });
-  setOutputMode('json');
-  await runWithCore({
-    installDir: directory,
-    integration: 'ruby',
-    apiKey: 'sk_test_synthetic',
-    clientId: 'client_synthetic',
-    redirectUri: 'http://app.fizzy.localhost:3006/auth/callback',
-    ci: true,
-    debug: false,
-    local: false,
-    forceInstall: false,
-    skipAuth: true,
-    noBranch: true,
-    noCommit: true,
-    noGitCheck: true,
-  });
-  expect(runAgent).toHaveBeenCalledOnce();
-  expect(configureAuthkitApplication).toHaveBeenCalledOnce();
-  expect(vi.mocked(runAgent).mock.invocationCallOrder[0]).toBeLessThan(
-    vi.mocked(configureAuthkitApplication).mock.invocationCallOrder[0],
-  );
-  expect(configureAuthkitApplication).toHaveBeenCalledWith(
-    expect.objectContaining({
-      redirectUri: 'http://app.fizzy.localhost:3006/auth/callback',
-      corsOrigin: 'http://app.fizzy.localhost:3006',
-      signOutUri: 'http://app.fizzy.localhost:3006/',
-      initiateLoginUri: 'http://app.fizzy.localhost:3006/auth/login',
-    }),
-    'client_synthetic',
-    'sk_test_synthetic',
-  );
-  expect(output.join('')).toContain('Synthetic pending read-back');
-  expect(output.join('')).toContain('startup not verified');
-  expect(fetch).not.toHaveBeenCalled();
-});
+it.each([undefined, 'http://app.fizzy.localhost:3006/auth/callback'])(
+  'runs Ruby before common URL setup and consistently reports its origin (%s)',
+  async (redirectUri) => {
+    vi.clearAllMocks();
+    const callback = redirectUri ?? 'http://localhost:4100/auth/callback';
+    const origin = new URL(callback).origin;
+    directory = await mkdtemp(join(tmpdir(), 'ruby-orchestration-'));
+    await mkdir(join(directory, 'config'));
+    await writeFile(join(directory, 'Gemfile'), 'gem "rails"');
+    await writeFile(join(directory, 'config/puma.rb'), 'port 4100');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => {
+        throw new Error('Unexpected network');
+      }),
+    );
+    const output: string[] = [];
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      output.push(String(chunk));
+      return true;
+    });
+    setOutputMode('json');
+    await runWithCore({
+      installDir: directory,
+      integration: 'ruby',
+      apiKey: 'sk_test_synthetic',
+      clientId: 'client_synthetic',
+      redirectUri,
+      ci: true,
+      debug: false,
+      local: false,
+      forceInstall: false,
+      skipAuth: true,
+      noBranch: true,
+      noCommit: true,
+      noGitCheck: true,
+    });
+    expect(runAgent).toHaveBeenCalledOnce();
+    expect(configureAuthkitApplication).toHaveBeenCalledOnce();
+    expect(vi.mocked(runAgent).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(configureAuthkitApplication).mock.invocationCallOrder[0],
+    );
+    expect(configureAuthkitApplication).toHaveBeenCalledWith(
+      expect.objectContaining({
+        redirectUri: callback,
+        corsOrigin: origin,
+        signOutUri: `${origin}/`,
+        initiateLoginUri: `${origin}/auth/login`,
+      }),
+      'client_synthetic',
+      'sk_test_synthetic',
+    );
+    expect(vi.mocked(runAgent).mock.calls[0][1]).toContain(`WORKOS_REDIRECT_URI=${callback}`);
+    expect(output.join('')).toContain(`Open ${origin} to test authentication`);
+    expect(output.join('')).toContain('Synthetic pending read-back');
+    expect(output.join('')).toContain('startup not verified');
+    expect(fetch).not.toHaveBeenCalled();
+  },
+);

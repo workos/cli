@@ -21,7 +21,7 @@ if (action === 'download') {
 } else if (action === 'preflight') {
   const result = await preflightFizzy(resolve(output));
   console.log(JSON.stringify(result, null, 2));
-  if (!result.runtimeAvailable) process.exitCode = 1;
+  if (!result.runtimeAvailable || !result.prepared) process.exitCode = 1;
 } else {
   await bootstrapFizzy(resolve(output));
 }
