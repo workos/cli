@@ -34,6 +34,9 @@ export interface AgentRetryConfig {
 export interface AgentExecutorOptions {
   verbose?: boolean;
   scenarioName?: string;
+  /** Allowlisted environment for isolated real-app fixtures. */
+  environment?: NodeJS.ProcessEnv;
+  redirectUri?: string;
 }
 
 // Skill name mapping for each framework
@@ -106,6 +109,7 @@ export class AgentExecutor {
     const envVars = {
       WORKOS_API_KEY: this.credentials.workosApiKey,
       WORKOS_CLIENT_ID: this.credentials.workosClientId,
+      ...(this.options.redirectUri ? { WORKOS_REDIRECT_URI: this.options.redirectUri } : {}),
     };
 
     if (JS_FRAMEWORKS.includes(this.framework)) {
@@ -118,7 +122,7 @@ export class AgentExecutor {
     const prompt = this.buildPrompt(skillName);
 
     const sdkEnv: Record<string, string | undefined> = {
-      ...process.env,
+      ...(this.options.environment ?? process.env),
       ANTHROPIC_API_KEY: this.credentials.anthropicApiKey,
       ANTHROPIC_BASE_URL: undefined,
       ANTHROPIC_AUTH_TOKEN: undefined,
@@ -202,9 +206,12 @@ export class AgentExecutor {
 - Working directory: ${this.workDir}
 
 ## Environment
-The following environment variables have been configured in .env.local:
+The following environment variables have been configured in ${JS_FRAMEWORKS.includes(this.framework) ? '.env.local' : '.env'}:
 - WORKOS_API_KEY
 - WORKOS_CLIENT_ID
+${this.options.redirectUri ? `- WORKOS_REDIRECT_URI=${this.options.redirectUri}\n` : ''}
+Ensure the app loads this file before SDK initialization. Never print or commit credentials.
+For an existing authentication system, preserve identity/session/account boundaries and existing login methods. Do not invent account linking, auto-creation or membership/role assignment: ask for approved policy and leave unsupported behavior pending. Require visible login/account/logout controls, idempotent repeat login and protected access denied after logout. A source match is not behavioral evidence.
 
 ## Your Task
 Use the \`${skillName}\` skill to integrate WorkOS AuthKit into this application.

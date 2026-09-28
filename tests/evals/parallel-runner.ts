@@ -1,6 +1,7 @@
 import pLimit from 'p-limit';
 import type { EvalResult, Grader, GradeCheck, ToolCall } from './types.js';
 import { FixtureManager } from './fixture-manager.js';
+import { FIZZY_FIXTURE, fizzyEnvironment } from './fizzy-fixture.js';
 import { AgentExecutor } from './agent-executor.js';
 import { detectConcurrency } from './concurrency.js';
 import { evalEvents } from './events.js';
@@ -104,6 +105,12 @@ export class ParallelRunner {
         const executor = new AgentExecutor(workDir, scenario.framework, {
           verbose: this.options.verbose,
           scenarioName,
+          ...(scenario.framework === 'ruby' && scenario.state === 'fizzy'
+            ? {
+                environment: { ...fizzyEnvironment(fixtureManager.getTempDir()!), BUNDLE_FROZEN: 'false' },
+                redirectUri: FIZZY_FIXTURE.redirectUri,
+              }
+            : {}),
         });
         const agentResult = await executor.run(
           this.options.noCorrection ? { enabled: false, maxRetries: 0 } : undefined,

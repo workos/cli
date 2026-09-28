@@ -39,6 +39,7 @@ const FRAMEWORKS = [
   'elixir',
 ];
 const STATES = [
+  'fizzy', // Opt-in only: also requires --framework=ruby and explicit approval.
   'example',
   'example-auth0',
   'partial-install',
