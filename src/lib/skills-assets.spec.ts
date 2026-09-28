@@ -1,8 +1,20 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { BUNDLED_SKILLS_VERSION, getReference, getSkillsDir } from './skills-assets.js';
+
+// All imports of node:os in this worker see the same private temp root, even
+// after resetModules(). Other specs and CLI processes keep their own cache.
+vi.mock('node:os', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:os')>();
+  const { mkdtempSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const root = mkdtempSync(join(actual.tmpdir(), 'workos-skills-spec-'));
+  return { ...actual, tmpdir: () => root };
+});
+
+afterAll(() => rmSync(tmpdir(), { recursive: true, force: true }));
 
 function extractionSuffix(): string {
   return process.platform === 'win32' ? '' : `-${process.getuid?.() ?? 0}`;
@@ -25,7 +37,12 @@ function tempFilesUnder(root: string): string[] {
 
 describe('embedded skills assets', () => {
   it('materializes the complete plugin tree to a real directory', async () => {
+    const { tmpdir: sharedTmpdir } = await vi.importActual<typeof import('node:os')>('node:os');
+    // This spec deletes extraction roots: never share them with other workers
+    // (e.g. doctor --fix copying these assets) or real CLI invocations.
+    expect(tmpdir()).not.toBe(sharedTmpdir());
     const skillsDir = getSkillsDir();
+    expect(skillsDir.startsWith(join(tmpdir(), 'workos-skills-'))).toBe(true);
     expect(skillsDir).toContain(`workos-skills-${BUNDLED_SKILLS_VERSION}`);
     expect(existsSync(join(skillsDir, 'workos', 'SKILL.md'))).toBe(true);
     expect(existsSync(join(skillsDir, 'workos-widgets', 'SKILL.md'))).toBe(true);
@@ -68,8 +85,7 @@ describe('embedded skills assets', () => {
 });
 
 describe('materializeFile concurrent extraction race', () => {
-  // The extraction root is version-keyed and shared with the other tests and
-  // real CLI runs on this machine; each test wipes it first so materializeFile's
+  // Wipe only this spec's private extraction root so materializeFile's
   // identical-target pre-check can't short-circuit before the mocked rename runs.
   const extractionRoot = join(tmpdir(), `workos-skills-${BUNDLED_SKILLS_VERSION}${extractionSuffix()}`);
 
