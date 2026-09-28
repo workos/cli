@@ -1,4 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { setInteractionMode, resetInteractionModeForTests } from '../utils/interaction-mode.js';
+import { setOutputMode } from '../utils/output.js';
+import { ensureAuthenticated } from './ensure-auth.js';
+import { getAccessToken } from './credentials.js';
+import { fetchStagingCredentials } from './staging-api.js';
 import type { EnvironmentConfig } from './config-store.js';
 
 // Provenance is derived in-module from the config store, so the store is the
@@ -11,12 +16,16 @@ vi.mock('./config-store.js', () => ({
   isUnclaimedEnvironment: (env: EnvironmentConfig) => env.type === 'unclaimed',
 }));
 
+vi.mock('./ensure-auth.js', () => ({ ensureAuthenticated: vi.fn() }));
+vi.mock('./credentials.js', () => ({ getAccessToken: vi.fn() }));
+vi.mock('./staging-api.js', () => ({ fetchStagingCredentials: vi.fn() }));
+
 vi.mock('../utils/analytics.js', () => ({
   analytics: { capture: vi.fn(), captureException: vi.fn() },
 }));
 
 const { analytics } = await import('../utils/analytics.js');
-const ui = (await import('../utils/ui.js')).default;
+const { default: ui, CANCEL } = await import('../utils/ui.js');
 const { autoConfigureWorkOSEnvironment, SANDBOX_ONLY_REASON } = await import('./workos-management.js');
 
 const API_KEY = 'sk_test_123';
@@ -114,6 +123,185 @@ describe('workos-management', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  describe('bounded Unauthorized recovery', () => {
+    const pair = { apiKey: 'sk_test_fake_recovered', clientId: 'client_fake' };
+    const tty = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+    beforeEach(() => {
+      Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: true });
+      setInteractionMode({ mode: 'human', source: 'flag' });
+      setOutputMode('human');
+      vi.spyOn(ui, 'select').mockResolvedValue('retry');
+      vi.mocked(ensureAuthenticated)
+        .mockReset()
+        .mockResolvedValue({ authenticated: true, loginTriggered: false, tokenRefreshed: false });
+      vi.mocked(getAccessToken).mockReset().mockReturnValue('fake-token');
+      vi.mocked(fetchStagingCredentials).mockReset().mockResolvedValue(pair);
+    });
+    afterEach(() => {
+      if (tty) Object.defineProperty(process.stdin, 'isTTY', tty);
+      else Reflect.deleteProperty(process.stdin, 'isTTY');
+      resetInteractionModeForTests();
+      setOutputMode('human');
+    });
+
+    it.each([
+      [
+        { authenticated: true, loginTriggered: false, tokenRefreshed: false },
+        'Using the existing dashboard session; no new login was needed.',
+      ],
+      [{ authenticated: true, loginTriggered: false, tokenRefreshed: true }, 'Dashboard session refreshed.'],
+      [{ authenticated: true, loginTriggered: true, tokenRefreshed: false }, 'Signed in to WorkOS.'],
+    ] as const)('recovers with a same-target pair and truthful auth wording: %s', async (auth, message) => {
+      vi.mocked(ensureAuthenticated).mockResolvedValue(auth);
+      const fetch = vi.fn(async (_url: string, init: RequestInit) =>
+        Response.json(
+          {},
+          {
+            status: (init.headers as Record<string, string>).Authorization === `Bearer ${API_KEY}` ? 401 : 201,
+          },
+        ),
+      );
+      vi.stubGlobal('fetch', fetch);
+      const result = await autoConfigureWorkOSEnvironment(API_KEY, INTEGRATION, PORT, { clientId: pair.clientId });
+      expect(result?.recoveredCredentials).toEqual(pair);
+      expect(fetch).toHaveBeenCalledTimes(4);
+      expect(ui.select).toHaveBeenCalledTimes(1);
+      expect(ui.log.info).toHaveBeenCalledWith(message);
+      expect(JSON.stringify(vi.mocked(analytics.capture).mock.calls)).not.toContain(pair.apiKey);
+    });
+
+    it.each(['same', 'mismatch', 'production', 'noClient', 'manual', 'cancel', 'exhausted'])(
+      'stops without adopting a replacement: %s',
+      async (failure) => {
+        const fetch = vi.fn(async () => Response.json({ message: 'fake_secret_backend' }, { status: 401 }));
+        vi.stubGlobal('fetch', fetch);
+        if (failure === 'same') vi.mocked(fetchStagingCredentials).mockResolvedValue({ ...pair, apiKey: API_KEY });
+        if (failure === 'mismatch')
+          vi.mocked(fetchStagingCredentials).mockResolvedValue({ ...pair, clientId: 'client_other' });
+        if (failure === 'production')
+          vi.mocked(fetchStagingCredentials).mockResolvedValue({ ...pair, apiKey: 'sk_live_fake' });
+        if (failure === 'manual') vi.mocked(ui.select).mockResolvedValue('manual');
+        if (failure === 'cancel') vi.mocked(ui.select).mockResolvedValue(CANCEL);
+        expect(
+          await autoConfigureWorkOSEnvironment(API_KEY, INTEGRATION, PORT, {
+            clientId: failure === 'noClient' ? undefined : pair.clientId,
+          }),
+        ).toBeNull();
+        expect(ui.select).toHaveBeenCalledTimes(1);
+        expect(fetch).toHaveBeenCalledTimes(failure === 'exhausted' ? 4 : 2);
+        expect(ui.log.success).not.toHaveBeenCalled();
+        const output = JSON.stringify([
+          vi.mocked(ui.log.warn).mock.calls,
+          vi.mocked(ui.log.info).mock.calls,
+          vi.mocked(analytics.capture).mock.calls,
+        ]);
+        expect(output).not.toContain('fake_secret_backend');
+        expect(output).not.toContain(pair.apiKey);
+        expect(ui.rows).toHaveBeenCalledWith(
+          expect.arrayContaining([{ key: 'Redirect URI', value: `${BASE_URL}/auth/callback` }]),
+        );
+      },
+    );
+
+    it.each([403, 422, 500])(
+      'does not offer auth recovery for HTTP %s even with Unauthorized in the body',
+      async (status) => {
+        vi.stubGlobal(
+          'fetch',
+          vi.fn(async () => Response.json({ message: 'Unauthorized 401 fake_secret_backend' }, { status })),
+        );
+        expect(
+          await autoConfigureWorkOSEnvironment(API_KEY, INTEGRATION, PORT, { clientId: pair.clientId }),
+        ).toBeNull();
+        expect(ui.select).not.toHaveBeenCalled();
+        expect(ensureAuthenticated).not.toHaveBeenCalled();
+        expect(JSON.stringify(vi.mocked(analytics.capture).mock.calls)).not.toContain('fake_secret_backend');
+      },
+    );
+
+    it('waits for in-flight writes and does not disguise concurrent non-auth failure as a 401', async () => {
+      let settle!: (response: Response) => void;
+      const slow = new Promise<Response>((resolve) => {
+        settle = resolve;
+      });
+      vi.stubGlobal(
+        'fetch',
+        vi
+          .fn()
+          .mockResolvedValueOnce(Response.json({}, { status: 401 }))
+          .mockReturnValueOnce(slow),
+      );
+      const result = autoConfigureWorkOSEnvironment(API_KEY, INTEGRATION, PORT, { clientId: pair.clientId });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(ui.select).not.toHaveBeenCalled();
+      settle(Response.json({}, { status: 403 }));
+      expect(await result).toBeNull();
+      expect(ui.select).not.toHaveBeenCalled();
+    });
+
+    it.each([undefined, 'https://requested.example/'])(
+      'preserves default-vs-explicit homepage semantics after replacing an unclaimed profile key (%s)',
+      async (homepageUrl) => {
+        const profile: EnvironmentConfig = { ...unclaimedEnv, clientId: pair.clientId };
+        getActiveEnvironment.mockReturnValue(profile);
+        let homepage = 'https://existing.example/';
+        const calls: FetchCall[] = [];
+        const request = vi.fn(async (url: string, init: RequestInit) => {
+          calls.push({ url, method: init.method! });
+          if (url.endsWith('/claim-nonces')) return Response.json({ nonce: 'fake_claim_nonce' });
+          const rejected = (init.headers as Record<string, string>).Authorization === `Bearer ${API_KEY}`;
+          if (rejected) return Response.json({}, { status: 401 });
+          if (url === HOMEPAGE_ENDPOINT) {
+            if (init.method === 'GET') return Response.json({ url: homepage });
+            homepage = JSON.parse(init.body as string).url;
+          }
+          return Response.json({}, { status: 201 });
+        });
+        vi.stubGlobal('fetch', request);
+
+        const result = await autoConfigureWorkOSEnvironment(API_KEY, INTEGRATION, PORT, {
+          clientId: pair.clientId,
+          homepageUrl,
+        });
+        expect(result?.recoveredCredentials).toEqual(pair);
+        expect(result?.redirectUri.success).toBe(true);
+        expect(result?.corsOrigin.success).toBe(true);
+        expect(profile.apiKey).toBe(API_KEY);
+        expect(ui.select).toHaveBeenCalledTimes(1);
+        if (homepageUrl) {
+          expect(result?.homepageUrl).toEqual({ success: true, alreadyExists: false });
+          expect(homepage).toBe(homepageUrl);
+          expect(homepageCalls(calls, 'PUT')).toHaveLength(1);
+          expect(ui.log.success).toHaveBeenCalledWith('WorkOS dashboard configured');
+        } else {
+          // A same-client staging pair does not transfer the old claim token's
+          // ownership or prove the environment is STILL unclaimed after login.
+          expect(result?.homepageUrl).toBeUndefined();
+          expect(homepage).toBe('https://existing.example/');
+          expect(homepageCalls(calls, 'PUT')).toHaveLength(0);
+          expect(calls.filter(({ url }) => url.endsWith('/claim-nonces'))).toHaveLength(1);
+          expect(ui.log.success).not.toHaveBeenCalled();
+          expect(ui.log.warn).toHaveBeenCalledWith(expect.stringContaining('homepage left unchanged'));
+          expect(rowFor('Homepage URL').status).toContain('not changed');
+        }
+      },
+    );
+
+    it('never writes the homepage after its GET rejects authorization', async () => {
+      const request = vi.fn(async (url: string) =>
+        Response.json({}, { status: url === HOMEPAGE_ENDPOINT ? 401 : 201 }),
+      );
+      vi.stubGlobal('fetch', request);
+      vi.mocked(ui.select).mockResolvedValue('manual');
+      await autoConfigureWorkOSEnvironment(API_KEY, INTEGRATION, PORT, {
+        homepageUrl: BASE_URL,
+        clientId: pair.clientId,
+      });
+      expect(request.mock.calls).toHaveLength(3);
+      expect(ui.select).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('setHomepageUrl read-then-write', () => {

@@ -1,3 +1,10 @@
+import {
+  DashboardConfigError,
+  isConfigurationUnauthorized,
+  recoverConfigurationAccess,
+  configurationRecoveryHint,
+  type ConfigurationCredentials,
+} from './configuration-recovery.js';
 import type { Integration } from './constants.js';
 import type { SetupItemId, SetupItemStatus } from './events.js';
 import type { EnvironmentConfig } from './config-store.js';
@@ -17,9 +24,11 @@ const HOMEPAGE_URL_ENDPOINT = '/user_management/app_homepage_url';
 const SUPPLIED_KEY_PROVENANCE = 'the API key supplied to this run';
 
 export interface AutoConfigResult {
+  /** Accepted only after the complete retry succeeds; callers must adopt both values. */
+  recoveredCredentials?: ConfigurationCredentials;
   redirectUri: { success: boolean; alreadyExists: boolean };
   corsOrigin: { success: boolean; alreadyExists: boolean };
-  /** Absent when the homepage was left alone (see `autoConfigureWorkOSEnvironment`). */
+  /** Absent when the homepage was left alone; callback/CORS success does not imply complete setup. */
   homepageUrl?: { success: boolean; alreadyExists: boolean };
 }
 
@@ -78,7 +87,7 @@ async function createRedirectUri(apiKey: string, uri: string): Promise<{ success
     return { success: true, alreadyExists: true };
   }
 
-  throw new Error(error.message || `HTTP ${error.status}`);
+  throw new DashboardConfigError(error.status);
 }
 
 /**
@@ -101,7 +110,7 @@ export async function createCorsOrigin(
     return { success: true, alreadyExists: true };
   }
 
-  throw new Error(error.message || `HTTP ${error.status}`);
+  throw new DashboardConfigError(error.status);
 }
 
 /**
@@ -130,11 +139,11 @@ export async function setHomepageUrl(
       if (data?.url === url || (preserveExisting && data?.url)) {
         return { success: true, alreadyExists: true };
       }
-    } else if (preserveExisting) {
-      throw new Error('Could not read the current homepage URL.');
+    } else if (current.status === 401 || preserveExisting) {
+      throw new DashboardConfigError(current.status);
     }
   } catch (error) {
-    if (preserveExisting) throw error;
+    if (preserveExisting || isConfigurationUnauthorized(error)) throw error;
     // Legacy callers fall through to the write on read failures.
   }
 
@@ -142,7 +151,7 @@ export async function setHomepageUrl(
 
   if (!response.ok) {
     const error = await parseFetchError(response);
-    throw new Error(error.message || `HTTP ${error.status}`);
+    throw new DashboardConfigError(error.status);
   }
 
   return { success: true, alreadyExists: false };
@@ -200,6 +209,10 @@ function describeCredentialProvenance(apiKey: string): string {
 }
 
 export interface AutoConfigOptions {
+  /** Required to verify a replacement key against this application. */
+  clientId?: string;
+  /** Explicit CI callers may disable recovery even in a human terminal. */
+  interactive?: boolean;
   /** Custom homepage URL (defaults to http://localhost:{port}) */
   homepageUrl?: string;
   /** Custom redirect URI (defaults to framework convention) */
@@ -231,6 +244,40 @@ export async function autoConfigureWorkOSEnvironment(
   port: number,
   options: AutoConfigOptions = {},
 ): Promise<AutoConfigResult | null> {
+  try {
+    return await autoConfigureOnce(apiKey, integration, port, options);
+  } catch (error) {
+    if (!isConfigurationUnauthorized(error)) throw error;
+    const recovered = await recoverConfigurationAccess({ apiKey, clientId: options.clientId }, options.interactive);
+    let reason =
+      'reason' in recovered ? recovered.reason : `Unauthorized recovery exhausted. ${configurationRecoveryHint()}`;
+    if ('credentials' in recovered && recovered.credentials) {
+      try {
+        const result = await autoConfigureOnce(recovered.credentials.apiKey, integration, port, options);
+        if (result) return { ...result, recoveredCredentials: recovered.credentials };
+        reason = 'Configuration retry failed. Credentials were left unchanged.';
+      } catch {
+        // The single retry is exhausted. No staged credentials escape on failure.
+      }
+    }
+    ui.log.warn(reason);
+    ui.log.info('Configure these settings manually in the WorkOS dashboard:');
+    const baseUrl = `http://localhost:${port}`;
+    ui.rows([
+      { key: 'Redirect URI', value: options.redirectUri || `${baseUrl}${getCallbackPath(integration)}` },
+      { key: 'CORS origin', value: baseUrl },
+      ...(options.homepageUrl ? [{ key: 'Homepage URL', value: options.homepageUrl }] : []),
+    ]);
+    return null;
+  }
+}
+
+async function autoConfigureOnce(
+  apiKey: string,
+  integration: Integration,
+  port: number,
+  options: AutoConfigOptions,
+): Promise<AutoConfigResult | null> {
   const baseUrl = `http://localhost:${port}`;
   const callbackPath = getCallbackPath(integration);
   const callbackUrl = options.redirectUri || `${baseUrl}${callbackPath}`;
@@ -257,7 +304,9 @@ export async function autoConfigureWorkOSEnvironment(
   // someone already chose one. Write only an explicit homepage or a default
   // for an environment the server still reports as unclaimed. Local claim
   // status can be stale. With a login, the later dashboard step reads the
-  // current value and fills an empty one.
+  // current value and fills an empty one. Recheck on recovery: a replacement
+  // staging pair does not transfer the stored claim token or prove the target
+  // is still unclaimed. Leave the default alone when ownership is unverified.
   const writeHomepage = Boolean(options.homepageUrl) || (await isUnclaimedEnvironmentKey(apiKey));
 
   ui.log.step('Configuring WorkOS dashboard settings...');
@@ -271,19 +320,26 @@ export async function autoConfigureWorkOSEnvironment(
         return result;
       },
       (error: unknown) => {
-        onStep(step, 'failed', error instanceof Error ? error.message : String(error));
+        onStep(step, 'failed', isConfigurationUnauthorized(error) ? 'Unauthorized' : 'Configuration request failed');
         throw error;
       },
     );
   };
 
   try {
-    const [redirectUri, corsOrigin, homepageUrl] = await Promise.all([
+    // Settle every in-flight write before offering recovery. These are additive
+    // upserts (or an explicit homepage override), so the same-target retry is safe.
+    const requests = [
       track('redirect-uri', createRedirectUri(apiKey, callbackUrl)),
       track('cors-origin', createCorsOrigin(apiKey, baseUrl)),
       writeHomepage ? setHomepageUrl(apiKey, homepageUrlValue) : undefined,
-    ]);
-
+    ] as const;
+    const settled = await Promise.allSettled(requests);
+    const failures = settled.filter((result) => result.status === 'rejected');
+    // A simultaneous non-auth failure must not be disguised as an auth failure.
+    const failure = failures.find((result) => !isConfigurationUnauthorized(result.reason)) ?? failures[0];
+    if (failure) throw failure.reason;
+    const [redirectUri, corsOrigin, homepageUrl] = await Promise.all(requests);
     const results: AutoConfigResult = { redirectUri, corsOrigin, homepageUrl };
 
     analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
@@ -298,7 +354,11 @@ export async function autoConfigureWorkOSEnvironment(
     // Aligned key/value feedback: value in accent, a dim status for "already
     // existed" vs. a green status for a fresh create/update. The provenance row
     // comes first — it is the context for the three rows below it.
-    ui.log.success('WorkOS dashboard configured');
+    if (homepageUrl) ui.log.success('WorkOS dashboard configured');
+    else {
+      ui.log.warn('Callback and CORS configured; homepage left unchanged.');
+      ui.log.info('Check the homepage in the WorkOS dashboard, or supply --homepage-url to explicitly override it.');
+    }
     ui.rows([
       { key: 'Environment', value: describeCredentialProvenance(apiKey), statusKind: 'muted' },
       {
@@ -330,19 +390,9 @@ export async function autoConfigureWorkOSEnvironment(
 
     return results;
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-
-    // Provide specific guidance for common errors
-    if (message.includes('401') || message.includes('Invalid API key')) {
-      ui.log.warn('Could not configure WorkOS dashboard: Invalid API key');
-    } else if (message.includes('403') || message.includes('permission')) {
-      ui.log.warn('Could not configure WorkOS dashboard: API key lacks permission');
-    } else if (message.includes('422') || message.includes('Validation')) {
-      ui.log.warn(`Could not configure WorkOS dashboard: Validation error`);
-      ui.log.info(`  Error: ${message}`);
-    } else {
-      ui.log.warn(`Could not configure WorkOS dashboard: ${message}`);
-    }
+    if (isConfigurationUnauthorized(error)) throw error;
+    const message = error instanceof DashboardConfigError ? error.message : 'Configuration request failed';
+    ui.log.warn(`Could not configure WorkOS dashboard: ${message}`);
 
     ui.log.info('You can configure these settings manually in the WorkOS dashboard.');
 
