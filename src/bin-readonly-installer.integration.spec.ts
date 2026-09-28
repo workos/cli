@@ -6,11 +6,10 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const fixture = join(root, 'src/test/readonly-installer.fixture.ts');
-const realGit = execFileSync('which', ['git'], { encoding: 'utf8' }).trim();
 let sandbox: string;
 let project: string;
 let env: NodeJS.ProcessEnv;
-const git = (dir: string, ...args: string[]) => execFileSync(realGit, args, { cwd: dir, env, encoding: 'utf8' });
+const git = (dir: string, ...args: string[]) => execFileSync('git', args, { cwd: dir, env, encoding: 'utf8' });
 
 function repo(dir: string) {
   mkdirSync(dir, { recursive: true });
@@ -30,18 +29,18 @@ function repo(dir: string) {
 beforeEach(() => {
   sandbox = mkdtempSync(join(root, '.auth6733-test-'));
   const home = join(sandbox, 'home');
-  const bin = join(sandbox, 'bin');
   mkdirSync(home);
-  mkdirSync(bin);
+  const gitConfig = join(home, 'gitconfig');
+  writeFileSync(gitConfig, '');
   env = {
-    PATH: `${bin}:${process.env.PATH}`,
+    PATH: process.env.PATH,
     HOME: home,
     USERPROFILE: home,
     TMPDIR: home,
     TMP: home,
     TEMP: home,
     GIT_CONFIG_NOSYSTEM: '1',
-    GIT_CONFIG_GLOBAL: '/dev/null',
+    GIT_CONFIG_GLOBAL: gitConfig,
     GIT_AUTHOR_NAME: 'Offline Test',
     GIT_AUTHOR_EMAIL: 'offline@example.test',
     GIT_COMMITTER_NAME: 'Offline Test',
@@ -50,25 +49,19 @@ beforeEach(() => {
     NO_COLOR: '1',
     TERM: 'dumb',
     TEST_EVIDENCE: join(sandbox, 'evidence.ndjson'),
-    TEST_COMMANDS: join(sandbox, 'commands.log'),
   };
+  // Windows subprocess startup needs these OS paths; never inherit credentials.
+  for (const key of ['SystemRoot', 'WINDIR', 'COMSPEC', 'PATHEXT']) {
+    if (process.env[key]) env[key] = process.env[key];
+  }
   writeFileSync(env.TEST_EVIDENCE!, '');
-  writeFileSync(env.TEST_COMMANDS!, '');
-  // Only read-only inspection and the explicitly preserved branch operation
-  // can reach real git. Even a swallowed forbidden error leaves evidence.
-  writeFileSync(
-    join(bin, 'git'),
-    `#!/bin/sh\nprintf '%s\\n' "git $*" >> "$TEST_COMMANDS"\ncase "$1" in\n rev-parse|status|checkout) exec '${realGit}' "$@" ;;\n *) echo FORBIDDEN >> "$TEST_COMMANDS"; exit 97 ;;\nesac\n`,
-    { mode: 0o755 },
-  );
-  writeFileSync(join(bin, 'gh'), '#!/bin/sh\necho "FORBIDDEN gh $*" >> "$TEST_COMMANDS"\nexit 97\n', { mode: 0o755 });
   project = join(sandbox, 'project');
   repo(project);
 });
 
 afterEach(() => rmSync(sandbox, { recursive: true, force: true }));
 
-function run(args: string[], overrides: NodeJS.ProcessEnv = {}, cwd = project) {
+function run(args: string[], overrides: NodeJS.ProcessEnv = {}, cwd = project, expectedForbidden: string[] = []) {
   const head = git(project, 'rev-parse', 'HEAD');
   const index = git(project, 'ls-files', '--stage');
   const result = spawnSync('bun', [fixture, ...args], {
@@ -83,8 +76,7 @@ function run(args: string[], overrides: NodeJS.ProcessEnv = {}, cwd = project) {
     .split('\n')
     .filter(Boolean)
     .map((s) => JSON.parse(s));
-  expect(evidence.filter((e) => e.kind === 'forbidden')).toEqual([]);
-  expect(readFileSync(env.TEST_COMMANDS!, 'utf8')).not.toContain('FORBIDDEN');
+  expect(evidence.filter((e) => e.kind === 'forbidden').map((e) => e.value)).toEqual(expectedForbidden);
   expect(git(project, 'rev-parse', 'HEAD')).toBe(head);
   // Git status can refresh stat metadata, but never the staged entries.
   expect(git(project, 'ls-files', '--stage')).toBe(index);
@@ -124,6 +116,23 @@ function expectSuccess(result: ReturnType<typeof run>) {
 }
 
 describe('installer leaves changes uncommitted through the real parser and orchestrator', () => {
+  it('records forbidden process calls even when swallowed, without relying on executable shims', () => {
+    const result = run([], { TEST_ENTRY: 'guard-probe' }, project, [
+      'execFileSync git add -A',
+      'execFileSync git commit -m forbidden',
+      'execFileSync git push',
+      'execFileSync gh pr create',
+      'execSync git status --porcelain=v1 && git push',
+      'exec',
+      'execFile',
+      'spawn',
+      'spawnSync',
+      'fork',
+    ]);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.evidence.filter((e) => e.kind === 'command').length).toBe(4);
+  });
+
   it.each(
     [
       [],

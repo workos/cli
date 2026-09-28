@@ -21,7 +21,9 @@ beforeEach(() => {
   vi.stubEnv('HOME', dir);
   vi.stubEnv('GIT_CEILING_DIRECTORIES', process.cwd());
   vi.stubEnv('GIT_CONFIG_NOSYSTEM', '1');
-  vi.stubEnv('GIT_CONFIG_GLOBAL', '/dev/null');
+  const gitConfig = join(dir, 'empty-gitconfig');
+  writeFileSync(gitConfig, '');
+  vi.stubEnv('GIT_CONFIG_GLOBAL', gitConfig);
   vi.stubEnv('GIT_AUTHOR_NAME', 'Offline Test');
   vi.stubEnv('GIT_AUTHOR_EMAIL', 'offline@example.test');
   vi.stubEnv('GIT_COMMITTER_NAME', 'Offline Test');
@@ -51,9 +53,9 @@ describe('read-only change inspection', () => {
 
   it('preserves tracked/untracked filenames and staged rename destinations, without touching the index', () => {
     init();
-    const renamed = 'renamed → "file".ts';
+    const renamed = 'renamed → file.ts';
     git('mv', 'tracked.ts', renamed);
-    const names = [' space.ts', 'line\nbreak.ts', 'quote".ts', 'unicode-雪.ts'];
+    const names = ['space name.ts', 'unicode-雪.ts'];
     for (const name of names) writeFileSync(join(dir, name), 'new');
     mkdirSync(join(dir, 'nested'));
     writeFileSync(join(dir, 'nested', 'untracked.ts'), 'new');
@@ -63,6 +65,19 @@ describe('read-only change inspection', () => {
     expect(result.files.sort()).toEqual([...names, renamed, 'nested/untracked.ts'].sort());
     expect(readFileSync(join(dir, '.git/index'))).toEqual(index);
     expect(detectChanges(join(dir, 'nested'))).toEqual({ state: 'changed', files: ['nested/untracked.ts'] });
+  });
+
+  it('parses exact NUL-delimited names including characters unavailable in Windows filenames', () => {
+    const files = [' space.ts', 'line\nbreak.ts', 'quote".ts', 'unicode-雪.ts', 'renamed → "file".ts'];
+    vi.spyOn(childProcess, 'execFileSync').mockImplementation((_cmd, args) =>
+      args?.[0] === 'rev-parse'
+        ? 'true\n'
+        : files
+            .slice(0, -1)
+            .map((file) => `?? ${file}\0`)
+            .join('') + `R  ${files.at(-1)}\0old\nname.ts\0`,
+    );
+    expect(detectChanges(dir)).toEqual({ state: 'changed', files });
   });
 
   it('does not call a status failure unchanged (and runs only read-only commands)', () => {

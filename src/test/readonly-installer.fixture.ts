@@ -14,6 +14,44 @@ const forbidden =
     throw new Error(`Forbidden external call: ${name}`);
   };
 
+// Intercept before importing CLI modules. Use real Git for inspection/branch
+// creation, but never invoke a shell or rely on POSIX PATH executable shims.
+const childProcess = await import('node:child_process');
+const realExecFileSync = childProcess.execFileSync;
+const execFileSync = ((
+  file: string,
+  args: string[] = [],
+  options?: import('node:child_process').ExecFileSyncOptions,
+) => {
+  record('command', { file, args });
+  const readOnly = ['rev-parse', 'status'].includes(args[0]);
+  const branch = args.length === 3 && args[0] === 'checkout' && args[1] === '-b';
+  if (file !== 'git' || (!readOnly && !branch) || options?.shell) {
+    forbidden(`execFileSync ${file} ${args.join(' ')}`)();
+  }
+  return realExecFileSync(file, args, options);
+}) as typeof childProcess.execFileSync;
+const execSync = ((command: string, options?: import('node:child_process').ExecSyncOptions) => {
+  if (
+    !['git rev-parse --abbrev-ref HEAD', 'git rev-parse --is-inside-work-tree', 'git status --porcelain=v1'].includes(
+      command,
+    )
+  )
+    forbidden(`execSync ${command}`)();
+  return execFileSync('git', command.split(' ').slice(1), options);
+}) as typeof childProcess.execSync;
+const guardedProcesses = {
+  ...childProcess,
+  execFileSync,
+  execSync,
+  exec: forbidden('exec'),
+  execFile: forbidden('execFile'),
+  spawn: forbidden('spawn'),
+  spawnSync: forbidden('spawnSync'),
+  fork: forbidden('fork'),
+};
+mock.module('node:child_process', () => ({ ...guardedProcesses, default: guardedProcesses }));
+
 // Block both native keychain backends BEFORE loading any CLI modules.
 mock.module('@napi-rs/keyring', () => ({
   Entry: class {
@@ -106,7 +144,30 @@ if (process.env.TEST_HUMAN === '1') {
   };
 }
 
-if (process.env.TEST_ENTRY === 'programmatic') {
+if (process.env.TEST_ENTRY === 'guard-probe') {
+  const guarded = await import('node:child_process');
+  // These must all throw AND leave evidence even if a caller catches the error.
+  const probes = [
+    () => guarded.execFileSync('git', ['add', '-A']),
+    () => guarded.execFileSync('git', ['commit', '-m', 'forbidden']),
+    () => guarded.execFileSync('git', ['push']),
+    () => guarded.execFileSync('gh', ['pr', 'create']),
+    () => guarded.execSync('git status --porcelain=v1 && git push'),
+    () => guarded.exec('git push'),
+    () => guarded.execFile('git', ['push']),
+    () => guarded.spawn('git', ['push']),
+    () => guarded.spawnSync('git', ['push']),
+    () => guarded.fork('forbidden.js'),
+  ];
+  for (const probe of probes) {
+    try {
+      probe();
+    } catch {
+      continue;
+    }
+    throw new Error('Process guard allowed a forbidden call');
+  }
+} else if (process.env.TEST_ENTRY === 'programmatic') {
   const { setOutputMode } = await import('../utils/output.js');
   setOutputMode('json');
   const { runWithCore } = await import('../lib/run-with-core.js');
