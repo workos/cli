@@ -527,7 +527,14 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
 
       buildCompletion: fromPromise<CompletionData | undefined, { context: InstallerMachineContext }>(
         async ({ input }) => {
-          const { integration, changedFiles, changeDetection, options: installerOptions, credentials, applicationSetup } = input.context;
+          const {
+            integration,
+            changedFiles,
+            changeDetection,
+            options: installerOptions,
+            credentials,
+            applicationSetup,
+          } = input.context;
           if (!integration) return undefined;
           try {
             const registry = await getRegistry();

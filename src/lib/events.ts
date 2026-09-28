@@ -223,19 +223,6 @@ const INSTALLER_EVENT_REGISTRY = {
   'postinstall:changes': true,
   'postinstall:nochanges': true,
   'postinstall:unavailable': true,
-  'postinstall:commit:prompt': true,
-  'postinstall:commit:generating': true,
-  'postinstall:commit:committing': true,
-  'postinstall:commit:success': true,
-  'postinstall:commit:failed': true,
-  'postinstall:pr:prompt': true,
-  'postinstall:pr:generating': true,
-  'postinstall:pr:pushing': true,
-  'postinstall:pr:creating': true,
-  'postinstall:pr:success': true,
-  'postinstall:pr:failed': true,
-  'postinstall:push:failed': true,
-  'postinstall:manual': true,
 } as const satisfies Record<InstallerEventName, true>;
 
 export const INSTALLER_EVENT_NAMES = Object.keys(INSTALLER_EVENT_REGISTRY) as InstallerEventName[];

@@ -176,6 +176,25 @@ const tuiOption = {
   },
 } as const;
 
+// Compatibility-only booleans: no defaults, so omission stays distinguishable.
+const deprecatedInstallerGitOptions = {
+  commit: {
+    describe: 'Deprecated no-op (--commit/--no-commit); installer changes are left uncommitted',
+    type: 'boolean' as const,
+  },
+  'create-pr': {
+    describe: 'Deprecated no-op; the installer never pushes or creates pull requests',
+    type: 'boolean' as const,
+  },
+};
+
+function warnDeprecatedInstallerGitFlags(argv: { commit?: boolean; createPr?: boolean }): void {
+  if (isJsonMode() || (argv.commit === undefined && argv.createPr === undefined)) return;
+  ui.log.warn(
+    'Deprecated installer Git flags are ignored. The installer no longer commits, pushes, or creates pull requests. Review and commit changes yourself.',
+  );
+}
+
 const installerOptions = {
   direct: {
     alias: 'D',
@@ -246,16 +265,7 @@ const installerOptions = {
     describe: 'Create a new branch for changes (use --no-branch to skip)',
     type: 'boolean' as const,
   },
-  commit: {
-    default: true,
-    describe: 'Auto-commit after installation (use --no-commit to skip)',
-    type: 'boolean' as const,
-  },
-  'create-pr': {
-    default: false,
-    describe: 'Auto-create pull request after installation',
-    type: 'boolean' as const,
-  },
+  ...deprecatedInstallerGitOptions,
   'git-check': {
     default: true,
     describe: 'Check for dirty working tree (use --no-git-check to skip)',
@@ -3199,6 +3209,7 @@ async function runCli(): Promise<void> {
           force: argv.force,
           router: argv.router,
         });
+        warnDeprecatedInstallerGitFlags(argv);
         await resolveInstallCredentials(argv.apiKey, argv.installDir, argv.skipAuth, ensureAuthenticated);
         const { handleInstall } = await import('./commands/install.js');
         await handleInstall(argv);
@@ -3410,8 +3421,10 @@ async function runCli(): Promise<void> {
       'WorkOS AuthKit CLI',
       // `--force` must be registered here too: this parser is .strict(), so
       // `npx workos --force` would die as an unknown argument otherwise.
-      (yargs) => yargs.options({ ...insecureStorageOption, ...forceOption, ...tuiOption }),
+      (yargs) =>
+        yargs.options({ ...insecureStorageOption, ...forceOption, ...tuiOption, ...deprecatedInstallerGitOptions }),
       async (argv) => {
+        warnDeprecatedInstallerGitFlags(argv);
         // Non-human modes: emit machine-readable command tree (JSON) or the
         // fully-configured parser help (human non-TTY edge) instead of prompting.
         if (!isPromptAllowed()) {

@@ -103,10 +103,12 @@
       "failed": "A few things are worth a look (issues: {count}). They'll be listed when this screen closes."
     },
     "app-urls:step": "Your app's routes are in place, so now I'm pointing WorkOS at them.",
-    "postinstall:changes": "Files changed: {count}.",
-    "postinstall:commit:success": "Committed: {message}",
-    "postinstall:pr:success": "Pull request opened: {url}",
-    "postinstall:manual": "The GitHub CLI isn't installed, so here's how to open the pull request yourself.",
+    "postinstall:changes": "Current changed files: {count} (may include pre-existing changes). Nothing was committed; review the project and commit when ready.",
+    "postinstall:nochanges": "No Git changes detected in the install directory.",
+    "postinstall:unavailable": {
+      "not-git": "This project is not a Git working tree; review the files manually. Nothing was committed.",
+      "error": "I couldn't inspect Git changes; review the files manually. Nothing was committed."
+    },
     "complete": {
       "success": "All done. AuthKit is installed. Start your app and complete your first sign-up.",
       "setup-required": "The code is in. Some WorkOS settings need a look in the dashboard (listed above). Then start your app and complete your first sign-up.",

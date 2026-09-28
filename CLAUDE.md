@@ -16,7 +16,8 @@ WorkOS CLI for installing AuthKit integrations and managing WorkOS resources (or
 - **Auth**: Exits code 4 instead of opening browser. Resource commands (organization, user, role, permission, membership, invitation, session, event, feature-flag, org-domain, portal, webhook, config) use the dashboard session from a prior `workos auth login`; expired access tokens refresh silently while the stored refresh token is valid, so only a truly dead session exits 4. `WORKOS_API_KEY` applies only to `workos api` and the still-REST commands (`connection`, `directory`, `audit-log`, `api-key`, `vault`, plus the workflow/debug commands `seed`, `setup-org`, `onboard-user`, `verify-login`, `debug-sso`, `debug-sync`, `migrations`).
 - **Errors**: Structured JSON to stderr: `{ "error": { "code": "...", "message": "..." } }`
 - **Exit codes**: 0=success, 1=error, 2=cancelled, 4=auth required (follows `gh` CLI convention)
-- **Headless flags**: `--no-branch`, `--no-commit`, `--create-pr`, `--no-git-check`. CI mode (`WORKOS_MODE=ci`) auto-continues past a dirty tree without `--no-git-check`; agent mode requires the flag.
+- **Headless flags**: `--no-branch`, `--no-git-check`. CI mode (`WORKOS_MODE=ci`) auto-continues past a dirty tree without `--no-git-check`; agent mode requires the flag.
+- **Installer Git policy**: Generated changes stay unstaged/uncommitted; pre-existing staging is preserved. No installer-controlled staging, commits, pushes, PR creation, or commit/PR text generation. `--commit`, `--no-commit`, and `--create-pr` are deprecated compatibility-only no-ops, with human-only notices. Branch prompts/`--no-branch` remain unchanged; branches do not isolate uncommitted work. Change reporting is scoped to `installDir` and may include pre-existing changes.
 
 ## JSON Output Conventions
 

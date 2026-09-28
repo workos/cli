@@ -164,6 +164,11 @@ export class CLIAdapter implements InstallerAdapter {
 
     // Post-install events
     this.subscribe('postinstall:changes', this.handlePostInstallChanges);
+    this.subscribe('postinstall:nochanges', () => ui.log.info('No Git changes detected in the install directory.'));
+    this.subscribe('postinstall:unavailable', ({ reason, error }) => {
+      if (reason === 'not-git') ui.log.info('This project is not a Git working tree; review the files manually.');
+      else ui.log.warn(`Could not inspect Git changes; review the files manually. ${error ?? ''}`);
+    });
   }
 
   async stop(): Promise<void> {

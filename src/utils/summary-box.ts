@@ -22,7 +22,13 @@ export function renderCompletionSummary(success: boolean, summary?: string, comp
         // Code in, dashboard not yet: a warning, not a success.
         tone: setupPending ? 'warning' : 'success',
         title: setupPending ? 'App code installed; WorkOS setup required' : 'WorkOS AuthKit Installed',
-        items: [...shown, ...steps],
+        items: [
+          ...(files.length
+            ? [{ type: 'pending' as const, text: 'Current changed files (may include pre-existing changes):' }]
+            : []),
+          ...shown,
+          ...steps,
+        ],
         footer: completion.docsUrl,
       });
     }
@@ -34,6 +40,7 @@ export function renderCompletionSummary(success: boolean, summary?: string, comp
         ...(summary ? [{ type: 'pending' as const, text: summary }] : []),
         { type: 'pending', text: 'Start dev server to test authentication' },
         { type: 'pending', text: 'Visit WorkOS Dashboard to manage users' },
+        { type: 'pending', text: 'Changes are left uncommitted. Review the project and commit when ready.' },
       ],
       footer: 'https://workos.com/docs/authkit',
     });

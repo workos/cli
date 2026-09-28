@@ -112,6 +112,8 @@ export class HeadlessAdapter implements InstallerAdapter {
 
     // Post-install
     this.subscribe('postinstall:changes', this.handlePostInstallChanges);
+    this.subscribe('postinstall:nochanges', () => writeNDJSON({ type: 'postinstall:nochanges' }));
+    this.subscribe('postinstall:unavailable', (result) => writeNDJSON({ type: 'postinstall:unavailable', ...result }));
 
     // Terminal events
     this.subscribe('complete', this.handleComplete);

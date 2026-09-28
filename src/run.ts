@@ -23,10 +23,13 @@ export type InstallerArgs = {
   inspect?: boolean;
   noValidate?: boolean;
   validate?: boolean;
+  /** @deprecated Ignored: changes are always left uncommitted. */
   noCommit?: boolean;
+  /** @deprecated Ignored: changes are always left uncommitted. */
   commit?: boolean;
   noBranch?: boolean;
   branch?: boolean;
+  /** @deprecated Ignored: the installer never publishes changes. */
   createPr?: boolean;
   noGitCheck?: boolean;
   gitCheck?: boolean;
@@ -71,9 +74,7 @@ function buildOptions(argv: InstallerArgs): InstallerOptions {
     redirectUri: merged.redirectUri,
     inspect: merged.inspect ?? false,
     noValidate: merged.noValidate ?? merged.validate === false,
-    noCommit: merged.noCommit ?? merged.commit === false,
     noBranch: merged.noBranch ?? merged.branch === false,
-    createPr: merged.createPr ?? false,
     noGitCheck: merged.noGitCheck ?? merged.gitCheck === false,
     direct: merged.direct ?? false,
     noTui: merged.noTui ?? merged.tui === false,
