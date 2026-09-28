@@ -7,7 +7,11 @@ import { analytics } from '../../utils/analytics.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from '../../lib/constants.js';
 import { initializeAgent, runAgent } from '../../lib/agent-interface.js';
 import { getOrAskForWorkOSCredentials } from '../../utils/ui-utils.js';
-import { autoConfigureWorkOSEnvironment } from '../../lib/workos-management.js';
+import { basename } from 'node:path';
+import { resolveRedirectUri, getSignInPath } from '../../lib/port-detection.js';
+import { buildApplicationSetup } from '../../lib/authkit-application-setup.js';
+import { writeCredentialsEnv } from '../../lib/env-writer.js';
+import { resolveProjectEnvPath } from '../../lib/project-env.js';
 import { getReference } from '../../lib/skills-assets.js';
 import { buildSignInSection } from '../../lib/sign-in-route.js';
 
@@ -46,15 +50,14 @@ export const config: FrameworkConfig = {
   prompts: {},
 
   ui: {
-    successMessage: 'WorkOS AuthKit integration complete',
+    successMessage: 'Ruby agent finished; integration verification pending',
     getOutroChanges: () => [
-      'Analyzed your Rails project structure',
-      'Installed and configured the WorkOS Ruby SDK',
-      'Created authentication controller with login, callback, and logout',
-      'Added authentication routes to config/routes.rb',
+      'Requested SDK configuration, visible auth controls, and application session integration',
+      'Requested login, callback, and safe logout routes preserving existing authorization',
     ],
     getOutroNextSteps: () => [
-      'Start your Rails server with `rails server` to test authentication',
+      'Review the diff and use the project’s documented launcher; a Gemfile does not verify startup behavior',
+      'Verify visible auth controls, callback identity/account context, repeat login, and protected access after logout',
       'Visit the WorkOS Dashboard to manage users and settings',
     ],
   },
@@ -79,23 +82,25 @@ export async function run(options: InstallerOptions): Promise<string> {
   });
 
   // Get WorkOS credentials
-  const { apiKey, clientId: _clientId } = await getOrAskForWorkOSCredentials(
-    options,
-    config.environment.requiresApiKey,
-  );
+  const { apiKey, clientId } = await getOrAskForWorkOSCredentials(options, config.environment.requiresApiKey);
 
-  // Auto-configure WorkOS environment (redirect URI, CORS, homepage) if not already done
-  const callerHandledConfig = Boolean(options.apiKey || options.clientId);
-  if (!callerHandledConfig && apiKey) {
-    const port = 3000; // Rails default
-    await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, port, {
-      homepageUrl: options.homepageUrl,
-      redirectUri: options.redirectUri,
-    });
-  }
+  // The common installer owns URL provisioning after the agent, with a single
+  // sandbox target and read-back. Never perform legacy pre-agent URL writes here.
+  const redirectUri = resolveRedirectUri('ruby', options);
+  const setup = buildApplicationSetup({
+    clientId,
+    redirectUri,
+    homepageUrl: options.homepageUrl,
+    signInPath: getSignInPath('ruby'),
+  });
+  writeCredentialsEnv(options.installDir, {
+    WORKOS_API_KEY: apiKey,
+    WORKOS_CLIENT_ID: clientId,
+    WORKOS_REDIRECT_URI: redirectUri,
+  });
+  const envFile = basename(resolveProjectEnvPath(options.installDir));
 
-  // Build prompt for the agent
-  const redirectUri = options.redirectUri || 'http://localhost:3000/auth/callback';
+  // Keep credentials out of the prompt/transcript; the agent can read the ignored file.
   const refContent = await getReference('workos-ruby');
   const prompt = `You are integrating WorkOS AuthKit into this Ruby on Rails application.
 
@@ -106,7 +111,9 @@ export async function run(options: InstallerOptions): Promise<string> {
 
 ## Environment
 
-The following environment variables are needed (create a .env file if one does not exist):
+The installer wrote the selected credentials to the gitignored ${envFile}:
+Ensure this file is loaded before WorkOS initialization using the project's existing environment-loading convention (Rails does not load dotenv files by itself). Preserve unrelated settings. Never print secrets or commit them. Verify variable presence without displaying values.
+The variables are:
 - WORKOS_API_KEY
 - WORKOS_CLIENT_ID
 - WORKOS_REDIRECT_URI=${redirectUri}
@@ -115,7 +122,17 @@ The following environment variables are needed (create a .env file if one does n
 
 ${refContent}
 
-${buildSignInSection(config)}Report your progress using [STATUS] prefixes.
+${buildSignInSection(config)}## Application integration requirements (take precedence over generic examples)
+
+- Use callback ${redirectUri}, Initiate login ${setup.initiateLoginUri}, and sign-out return destination ${setup.signOutUri}. CORS origin is ${new URL(redirectUri).origin}. The sign-out return destination is not the logout action. Do not guess a different host/port from Puma when an explicit callback is supplied. Do not write dashboard settings; the installer configures the selected environment after agent execution.
+- Add visible sign-in controls while signed out and signed-in account/logout controls in the existing layouts/navigation. Wire real routes, not unused SDK examples. Preserve existing routes; if the required sign-in path conflicts, report the conflict rather than silently replacing it or choosing an unregistered alternative.
+- Trace the app's real identity, session, account scope, and active membership/role checks. The callback must establish that existing authenticated context, not merely store an unrelated token or replace current_user. Preserve existing authorization and cross-account boundaries.
+- Do not invent account-linking, identity/account auto-creation, membership or role assignment policy. Ask the user for the mapping policy if absent; leave that integration pending rather than using User.find_or_create_by(email:) or a hardcoded identity. Preserve magic-link and passkey behavior; do not silently replace the authentication system.
+- Ensure repeat login does not duplicate identities, accounts, or memberships under the approved policy.
+- Implement safe logout using the app's session termination/cookie clearing and the installed SDK's supported session logout behavior. Use CSRF protection for local session mutation. Verify protected access is denied afterward, including replay of the old app session. Local cookie deletion is not global provider-session revocation. If the SDK cannot end the upstream session, report that limitation instead of claiming logout is complete.
+- Add local route/session tests with synthetic identities and stubbed network where possible. Distinguish source changes from checks actually run; source strings and a successful agent exit are not behavioral proof. Report commands/results, unavailable checks, and pending policy decisions. Hosted AuthKit/browser flows remain unverified until actually exercised.
+
+Report your progress using [STATUS] prefixes.
 
 Begin integration now.`;
 
@@ -152,9 +169,11 @@ Begin integration now.`;
   const nextSteps = config.ui.getOutroNextSteps({});
 
   const lines: string[] = [
-    'Successfully installed WorkOS AuthKit!',
+    'Ruby agent finished. Application behavior and hosted AuthKit flows are not verified.',
+    `Requested callback: ${redirectUri}`,
+    'Application URL registration is handled separately by the installer after this step.',
     '',
-    'What the agent did:',
+    'Instructions given to the agent (not verified changes):',
     ...changes.map((c) => `• ${c}`),
     '',
     'Next steps:',

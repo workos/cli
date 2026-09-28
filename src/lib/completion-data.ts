@@ -63,11 +63,13 @@ export async function buildCompletionData(ctx: CompletionContext, deps: Completi
   const dev = await deps.resolveDevCommand(ctx.installDir);
   const devCommand = [dev.command, ...dev.args].join(' ');
   const port = deps.detectPort(ctx.integration as Integration, ctx.installDir);
-  const url = `http://localhost:${port}`;
+  const url = deps.applicationSetup ? new URL(deps.applicationSetup.redirectUri).origin : `http://localhost:${port}`;
   const files = ctx.changedFiles ?? [];
 
   const concrete = [
-    `Run \`${devCommand}\` to start your dev server`,
+    ctx.integration === 'ruby'
+      ? `Use the project's documented launcher (inferred command: \`${devCommand}\`; startup not verified)`
+      : `Run \`${devCommand}\` to start your dev server`,
     `Open ${url} to test authentication`,
     ...(deps.signInSnippet ? [deps.signInSnippet] : []),
   ];
