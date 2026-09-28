@@ -561,7 +561,10 @@ The deprecated Git flags above (including boolean/negated forms) are accepted bu
 ignored; human runs show a notice, while JSON runs keep machine streams clean.
 Branch creation and `--no-branch` are unchanged: uncommitted changes are not
 isolated by creating a branch. Reported changed files may include pre-existing
-work; inspection is scoped to `--install-dir`.
+work; inspection is scoped to `--install-dir`. Each of its two Git commands is
+limited to 5 seconds and 1 MiB of buffered output. If inspection hits either
+limit, it reports unknown changed files (not “no changes”); review the project
+manually. Partial output is never presented as a complete file list.
 
 **Full-screen installer:** In an interactive terminal of at least 80×24,
 `workos install` opens a full-screen view: a plain-English walkthrough of what

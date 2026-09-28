@@ -91,12 +91,52 @@ describe('read-only change inspection', () => {
       ['git', ['rev-parse', '--is-inside-work-tree']],
       ['git', ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--', '.']],
     ]);
-    expect(exec.mock.calls.every((call) => (call[2] as { cwd: string }).cwd === dir)).toBe(true);
+    for (const [, , options] of exec.mock.calls) {
+      expect(options).toMatchObject({
+        cwd: dir,
+        timeout: 5_000,
+        killSignal: 'SIGKILL',
+        maxBuffer: 1024 * 1024,
+        env: { GIT_OPTIONAL_LOCKS: '0' },
+      });
+    }
+  });
+
+  it('reports a large complete untracked list without summarizing or losing filenames', () => {
+    const files = Array.from({ length: 10_000 }, (_, i) => `generated/subdir/untracked-${i}-雪.ts`);
+    const output = files.map((file) => `?? ${file}\0`).join('');
+    expect(Buffer.byteLength(output)).toBeLessThan(1024 * 1024);
+    vi.spyOn(childProcess, 'execFileSync').mockImplementation((_cmd, args) =>
+      args?.[0] === 'rev-parse' ? 'true\n' : output,
+    );
+    expect(detectChanges(dir)).toEqual({ state: 'changed', files });
+  });
+
+  it.each([
+    { code: 'ETIMEDOUT', detail: 'timed out after 5000 ms' },
+    { code: 'ENOBUFS', detail: 'exceeded the 1048576-byte output limit' },
+  ])('discards partial stdout on $code in either command', ({ code, detail }) => {
+    for (const phase of ['rev-parse', 'status']) {
+      const error = Object.assign(new Error('raw subprocess error'), {
+        code,
+        stdout: '?? partially-reported.ts\0',
+        stderr: 'not a git repository',
+      });
+      vi.spyOn(childProcess, 'execFileSync').mockImplementation((_cmd, args) => {
+        if (args?.[0] === phase) throw error;
+        return 'true\n';
+      });
+      expect(detectChanges(dir)).toEqual({
+        state: 'error',
+        files: [],
+        error: `Git change inspection ${detail}; changed files are unknown. Review the project manually.`,
+      });
+    }
   });
 
   it('distinguishes an unavailable Git executable from a non-Git project', () => {
     vi.spyOn(childProcess, 'execFileSync').mockImplementation(() => {
-      throw new Error('spawn git ENOENT');
+      throw Object.assign(new Error('spawn git ENOENT'), { stderr: null });
     });
     expect(detectChanges(dir)).toEqual({ state: 'error', files: [], error: 'spawn git ENOENT' });
   });

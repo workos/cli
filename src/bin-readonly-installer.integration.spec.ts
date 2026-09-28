@@ -238,6 +238,34 @@ describe('installer leaves changes uncommitted through the real parser and orche
     expect(output.find((e) => e.type === 'git:status').files).toContain('- wrong-repository.txt');
   });
 
+  it.each([
+    { probe: 'timeout', detail: 'timed out after 5000 ms' },
+    { probe: 'overflow', detail: 'exceeded the 1048576-byte output limit' },
+  ])(
+    'reports unknown changed files after a real Bun $probe, never unchanged or a partial list',
+    ({ probe, detail }) => {
+      const result = run([...install, '--json'], { TEST_INSPECTION: probe });
+      expect(result.status, result.stderr + result.stdout).toBe(0);
+      expect(result.stderr).toBe('');
+      const output = events(result.stdout);
+      expect(output.filter((e) => e.type.startsWith('postinstall:'))).toEqual([
+        expect.objectContaining({
+          type: 'postinstall:unavailable',
+          reason: 'error',
+          error: expect.stringContaining(detail),
+        }),
+      ]);
+      const complete = output.find((e) => e.type === 'complete');
+      // Installation succeeded; inspection did not. Neither outcome hides the other.
+      expect(complete.success).toBe(true);
+      expect(complete.files).toEqual([]);
+      expect(complete.changeDetection).toEqual({ state: 'error', files: [], error: expect.stringContaining(detail) });
+      expect(complete.changeDetection.error).toContain('changed files are unknown');
+      expect(git(project, 'status', '--porcelain')).toContain('?? generated.ts');
+    },
+    15_000,
+  );
+
   it('reports fake agent failure without post-install success or publication', () => {
     const result = run([...install, '--create-pr', '--json'], { TEST_AGENT: 'fail' });
     expect(result.status).toBe(1);

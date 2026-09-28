@@ -29,6 +29,14 @@ const execFileSync = ((
   if (file !== 'git' || (!readOnly && !branch) || options?.shell) {
     forbidden(`execFileSync ${file} ${args.join(' ')}`)();
   }
+  if (process.env.TEST_INSPECTION && args.includes('--untracked-files=all')) {
+    // Real Bun child-process limits, with deterministic slow/large fake Git output.
+    const script =
+      process.env.TEST_INSPECTION === 'timeout'
+        ? `process.stdout.write('?? partial.ts\\0'); setInterval(() => {}, 1000);`
+        : `process.stdout.write(Array.from({ length: 80_000 }, (_, i) => '?? generated/untracked-' + i + '.ts\\0').join(''));`;
+    return realExecFileSync(process.execPath, ['--eval', script], options);
+  }
   return realExecFileSync(file, args, options);
 }) as typeof childProcess.execFileSync;
 const execSync = ((command: string, options?: import('node:child_process').ExecSyncOptions) => {
