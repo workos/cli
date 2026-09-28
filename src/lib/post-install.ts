@@ -1,54 +1,41 @@
 import { execFileSync } from 'node:child_process';
-import { writeFileSync, unlinkSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { getDefaultBranch, getUncommittedFiles } from '../utils/git-utils.js';
 
-export function detectChanges(): { hasChanges: boolean; files: string[] } {
-  const files = getUncommittedFiles();
-  return { hasChanges: files.length > 0, files };
-}
+export type ChangeDetection =
+  | { state: 'changed' | 'unchanged'; files: string[] }
+  | { state: 'not-git'; files: [] }
+  | { state: 'error'; files: []; error: string };
 
-export function stageAndCommit(message: string, cwd: string): void {
-  execFileSync('git', ['add', '-A'], { cwd, stdio: 'ignore' });
-  execFileSync('git', ['commit', '-m', message], { cwd, stdio: 'ignore' });
-}
-
-export function pushBranch(cwd: string): void {
-  execFileSync('git', ['push', '-u', 'origin', 'HEAD'], { cwd, stdio: 'pipe' });
-}
-
-export function createPullRequest(title: string, body: string, cwd: string): string {
-  const baseBranch = getDefaultBranch();
-  const tmpFile = join(tmpdir(), `pr-body-${Date.now()}.md`);
-  writeFileSync(tmpFile, body, 'utf-8');
-
-  try {
-    return execFileSync('gh', ['pr', 'create', '--title', title, '--body-file', tmpFile, '--base', baseBranch], {
-      cwd,
+/** Read the current tree, not an attribution of changes to the installer. Never touch the index. */
+export function detectChanges(installDir: string): ChangeDetection {
+  const git = (args: string[]) =>
+    execFileSync('git', args, {
+      cwd: installDir,
+      encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
-    })
-      .toString()
-      .trim();
-  } finally {
-    try {
-      unlinkSync(tmpFile);
-    } catch {}
+      env: { ...process.env, LC_ALL: 'C' },
+    });
+  try {
+    if (git(['rev-parse', '--is-inside-work-tree']).trim() !== 'true') {
+      return { state: 'not-git', files: [] };
+    }
+  } catch (error) {
+    const stderr = (error as { stderr?: string }).stderr ?? '';
+    if (stderr.includes('not a git repository')) return { state: 'not-git', files: [] };
+    return { state: 'error', files: [], error: error instanceof Error ? error.message : String(error) };
   }
-}
-
-export function getManualPrInstructions(branch: string): string {
-  const baseBranch = getDefaultBranch();
-  return `
-To create a PR manually:
-
-1. Push your branch:
-   git push -u origin ${branch}
-
-2. Create PR via GitHub:
-   https://github.com/<owner>/<repo>/compare/${baseBranch}...${branch}
-
-Or install the GitHub CLI:
-   https://cli.github.com/
-`.trim();
+  try {
+    // NUL records preserve spaces, quotes, newlines and Unicode. Rename/copy
+    // records contain a second (source) path; report the destination only.
+    const records = git(['status', '--porcelain=v1', '-z', '--untracked-files=all', '--', '.']).split('\0');
+    const files: string[] = [];
+    for (let i = 0; i < records.length; i++) {
+      const record = records[i];
+      if (!record) continue;
+      files.push(record.slice(3));
+      if (/[RC]/.test(record.slice(0, 2))) i++;
+    }
+    return { state: files.length ? 'changed' : 'unchanged', files };
+  } catch (error) {
+    return { state: 'error', files: [], error: error instanceof Error ? error.message : String(error) };
+  }
 }

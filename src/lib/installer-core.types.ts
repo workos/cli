@@ -50,14 +50,9 @@ export interface InstallerMachineContext {
   currentBranch?: string;
   /** Whether current branch is protected */
   isProtectedBranch?: boolean;
-  /** Files changed during agent execution (for post-install) */
+  /** Current changed files, including any pre-existing changes (git-relative). */
   changedFiles?: string[];
-  /** AI-generated commit message */
-  commitMessage?: string;
-  /** AI-generated PR description */
-  prDescription?: string;
-  /** URL of created PR */
-  prUrl?: string;
+  changeDetection?: import('./post-install.js').ChangeDetection;
   /** Summary message from agent execution */
   agentSummary?: string;
   applicationSetup?: import('./authkit-application-setup.js').AuthkitApplicationSetup;
@@ -102,12 +97,7 @@ export type InstallerMachineEvent =
   // Branch check events
   | { type: 'BRANCH_CREATE' }
   | { type: 'BRANCH_CONTINUE' }
-  | { type: 'BRANCH_CANCEL' }
-  // Post-install events
-  | { type: 'COMMIT_APPROVED' }
-  | { type: 'COMMIT_DECLINED' }
-  | { type: 'PR_APPROVED' }
-  | { type: 'PR_DECLINED' };
+  | { type: 'BRANCH_CANCEL' };
 
 /**
  * Output from the detection actor.

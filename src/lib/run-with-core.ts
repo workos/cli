@@ -49,11 +49,7 @@ import {
   createBranch as createGitBranch,
   branchExists,
 } from '../utils/git-utils.js';
-import { detectChanges, stageAndCommit, pushBranch as pushGitBranch, createPullRequest } from './post-install.js';
-import {
-  generateCommitMessage as generateCommitMessageAi,
-  generatePrDescription as generatePrDescriptionAi,
-} from './ai-content.js';
+import { detectChanges } from './post-install.js';
 import {
   assertSupportedNextJsRouter,
   getNextJsRouter,
@@ -370,7 +366,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   // Headless (no prompts, structured output) is for MACHINE output only: JSON.
   // A prompt cannot render into a JSON stream, so any JSON run must be headless.
   // We deliberately do NOT route a human session with non-TTY stdin here:
-  // headless auto-approves branch/commit/scaffold, and applying those unattended
+  // headless auto-approves branch/scaffold, and applying those unattended
   // to a session the user never opted into would violate the "nothing is written
   // until you confirm" contract. Those sessions keep the CLIAdapter, which now
   // fails fast with a clear `prompt_unavailable` error on the first prompt
@@ -391,8 +387,6 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         apiKey: augmentedOptions.apiKey,
         clientId: augmentedOptions.clientId,
         noBranch: augmentedOptions.noBranch,
-        noCommit: augmentedOptions.noCommit,
-        createPr: augmentedOptions.createPr,
         noGitCheck: augmentedOptions.noGitCheck,
         ci: augmentedOptions.ci,
       },
@@ -533,7 +527,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
 
       buildCompletion: fromPromise<CompletionData | undefined, { context: InstallerMachineContext }>(
         async ({ input }) => {
-          const { integration, changedFiles, options: installerOptions, credentials, applicationSetup } = input.context;
+          const { integration, changedFiles, changeDetection, options: installerOptions, credentials, applicationSetup } = input.context;
           if (!integration) return undefined;
           try {
             const registry = await getRegistry();
@@ -556,7 +550,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
               activeEnv.clientId === credentials.clientId,
             );
             return await buildCompletionData(
-              { integration, changedFiles, installDir: installerOptions.installDir },
+              { integration, changedFiles, changeDetection, installDir: installerOptions.installDir },
               {
                 resolveDevCommand,
                 detectPort,
@@ -667,34 +661,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
       }),
 
       // Post-install actors
-      detectChanges: fromPromise<{ hasChanges: boolean; files: string[] }, void>(async () => {
-        return detectChanges();
-      }),
-
-      generateCommitMessage: fromPromise<string, { integration: string; files: string[]; direct?: boolean }>(
-        async ({ input }) => {
-          return generateCommitMessageAi(input.integration, input.files, { direct: input.direct });
-        },
-      ),
-
-      commitChanges: fromPromise<void, { message: string; cwd: string }>(async ({ input }) => {
-        stageAndCommit(input.message, input.cwd);
-      }),
-
-      generatePrDescription: fromPromise<
-        string,
-        { integration: string; files: string[]; commitMessage: string; direct?: boolean }
-      >(async ({ input }) => {
-        return generatePrDescriptionAi(input.integration, input.files, input.commitMessage, { direct: input.direct });
-      }),
-
-      pushBranch: fromPromise<void, { cwd: string }>(async ({ input }) => {
-        pushGitBranch(input.cwd);
-      }),
-
-      createPr: fromPromise<string, { title: string; body: string; cwd: string }>(async ({ input }) => {
-        return createPullRequest(input.title, input.body, input.cwd);
-      }),
+      detectChanges: fromPromise(async ({ input }) => detectChanges(input.installDir)),
     },
   });
 

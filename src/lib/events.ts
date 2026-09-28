@@ -17,6 +17,8 @@ export interface CompletionData {
   url: string;
   /** Changed files (git-relative), full list — display cap lives in the renderer */
   files: string[];
+  /** Inspection outcome; files can include changes made before installation. */
+  changeDetection?: import('./post-install.js').ChangeDetection;
   /** Composed concrete + framework next-step lines */
   nextSteps: string[];
   /** Per-framework docs URL */
@@ -137,19 +139,7 @@ export interface InstallerEvents {
   // Post-install events
   'postinstall:changes': { files: string[] };
   'postinstall:nochanges': Record<string, never>;
-  'postinstall:commit:prompt': Record<string, never>;
-  'postinstall:commit:generating': Record<string, never>;
-  'postinstall:commit:committing': { message: string };
-  'postinstall:commit:success': { message: string };
-  'postinstall:commit:failed': { error: string };
-  'postinstall:pr:prompt': Record<string, never>;
-  'postinstall:pr:generating': Record<string, never>;
-  'postinstall:pr:pushing': Record<string, never>;
-  'postinstall:pr:creating': Record<string, never>;
-  'postinstall:pr:success': { url: string };
-  'postinstall:pr:failed': { error: string };
-  'postinstall:push:failed': { error: string };
-  'postinstall:manual': { instructions: string };
+  'postinstall:unavailable': { reason: 'not-git' | 'error'; error?: string };
 }
 
 export type InstallerEventName = keyof InstallerEvents;
@@ -232,6 +222,7 @@ const INSTALLER_EVENT_REGISTRY = {
   'branch:skipped': true,
   'postinstall:changes': true,
   'postinstall:nochanges': true,
+  'postinstall:unavailable': true,
   'postinstall:commit:prompt': true,
   'postinstall:commit:generating': true,
   'postinstall:commit:committing': true,
