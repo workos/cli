@@ -307,6 +307,105 @@ describe('TuiAdapter', () => {
     expect(afterExit()).toContain('✗ Still there? cancelled');
   });
 
+  it('keeps queued questions visible and answerable through phase/status replacement', async () => {
+    await adapter.start();
+    emitter.emit('agent:start', {});
+    emitter.emit('postinstall:commit:prompt', {});
+    emitter.emit('postinstall:pr:prompt', {});
+    await waitFor(() => expect(frame()).toContain('? Commit the changes?'));
+    emitter.emit('agent:success', { summary: 'Rails fixture: no validation' });
+    emitter.emit('postinstall:commit:generating', {});
+    emitter.emit('postinstall:commit:success', { message: 'fixture commit' });
+    emitter.emit('postinstall:pr:generating', {});
+    emitter.emit('postinstall:pr:pushing', {});
+    emitter.emit('agent:tool', { kind: 'command', detail: 'synthetic tool log' });
+    // The status bar deliberately yields to prompt key hints while input is open.
+    await new Promise((resolve) => setTimeout(resolve, 240));
+    expect(frame()).toContain('? Commit the changes?');
+    stdin.press('n');
+    await waitFor(() => expect(sendEvent).toHaveBeenCalledWith({ type: 'COMMIT_DECLINED' }));
+    await waitFor(() => expect(frame()).toContain('? Create a pull request?'));
+    emitter.emit('postinstall:pr:failed', { error: 'synthetic warning' });
+    await waitFor(() => {
+      expect(frame()).toContain('? Create a pull request?');
+      expect(frame()).toContain('synthetic warning');
+    });
+    stdin.press('y');
+    await waitFor(() => expect(sendEvent).toHaveBeenCalledWith({ type: 'PR_APPROVED' }));
+    await adapter.stop();
+    expect(afterExit()).toContain('Agent completed');
+    expect(afterExit()).toContain('✔ Commit the changes? No');
+    expect(afterExit()).toContain('✔ Create a pull request? Yes');
+    expect(afterExit()).toContain('synthetic warning');
+  });
+
+  it('tears down open and queued questions without late terminal output or input listeners', async () => {
+    const write = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const listeners = stdin.listenerCount('readable');
+    await adapter.start();
+    emitter.emit('agent:start', {});
+    emitter.emit('postinstall:commit:prompt', {});
+    emitter.emit('postinstall:pr:prompt', {});
+    await waitFor(() => expect(frame()).toContain('? Commit the changes?'));
+    emitter.emit('agent:tool', { kind: 'command', detail: 'buffered before stop' });
+    emitter.emit('postinstall:commit:generating', {});
+    await adapter.stop();
+    const stoppedOutput = stdout.output();
+    await new Promise((resolve) => setTimeout(resolve, 240));
+    expect(stdout.output()).toBe(stoppedOutput);
+    expect(write).not.toHaveBeenCalled();
+    expect(stdout.output()).not.toContain('? Create a pull request?');
+    expect(afterExit()).toContain('✗ Commit the changes? cancelled');
+    expect(afterExit()).not.toContain('buffered before stop');
+    expect(afterExit()).toContain("The agent's step-by-step log is in the installer log");
+    expect(stdin.listenerCount('readable')).toBe(listeners);
+    expect(stdin.rawMode).toBe(false);
+    expect(getUiHost()).toBeNull();
+    await adapter.stop();
+    expect(stdout.output()).toBe(stoppedOutput);
+  });
+
+  it('the synchronous exit hook also detaches CLI handlers and cancels queued input', async () => {
+    const sigintListeners = process.listenerCount('SIGINT');
+    const write = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    await adapter.start();
+    emitter.emit('agent:start', {});
+    emitter.emit('postinstall:commit:prompt', {});
+    emitter.emit('postinstall:pr:prompt', {});
+    await waitFor(() => expect(frame()).toContain('? Commit the changes?'));
+    emitter.emit('agent:tool', { kind: 'command', detail: 'late tool log' });
+    const hook = process.listeners('exit').at(-1) as () => void;
+    hook();
+    await new Promise((resolve) => setTimeout(resolve, 240));
+    expect(write).not.toHaveBeenCalled();
+    expect(stdout.output()).not.toContain('? Create a pull request?');
+    expect(process.listenerCount('SIGINT')).toBe(sigintListeners);
+    expect(emitter.listenerCount('agent:start')).toBe(0);
+    expect(stdin.rawMode).toBe(false);
+    expect(getUiHost()).toBeNull();
+  });
+
+  it('keeps password answers masked across status replacement and teardown', async () => {
+    await adapter.start();
+    const old = ui.spinner();
+    old.start('old phase');
+    const answer = ui.password({ message: 'Synthetic password?' });
+    await waitFor(() => expect(frame()).toContain('Synthetic password?'));
+    const current = ui.spinner();
+    current.start('new phase');
+    old.message('stale');
+    old.clear();
+    old.stop('stale');
+    await new Promise((resolve) => setTimeout(resolve, 240));
+    expect(frame()).toContain('Synthetic password?');
+    stdin.press('fake-secret\r');
+    expect(await answer).toBe('fake-secret');
+    await waitFor(() => expect(frame()).toContain('new phase'));
+    await adapter.stop();
+    expect(stdout.output()).not.toContain('fake-secret');
+    expect(afterExit()).toContain('********');
+  });
+
   it('answers CANCEL when the question is aborted by its signal', async () => {
     await adapter.start();
     const controller = new AbortController();

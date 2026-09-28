@@ -69,9 +69,15 @@ export interface UiHost {
 }
 
 let uiHost: UiHost | null = null;
+let hostLifetime = new AbortController();
 
 /** Route all ui output and prompts to `host`, or back to the terminal with null. */
 export function setUiHost(host: UiHost | null): void {
+  if (host === uiHost) return;
+  activeSpinner?.retire();
+  hostLifetime.abort();
+  hostLifetime = new AbortController();
+  recentLines = [];
   uiHost = host;
 }
 
@@ -103,6 +109,10 @@ function emit(kind: UiLineKind, message: string, rendered: string, terminal = IN
     const line: UiLine = { kind, message, rendered, stream: 'stdout' };
     rememberForPrompt(line);
     uiHost.line(line);
+    return;
+  }
+  if (pendingPrompts > 0) {
+    pendingOutput.push(() => emit(kind, message, rendered, terminal));
     return;
   }
   console.log(terminal);
@@ -231,11 +241,12 @@ export interface Spinner {
 /**
  * The currently-running spinner, if any. A prompt pauses it before opening so
  * the 80ms redraw interval can't overwrite the question (see withPrompt).
- * Internal — not part of the public Spinner surface.
+ * Replacement retires the owner, including hosted status. Internal only.
  */
 interface PausableSpinner {
   pause: () => void;
   resume: () => void;
+  retire: () => void;
 }
 let activeSpinner: PausableSpinner | null = null;
 
@@ -249,84 +260,59 @@ function spinner(): Spinner {
   let timer: ReturnType<typeof setInterval> | undefined;
   let frame = 0;
   let text = '';
-  let hosted = false;
+  let retired = false;
+  let host: UiHost | null = null;
+  let visible = false;
   const isTty = Boolean(process.stdout.isTTY);
+  const ownsStatus = () => activeSpinner === handle && !retired;
   const render = () => {
+    if (!ownsStatus() || pendingPrompts > 0 || host || isJsonMode()) return;
+    visible = true;
     process.stdout.write(`\r${INDENT}${dim(SPINNER_FRAMES[(frame = (frame + 1) % SPINNER_FRAMES.length)])} ${text}`);
   };
-  const clearLine = () => {
-    if (isTty) process.stdout.write('\r\x1b[2K');
+  const pause = () => {
+    if (timer) clearInterval(timer);
+    timer = undefined;
+    // Only erase a line this handle actually drew, never a prompt's line.
+    if (visible) process.stdout.write('\r\x1b[2K');
+    visible = false;
   };
-  const tick = () => {
-    if (isTty && !timer) {
-      render();
-      timer = setInterval(render, 80);
-    }
+  const retire = () => {
+    if (!ownsStatus()) return;
+    pause();
+    host?.status(null);
+    retired = true;
+    activeSpinner = null;
   };
   const handle: Spinner & PausableSpinner = {
     start(message = '') {
+      if (retired || isJsonMode()) return;
+      if (activeSpinner !== handle) activeSpinner?.retire();
+      activeSpinner = handle;
+      host = uiHost;
       text = message;
-      if (uiHost) {
-        hosted = true;
-        uiHost.status(text);
-        return;
-      }
-      if (isTty) {
-        tick();
-        activeSpinner = handle;
-      } else {
-        line(`${dim('…')} ${text}`);
-      }
+      if (host) host.status(text);
+      else if (isTty) handle.resume();
+      else line(`${dim('…')} ${text}`);
     },
     message(message: string) {
+      if (!ownsStatus()) return;
       text = message;
-      if (hosted) uiHost?.status(text);
+      host?.status(text);
     },
     stop(message?: string, code = 0) {
-      if (timer) {
-        clearInterval(timer);
-        timer = undefined;
-      }
-      if (activeSpinner === handle) activeSpinner = null;
-      if (hosted) {
-        hosted = false;
-        uiHost?.status(null);
-      } else {
-        clearLine();
-      }
+      if (!ownsStatus()) return;
+      retire();
       const final = message ?? text;
       emit(code === 0 ? 'success' : 'error', final, `${code === 0 ? green('✓') : red('✗')} ${final}`);
     },
-    // Halt + erase without printing a final line (e.g. an orphaned spinner from
-    // a failed step being cleared before a prompt), and deregister so a prompt
-    // doesn't resume it.
-    clear() {
-      if (timer) {
-        clearInterval(timer);
-        timer = undefined;
-      }
-      if (activeSpinner === handle) activeSpinner = null;
-      if (hosted) {
-        hosted = false;
-        uiHost?.status(null);
-        return;
-      }
-      clearLine();
-    },
-    // Pause/resume let a prompt borrow the terminal: pause clears the spinner
-    // line and halts the redraw interval; resume restarts it. stop() is NOT
-    // called, so activeSpinner stays registered across the prompt.
-    pause() {
-      if (timer) {
-        clearInterval(timer);
-        timer = undefined;
-      }
-      clearLine();
-    },
+    clear: retire,
+    retire,
+    pause,
     resume() {
-      // Only resume if this handle is still the active spinner — never resurrect
-      // a spinner that was stopped or cleared while the prompt was open.
-      if (activeSpinner === handle) tick();
+      if (!ownsStatus() || host || pendingPrompts > 0 || !isTty || isJsonMode() || timer) return;
+      render();
+      timer = setInterval(render, 80);
     },
   };
   return handle;
@@ -390,6 +376,9 @@ export class PromptUnavailableError extends Error {
  * the 80ms redraw interval can't overwrite the question.
  */
 let promptChain: Promise<unknown> = Promise.resolve();
+// Count queued callers too: no spinner flash or log flush between questions.
+let pendingPrompts = 0;
+const pendingOutput: Array<() => void> = [];
 
 /** Hand a prompt to the UI host, short-circuiting one whose signal already aborted. */
 async function hostPrompt<T>(host: UiHost, request: UiPromptRequest): Promise<T | symbol> {
@@ -397,7 +386,10 @@ async function hostPrompt<T>(host: UiHost, request: UiPromptRequest): Promise<T 
   return (await host.prompt(request)) as T | symbol;
 }
 
-async function withPrompt<T>(run: () => Promise<T>): Promise<T> {
+async function withPrompt<T>(
+  run: (host: UiHost | null, signal?: AbortSignal) => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T | symbol> {
   if (isJsonMode()) {
     throw new PromptUnavailableError(
       'json',
@@ -410,19 +402,29 @@ async function withPrompt<T>(run: () => Promise<T>): Promise<T> {
       'This step needs an interactive terminal. Re-run in a terminal, or pass the required flags to run non-interactively.',
     );
   }
+  const host = uiHost;
+  if (host) signal = signal ? AbortSignal.any([signal, hostLifetime.signal]) : hostLifetime.signal;
   const prior = promptChain.catch(() => undefined);
   let release!: () => void;
   promptChain = new Promise<void>((resolve) => {
     release = resolve;
   });
+  activeSpinner?.pause();
+  pendingPrompts++;
   await prior;
-  const spinner = activeSpinner;
-  spinner?.pause();
   try {
-    return await run();
+    if (signal?.aborted) return CANCEL;
+    return await run(host, signal);
   } finally {
-    spinner?.resume();
-    release();
+    pendingPrompts--;
+    if (pendingPrompts === 0) {
+      pendingOutput.splice(0).forEach((print) => print());
+      activeSpinner?.resume();
+    }
+    // Let the caller deliver cancellation to the installer before a queued
+    // sibling checks its signal. The chain still owns stdin during handoff.
+    if (pendingPrompts > 0) setTimeout(release, 0);
+    else release();
   }
 }
 
@@ -451,8 +453,9 @@ export interface ConfirmOptions {
 }
 async function confirm(options: ConfirmOptions): Promise<boolean | symbol> {
   const context = takePromptContext();
-  return withPrompt(async () => {
-    if (uiHost) return hostPrompt<boolean>(uiHost, { kind: 'confirm', ...options, ...context });
+  return withPrompt(async (host, signal) => {
+    options = { ...options, signal };
+    if (host) return hostPrompt<boolean>(host, { kind: 'confirm', ...options, ...context });
     const { confirm: inquirerConfirm } = await import('@inquirer/prompts');
     try {
       return await inquirerConfirm(
@@ -463,7 +466,7 @@ async function confirm(options: ConfirmOptions): Promise<boolean | symbol> {
       if (isCancelError(error)) return CANCEL;
       throw error;
     }
-  });
+  }, options.signal);
 }
 
 export interface SelectOption<T> {
@@ -482,8 +485,9 @@ export interface SelectOptions<T> {
 }
 async function select<T>(options: SelectOptions<T>): Promise<T | symbol> {
   const context = takePromptContext();
-  return withPrompt(async () => {
-    if (uiHost) return hostPrompt<T>(uiHost, { kind: 'select', ...(options as SelectOptions<unknown>), ...context });
+  return withPrompt(async (host, signal) => {
+    options = { ...options, signal };
+    if (host) return hostPrompt<T>(host, { kind: 'select', ...(options as SelectOptions<unknown>), ...context });
     const { select: inquirerSelect } = await import('@inquirer/prompts');
     try {
       return await inquirerSelect<T>(
@@ -504,7 +508,7 @@ async function select<T>(options: SelectOptions<T>): Promise<T | symbol> {
       if (isCancelError(error)) return CANCEL;
       throw error;
     }
-  });
+  }, options.signal);
 }
 
 export interface TextOptions {
@@ -517,8 +521,9 @@ export interface TextOptions {
 }
 async function text(options: TextOptions): Promise<string | symbol> {
   const context = takePromptContext();
-  return withPrompt(async () => {
-    if (uiHost) return hostPrompt<string>(uiHost, { kind: 'text', ...options, ...context });
+  return withPrompt(async (host, signal) => {
+    options = { ...options, signal };
+    if (host) return hostPrompt<string>(host, { kind: 'text', ...options, ...context });
     // @inquirer/input has no placeholder concept, and mapping it to `default`
     // would auto-submit the hint as the real value on an empty enter. Fold it
     // into the message so the hint survives (rendered as ghost text previously).
@@ -537,7 +542,7 @@ async function text(options: TextOptions): Promise<string | symbol> {
       if (isCancelError(error)) return CANCEL;
       throw error;
     }
-  });
+  }, options.signal);
 }
 
 export interface PasswordOptions {
@@ -547,8 +552,9 @@ export interface PasswordOptions {
 }
 async function password(options: PasswordOptions): Promise<string | symbol> {
   const context = takePromptContext();
-  return withPrompt(async () => {
-    if (uiHost) return hostPrompt<string>(uiHost, { kind: 'password', ...options, ...context });
+  return withPrompt(async (host, signal) => {
+    options = { ...options, signal };
+    if (host) return hostPrompt<string>(host, { kind: 'password', ...options, ...context });
     const { password: inquirerPassword } = await import('@inquirer/prompts');
     try {
       return await inquirerPassword(
@@ -559,7 +565,7 @@ async function password(options: PasswordOptions): Promise<string | symbol> {
       if (isCancelError(error)) return CANCEL;
       throw error;
     }
-  });
+  }, options.signal);
 }
 
 // ── Default export (the `ui` facade) ────────────────────────────────────────
