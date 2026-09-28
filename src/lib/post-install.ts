@@ -12,7 +12,7 @@ export function detectChanges(installDir: string): ChangeDetection {
       cwd: installDir,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, LC_ALL: 'C' },
+      env: { ...process.env, LC_ALL: 'C', GIT_OPTIONAL_LOCKS: '0' },
     });
   try {
     if (git(['rev-parse', '--is-inside-work-tree']).trim() !== 'true') {

@@ -367,6 +367,7 @@ export class HeadlessAdapter implements InstallerAdapter {
             devCommand: completion.devCommand,
             url: completion.url,
             files: completion.files,
+            ...(completion.changeDetection ? { changeDetection: completion.changeDetection } : {}),
             nextSteps: completion.nextSteps,
             ...(completion.applicationSetup ? { applicationSetup: completion.applicationSetup } : {}),
           }

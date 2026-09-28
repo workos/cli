@@ -134,10 +134,10 @@ describe('TuiAdapter', () => {
 
   it('cancels an open question on esc, the same as cancelling it in the plain CLI', async () => {
     await adapter.start();
-    emitter.emit('postinstall:commit:prompt', {});
-    await waitFor(() => expect(frame()).toContain('? Commit the changes?'));
+    emitter.emit('branch:prompt', { branch: 'main' });
+    await waitFor(() => expect(frame()).toContain('Create a feature branch?'));
     stdin.press(KEY.escape);
-    await waitFor(() => expect(sendEvent).toHaveBeenCalledWith({ type: 'COMMIT_DECLINED' }));
+    await waitFor(() => expect(sendEvent).toHaveBeenCalledWith({ type: 'BRANCH_CANCEL' }));
   });
 
   it('lets ctrl-c finish machine cancellation before the adapter stops', async () => {
@@ -195,8 +195,77 @@ describe('TuiAdapter', () => {
 
   it('surfaces errors the installer prints in the walkthrough', async () => {
     await adapter.start();
-    emitter.emit('postinstall:commit:failed', { error: 'nothing to commit' });
-    await waitFor(() => expect(frame()).toContain('✗ Commit failed: nothing to commit'));
+    emitter.emit('postinstall:unavailable', { reason: 'error', error: 'inspection failed' });
+    await waitFor(() => expect(frame()).toContain('inspection failed'));
+  });
+
+  it('drives the real successful machine through branch consent to finish, without commit/PR prompts', async () => {
+    const prompts = vi.spyOn(ui, 'confirm');
+    const branch = vi.fn(async () => ({ branch: 'feat/add-workos-authkit' }));
+    const emitted = vi.spyOn(emitter, 'emit');
+    const machine = installerMachine.provide({
+      actors: {
+        checkWorkspace: fromPromise(async () => ({ scaffoldable: false, packageManager: 'npm', autoScaffold: false })),
+        detectIntegration: fromPromise(async () => ({ integration: 'nextjs' })),
+        checkGitStatus: fromPromise(async () => ({ isClean: true, files: [] })),
+        checkBranch: fromPromise(async () => ({ branch: 'main', isProtected: true })),
+        createBranch: fromPromise(branch),
+        configureEnvironment: fromPromise(async () => {}),
+        runAgent: fromPromise(async () => {
+          emitter.emit('validation:start', { framework: 'nextjs' });
+          emitter.emit('validation:complete', { passed: true, issueCount: 0, durationMs: 1 });
+          return { success: true, summary: 'Fake agent completed validation' };
+        }),
+        detectChanges: fromPromise(async () => ({ state: 'changed', files: ['existing.ts', 'generated.ts'] })),
+        buildCompletion: fromPromise(async ({ input: { context } }) => ({
+          integration: 'nextjs',
+          devCommand: 'npm run dev',
+          url: 'http://localhost:3000',
+          files: context.changedFiles ?? [],
+          changeDetection: context.changeDetection,
+          nextSteps: ['Review and commit independently'],
+          docsUrl: 'https://workos.com/docs',
+          dashboardUrl: 'https://dashboard.workos.com',
+        })),
+      },
+    });
+    const actor = createActor(machine, {
+      input: {
+        emitter,
+        options: {
+          installDir: '/work/my-app',
+          skipAuth: true,
+          apiKey: 'offline',
+          clientId: 'offline',
+          noCommit: false,
+          createPr: true,
+        },
+      },
+    });
+    sendEvent.mockImplementation((event) => actor.send(event));
+    try {
+      await adapter.start();
+      actor.start();
+      actor.send({ type: 'START' });
+      await waitFor(() => expect(frame()).toContain('Create a feature branch?'));
+      stdin.press(KEY.enter);
+      await waitFor(() => expect(actor.getSnapshot().value).toBe('complete'));
+      await waitFor(() => expect(frame()).toContain('Current changed files: 2'));
+      expect(branch).toHaveBeenCalledOnce();
+      expect(prompts).not.toHaveBeenCalled();
+      expect(emitted.mock.calls.some(([name]) => /postinstall:(commit|pr|push)/.test(name))).toBe(false);
+      expect(frame()).not.toContain('Commit the changes?');
+      expect(frame()).not.toContain('Create a pull request?');
+      await adapter.stop();
+      expect(afterExit()).toContain('generated.ts');
+      expect(afterExit()).toContain('may include pre-existing changes');
+      expect(afterExit()).toContain('Review and commit independently');
+      expect(getUiHost()).toBeNull();
+      expect(stdin.rawMode).toBe(false);
+      expect(console.log).toBe(originalLog);
+    } finally {
+      actor.stop();
+    }
   });
 
   it('leaves the alternate screen on stop and prints the plain completion summary', async () => {
