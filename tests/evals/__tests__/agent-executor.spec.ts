@@ -43,12 +43,13 @@ vi.mock('../env-loader.js', () => ({
   loadCredentials: vi.fn(() => mockCredentials),
 }));
 
-vi.mock('../../../src/lib/env-writer.js', () => ({
+vi.mock('../../../src/lib/env-writer.js', async (original) => ({
+  ...(await original<typeof import('../../../src/lib/env-writer.js')>()),
   writeEnvLocal: vi.fn(),
 }));
 
-vi.mock('../../../src/utils/env-parser.js', () => ({
-  parseEnvFile: vi.fn(() => ({})),
+vi.mock('../../../src/utils/exec-file.js', () => ({
+  execFileNoThrow: vi.fn(async () => ({ status: 0, stdout: '', stderr: '' })),
 }));
 
 vi.mock('../../../src/lib/settings.js', () => ({

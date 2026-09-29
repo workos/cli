@@ -1,8 +1,8 @@
-import { writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { chmod, lstat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadCredentials } from './env-loader.js';
-import { writeEnvLocal } from '../../src/lib/env-writer.js';
-import { parseEnvFile } from '../../src/utils/env-parser.js';
+import { writeEnvFile, writeEnvLocal } from '../../src/lib/env-writer.js';
+import { execFileNoThrow } from '../../src/utils/exec-file.js';
 import { getConfig } from '../../src/lib/settings.js';
 import { LatencyTracker } from './latency-tracker.js';
 import { quickCheckValidateAndFormat } from '../../src/lib/validation/quick-checks.js';
@@ -62,23 +62,6 @@ const SKILL_NAMES: Record<string, string> = {
 /** Frameworks that use package.json / .env.local */
 const JS_FRAMEWORKS = ['nextjs', 'react', 'react-router', 'tanstack-start', 'vanilla-js', 'sveltekit', 'node'];
 
-/**
- * Write a .env file (for non-JS frameworks).
- * Merges with existing .env if present.
- */
-function writeEnvFile(workDir: string, envVars: Record<string, string>): void {
-  const envPath = join(workDir, '.env');
-  let existing: Record<string, string> = {};
-  if (existsSync(envPath)) {
-    existing = parseEnvFile(readFileSync(envPath, 'utf-8'));
-  }
-  const merged = { ...existing, ...envVars };
-  const content = Object.entries(merged)
-    .map(([key, value]) => `${key}=${value}`)
-    .join('\n');
-  writeFileSync(envPath, content + '\n');
-}
-
 export class AgentExecutor {
   private options: AgentExecutorOptions;
   private credentials: ReturnType<typeof loadCredentials>;
@@ -115,6 +98,28 @@ export class AgentExecutor {
     if (JS_FRAMEWORKS.includes(this.framework)) {
       writeEnvLocal(this.workDir, envVars);
     } else {
+      // Git ignores cannot protect tracked files. Refuse rather than silently
+      // untracking a fixture or allowing secrets into its ordinary diff/artifacts.
+      const tracked = await execFileNoThrow('git', ['ls-files', '--', '.env', '.env.bak'], {
+        cwd: this.workDir,
+        env: this.options.environment,
+      });
+      if (tracked.status !== 0 || tracked.stdout.trim()) {
+        throw new Error('Refusing eval credentials: .env/.env.bak must be untracked in a Git fixture.');
+      }
+      for (const name of ['.env', '.env.bak']) {
+        const path = join(this.workDir, name);
+        const info = await lstat(path).catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== 'ENOENT') throw error;
+          return undefined;
+        });
+        if (info) {
+          if (!info.isFile()) throw new Error(`Refusing non-regular eval credential file: ${name}`);
+          // Tighten existing files before writing or backing up any credentials.
+          await chmod(path, 0o600);
+        }
+      }
+      // Shared writer installs ignores BEFORE .env/backup writes; new files are 0600.
       writeEnvFile(this.workDir, envVars);
     }
 

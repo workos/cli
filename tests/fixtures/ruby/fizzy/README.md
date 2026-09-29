@@ -15,7 +15,7 @@
 - Locked Rails: `8.2.0.alpha`, Git revision `3df2cbea2027026a29edb92cbb7e336a63e35444`; the remaining public Git/gem dependency revisions/checksums stay in upstream `Gemfile.lock`. Bootstrap uses frozen resolution, not `bundle update`.
 - Bundled `@workos/skills`: **0.7.3**, Ruby reference loaded through `skills-assets.ts`. Agent SDK: **0.3.211**. Configured model: **claude-opus-4-5-20251101** (not executed). WorkOS Ruby gem version is **not yet established**; a future run must retain its resolved lockfile/version and API documentation snapshot.
 
-Ignored local evidence is under `.artifacts/`: `rails-red.log` (5 failing regressions before fix), `rails-green.log`, `orchestration.log`, `fixture-tests.log`, `fizzy-prepare.log`, `fizzy-preflight.json`, `check.log`, and `build.log`. These artifacts are local, not published.
+Ignored local evidence is under `.artifacts/`: `rails-red.log` (5 failing regressions before fix), `rails-green.log`, `orchestration.log`, `fixture-tests.log`, `fizzy-prepare.log`, `fizzy-preflight.json`, `check.log`, and `build.log`. Review fixes additionally retain `fizzy-cap-red.log`/`fizzy-cap-green.log`, `eval-secrets-red.log`/`eval-secrets-green.log`, `review-check.log`, and `review-build.log`. All review reproductions use fake agents and synthetic credentials only. These artifacts are local, not published.
 
 ## Why the development port is 3006
 
@@ -62,11 +62,13 @@ The integration uses `resolveRedirectUri()` rather than hardcoded port 3000. Its
 
 Offline tests run the **real Ruby integration** with fake credentials/agent/network, plus the **real installer state machine** through Ruby and the common post-agent URL setup with a mocked backend. Existing production/sandbox, target selection, preservation, and read-back regression suites pass unchanged. New fixture tests mock command execution, use synthetic archive data, and cannot load credentials, download source or run models. Test setup replaces both native keyring and macOS security backends; keyring-isolation regressions are included in the full check.
 
+The eval executor now uses the shared protected writer for non-JS `.env` files (including Ruby projects with frontend package.json files). It refuses tracked `.env`/`.env.bak` files or unavailable Git protection, rejects non-regular credential paths, tightens existing file permissions before writing/backing up, and creates new files as 0600. Ignore rules are installed before secret writes, preserve unrelated rules, and override later negations that would expose the files. Offline temporary-Git-repo tests inspect ordinary status/diff/staging, raw fake-agent Git transcripts, collected key files and serialized result artifacts using synthetic credentials only. This proves the tested Git leak path is closed, not that arbitrary future model output is automatically redacted.
+
 `FizzyGrader` separates static source candidates from all six mandatory acceptance checks. It intentionally returns `passed: false` until a real behavioral/hosted acceptance mechanism exists. Unused SDK strings, missing routes/UI, hardcoded identities, duplicate provisioning, logout that leaves access, and even plausible source cannot become proven acceptance. Positive controls prove only that static observations are collected. The existing Sinatra `RubyGrader` remains unchanged; its `server.rb` syntax bonus is not used for Fizzy.
 
 ## Final local validation
 
-Using Bun 1.4.2, `bun run test && bun run typecheck && bun run lint && bun run format:check` passed: **174 test files, 3,231 tests**, TypeScript, Oxlint and formatting all green. Existing Node `fs.rmdir` deprecation warnings were non-failing. `bun run build` also passed and produced `dist/workos`; the binary was not run against credentials or an app.
+Using Bun 1.4.2, `bun run test && bun run typecheck && bun run lint && bun run format:check` passed after review fixes: **176 test files, 3,266 tests**, TypeScript, Oxlint and formatting all green. Existing Node `fs.rmdir` deprecation warnings were non-failing. `bun run build` also passed and produced `dist/workos`; the binary was not run against credentials or an app.
 
 The real preparation command succeeded. The real offline preflight exited 1 as expected: pinned source verified, runtime prerequisites unavailable, acceptance unverified. Unit tests include positive and negative preflight/bootstrap/source-check controls without executing Ruby, Bundler, network or models.
 
