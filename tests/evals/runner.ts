@@ -167,15 +167,19 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
 
   const results = await runner.run();
 
-  // Quality grading (optional, only for passing scenarios with key files)
-  if (options.quality) {
+  // Fizzy is one explicitly approved agent attempt, never an extra model grade.
+  // Filter here too, so even an overridden/future passing grader cannot add spend.
+  const qualityCandidates = results.filter(
+    (result) => result.scenario !== 'ruby/fizzy' && result.passed && result.keyFiles && result.keyFiles.size > 0,
+  );
+  if (options.quality && qualityCandidates.length > 0) {
     const credentials = loadCredentials();
     const qualityGrader = new QualityGrader(credentials.anthropicApiKey);
 
     console.log('\nRunning quality grading on passing scenarios...');
 
-    for (const result of results) {
-      if (result.passed && result.keyFiles && result.keyFiles.size > 0) {
+    for (const result of qualityCandidates) {
+      if (result.keyFiles) {
         const framework = result.scenario.split('/')[0];
 
         // Build metadata from result
