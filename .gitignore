@@ -36,6 +36,9 @@ src/generated/agent-sdk-manifest.ts
 *.sublime-*
 dist/
 
+# Isolated local preparation and verification artifacts
+.artifacts/
+
 # Eval results
 tests/eval-results/
 .next/

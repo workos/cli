@@ -8,6 +8,7 @@ import { SvelteKitGrader } from './graders/sveltekit.grader.js';
 import { NodeGrader } from './graders/node.grader.js';
 import { PythonGrader } from './graders/python.grader.js';
 import { RubyGrader } from './graders/ruby.grader.js';
+import { FizzyGrader } from './graders/fizzy.grader.js';
 import { GoGrader } from './graders/go.grader.js';
 import { PhpGrader } from './graders/php.grader.js';
 import { PhpLaravelGrader } from './graders/php-laravel.grader.js';
@@ -26,6 +27,7 @@ interface Scenario {
   framework: string;
   state: string;
   grader: new (workDir: string) => Grader;
+  optIn?: boolean;
 }
 
 const SCENARIOS: Scenario[] = [
@@ -80,6 +82,7 @@ const SCENARIOS: Scenario[] = [
   { framework: 'python', state: 'example-auth0', grader: PythonGrader },
   { framework: 'python', state: 'partial-install', grader: PythonGrader },
   { framework: 'python', state: 'conflicting-auth', grader: PythonGrader },
+  { framework: 'ruby', state: 'fizzy', grader: FizzyGrader, optIn: true },
   { framework: 'ruby', state: 'example', grader: RubyGrader },
   { framework: 'ruby', state: 'example-auth0', grader: RubyGrader },
   { framework: 'ruby', state: 'partial-install', grader: RubyGrader },
@@ -119,6 +122,15 @@ export interface ExtendedEvalOptions extends EvalOptions {
   quality?: boolean;
 }
 
+export function selectScenarios(options: EvalOptions): Scenario[] {
+  return SCENARIOS.filter(
+    (s) =>
+      (!s.optIn || (options.state === s.state && options.framework?.includes(s.framework))) &&
+      (!options.framework || options.framework.includes(s.framework)) &&
+      (!options.state || s.state === options.state),
+  );
+}
+
 export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult[]> {
   // Capture version metadata at start
   const versionMeta = await captureVersionMetadata();
@@ -127,10 +139,7 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
     timestamp: new Date().toISOString(),
   };
 
-  const scenarios = SCENARIOS.filter(
-    (s) =>
-      (!options.framework || options.framework.includes(s.framework)) && (!options.state || s.state === options.state),
-  );
+  const scenarios = selectScenarios(options);
 
   const maxAttempts = (options.retry ?? 2) + 1;
 
@@ -158,15 +167,19 @@ export async function runEvals(options: ExtendedEvalOptions): Promise<EvalResult
 
   const results = await runner.run();
 
-  // Quality grading (optional, only for passing scenarios with key files)
-  if (options.quality) {
+  // Fizzy is one explicitly approved agent attempt, never an extra model grade.
+  // Filter here too, so even an overridden/future passing grader cannot add spend.
+  const qualityCandidates = results.filter(
+    (result) => result.scenario !== 'ruby/fizzy' && result.passed && result.keyFiles && result.keyFiles.size > 0,
+  );
+  if (options.quality && qualityCandidates.length > 0) {
     const credentials = loadCredentials();
     const qualityGrader = new QualityGrader(credentials.anthropicApiKey);
 
     console.log('\nRunning quality grading on passing scenarios...');
 
-    for (const result of results) {
-      if (result.passed && result.keyFiles && result.keyFiles.size > 0) {
+    for (const result of qualityCandidates) {
+      if (result.keyFiles) {
         const framework = result.scenario.split('/')[0];
 
         // Build metadata from result

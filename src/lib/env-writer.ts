@@ -8,7 +8,7 @@ const ENV_COVERING_PATTERNS = ['.env', '.env*'];
 /**
  * Ensure the given filename is in .gitignore.
  * Creates .gitignore if it doesn't exist.
- * No-ops if one of `coveringPatterns` is already present.
+ * No-ops if a recognized covering pattern appears after any negations.
  */
 function ensureGitignore(installDir: string, filename: string, coveringPatterns: string[]): void {
   const gitignorePath = join(installDir, '.gitignore');
@@ -21,9 +21,14 @@ function ensureGitignore(installDir: string, filename: string, coveringPatterns:
   const content = readFileSync(gitignorePath, 'utf-8');
   const lines = content.split('\n').map((line) => line.trim());
 
-  if (lines.some((line) => coveringPatterns.includes(line))) {
-    return;
+  // A later negation can expose a previously covered secret. Conservatively
+  // append an explicit rule after negations rather than attempting to parse globs.
+  let covered = false;
+  for (const line of lines) {
+    if (line.startsWith('!')) covered = false;
+    else if (coveringPatterns.includes(line)) covered = true;
   }
+  if (covered) return;
 
   const separator = content.endsWith('\n') ? '' : '\n';
   writeFileSync(gitignorePath, `${content}${separator}${filename}\n`);
@@ -206,6 +211,11 @@ export function writeCredentialsEnv(installDir: string, envVars: Partial<EnvVars
     return;
   }
 
+  writeEnvFile(installDir, envVars);
+}
+
+/** Write .env explicitly for non-JS SDKs, even when frontend tooling adds package.json. */
+export function writeEnvFile(installDir: string, envVars: Partial<EnvVars>): void {
   const envPath = join(installDir, '.env');
 
   backupEnvFile(installDir, envPath);

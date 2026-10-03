@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -34,17 +34,22 @@ vi.mock('../../../src/lib/agent-interface.js', () => ({
   runAgent: mockRunAgent,
 }));
 
+vi.mock('../../../src/lib/agent-sdk-assets.js', () => ({
+  ensureClaudeCodeExecutable: vi.fn(async () => '/synthetic/claude'),
+}));
+
 // Mock dependencies
 vi.mock('../env-loader.js', () => ({
   loadCredentials: vi.fn(() => mockCredentials),
 }));
 
-vi.mock('../../../src/lib/env-writer.js', () => ({
+vi.mock('../../../src/lib/env-writer.js', async (original) => ({
+  ...(await original<typeof import('../../../src/lib/env-writer.js')>()),
   writeEnvLocal: vi.fn(),
 }));
 
-vi.mock('../../../src/utils/env-parser.js', () => ({
-  parseEnvFile: vi.fn(() => ({})),
+vi.mock('../../../src/utils/exec-file.js', () => ({
+  execFileNoThrow: vi.fn(async () => ({ status: 0, stdout: '', stderr: '' })),
 }));
 
 vi.mock('../../../src/lib/settings.js', () => ({
@@ -110,6 +115,25 @@ describe('AgentExecutor', () => {
     // Direct mode — no gateway URL
     expect(agentRunConfig.sdkEnv.ANTHROPIC_API_KEY).toBe('sk-ant-test');
     expect(agentRunConfig.sdkEnv.ANTHROPIC_BASE_URL).toBeUndefined();
+  });
+
+  it('uses isolated Ruby environment and explicit callback without inheriting host secrets', async () => {
+    mockRunAgent.mockResolvedValue({});
+    const executor = new AgentExecutor(testDir, 'ruby', {
+      environment: { HOME: '/synthetic/home', PATH: '/synthetic/bin' },
+      redirectUri: 'http://app.fizzy.localhost:3006/auth/callback',
+    });
+    await executor.run({ enabled: false, maxRetries: 0 });
+    const [config, prompt] = mockRunAgent.mock.calls[0];
+    expect(config.sdkEnv.HOME).toBe('/synthetic/home');
+    expect(config.sdkEnv.PATH).toBe('/synthetic/bin');
+    expect(config.sdkEnv).not.toHaveProperty('WORKOS_API_KEY');
+    expect(prompt).toContain('configured in .env:');
+    expect(prompt).not.toContain('configured in .env.local');
+    expect(prompt).toContain('WORKOS_REDIRECT_URI=http://app.fizzy.localhost:3006/auth/callback');
+    expect(readFileSync(join(testDir, '.env'), 'utf8')).toContain(
+      'WORKOS_REDIRECT_URI=http://app.fizzy.localhost:3006/auth/callback',
+    );
   });
 
   it('passes RetryConfig when correction is enabled', async () => {
