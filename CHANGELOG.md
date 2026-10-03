@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.1](https://github.com/workos/cli/compare/v0.23.0...v0.23.1) (2026-10-03)
+
+
+### Bug Fixes
+
+* **ruby:** improve Rails setup and prepare Fizzy acceptance ([#258](https://github.com/workos/cli/issues/258)) ([dea3326](https://github.com/workos/cli/commit/dea3326b3e04d43637f8e4e7ad93d070598e61d2))
+
 ## [0.23.0](https://github.com/workos/cli/compare/v0.22.0...v0.23.0) (2026-09-25)
 
 
