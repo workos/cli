@@ -254,56 +254,21 @@ describe('HeadlessAdapter', () => {
     });
   });
 
-  describe('commit auto-resolution', () => {
-    it('auto-commits by default', async () => {
+  describe('read-only post-install reporting', () => {
+    it('reports changed, unchanged, non-Git and inspection failures without sending approvals', async () => {
       const adapter = createAdapter();
       await adapter.start();
-
-      emitter.emit('postinstall:commit:prompt', {});
-
-      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'commit:auto' });
-      expect(sendEvent).toHaveBeenCalledWith({ type: 'COMMIT_APPROVED' });
-      await adapter.stop();
-    });
-
-    it('skips commit with --no-commit flag', async () => {
-      const adapter = createAdapter({ noCommit: true });
-      await adapter.start();
-
-      emitter.emit('postinstall:commit:prompt', {});
-
-      expect(mockWriteNDJSON).toHaveBeenCalledWith({
-        type: 'commit:skipped',
-        reason: '--no-commit flag',
-      });
-      expect(sendEvent).toHaveBeenCalledWith({ type: 'COMMIT_DECLINED' });
-      await adapter.stop();
-    });
-  });
-
-  describe('PR auto-resolution', () => {
-    it('skips PR by default', async () => {
-      const adapter = createAdapter();
-      await adapter.start();
-
-      emitter.emit('postinstall:pr:prompt', {});
-
-      expect(mockWriteNDJSON).toHaveBeenCalledWith({
-        type: 'pr:skipped',
-        reason: '--create-pr not set',
-      });
-      expect(sendEvent).toHaveBeenCalledWith({ type: 'PR_DECLINED' });
-      await adapter.stop();
-    });
-
-    it('creates PR with --create-pr flag', async () => {
-      const adapter = createAdapter({ createPr: true });
-      await adapter.start();
-
-      emitter.emit('postinstall:pr:prompt', {});
-
-      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'pr:creating' });
-      expect(sendEvent).toHaveBeenCalledWith({ type: 'PR_APPROVED' });
+      emitter.emit('postinstall:changes', { files: ['existing.ts', 'generated.ts'] });
+      emitter.emit('postinstall:nochanges', {});
+      emitter.emit('postinstall:unavailable', { reason: 'not-git' });
+      emitter.emit('postinstall:unavailable', { reason: 'error', error: 'inspection failed' });
+      expect(mockWriteNDJSON.mock.calls.map(([event]) => event)).toEqual([
+        { type: 'postinstall:changes', files: ['existing.ts', 'generated.ts'], count: 2 },
+        { type: 'postinstall:nochanges' },
+        { type: 'postinstall:unavailable', reason: 'not-git' },
+        { type: 'postinstall:unavailable', reason: 'error', error: 'inspection failed' },
+      ]);
+      expect(sendEvent).not.toHaveBeenCalled();
       await adapter.stop();
     });
   });

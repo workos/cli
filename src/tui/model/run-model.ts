@@ -169,8 +169,7 @@ const TONES: Partial<Record<InstallerEventName, EntryTone>> = {
   'agent:retry': 'warning',
   'agent:success': 'success',
   'agent:failure': 'error',
-  'postinstall:commit:success': 'success',
-  'postinstall:pr:success': 'success',
+  'postinstall:unavailable': 'warning',
 };
 
 const MAX_COMMAND = 80;
@@ -431,8 +430,7 @@ export function createRunModel(options: RunModelOptions): RunModel {
     },
 
     'postinstall:changes': ({ files }) => narrate('postinstall:changes', { count: files.length }),
-    'postinstall:commit:success': ({ message }) => narrate('postinstall:commit:success', { message }),
-    'postinstall:pr:success': ({ url }) => narrate('postinstall:pr:success', { url }),
+    'postinstall:unavailable': ({ reason }) => narrate('postinstall:unavailable', {}, reason),
 
     complete: ({ success }) => {
       outcome = success ? 'success' : cancelled ? 'cancelled' : 'failure';

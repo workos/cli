@@ -546,13 +546,25 @@ workos install [options]
   --pm <manager>          Package manager for the scaffolded app: npm, pnpm, yarn, bun
   --no-validate           Skip post-installation validation
   --no-branch             Skip branch creation (use current branch)
-  --no-commit             Skip auto-commit after installation
-  --create-pr             Auto-create pull request after installation
+  --commit / --no-commit  Deprecated compatibility-only no-ops
+  --create-pr             Deprecated compatibility-only no-op (never publishes)
   --no-git-check          Skip git dirty working tree check
   --force-install         Force install packages even if peer dependency checks fail
   --no-tui                Use plain line-by-line output instead of the full-screen installer
   --debug                 Enable verbose logging
 ```
+
+The installer leaves generated changes unstaged and uncommitted, preserving any
+previously staged work. It never stages, commits, pushes, opens a pull request, or
+generates commit/PR text. Review the project and commit independently when ready.
+The deprecated Git flags above (including boolean/negated forms) are accepted but
+ignored; human runs show a notice, while JSON runs keep machine streams clean.
+Branch creation and `--no-branch` are unchanged: uncommitted changes are not
+isolated by creating a branch. Reported changed files may include pre-existing
+work; inspection is scoped to `--install-dir`. Each of its two Git commands is
+limited to 5 seconds and 1 MiB of buffered output. If inspection hits either
+limit, it reports unknown changed files (not “no changes”); review the project
+manually. Partial output is never presented as a complete file list.
 
 **Full-screen installer:** In an interactive terminal of at least 80×24,
 `workos install` opens a full-screen view: a plain-English walkthrough of what
@@ -653,7 +665,7 @@ Mode resolution notes:
 In non-TTY, the installer streams progress as NDJSON (one JSON object per line):
 
 ```bash
-workos install --api-key sk_test_xxx --client-id client_xxx --no-commit 2>/dev/null
+workos install --api-key sk_test_xxx --client-id client_xxx 2>/dev/null
 # → {"type":"detection:complete","integration":"nextjs","timestamp":"..."}
 # → {"type":"agent:start","timestamp":"..."}
 # → {"type":"agent:progress","message":"...","timestamp":"..."}

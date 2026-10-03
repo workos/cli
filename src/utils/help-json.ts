@@ -2120,17 +2120,15 @@ const commands: CommandSchema[] = [
       {
         name: 'commit',
         type: 'boolean',
-        description: 'Auto-commit after installation (use --no-commit to skip)',
+        description: 'Deprecated no-op (--commit/--no-commit); installer changes are left uncommitted',
         required: false,
-        default: true,
         hidden: false,
       },
       {
         name: 'create-pr',
         type: 'boolean',
-        description: 'Auto-create pull request after installation',
+        description: 'Deprecated no-op; the installer never pushes or creates pull requests',
         required: false,
-        default: false,
         hidden: false,
       },
       {

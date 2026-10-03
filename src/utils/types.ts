@@ -87,7 +87,7 @@ export type InstallerOptions = {
   noValidate?: boolean;
 
   /**
-   * Skip post-install commit and PR workflow
+   * @deprecated Ignored: installer changes are always left uncommitted.
    */
   noCommit?: boolean;
 
@@ -97,7 +97,7 @@ export type InstallerOptions = {
   noBranch?: boolean;
 
   /**
-   * Auto-create pull request after installation
+   * @deprecated Ignored: the installer never pushes or creates pull requests.
    */
   createPr?: boolean;
 

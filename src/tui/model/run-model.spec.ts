@@ -31,6 +31,7 @@ function actors(overrides: Record<string, unknown> = {}) {
     })),
     checkGitStatus: fromPromise<GitCheckOutput, { installDir: string }>(async () => ({ isClean: true, files: [] })),
     configureEnvironment: fromPromise<void, { context: InstallerMachineContext }>(async () => {}),
+    detectChanges: fromPromise(async () => ({ state: 'unchanged' as const, files: [] })),
     runAgent: fromPromise<AgentOutput, { context: InstallerMachineContext }>(async () => ({
       success: true,
       summary: 'Done!',
@@ -48,7 +49,6 @@ function options(overrides: Partial<InstallerOptions> = {}): InstallerOptions {
     local: true,
     ci: false,
     skipAuth: false,
-    noCommit: true,
     emitter: null!,
     apiKey: 'sk_test_123',
     clientId: 'client_test_123',
@@ -406,22 +406,22 @@ describe('run model: tips, prompt, status, notices', () => {
     let notified = 0;
     const unsubscribe = model.subscribe(() => notified++);
 
-    model.setPrompt({ kind: 'confirm', message: 'Commit the changes?', initialValue: true });
-    expect(model.getSnapshot().prompt).toEqual({ kind: 'confirm', message: 'Commit the changes?', initialValue: true });
-    model.setStatus('Generating commit message...');
+    model.setPrompt({ kind: 'confirm', message: 'Continue anyway?', initialValue: true });
+    expect(model.getSnapshot().prompt).toEqual({ kind: 'confirm', message: 'Continue anyway?', initialValue: true });
+    model.setStatus('Inspecting project changes...');
     const withStatus = model.getSnapshot();
-    model.setStatus('Generating commit message...'); // unchanged: same snapshot
+    model.setStatus('Inspecting project changes...'); // unchanged: same snapshot
     expect(model.getSnapshot()).toBe(withStatus);
-    model.addNotice('error', 'Commit failed: nothing to commit');
+    model.addNotice('error', 'Change inspection failed');
     model.setPrompt(null);
 
     const snapshot = model.getSnapshot();
     expect(snapshot.prompt).toBeNull();
-    expect(snapshot.status).toBe('Generating commit message...');
+    expect(snapshot.status).toBe('Inspecting project changes...');
     expect(snapshot.walkthrough.at(-1)).toMatchObject({
       kind: 'notice',
       tone: 'error',
-      text: 'Commit failed: nothing to commit',
+      text: 'Change inspection failed',
     });
     expect(notified).toBeGreaterThan(0);
 
@@ -475,8 +475,6 @@ describe('run model: tips, prompt, status, notices', () => {
       'agent:tool': { kind: 'command', detail: 'ls' },
       'validation:complete': { passed: false, issueCount: 1, durationMs: 1 },
       'postinstall:changes': { files: ['a'] },
-      'postinstall:commit:success': { message: 'feat: add AuthKit' },
-      'postinstall:pr:success': { url: 'https://github.com/o/r/pull/1' },
     };
     expect(Object.keys(payloads).sort()).toEqual(Object.keys(WALKTHROUGH_PARAMS).sort());
 
