@@ -1,7 +1,7 @@
 import type { InstallerAdapter, AdapterConfig } from './types.js';
 import type { InstallerEventEmitter, InstallerEvents } from '../events.js';
 import { relative } from 'node:path';
-import ui, { PromptUnavailableError } from '../../utils/ui.js';
+import ui, { getUiHost, PromptUnavailableError } from '../../utils/ui.js';
 import chalk from 'chalk';
 import { getConfig } from '../settings.js';
 import { getActiveEnvironment, isUnclaimedEnvironment, profileEnvironmentLabel } from '../config-store.js';
@@ -31,7 +31,8 @@ export class CLIAdapter implements InstallerAdapter {
   private handlers = new Map<string, (...args: unknown[]) => void>();
 
   // Queue for logs while prompt is active (parallel state issue)
-  private isPromptActive = false;
+  private pendingPrompts = 0;
+  private pendingHandlers = new Set<Promise<void>>();
   private pendingLogs: Array<() => void> = [];
 
   // SIGINT handler for cleanup
@@ -43,7 +44,7 @@ export class CLIAdapter implements InstallerAdapter {
   // stops the queued sibling from opening a now-moot question.
   private promptAbort: AbortController | null = null;
 
-  // Last phase message shown on the agent spinner, restored after logging above it.
+  // Last phase message shown on the agent spinner.
   private lastAgentMessage = 'Running AI agent...';
   // Last file path rendered as a step line, to dedupe consecutive same-path ops.
   private lastFileOp: string | null = null;
@@ -58,8 +59,15 @@ export class CLIAdapter implements InstallerAdapter {
    * Queue a log call if a prompt is active, otherwise execute immediately.
    */
   private queueableLog(logFn: () => void): void {
-    if (this.isPromptActive) {
-      this.pendingLogs.push(logFn);
+    // Hosted lines go to the transcript, not through input. Deliver them now
+    // so the TUI can still classify agent play-by-play in its original phase.
+    if (this.pendingPrompts > 0 && !getUiHost()) {
+      const host = getUiHost();
+      this.pendingLogs.push(() => {
+        // Normal stop drains before host teardown. An exit/signal hook cannot
+        // await it: never leak its late logs onto the restored terminal.
+        if (getUiHost() === host) logFn();
+      });
     } else {
       logFn();
     }
@@ -80,12 +88,12 @@ export class CLIAdapter implements InstallerAdapter {
    * prompt handler so the active/flush lifecycle lives in one place.
    */
   private async withPromptActive<T>(run: () => Promise<T>): Promise<T> {
-    this.isPromptActive = true;
+    this.pendingPrompts++;
     try {
       return await run();
     } finally {
-      this.isPromptActive = false;
-      this.flushPendingLogs();
+      this.pendingPrompts--;
+      if (this.pendingPrompts === 0) this.flushPendingLogs();
     }
   }
 
@@ -142,6 +150,8 @@ export class CLIAdapter implements InstallerAdapter {
     this.subscribe('config:complete', this.handleConfigComplete);
     this.subscribe('agent:start', this.handleAgentStart);
     this.subscribe('agent:progress', this.handleAgentProgress);
+    this.subscribe('agent:success', this.handleAgentSuccess);
+    this.subscribe('agent:failure', this.handleAgentFailure);
     // Persistent, append-only log of file operations + tool calls above the spinner.
     this.subscribe('file:write', this.handleFileWrite);
     this.subscribe('file:edit', this.handleFileEdit);
@@ -183,7 +193,6 @@ export class CLIAdapter implements InstallerAdapter {
     // Abort any in-flight/queued prompt so a cancelled run can't leave a
     // now-moot sibling question open (e.g. the branch prompt after git-cancel).
     this.promptAbort?.abort();
-    this.promptAbort = null;
 
     // Remove SIGINT handler
     if (this.sigIntHandler) {
@@ -198,10 +207,13 @@ export class CLIAdapter implements InstallerAdapter {
     this.handlers.clear();
 
     // Stop any active spinner
-    this.spinner?.stop();
+    this.spinner?.clear();
     this.spinner = null;
 
     this.isStarted = false;
+    // Let aborted handlers flush their buffered output while the TUI host and
+    // console capture still exist. No question may escape into plain stdin.
+    await Promise.all(this.pendingHandlers);
   }
 
   private stopSpinner(message: string, code = 0): void {
@@ -211,10 +223,16 @@ export class CLIAdapter implements InstallerAdapter {
     }
   }
 
+  /** ui owns replacement/retirement, including while a question is open. */
+  private startSpinner(message: string): void {
+    this.spinner = ui.spinner();
+    this.spinner.start(message);
+  }
+
   /** Debug logging - only outputs when debug mode is enabled */
   private debugLog = (message: string): void => {
     if (this.debug) {
-      console.log(chalk.dim(`[debug] ${message}`));
+      this.queueableLog(() => console.log(chalk.dim(`[debug] ${message}`)));
     }
   };
 
@@ -233,7 +251,10 @@ export class CLIAdapter implements InstallerAdapter {
     const safeHandler = (payload: InstallerEvents[K]): void => {
       try {
         const result = boundHandler(payload);
-        if (result instanceof Promise) result.catch((err) => this.onHandlerError(err));
+        if (result instanceof Promise) {
+          this.pendingHandlers.add(result);
+          void result.catch((err) => this.onHandlerError(err)).finally(() => this.pendingHandlers.delete(result));
+        }
       } catch (err) {
         this.onHandlerError(err);
       }
@@ -332,6 +353,7 @@ export class CLIAdapter implements InstallerAdapter {
       ui.confirm({
         message: `Found ${fileList}. Check for existing WorkOS credentials?`,
         initialValue: true,
+        signal: this.promptAbort?.signal,
       }),
     );
 
@@ -342,11 +364,12 @@ export class CLIAdapter implements InstallerAdapter {
 
   private handleDeviceStarted = ({ verificationUri, userCode }: InstallerEvents['device:started']): void => {
     ui.log.info(`\nOpen this URL in your browser:\n`);
-    console.log(`  ${chalk.cyan(verificationUri)}`);
-    console.log(`\nEnter code: ${chalk.bold(userCode)}\n`);
+    this.queueableLog(() => {
+      console.log(`  ${chalk.cyan(verificationUri)}`);
+      console.log(`\nEnter code: ${chalk.bold(userCode)}\n`);
+    });
 
-    this.spinner = ui.spinner();
-    this.spinner.start('Waiting for authentication...');
+    this.startSpinner('Waiting for authentication...');
   };
 
   private handleDeviceSuccess = (): void => {
@@ -354,11 +377,8 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handleStagingFetching = (): void => {
-    if (this.spinner) {
-      this.spinner.stop('Authenticated');
-    }
-    this.spinner = ui.spinner();
-    this.spinner.start('Fetching your WorkOS credentials...');
+    this.stopSpinner('Authenticated');
+    this.startSpinner('Fetching your WorkOS credentials...');
   };
 
   private handleStagingSuccess = ({ source, credentials }: InstallerEvents['staging:success']): void => {
@@ -457,19 +477,22 @@ export class CLIAdapter implements InstallerAdapter {
 
     ui.log.step(`Get your credentials from ${chalk.cyan('https://dashboard.workos.com')}`);
 
-    const clientId = await ui.text({
-      message: 'Enter your WorkOS Client ID:',
-      placeholder: 'client_...',
-      validate: (value) => {
-        if (!value || value.trim().length === 0) {
-          return 'Client ID is required';
-        }
-        if (!value.startsWith('client_')) {
-          return 'Client ID should start with "client_"';
-        }
-        return undefined;
-      },
-    });
+    const clientId = await this.withPromptActive(() =>
+      ui.text({
+        signal: this.promptAbort?.signal,
+        message: 'Enter your WorkOS Client ID:',
+        placeholder: 'client_...',
+        validate: (value) => {
+          if (!value || value.trim().length === 0) {
+            return 'Client ID is required';
+          }
+          if (!value.startsWith('client_')) {
+            return 'Client ID should start with "client_"';
+          }
+          return undefined;
+        },
+      }),
+    );
 
     if (ui.isCancel(clientId)) {
       this.sendEvent({ type: 'CANCEL' });
@@ -479,18 +502,21 @@ export class CLIAdapter implements InstallerAdapter {
     let apiKey = '';
     if (requiresApiKey) {
       ui.log.info(chalk.dim('ℹ️ Your API key will be hidden for security and saved to .env.local'));
-      const apiKeyResult = await ui.password({
-        message: 'Enter your WorkOS API Key:',
-        validate: (value) => {
-          if (!value || value.trim().length === 0) {
-            return 'API Key is required';
-          }
-          if (!value.startsWith('sk_')) {
-            return 'API Key should start with "sk_"';
-          }
-          return undefined;
-        },
-      });
+      const apiKeyResult = await this.withPromptActive(() =>
+        ui.password({
+          signal: this.promptAbort?.signal,
+          message: 'Enter your WorkOS API Key:',
+          validate: (value) => {
+            if (!value || value.trim().length === 0) {
+              return 'API Key is required';
+            }
+            if (!value.startsWith('sk_')) {
+              return 'API Key should start with "sk_"';
+            }
+            return undefined;
+          },
+        }),
+      );
 
       if (ui.isCancel(apiKeyResult)) {
         this.sendEvent({ type: 'CANCEL' });
@@ -513,10 +539,19 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handleAgentStart = (): void => {
-    this.spinner = ui.spinner();
-    this.spinner.start(this.lastAgentMessage);
+    this.startSpinner(this.lastAgentMessage);
     // No setInterval: ui animates its own frames, and the old 2s reset
     // clobbered the current phase text set by handleAgentProgress.
+  };
+
+  // Rails and --no-validate never emit validation:start.
+  private handleAgentSuccess = (): void => {
+    this.stopSpinner('Agent completed');
+  };
+
+  private handleAgentFailure = (): void => {
+    this.promptAbort?.abort();
+    this.stopSpinner('Agent failed', 1);
   };
 
   private handleAgentProgress = ({ step, detail }: InstallerEvents['agent:progress']): void => {
@@ -525,27 +560,11 @@ export class CLIAdapter implements InstallerAdapter {
     this.spinner?.message(message);
   };
 
-  /**
-   * Render a persistent line above the running spinner: stop the spinner to
-   * finalize its line, emit the log, then restart it on the last phase message.
-   * Mirrors the existing stop→log and stop→start-new-spinner precedents.
-   */
-  private logAboveSpinner(render: () => void): void {
-    const wasRunning = this.spinner !== null;
-    this.spinner?.stop();
-    this.spinner = null;
-    render();
-    if (wasRunning) {
-      this.spinner = ui.spinner();
-      this.spinner.start(this.lastAgentMessage);
-    }
-  }
-
   private logFileOp(verb: 'Creating' | 'Editing', path: string): void {
     if (path === this.lastFileOp) return; // dedupe consecutive same-path ops
     this.lastFileOp = path;
     const rel = relative(process.cwd(), path);
-    this.logAboveSpinner(() => ui.log.step(`${verb} ${chalk.dim(rel)}`));
+    this.queueableLog(() => ui.log.step(`${verb} ${chalk.dim(rel)}`));
   }
 
   private handleFileWrite = ({ path }: InstallerEvents['file:write']): void => {
@@ -558,7 +577,7 @@ export class CLIAdapter implements InstallerAdapter {
 
   private handleAgentTool = ({ detail }: InstallerEvents['agent:tool']): void => {
     const cmd = detail.length > 80 ? `${detail.slice(0, 77)}…` : detail;
-    this.logAboveSpinner(() => ui.log.step(`Running ${chalk.dim(cmd)}`));
+    this.queueableLog(() => ui.log.step(`Running ${chalk.dim(cmd)}`));
   };
 
   private handleValidationStart = (): void => {
@@ -596,9 +615,11 @@ export class CLIAdapter implements InstallerAdapter {
 
     this.stopSpinner(success ? 'Done' : 'Failed');
 
-    console.log('');
-    console.log(renderCompletionSummary(success, summary, completion));
-    console.log('');
+    this.queueableLog(() => {
+      console.log('');
+      console.log(renderCompletionSummary(success, summary, completion));
+      console.log('');
+    });
 
     // When we scaffolded a fresh app, the install ran in the current dir, so
     // point the user straight at the dev server.
@@ -608,6 +629,7 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handleError = ({ message, stack, code }: InstallerEvents['error']): void => {
+    this.promptAbort?.abort();
     // A structured decline (e.g. unsupported framework version) already
     // printed its guidance via the integration — don't restyle it as a
     // generic failure.
@@ -642,6 +664,7 @@ export class CLIAdapter implements InstallerAdapter {
       ui.confirm({
         message: 'This directory is empty. Scaffold a new Next.js app with AuthKit here?',
         initialValue: true,
+        signal: this.promptAbort?.signal,
       }),
     );
 
@@ -652,8 +675,7 @@ export class CLIAdapter implements InstallerAdapter {
 
   private handleScaffoldStart = ({ packageManager }: InstallerEvents['scaffold:start']): void => {
     this.scaffoldPackageManager = packageManager;
-    this.spinner = ui.spinner();
-    this.spinner.start(`Scaffolding a new Next.js app with ${packageManager} (this can take a minute)...`);
+    this.startSpinner(`Scaffolding a new Next.js app with ${packageManager} (this can take a minute)...`);
   };
 
   // create-next-app output is verbose; surface it only under --debug and keep
@@ -712,6 +734,7 @@ export class CLIAdapter implements InstallerAdapter {
       ui.confirm({
         message: 'Commit the changes?',
         initialValue: true,
+        signal: this.promptAbort?.signal,
       }),
     );
 
@@ -721,8 +744,7 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handleCommitGenerating = (): void => {
-    this.spinner = ui.spinner();
-    this.spinner.start('Generating commit message...');
+    this.startSpinner('Generating commit message...');
   };
 
   private handleCommitSuccess = ({ message }: InstallerEvents['postinstall:commit:success']): void => {
@@ -740,6 +762,7 @@ export class CLIAdapter implements InstallerAdapter {
       ui.confirm({
         message: 'Create a pull request?',
         initialValue: true,
+        signal: this.promptAbort?.signal,
       }),
     );
 
@@ -749,16 +772,14 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handlePrGenerating = (): void => {
-    this.spinner = ui.spinner();
-    this.spinner.start('Generating PR description...');
+    this.startSpinner('Generating PR description...');
   };
 
   private handlePrPushing = (): void => {
     if (this.spinner) {
       this.spinner.message('Pushing to remote...');
     } else {
-      this.spinner = ui.spinner();
-      this.spinner.start('Pushing to remote...');
+      this.startSpinner('Pushing to remote...');
     }
   };
 
@@ -779,6 +800,6 @@ export class CLIAdapter implements InstallerAdapter {
 
   private handleManualInstructions = ({ instructions }: InstallerEvents['postinstall:manual']): void => {
     ui.log.info('GitHub CLI not found. Manual steps:');
-    console.log(chalk.dim(instructions));
+    this.queueableLog(() => console.log(chalk.dim(instructions)));
   };
 }
