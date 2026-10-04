@@ -27,6 +27,7 @@ export function applicationSetupNextSteps(setup: AuthkitApplicationSetup): strin
 export interface CompletionContext {
   integration: string;
   changedFiles?: string[];
+  changeDetection?: import('./post-install.js').ChangeDetection;
   installDir: string;
 }
 
@@ -90,11 +91,13 @@ export async function buildCompletionData(ctx: CompletionContext, deps: Completi
     devCommand,
     url,
     files,
+    ...(ctx.changeDetection ? { changeDetection: ctx.changeDetection } : {}),
     nextSteps: [
       ...claim,
       ...(deps.applicationSetup ? applicationSetupNextSteps(deps.applicationSetup) : []),
       ...concrete,
       ...framework,
+      'The installer leaves changes uncommitted. Review the project and commit when ready.',
     ],
     ...(deps.applicationSetup ? { applicationSetup: deps.applicationSetup } : {}),
     docsUrl: deps.docsUrl,

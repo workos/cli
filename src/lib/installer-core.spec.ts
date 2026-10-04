@@ -13,6 +13,7 @@ import type {
 } from './installer-core.types.js';
 import type { EnvFileInfo } from './credential-discovery.js';
 import type { StagingCredentials } from './staging-api.js';
+import type { ChangeDetection } from './post-install.js';
 
 // Shared mock actors for reuse across tests
 const baseMockActors = {
@@ -39,6 +40,7 @@ const baseMockActors = {
     branch: input.name,
   })),
   configureEnvironment: fromPromise<void, { context: InstallerMachineContext }>(async () => {}),
+  detectChanges: fromPromise<ChangeDetection, { installDir: string }>(async () => ({ state: 'unchanged', files: [] })),
   runAgent: fromPromise<AgentOutput, { context: InstallerMachineContext }>(async () => ({
     success: true,
     summary: 'Done!',
@@ -305,6 +307,25 @@ describe('InstallerCore State Machine', () => {
   });
 
   describe('full flow', () => {
+    it('reports an unexpected inspection rejection without claiming no changes or failing the installation', async () => {
+      const { actor, emitter } = createTestActor(
+        { skipAuth: true, apiKey: 'offline', clientId: 'offline' },
+        {
+          detectChanges: fromPromise(async () => {
+            throw new Error('inspection rejected');
+          }),
+        },
+      );
+      const inspection: unknown[] = [];
+      emitter.on('postinstall:nochanges', () => inspection.push('unchanged'));
+      emitter.on('postinstall:unavailable', (result) => inspection.push(result));
+      actor.start();
+      actor.send({ type: 'START' });
+      await waitFor(actor, (s) => s.status === 'done', { timeout: 1000 });
+      expect(actor.getSnapshot().value).toBe('complete');
+      expect(inspection).toEqual([{ reason: 'error', error: 'Error: inspection rejected' }]);
+      actor.stop();
+    });
     it('retains pending application setup for the completion actor', async () => {
       const applicationSetup = {
         clientId: 'client_123',

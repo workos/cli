@@ -54,8 +54,6 @@ export const WALKTHROUGH_PARAMS: Partial<Record<InstallerEventName, readonly str
   'agent:tool': ['command'],
   'validation:complete': ['count'],
   'postinstall:changes': ['count'],
-  'postinstall:commit:success': ['message'],
-  'postinstall:pr:success': ['url'],
 };
 
 /**
@@ -64,6 +62,7 @@ export const WALKTHROUGH_PARAMS: Partial<Record<InstallerEventName, readonly str
  */
 export const WALKTHROUGH_VARIANTS: Partial<Record<InstallerEventName, readonly string[]>> = {
   'validation:complete': ['passed', 'failed'],
+  'postinstall:unavailable': ['not-git', 'error'],
   complete: ['success', 'setup-required', 'failure', 'cancelled'],
 };
 

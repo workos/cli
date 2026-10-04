@@ -136,8 +136,8 @@ function writeSecretFile(path: string, contents: string, existed: boolean): void
  * pure, and the writers have four call sites across the codebase.
  *
  * `ensureGitignore` runs BEFORE the write so a crash between the two cannot
- * leave an unignored secret on disk: `stageAndCommit` runs `git add -A`, and the
- * env file holds a live API key and claim token.
+ * leave an unignored secret on disk: a later user-run `git add -A` must not
+ * stage the live API key and claim token held in the env file.
  *
  * The copy mirrors the source's permission bits: a `chmod 600 .env.local` must
  * not gain a world-readable twin, and `.bak` sits outside the `.env*` glob most

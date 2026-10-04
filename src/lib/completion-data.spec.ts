@@ -99,7 +99,7 @@ describe('buildCompletionData', () => {
     expect(data.url).toBe('http://localhost:8080');
   });
 
-  it('handles empty changedFiles (--no-commit shape) without throwing', async () => {
+  it('handles an empty changedFiles list without throwing', async () => {
     writePackageJson({ scripts: { dev: 'next dev' }, dependencies: { next: '15.0.0' } });
 
     const data = await buildCompletionData({ integration: 'nextjs', changedFiles: [], installDir }, baseDeps);
