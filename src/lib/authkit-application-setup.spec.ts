@@ -1100,6 +1100,39 @@ describe('Unauthorized configuration recovery', () => {
     },
   );
 
+  it.each([
+    ['prompt', () => vi.mocked(ui.select).mockResolvedValue(CANCEL)],
+    ['login', () => vi.mocked(ensureAuthenticated).mockRejectedValue(new CliExit(2))],
+  ] as const)('cancels instead of completing when %s cancellation follows callback registration', async (_, cancel) => {
+    cancel();
+    const original = vi.mocked(dashboardGraphqlRequest).getMockImplementation()!;
+    vi.mocked(dashboardGraphqlRequest).mockImplementation(async (name, options) => {
+      if (name === 'updateAuthkitApplication') throw unauthorized();
+      return original(name, options);
+    });
+    await expect(configureAuthkitApplication(setup, setup.clientId, 'sk_test_fake')).rejects.toMatchObject({
+      code: 'cancelled',
+      message: expect.stringContaining('callback URL was registered'),
+    });
+    expect(application.redirectUris.some((uri) => uri.uri === setup.redirectUri)).toBe(true);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps an explicit manual choice after callback registration as an unverified partial result', async () => {
+    vi.mocked(ui.select).mockResolvedValue('manual');
+    const original = vi.mocked(dashboardGraphqlRequest).getMockImplementation()!;
+    vi.mocked(dashboardGraphqlRequest).mockImplementation(async (name, options) => {
+      if (name === 'updateAuthkitApplication') throw unauthorized();
+      return original(name, options);
+    });
+    expect(await configureAuthkitApplication(setup, setup.clientId, 'sk_test_fake')).toMatchObject({
+      callbackRegistered: true,
+      verified: false,
+      reason: expect.stringContaining('declined'),
+    });
+    expect(ensureAuthenticated).not.toHaveBeenCalled();
+  });
+
   it('preserves cancellation during the authentication check', async () => {
     vi.mocked(fetchTeamEnvironments).mockRejectedValue(unauthorized());
     vi.mocked(ensureAuthenticated).mockRejectedValue(new CliExit(2));
