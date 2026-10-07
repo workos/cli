@@ -21,6 +21,20 @@ describe('writeEnvLocal', () => {
     rmSync(testDir, { recursive: true, force: true });
   });
 
+  it('replaces recovered credentials written as exported assignments, keeping the export prefix', async () => {
+    const previous = { apiKey: 'sk_test_fake_old', clientId: 'client_fake' };
+    const replacement = { apiKey: 'sk_test_fake_new', clientId: 'client_fake' };
+    const path = join(testDir, '.env.local');
+    writeFileSync(
+      path,
+      `export WORKOS_API_KEY=${previous.apiKey}\n  export WORKOS_CLIENT_ID = ${previous.clientId}\nOTHER=value\n`,
+    );
+    await replaceRecoveredEnvCredentials(testDir, previous, replacement);
+    expect(readFileSync(path, 'utf8')).toBe(
+      `export WORKOS_API_KEY=${replacement.apiKey}\nexport WORKOS_CLIENT_ID=${replacement.clientId}\nOTHER=value\n`,
+    );
+  });
+
   it('atomically replaces a recovered pair while preserving unrelated content and permissions', async () => {
     const previous = { apiKey: 'sk_test_fake_old', clientId: 'client_fake' };
     const replacement = { apiKey: 'sk_test_fake_new', clientId: 'client_fake' };

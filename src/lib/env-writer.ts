@@ -192,6 +192,20 @@ export function writeEnvLocal(installDir: string, envVars: Partial<EnvVars>): vo
   writeSecretFile(envPath, upsertEnvLines(existingContent, vars), envExisted);
 }
 
+/**
+ * Read assignments with the line shapes `upsertEnvLines` rewrites (optional
+ * indentation and `export `). Last occurrence wins, like `parseEnvFile`, so a
+ * duplicate the writer would leave behind still shadows the update.
+ */
+function readAssignments(content: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const line of content.split(/\r?\n/)) {
+    const match = ENV_ASSIGNMENT.exec(line);
+    if (match) result[match[2]] = line.slice(match[0].length).trim();
+  }
+  return result;
+}
+
 /** Replace a recovered pair only in the known installer-owned file, before state adoption. */
 export async function replaceRecoveredEnvCredentials(
   installDir: string,
@@ -202,14 +216,14 @@ export async function replaceRecoveredEnvCredentials(
   const info = await lstat(path);
   if (!info.isFile()) throw new Error('Credential file is not a regular file.');
   const content = await readFile(path, 'utf8');
-  const current = parseEnvFile(content);
+  const current = readAssignments(content);
   if (current.WORKOS_API_KEY !== previous.apiKey || current.WORKOS_CLIENT_ID !== previous.clientId)
     throw new Error('Local credentials changed during setup.');
   const updated = upsertEnvLines(content, {
     WORKOS_API_KEY: replacement.apiKey,
     WORKOS_CLIENT_ID: replacement.clientId,
   });
-  const parsed = parseEnvFile(updated);
+  const parsed = readAssignments(updated);
   if (parsed.WORKOS_API_KEY !== replacement.apiKey || parsed.WORKOS_CLIENT_ID !== replacement.clientId)
     throw new Error('Cannot safely replace duplicate credential assignments.');
   // Keep temporary secrets ignored even with a narrow .env.local ignore rule.
