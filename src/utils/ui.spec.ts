@@ -199,6 +199,198 @@ describe('prompt coordination (withPrompt)', () => {
   });
 });
 
+describe('spinner ownership (AUTH-6732)', () => {
+  let write: ReturnType<typeof vi.spyOn>;
+  let log: ReturnType<typeof vi.spyOn>;
+  let stdoutTty: PropertyDescriptor | undefined;
+  const handles: ReturnType<typeof ui.spinner>[] = [];
+  const start = (message: string) => {
+    const handle = ui.spinner();
+    handles.push(handle);
+    handle.start(message);
+    return handle;
+  };
+  const output = () => write.mock.calls.map(([chunk]) => String(chunk)).join('');
+  const drain = async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    stdoutTty = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');
+    Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true });
+    write = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    log = vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    handles.splice(0).forEach((handle) => handle.clear());
+    setUiHost(null);
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    if (stdoutTty) Object.defineProperty(process.stdout, 'isTTY', stdoutTty);
+    else delete (process.stdout as { isTTY?: boolean }).isTTY;
+  });
+
+  it('retires replaced timers and makes all stale operations inert', () => {
+    const old = start('old');
+    const current = start('current');
+    write.mockClear();
+    old.message('stale');
+    old.stop('stale');
+    old.clear();
+    old.start('stale');
+    expect(write).not.toHaveBeenCalled();
+    expect(log).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(400);
+    expect(output()).toContain('current');
+    expect(output()).not.toMatch(/old|stale/);
+    expect(vi.getTimerCount()).toBe(1);
+    current.clear();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each(['resume', 'stop', 'clear'] as const)(
+    'suspends new and replaced spinners through queued prompts, then %s',
+    async (ending) => {
+      let answer!: (value: boolean) => void;
+      vi.mocked(inquirer.confirm).mockImplementation(() => new Promise((resolve) => (answer = resolve)));
+      const old = start('old');
+      const first = ui.confirm({ message: 'first' });
+      const second = ui.confirm({ message: 'second' });
+      await drain();
+      write.mockClear();
+      vi.advanceTimersByTime(400);
+      const current = start('next');
+      old.clear();
+      current.message('updated');
+      if (ending === 'stop') current.stop('finished');
+      if (ending === 'clear') current.clear();
+      vi.advanceTimersByTime(400);
+      expect(write).not.toHaveBeenCalled();
+      expect(log).not.toHaveBeenCalled();
+      answer(true);
+      await first;
+      await drain();
+      expect(inquirer.confirm).toHaveBeenCalledTimes(2);
+      vi.advanceTimersByTime(400);
+      expect(write).not.toHaveBeenCalled();
+      expect(log).not.toHaveBeenCalled();
+      answer(false);
+      expect(await second).toBe(false);
+      write.mockClear();
+      vi.advanceTimersByTime(400);
+      expect(output()).not.toContain('old');
+      if (ending === 'resume') expect(output()).toContain('updated');
+      else expect(write).not.toHaveBeenCalled();
+      if (ending === 'stop') expect(log).toHaveBeenCalledWith(expect.stringContaining('finished'));
+    },
+  );
+
+  it('pauses an existing owner for all ticks and resumes it after the answer', async () => {
+    let answer!: (value: boolean) => void;
+    vi.mocked(inquirer.confirm).mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+    start('working');
+    const prompt = ui.confirm({ message: 'question' });
+    await drain();
+    write.mockClear();
+    vi.advanceTimersByTime(800);
+    expect(write).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+    answer(true);
+    await prompt;
+    vi.advanceTimersByTime(240);
+    expect(output()).toContain('working');
+    expect(vi.getTimerCount()).toBe(1);
+  });
+
+  it('host activation retires terminal animation and host replacement retires status', () => {
+    const terminal = start('terminal');
+    const oldHost = { line: vi.fn(), status: vi.fn(), prompt: vi.fn() };
+    const newHost = { line: vi.fn(), status: vi.fn(), prompt: vi.fn() };
+    setUiHost(oldHost);
+    expect(vi.getTimerCount()).toBe(0);
+    const hosted = start('hosted');
+    setUiHost(newHost);
+    expect(oldHost.status).toHaveBeenLastCalledWith(null);
+    write.mockClear();
+    terminal.start('stale terminal');
+    hosted.stop('stale host');
+    hosted.message('stale host');
+    vi.advanceTimersByTime(800);
+    expect(write).not.toHaveBeenCalled();
+    expect(newHost.status).not.toHaveBeenCalled();
+    expect(newHost.line).not.toHaveBeenCalled();
+  });
+
+  it('does not animate on non-TTY output or emit any spinner output in JSON mode', async () => {
+    Object.defineProperty(process.stdout, 'isTTY', { value: false, configurable: true });
+    const nonTty = start('non-TTY');
+    nonTty.stop('done');
+    expect(write).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+    const { setOutputMode } = await import('./output.js');
+    log.mockClear();
+    setOutputMode('json');
+    try {
+      const json = start('json');
+      json.message('json update');
+      json.stop('json done');
+      json.clear();
+      expect(log).not.toHaveBeenCalled();
+      expect(write).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      setOutputMode('human');
+    }
+  });
+
+  it('hands back to the current spinner after a rejected prompt', async () => {
+    start('working');
+    vi.mocked(inquirer.confirm).mockRejectedValueOnce(new Error('broken'));
+    await expect(ui.confirm({ message: 'question' })).rejects.toThrow('broken');
+    write.mockClear();
+    vi.advanceTimersByTime(400);
+    expect(output()).toContain('working');
+  });
+
+  it('does not open pre-aborted or cancelled queued prompts', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    expect(await ui.confirm({ message: 'moot', signal: controller.signal })).toBe(CANCEL);
+    expect(inquirer.confirm).not.toHaveBeenCalled();
+  });
+
+  it('protects hosted status from stale handles and retires it at teardown', async () => {
+    const status = vi.fn();
+    let answer!: (value: unknown) => void;
+    setUiHost({ line: vi.fn(), status, prompt: () => new Promise((resolve) => (answer = resolve)) });
+    const old = start('old');
+    const first = ui.confirm({ message: 'first' });
+    const queued = ui.confirm({ message: 'queued' });
+    await drain();
+    const current = start('current');
+    status.mockClear();
+    old.stop('stale');
+    old.clear();
+    old.message('stale');
+    old.start('stale');
+    expect(status).not.toHaveBeenCalled();
+    setUiHost(null);
+    answer(CANCEL);
+    expect(await first).toBe(CANCEL);
+    await drain();
+    expect(await queued).toBe(CANCEL);
+    current.message('late');
+    current.stop('late');
+    current.start('late');
+    vi.advanceTimersByTime(400);
+    expect(write).not.toHaveBeenCalled();
+    expect(log).not.toHaveBeenCalled();
+    expect(inquirer.confirm).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
 describe('UI host', () => {
   let logSpy: ReturnType<typeof vi.spyOn>;
   let errorSpy: ReturnType<typeof vi.spyOn>;
@@ -317,7 +509,8 @@ describe('UI host', () => {
     await expect(ui.text({ message: 'Name', placeholder: 'client_...', validate })).resolves.toBe('typed');
     await expect(ui.password({ message: 'Key', validate })).resolves.toBe('typed');
 
-    expect(requests).toEqual([
+    expect(requests.every((request) => request.signal instanceof AbortSignal)).toBe(true);
+    expect(requests.map(({ signal: _signal, ...request }) => request)).toEqual([
       { kind: 'confirm', message: 'Continue?', initialValue: true },
       {
         kind: 'select',

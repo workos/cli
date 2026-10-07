@@ -7,6 +7,7 @@ const mockConsoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
 
 // Mock the UI facade
 vi.mock('../../utils/ui.js', () => ({
+  getUiHost: vi.fn(() => null),
   default: {
     intro: vi.fn(),
     log: {

@@ -171,6 +171,9 @@ export class TuiAdapter implements InstallerAdapter {
     process.off('exit', this.teardown);
     for (const signal of TERMINATING_SIGNALS) process.off(signal, this.terminated);
 
+    // stop() normally already awaited this. Exit/signal hooks must also abort
+    // queued questions and detach the CLI subscriptions, synchronously.
+    void this.cli.stop();
     // A prompt nobody will answer now must not leave its caller hanging.
     this.settle(CANCEL);
     try {
