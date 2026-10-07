@@ -294,7 +294,10 @@ async function configureApplicationAttempt(
     const matches = environments.filter((environment) => environment.clientId === setup.clientId);
     // A session for another team must not disable API-key-only onboarding. No
     // dashboard mutation has happened, and this branch returns before any can.
-    if (matches.length === 0 && !recovery.retried) return registerApiCallback();
+    // After a retry this stays safe only if the first attempt never selected a
+    // dashboard environment: every application read and write happens after that
+    // selection, so an unset target proves the fallback cannot follow a dashboard write.
+    if (matches.length === 0 && recovery.environmentId === undefined) return registerApiCallback();
     if (matches.length !== 1) return pending('Could not uniquely match the app client ID to a WorkOS environment.');
     const environment = matches[0];
     // Already validated by the team catalog and the application read below.

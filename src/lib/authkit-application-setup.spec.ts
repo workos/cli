@@ -1133,6 +1133,39 @@ describe('Unauthorized configuration recovery', () => {
     expect(ensureAuthenticated).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['another team', [{ id: 'env_other', name: 'Other', clientId: 'client_other', sandbox: true }]],
+    ['no environments', []],
+  ])(
+    'falls back to the sandbox API key when the refreshed session sees %s and no dashboard target was used',
+    async (_, environments) => {
+      vi.mocked(fetchTeamEnvironments).mockRejectedValueOnce(unauthorized()).mockResolvedValueOnce(environments);
+      const request = vi.fn(async (_url: string, _init: RequestInit) => Response.json({}, { status: 201 }));
+      vi.stubGlobal('fetch', request);
+      const result = await configureAuthkitApplication(setup, setup.clientId, 'sk_test_fake_app');
+      expect(result).toMatchObject({ callbackRegistered: true, verified: false });
+      expect(request).toHaveBeenCalledTimes(1);
+      expect(request.mock.calls[0][1].headers).toMatchObject({ Authorization: 'Bearer sk_test_fake_app' });
+      expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
+      expect(fetchTeamEnvironments).toHaveBeenCalledTimes(2);
+      expect(ui.select).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('bounds the post-retry API-key fallback: a 401 there is not offered recovery again', async () => {
+    vi.mocked(fetchTeamEnvironments).mockRejectedValueOnce(unauthorized()).mockResolvedValueOnce([]);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({}, { status: 401 })),
+    );
+    await expect(configureAuthkitApplication(setup, setup.clientId, 'sk_test_fake_app')).rejects.toMatchObject({
+      code: 'auth_required',
+      message: expect.stringContaining('exhausted after one retry'),
+    });
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    expect(ui.select).toHaveBeenCalledTimes(1);
+  });
+
   it('preserves cancellation during the authentication check', async () => {
     vi.mocked(fetchTeamEnvironments).mockRejectedValue(unauthorized());
     vi.mocked(ensureAuthenticated).mockRejectedValue(new CliExit(2));
