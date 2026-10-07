@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInstallerEventEmitter } from '../events.js';
 import { CLIAdapter } from './cli-adapter.js';
+import ui from '../../utils/ui.js';
 
 // Only the input transport is fake: adapter, facade, spinner timers, queuing,
 // cancellation and installer event delivery are real.
@@ -122,6 +123,24 @@ describe('CLI adapter with real UI coordination', () => {
     expect(frames()).toContain('Pushing to remote...');
     expect(frames()).not.toMatch(/Running AI|Generating commit/);
     expect(vi.getTimerCount()).toBe(1);
+  });
+
+  it('logging preserves a newer facade owner instead of restarting a stale adapter phase', async () => {
+    emitter.emit('agent:start', {});
+    const newer = ui.spinner();
+    try {
+      newer.start('newer owner');
+      emitter.emit('agent:tool', { kind: 'command', detail: 'synthetic log' });
+      write.mockClear();
+      await vi.advanceTimersByTimeAsync(240);
+      expect(frames()).toContain('newer owner');
+      expect(frames()).not.toContain('Running AI agent');
+      expect(output()).toContain('synthetic log');
+      expect(output()).not.toContain('✓');
+      expect(vi.getTimerCount()).toBe(1);
+    } finally {
+      newer.clear();
+    }
   });
 
   it('cancelling the first question never opens the now-moot queued sibling', async () => {

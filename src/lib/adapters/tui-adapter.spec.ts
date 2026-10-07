@@ -382,6 +382,7 @@ describe('TuiAdapter', () => {
     emitter.emit('postinstall:commit:prompt', {});
     emitter.emit('postinstall:pr:prompt', {});
     await waitFor(() => expect(frame()).toContain('? Commit the changes?'));
+    emitter.emit('agent:tool', { kind: 'command', detail: 'hidden agent play-by-play' });
     emitter.emit('agent:success', { summary: 'Rails fixture: no validation' });
     emitter.emit('postinstall:commit:generating', {});
     emitter.emit('postinstall:commit:success', { message: 'fixture commit' });
@@ -403,6 +404,8 @@ describe('TuiAdapter', () => {
     await waitFor(() => expect(sendEvent).toHaveBeenCalledWith({ type: 'PR_APPROVED' }));
     await adapter.stop();
     expect(afterExit()).toContain('Agent completed');
+    expect(afterExit()).not.toContain('hidden agent play-by-play');
+    expect(afterExit()).toContain("The agent's step-by-step log is in the installer log");
     expect(afterExit()).toContain('✔ Commit the changes? No');
     expect(afterExit()).toContain('✔ Create a pull request? Yes');
     expect(afterExit()).toContain('synthetic warning');

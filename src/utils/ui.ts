@@ -115,7 +115,11 @@ function emit(kind: UiLineKind, message: string, rendered: string, terminal = IN
     pendingOutput.push(() => emit(kind, message, rendered, terminal));
     return;
   }
+  // Logs borrow the spinner line without ending/restarting its phase. Keep
+  // ownership here: adapters may still hold handles retired by another caller.
+  activeSpinner?.pause();
   console.log(terminal);
+  activeSpinner?.resume();
 }
 
 // Callers print what a question is about, then ask, in one synchronous run

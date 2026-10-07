@@ -33,7 +33,6 @@ export class CLIAdapter implements InstallerAdapter {
   // Queue for logs while prompt is active (parallel state issue)
   private pendingPrompts = 0;
   private pendingHandlers = new Set<Promise<void>>();
-  private spinnerMessage = '';
   private pendingLogs: Array<() => void> = [];
 
   // SIGINT handler for cleanup
@@ -45,7 +44,7 @@ export class CLIAdapter implements InstallerAdapter {
   // stops the queued sibling from opening a now-moot question.
   private promptAbort: AbortController | null = null;
 
-  // Last phase message shown on the agent spinner, restored after logging above it.
+  // Last phase message shown on the agent spinner.
   private lastAgentMessage = 'Running AI agent...';
   // Last file path rendered as a step line, to dedupe consecutive same-path ops.
   private lastFileOp: string | null = null;
@@ -60,7 +59,9 @@ export class CLIAdapter implements InstallerAdapter {
    * Queue a log call if a prompt is active, otherwise execute immediately.
    */
   private queueableLog(logFn: () => void): void {
-    if (this.pendingPrompts > 0) {
+    // Hosted lines go to the transcript, not through input. Deliver them now
+    // so the TUI can still classify agent play-by-play in its original phase.
+    if (this.pendingPrompts > 0 && !getUiHost()) {
       const host = getUiHost();
       this.pendingLogs.push(() => {
         // Normal stop drains before host teardown. An exit/signal hook cannot
@@ -218,7 +219,6 @@ export class CLIAdapter implements InstallerAdapter {
 
   /** ui owns replacement/retirement, including while a question is open. */
   private startSpinner(message: string): void {
-    this.spinnerMessage = message;
     this.spinner = ui.spinner();
     this.spinner.start(message);
   }
@@ -551,32 +551,14 @@ export class CLIAdapter implements InstallerAdapter {
   private handleAgentProgress = ({ step, detail }: InstallerEvents['agent:progress']): void => {
     const message = detail ? `${step}: ${detail}` : step;
     this.lastAgentMessage = message;
-    this.spinnerMessage = message;
     this.spinner?.message(message);
   };
-
-  /**
-   * Render a persistent line above the running spinner: stop the spinner to
-   * finalize its line, emit the log, then restart it on the last phase message.
-   * Mirrors the existing stop→log and stop→start-new-spinner precedents.
-   */
-  private logAboveSpinner(render: () => void): void {
-    this.queueableLog(() => {
-      // Inspect the phase at flush time, not when the log was queued: it may
-      // have finished or been replaced while the user was answering.
-      const wasRunning = this.spinner !== null;
-      this.spinner?.stop();
-      this.spinner = null;
-      render();
-      if (wasRunning) this.startSpinner(this.spinnerMessage);
-    });
-  }
 
   private logFileOp(verb: 'Creating' | 'Editing', path: string): void {
     if (path === this.lastFileOp) return; // dedupe consecutive same-path ops
     this.lastFileOp = path;
     const rel = relative(process.cwd(), path);
-    this.logAboveSpinner(() => ui.log.step(`${verb} ${chalk.dim(rel)}`));
+    this.queueableLog(() => ui.log.step(`${verb} ${chalk.dim(rel)}`));
   }
 
   private handleFileWrite = ({ path }: InstallerEvents['file:write']): void => {
@@ -589,7 +571,7 @@ export class CLIAdapter implements InstallerAdapter {
 
   private handleAgentTool = ({ detail }: InstallerEvents['agent:tool']): void => {
     const cmd = detail.length > 80 ? `${detail.slice(0, 77)}…` : detail;
-    this.logAboveSpinner(() => ui.log.step(`Running ${chalk.dim(cmd)}`));
+    this.queueableLog(() => ui.log.step(`Running ${chalk.dim(cmd)}`));
   };
 
   private handleValidationStart = (): void => {
