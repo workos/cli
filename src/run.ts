@@ -33,6 +33,8 @@ export type InstallerArgs = {
   createPr?: boolean;
   noGitCheck?: boolean;
   gitCheck?: boolean;
+  noAgentsMd?: boolean;
+  agentsMd?: boolean;
   direct?: boolean;
   tui?: boolean;
   noTui?: boolean;
@@ -76,6 +78,7 @@ function buildOptions(argv: InstallerArgs): InstallerOptions {
     noValidate: merged.noValidate ?? merged.validate === false,
     noBranch: merged.noBranch ?? merged.branch === false,
     noGitCheck: merged.noGitCheck ?? merged.gitCheck === false,
+    noAgentsMd: merged.noAgentsMd ?? merged.agentsMd === false,
     direct: merged.direct ?? false,
     noTui: merged.noTui ?? merged.tui === false,
     scaffold: merged.scaffold ?? false,

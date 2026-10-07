@@ -355,7 +355,10 @@ export const installerMachine = setup({
       throw new Error('createBranch not implemented - provide via machine.provide()');
     }),
     // Post-install actors
-    detectChanges: fromPromise<ChangeDetection, { installDir: string }>(async () => {
+    detectChanges: fromPromise<
+      ChangeDetection,
+      { installDir: string; integration?: string; options?: InstallerOptions }
+    >(async () => {
       throw new Error('detectChanges not implemented - provide via machine.provide()');
     }),
   },
@@ -972,7 +975,11 @@ export const installerMachine = setup({
           invoke: {
             id: 'detectChanges',
             src: 'detectChanges',
-            input: ({ context }) => ({ installDir: context.options.installDir }),
+            input: ({ context }) => ({
+              installDir: context.options.installDir,
+              integration: context.integration,
+              options: context.options,
+            }),
             onDone: { target: 'done', actions: ['assignChangeDetection', 'emitChangeDetection'] },
             onError: { target: 'done', actions: ['assignChangeDetectionError', 'emitChangeDetection'] },
           },

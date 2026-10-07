@@ -50,6 +50,7 @@ import {
   branchExists,
 } from '../utils/git-utils.js';
 import { detectChanges } from './post-install.js';
+import { writeAgentsMdAfterInstall } from './agents-md.js';
 import {
   assertSupportedNextJsRouter,
   getNextJsRouter,
@@ -668,7 +669,12 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
       }),
 
       // Post-install actors
-      detectChanges: fromPromise(async ({ input }) => detectChanges(input.installDir)),
+      detectChanges: fromPromise(async ({ input }) => {
+        // Reached only after a successful install, so the AGENTS.md block lands
+        // before change detection and shows up in the changed-files summary.
+        await writeAgentsMdAfterInstall(input);
+        return detectChanges(input.installDir);
+      }),
     },
   });
 

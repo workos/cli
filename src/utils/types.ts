@@ -107,6 +107,11 @@ export type InstallerOptions = {
   noGitCheck?: boolean;
 
   /**
+   * Skip writing the AuthKit block to AGENTS.md and the CLAUDE.md import
+   */
+  noAgentsMd?: boolean;
+
+  /**
    * Direct mode - bypass llm-gateway and use user's own Anthropic API key.
    * Requires ANTHROPIC_API_KEY environment variable.
    */

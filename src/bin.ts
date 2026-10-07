@@ -271,6 +271,11 @@ const installerOptions = {
     describe: 'Check for dirty working tree (use --no-git-check to skip)',
     type: 'boolean' as const,
   },
+  'agents-md': {
+    default: true,
+    describe: 'Write an AuthKit block to AGENTS.md and import it from CLAUDE.md (use --no-agents-md to skip)',
+    type: 'boolean' as const,
+  },
   scaffold: {
     default: false,
     describe: 'Scaffold a new Next.js app when run in an empty directory',
