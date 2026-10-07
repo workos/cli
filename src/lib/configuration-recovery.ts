@@ -29,7 +29,10 @@ export interface ConfigurationCredentials {
   clientId: string;
 }
 
-export function configurationRecoveryHint(): string {
+export function configurationRecoveryHint(dashboardSession = false): string {
+  if (dashboardSession) {
+    return `A dashboard session can be rejected before its local expiry; \`${formatWorkOSCommand('auth login')}\` alone may reuse it. If you choose to replace this CLI session, run \`${formatWorkOSCommand('auth logout')}\` then \`${formatWorkOSCommand('auth login')}\` in your host terminal, sign in to the same account, and retry setup for the same application. The installer will not log you out automatically. Alternatively, configure and verify the application's URLs manually in the WorkOS dashboard.`;
+  }
   return `Run \`${formatWorkOSCommand('auth login')}\` to check dashboard access, then retry setup for the same application, or configure its URLs manually in the WorkOS dashboard. A dashboard login does not itself replace a rejected API key.`;
 }
 
@@ -42,7 +45,7 @@ export async function recoverConfigurationAccess(
   rejected: { token: string } | { apiKey: string; clientId?: string },
   interactive = true,
 ): Promise<RecoveryResult> {
-  const hint = configurationRecoveryHint();
+  const hint = configurationRecoveryHint('token' in rejected);
   if (!interactive || !isPromptAllowed() || isJsonMode() || !process.stdin.isTTY) {
     return { reason: `Unauthorized. Interactive recovery is unavailable. ${hint}` };
   }
@@ -64,6 +67,14 @@ export async function recoverConfigurationAccess(
     const { ensureAuthenticated } = await import('./ensure-auth.js');
     const auth = await ensureAuthenticated();
     if (!auth.authenticated) return { reason: `Authentication check failed. ${hint}` };
+    const { getAccessToken } = await import('./credentials.js');
+    const token = getAccessToken();
+    if (!token) return { reason: `No usable dashboard session. ${hint}` };
+    if ('token' in rejected && token === rejected.token) {
+      // A local expiry check is not proof of server acceptance. Keep the session
+      // intact; replacing a rejected but unexpired login remains a manual choice.
+      return { reason: `The dashboard session is unchanged; the rejected session was not retried. ${hint}` };
+    }
     ui.log.info(
       auth.loginTriggered
         ? 'Signed in to WorkOS.'
@@ -71,14 +82,7 @@ export async function recoverConfigurationAccess(
           ? 'Dashboard session refreshed.'
           : 'Using the existing dashboard session; no new login was needed.',
     );
-    const { getAccessToken } = await import('./credentials.js');
-    const token = getAccessToken();
-    if (!token) return { reason: `No usable dashboard session. ${hint}` };
-    if ('token' in rejected) {
-      return token === rejected.token
-        ? { reason: `The dashboard session is unchanged; the rejected session was not retried. ${hint}` }
-        : { token };
-    }
+    if ('token' in rejected) return { token };
     if (!rejected.clientId)
       return { reason: `Cannot verify replacement credentials without the intended client ID. ${hint}` };
     const { fetchStagingCredentials } = await import('./staging-api.js');

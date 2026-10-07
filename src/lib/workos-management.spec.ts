@@ -241,6 +241,54 @@ describe('workos-management', () => {
       expect(ui.select).not.toHaveBeenCalled();
     });
 
+    it.each([undefined, 'https://requested.example/'])(
+      'preserves default-vs-explicit homepage semantics after replacing an unclaimed profile key (%s)',
+      async (homepageUrl) => {
+        const profile: EnvironmentConfig = { ...unclaimedEnv, clientId: pair.clientId };
+        getActiveEnvironment.mockReturnValue(profile);
+        let homepage = 'https://existing.example/';
+        const calls: FetchCall[] = [];
+        const request = vi.fn(async (url: string, init: RequestInit) => {
+          calls.push({ url, method: init.method! });
+          if (url.endsWith('/claim-nonces')) return Response.json({ nonce: 'fake_claim_nonce' });
+          const rejected = (init.headers as Record<string, string>).Authorization === `Bearer ${API_KEY}`;
+          if (rejected) return Response.json({}, { status: 401 });
+          if (url === HOMEPAGE_ENDPOINT) {
+            if (init.method === 'GET') return Response.json({ url: homepage });
+            homepage = JSON.parse(init.body as string).url;
+          }
+          return Response.json({}, { status: 201 });
+        });
+        vi.stubGlobal('fetch', request);
+
+        const result = await autoConfigureWorkOSEnvironment(API_KEY, INTEGRATION, PORT, {
+          clientId: pair.clientId,
+          homepageUrl,
+        });
+        expect(result?.recoveredCredentials).toEqual(pair);
+        expect(result?.redirectUri.success).toBe(true);
+        expect(result?.corsOrigin.success).toBe(true);
+        expect(profile.apiKey).toBe(API_KEY);
+        expect(ui.select).toHaveBeenCalledTimes(1);
+        if (homepageUrl) {
+          expect(result?.homepageUrl).toEqual({ success: true, alreadyExists: false });
+          expect(homepage).toBe(homepageUrl);
+          expect(homepageCalls(calls, 'PUT')).toHaveLength(1);
+          expect(ui.log.success).toHaveBeenCalledWith('WorkOS dashboard configured');
+        } else {
+          // A same-client staging pair does not transfer the old claim token's
+          // ownership or prove the environment is STILL unclaimed after login.
+          expect(result?.homepageUrl).toBeUndefined();
+          expect(homepage).toBe('https://existing.example/');
+          expect(homepageCalls(calls, 'PUT')).toHaveLength(0);
+          expect(calls.filter(({ url }) => url.endsWith('/claim-nonces'))).toHaveLength(1);
+          expect(ui.log.success).not.toHaveBeenCalled();
+          expect(ui.log.warn).toHaveBeenCalledWith(expect.stringContaining('homepage left unchanged'));
+          expect(rowFor('Homepage URL').status).toContain('not changed');
+        }
+      },
+    );
+
     it('never writes the homepage after its GET rejects authorization', async () => {
       const request = vi.fn(async (url: string) =>
         Response.json({}, { status: url === HOMEPAGE_ENDPOINT ? 401 : 201 }),

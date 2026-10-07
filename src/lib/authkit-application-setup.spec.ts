@@ -989,9 +989,15 @@ describe('Unauthorized configuration recovery', () => {
   });
 
   it.each(['nextjs', 'sveltekit'])(
-    'adopts an authoritative pair in %s post-agent files, state and subsequent options',
+    'adopts an authoritative pair in %s but leaves the unclaimed profile homepage explicitly incomplete',
     async (integration) => {
       const context = contextFor(directory, integration);
+      vi.mocked(getActiveEnvironment).mockReturnValue({
+        name: 'fake-unclaimed',
+        type: 'unclaimed',
+        ...context.credentials,
+        claimToken: 'fake_claim_token',
+      });
       const redirectKey = integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
       await writeFile(
         join(directory, '.env.local'),
@@ -1023,6 +1029,10 @@ describe('Unauthorized configuration recovery', () => {
       expect(JSON.stringify(result)).not.toContain(pair.apiKey);
       expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
       expect(fetchTeamEnvironments).not.toHaveBeenCalled();
+      expect(vi.mocked(getActiveEnvironment).mock.results.at(-1)?.value.apiKey).toBe('sk_test_fake_rejected');
+      expect(
+        request.mock.calls.every(([url]) => !url.endsWith('/app_homepage_url') && !url.endsWith('/claim-nonces')),
+      ).toBe(true);
     },
   );
 
@@ -1057,6 +1067,36 @@ describe('Unauthorized configuration recovery', () => {
       expect(context.credentials.apiKey).toBe('sk_test_fake_rejected');
       expect(context.options).not.toHaveProperty('apiKey');
       expect(await readFile(join(directory, '.env.local'), 'utf8')).toBe(before);
+    },
+  );
+
+  it.each(['failed', 'cancelled', 'not-authenticated'])(
+    'leaves post-agent files and target untouched when dashboard auth checking is %s',
+    async (outcome) => {
+      const context = contextFor(directory, 'nextjs');
+      const before = `WORKOS_API_KEY=${context.credentials.apiKey}\nWORKOS_CLIENT_ID=${setup.clientId}\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=${setup.redirectUri}\n`;
+      await writeFile(join(directory, '.env.local'), before);
+      vi.mocked(fetchTeamEnvironments).mockRejectedValueOnce(unauthorized());
+      if (outcome === 'not-authenticated')
+        vi.mocked(ensureAuthenticated).mockResolvedValue({
+          authenticated: false,
+          loginTriggered: true,
+          tokenRefreshed: false,
+        });
+      else
+        vi.mocked(ensureAuthenticated).mockRejectedValue(
+          outcome === 'cancelled' ? new CliExit(2) : new Error('fake_private_auth_error'),
+        );
+      await expect(configureNextjsApplicationUrls(context)).rejects.toMatchObject({
+        code: outcome === 'cancelled' ? 'cancelled' : 'auth_required',
+        message: expect.not.stringContaining('fake_private_auth_error'),
+      });
+      expect(await readFile(join(directory, '.env.local'), 'utf8')).toBe(before);
+      expect(context.credentials.apiKey).toBe('sk_test_fake_rejected');
+      expect(fetchTeamEnvironments).toHaveBeenCalledTimes(1);
+      expect(ui.select).toHaveBeenCalledTimes(1);
+      expect(dashboardGraphqlRequest).not.toHaveBeenCalled();
+      expect(globalThis.fetch).not.toHaveBeenCalled();
     },
   );
 
@@ -1180,18 +1220,41 @@ describe('Unauthorized configuration recovery', () => {
     expect(ensureAuthenticated).not.toHaveBeenCalled();
   });
 
-  it('does not retry an unchanged rejected dashboard session', async () => {
-    vi.mocked(getAccessToken).mockReturnValue('test-token');
-    vi.mocked(ensureAuthenticated).mockResolvedValue({
-      authenticated: true,
-      loginTriggered: false,
-      tokenRefreshed: false,
-    });
-    vi.mocked(fetchTeamEnvironments).mockRejectedValue(unauthorized());
-    await expect(configureAuthkitApplication(setup, setup.clientId)).rejects.toThrow('session is unchanged');
-    expect(fetchTeamEnvironments).toHaveBeenCalledTimes(1);
-    expect(ui.log.info).toHaveBeenCalledWith(expect.stringContaining('no new login'));
-  });
+  it.each([false, true])(
+    'keeps unchanged-session recovery manual, with callbackRegistered=%s',
+    async (callbackRegistered) => {
+      vi.mocked(getAccessToken).mockReturnValue('test-token');
+      vi.mocked(ensureAuthenticated).mockResolvedValue({
+        authenticated: true,
+        loginTriggered: false,
+        tokenRefreshed: false,
+      });
+      if (callbackRegistered) {
+        const original = vi.mocked(dashboardGraphqlRequest).getMockImplementation()!;
+        vi.mocked(dashboardGraphqlRequest).mockImplementation(async (name, options) => {
+          if (name === 'updateAuthkitApplication') throw unauthorized();
+          return original(name, options);
+        });
+      } else vi.mocked(fetchTeamEnvironments).mockRejectedValue(unauthorized());
+      const outcome = configureAuthkitApplication(setup, setup.clientId);
+      if (callbackRegistered) {
+        expect(await outcome).toMatchObject({
+          callbackRegistered: true,
+          verified: false,
+          reason: expect.stringContaining('auth login` alone may reuse'),
+        });
+      } else {
+        await expect(outcome).rejects.toMatchObject({
+          code: 'auth_required',
+          message: expect.stringContaining('auth login` alone may reuse'),
+        });
+      }
+      expect(fetchTeamEnvironments).toHaveBeenCalledTimes(1);
+      expect(ui.select).toHaveBeenCalledTimes(1);
+      expect(ui.log.info).not.toHaveBeenCalled();
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(['forbidden', 'network', 'message401'])('does not recover non-auth failures (%s)', async (failure) => {
     vi.mocked(fetchTeamEnvironments).mockRejectedValue(

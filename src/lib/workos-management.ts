@@ -28,7 +28,7 @@ export interface AutoConfigResult {
   recoveredCredentials?: ConfigurationCredentials;
   redirectUri: { success: boolean; alreadyExists: boolean };
   corsOrigin: { success: boolean; alreadyExists: boolean };
-  /** Absent when the homepage was left alone (see `autoConfigureWorkOSEnvironment`). */
+  /** Absent when the homepage was left alone; callback/CORS success does not imply complete setup. */
   homepageUrl?: { success: boolean; alreadyExists: boolean };
 }
 
@@ -304,7 +304,9 @@ async function autoConfigureOnce(
   // someone already chose one. Write only an explicit homepage or a default
   // for an environment the server still reports as unclaimed. Local claim
   // status can be stale. With a login, the later dashboard step reads the
-  // current value and fills an empty one.
+  // current value and fills an empty one. Recheck on recovery: a replacement
+  // staging pair does not transfer the stored claim token or prove the target
+  // is still unclaimed. Leave the default alone when ownership is unverified.
   const writeHomepage = Boolean(options.homepageUrl) || (await isUnclaimedEnvironmentKey(apiKey));
 
   ui.log.step('Configuring WorkOS dashboard settings...');
@@ -352,7 +354,11 @@ async function autoConfigureOnce(
     // Aligned key/value feedback: value in accent, a dim status for "already
     // existed" vs. a green status for a fresh create/update. The provenance row
     // comes first — it is the context for the three rows below it.
-    ui.log.success('WorkOS dashboard configured');
+    if (homepageUrl) ui.log.success('WorkOS dashboard configured');
+    else {
+      ui.log.warn('Callback and CORS configured; homepage left unchanged.');
+      ui.log.info('Check the homepage in the WorkOS dashboard, or supply --homepage-url to explicitly override it.');
+    }
     ui.rows([
       { key: 'Environment', value: describeCredentialProvenance(apiKey), statusKind: 'muted' },
       {
