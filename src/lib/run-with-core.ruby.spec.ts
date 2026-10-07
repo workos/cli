@@ -118,6 +118,7 @@ it.each([undefined, 'http://app.fizzy.localhost:3006/auth/callback'])(
       }),
       'client_synthetic',
       'sk_test_synthetic',
+      { adoptCredentials: undefined, interactive: false },
     );
     expect(vi.mocked(runAgent).mock.calls[0][1]).toContain(`WORKOS_REDIRECT_URI=${callback}`);
     expect(output.join('')).toContain(`Open ${origin} to test authentication`);
