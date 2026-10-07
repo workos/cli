@@ -45,8 +45,7 @@ export async function fetchStagingCredentials(accessToken: string): Promise<Stag
 
     logInfo('[staging-api] Response status:', res.status);
     if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      logError('[staging-api] Error response:', res.status, text);
+      logError('[staging-api] Error response:', res.status);
 
       if (res.status === 401) {
         throw new StagingApiError('Authentication expired. Please log in again.', 401);
@@ -58,7 +57,7 @@ export async function fetchStagingCredentials(accessToken: string): Promise<Stag
         throw new StagingApiError('No staging environment found. Create one in the WorkOS dashboard.', 404);
       }
 
-      throw new StagingApiError(`Failed to fetch credentials: ${res.status} ${text}`, res.status);
+      throw new StagingApiError(`Failed to fetch credentials: HTTP ${res.status}`, res.status);
     }
 
     const data = (await res.json()) as { clientId?: string; apiKey?: string; client_id?: string; api_key?: string };
@@ -80,8 +79,8 @@ export async function fetchStagingCredentials(accessToken: string): Promise<Stag
       logError('[staging-api] Request timed out');
       throw new StagingApiError('Request timed out. Check your network connection.');
     }
-    logError('[staging-api] Network error:', error instanceof Error ? error.message : 'Unknown');
-    throw new StagingApiError(`Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    logError('[staging-api] Network error');
+    throw new StagingApiError('Network error while fetching credentials.');
   } finally {
     clearTimeout(timeoutId);
   }

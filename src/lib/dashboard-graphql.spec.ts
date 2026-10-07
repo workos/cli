@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { dashboardGraphqlUpload, DashboardGraphqlError } from './dashboard-graphql.js';
+import { dashboardGraphqlRequest, dashboardGraphqlUpload, DashboardGraphqlError } from './dashboard-graphql.js';
 
 /**
  * Covers the multipart (`Upload`) transport. The plain JSON path is exercised
@@ -29,6 +29,29 @@ describe('dashboardGraphqlUpload', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it.each([401, 403])('retains HTTP %s on dashboard-session failures', async (status) => {
+    fetchMock.mockResolvedValue(new Response('private body', { status }));
+    await expect(dashboardGraphqlRequest('query {}', { token: 'fake-token' })).rejects.toMatchObject({
+      status,
+      message: expect.not.stringContaining('private body'),
+    });
+  });
+
+  it('recognizes explicit UNAUTHENTICATED errors, not arbitrary Unauthorized messages', async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({ errors: [{ message: 'private details', extensions: { code: 'UNAUTHENTICATED' } }] }),
+    );
+    await expect(dashboardGraphqlRequest('query {}', { token: 'fake-token' })).rejects.toMatchObject({
+      status: 401,
+      message: expect.not.stringContaining('private details'),
+    });
+    fetchMock.mockResolvedValue(Response.json({ errors: [{ message: 'Unauthorized' }] }));
+    await expect(dashboardGraphqlRequest('query {}', { token: 'fake-token' })).rejects.toMatchObject({
+      code: 'graphql_error',
+      status: undefined,
+    });
   });
 
   /** The FormData handed to fetch on the most recent call. */

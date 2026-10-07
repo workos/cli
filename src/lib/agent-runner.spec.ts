@@ -168,6 +168,33 @@ describe('installer prompt', () => {
     expect(initializeAgent).not.toHaveBeenCalled();
   });
 
+  it('forwards an accepted recovered pair to files, agent initialization and downstream options', async () => {
+    const pair = { apiKey: 'sk_test_fake_recovered', clientId: 'client_test' };
+    vi.mocked(autoConfigureWorkOSEnvironment).mockResolvedValueOnce({
+      redirectUri: { success: true, alreadyExists: false },
+      corsOrigin: { success: true, alreadyExists: false },
+      recoveredCredentials: pair,
+    });
+    const direct = { ...options, clientId: undefined };
+    await runAgentInstaller({ ...config, metadata: { ...config.metadata, integration: 'sveltekit' } }, direct);
+    expect(autoConfigureWorkOSEnvironment).toHaveBeenCalledWith(
+      'test-key',
+      'sveltekit',
+      expect.any(Number),
+      expect.objectContaining({ clientId: pair.clientId }),
+    );
+    expect(writeEnvLocal).toHaveBeenCalledWith(
+      direct.installDir,
+      expect.objectContaining({ WORKOS_API_KEY: pair.apiKey, WORKOS_CLIENT_ID: pair.clientId }),
+    );
+    expect(initializeAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ workOSApiKey: pair.apiKey }),
+      expect.objectContaining(pair),
+    );
+    expect(direct).toMatchObject(pair);
+    expect(vi.mocked(runAgent).mock.calls[0][1]).not.toContain(pair.apiKey);
+  });
+
   it('does not register a callback in the API-key environment when run directly', async () => {
     await runAgentInstaller(config, { ...options, clientId: undefined });
     expect(autoConfigureWorkOSEnvironment).not.toHaveBeenCalled();

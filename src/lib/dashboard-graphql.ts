@@ -48,7 +48,7 @@ export class DashboardGraphqlError extends Error {
 
 interface GraphqlResponseBody<T> {
   data?: T | null;
-  errors?: Array<{ message: string }>;
+  errors?: Array<{ message: string; extensions?: { code?: string } }>;
 }
 
 export interface DashboardGraphqlOptions {
@@ -151,6 +151,9 @@ async function sendDashboardRequest<T>(
   }
 
   if (body.errors?.length) {
+    if (body.errors.every((error) => error.extensions?.code === 'UNAUTHENTICATED')) {
+      throw new DashboardGraphqlError('The dashboard session was rejected.', 'forbidden', 401);
+    }
     throw new DashboardGraphqlError(body.errors.map((e) => e.message).join('; '), 'graphql_error');
   }
 
