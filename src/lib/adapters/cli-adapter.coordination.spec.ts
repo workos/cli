@@ -20,6 +20,8 @@ let questions: Array<{ message: string; answer: (value: never) => void }>;
 const drain = () => vi.advanceTimersByTimeAsync(1);
 const output = () => log.mock.calls.map(([chunk]) => String(chunk)).join('\n');
 const frames = () => write.mock.calls.map(([chunk]) => String(chunk)).join('');
+const scanQuestion = 'Found fixture.env. Check for existing WorkOS credentials?';
+const scaffoldQuestion = 'This directory is empty. Scaffold a new Next.js app with AuthKit here?';
 
 beforeEach(async () => {
   vi.useFakeTimers();
@@ -85,27 +87,28 @@ describe('CLI adapter with real UI coordination', () => {
 
   it('keeps two questions isolated through spinner replacement, logs and phase completion', async () => {
     emitter.emit('agent:start', {});
-    emitter.emit('postinstall:commit:prompt', {});
-    emitter.emit('postinstall:pr:prompt', {});
+    emitter.emit('credentials:env:prompt', { files: ['fixture.env'] });
+    emitter.emit('scaffold:prompt', { packageManager: 'bun' });
     await drain();
-    expect(questions.map((q) => q.message)).toEqual(['Commit the changes?']);
+    expect(questions.map((q) => q.message)).toEqual([scanQuestion]);
     write.mockClear();
     log.mockClear();
     emitter.emit('agent:tool', { kind: 'command', detail: 'synthetic tool' });
     emitter.emit('file:write', { path: '/fixture/callback.rb' });
     emitter.emit('agent:success', {});
-    emitter.emit('postinstall:commit:generating', {});
-    emitter.emit('postinstall:commit:success', { message: 'fixture only' });
-    emitter.emit('postinstall:pr:generating', {});
-    emitter.emit('postinstall:pr:pushing', {});
+    // Synthetic phase events only; no scaffolder, credential fetch or agent runs.
+    emitter.emit('scaffold:start', { packageManager: 'bun' });
+    emitter.emit('scaffold:complete', {});
+    emitter.emit('agent:start', {});
+    emitter.emit('agent:progress', { step: 'Synthetic current phase' });
     await vi.advanceTimersByTimeAsync(800);
     expect(write).not.toHaveBeenCalled();
     expect(log).not.toHaveBeenCalled();
 
     questions[0].answer(false as never);
     await drain();
-    expect(sendEvent).toHaveBeenCalledWith({ type: 'COMMIT_DECLINED' });
-    expect(questions.map((q) => q.message)).toEqual(['Commit the changes?', 'Create a pull request?']);
+    expect(sendEvent).toHaveBeenCalledWith({ type: 'ENV_SCAN_DECLINED' });
+    expect(questions.map((q) => q.message)).toEqual([scanQuestion, scaffoldQuestion]);
     emitter.emit('agent:tool', { kind: 'command', detail: 'second synthetic tool' });
     await vi.advanceTimersByTimeAsync(800);
     expect(write).not.toHaveBeenCalled();
@@ -113,15 +116,15 @@ describe('CLI adapter with real UI coordination', () => {
 
     questions[1].answer(true as never);
     await drain();
-    expect(sendEvent).toHaveBeenCalledWith({ type: 'PR_APPROVED' });
+    expect(sendEvent).toHaveBeenCalledWith({ type: 'SCAFFOLD_CONFIRMED' });
     expect(output()).toContain('Agent completed');
-    expect(output()).toContain('fixture only');
+    expect(output()).toContain('Next.js app created');
     expect(output()).toContain('callback.rb');
     expect(output()).toContain('second synthetic tool');
     write.mockClear();
     await vi.advanceTimersByTimeAsync(800);
-    expect(frames()).toContain('Pushing to remote...');
-    expect(frames()).not.toMatch(/Running AI|Generating commit/);
+    expect(frames()).toContain('Synthetic current phase');
+    expect(frames()).not.toMatch(/Running AI|Scaffolding/);
     expect(vi.getTimerCount()).toBe(1);
   });
 
@@ -162,8 +165,8 @@ describe('CLI adapter with real UI coordination', () => {
     '%s aborts open/queued prompts and retires all animation',
     async (end) => {
       emitter.emit('agent:start', {});
-      emitter.emit('postinstall:commit:prompt', {});
-      emitter.emit('postinstall:pr:prompt', {});
+      emitter.emit('credentials:env:prompt', { files: ['fixture.env'] });
+      emitter.emit('scaffold:prompt', { packageManager: 'bun' });
       await drain();
       write.mockClear();
       let stopped: Promise<void> | undefined;

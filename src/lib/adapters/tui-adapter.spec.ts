@@ -30,6 +30,12 @@ function create(overrides: Partial<ConstructorParameters<typeof TuiAdapter>[0]> 
 }
 
 const frame = () => stripAnsi(stdout.lastFrame('WorkOS AuthKit installer'));
+const scanQuestion = 'Found fixture.env. Check for existing WorkOS credentials?';
+const scaffoldQuestion = 'This directory is empty. Scaffold a new Next.js app with AuthKit here?';
+const queuePhaseQuestions = () => {
+  emitter.emit('credentials:env:prompt', { files: ['fixture.env'] });
+  emitter.emit('scaffold:prompt', { packageManager: 'bun' });
+};
 /** Everything written after the full screen closed. */
 const afterExit = () => {
   const output = stdout.output();
@@ -379,35 +385,36 @@ describe('TuiAdapter', () => {
   it('keeps queued questions visible and answerable through phase/status replacement', async () => {
     await adapter.start();
     emitter.emit('agent:start', {});
-    emitter.emit('postinstall:commit:prompt', {});
-    emitter.emit('postinstall:pr:prompt', {});
-    await waitFor(() => expect(frame()).toContain('? Commit the changes?'));
+    queuePhaseQuestions();
+    await waitFor(() => expect(frame()).toContain(`? ${scanQuestion}`));
     emitter.emit('agent:tool', { kind: 'command', detail: 'hidden agent play-by-play' });
     emitter.emit('agent:success', { summary: 'Rails fixture: no validation' });
-    emitter.emit('postinstall:commit:generating', {});
-    emitter.emit('postinstall:commit:success', { message: 'fixture commit' });
-    emitter.emit('postinstall:pr:generating', {});
-    emitter.emit('postinstall:pr:pushing', {});
+    emitter.emit('scaffold:start', { packageManager: 'bun' });
+    emitter.emit('scaffold:complete', {});
+    emitter.emit('agent:start', {});
+    emitter.emit('agent:progress', { step: 'Synthetic current phase' });
     emitter.emit('agent:tool', { kind: 'command', detail: 'synthetic tool log' });
     // The status bar deliberately yields to prompt key hints while input is open.
     await new Promise((resolve) => setTimeout(resolve, 240));
-    expect(frame()).toContain('? Commit the changes?');
+    expect(frame()).toContain(`? ${scanQuestion}`);
     stdin.press('n');
-    await waitFor(() => expect(sendEvent).toHaveBeenCalledWith({ type: 'COMMIT_DECLINED' }));
-    await waitFor(() => expect(frame()).toContain('? Create a pull request?'));
-    emitter.emit('postinstall:pr:failed', { error: 'synthetic warning' });
+    await waitFor(() => expect(sendEvent).toHaveBeenCalledWith({ type: 'ENV_SCAN_DECLINED' }));
+    await waitFor(() => expect(frame()).toContain(`? ${scaffoldQuestion}`));
+    emitter.emit('validation:issues', {
+      issues: [{ type: 'file', severity: 'warning', message: 'synthetic warning' }],
+    });
     await waitFor(() => {
-      expect(frame()).toContain('? Create a pull request?');
+      expect(frame()).toContain(`? ${scaffoldQuestion}`);
       expect(frame()).toContain('synthetic warning');
     });
     stdin.press('y');
-    await waitFor(() => expect(sendEvent).toHaveBeenCalledWith({ type: 'PR_APPROVED' }));
+    await waitFor(() => expect(sendEvent).toHaveBeenCalledWith({ type: 'SCAFFOLD_CONFIRMED' }));
     await adapter.stop();
     expect(afterExit()).toContain('Agent completed');
     expect(afterExit()).not.toContain('hidden agent play-by-play');
     expect(afterExit()).toContain("The agent's step-by-step log is in the installer log");
-    expect(afterExit()).toContain('✔ Commit the changes? No');
-    expect(afterExit()).toContain('✔ Create a pull request? Yes');
+    expect(afterExit()).toContain(`✔ ${scanQuestion} No`);
+    expect(afterExit()).toContain(`✔ ${scaffoldQuestion} Yes`);
     expect(afterExit()).toContain('synthetic warning');
   });
 
@@ -416,18 +423,17 @@ describe('TuiAdapter', () => {
     const listeners = stdin.listenerCount('readable');
     await adapter.start();
     emitter.emit('agent:start', {});
-    emitter.emit('postinstall:commit:prompt', {});
-    emitter.emit('postinstall:pr:prompt', {});
-    await waitFor(() => expect(frame()).toContain('? Commit the changes?'));
+    queuePhaseQuestions();
+    await waitFor(() => expect(frame()).toContain(`? ${scanQuestion}`));
     emitter.emit('agent:tool', { kind: 'command', detail: 'buffered before stop' });
-    emitter.emit('postinstall:commit:generating', {});
+    emitter.emit('scaffold:start', { packageManager: 'bun' });
     await adapter.stop();
     const stoppedOutput = stdout.output();
     await new Promise((resolve) => setTimeout(resolve, 240));
     expect(stdout.output()).toBe(stoppedOutput);
     expect(write).not.toHaveBeenCalled();
-    expect(stdout.output()).not.toContain('? Create a pull request?');
-    expect(afterExit()).toContain('✗ Commit the changes? cancelled');
+    expect(stdout.output()).not.toContain(`? ${scaffoldQuestion}`);
+    expect(afterExit()).toContain(`✗ ${scanQuestion} cancelled`);
     expect(afterExit()).not.toContain('buffered before stop');
     expect(afterExit()).toContain("The agent's step-by-step log is in the installer log");
     expect(stdin.listenerCount('readable')).toBe(listeners);
@@ -442,15 +448,14 @@ describe('TuiAdapter', () => {
     const write = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     await adapter.start();
     emitter.emit('agent:start', {});
-    emitter.emit('postinstall:commit:prompt', {});
-    emitter.emit('postinstall:pr:prompt', {});
-    await waitFor(() => expect(frame()).toContain('? Commit the changes?'));
+    queuePhaseQuestions();
+    await waitFor(() => expect(frame()).toContain(`? ${scanQuestion}`));
     emitter.emit('agent:tool', { kind: 'command', detail: 'late tool log' });
     const hook = process.listeners('exit').at(-1) as () => void;
     hook();
     await new Promise((resolve) => setTimeout(resolve, 240));
     expect(write).not.toHaveBeenCalled();
-    expect(stdout.output()).not.toContain('? Create a pull request?');
+    expect(stdout.output()).not.toContain(`? ${scaffoldQuestion}`);
     expect(process.listenerCount('SIGINT')).toBe(sigintListeners);
     expect(emitter.listenerCount('agent:start')).toBe(0);
     expect(stdin.rawMode).toBe(false);

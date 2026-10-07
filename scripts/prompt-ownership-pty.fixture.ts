@@ -53,7 +53,7 @@ const config = {
       emitter.emit('complete', { success: false, summary: 'Synthetic cancellation' });
       finished();
     }
-    if (event.type === 'PR_APPROVED') finished();
+    if (event.type === 'SCAFFOLD_CONFIRMED') finished();
   },
 };
 const adapter =
@@ -76,14 +76,14 @@ try {
     emitter.emit('git:dirty', { files: ['synthetic.rb'] });
     emitter.emit('branch:prompt', { branch: 'main' });
   } else {
-    emitter.emit('postinstall:commit:prompt', {});
-    emitter.emit('postinstall:pr:prompt', {});
+    emitter.emit('credentials:env:prompt', { files: ['fixture.env'] });
+    emitter.emit('scaffold:prompt', { packageManager: 'bun' });
   }
   await delay(350);
   emitter.emit('agent:success', { summary: 'Synthetic Rails/no-validation completion' });
-  emitter.emit('postinstall:commit:generating', {});
-  emitter.emit('postinstall:pr:generating', {});
-  emitter.emit('postinstall:pr:pushing', {});
+  emitter.emit('scaffold:start', { packageManager: 'bun' });
+  emitter.emit('agent:start', {});
+  emitter.emit('agent:progress', { step: 'Synthetic current phase' });
   emitter.emit('agent:tool', { kind: 'command', detail: 'synthetic-no-op' });
   await report('replaced');
   if (scenario === 'stop') await delay(400);
@@ -95,7 +95,7 @@ try {
   assert(!process.listeners('SIGINT').includes(cliSigint));
   assert.equal(process.stdin.listenerCount('readable'), inputBefore);
   assert.equal(emitter.listenerCount('agent:start'), 0);
-  if (scenario === 'answers') assert.deepEqual(events, ['COMMIT_DECLINED', 'PR_APPROVED']);
+  if (scenario === 'answers') assert.deepEqual(events, ['ENV_SCAN_DECLINED', 'SCAFFOLD_CONFIRMED']);
   if (scenario === 'cancel') assert(events.includes('GIT_CANCELLED'));
   // Leave the process alive long enough to detect orphaned redraw intervals.
   await delay(400);

@@ -71,19 +71,30 @@ def run(mode, scenario, home):
             pump()
 
     try:
-        question = b"Continue anyway?" if scenario == "cancel" else b"Commit the changes?"
+        question = b"Continue anyway?" if scenario == "cancel" else b"Found fixture.env. Check for existing WorkOS credentials?"
+        second_question = b"Scaffold a new Next.js app with AuthKit here?"
         wait(lambda: question in output)
         wait(lambda: "replaced" in stages())
         hold(0.1)  # Let Ink's batched frame finish, then hold input open for 3 ticks.
         if mode == "tui":
             assert b"\x1b[?1049h" in output, "missing alternate-screen entry"
             assert question in output[-6000:], "question missing from recent Ink frame"
+            wait(lambda: output.endswith(b"\x1b[?2026l"))
         before = len(output)
         hold(0.24)
-        assert len(output) == before, f"output while awaiting input: {output[before:]!r}"
+        if mode == "cli":
+            assert len(output) == before, f"output while awaiting input: {output[before:]!r}"
+        elif len(output) > before:
+            # Ink may animate an active task while input is open. Every redraw
+            # must be a complete synchronized frame retaining the question;
+            # a plain facade spinner/erase outside those frames is forbidden.
+            wait(lambda: output.endswith(b"\x1b[?2026l"))
+            for frame in output[before:].split(b"\x1b[?2026l")[:-1]:
+                assert frame.startswith(b"\x1b[?2026h"), f"unhosted output: {frame!r}"
+                assert question in frame, f"question lost during redraw: {frame!r}"
         if scenario == "answers":
             os.write(master, b"n" if mode == "tui" else b"n\r")
-            wait(lambda: b"Create a pull request?" in output[before:])
+            wait(lambda: second_question in output[before:])
             hold(0.1)
             os.write(master, b"y" if mode == "tui" else b"y\r")
         elif scenario == "cancel":
@@ -104,8 +115,8 @@ def run(mode, scenario, home):
         if scenario == "cancel":
             assert b"Create a feature branch?" not in output, "moot queued question opened"
         if scenario == "stop":
-            assert b"Create a pull request?" not in output, "queued question escaped teardown"
-        print(f"PASS {mode}/{scenario}: real PTY 100x30; input, quiet timers, cleanup verified")
+            assert second_question not in output, "queued question escaped teardown"
+        print(f"PASS {mode}/{scenario}: real PTY 100x30; prompt ownership, input, cleanup verified")
     finally:
         if child.poll() is None:
             os.killpg(child.pid, signal.SIGKILL)
