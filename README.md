@@ -71,6 +71,7 @@ Depending on your framework, the installer creates:
 - ✅ SDK installation with correct package manager
 - ✅ UI components showing login status
 - ✅ User info display (name, email)
+- ✅ An AuthKit block in `AGENTS.md`, imported from `CLAUDE.md`, so coding agents use the installed SDK's APIs (JavaScript frameworks; see [Installer Options](#installer-options))
 
 ## Credentials
 
@@ -549,6 +550,7 @@ workos install [options]
   --commit / --no-commit  Deprecated compatibility-only no-ops
   --create-pr             Deprecated compatibility-only no-op (never publishes)
   --no-git-check          Skip git dirty working tree check
+  --no-agents-md          Don't write the AuthKit block to AGENTS.md or the CLAUDE.md import
   --force-install         Force install packages even if peer dependency checks fail
   --no-tui                Use plain line-by-line output instead of the full-screen installer
   --debug                 Enable verbose logging
@@ -565,6 +567,20 @@ work; inspection is scoped to `--install-dir`. Each of its two Git commands is
 limited to 5 seconds and 1 MiB of buffered output. If inspection hits either
 limit, it reports unknown changed files (not “no changes”); review the project
 manually. Partial output is never presented as a complete file list.
+
+**AGENTS.md:** After a successful install, the installer writes a short AuthKit
+block to `AGENTS.md` for coding agents: the SDK package and installed version,
+where its README is in `node_modules`, the auth files it set up, the env var
+**names** it wrote (never values), stale APIs to avoid for that version, and
+what not to undo. Next.js, React Router, and TanStack Start get a tailored block;
+React, vanilla JS, SvelteKit, and Node.js (Express) get a shorter generic one.
+Other frameworks get no block yet, and none is written if the installed SDK
+version can't be read. The block sits between `<!-- BEGIN:workos-authkit -->`
+and `<!-- END:workos-authkit -->`: rerunning the installer replaces it in place,
+and nothing outside the markers is touched. `AGENTS.md` is created if missing.
+`CLAUDE.md` gets an `@AGENTS.md` import line if it doesn't already have one, or
+is created with just that line. A failed or cancelled install writes neither
+file. Pass `--no-agents-md` to skip both, in any mode.
 
 **Full-screen installer:** In an interactive terminal of at least 80×24,
 `workos install` opens a full-screen view: a plain-English walkthrough of what

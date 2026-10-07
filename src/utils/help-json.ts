@@ -2140,6 +2140,14 @@ const commands: CommandSchema[] = [
         hidden: false,
       },
       {
+        name: 'agents-md',
+        type: 'boolean',
+        description: 'Write an AuthKit block to AGENTS.md and import it from CLAUDE.md (use --no-agents-md to skip)',
+        required: false,
+        default: true,
+        hidden: false,
+      },
+      {
         name: 'tui',
         type: 'boolean',
         description: 'Use the full-screen installer in an interactive terminal (use --no-tui for plain output)',

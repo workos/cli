@@ -172,6 +172,15 @@ The installer prompt in `agent-runner.ts` tells Claude to:
 
 To change instructions, edit `buildIntegrationPrompt()` in `lib/agent-runner.ts`.
 
+### Updating the AGENTS.md Block
+
+`src/lib/agents-md.ts` builds the AuthKit block written to a project's
+`AGENTS.md` after a successful install. Only add a stale-API trap you have
+verified against the SDK's changelog or package for a specific version, and gate
+it with `atLeast(version, ...)`. Update the snapshots in
+`src/lib/__snapshots__/agents-md.spec.ts.snap` with `bunx vitest run src/lib/agents-md.spec.ts -u`
+and review the diff.
+
 ### Adding Security Features
 
 Credential redaction is in `utils/redact.ts`. Add patterns:
