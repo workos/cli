@@ -60,9 +60,9 @@ The harness uses Python's standard-library PTY facilities, ephemeral HOME/config
 
 Ink's `restore-cursor` dependency deliberately keeps a process-exit hook. Its final show-cursor escape is allowed after teardown; text, erasure, animation and prompts are not.
 
-### Full checks and build
+### Worker-local full checks and build
 
-Latest complete run:
+Earlier successful worker-local run (not the supervisor's independent result):
 
 ```sh
 bun run test && bun run typecheck && bun run lint && bun run format:check
@@ -75,6 +75,43 @@ bun run build
 - Dependency installation: `bun install --frozen-lockfile`; no lockfile change. Generation remained in this worktree.
 
 **Baseline flake, not fixed here:** two full-suite attempts failed in `src/doctor/checks/skills-fix.spec.ts:180/183`, seeing either `null` or only `workos` instead of `workos` plus `workos-widgets`. The test passed in isolation. An untouched archive of the base commit, created and run entirely inside this worktree with its own temp directory, reproduced the missing-widget failure (3202 passed / 1 failed). A subsequent final check on this branch passed in full. Riker may encounter this existing parallel skills-extraction test flake. The temporary baseline archive was removed.
+
+### Supervisor typecheck timeout investigation
+
+**Independent verification remains unresolved.** The supervisor reported 3228 passing tests, successful generation, then no completion after `$ tsc --noEmit` before its **600-second overall timeout**. That failure is authoritative for the independent check. The compiler's own exit status is unknown; a timeout is not evidence that tsc returned a nonzero status. No timestamp, raw failed-run log, captured environment or stalled process sample was available from the supervisor. The earlier worker-local passes above do not supersede this result.
+
+One bounded local reproduction was run at **2026-09-28 14:57:17 -05:00** on unchanged implementation commit `16c103d`. It used the supervisor launch shape reported by Riker from source: `/bin/sh -c`, detached session, stdin `/dev/null`, stdout and stderr in separate pipes, and inherited environment. This matches the reported launcher shape, not a verified deployed supervisor environment. The exact command was unchanged:
+
+```sh
+bun run test && bun run typecheck && bun run lint && bun run format:check
+```
+
+A temporary Python observer drained both pipes concurrently, timestamped stage markers, sampled only the launched process group, and imposed the same **600-second ceiling**. It did not inject environment overrides, change compiler flags, skip stages, or kill unrelated processes. Only one reproduction was run; no timeout increase or retry loop was used.
+
+| Local stage                               | Exit status | Observed wall duration |
+| ----------------------------------------- | ----------- | ---------------------- |
+| `bun run test`, including generation      | 0           | 8.458s                 |
+| `bun run typecheck`, including generation | 0           | 2.727s                 |
+| `bun run lint`                            | 0           | 0.108s                 |
+| `bun run format:check`                    | 0           | 0.541s                 |
+| Entire shell chain and pipe EOF           | **0**       | **11.834s**            |
+
+Stage boundaries were observed from Bun's stderr launch markers, so durations include small observer/scheduling overhead rather than being compiler profiler measurements. Individual successful statuses follow from advancement through `&&`; the final shell status was collected directly. Vitest reported **170 files / 3228 tests passed**, with its internal duration **7.81s**. TypeScript, oxlint and oxfmt all completed.
+
+Concrete local diagnostics:
+
+- Bun **1.4.2** resolved to `/Users/nicknisi/.local/share/mise/installs/bun/latest/bin/bun`.
+- Node **v24.19.0** resolved to `/Users/nicknisi/.local/share/mise/installs/node/24.19.0/bin/node`.
+- Local `node_modules/.bin/tsc` resolves to `node_modules/typescript/bin/tsc`, TypeScript **5.9.3**. `package.json`, `bun.lock`, `tsconfig.json` and `vitest.config.ts` are unchanged from the task base.
+- Only the named non-secret environment details were inspected: `NODE_OPTIONS`, `BUN_OPTIONS`, and `CI` unset; `SHELL=/opt/homebrew/bin/zsh`; `TERM=tmux-256color`; inherited PATH resolves the executables above. The actual launched shell was explicitly `/bin/sh`, not `$SHELL`. The supervisor's corresponding values are unknown.
+- Shell PID **89055** launched Bun PID **90307**, which launched compiler PID **90334**: `node /Users/nicknisi/.riker/worktrees/13/node_modules/.bin/tsc --noEmit`.
+- The compiler command marker appeared at **+8.801s**; lint's marker appeared at **+11.185s**. Compiler samples showed running state, CPU time progressing from **0.64s to 4.79s**, and maximum sampled RSS **623920 KiB**. This was an actively executing compiler, not an observed child/pipe stall.
+- `lsof` on that compiler confirmed this worktree as cwd, fd 0 `/dev/null`, and fds 1/2 as pipes. Both pipes reached EOF. The launched process group was empty at **+11.915s**; a subsequent PID check found neither shell nor compiler alive.
+- No identifiable stalled tsc process or supervisor log was present when this investigation began. The machine's earlier load averages were **6.58 / 6.39 / 8.39**, but there is no corresponding snapshot from the supervisor failure; this does not establish resource contention as its cause.
+
+**Conclusion: local reproduction passed; supervisor timeout cause unestablished.** No reproducible job-local defect was identified, so no implementation, dependency, compiler or global configuration change was made. A diagnosis of the independent timeout still needs its raw timestamped output, resolved runtimes/selected environment, and compiler/parent process state and pipe status during the actual stall. Do not infer a compiler, child-process, resource-contention, environment or transport cause from the timeout alone. This is distinct from the separately reproduced skills-test flake above.
+
+This follow-up changes verification documentation only. The original PR216 attribution, implementation commits, deterministic/fake-stream tests and six successful real-PTY scenarios remain unchanged. The temporary observer and logs were removed after recording these diagnostics.
 
 ## Limits and integration
 
