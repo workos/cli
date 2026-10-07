@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
@@ -136,6 +145,39 @@ describe('writeAgentsMdAfterInstall', () => {
     expect(read('AGENTS.md')).not.toContain('@AGENTS.md');
   });
 
+  it('leaves AGENTS.md alone across runs when an opening marker has no closing marker', async () => {
+    nextjsProject();
+    const original = `# Notes\n${AGENTS_MD_BEGIN}\nmy notes\n`;
+    write('AGENTS.md', original);
+    await expect(run()).resolves.toBeUndefined();
+    await expect(run()).resolves.toBeUndefined();
+    expect(read('AGENTS.md')).toBe(original);
+    expect(existsSync(join(dir, 'CLAUDE.md'))).toBe(false);
+  });
+
+  it('refuses to pair a stray opening marker with a later block', () => {
+    const stray = `${AGENTS_MD_BEGIN}\nmy notes\n${AGENTS_MD_BEGIN}\nold\n${AGENTS_MD_END}\n`;
+    expect(() => upsertBlock(stray, 'B')).toThrow(/unmatched/);
+  });
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'does not overwrite an AGENTS.md or CLAUDE.md it cannot read',
+    async () => {
+      nextjsProject();
+      write('AGENTS.md', '# private notes\n');
+      chmodSync(join(dir, 'AGENTS.md'), 0o200); // writable, not readable
+      await expect(run()).resolves.toBeUndefined();
+      chmodSync(join(dir, 'AGENTS.md'), 0o600);
+      expect(read('AGENTS.md')).toBe('# private notes\n');
+
+      write('CLAUDE.md', '# claude notes\n');
+      chmodSync(join(dir, 'CLAUDE.md'), 0o200);
+      await run();
+      chmodSync(join(dir, 'CLAUDE.md'), 0o600);
+      expect(read('CLAUDE.md')).toBe('# claude notes\n');
+    },
+  );
+
   it('writes neither file with --no-agents-md', async () => {
     nextjsProject();
     await expect(run('nextjs', { noAgentsMd: true })).resolves.toBeUndefined();
@@ -199,6 +241,33 @@ describe('block content', () => {
     write('app/routes/login.ts', 'const { url, headers } = await getSignInUrl(undefined, request);\n');
     env(['WORKOS_CLIENT_ID=client_123', 'WORKOS_REDIRECT_URI=http://localhost:5173/callback']);
     expect(await block('react-router')).toMatchSnapshot();
+  });
+
+  it.each([
+    ['app/routes/auth.callback.tsx', 'export const loader = authLoader;\n'],
+    ['src/routes/auth/callback.tsx', "export { authLoader as loader } from '@workos-inc/authkit-react-router';\n"],
+    ['app/auth/callback.tsx', 'export const loader = authLoader({ returnPathname: "/" });\n'],
+  ])('React Router finds the callback at %s', async (file, source) => {
+    installed('@workos-inc/authkit-react-router', '0.13.0');
+    write('app/root.tsx', 'export const loader = (args) => authkitLoader(args);\n');
+    write(file, source);
+    const redirectUri = 'http://localhost:5173/auth/callback';
+    env(['WORKOS_CLIENT_ID=client_123', `WORKOS_REDIRECT_URI=${redirectUri}`]);
+    const text = await buildAuthkitBlock('react-router', (await gatherFacts(dir, 'react-router', redirectUri))!);
+    expect(text).toContain(`\`${file}\`: the OAuth callback at \`/auth/callback\``);
+    expect(text).toContain('Keep the OAuth callback at `/auth/callback`');
+  });
+
+  it('TanStack Start finds authkitMiddleware in app/start.tsx', async () => {
+    installed('@workos/authkit-tanstack-react-start', '0.11.1');
+    write(
+      'app/start.tsx',
+      'export const startInstance = createStart(() => ({ requestMiddleware: [authkitMiddleware()] }));\n',
+    );
+    env(['WORKOS_CLIENT_ID=client_123', 'WORKOS_REDIRECT_URI=http://localhost:3000/api/auth/callback']);
+    const text = await block('tanstack-start');
+    expect(text).toContain('Keep `authkitMiddleware()` in `app/start.tsx`');
+    expect(text).not.toContain('createCsrfMiddleware');
   });
 
   it('generic JS integration (SvelteKit) names only what the installer wrote', async () => {

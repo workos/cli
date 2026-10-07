@@ -46,7 +46,7 @@ exports[`block content > React Router 1`] = `
 
 ### Set up by the installer
 
-- \`app/routes/callback.ts\`: the OAuth callback at \`/callback\` (\`authLoader()\`).
+- \`app/routes/callback.ts\`: the OAuth callback at \`/callback\` (\`authLoader\`).
 - \`app/routes/login.ts\`: calls \`getSignInUrl()\` to start sign-in.
 
 ### Stale APIs to avoid

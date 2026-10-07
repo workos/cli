@@ -189,11 +189,12 @@ async function nextjsSection(facts: AuthkitFacts): Promise<string[]> {
 
 async function reactRouterSection(facts: AuthkitFacts): Promise<string[]> {
   const { installDir: dir, version, callbackPath } = facts;
-  const callback = await findSourceContaining(dir, 'app/**/*.{ts,tsx,js,jsx}', 'authLoader(');
-  const signIn = await findSourceContaining(dir, 'app/routes/**/*.{ts,tsx,js,jsx}', 'getSignInUrl(');
+  // `authLoader` as a word: called, assigned, or re-exported (`export { authLoader as loader }`).
+  const callback = await findCallbackRoute(dir, callbackPath, /\bauthLoader\b/);
+  const signIn = await findSourceContaining(dir, '{app,src}/routes/**/*.{ts,tsx,js,jsx}', 'getSignInUrl(');
   return [
     ...setUp([
-      callback && `\`${callback}\`: the OAuth callback at \`${callbackPath}\` (\`authLoader()\`).`,
+      callback && `\`${callback}\`: the OAuth callback at \`${callbackPath}\` (\`authLoader\`).`,
       signIn && `\`${signIn}\`: calls \`getSignInUrl()\` to start sign-in.`,
     ]),
     ...traps([
@@ -206,9 +207,13 @@ async function reactRouterSection(facts: AuthkitFacts): Promise<string[]> {
 
 async function tanstackStartSection(facts: AuthkitFacts): Promise<string[]> {
   const { installDir: dir, version, callbackPath } = facts;
-  const start = await firstFileContaining(dir, ['src/start.ts', 'src/start.tsx', 'app/start.ts'], 'authkitMiddleware');
+  const start = await firstFileContaining(
+    dir,
+    ['src/start.ts', 'src/start.tsx', 'app/start.ts', 'app/start.tsx'],
+    'authkitMiddleware',
+  );
   const startSource = start ? await readFile(join(dir, start), 'utf-8') : '';
-  const callback = await findSourceContaining(dir, '{src,app}/routes/**/*.{ts,tsx,js,jsx}', 'handleCallbackRoute(');
+  const callback = await findCallbackRoute(dir, callbackPath, 'handleCallbackRoute');
   const signIn = await findSourceContaining(dir, '{src,app}/routes/**/*.{ts,tsx,js,jsx}', 'getSignInUrl(');
   return [
     ...setUp([
@@ -292,10 +297,15 @@ async function readEnvNames(installDir: string): Promise<string[]> {
   return INSTALLER_ENV_NAMES.filter((name) => names.has(name));
 }
 
-async function firstFileContaining(dir: string, candidates: string[], needle: string): Promise<string | undefined> {
+async function firstFileContaining(
+  dir: string,
+  candidates: string[],
+  needle: string | RegExp,
+): Promise<string | undefined> {
   for (const file of candidates) {
     try {
-      if ((await readFile(join(dir, file), 'utf-8')).includes(needle)) return file;
+      const source = await readFile(join(dir, file), 'utf-8');
+      if (typeof needle === 'string' ? source.includes(needle) : needle.test(source)) return file;
     } catch {
       // Missing candidate.
     }
@@ -303,9 +313,33 @@ async function firstFileContaining(dir: string, candidates: string[], needle: st
   return undefined;
 }
 
-async function findSourceContaining(dir: string, pattern: string, needle: string): Promise<string | undefined> {
+async function findSourceContaining(
+  dir: string,
+  pattern: string,
+  needle: string | RegExp,
+): Promise<string | undefined> {
   const files = (await fg(pattern, { cwd: dir, ignore: ['**/node_modules/**'] })).sort();
   return firstFileContaining(dir, files, needle);
+}
+
+/**
+ * The React Router / TanStack Start route file for `urlPath` that uses `needle`:
+ * the conventional nested or flat file under app/routes or src/routes first
+ * (as the validator checks), then any source file using it (e.g. config-based routes).
+ */
+async function findCallbackRoute(dir: string, urlPath: string, needle: string | RegExp): Promise<string | undefined> {
+  const path = urlPath.replace(/^\/+|\/+$/g, '');
+  const conventional = ['app', 'src'].flatMap((root) =>
+    [path, path.replace(/\//g, '.')].flatMap((name) =>
+      ['', '/index', '/route', '.index', '.route'].flatMap((suffix) =>
+        ['ts', 'tsx', 'js', 'jsx'].map((ext) => `${root}/routes/${name}${suffix}.${ext}`),
+      ),
+    ),
+  );
+  return (
+    (await firstFileContaining(dir, conventional, needle)) ??
+    findSourceContaining(dir, '{app,src}/**/*.{ts,tsx,js,jsx}', needle)
+  );
 }
 
 /** The App Router `route.*` file serving `urlPath`, ignoring `(group)` segments. */
@@ -349,8 +383,10 @@ async function upsertFile(path: string, update: (existing: string) => string): P
   let existing: string | undefined;
   try {
     existing = await readFile(path, 'utf-8');
-  } catch {
-    existing = undefined;
+  } catch (error) {
+    // Only a missing file may be created. Any other read error (permissions, a
+    // directory) stops the update rather than overwriting what we couldn't read.
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
   const next = update(existing ?? '');
   if (next === existing) return 'unchanged';
@@ -367,11 +403,15 @@ export function upsertBlock(existing: string, block: string): string {
   const eol = detectEol(existing);
   const normalized = block.replace(/\r?\n/g, eol);
   const start = existing.indexOf(AGENTS_MD_BEGIN);
-  const end = start === -1 ? -1 : existing.indexOf(AGENTS_MD_END, start);
-  if (end !== -1) {
-    return existing.slice(0, start) + normalized + existing.slice(end + AGENTS_MD_END.length);
+  if (start === -1) return existing + appendSeparator(existing, eol) + normalized + eol;
+  const end = existing.indexOf(AGENTS_MD_END, start);
+  // An unmatched or repeated opening marker can't be paired safely: appending a
+  // block would let a later run replace the user's text between the markers.
+  const nextStart = existing.indexOf(AGENTS_MD_BEGIN, start + 1);
+  if (end === -1 || (nextStart !== -1 && nextStart < end)) {
+    throw new Error(`AGENTS.md has an unmatched ${AGENTS_MD_BEGIN} marker; fix the markers and rerun.`);
   }
-  return existing + appendSeparator(existing, eol) + normalized + eol;
+  return existing.slice(0, start) + normalized + existing.slice(end + AGENTS_MD_END.length);
 }
 
 function ensureImport(existing: string): string {
