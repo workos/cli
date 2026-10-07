@@ -1,0 +1,127 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`block content > Next.js 1`] = `
+"<!-- BEGIN:workos-authkit -->
+
+## WorkOS AuthKit
+
+\`workos install\` set up authentication for Next.js with \`@workos-inc/authkit-nextjs\` 4.4.0. Its API may differ from your training data: read \`node_modules/@workos-inc/authkit-nextjs/README.md\` before changing auth code.
+
+### Set up by the installer
+
+- \`src/proxy.ts\`: runs AuthKit on matched requests. \`withAuth()\` only works on routes it covers.
+- \`src/app/auth/callback/route.ts\`: the OAuth callback at \`/auth/callback\`.
+- \`src/app/(auth)/sign-in/route.ts\`: starts sign-in at \`/sign-in\`.
+
+### Stale APIs to avoid
+
+- Read the session with \`withAuth()\`. There is no \`getUser\` export.
+- Import \`AuthKitProvider\` and \`useAuth\` from \`@workos-inc/authkit-nextjs/components\`, not the package root.
+- Start sign-in with \`getSignInUrl()\` in a route handler or server action, or \`refreshAuth({ ensureSignedIn: true })\` from a client click handler. The callback checks a state cookie these set, so a hand-built authorization URL fails with "OAuth state mismatch".
+- Sign out by calling \`signOut()\` from a server action or POST handler, never a GET route: link prefetching would log users out.
+
+### Don't undo
+
+- Keep \`src/proxy.ts\` at the same level as \`src/app/\`; Next.js ignores a proxy file anywhere else. Next.js 16 renamed \`middleware.ts\` to \`proxy.ts\`, so renaming it back is wrong too.
+- Keep the OAuth callback at \`/auth/callback\`: it must match \`NEXT_PUBLIC_WORKOS_REDIRECT_URI\` and the redirect URI registered in WorkOS.
+
+### Environment
+
+Names only. The values live in \`.env.local\`, which is git-ignored; don't copy them into code or commit them.
+
+- \`WORKOS_API_KEY\`, \`WORKOS_CLIENT_ID\`, \`NEXT_PUBLIC_WORKOS_REDIRECT_URI\`, \`WORKOS_COOKIE_PASSWORD\`
+- \`WORKOS_API_KEY\` and \`WORKOS_COOKIE_PASSWORD\` are server-only. Never give them a \`NEXT_PUBLIC_\` prefix or read them in client components.
+
+\`workos install\` wrote this block and replaces it when it runs again. Keep your own notes outside the markers.
+
+<!-- END:workos-authkit -->"
+`;
+
+exports[`block content > React Router 1`] = `
+"<!-- BEGIN:workos-authkit -->
+
+## WorkOS AuthKit
+
+\`workos install\` set up authentication for React Router with \`@workos-inc/authkit-react-router\` 0.13.0. Its API may differ from your training data: read \`node_modules/@workos-inc/authkit-react-router/README.md\` before changing auth code.
+
+### Set up by the installer
+
+- \`app/routes/callback.ts\`: the OAuth callback at \`/callback\` (\`authLoader()\`).
+- \`app/routes/login.ts\`: calls \`getSignInUrl()\` to start sign-in.
+
+### Stale APIs to avoid
+
+- \`getSignInUrl()\` and \`getSignUpUrl()\` return \`{ url, headers }\`, not a string. Return \`redirect(url, { headers })\` from a loader or action; a URL rendered into a \`<Link>\` drops the PKCE cookie and the callback rejects the sign-in.
+
+### Don't undo
+
+- Keep the OAuth callback at \`/callback\`: it must match \`WORKOS_REDIRECT_URI\` and the redirect URI registered in WorkOS.
+
+### Environment
+
+Names only. The values live in \`.env.local\`, which is git-ignored; don't copy them into code or commit them.
+
+- \`WORKOS_API_KEY\`, \`WORKOS_CLIENT_ID\`, \`WORKOS_REDIRECT_URI\`, \`WORKOS_COOKIE_PASSWORD\`
+- \`WORKOS_API_KEY\` and \`WORKOS_COOKIE_PASSWORD\` are server-only. Never expose them to browser code.
+
+\`workos install\` wrote this block and replaces it when it runs again. Keep your own notes outside the markers.
+
+<!-- END:workos-authkit -->"
+`;
+
+exports[`block content > TanStack Start 1`] = `
+"<!-- BEGIN:workos-authkit -->
+
+## WorkOS AuthKit
+
+\`workos install\` set up authentication for TanStack Start with \`@workos/authkit-tanstack-react-start\` 0.11.1. Its API may differ from your training data: read \`node_modules/@workos/authkit-tanstack-react-start/README.md\` before changing auth code.
+
+### Set up by the installer
+
+- \`src/start.ts\`: registers \`authkitMiddleware()\` in \`requestMiddleware\`.
+- \`src/routes/api/auth/callback.tsx\`: the OAuth callback at \`/api/auth/callback\` (\`handleCallbackRoute()\`).
+- \`src/routes/api/auth/sign-in.tsx\`: calls \`getSignInUrl()\` to start sign-in.
+
+### Stale APIs to avoid
+
+- Start every sign-in from \`getSignInUrl()\`. The callback requires the per-flow PKCE cookie it sets; a flow that skips it fails with \`PKCECookieMissingError\`.
+- \`AuthKitProvider\` and \`useAuth\` come from \`@workos/authkit-tanstack-react-start/client\`; server helpers come from the package root.
+
+### Don't undo
+
+- Keep \`authkitMiddleware()\` in \`src/start.ts\`. Without it, server helpers throw "AuthKit middleware is not configured".
+- Keep \`createCsrfMiddleware\` ahead of it: defining \`startInstance\` turns off TanStack Start's default CSRF protection, and this restores it.
+- Keep the OAuth callback at \`/api/auth/callback\`: it must match \`WORKOS_REDIRECT_URI\` and the redirect URI registered in WorkOS.
+
+### Environment
+
+Names only. The values live in \`.env.local\`, which is git-ignored; don't copy them into code or commit them.
+
+- \`WORKOS_API_KEY\`, \`WORKOS_CLIENT_ID\`, \`WORKOS_REDIRECT_URI\`, \`WORKOS_COOKIE_PASSWORD\`
+- \`WORKOS_API_KEY\` and \`WORKOS_COOKIE_PASSWORD\` are server-only. Never expose them to browser code.
+
+\`workos install\` wrote this block and replaces it when it runs again. Keep your own notes outside the markers.
+
+<!-- END:workos-authkit -->"
+`;
+
+exports[`block content > generic JS integration (SvelteKit) names only what the installer wrote 1`] = `
+"<!-- BEGIN:workos-authkit -->
+
+## WorkOS AuthKit
+
+\`workos install\` set up authentication for SvelteKit with \`@workos/authkit-sveltekit\` 0.3.0. Its API may differ from your training data: read \`node_modules/@workos/authkit-sveltekit/README.md\` before changing auth code.
+
+- Keep the OAuth callback at \`/callback\`: it must match \`WORKOS_REDIRECT_URI\` and the redirect URI registered in WorkOS.
+
+### Environment
+
+Names only. The values live in \`.env.local\`, which is git-ignored; don't copy them into code or commit them.
+
+- \`WORKOS_API_KEY\`, \`WORKOS_CLIENT_ID\`, \`WORKOS_REDIRECT_URI\`, \`WORKOS_COOKIE_PASSWORD\`
+- \`WORKOS_API_KEY\` and \`WORKOS_COOKIE_PASSWORD\` are server-only. Never expose them to browser code.
+
+\`workos install\` wrote this block and replaces it when it runs again. Keep your own notes outside the markers.
+
+<!-- END:workos-authkit -->"
+`;

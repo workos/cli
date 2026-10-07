@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -284,5 +284,52 @@ describe('installer leaves changes uncommitted through the real parser and orche
     expect(result.stdout).toContain('cancelled');
     expect(result.evidence.some((e) => e.kind === 'agent-options')).toBe(false);
     expect(result.evidence.filter((e) => e.kind === 'prompt').map((e) => e.value)).toEqual(['Continue anyway?']);
+  });
+});
+
+describe('AGENTS.md block through the real parser and orchestrator', () => {
+  const agentFiles = ['AGENTS.md', 'CLAUDE.md'];
+  const exists = (file: string) => existsSync(join(project, file));
+  beforeEach(() => {
+    // The fake vanilla-js install "installed" its SDK; the block needs its version.
+    mkdirSync(join(project, 'node_modules/@workos-inc/authkit-js'), { recursive: true });
+    writeFileSync(join(project, 'node_modules/@workos-inc/authkit-js/package.json'), '{"version":"0.20.4"}');
+    writeFileSync(join(project, '.gitignore'), '.env*\nnode_modules\n');
+  });
+
+  it('writes AGENTS.md and CLAUDE.md after a successful install, without secret values', () => {
+    const result = run([...install, '--json']);
+    expectSuccess(result);
+    const complete = events(result.stdout).find((e) => e.type === 'complete');
+    expect(complete.files).toEqual(expect.arrayContaining(agentFiles));
+    const agents = readFileSync(join(project, 'AGENTS.md'), 'utf8');
+    expect(agents).toContain('`@workos-inc/authkit-js` 0.20.4');
+    expect(readFileSync(join(project, 'CLAUDE.md'), 'utf8')).toBe('@AGENTS.md\n');
+    const secrets = readFileSync(join(project, '.env.local'), 'utf8')
+      .split('\n')
+      .map((line) => line.split('=').slice(1).join('='))
+      .filter(Boolean);
+    expect(secrets).toEqual(expect.arrayContaining(['sk_test_offline']));
+    for (const file of agentFiles) {
+      for (const secret of secrets) expect(readFileSync(join(project, file), 'utf8')).not.toContain(secret);
+    }
+  });
+
+  const ci = ['install', '--api-key', 'sk_test_offline', '--client-id', 'client_offline'];
+  it.each([
+    { mode: 'ci', args: ci, flag: [], written: true },
+    { mode: 'ci', args: ci, flag: ['--no-agents-md'], written: false },
+    { mode: 'agent', args: install, flag: [], written: true },
+    { mode: 'agent', args: install, flag: ['--no-agents-md'], written: false },
+  ])('$mode mode with $flag writes the files: $written', ({ mode, args, flag, written }) => {
+    const result = run([...args, '--install-dir', project, ...flag], { WORKOS_MODE: mode });
+    expectSuccess(result);
+    for (const file of agentFiles) expect(exists(file)).toBe(written);
+  });
+
+  it('a failed install writes neither file', () => {
+    const result = run([...install, '--json'], { TEST_AGENT: 'fail' });
+    expect(result.status).toBe(1);
+    for (const file of agentFiles) expect(exists(file)).toBe(false);
   });
 });
