@@ -56,7 +56,8 @@ import {
   assertNextjsSignInRouteAvailable,
 } from '../integrations/nextjs/utils.js';
 import { detectPort, getClientEnvPrefix, getSignInPath, resolveRedirectUri } from './port-detection.js';
-import { writeEnvLocal } from './env-writer.js';
+import { writeEnvLocal, replaceRecoveredEnvCredentials } from './env-writer.js';
+import type { ConfigurationCredentials } from './configuration-recovery.js';
 import { getRegistry } from './registry.js';
 import { observeHostFailure } from './host-probe.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
@@ -239,6 +240,53 @@ export async function configureInstallEnvironment(
   step('env-vars', 'done');
 }
 
+async function credentialAdopter(
+  context: Pick<InstallerMachineContext, 'options' | 'integration'> &
+    Partial<Pick<InstallerMachineContext, 'credentials'>>,
+  clientId: string,
+  apiKey?: string,
+): Promise<((pair: ConfigurationCredentials) => Promise<void>) | undefined> {
+  if (
+    !apiKey ||
+    !context.credentials ||
+    !context.integration ||
+    (await getRegistry()).get(context.integration)?.config.metadata.language !== 'javascript'
+  )
+    return undefined;
+  return async (pair) => {
+    await replaceRecoveredEnvCredentials(context.options.installDir, { apiKey, clientId }, pair);
+    Object.assign(context.credentials!, pair);
+    Object.assign(context.options, pair);
+  };
+}
+
+/** The actual post-agent Next.js path: validate the saved app before any URL writes. */
+export async function configureNextjsApplicationUrls(
+  context: Pick<InstallerMachineContext, 'options' | 'credentials' | 'emitter' | 'integration'>,
+): Promise<AuthkitApplicationSetup> {
+  const { options, credentials, emitter } = context;
+  const setup = await readNextjsApplicationSetup(options.installDir, options.homepageUrl);
+  if (setup.redirectUri !== resolveRedirectUri('nextjs', options)) {
+    throw new Error('The app callback URL changed during installation. Confirm it before configuring WorkOS.');
+  }
+  const validation = await validateInstallation('nextjs', options.installDir, { runBuild: false });
+  if (!validation.passed) {
+    throw new Error(
+      `Application setup is incomplete:\n${validation.issues
+        .filter((issue) => issue.severity === 'error')
+        .map((issue) => `${issue.message}. ${issue.hint ?? ''}`)
+        .join('\n')}`,
+    );
+  }
+  const adopt = await credentialAdopter(context, credentials?.clientId ?? '', credentials?.apiKey);
+  return reportAppUrlSetup(emitter, () =>
+    configureAuthkitApplication(setup, credentials?.clientId ?? '', credentials?.apiKey, {
+      adoptCredentials: adopt,
+      interactive: !options.ci,
+    }),
+  );
+}
+
 export const NO_SIGN_IN_ROUTE_REASON = 'This framework has no fixed sign-in route to use.';
 
 /**
@@ -278,7 +326,8 @@ export async function reportAppUrlSetup(
  * target selected here. An unregistered callback fails the install.
  */
 export async function configureOtherApplicationUrls(
-  context: Pick<InstallerMachineContext, 'options' | 'integration' | 'emitter'>,
+  context: Pick<InstallerMachineContext, 'options' | 'integration' | 'emitter'> &
+    Partial<Pick<InstallerMachineContext, 'credentials'>>,
   clientId: string,
   apiKey?: string,
 ): Promise<AuthkitApplicationSetup | undefined> {
@@ -303,9 +352,18 @@ export async function configureOtherApplicationUrls(
     delete setup.initiateLoginUri;
     setup.initiateLoginReason = `Client-side ${signInPath} requires browser verification. Confirm it starts sign-in without a click, then set the Initiate login URI in the WorkOS dashboard. The existing setting was left unchanged.`;
   }
-  return reportAppUrlSetup(context.emitter, () => configureAuthkitApplication(setup, clientId, apiKey), {
-    includeCors: true,
-  });
+  const adopt = await credentialAdopter(context, clientId, apiKey);
+  return reportAppUrlSetup(
+    context.emitter,
+    () =>
+      configureAuthkitApplication(setup, clientId, apiKey, {
+        adoptCredentials: adopt,
+        interactive: !installerOptions.ci,
+      }),
+    {
+      includeCors: true,
+    },
+  );
 }
 
 /** Pick the installer adapter for this process's output mode and terminal. */
@@ -480,32 +538,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
           const summary = await runIntegrationInstallerFn(integration, agentOptions);
           let applicationSetup;
           if (integration === 'nextjs') {
-            applicationSetup = await readNextjsApplicationSetup(
-              installerOptions.installDir,
-              installerOptions.homepageUrl,
-            );
-            const expectedRedirectUri = resolveRedirectUri(integration, installerOptions);
-            if (applicationSetup.redirectUri !== expectedRedirectUri) {
-              throw new Error(
-                'The app callback URL changed during installation. Confirm it before configuring WorkOS.',
-              );
-            }
-            // Even --no-validate must not point the dashboard at a missing route.
-            const validation = await validateInstallation(integration, installerOptions.installDir, {
-              runBuild: false,
-            });
-            if (!validation.passed) {
-              throw new Error(
-                `Application setup is incomplete:\n${validation.issues
-                  .filter((issue) => issue.severity === 'error')
-                  .map((issue) => `${issue.message}. ${issue.hint ?? ''}`)
-                  .join('\n')}`,
-              );
-            }
-            const setup = applicationSetup;
-            applicationSetup = await reportAppUrlSetup(context.emitter, () =>
-              configureAuthkitApplication(setup, credentials?.clientId ?? '', credentials?.apiKey),
-            );
+            applicationSetup = await configureNextjsApplicationUrls(context);
           } else if (credentials?.clientId) {
             applicationSetup = await configureOtherApplicationUrls(context, credentials.clientId, credentials.apiKey);
           }
