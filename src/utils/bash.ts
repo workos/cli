@@ -1,4 +1,4 @@
-import * as child_process from "child_process";
+import * as child_process from 'child_process';
 
 export function executeSync(command: string): string {
   const output = child_process.execSync(command);
