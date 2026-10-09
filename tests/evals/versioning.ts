@@ -46,7 +46,7 @@ export async function captureVersionMetadata(): Promise<VersionMetadata> {
   return {
     skillVersions,
     cliVersion: getVersion(),
-    modelVersion: getConfig().model,
+    modelVersion: process.env.EVAL_MODEL ?? getConfig().model,
   };
 }
 
