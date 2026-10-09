@@ -1,5 +1,8 @@
-import { createEmulator, type EmulatorSeedConfig } from '@workos/emulate';
+// Type-only: the compiled-in package stays the compile-time contract even when
+// a runtime-downloaded bundle provides the implementation (emulate-loader.ts).
+import type { EmulatorSeedConfig } from '@workos/emulate';
 import { resolveDevCommand } from '../lib/dev-command.js';
+import { resolveCreateEmulator } from '../lib/emulate-loader.js';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -89,6 +92,7 @@ export async function runDev(argv: DevArgs): Promise<void> {
   const seedConfig = userSeed ?? DEFAULT_DEV_SEED;
 
   // 1. Start emulator
+  const createEmulator = await resolveCreateEmulator();
   const emulator = await createEmulator({
     port: argv.port,
     seed: seedConfig,
