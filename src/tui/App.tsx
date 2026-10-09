@@ -5,9 +5,9 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text, useInput, useWindowSize } from 'ink';
 import type { RunModel } from './model/run-model.js';
-import { useRunSnapshot, useTerminalSize } from './hooks.js';
+import { useRunSnapshot } from './hooks.js';
 import { colors, MIN_COLUMNS, MIN_ROWS, SIDE_BY_SIDE_MIN_COLUMNS, SIDE_BY_SIDE_MIN_ROWS } from './theme.js';
 import { COMPACT_HEADER_ROWS, FULL_HEADER_ROWS, Header } from './components/Header.js';
 import { ProgressLine, TaskList } from './components/TaskList.js';
@@ -43,7 +43,7 @@ function keyFor(prompt: object): number {
 
 export function InstallerApp({ model, answer, interrupt, projectName, tipIntervalMs = 12_000 }: InstallerAppProps) {
   const snapshot = useRunSnapshot(model);
-  const [columns, rows] = useTerminalSize();
+  const { columns, rows } = useWindowSize();
   const [tipIndex, setTipIndex] = useState(0);
 
   useEffect(() => {
