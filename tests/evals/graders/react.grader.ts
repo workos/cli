@@ -26,11 +26,10 @@ export class ReactGrader implements Grader {
   async grade(): Promise<GradeResult> {
     const checks: GradeCheck[] = [];
 
-    // Check AuthKitProvider wrapper exists in entry file
-    // Can be main.tsx (Vite) or index.tsx (CRA)
+    // AuthKitProvider may live in the entry file or an app-owned provider module
     checks.push(
       await this.fileGrader.checkFileWithPattern(
-        'src/{main,index}.tsx',
+        'src/**/*.tsx',
         ['AuthKitProvider', '@workos-inc/authkit-react'],
         'AuthKitProvider configured with correct SDK',
       ),
@@ -46,12 +45,12 @@ export class ReactGrader implements Grader {
       ),
     );
 
-    // Check environment config in entry file
+    // Env config is read where AuthKitProvider is configured
     // Supports both Vite (import.meta.env) and CRA (process.env)
     checks.push(
       await this.fileGrader.checkFileWithPattern(
-        'src/{main,index}.tsx',
-        [/VITE_WORKOS_CLIENT_ID|REACT_APP_WORKOS_CLIENT_ID|import\.meta\.env|process\.env/],
+        'src/**/*.tsx',
+        ['AuthKitProvider', /VITE_WORKOS_CLIENT_ID|REACT_APP_WORKOS_CLIENT_ID|import\.meta\.env|process\.env/],
         'Environment variable configuration',
       ),
     );
