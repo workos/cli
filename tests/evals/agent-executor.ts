@@ -137,7 +137,7 @@ export class AgentExecutor {
 
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: this.workDir,
-      model: getConfig().model,
+      model: process.env.EVAL_MODEL ?? getConfig().model,
       allowedTools: ['Skill', 'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch'],
       sdkEnv,
       claudeExecutablePath: await ensureClaudeCodeExecutable(),
