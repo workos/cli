@@ -109,7 +109,7 @@ const { getConfig, saveConfig, setInsecureConfigStorage, clearConfig } = await i
 const { provisionStagingEnvironment, runLogin } = await import('./login.js');
 const { maybeRunSetupAfter } = await import('./setup.js');
 const { isJsonMode, outputJson } = await import('../utils/output.js');
-const { clearCredentials, setInsecureStorage } = await import('../lib/credentials.js');
+const { clearCredentials, setInsecureStorage, saveCredentials, getCredentials } = await import('../lib/credentials.js');
 const { resetInteractionModeForTests, setInteractionMode } = await import('../utils/interaction-mode.js');
 const uiMod = await import('../utils/ui.js');
 
@@ -149,6 +149,30 @@ describe('login', () => {
     try {
       rmdirSync(testDir);
     } catch {}
+  });
+
+  it('reuses a locally unexpired session even when a dashboard request previously rejected it', async () => {
+    const rejectedSession = {
+      accessToken: 'fake_revoked_but_unexpired_token',
+      refreshToken: 'fake_refresh_token',
+      expiresAt: Date.now() + 3_600_000,
+      userId: 'fake_user',
+    };
+    saveCredentials(rejectedSession);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      await runLogin();
+      expect(log).toHaveBeenCalledWith(expect.stringContaining('Already logged in'));
+      expect(getCredentials()).toMatchObject(rejectedSession);
+      expect(mockOpen).not.toHaveBeenCalled();
+      expect(mockRequestDeviceCode).not.toHaveBeenCalled();
+      expect(mockPollForToken).not.toHaveBeenCalled();
+      expect(mockFetchStagingCredentials).not.toHaveBeenCalled();
+      expect(mockTryResolveProfileEnvironmentId).not.toHaveBeenCalled();
+      expect(maybeRunSetupAfter).not.toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
+    }
   });
 
   describe('provisionStagingEnvironment', () => {

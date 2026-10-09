@@ -1,3 +1,9 @@
+import {
+  isConfigurationUnauthorized,
+  recoverConfigurationAccess,
+  configurationRecoveryHint,
+  type ConfigurationCredentials,
+} from './configuration-recovery.js';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseEnvFile } from '../utils/env-parser.js';
@@ -102,6 +108,82 @@ export async function configureAuthkitApplication(
   setup: AuthkitApplicationSetup,
   expectedClientId: string,
   apiKey?: string,
+  options: {
+    adoptCredentials?: (credentials: ConfigurationCredentials) => Promise<void>;
+    interactive?: boolean;
+  } = {},
+): Promise<AuthkitApplicationSetup> {
+  const { adoptCredentials } = options;
+  const recovery: SetupRecovery = { retried: false };
+  try {
+    return await attempt();
+  } catch (error) {
+    if (!isConfigurationUnauthorized(error)) throw error;
+    if (recovery.transport === 'rest' && !adoptCredentials) {
+      return recovery.pending!(
+        `Unauthorized. Automatic key replacement is unavailable for this project's credential files. ${configurationRecoveryHint()}`,
+        'auth_required',
+      );
+    }
+    const recovered = await recoverConfigurationAccess(
+      recovery.transport === 'rest' ? { apiKey: apiKey!, clientId: expectedClientId } : { token: recovery.token ?? '' },
+      options.interactive,
+    );
+    if ('reason' in recovered) return recovery.pending!(recovered.reason, recovered.code ?? 'auth_required');
+    recovery.retried = true;
+    recovery.token = recovered.token;
+    const accepted = recovered.credentials;
+    if (accepted) apiKey = accepted.apiKey;
+    let result: AuthkitApplicationSetup;
+    try {
+      result = await attempt();
+    } catch (retryError) {
+      if (!isConfigurationUnauthorized(retryError)) throw retryError;
+      if (accepted) {
+        throw new InstallDeclinedError(
+          `Unauthorized recovery exhausted after one retry. The replacement API key was rejected; application credentials were left unchanged. Check any partially configured URLs. ${configurationRecoveryHint()}`,
+          'auth_required',
+        );
+      }
+      return recovery.pending!(
+        `Unauthorized recovery exhausted after one retry. ${configurationRecoveryHint()}`,
+        'auth_required',
+      );
+    }
+    // Never expose secrets on AuthkitApplicationSetup (it is emitted to adapters).
+    // The callback updates the file atomically before adopting shared state.
+    if (accepted) {
+      try {
+        await adoptCredentials!(accepted);
+      } catch {
+        throw new InstallDeclinedError(
+          'Recovered credentials could not be saved safely. Check local credentials and dashboard URLs before retrying.',
+          'credential_recovery_failed',
+        );
+      }
+    }
+    return result;
+  }
+
+  function attempt() {
+    return configureApplicationAttempt(setup, expectedClientId, apiKey, recovery);
+  }
+}
+
+interface SetupRecovery {
+  retried: boolean;
+  transport?: 'rest' | 'dashboard';
+  token?: string;
+  environmentId?: string;
+  applicationId?: string;
+  pending?: (reason: string, code?: string) => AuthkitApplicationSetup;
+}
+
+async function configureApplicationAttempt(
+  setup: AuthkitApplicationSetup,
+  expectedClientId: string,
+  apiKey: string | undefined,
+  recovery: SetupRecovery,
 ): Promise<AuthkitApplicationSetup> {
   if (setup.initiateLoginUri === undefined) {
     setup = {
@@ -114,12 +196,25 @@ export async function configureAuthkitApplication(
   // Never trust incoming registration flags; they belong to an earlier attempt.
   setup = { ...setup, signOutRegistered: false, ...(setup.corsOrigin !== undefined ? { corsRegistered: false } : {}) };
   let callbackRegistered = false;
-  const pending = (reason: string): AuthkitApplicationSetup => {
+  const pending = (reason: string, code = 'callback_unregistered'): AuthkitApplicationSetup => {
     if (!callbackRegistered) {
-      throw new InstallDeclinedError(`Callback URL is not registered or verified. ${reason}`, 'callback_unregistered');
+      throw new InstallDeclinedError(`Callback URL is not registered or verified. ${reason}`, code);
+    }
+    // A cancelled recovery is a cancelled install, even after a partial write:
+    // never let it continue to completion as an unverified success.
+    if (code === 'cancelled') {
+      throw new InstallDeclinedError(
+        `Setup cancelled after the callback URL was registered; the remaining settings are unverified. ${reason}`,
+        code,
+      );
     }
     return { ...setup, callbackRegistered, verified: false, reason };
   };
+  recovery.pending = (reason, code) =>
+    pending(
+      `${reason} For application ${setup.clientId}, check Callback URL: ${setup.redirectUri}; Sign-out URI: ${setup.signOutUri}${setup.initiateLoginUri ? `; Initiate login URI: ${setup.initiateLoginUri}` : ''}${setup.corsOrigin ? `; CORS origin: ${setup.corsOrigin}` : ''}.`,
+      code,
+    );
   const isSignOutDestination = (uri: string): boolean => {
     try {
       return new URL(uri).href === new URL(setup.signOutUri).href;
@@ -131,6 +226,7 @@ export async function configureAuthkitApplication(
     return pending('The app client ID changed during installation. Confirm the application before configuring it.');
   }
   const registerApiCallback = async (): Promise<AuthkitApplicationSetup> => {
+    recovery.transport = 'rest';
     if (!apiKey)
       return pending(
         'No usable dashboard environment or API key is available. Configure the callback in the dashboard.',
@@ -143,7 +239,8 @@ export async function configureAuthkitApplication(
     try {
       const { createWorkOSClient } = await import('./workos-client.js');
       await createWorkOSClient(apiKey).redirectUris.add(setup.redirectUri);
-    } catch {
+    } catch (error) {
+      if (isConfigurationUnauthorized(error)) throw error;
       return pending('Could not register the callback URL. Check the API key and connection, then retry setup.');
     }
     callbackRegistered = true;
@@ -151,7 +248,8 @@ export async function configureAuthkitApplication(
       try {
         await createCorsOrigin(apiKey, setup.corsOrigin);
         setup = { ...setup, corsRegistered: true };
-      } catch {
+      } catch (error) {
+        if (isConfigurationUnauthorized(error)) throw error;
         return pending(
           'Callback registered using the API key, but CORS origin setup failed. Check the application URLs in the dashboard.',
         );
@@ -166,7 +264,8 @@ export async function configureAuthkitApplication(
     }
     try {
       await setHomepageUrl(apiKey, setup.homepageUrl ?? new URL(setup.redirectUri).origin);
-    } catch {
+    } catch (error) {
+      if (isConfigurationUnauthorized(error)) throw error;
       return pending(
         'Callback registered using the API key, but homepage setup failed. Check the Homepage URL, Sign-out URI and Initiate login URI in the dashboard.',
       );
@@ -175,25 +274,38 @@ export async function configureAuthkitApplication(
       'Callback registered using the API key. Sign-out URI and Initiate login URI still require dashboard setup and verification. Sign in to the correct team (and claim the environment if needed) to manage those settings.',
     );
   };
-  const session = await refreshIfExpired().catch(() => {
-    throw new InstallDeclinedError(
-      'Callback URL is not registered or verified. Could not check the dashboard session. Retry setup.',
-      'callback_unregistered',
-    );
-  });
+  if (recovery.transport === 'rest') return registerApiCallback();
+  const session =
+    recovery.retried && recovery.token
+      ? { accessToken: recovery.token }
+      : await refreshIfExpired().catch((error: unknown) => {
+          if (isConfigurationUnauthorized(error)) throw error;
+          throw new InstallDeclinedError(
+            'Callback URL is not registered or verified. Could not check the dashboard session. Retry setup.',
+            'callback_unregistered',
+          );
+        });
   if (!session) return registerApiCallback();
+  recovery.token = session.accessToken;
+  recovery.transport = 'dashboard';
 
   try {
     const environments = await fetchTeamEnvironments(session.accessToken);
     const matches = environments.filter((environment) => environment.clientId === setup.clientId);
     // A session for another team must not disable API-key-only onboarding. No
     // dashboard mutation has happened, and this branch returns before any can.
-    if (matches.length === 0) return registerApiCallback();
+    // After a retry this stays safe only if the first attempt never selected a
+    // dashboard environment: every application read and write happens after that
+    // selection, so an unset target proves the fallback cannot follow a dashboard write.
+    if (matches.length === 0 && recovery.environmentId === undefined) return registerApiCallback();
     if (matches.length !== 1) return pending('Could not uniquely match the app client ID to a WorkOS environment.');
     const environment = matches[0];
     // Already validated by the team catalog and the application read below.
     // Do not resolve again: that would re-fetch and mutate stored profiles.
     const environmentId = environment.id;
+    if (recovery.environmentId && recovery.environmentId !== environmentId)
+      return pending('The WorkOS environment changed during recovery. No new target was configured.');
+    recovery.environmentId = environmentId;
     const request = <T>(name: string, variables: Record<string, unknown>): Promise<T> =>
       dashboardGraphqlRequest<T>(resolveExecutableDocument(getOperation(name)), {
         token: session.accessToken,
@@ -209,6 +321,7 @@ export async function configureAuthkitApplication(
         !application ||
         application.clientId !== setup.clientId ||
         !application.id ||
+        (recovery.applicationId !== undefined && application.id !== recovery.applicationId) ||
         !Array.isArray(application.logoutUris) ||
         !Array.isArray(application.redirectUris) ||
         !(application.initiateLoginUri === null || typeof application.initiateLoginUri === 'string') ||
@@ -223,6 +336,7 @@ export async function configureAuthkitApplication(
       return application;
     };
     let original = await readApplication();
+    recovery.applicationId = original.id;
     if (environment.sandbox !== true) {
       // Production can use an already registered callback, but is read-only here.
       callbackRegistered = original.redirectUris.some((uri) => uri.uri === setup.redirectUri);
@@ -410,7 +524,7 @@ export async function configureAuthkitApplication(
       verified: true,
     };
   } catch (error) {
-    if (error instanceof InstallDeclinedError) throw error;
+    if (error instanceof InstallDeclinedError || isConfigurationUnauthorized(error)) throw error;
     // Callback failures are fatal. Once it is confirmed, other settings may be
     // reported as incomplete, without exposing private backend errors or switching targets.
     return pending(

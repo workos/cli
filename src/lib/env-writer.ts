@@ -1,5 +1,7 @@
 import { existsSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { basename, join } from 'path';
+import { lstat, readFile, writeFile, rename, rm } from 'node:fs/promises';
+import type { ConfigurationCredentials } from './configuration-recovery.js';
 import { parseEnvFile } from '../utils/env-parser.js';
 
 const ENV_LOCAL_COVERING_PATTERNS = ['.env.local', '.env*.local', '.env*'];
@@ -188,6 +190,53 @@ export function writeEnvLocal(installDir: string, envVars: Partial<EnvVars>): vo
   ensureGitignore(installDir, '.env.local', ENV_LOCAL_COVERING_PATTERNS);
 
   writeSecretFile(envPath, upsertEnvLines(existingContent, vars), envExisted);
+}
+
+/**
+ * Read assignments with the line shapes `upsertEnvLines` rewrites (optional
+ * indentation and `export `). Last occurrence wins, like `parseEnvFile`, so a
+ * duplicate the writer would leave behind still shadows the update.
+ */
+function readAssignments(content: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const line of content.split(/\r?\n/)) {
+    const match = ENV_ASSIGNMENT.exec(line);
+    if (match) result[match[2]] = line.slice(match[0].length).trim();
+  }
+  return result;
+}
+
+/** Replace a recovered pair only in the known installer-owned file, before state adoption. */
+export async function replaceRecoveredEnvCredentials(
+  installDir: string,
+  previous: ConfigurationCredentials,
+  replacement: ConfigurationCredentials,
+): Promise<void> {
+  const path = join(installDir, '.env.local');
+  const info = await lstat(path);
+  if (!info.isFile()) throw new Error('Credential file is not a regular file.');
+  const content = await readFile(path, 'utf8');
+  const current = readAssignments(content);
+  if (current.WORKOS_API_KEY !== previous.apiKey || current.WORKOS_CLIENT_ID !== previous.clientId)
+    throw new Error('Local credentials changed during setup.');
+  const updated = upsertEnvLines(content, {
+    WORKOS_API_KEY: replacement.apiKey,
+    WORKOS_CLIENT_ID: replacement.clientId,
+  });
+  const parsed = readAssignments(updated);
+  if (parsed.WORKOS_API_KEY !== replacement.apiKey || parsed.WORKOS_CLIENT_ID !== replacement.clientId)
+    throw new Error('Cannot safely replace duplicate credential assignments.');
+  // Keep temporary secrets ignored even with a narrow .env.local ignore rule.
+  const temporaryName = `.env.local.recovery-${crypto.randomUUID()}`;
+  ensureGitignore(installDir, '.env.local.recovery-*', ['.env.local.recovery-*', '.env*']);
+  const temporary = join(installDir, temporaryName);
+  try {
+    await writeFile(temporary, updated, { flag: 'wx', mode: info.mode & 0o777 });
+    if ((await readFile(path, 'utf8')) !== content) throw new Error('Local credentials changed during recovery.');
+    await rename(temporary, path);
+  } finally {
+    await rm(temporary, { force: true });
+  }
 }
 
 /**

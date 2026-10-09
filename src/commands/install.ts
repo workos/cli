@@ -2,7 +2,7 @@ import { runInstaller } from '../run.js';
 import type { InstallerArgs } from '../run.js';
 import ui from '../utils/ui.js';
 import { exitWithError, isJsonMode } from '../utils/output.js';
-import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
+import { ExitCode, exitWithCode, resolveErrorCode } from '../utils/exit-codes.js';
 import { isCiMode } from '../utils/interaction-mode.js';
 import type { ArgumentsCamelCase } from 'yargs';
 import { InstallDeclinedError } from '../lib/installer-errors.js';
@@ -48,7 +48,7 @@ export async function handleInstall(argv: ArgumentsCamelCase<InstallerArgs>): Pr
       if (isJsonMode()) {
         exitWithError({ code: err.code, message: err.message });
       }
-      exitWithCode(ExitCode.GENERAL_ERROR);
+      exitWithCode(resolveErrorCode(err.code).exit);
     }
 
     const { getLogFilePath } = await import('../utils/debug.js');

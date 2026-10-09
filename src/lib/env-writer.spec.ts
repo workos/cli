@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { writeCredentialsEnv, writeEnvLocal } from './env-writer.js';
+import { writeCredentialsEnv, writeEnvLocal, replaceRecoveredEnvCredentials } from './env-writer.js';
 
 /** POSIX permission bits of `path`. */
 const modeOf = (path: string): number => statSync(path).mode & 0o777;
@@ -19,6 +19,50 @@ describe('writeEnvLocal', () => {
 
   afterEach(() => {
     rmSync(testDir, { recursive: true, force: true });
+  });
+
+  it('replaces recovered credentials written as exported assignments, keeping the export prefix', async () => {
+    const previous = { apiKey: 'sk_test_fake_old', clientId: 'client_fake' };
+    const replacement = { apiKey: 'sk_test_fake_new', clientId: 'client_fake' };
+    const path = join(testDir, '.env.local');
+    writeFileSync(
+      path,
+      `export WORKOS_API_KEY=${previous.apiKey}\n  export WORKOS_CLIENT_ID = ${previous.clientId}\nOTHER=value\n`,
+    );
+    await replaceRecoveredEnvCredentials(testDir, previous, replacement);
+    expect(readFileSync(path, 'utf8')).toBe(
+      `export WORKOS_API_KEY=${replacement.apiKey}\nexport WORKOS_CLIENT_ID=${replacement.clientId}\nOTHER=value\n`,
+    );
+  });
+
+  it('atomically replaces a recovered pair while preserving unrelated content and permissions', async () => {
+    const previous = { apiKey: 'sk_test_fake_old', clientId: 'client_fake' };
+    const replacement = { apiKey: 'sk_test_fake_new', clientId: 'client_fake' };
+    const path = join(testDir, '.env.local');
+    writeFileSync(
+      path,
+      `# keep\nWORKOS_API_KEY=${previous.apiKey}\nWORKOS_CLIENT_ID=${previous.clientId}\nOTHER=value\n`,
+      { mode: 0o600 },
+    );
+    await replaceRecoveredEnvCredentials(testDir, previous, replacement);
+    expect(readFileSync(path, 'utf8')).toBe(
+      `# keep\nWORKOS_API_KEY=${replacement.apiKey}\nWORKOS_CLIENT_ID=${replacement.clientId}\nOTHER=value\n`,
+    );
+    if (process.platform !== 'win32') expect(modeOf(path)).toBe(0o600);
+    expect(readFileSync(join(testDir, '.gitignore'), 'utf8')).toContain('.env.local.recovery-*');
+  });
+
+  it.each(['changed', 'duplicate'])('leaves files untouched when replacement is unsafe: %s', async (failure) => {
+    const previous = { apiKey: 'sk_test_fake_old', clientId: 'client_fake' };
+    const replacement = { apiKey: 'sk_test_fake_new', clientId: 'client_fake' };
+    const path = join(testDir, '.env.local');
+    const before =
+      failure === 'changed'
+        ? 'WORKOS_API_KEY=sk_test_fake_other\nWORKOS_CLIENT_ID=client_other\n'
+        : `WORKOS_API_KEY=${previous.apiKey}\nWORKOS_API_KEY=${previous.apiKey}\nWORKOS_CLIENT_ID=${previous.clientId}\n`;
+    writeFileSync(path, before);
+    await expect(replaceRecoveredEnvCredentials(testDir, previous, replacement)).rejects.toThrow();
+    expect(readFileSync(path, 'utf8')).toBe(before);
   });
 
   it('creates .env.local when none exists', () => {
