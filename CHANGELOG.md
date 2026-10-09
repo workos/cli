@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.0](https://github.com/workos/cli/compare/v0.23.0...v0.24.0) (2026-10-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* The npm package no longer exports a library API — `main`/`exports` are gone and it only provides the `workos` binary. Development now requires Bun >= 1.3.0 instead of Node >= 22.11.
+
+### Features
+
+* Download migrations and emulate bundles at runtime ([#203](https://github.com/workos/cli/issues/203)) ([b07f661](https://github.com/workos/cli/commit/b07f661f4f647c6afee5b9184a7507cb1fe418e8))
+* **skills:** offer to update stale skills after commands ([#237](https://github.com/workos/cli/issues/237)) ([6f27596](https://github.com/workos/cli/commit/6f275967d1e2bc130ca695a052068f107c0b5bf1))
+
+
+### Bug Fixes
+
+* **installer:** coordinate spinner and prompt ownership ([#256](https://github.com/workos/cli/issues/256)) ([098ddb0](https://github.com/workos/cli/commit/098ddb0bec4a9ef29a4dc6cb6a7b911514c9550b))
+* **installer:** recover unauthorized dashboard configuration safely ([#255](https://github.com/workos/cli/issues/255)) ([28e3ce4](https://github.com/workos/cli/commit/28e3ce4d94117d1c8b88558dbbf7492a598a6d3f))
+* **installer:** remove commit and pull request prompts ([#257](https://github.com/workos/cli/issues/257)) ([4da43d9](https://github.com/workos/cli/commit/4da43d9520267603335120e984a3ebdd528cc502))
+* **ruby:** improve Rails setup and prepare Fizzy acceptance ([#258](https://github.com/workos/cli/issues/258)) ([dea3326](https://github.com/workos/cli/commit/dea3326b3e04d43637f8e4e7ad93d070598e61d2))
+
 ## [0.23.0](https://github.com/workos/cli/compare/v0.22.0...v0.23.0) (2026-09-25)
 
 
