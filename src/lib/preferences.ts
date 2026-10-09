@@ -51,6 +51,20 @@ export interface CliPreferences {
     declined?: boolean;
     /** ISO timestamp the user completed a setup run. */
     completedAt?: string;
+    /**
+     * Bundled skills version the automatic stale-skills update prompt was last
+     * answered for. Suppresses re-asking until a newer CLI ships newer skills.
+     */
+    skillsUpdateOfferedVersion?: string;
+    /**
+     * Bundled skills version whose offer was accepted but left at least one
+     * agent stale. Such a version gets exactly one more offer — the refresh
+     * demonstrably works for some agents, so the miss is worth one retry —
+     * after which it lands in `skillsUpdateOfferedVersion` and goes quiet for
+     * good. Bounding it is the point: a permanently unwritable skills dir must
+     * not re-ask after every single command.
+     */
+    skillsUpdateRetryVersion?: string;
   };
 }
 
@@ -204,6 +218,30 @@ export function recordSetupDeclined(): void {
 /** Persist a completed setup run, stamping the current time. */
 export function recordSetupCompleted(): void {
   savePreferences({ setup: { completedAt: new Date().toISOString() } });
+}
+
+/** Bundled skills version the stale-skills update prompt was last answered for. */
+export function getSkillsUpdateOfferedVersion(): string | undefined {
+  return getPreferences().setup?.skillsUpdateOfferedVersion;
+}
+
+/** Persist that the stale-skills update prompt was answered for `version`. */
+export function recordSkillsUpdateOffered(version: string): void {
+  savePreferences({ setup: { skillsUpdateOfferedVersion: version } });
+}
+
+/** True when `version` has already burned its one post-failure retry offer. */
+export function hasSkillsUpdateRetried(version: string): boolean {
+  return getPreferences().setup?.skillsUpdateRetryVersion === version;
+}
+
+/**
+ * Persist that `version` is owed one more offer after an incomplete refresh.
+ * Clearing the answered-version is what re-opens the offer for the agents that
+ * are still stale; the retry marker is what bounds it to exactly one more.
+ */
+export function recordSkillsUpdateRetry(version: string): void {
+  savePreferences({ setup: { skillsUpdateOfferedVersion: undefined, skillsUpdateRetryVersion: version } });
 }
 
 /** Clear the setup decline (new + legacy) so automatic offers resume. For `workos setup --reset`. */
