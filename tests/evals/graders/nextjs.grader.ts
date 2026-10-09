@@ -117,7 +117,7 @@ export class NextjsGrader implements Grader {
     const middlewareChecks = await this.fileGrader.checkFileContains(middlewareFile, ['authkitMiddleware']);
     const composableChecks = await this.fileGrader.checkFileContains(middlewareFile, [
       'authkit(',
-      /handleAuthkit(Proxy|Headers)\(/,
+      /handleAuthkit(Proxy|Headers)\b/,
     ]);
 
     const usesAuthkitMiddleware = middlewareChecks.every((c) => c.passed);
