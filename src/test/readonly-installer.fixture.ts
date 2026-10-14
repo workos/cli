@@ -92,7 +92,10 @@ mock.module('../lib/resolve-install-credentials.js', () => ({
   maybePickInstallEnvironment: async () => {},
   resolveStagingCredentials: forbidden('staging credentials'),
 }));
-mock.module('../commands/setup.js', () => ({ maybeRunSetupAfter: async () => {}, maybeOfferSkillsUpdate: async () => {} }));
+mock.module('../commands/setup.js', () => ({
+  maybeRunSetupAfter: async () => {},
+  maybeOfferSkillsUpdate: async () => {},
+}));
 const credentials = await import('../lib/credentials.js');
 mock.module('../lib/credentials.js', () => ({ ...credentials, getAccessToken: () => 'offline-test-token' }));
 const application = await import('../lib/authkit-application-setup.js');
