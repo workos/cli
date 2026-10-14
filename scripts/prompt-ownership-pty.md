@@ -14,7 +14,7 @@
 
 The UI facade has one spinner owner across terminal and hosted rendering. Replacement, stop, clear, and host teardown retire handles permanently. Only an actually drawn spinner line can be erased. Queued prompt callers reserve the terminal before awaiting input; existing and newly started spinners remain suspended until all questions settle. Handback resumes the current owner, never the entry handle. Terminal completion/error lines wait behind input; hosted warnings/errors remain immediately visible.
 
-Prompt requests retain their host and are cancelled on host teardown rather than opening a late inquirer question. A one-turn queued handoff lets the installer process cancellation before the next question opens. The adapter counts queued prompt callers, supplies its cancellation signal to every prompt, and drains its handlers before normal hosted teardown. Exit/signal teardown also detaches CLI handlers.
+Prompt requests retain their host and are canceled on host teardown rather than opening a late inquirer question. A one-turn queued handoff lets the installer process cancellation before the next question opens. The adapter counts queued prompt callers, supplies its cancellation signal to every prompt, and drains its handlers before normal hosted teardown. Exit/signal teardown also detaches CLI handlers.
 
 Agent success ends the spinner without requiring validation (Rails/`--no-validate`); failure, completion, cancellation and stop retire animation. Logging no longer stops/recreates adapter spinners: the facade borrows the current owner's line. This prevents a stale adapter handle from reclaiming an obsolete phase. Hosted logs are delivered in their original phase to preserve transcript filtering.
 

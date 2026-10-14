@@ -69,8 +69,8 @@ export const installerMachine = setup({
     emitGitConfirmed: ({ context }) => {
       context.emitter.emit('git:dirty:confirmed', {});
     },
-    emitGitCancelled: ({ context }) => {
-      context.emitter.emit('git:dirty:cancelled', {});
+    emitGitCanceled: ({ context }) => {
+      context.emitter.emit('git:dirty:canceled', {});
     },
     emitScaffoldChecking: ({ context }) => {
       context.emitter.emit('scaffold:checking', {});
@@ -235,8 +235,8 @@ export const installerMachine = setup({
       },
     }),
 
-    emitCancelled: ({ context }) => {
-      context.emitter.emit('complete', { success: false, summary: 'Installer cancelled by user' });
+    emitCanceled: ({ context }) => {
+      context.emitter.emit('complete', { success: false, summary: 'Installer canceled by user' });
     },
     emitError: ({ context }) => {
       // Must NOT be 'An unexpected error occurred': that is the LLM gateway's
@@ -380,7 +380,7 @@ export const installerMachine = setup({
   // Global event handlers - CANCEL can be sent from any state
   on: {
     CANCEL: {
-      target: '.cancelled',
+      target: '.canceled',
     },
   },
 
@@ -463,8 +463,8 @@ export const installerMachine = setup({
             SCAFFOLD_CONFIRMED: {
               target: 'running',
             },
-            SCAFFOLD_CANCELLED: {
-              target: '#installer.cancelled',
+            SCAFFOLD_CANCELED: {
+              target: '#installer.canceled',
               actions: ['emitScaffoldSkipped', { type: 'emitStateExit', params: { state: 'scaffold' } }],
             },
           },
@@ -564,9 +564,9 @@ export const installerMachine = setup({
                   target: 'done',
                   actions: ['emitGitConfirmed'],
                 },
-                GIT_CANCELLED: {
-                  target: '#installer.cancelled',
-                  actions: ['emitGitCancelled'],
+                GIT_CANCELED: {
+                  target: '#installer.canceled',
+                  actions: ['emitGitCanceled'],
                 },
               },
             },
@@ -609,7 +609,7 @@ export const installerMachine = setup({
                   target: 'done',
                 },
                 BRANCH_CANCEL: {
-                  target: '#installer.cancelled',
+                  target: '#installer.canceled',
                 },
               },
             },
@@ -742,7 +742,7 @@ export const installerMachine = setup({
               actions: assign({ envScanConsent: () => false }),
             },
             CANCEL: {
-              target: '#installer.cancelled',
+              target: '#installer.canceled',
               actions: { type: 'emitStateExit', params: { state: 'gatheringCredentials' } },
             },
           },
@@ -882,7 +882,7 @@ export const installerMachine = setup({
               target: 'runningDeviceAuth',
             },
             CANCEL: {
-              target: '#installer.cancelled',
+              target: '#installer.canceled',
               actions: { type: 'emitStateExit', params: { state: 'gatheringCredentials' } },
             },
           },
@@ -1005,9 +1005,9 @@ export const installerMachine = setup({
       entry: [{ type: 'emitStateEnter', params: { state: 'complete' } }, 'emitComplete'],
     },
 
-    cancelled: {
+    canceled: {
       type: 'final',
-      entry: [{ type: 'emitStateEnter', params: { state: 'cancelled' } }, 'emitCancelled'],
+      entry: [{ type: 'emitStateEnter', params: { state: 'canceled' } }, 'emitCanceled'],
     },
 
     error: {

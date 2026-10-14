@@ -238,7 +238,7 @@ describe('resolveEnvironmentTarget', () => {
       expect(getConfig()?.environments.staging.environmentId).toBe('env_b');
     });
 
-    it('exits cancelled (code 2) when the picker is dismissed', async () => {
+    it('exits canceled (code 2) when the picker is dismissed', async () => {
       seedProfile({});
       mockGraphqlRequest.mockResolvedValue(teamData([{ id: 'env_a' }]));
       vi.mocked(ui.select).mockResolvedValue(Symbol('cancel'));

@@ -45,7 +45,7 @@ export type TaskStatus =
   | 'completed'
   | 'skipped'
   | 'failed'
-  | 'cancelled'
+  | 'canceled'
   | 'next'
   | 'attention';
 
@@ -83,7 +83,7 @@ export interface WalkthroughEntry {
   text: string;
 }
 
-export type RunOutcome = 'success' | 'failure' | 'cancelled';
+export type RunOutcome = 'success' | 'failure' | 'canceled';
 
 export interface RunSnapshot {
   /** Tasks to display, in order. Optional tasks appear once they start. */
@@ -188,10 +188,10 @@ export function createRunModel(options: RunModelOptions): RunModel {
   let prompt: UiPromptRequest | null = null;
   let integration: string | undefined;
   let outcome: RunOutcome | null = null;
-  let cancelled = false;
+  let canceled = false;
   // The task whose phase just exited. Every exit is immediately followed by the
-  // next state's enter, which settles it: completed, or failed/cancelled when
-  // the machine went to error/cancelled instead. Settling there (not on exit)
+  // next state's enter, which settles it: completed, or failed/canceled when
+  // the machine went to error/canceled instead. Settling there (not on exit)
   // keeps a failing task from flashing "completed" first.
   let exiting: TaskId | null = null;
   let lastFile: string | null = null;
@@ -315,14 +315,14 @@ export function createRunModel(options: RunModelOptions): RunModel {
   // ── Phases → tasks ────────────────────────────────────────────────────────
 
   function onEnter({ state }: InstallerEvents['state:enter']): void {
-    const ended = state === 'error' || state === 'cancelled';
-    const settle: TaskStatus = state === 'error' ? 'failed' : state === 'cancelled' ? 'cancelled' : 'completed';
+    const ended = state === 'error' || state === 'canceled';
+    const settle: TaskStatus = state === 'error' ? 'failed' : state === 'canceled' ? 'canceled' : 'completed';
     const settling = exiting ?? (ended ? current() : undefined);
     exiting = null;
     if (settling) setTask(settling, settle);
 
     if (ended) {
-      cancelled ||= state === 'cancelled';
+      canceled ||= state === 'canceled';
       for (const items of substatus.values()) {
         for (const [id, s] of items) if (s === 'in_progress') items.set(id, settle);
       }
@@ -433,7 +433,7 @@ export function createRunModel(options: RunModelOptions): RunModel {
     'postinstall:unavailable': ({ reason }) => narrate('postinstall:unavailable', {}, reason),
 
     complete: ({ success }) => {
-      outcome = success ? 'success' : cancelled ? 'cancelled' : 'failure';
+      outcome = success ? 'success' : canceled ? 'canceled' : 'failure';
       const pending = outcome === 'success' && needsAttention();
       narrate(
         'complete',

@@ -65,7 +65,7 @@ export async function runEnvAdd(options: {
       message: 'Enter a name for the environment (e.g., production, sandbox, local)',
       validate: (value) => validateEnvName(value),
     });
-    if (ui.isCancel(nameResult)) exitWithCode(ExitCode.CANCELLED);
+    if (ui.isCancel(nameResult)) exitWithCode(ExitCode.CANCELED);
     name = nameResult;
 
     const typeResult = await ui.select({
@@ -75,7 +75,7 @@ export async function runEnvAdd(options: {
         { value: 'sandbox', label: 'Sandbox' },
       ],
     });
-    if (ui.isCancel(typeResult)) exitWithCode(ExitCode.CANCELLED);
+    if (ui.isCancel(typeResult)) exitWithCode(ExitCode.CANCELED);
 
     const apiKeyResult = await ui.password({
       message: 'Enter the API key for this environment',
@@ -84,7 +84,7 @@ export async function runEnvAdd(options: {
         return undefined;
       },
     });
-    if (ui.isCancel(apiKeyResult)) exitWithCode(ExitCode.CANCELLED);
+    if (ui.isCancel(apiKeyResult)) exitWithCode(ExitCode.CANCELED);
     apiKey = apiKeyResult;
 
     const config = getOrCreateConfig();
@@ -280,7 +280,7 @@ export async function runEnvSwitch(name?: string): Promise<void> {
       message: 'Select an environment',
       options,
     });
-    if (ui.isCancel(selected)) exitWithCode(ExitCode.CANCELLED);
+    if (ui.isCancel(selected)) exitWithCode(ExitCode.CANCELED);
     name = selected as string;
   }
 

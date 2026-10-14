@@ -102,6 +102,6 @@ export async function assertNoExistingAuthKit(opts: { installDir: string; force?
 
   const proceed = await ui.confirm({ message: 'Continue anyway?' });
   if (ui.isCancel(proceed) || !proceed) {
-    exitWithCode(ExitCode.CANCELLED, { code: 'cancelled', message: 'Install cancelled.' });
+    exitWithCode(ExitCode.CANCELED, { code: 'cancelled', message: 'Install canceled.' });
   }
 }

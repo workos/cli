@@ -145,7 +145,7 @@ export async function runApiRequest(endpoint: string, options: ApiCommandOptions
     if (hasBody) prettyPrint(body);
     const ok = await ui.confirm({ message: 'Proceed?' });
     if (!ok || ui.isCancel(ok)) {
-      exitWithCode(ExitCode.CANCELLED);
+      exitWithCode(ExitCode.CANCELED);
     }
   }
 

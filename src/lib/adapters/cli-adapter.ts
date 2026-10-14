@@ -40,7 +40,7 @@ export class CLIAdapter implements InstallerAdapter {
 
   // Aborts in-flight/queued prompts when the run ends (cancellation, ctrl-c).
   // The installer's `preparing` state can queue a second prompt behind a live
-  // one (git-dirty + protected-branch); if the first is cancelled, this signal
+  // one (git-dirty + protected-branch); if the first is canceled, this signal
   // stops the queued sibling from opening a now-moot question.
   private promptAbort: AbortController | null = null;
 
@@ -118,7 +118,7 @@ export class CLIAdapter implements InstallerAdapter {
     const handleSigInt = () => {
       this.promptAbort?.abort();
       if (this.spinner) {
-        this.spinner.stop('Cancelled');
+        this.spinner.stop('Canceled');
         this.spinner = null;
       }
       this.sendEvent({ type: 'CANCEL' });
@@ -184,7 +184,7 @@ export class CLIAdapter implements InstallerAdapter {
   async stop(): Promise<void> {
     if (!this.isStarted) return;
 
-    // Abort any in-flight/queued prompt so a cancelled run can't leave a
+    // Abort any in-flight/queued prompt so a canceled run can't leave a
     // now-moot sibling question open (e.g. the branch prompt after git-cancel).
     this.promptAbort?.abort();
 
@@ -456,7 +456,7 @@ export class CLIAdapter implements InstallerAdapter {
     );
 
     this.sendEvent({
-      type: ui.isCancel(confirmed) || !confirmed ? 'GIT_CANCELLED' : 'GIT_CONFIRMED',
+      type: ui.isCancel(confirmed) || !confirmed ? 'GIT_CANCELED' : 'GIT_CONFIRMED',
     });
   };
 
@@ -600,9 +600,9 @@ export class CLIAdapter implements InstallerAdapter {
   };
 
   private handleComplete = ({ success, summary, completion }: InstallerEvents['complete']): void => {
-    // Fires synchronously during the cancelled-state transition (emitCancelled),
+    // Fires synchronously during the canceled-state transition (emitCanceled),
     // BEFORE a queued sibling prompt's microtask runs — so aborting here makes a
-    // cancelled run's still-queued prompt (e.g. the branch select after a
+    // canceled run's still-queued prompt (e.g. the branch select after a
     // git-dirty "No") open with an already-aborted signal and resolve to CANCEL
     // without ever rendering a now-moot question.
     this.promptAbort?.abort();
@@ -663,7 +663,7 @@ export class CLIAdapter implements InstallerAdapter {
     );
 
     this.sendEvent({
-      type: ui.isCancel(confirmed) || !confirmed ? 'SCAFFOLD_CANCELLED' : 'SCAFFOLD_CONFIRMED',
+      type: ui.isCancel(confirmed) || !confirmed ? 'SCAFFOLD_CANCELED' : 'SCAFFOLD_CONFIRMED',
     });
   };
 

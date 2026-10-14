@@ -138,7 +138,7 @@ export async function runEnvironmentUse(environmentIdArg?: string): Promise<void
       });
     }
     const choice = await promptForEnvironment(environments);
-    if (choice === null) exitWithCode(ExitCode.CANCELLED);
+    if (choice === null) exitWithCode(ExitCode.CANCELED);
     targetId = choice;
   }
 

@@ -66,11 +66,11 @@ function TaskRow({ row, spinner }: { row: Row; spinner: string }) {
           {glyphs.warning} {row.label}
         </Text>
       );
-    case 'cancelled':
+    case 'canceled':
       return (
         <Text wrap="truncate-end" color={colors.warning}>
           {pad}
-          {glyphs.cancelled} {row.label}
+          {glyphs.canceled} {row.label}
         </Text>
       );
     case 'skipped':
@@ -135,7 +135,7 @@ export function ProgressLine({ tasks, width }: { tasks: TaskView[]; width: numbe
   const done = counted.filter((t) => t.status === 'completed').length;
   const count = `${done} of ${counted.length} done`;
   const active = tasks.find((t) => t.status === 'in_progress');
-  const failed = tasks.find((t) => t.status === 'failed' || t.status === 'cancelled');
+  const failed = tasks.find((t) => t.status === 'failed' || t.status === 'canceled');
   const next = tasks.find((t) => t.status === 'next');
   const spinner = useSpinner(Boolean(active));
 
@@ -151,10 +151,10 @@ export function ProgressLine({ tasks, width }: { tasks: TaskView[]; width: numbe
       </Text>
     );
   } else if (failed) {
-    const cancelled = failed.status === 'cancelled';
+    const canceled = failed.status === 'canceled';
     line = (
-      <Text wrap="truncate-end" color={cancelled ? colors.warning : colors.error}>
-        {`${cancelled ? glyphs.cancelled : glyphs.failed} ${failed.label} ${cancelled ? 'cancelled' : 'failed'}`}
+      <Text wrap="truncate-end" color={canceled ? colors.warning : colors.error}>
+        {`${canceled ? glyphs.canceled : glyphs.failed} ${failed.label} ${canceled ? 'canceled' : 'failed'}`}
         <Text color={colors.muted}>{` · ${count}`}</Text>
       </Text>
     );

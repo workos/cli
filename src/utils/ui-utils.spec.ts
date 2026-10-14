@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 /**
  * Locks the Layer-1 invariant of the agent/CI path fix: when prompts are not
- * allowed (agent/ci/non-TTY), abortIfCancelled must fail fast with a structured
+ * allowed (agent/ci/non-TTY), abortIfCanceled must fail fast with a structured
  * CliExit *without awaiting* the input promise — awaiting a never-resolving
  * prompt is exactly the hang this guard fixes.
  */
@@ -33,9 +33,9 @@ const { setInteractionMode, resetInteractionModeForTests } = await import('./int
 const { CliExit } = await import('./cli-exit.js');
 const { setOutputMode } = await import('./output.js');
 const { analytics } = await import('./analytics.js');
-const { abortIfCancelled, getOrAskForWorkOSCredentials } = await import('./ui-utils.js');
+const { abortIfCanceled, getOrAskForWorkOSCredentials } = await import('./ui-utils.js');
 
-describe('abortIfCancelled — non-interactive guard', () => {
+describe('abortIfCanceled — non-interactive guard', () => {
   beforeEach(() => {
     resetInteractionModeForTests();
     setOutputMode('human');
@@ -51,12 +51,12 @@ describe('abortIfCancelled — non-interactive guard', () => {
   it('agent mode throws CliExit without awaiting the input promise', async () => {
     setInteractionMode({ mode: 'agent', source: 'env' });
     // A never-resolving input: if the guard awaited it, this test would time out.
-    await expect(abortIfCancelled(new Promise<never>(() => {}))).rejects.toThrow(CliExit);
+    await expect(abortIfCanceled(new Promise<never>(() => {}))).rejects.toThrow(CliExit);
   });
 
   it('ci mode throws CliExit without awaiting the input promise', async () => {
     setInteractionMode({ mode: 'ci', source: 'env' });
-    await expect(abortIfCancelled(new Promise<never>(() => {}))).rejects.toThrow(CliExit);
+    await expect(abortIfCanceled(new Promise<never>(() => {}))).rejects.toThrow(CliExit);
   });
 
   it('emits a structured non_interactive_prompt error in JSON mode', async () => {
@@ -64,7 +64,7 @@ describe('abortIfCancelled — non-interactive guard', () => {
     setOutputMode('json');
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await expect(abortIfCancelled(new Promise<never>(() => {}))).rejects.toThrow(CliExit);
+    await expect(abortIfCanceled(new Promise<never>(() => {}))).rejects.toThrow(CliExit);
 
     expect(errorSpy).toHaveBeenCalled();
     const payload = JSON.parse(String(errorSpy.mock.calls[0][0]));
@@ -76,14 +76,14 @@ describe('abortIfCancelled — non-interactive guard', () => {
   it('human mode passes a resolved value through', async () => {
     setInteractionMode({ mode: 'human', source: 'default' });
     vi.mocked(ui.isCancel).mockReturnValue(false);
-    await expect(abortIfCancelled('value')).resolves.toBe('value');
+    await expect(abortIfCanceled('value')).resolves.toBe('value');
   });
 
-  it('does not flush a cancelled session on the happy path (no per-prompt dead-time)', async () => {
+  it('does not flush a canceled session on the happy path (no per-prompt dead-time)', async () => {
     setInteractionMode({ mode: 'human', source: 'default' });
     vi.mocked(ui.isCancel).mockReturnValue(false);
 
-    await abortIfCancelled('value');
+    await abortIfCanceled('value');
 
     // shutdown('cancelled') must fire ONLY on an actual cancel — never on a
     // resolved prompt (regression guard for the 3s-per-prompt flush bug).

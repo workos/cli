@@ -10,10 +10,10 @@ vi.mock('../../utils/ui.js', () => ({
   },
 }));
 
-// Passthrough abortIfCancelled + a package.json with no react-router version, so
+// Passthrough abortIfCanceled + a package.json with no react-router version, so
 // getReactRouterMode always hits the ambiguous "no version" prompt branch.
 vi.mock('../../utils/ui-utils.js', () => ({
-  abortIfCancelled: vi.fn(async (p) => await p),
+  abortIfCanceled: vi.fn(async (p) => await p),
   getPackageDotJson: vi.fn(async () => ({})),
 }));
 

@@ -369,7 +369,7 @@ describe('Analytics', () => {
         );
       });
 
-      it('supports cancelled outcome', async () => {
+      it('supports canceled outcome', async () => {
         await analytics.shutdown('cancelled');
 
         expect(mockQueueEvent).toHaveBeenCalledWith(

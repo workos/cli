@@ -267,11 +267,11 @@ describe('output', () => {
       errorSpy.mockRestore();
     });
 
-    it('throws CliExit with exit code 2 for cancelled', () => {
+    it('throws CliExit with exit code 2 for canceled', () => {
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       try {
-        exitWithError({ code: 'cancelled', message: 'User cancelled' });
+        exitWithError({ code: 'cancelled', message: 'User canceled' });
         expect.fail('expected exitWithError to throw');
       } catch (e) {
         expect(e).toBeInstanceOf(CliExit);

@@ -18,7 +18,7 @@ describe('exit-codes', () => {
     it('has correct values', () => {
       expect(ExitCode.SUCCESS).toBe(0);
       expect(ExitCode.GENERAL_ERROR).toBe(1);
-      expect(ExitCode.CANCELLED).toBe(2);
+      expect(ExitCode.CANCELED).toBe(2);
       expect(ExitCode.AUTH_REQUIRED).toBe(4);
     });
   });
@@ -31,10 +31,10 @@ describe('exit-codes', () => {
       });
     });
 
-    it('maps cancelled to exit 2', () => {
+    it('maps canceled to exit 2', () => {
       expect(resolveErrorCode('cancelled')).toEqual({
         reason: 'cancelled',
-        exit: ExitCode.CANCELLED,
+        exit: ExitCode.CANCELED,
       });
     });
 
@@ -107,7 +107,7 @@ describe('exit-codes', () => {
 
     it('includes termination reason derived from exit code in context', () => {
       try {
-        exitWithCode(ExitCode.CANCELLED);
+        exitWithCode(ExitCode.CANCELED);
       } catch (e) {
         expect((e as InstanceType<typeof CliExit>).context?.reason).toBe('cancelled');
       }

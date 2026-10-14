@@ -3,7 +3,7 @@
  *
  * 0 = Success
  * 1 = General error
- * 2 = Cancelled (e.g., Ctrl+C, user cancelled prompt)
+ * 2 = Canceled (e.g., Ctrl+C, user canceled prompt)
  * 4 = Authentication required
  */
 
@@ -17,7 +17,7 @@ import type { TerminationReason } from './telemetry-types.js';
 export const ExitCode = {
   SUCCESS: 0,
   GENERAL_ERROR: 1,
-  CANCELLED: 2,
+  CANCELED: 2,
   AUTH_REQUIRED: 4,
 } as const;
 
@@ -28,7 +28,7 @@ const ERROR_CODE_MAP: Record<string, { reason: TerminationReason; exit: ExitCode
   // resolveApiKey() emits `no_api_key` when no key is configured; semantically
   // an auth failure, so it must not fall through to `validation_error`.
   no_api_key: { reason: 'auth_required', exit: ExitCode.AUTH_REQUIRED },
-  cancelled: { reason: 'cancelled', exit: ExitCode.CANCELLED },
+  cancelled: { reason: 'cancelled', exit: ExitCode.CANCELED },
 };
 
 export function resolveErrorCode(code: string): {
@@ -45,7 +45,7 @@ export function resolveErrorCode(code: string): {
 
 function reasonForExitCode(code: ExitCodeValue): TerminationReason {
   if (code === ExitCode.AUTH_REQUIRED) return 'auth_required';
-  if (code === ExitCode.CANCELLED) return 'cancelled';
+  if (code === ExitCode.CANCELED) return 'cancelled';
   if (code === ExitCode.SUCCESS) return 'success';
   return 'validation_error';
 }

@@ -84,10 +84,10 @@ export type InstallerMachineEvent =
   | { type: 'START' }
   | { type: 'SKIP_AUTH' }
   | { type: 'GIT_CONFIRMED' }
-  | { type: 'GIT_CANCELLED' }
+  | { type: 'GIT_CANCELED' }
   // Scaffold events
   | { type: 'SCAFFOLD_CONFIRMED' }
-  | { type: 'SCAFFOLD_CANCELLED' }
+  | { type: 'SCAFFOLD_CANCELED' }
   | { type: 'CREDENTIALS_SUBMITTED'; apiKey: string; clientId: string }
   | { type: 'CANCEL' }
   // Credential discovery events

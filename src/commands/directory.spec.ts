@@ -169,7 +169,7 @@ describe('directory commands', () => {
       mockConfirm.mockResolvedValue(false);
       await runDirectoryDelete('directory_01ABC', {}, 'sk_test');
       expect(mockSdk.directorySync.deleteDirectory).not.toHaveBeenCalled();
-      expect(consoleOutput.some((l) => l.includes('cancelled'))).toBe(true);
+      expect(consoleOutput.some((l) => l.includes('canceled'))).toBe(true);
     });
 
     it('cancels on user cancel', async () => {

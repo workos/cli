@@ -63,7 +63,7 @@ export async function maybePickInstallEnvironment(
   // dead endpoint's 30s fetch timeout must not stall installer startup (or
   // the single-profile silent path), so the fetch is bounded. Only a
   // currently-valid token is used — never a refresh: the race abandons the
-  // loser without cancelling it, and a refresh outliving the picker can
+  // loser without canceling it, and a refresh outliving the picker can
   // answer invalid_grant AFTER the installer's own auth flow wrote a new
   // session, and invalid_grant clears the credential store. An expired
   // session just degrades to the local-only picker; the machine's auth check
@@ -151,7 +151,7 @@ export async function maybePickInstallEnvironment(
     ],
     initialValue: config.activeEnvironment,
   });
-  if (ui.isCancel(choice)) exitWithCode(ExitCode.CANCELLED);
+  if (ui.isCancel(choice)) exitWithCode(ExitCode.CANCELED);
   if (choice !== config.activeEnvironment) setActiveEnvironment(String(choice));
   return getActiveEnvironment();
 }

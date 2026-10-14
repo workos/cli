@@ -106,8 +106,8 @@ describe('content validation', () => {
 
   it('requires exactly the declared outcomes for variant events', () => {
     const missing = raw();
-    delete missing.walkthrough.complete.cancelled;
-    expect(problems(missing)).toContain('outcomes must be exactly success, setup-required, failure, cancelled');
+    delete missing.walkthrough.complete.canceled;
+    expect(problems(missing)).toContain('outcomes must be exactly success, setup-required, failure, canceled');
 
     const flat = raw();
     flat.walkthrough.complete = 'Done.';

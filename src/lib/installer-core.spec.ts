@@ -298,10 +298,10 @@ describe('InstallerCore State Machine', () => {
       dirtyActor.send({ type: 'START' });
       await new Promise((r) => setTimeout(r, 50));
 
-      dirtyActor.send({ type: 'GIT_CANCELLED' });
+      dirtyActor.send({ type: 'GIT_CANCELED' });
       await new Promise((r) => setTimeout(r, 50));
 
-      expect(dirtyActor.getSnapshot().value).toBe('cancelled');
+      expect(dirtyActor.getSnapshot().value).toBe('canceled');
       dirtyActor.stop();
     });
   });
@@ -685,12 +685,12 @@ describe('InstallerCore State Machine', () => {
       actor.send({ type: 'START' });
       await new Promise((r) => setTimeout(r, 50));
 
-      actor.send({ type: 'SCAFFOLD_CANCELLED' });
+      actor.send({ type: 'SCAFFOLD_CANCELED' });
       await new Promise((r) => setTimeout(r, 50));
 
       expect(ran).toBe(false);
       expect(skipped).toBe(true);
-      expect(actor.getSnapshot().value).toBe('cancelled');
+      expect(actor.getSnapshot().value).toBe('canceled');
       actor.stop();
     });
 

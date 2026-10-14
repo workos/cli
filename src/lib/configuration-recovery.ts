@@ -60,7 +60,7 @@ export async function recoverConfigurationAccess(
       { value: 'manual', label: 'Configure manually', hint: 'Leave credentials unchanged' },
     ],
   });
-  if (ui.isCancel(choice)) return { reason: `Unauthorized recovery cancelled. ${hint}`, code: 'cancelled' };
+  if (ui.isCancel(choice)) return { reason: `Unauthorized recovery canceled. ${hint}`, code: 'cancelled' };
   if (choice !== 'retry') return { reason: `Unauthorized recovery declined; manual configuration selected. ${hint}` };
 
   try {
@@ -103,8 +103,8 @@ export async function recoverConfigurationAccess(
     }
     return { token, credentials };
   } catch (error) {
-    if (error instanceof CliExit && error.exitCode === ExitCode.CANCELLED) {
-      return { reason: `Unauthorized recovery cancelled. ${hint}`, code: 'cancelled' };
+    if (error instanceof CliExit && error.exitCode === ExitCode.CANCELED) {
+      return { reason: `Unauthorized recovery canceled. ${hint}`, code: 'cancelled' };
     }
     return { reason: `Authentication recovery failed. Application credentials were left unchanged. ${hint}` };
   }

@@ -200,11 +200,11 @@ async function configureApplicationAttempt(
     if (!callbackRegistered) {
       throw new InstallDeclinedError(`Callback URL is not registered or verified. ${reason}`, code);
     }
-    // A cancelled recovery is a cancelled install, even after a partial write:
+    // A canceled recovery is a canceled install, even after a partial write:
     // never let it continue to completion as an unverified success.
     if (code === 'cancelled') {
       throw new InstallDeclinedError(
-        `Setup cancelled after the callback URL was registered; the remaining settings are unverified. ${reason}`,
+        `Setup canceled after the callback URL was registered; the remaining settings are unverified. ${reason}`,
         code,
       );
     }

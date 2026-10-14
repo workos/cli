@@ -49,7 +49,7 @@ const config = {
   emitter,
   sendEvent(event: { type: string }) {
     events.push(event.type);
-    if (event.type === 'GIT_CANCELLED') {
+    if (event.type === 'GIT_CANCELED') {
       emitter.emit('complete', { success: false, summary: 'Synthetic cancellation' });
       finished();
     }
@@ -96,7 +96,7 @@ try {
   assert.equal(process.stdin.listenerCount('readable'), inputBefore);
   assert.equal(emitter.listenerCount('agent:start'), 0);
   if (scenario === 'answers') assert.deepEqual(events, ['ENV_SCAN_DECLINED', 'SCAFFOLD_CONFIRMED']);
-  if (scenario === 'cancel') assert(events.includes('GIT_CANCELLED'));
+  if (scenario === 'cancel') assert(events.includes('GIT_CANCELED'));
   // Leave the process alive long enough to detect orphaned redraw intervals.
   await delay(400);
   await report('clean');

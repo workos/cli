@@ -100,7 +100,7 @@ export async function runDirectoryDelete(
     });
 
     if (ui.isCancel(confirmed) || !confirmed) {
-      console.log('Delete cancelled.');
+      console.log('Delete canceled.');
       return;
     }
   }

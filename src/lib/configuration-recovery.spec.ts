@@ -76,10 +76,10 @@ describe('revoked but locally unexpired session policy', () => {
     },
   );
 
-  it.each(['manual', CANCEL])('does not run authentication when recovery is declined or cancelled', async (choice) => {
+  it.each(['manual', CANCEL])('does not run authentication when recovery is declined or canceled', async (choice) => {
     vi.mocked(ui.select).mockResolvedValue(choice);
     const result = await recoverConfigurationAccess({ token: fakeSession.accessToken });
-    expect(result).toMatchObject({ reason: expect.stringContaining(choice === CANCEL ? 'cancelled' : 'declined') });
+    expect(result).toMatchObject({ reason: expect.stringContaining(choice === CANCEL ? 'canceled' : 'declined') });
     expect(getCredentials).not.toHaveBeenCalled();
     expect(runLogin).not.toHaveBeenCalled();
     expect(clearCredentials).not.toHaveBeenCalled();

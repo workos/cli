@@ -293,7 +293,7 @@ describe('preflight-authkit', () => {
       expect(readdirSync(testDir)).toEqual(['package.json']);
     });
 
-    it('throws CliExit (exit 2) when the prompt is cancelled', async () => {
+    it('throws CliExit (exit 2) when the prompt is canceled', async () => {
       writePackageJson(testDir, { '@workos-inc/authkit-nextjs': '^2.6.0' });
       mockConfirm.mockResolvedValueOnce(Symbol('workos.prompt.cancel'));
 
