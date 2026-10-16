@@ -17,7 +17,7 @@ export const glyphs = {
   failed: '✗',
   pending: '○',
   skipped: '–',
-  cancelled: '■',
+  canceled: '■',
   pointer: '›',
   bullet: '·',
   warning: '!',

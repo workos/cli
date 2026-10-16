@@ -15,7 +15,7 @@ WorkOS CLI for installing AuthKit integrations and managing WorkOS resources (or
 - **Output**: Auto-switches to JSON when piped or `--json` flag. `WORKOS_FORCE_TTY=1` overrides.
 - **Auth**: Exits code 4 instead of opening browser. Resource commands (organization, user, role, permission, membership, invitation, session, event, feature-flag, org-domain, portal, webhook, config) use the dashboard session from a prior `workos auth login`; expired access tokens refresh silently while the stored refresh token is valid, so only a truly dead session exits 4. `WORKOS_API_KEY` applies only to `workos api` and the still-REST commands (`connection`, `directory`, `audit-log`, `api-key`, `vault`, plus the workflow/debug commands `seed`, `setup-org`, `onboard-user`, `verify-login`, `debug-sso`, `debug-sync`, `migrations`).
 - **Errors**: Structured JSON to stderr: `{ "error": { "code": "...", "message": "..." } }`
-- **Exit codes**: 0=success, 1=error, 2=cancelled, 4=auth required (follows `gh` CLI convention)
+- **Exit codes**: 0=success, 1=error, 2=canceled, 4=auth required (follows `gh` CLI convention)
 - **Headless flags**: `--no-branch`, `--no-git-check`. CI mode (`WORKOS_MODE=ci`) auto-continues past a dirty tree without `--no-git-check`; agent mode requires the flag.
 - **Installer Git policy**: Generated changes stay unstaged/uncommitted; pre-existing staging is preserved. No installer-controlled staging, commits, pushes, PR creation, or commit/PR text generation. `--commit`, `--no-commit`, and `--create-pr` are deprecated compatibility-only no-ops, with human-only notices. Branch prompts/`--no-branch` remain unchanged; branches do not isolate uncommitted work. Change reporting is scoped to `installDir` and may include pre-existing changes.
 
@@ -45,6 +45,10 @@ shipped once already.
 `scripts/parity-smoke.ts` compares this branch against `../main` and fails on any
 unexpected field divergence. Its `ACCEPTED` map lists deliberate curations only;
 a casing-only difference appearing there is a bug, not an accepted divergence.
+
+## Spelling
+
+Use American English in code, comments, docs and UI copy (`canceled`, `behavior`, `organization`). The `cancelled` values that already ship are public contracts: the JSON error code, `termination.reason`, `installer.outcome`, `setup.outcome` and the `workos debug reset --json` key. Leave them as they are unless you also plan the migration.
 
 ## Tech Constraints
 

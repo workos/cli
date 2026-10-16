@@ -6,8 +6,8 @@ import { resolveApiKey, resolveApiBaseUrl } from '../../lib/api-key.js';
 import { ExitCode, exitWithCode } from '../../utils/exit-codes.js';
 import { exitWithError } from '../../utils/output.js';
 
-function assertNotCancelled<T>(value: T | symbol): T {
-  if (ui.isCancel(value)) exitWithCode(ExitCode.CANCELLED);
+function assertNotCanceled<T>(value: T | symbol): T {
+  if (ui.isCancel(value)) exitWithCode(ExitCode.CANCELED);
   return value as T;
 }
 
@@ -15,7 +15,7 @@ export async function apiInteractive(options?: { apiKey?: string }): Promise<voi
   const catalog = await loadCatalog();
   const grouped = endpointsByTag(catalog.endpoints);
 
-  const tag = assertNotCancelled(
+  const tag = assertNotCanceled(
     await ui.select({
       message: 'Select a category:',
       options: catalog.tags.map((t) => {
@@ -26,7 +26,7 @@ export async function apiInteractive(options?: { apiKey?: string }): Promise<voi
   );
 
   const endpoints = grouped.get(tag)!;
-  const ep = assertNotCancelled(
+  const ep = assertNotCanceled(
     await ui.select<EndpointInfo>({
       message: 'Select an endpoint:',
       options: endpoints.map((e) => ({
@@ -39,7 +39,7 @@ export async function apiInteractive(options?: { apiKey?: string }): Promise<voi
 
   let resolvedPath = ep.path;
   for (const param of ep.pathParams) {
-    const value = assertNotCancelled(
+    const value = assertNotCanceled(
       await ui.text({
         message: `${param.name}:`,
         placeholder: param.description || undefined,
@@ -58,7 +58,7 @@ export async function apiInteractive(options?: { apiKey?: string }): Promise<voi
     const params: string[] = [];
 
     for (const qp of requiredParams) {
-      const value = assertNotCancelled(
+      const value = assertNotCanceled(
         await ui.text({
           message: `${qp.name} (required):`,
           placeholder: qp.description || undefined,
@@ -71,7 +71,7 @@ export async function apiInteractive(options?: { apiKey?: string }): Promise<voi
     }
 
     if (optionalParams.length > 0) {
-      const wantsOptional = assertNotCancelled(
+      const wantsOptional = assertNotCanceled(
         await ui.confirm({
           message: `Add optional query parameters? (${optionalParams.length} available)`,
           initialValue: false,
@@ -80,7 +80,7 @@ export async function apiInteractive(options?: { apiKey?: string }): Promise<voi
 
       if (wantsOptional) {
         for (const qp of optionalParams) {
-          const value = assertNotCancelled(
+          const value = assertNotCanceled(
             await ui.text({
               message: `${qp.name}:`,
               placeholder: qp.description || undefined,
@@ -103,7 +103,7 @@ export async function apiInteractive(options?: { apiKey?: string }): Promise<voi
   if (ep.hasRequestBody) {
     let collectBody = ep.requestBodyRequired;
     if (!collectBody) {
-      collectBody = assertNotCancelled(
+      collectBody = assertNotCanceled(
         await ui.confirm({
           message: 'Provide a request body?',
           initialValue: ep.method === 'POST' || ep.method === 'PUT',
@@ -112,7 +112,7 @@ export async function apiInteractive(options?: { apiKey?: string }): Promise<voi
     }
 
     if (collectBody) {
-      body = assertNotCancelled(
+      body = assertNotCanceled(
         await ui.text({
           message: 'Request body (JSON):',
           placeholder: '{"key": "value"}',
@@ -137,8 +137,8 @@ export async function apiInteractive(options?: { apiKey?: string }): Promise<voi
   }
   console.log();
 
-  const ok = assertNotCancelled(await ui.confirm({ message: 'Execute this request?' }));
-  if (!ok) exitWithCode(ExitCode.CANCELLED);
+  const ok = assertNotCanceled(await ui.confirm({ message: 'Execute this request?' }));
+  if (!ok) exitWithCode(ExitCode.CANCELED);
 
   const response = await apiRequest({
     method: ep.method,

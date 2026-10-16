@@ -113,7 +113,7 @@
       "success": "All done. AuthKit is installed. Start your app and complete your first sign-up.",
       "setup-required": "The code is in. Some WorkOS settings need a look in the dashboard (listed above). Then start your app and complete your first sign-up.",
       "failure": "The install didn't finish. The details will be shown when this screen closes.",
-      "cancelled": "Stopped. The installer was cancelled."
+      "canceled": "Stopped. The installer was canceled."
     }
   },
   "tips": [

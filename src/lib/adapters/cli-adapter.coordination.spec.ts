@@ -146,9 +146,9 @@ describe('CLI adapter with real UI coordination', () => {
     }
   });
 
-  it('cancelling the first question never opens the now-moot queued sibling', async () => {
+  it('canceling the first question never opens the now-moot queued sibling', async () => {
     sendEvent.mockImplementation((event) => {
-      if (event.type === 'GIT_CANCELLED') emitter.emit('complete', { success: false, summary: 'Cancelled' });
+      if (event.type === 'GIT_CANCELED') emitter.emit('complete', { success: false, summary: 'Canceled' });
     });
     emitter.emit('agent:start', {});
     emitter.emit('git:dirty', { files: ['fixture.rb'] });
@@ -157,7 +157,7 @@ describe('CLI adapter with real UI coordination', () => {
     questions[0].answer(false as never);
     await drain();
     expect(questions.map((q) => q.message)).toEqual(['Continue anyway?']);
-    expect(output()).toContain('Cancelled');
+    expect(output()).toContain('Canceled');
     expect(vi.getTimerCount()).toBe(0);
   });
 

@@ -77,7 +77,7 @@ describe('TuiAdapter', () => {
     expect(afterExit()).toContain('stray line');
   });
 
-  it("answers the plain CLI's git-dirty question inline (No → GIT_CANCELLED)", async () => {
+  it("answers the plain CLI's git-dirty question inline (No → GIT_CANCELED)", async () => {
     await adapter.start();
     emitter.emit('git:dirty', { files: ['a.ts', 'b.ts'] });
 
@@ -91,7 +91,7 @@ describe('TuiAdapter', () => {
     expect(at('b.ts')).toBe(at('a.ts') + 1);
     expect(at('? Continue anyway?')).toBe(at('b.ts') + 1);
     stdin.press('n');
-    await waitFor(() => expect(sendEvent).toHaveBeenCalledWith({ type: 'GIT_CANCELLED' }));
+    await waitFor(() => expect(sendEvent).toHaveBeenCalledWith({ type: 'GIT_CANCELED' }));
     await waitFor(() => expect(frame()).not.toContain('? Continue anyway?'));
   });
 
@@ -138,7 +138,7 @@ describe('TuiAdapter', () => {
     expect(await answer).toBe('abc');
   });
 
-  it('cancels an open question on esc, the same as cancelling it in the plain CLI', async () => {
+  it('cancels an open question on esc, the same as canceling it in the plain CLI', async () => {
     await adapter.start();
     emitter.emit('branch:prompt', { branch: 'main' });
     await waitFor(() => expect(frame()).toContain('Create a feature branch?'));
@@ -175,11 +175,11 @@ describe('TuiAdapter', () => {
       stdin.press(KEY.ctrlC);
       await waitFor(() => expect(complete).toHaveBeenCalledOnce());
       expect(runWithCoreSigint).toHaveBeenCalledOnce();
-      expect(actor.getSnapshot().value).toBe('cancelled');
+      expect(actor.getSnapshot().value).toBe('canceled');
       expect(aborted).toHaveBeenCalledOnce();
       expect(exit).not.toHaveBeenCalled();
       await adapter.stop();
-      expect(afterExit()).toContain('cancelled');
+      expect(afterExit()).toContain('canceled');
       expect(getUiHost()).toBeNull();
       expect(stdin.rawMode).toBe(false);
     } finally {
@@ -379,7 +379,7 @@ describe('TuiAdapter', () => {
     await waitFor(() => expect(frame()).toContain('? Still there?'));
     await adapter.stop();
     expect(isCancel(await answer)).toBe(true);
-    expect(afterExit()).toContain('✗ Still there? cancelled');
+    expect(afterExit()).toContain('✗ Still there? canceled');
   });
 
   it('keeps queued questions visible and answerable through phase/status replacement', async () => {
@@ -433,7 +433,7 @@ describe('TuiAdapter', () => {
     expect(stdout.output()).toBe(stoppedOutput);
     expect(write).not.toHaveBeenCalled();
     expect(stdout.output()).not.toContain(`? ${scaffoldQuestion}`);
-    expect(afterExit()).toContain(`✗ ${scanQuestion} cancelled`);
+    expect(afterExit()).toContain(`✗ ${scanQuestion} canceled`);
     expect(afterExit()).not.toContain('buffered before stop');
     expect(afterExit()).toContain("The agent's step-by-step log is in the installer log");
     expect(stdin.listenerCount('readable')).toBe(listeners);

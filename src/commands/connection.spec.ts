@@ -224,7 +224,7 @@ describe('connection commands', () => {
       mockConfirm.mockResolvedValue(false);
       await runConnectionDelete('conn_01ABC', {}, 'sk_test');
       expect(mockSdk.sso.deleteConnection).not.toHaveBeenCalled();
-      expect(consoleOutput.some((l) => l.includes('cancelled'))).toBe(true);
+      expect(consoleOutput.some((l) => l.includes('canceled'))).toBe(true);
     });
 
     it('cancels on user cancel', async () => {

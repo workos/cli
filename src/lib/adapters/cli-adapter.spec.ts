@@ -202,7 +202,7 @@ describe('CLIAdapter', () => {
       expect(sendEvent).toHaveBeenCalledWith({ type: 'GIT_CONFIRMED' });
     });
 
-    it('sends GIT_CANCELLED on decline', async () => {
+    it('sends GIT_CANCELED on decline', async () => {
       await adapter.start();
       const ui = await import('../../utils/ui.js');
       vi.mocked(ui.default.confirm).mockResolvedValue(false);
@@ -211,7 +211,7 @@ describe('CLIAdapter', () => {
 
       await new Promise((r) => setTimeout(r, 10));
 
-      expect(sendEvent).toHaveBeenCalledWith({ type: 'GIT_CANCELLED' });
+      expect(sendEvent).toHaveBeenCalledWith({ type: 'GIT_CANCELED' });
     });
 
     it('sends CREDENTIALS_SUBMITTED on credentials form', async () => {
@@ -231,7 +231,7 @@ describe('CLIAdapter', () => {
       });
     });
 
-    it('sends CANCEL when credentials form is cancelled', async () => {
+    it('sends CANCEL when credentials form is canceled', async () => {
       await adapter.start();
       const ui = await import('../../utils/ui.js');
       vi.mocked(ui.default.isCancel).mockReturnValue(true);

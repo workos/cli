@@ -207,7 +207,7 @@ export async function resolveEnvironmentTarget(
 
   if (isPromptAllowed()) {
     const choice = await promptForEnvironment(environments);
-    if (choice === null) exitWithCode(ExitCode.CANCELLED);
+    if (choice === null) exitWithCode(ExitCode.CANCELED);
     // Persist so the picker runs at most once per profile (no-op without an
     // active profile — the choice then applies to this invocation only).
     // Healing never changes which profile is active, so the earlier config

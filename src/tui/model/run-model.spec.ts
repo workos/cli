@@ -97,7 +97,7 @@ const RANK: Record<TaskStatus, number> = {
   completed: 2,
   skipped: 2,
   failed: 2,
-  cancelled: 2,
+  canceled: 2,
   next: 2,
   attention: 2,
 };
@@ -322,7 +322,7 @@ describe('run model: tasks follow real installer events', () => {
     const run = start(options(), actors({ checkGitStatus }), (r) => {
       if (!answered && texts(r.model.getSnapshot()).some((t) => t.includes('uncommitted'))) {
         answered = true;
-        queueMicrotask(() => r.actor.send({ type: 'GIT_CANCELLED' }));
+        queueMicrotask(() => r.actor.send({ type: 'GIT_CANCELED' }));
       }
     });
     await run.done;
@@ -331,9 +331,9 @@ describe('run model: tasks follow real installer events', () => {
     expect(texts(final, 'narration')).toContain(
       "You have uncommitted changes (files: 3), so I'll check with you before going further.",
     );
-    expect(statuses(final)).toMatchObject({ inspect: 'cancelled', credentials: 'pending' });
-    expect(final.outcome).toBe('cancelled');
-    expect(final.walkthrough.at(-1)!.text).toBe((content.walkthrough.complete as Record<string, string>).cancelled);
+    expect(statuses(final)).toMatchObject({ inspect: 'canceled', credentials: 'pending' });
+    expect(final.outcome).toBe('canceled');
+    expect(final.walkthrough.at(-1)!.text).toBe((content.walkthrough.complete as Record<string, string>).canceled);
   });
 
   it('shows the scaffold task only when this run scaffolds', async () => {

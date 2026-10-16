@@ -248,7 +248,7 @@ describe('runSetup — automatic triggers (login/install)', () => {
     expect(hints.some((m) => m.includes('workos mcp install'))).toBe(true);
   });
 
-  it('treats cancel (ctrl-c) as skip — no decline recorded, but emits a cancelled event', async () => {
+  it('treats cancel (ctrl-c) as skip — no decline recorded, but emits a canceled event', async () => {
     detectSome();
     vi.mocked(ui.confirm).mockResolvedValue(CANCEL);
 

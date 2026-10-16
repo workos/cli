@@ -209,7 +209,7 @@ export class HeadlessAdapter implements InstallerAdapter {
         'Commit or stash your changes, or rerun with --no-git-check to proceed.',
     });
     writeNDJSON({ type: 'git:decision', action: 'cancel' });
-    this.sendEvent({ type: 'GIT_CANCELLED' });
+    this.sendEvent({ type: 'GIT_CANCELED' });
     process.exit(ExitCode.GENERAL_ERROR);
   };
 

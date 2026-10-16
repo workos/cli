@@ -538,7 +538,7 @@ describe('resolveInstallCredentials', () => {
       expect(Date.now() - start).toBeLessThan(10_000); // bounded, not the 30s fetch timeout
       const call = mockSelect.mock.calls[0][0] as { options: Array<{ disabled?: string }> };
       expect(call.options.every((o) => !o.disabled)).toBe(true);
-      // The abandoned request is cancelled too — its socket and abort timer
+      // The abandoned request is canceled too — its socket and abort timer
       // must not hold the event loop open past CLI exit.
       expect(fetchSignal?.aborted).toBe(true);
     }, 15_000);

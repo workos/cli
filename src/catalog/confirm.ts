@@ -18,7 +18,7 @@ import { isCiMode, isPromptAllowed } from '../utils/interaction-mode.js';
  * `src/utils/exit-codes.ts`):
  * - Non-interactive + destructive + no `--yes` => exit 1, `confirmation_required`
  * - Non-interactive + `--yes`                  => proceed (resolves)
- * - Interactive, user cancels                  => exit 2 (CANCELLED)
+ * - Interactive, user cancels                  => exit 2 (CANCELED)
  * - Interactive, user confirms                 => proceed (resolves)
  *
  * Note: exit 2 is reserved for active prompt cancellation only. A
@@ -60,8 +60,8 @@ export async function confirmDestructive(
   console.log(`\n${chalk.yellow('About to')} ${opts.action}`);
   const ok = await ui.confirm({ message: 'Proceed?' });
   if (!ok || ui.isCancel(ok)) {
-    // Active cancellation of an interactive prompt => CANCELLED (exit 2).
-    exitWithCode(ExitCode.CANCELLED);
+    // Active cancellation of an interactive prompt => CANCELED (exit 2).
+    exitWithCode(ExitCode.CANCELED);
   }
 }
 

@@ -53,11 +53,11 @@ export interface CliSetupConfigContent {
 export async function abort(message?: string, status?: number): Promise<never> {
   await analytics.shutdown('cancelled');
 
-  ui.outro(message ?? 'Installer setup cancelled.');
+  ui.outro(message ?? 'Installer setup canceled.');
   return process.exit(status ?? 1);
 }
 
-export async function abortIfCancelled<T>(
+export async function abortIfCanceled<T>(
   input: T | Promise<T>,
   integration?: Integration,
 ): Promise<Exclude<T, symbol>> {
@@ -94,7 +94,7 @@ export async function abortIfCancelled<T>(
     const docsUrl = integration ? INTEGRATION_CONFIG[integration].docsUrl : 'https://workos.com/docs/user-management';
 
     ui.cancel(
-      `Installer setup cancelled. You can read the documentation for ${
+      `Installer setup canceled. You can read the documentation for ${
         integration ?? 'WorkOS AuthKit'
       } at ${chalk.cyan(docsUrl)} to continue with the setup manually.`,
     );
@@ -120,7 +120,7 @@ export async function confirmContinueIfNoOrDirtyGitRepo(options: Pick<InstallerO
       // CI mode: auto-continue without git
       const continueWithoutGit = options.ci
         ? true
-        : await abortIfCancelled(
+        : await abortIfCanceled(
             ui.confirm({
               message:
                 'You are not inside a git repository. The installer will create and update files. Do you want to continue anyway?',
@@ -152,7 +152,7 @@ ${uncommittedOrUntrackedFiles.join('\n')}
 
 The installer will create and update files.`,
       );
-      const continueWithDirtyRepo = await abortIfCancelled(
+      const continueWithDirtyRepo = await abortIfCanceled(
         ui.confirm({
           message: 'Do you want to continue anyway?',
         }),
@@ -200,7 +200,7 @@ export function getUncommittedOrUntrackedFiles(): string[] {
 }
 
 export async function askForItemSelection(items: string[], message: string): Promise<{ value: string; index: number }> {
-  const selection = await abortIfCancelled<{ value: string; index: number } | symbol>(
+  const selection = await abortIfCanceled<{ value: string; index: number } | symbol>(
     ui.select({
       maxItems: 12,
       message: message,
@@ -249,7 +249,7 @@ export async function confirmContinueIfPackageVersionNotSupported({
     );
 
     ui.note(note ?? `Please upgrade to ${acceptableVersions} if you wish to use the WorkOS AuthKit installer.`);
-    const continueWithUnsupportedVersion = await abortIfCancelled(
+    const continueWithUnsupportedVersion = await abortIfCanceled(
       ui.confirm({
         message: 'Do you want to continue anyway?',
       }),
@@ -313,7 +313,7 @@ export async function installPackage({
 }): Promise<{ packageManager?: PackageManager }> {
   return traceStep('install-package', async () => {
     if (alreadyInstalled && askBeforeUpdating) {
-      const shouldUpdatePackage = await abortIfCancelled(
+      const shouldUpdatePackage = await abortIfCanceled(
         ui.confirm({
           message: `The ${chalk.bold.cyan(
             packageNameDisplayLabel ?? packageName,
@@ -427,7 +427,7 @@ export async function ensurePackageIsInstalled(
     analytics.setTag(`${packageName.toLowerCase()}-installed`, installed);
 
     if (!installed) {
-      const continueWithoutPackage = await abortIfCancelled(
+      const continueWithoutPackage = await abortIfCanceled(
         ui.confirm({
           message: `${packageName} does not seem to be installed. Do you still want to continue?`,
           initialValue: false,
@@ -512,7 +512,7 @@ export async function getPackageManager(
       ? 'Multiple package managers detected. Please select one:'
       : 'Please select your package manager.';
 
-  const selectedPackageManager = await abortIfCancelled<PackageManager | symbol>(
+  const selectedPackageManager = await abortIfCanceled<PackageManager | symbol>(
     ui.select({
       message,
       options: pkgOptions.map((packageManager) => ({
@@ -592,7 +592,7 @@ export async function getOrAskForWorkOSCredentials(
 
   if (requireApiKey && !apiKey) {
     ui.log.info(`${chalk.dim('ℹ️ Your API key will be hidden for security and saved to .env.local')}`);
-    apiKey = (await abortIfCancelled(
+    apiKey = (await abortIfCanceled(
       ui.password({
         message: 'Enter your WorkOS API Key',
         validate: (value) => {
@@ -609,7 +609,7 @@ export async function getOrAskForWorkOSCredentials(
   }
 
   if (!clientId) {
-    clientId = (await abortIfCancelled(
+    clientId = (await abortIfCanceled(
       ui.text({
         message: 'Enter your WorkOS Client ID',
         placeholder: 'client_...',

@@ -6,7 +6,7 @@
 # JSON errors on stderr, and JSON output on stdout. Everything here is
 # offline-safe — CI runs it inside a --network none container, and release
 # smoke runs it on native hardware for every platform binary. Exit code 2
-# (cancelled) needs an interactive session and is covered by unit tests.
+# (canceled) needs an interactive session and is covered by unit tests.
 #
 # POSIX sh only: this runs in debian-slim and Alpine containers (no bash)
 # and under Git Bash on the Windows runners.

@@ -353,7 +353,7 @@ describe('spinner ownership (AUTH-6732)', () => {
     expect(output()).toContain('working');
   });
 
-  it('does not open pre-aborted or cancelled queued prompts', async () => {
+  it('does not open pre-aborted or canceled queued prompts', async () => {
     const controller = new AbortController();
     controller.abort();
     expect(await ui.confirm({ message: 'moot', signal: controller.signal })).toBe(CANCEL);

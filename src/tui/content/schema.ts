@@ -63,7 +63,7 @@ export const WALKTHROUGH_PARAMS: Partial<Record<InstallerEventName, readonly str
 export const WALKTHROUGH_VARIANTS: Partial<Record<InstallerEventName, readonly string[]>> = {
   'validation:complete': ['passed', 'failed'],
   'postinstall:unavailable': ['not-git', 'error'],
-  complete: ['success', 'setup-required', 'failure', 'cancelled'],
+  complete: ['success', 'setup-required', 'failure', 'canceled'],
 };
 
 const PLACEHOLDER = /\{([a-zA-Z][a-zA-Z0-9]*)\}/g;

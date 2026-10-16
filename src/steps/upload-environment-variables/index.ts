@@ -2,7 +2,7 @@ import type { Integration } from '../../lib/constants.js';
 import { traceStep } from '../../telemetry.js';
 import { analytics } from '../../utils/analytics.js';
 import ui from '../../utils/ui.js';
-import { abortIfCancelled } from '../../utils/ui-utils.js';
+import { abortIfCanceled } from '../../utils/ui-utils.js';
 import { isPromptAllowed } from '../../utils/interaction-mode.js';
 import type { InstallerOptions } from '../../utils/types.js';
 import { EnvironmentProvider } from './EnvironmentProvider.js';
@@ -39,7 +39,7 @@ export const uploadEnvironmentVariablesStep = async (
   }
 
   // Non-interactive mode: default to skipping the upload rather than prompting
-  // (or failing fast via the abortIfCancelled guard below).
+  // (or failing fast via the abortIfCanceled guard below).
   if (!isPromptAllowed()) {
     analytics.capture('installer interaction', {
       action: 'not uploading environment variables',
@@ -50,7 +50,7 @@ export const uploadEnvironmentVariablesStep = async (
     return [];
   }
 
-  const upload: boolean = await abortIfCancelled(
+  const upload: boolean = await abortIfCanceled(
     ui.select({
       message: `It looks like you are using ${provider.name}. Would you like to upload the environment variables?`,
       options: [

@@ -257,7 +257,7 @@ export function clearSetupDecline(): void {
  * through to the saved preference.
  *
  * This is a deliberate, documented change from the old `WORKOS_TELEMETRY !==
- * 'false'` behaviour: previously `WORKOS_TELEMETRY=1` forced telemetry on even
+ * 'false'` behavior: previously `WORKOS_TELEMETRY=1` forced telemetry on even
  * for opted-out users; now an opt-out is respected unless the env var
  * explicitly says 'true'.
  */

@@ -281,7 +281,7 @@ describe('installer leaves changes uncommitted through the real parser and orche
   it('cancels before the agent without asking any post-install questions', () => {
     git(project, 'checkout', '-qb', 'existing-feature');
     const result = run(['install', '--no-branch', '--create-pr'], { TEST_HUMAN: '1', TEST_CANCEL: '1' });
-    expect(result.stdout).toContain('cancelled');
+    expect(result.stdout).toContain('canceled');
     expect(result.evidence.some((e) => e.kind === 'agent-options')).toBe(false);
     expect(result.evidence.filter((e) => e.kind === 'prompt').map((e) => e.value)).toEqual(['Continue anyway?']);
   });

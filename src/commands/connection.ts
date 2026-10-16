@@ -201,7 +201,7 @@ export async function runConnectionDelete(
     });
 
     if (ui.isCancel(confirmed) || !confirmed) {
-      console.log('Delete cancelled.');
+      console.log('Delete canceled.');
       return;
     }
   }

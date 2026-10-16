@@ -302,7 +302,7 @@ function emitSetupEvent(
     extraAttributes: {
       'setup.trigger': trigger,
       // `accepted` kept for back-compat dashboards; `outcome` distinguishes a
-      // deliberate "no" (declined) from a walk-away/ctrl-c (cancelled).
+      // deliberate "no" (declined) from a walk-away/ctrl-c (canceled).
       'setup.accepted': outcome === 'accepted',
       'setup.outcome': outcome,
       'setup.skills_agents': agents.skills.join(','),

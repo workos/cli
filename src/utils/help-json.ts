@@ -2287,7 +2287,7 @@ export function extractHelpJsonCommand(argv: string[]): string | undefined {
  */
 /**
  * Top-level command names (first token of each registered command). Used by
- * telemetry to recognise real commands without trusting arbitrary argv tokens
+ * telemetry to recognize real commands without trusting arbitrary argv tokens
  * (so option values / secrets are never recorded as a command name).
  */
 export function getTopLevelCommandNames(): string[] {

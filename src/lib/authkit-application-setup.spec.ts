@@ -1070,7 +1070,7 @@ describe('Unauthorized configuration recovery', () => {
     },
   );
 
-  it.each(['failed', 'cancelled', 'not-authenticated'])(
+  it.each(['failed', 'canceled', 'not-authenticated'])(
     'leaves post-agent files and target untouched when dashboard auth checking is %s',
     async (outcome) => {
       const context = contextFor(directory, 'nextjs');
@@ -1085,10 +1085,10 @@ describe('Unauthorized configuration recovery', () => {
         });
       else
         vi.mocked(ensureAuthenticated).mockRejectedValue(
-          outcome === 'cancelled' ? new CliExit(2) : new Error('fake_private_auth_error'),
+          outcome === 'canceled' ? new CliExit(2) : new Error('fake_private_auth_error'),
         );
       await expect(configureNextjsApplicationUrls(context)).rejects.toMatchObject({
-        code: outcome === 'cancelled' ? 'cancelled' : 'auth_required',
+        code: outcome === 'canceled' ? 'cancelled' : 'auth_required',
         message: expect.not.stringContaining('fake_private_auth_error'),
       });
       expect(await readFile(join(directory, '.env.local'), 'utf8')).toBe(before);

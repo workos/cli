@@ -7,7 +7,7 @@ import {
 } from './failure-classifier.js';
 
 /**
- * The verbatim strings from the incident, plus the neighbouring shapes that
+ * The verbatim strings from the incident, plus the neighboring shapes that
  * must NOT reclassify. The ordering inside classifyAgentFailure is the entire
  * fix: every `deterministic` row below also matches a transient pattern, so a
  * careless reorder turns them all back into "try again in a few minutes".

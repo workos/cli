@@ -253,10 +253,10 @@ describe('ensure-auth', () => {
       expect(mockRunLogin).toHaveBeenCalledOnce();
     });
 
-    it('returns authenticated=false if login is cancelled', async () => {
-      // No credentials, login doesn't create them (user cancelled)
+    it('returns authenticated=false if login is canceled', async () => {
+      // No credentials, login doesn't create them (user canceled)
       mockRunLogin.mockImplementation(() => {
-        // Don't save credentials - simulates user cancelling
+        // Don't save credentials - simulates user canceling
       });
 
       const result = await ensureAuthenticated();

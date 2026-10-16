@@ -327,7 +327,7 @@ function spinner(): Spinner {
 /**
  * Returned by a prompt when the user cancels (ctrl-c) or a signal aborts it.
  * Typed as a plain `symbol` (not `unique symbol`) to preserve the exact
- * generic-inference behavior at call sites like `assertNotCancelled<T>(v: T | symbol)`.
+ * generic-inference behavior at call sites like `assertNotCanceled<T>(v: T | symbol)`.
  */
 export const CANCEL: symbol = Symbol('workos.prompt.cancel');
 
@@ -337,7 +337,7 @@ export function isCancel(value: unknown): value is symbol {
 }
 
 /** Print a cancellation line. */
-export function cancel(message = 'Cancelled'): void {
+export function cancel(message = 'Canceled'): void {
   if (uiHost) {
     uiHost.line({ kind: 'plain', message, rendered: dim(message), stream: 'stderr' });
     return;

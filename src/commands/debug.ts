@@ -249,7 +249,7 @@ export async function runDebugReset({
       if (isJsonMode()) {
         outputJson({ cleared: false, cancelled: true });
       } else {
-        ui.log.info('Reset cancelled');
+        ui.log.info('Reset canceled');
       }
       return;
     }

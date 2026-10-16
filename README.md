@@ -678,7 +678,7 @@ workos install --api-key sk_test_xxx --client-id client_xxx 2>/dev/null
 | ---- | ----------------------- |
 | 0    | Success                 |
 | 1    | General error           |
-| 2    | Cancelled               |
+| 2    | Canceled                |
 | 4    | Authentication required |
 
 ### Environment Variables

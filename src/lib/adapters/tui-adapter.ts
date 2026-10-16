@@ -58,7 +58,7 @@ interface PendingPrompt {
 /** How an answered prompt reads in the scrollback, like inquirer leaves it. */
 function answeredLine(request: UiPromptRequest, value: unknown): string {
   const message = request.message;
-  if (isCancel(value)) return `${INDENT}${chalk.red('✗')} ${message} ${chalk.dim('cancelled')}`;
+  if (isCancel(value)) return `${INDENT}${chalk.red('✗')} ${message} ${chalk.dim('canceled')}`;
   let answer: string;
   switch (request.kind) {
     case 'confirm':

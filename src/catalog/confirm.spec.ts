@@ -113,7 +113,7 @@ describe('confirmDestructive', () => {
     expect(mockConfirm).not.toHaveBeenCalled();
   });
 
-  it('exits 2 (CANCELLED) when the interactive prompt is declined', async () => {
+  it('exits 2 (CANCELED) when the interactive prompt is declined', async () => {
     setInteractionMode({ mode: 'human', source: 'default' });
     setOutputMode('human');
     mockConfirm.mockResolvedValue(false);
@@ -121,7 +121,7 @@ describe('confirmDestructive', () => {
     expect(mockConfirm).toHaveBeenCalledOnce();
   });
 
-  it('exits 2 (CANCELLED) when the interactive prompt is cancelled (Ctrl+C)', async () => {
+  it('exits 2 (CANCELED) when the interactive prompt is canceled (Ctrl+C)', async () => {
     setInteractionMode({ mode: 'human', source: 'default' });
     setOutputMode('human');
     const cancelSymbol = Symbol('ui-cancel');

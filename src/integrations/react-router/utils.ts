@@ -1,6 +1,6 @@
 import { major } from 'semver';
 import fg from 'fast-glob';
-import { abortIfCancelled, getPackageDotJson } from '../../utils/ui-utils.js';
+import { abortIfCanceled, getPackageDotJson } from '../../utils/ui-utils.js';
 import ui from '../../utils/ui.js';
 import { getVersionBucket } from '../../utils/semver.js';
 import type { InstallerOptions } from '../../utils/types.js';
@@ -100,7 +100,7 @@ export async function getReactRouterMode(options: InstallerOptions): Promise<Rea
   if (!reactRouterVersion) {
     if (!isPromptAllowed()) return defaultModeNonInteractive();
     ui.log.info(`Learn more about React Router modes: ${chalk.cyan('https://reactrouter.com/start/modes')}`);
-    const result: ReactRouterMode = await abortIfCancelled(
+    const result: ReactRouterMode = await abortIfCanceled(
       ui.select({
         message: 'What React Router version and mode are you using?',
         options: [
@@ -144,7 +144,7 @@ export async function getReactRouterMode(options: InstallerOptions): Promise<Rea
 
     if (!isPromptAllowed()) return defaultModeNonInteractive();
     ui.log.info(`Learn more about React Router modes: ${chalk.cyan('https://reactrouter.com/start/modes')}`);
-    const result: ReactRouterMode = await abortIfCancelled(
+    const result: ReactRouterMode = await abortIfCanceled(
       ui.select({
         message: 'What React Router v7 mode are you using?',
         options: [
@@ -160,7 +160,7 @@ export async function getReactRouterMode(options: InstallerOptions): Promise<Rea
 
   if (!isPromptAllowed()) return defaultModeNonInteractive();
   ui.log.info(`Learn more about React Router modes: ${chalk.cyan('https://reactrouter.com/start/modes')}`);
-  const result: ReactRouterMode = await abortIfCancelled(
+  const result: ReactRouterMode = await abortIfCanceled(
     ui.select({
       message: 'What React Router version and mode are you using?',
       options: [

@@ -756,7 +756,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
     try {
       await maybePickInstallEnvironment(getActiveEnvironment(), augmentedOptions.installDir);
     } catch (error) {
-      // Cancelling the picker ends the run before the try/finally below, so
+      // Canceling the picker ends the run before the try/finally below, so
       // release the adapter here (the full-screen one owns the terminal).
       await adapter.stop();
       throw error;
@@ -785,7 +785,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
             const err = snapshot.context.error;
             installerStatus = 'error';
             reject(err ?? new Error('Wizard failed'));
-          } else if (snapshot.value === 'cancelled') {
+          } else if (snapshot.value === 'canceled') {
             installerStatus = 'cancelled';
             resolve();
           } else {

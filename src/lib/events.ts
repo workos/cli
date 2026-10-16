@@ -72,7 +72,7 @@ export interface InstallerEvents {
   'git:clean': Record<string, never>;
   'git:dirty': { files: string[] };
   'git:dirty:confirmed': Record<string, never>;
-  'git:dirty:cancelled': Record<string, never>;
+  'git:dirty:canceled': Record<string, never>;
   'credentials:gathering': { requiresApiKey: boolean };
   /**
    * Credentials were already on `options` when the machine started. `source`
@@ -176,7 +176,7 @@ const INSTALLER_EVENT_REGISTRY = {
   'git:clean': true,
   'git:dirty': true,
   'git:dirty:confirmed': true,
-  'git:dirty:cancelled': true,
+  'git:dirty:canceled': true,
   'credentials:gathering': true,
   'credentials:found': true,
   'credentials:env:detected': true,

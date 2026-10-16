@@ -125,7 +125,7 @@ describe('HeadlessAdapter', () => {
         files: ['package.json'],
       });
       expect(mockWriteNDJSON).toHaveBeenCalledWith(expect.objectContaining({ type: 'error', code: 'git_dirty' }));
-      expect(sendEvent).toHaveBeenCalledWith({ type: 'GIT_CANCELLED' });
+      expect(sendEvent).toHaveBeenCalledWith({ type: 'GIT_CANCELED' });
       expect(mockExit).toHaveBeenCalledWith(1);
       await adapter.stop();
     });
