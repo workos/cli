@@ -351,21 +351,27 @@ ${baseContent ? `## General Guidelines\n\n${baseContent}\n\n` : ''}## Integratio
 ${refContent}
 
 ${
-  setupContent
-    ? `## Required Application Setup and Verification
+  baseContent && !setupContent
+    ? `The references above link to workos-authkit-setup.md. It covers dashboard configuration and browser checks that this installer handles itself, so you don't need to read it.
+
+`
+    : ''
+}${
+    setupContent
+      ? `## Required Application Setup and Verification
 
 ${setupContent}
 
 ## Installer execution boundary
 
 The setup reference above is already included in this prompt. Do not read a relative workos-authkit-setup.md from the app directory.
-The agent's shell permissions do not allow WorkOS management commands. Do not run workos, install another CLI, use curl or SDK scripts to bypass that boundary, or attempt dashboard authentication. Implement and validate the app code only. The installer handles supported dashboard configuration outside the agent after code validation; unavailable configuration must remain explicitly unverified.
+Don't install another CLI or use SDK scripts to change WorkOS settings or authenticate to the dashboard. Implement and validate the app code only.
 
 Create a dedicated /sign-in GET route in the App Router using getSignInUrl() from @workos-inc/authkit-nextjs and redirect(await getSignInUrl()) from next/navigation. Keep the OAuth callback using handleAuth() separate. The Initiate login URI is the app origin plus /sign-in, NEVER the callback URI. Read existing files before editing; do not replace an unrelated existing sign-in flow. If a page already serves /sign-in (including inside route groups), stop: this installer cannot place a route handler alongside that page. Never delete the page or create a conflicting route. Keep /sign-in public and follow the SDK README for PKCE cookie handling.
 Do not claim the full integration or browser flows are verified. Report code implementation separately from application configuration and browser testing.
 `
-    : ''
-}
+      : ''
+  }
 
 ${signInSection}Report your progress using [STATUS] prefixes.
 
