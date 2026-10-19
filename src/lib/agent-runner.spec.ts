@@ -29,7 +29,7 @@ import { runAgentInstaller } from './agent-runner.js';
 import { validateInstallation, quickCheckValidateAndFormat } from './validation/index.js';
 import { autoConfigureWorkOSEnvironment } from './workos-management.js';
 import { writeEnvLocal } from './env-writer.js';
-import { getOrAskForWorkOSCredentials } from '../utils/ui-utils.js';
+import { ensurePackageIsInstalled, getOrAskForWorkOSCredentials, getPackageDotJson } from '../utils/ui-utils.js';
 
 const options: InstallerOptions = {
   debug: false,
@@ -242,5 +242,40 @@ describe('installer prompt', () => {
     await expect(runAgentInstaller(config, options)).rejects.toThrow('Missing bundled setup reference');
     expect(initializeAgent).not.toHaveBeenCalled();
     expect(runAgent).not.toHaveBeenCalled();
+  });
+});
+
+describe('project manifest checks', () => {
+  it.each([
+    ['kotlin', 'kotlin', 'workos-kotlin'],
+    ['php', 'php', 'workos-php'],
+    ['php-laravel', 'php', 'workos-php-laravel'],
+  ] as const)('does not read package.json for %s projects', async (integration, language, skillName) => {
+    await runAgentInstaller({ ...config, metadata: { ...config.metadata, integration, language, skillName } }, options);
+
+    expect(getPackageDotJson).not.toHaveBeenCalled();
+    expect(ensurePackageIsInstalled).not.toHaveBeenCalled();
+    expect(runAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not require a framework package for vanilla JS', async () => {
+    await runAgentInstaller(
+      {
+        ...config,
+        metadata: { ...config.metadata, integration: 'vanilla-js', skillName: 'workos-authkit-vanilla-js' },
+        detection: { packageName: 'workos', packageDisplayName: 'Vanilla JavaScript', getVersion: () => undefined },
+      },
+      options,
+    );
+
+    expect(getPackageDotJson).toHaveBeenCalled();
+    expect(ensurePackageIsInstalled).not.toHaveBeenCalled();
+    expect(runAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it('still requires the framework package for other JS integrations', async () => {
+    await runAgentInstaller(config, options);
+
+    expect(ensurePackageIsInstalled).toHaveBeenCalledWith(expect.anything(), 'next', 'Next.js');
   });
 });

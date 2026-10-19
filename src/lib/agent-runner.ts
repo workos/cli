@@ -41,8 +41,14 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
   // Git check is now handled by the state machine - no need to check here
 
   // Framework detection and version
-  const packageJson = await getPackageDotJson(options);
-  await ensurePackageIsInstalled(packageJson, config.detection.packageName, config.detection.packageDisplayName);
+  // Only JS integrations have a package.json; reading it elsewhere aborts the install
+  // (Kotlin, PHP, Laravel). Vanilla JS is the fallback for any JS project, so it has
+  // no framework package to require.
+  const isJavaScriptProject = config.metadata.language === 'javascript';
+  const packageJson = isJavaScriptProject ? await getPackageDotJson(options) : {};
+  if (isJavaScriptProject && config.metadata.integration !== 'vanilla-js') {
+    await ensurePackageIsInstalled(packageJson, config.detection.packageName, config.detection.packageDisplayName);
+  }
 
   const frameworkVersion = config.detection.getVersion(packageJson);
 
