@@ -113,8 +113,9 @@ export class NextjsGrader implements Grader {
     const sdkImportChecks = await this.fileGrader.checkFileContains(middlewareFile, ['@workos-inc/authkit-nextjs']);
     checks.push(...sdkImportChecks);
 
-    // Check for authkit integration: authkitMiddleware OR (authkit + handleAuthkitProxy, or its deprecated alias handleAuthkitHeaders)
-    const middlewareChecks = await this.fileGrader.checkFileContains(middlewareFile, ['authkitMiddleware']);
+    // Check for authkit integration: authkitProxy (or its deprecated alias authkitMiddleware)
+    // OR (authkit + handleAuthkitProxy, or its deprecated alias handleAuthkitHeaders)
+    const middlewareChecks = await this.fileGrader.checkFileContains(middlewareFile, [/authkit(Proxy|Middleware)\b/]);
     const composableChecks = await this.fileGrader.checkFileContains(middlewareFile, [
       'authkit(',
       /handleAuthkit(Proxy|Headers)\b/,
@@ -127,10 +128,10 @@ export class NextjsGrader implements Grader {
       name: 'AuthKit middleware integration',
       passed: usesAuthkitMiddleware || usesComposable,
       message: usesAuthkitMiddleware
-        ? 'Uses authkitMiddleware'
+        ? 'Uses authkitProxy/authkitMiddleware'
         : usesComposable
           ? 'Uses authkit() composable with handleAuthkitProxy'
-          : 'Missing authkitMiddleware or authkit() composable integration',
+          : 'Missing authkitProxy/authkitMiddleware or authkit() composable integration',
     };
     checks.push(authkitCheck);
 

@@ -138,7 +138,9 @@ export class AgentExecutor {
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: this.workDir,
       model: process.env.EVAL_MODEL ?? getConfig().model,
-      allowedTools: ['Skill', 'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch'],
+      // Empty like production: listed tools skip installerCanUseTool, which would let
+      // eval agents run commands (e.g. `workos`, `curl`) the shipped installer denies.
+      allowedTools: [],
       sdkEnv,
       claudeExecutablePath: await ensureClaudeCodeExecutable(),
     };
