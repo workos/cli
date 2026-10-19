@@ -14,7 +14,7 @@
         "@workos/emulate": "^0.14.0",
         "@workos/migrations": "^2.6.0",
         "@workos/openapi-spec": "^0.123.0",
-        "@workos/skills": "0.7.3",
+        "@workos/skills": "0.8.0",
         "chalk": "^6.0.1",
         "diff": "^9.0.0",
         "fast-glob": "^3.3.3",
@@ -411,7 +411,7 @@
 
     "@workos/openapi-spec": ["@workos/openapi-spec@0.123.0", "", {}, "sha512-ZsHblNwgpc53tLfNoZU3mRA+L/vO2xadWus6Y68XVfcp9cz9ufNax8qAeWxgspmc0zazsnwy2xb0+ZB0dyrEOw=="],
 
-    "@workos/skills": ["@workos/skills@0.7.3", "", { "dependencies": { "yaml": "^2.8.2" } }, "sha512-xg+TqR52bBj6nNfhzzUuLhBwaeaFs/913H5z7jsq4LF/mxm6TzQkfecFh7z15wrbbf1unpFXSY3V0HGDyRdbWA=="],
+    "@workos/skills": ["@workos/skills@0.8.0", "", { "dependencies": { "yaml": "^2.8.2" } }, "sha512-SNn1824L/q3wbVWLJQnxrsNwmAnYEREEwbgAtWwibjWTr0JH2uCbbpKIXdEbo2zbdBmxGvBnaCfR7jJHjTRn2A=="],
 
     "accepts": ["accepts@2.0.0", "", { "dependencies": { "mime-types": "^3.0.0", "negotiator": "^1.0.0" } }, "sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng=="],
 

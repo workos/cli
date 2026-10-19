@@ -109,8 +109,8 @@ describe('AgentExecutor', () => {
     const [agentRunConfig] = mockRunAgent.mock.calls[0];
     expect(agentRunConfig.workingDirectory).toBe(testDir);
     expect(agentRunConfig.model).toBe('test-model');
-    expect(agentRunConfig.allowedTools).toContain('Skill');
-    expect(agentRunConfig.allowedTools).toContain('Write');
+    // Must match production so every tool call goes through installerCanUseTool
+    expect(agentRunConfig.allowedTools).toEqual([]);
     expect(agentRunConfig.mcpServers).toBeUndefined();
     // Direct mode — no gateway URL
     expect(agentRunConfig.sdkEnv.ANTHROPIC_API_KEY).toBe('sk-ant-test');
