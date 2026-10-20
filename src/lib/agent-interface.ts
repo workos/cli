@@ -677,6 +677,12 @@ export async function runAgent(
           return Promise.resolve(result);
         },
         tools: { type: 'preset', preset: 'claude_code' },
+        // Load no ~/.claude or project settings. Omitted, the SDK (since 0.2.89) loads them
+        // all: the user's plugins, MCP servers, hooks, CLAUDE.md, and permission rules,
+        // which apply before installerCanUseTool and would bypass the Bash gate.
+        settingSources: [],
+        // Only MCP servers we pass explicitly (none), even if the SDK's defaults change again.
+        strictMcpConfig: true,
         allowedTools: agentConfig.allowedTools,
         plugins: [{ type: 'local', path: pluginPath }],
         pathToClaudeCodeExecutable: agentConfig.claudeExecutablePath,

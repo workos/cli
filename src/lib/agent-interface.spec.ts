@@ -169,6 +169,18 @@ describe('runAgent retry loop', () => {
     }) as typeof emitter.emit;
   });
 
+  it('isolates the agent from user Claude Code settings and MCP servers', async () => {
+    mockQuery.mockImplementation(createMockSDKResponse([{ text: 'Done!' }]));
+
+    await runAgent(makeAgentConfig(), 'Test prompt', makeOptions(), undefined, emitter);
+
+    const { options } = mockQuery.mock.calls[0][0] as { options: Record<string, unknown> };
+    // Omitted, the SDK loads ~/.claude settings: user plugins, MCP servers, hooks, and
+    // permission rules that would apply before installerCanUseTool.
+    expect(options.settingSources).toEqual([]);
+    expect(options.strictMcpConfig).toBe(true);
+  });
+
   it('returns retryCount=0 when no retryConfig provided', async () => {
     mockQuery.mockImplementation(createMockSDKResponse([{ text: 'Done!' }]));
 
