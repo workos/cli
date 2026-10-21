@@ -251,31 +251,57 @@ const READ_ONLY_GIT_SUBCOMMANDS = ['status', 'diff', 'log', 'show', 'ls-files', 
 /** git arguments that write files or run external programs. */
 const UNSAFE_GIT_ARG = /^(-c|-o|--output.*|--ext-diff|--textconv|--exec.*|--upload-pack.*|--open-files-in-pager.*)$/;
 
-function isReadOnlyGit(command: string, cwd?: string): boolean {
+/** The read-only git subcommand `command` runs, or null if it isn't an allowed read-only git call. */
+function readOnlyGitSubcommand(command: string, cwd?: string): string | null {
   // Quotes and backslashes are removed by the shell, so `"--output=x"` or `--out\put`
   // would slip past the token checks below. Without them, the split matches what runs.
-  if (/['"\\]/.test(command)) return false;
+  if (/['"\\]/.test(command)) return null;
   const parts = command.split(/\s+/);
-  if (parts[0] !== 'git') return false;
+  if (parts[0] !== 'git') return null;
   let i = 1;
   if (parts[i] === '--no-pager') i++;
   if (parts[i] === '-C') {
-    if (!cwd || !parts[i + 1] || resolve(cwd, parts[i + 1]) !== resolve(cwd)) return false;
+    if (!cwd || !parts[i + 1] || resolve(cwd, parts[i + 1]) !== resolve(cwd)) return null;
     i += 2;
   }
-  if (!READ_ONLY_GIT_SUBCOMMANDS.includes(parts[i])) return false;
-  return !parts.slice(i + 1).some((arg) => UNSAFE_GIT_ARG.test(arg));
+  if (!READ_ONLY_GIT_SUBCOMMANDS.includes(parts[i])) return null;
+  return parts.slice(i + 1).some((arg) => UNSAFE_GIT_ARG.test(arg)) ? null : parts[i];
 }
+
+/** Subcommands that can run external diff or textconv helpers. */
+const GIT_DIFF_SUBCOMMANDS = ['diff', 'show', 'log'];
 
 /**
  * Make an allowed read-only git command unable to run external diff or textconv
  * programs, whatever the user's or repo's git config says.
  */
 function withoutExternalGitHelpers(command: string): string {
+  // Anchored: only the git call at the start (after an optional `cd <dir> &&`) is
+  // rewritten, so a later "git log" in the arguments can't satisfy the check.
   return command.replace(
-    /\bgit((?:\s+--no-pager)?(?:\s+-C\s+\S+)?)\s+(diff|show|log)\b/,
-    'git$1 $2 --no-ext-diff --no-textconv',
+    /^((?:cd\s+\S+\s*&&\s*)?git(?:\s+--no-pager)?(?:\s+-C\s+\S+)?)\s+(diff|show|log)\b/,
+    '$1 $2 --no-ext-diff --no-textconv',
   );
+}
+
+/**
+ * Allow a read-only git command, or deny it when it could run external helpers and
+ * the helper-disabling rewrite can't be applied (e.g. `git 2>&1 diff`).
+ */
+function allowReadOnlyGit(subcommand: string, rawCommand: string, input: Record<string, unknown>): PermissionResult {
+  if (!GIT_DIFF_SUBCOMMANDS.includes(subcommand)) {
+    logInfo(`Allowing read-only git command: ${rawCommand}`);
+    return { behavior: 'allow', updatedInput: input };
+  }
+  const command = withoutExternalGitHelpers(rawCommand);
+  if (command === rawCommand) {
+    return {
+      behavior: 'deny',
+      message: `Bash command not allowed. Write read-only git as \`git ${subcommand} [args]\`, with options after the subcommand.`,
+    };
+  }
+  logInfo(`Allowing read-only git command: ${command}`);
+  return { behavior: 'allow', updatedInput: { ...input, command } };
 }
 
 /** Characters a `cd` target may contain; anything else could expand in the shell. */
@@ -382,10 +408,8 @@ export function installerCanUseTool(
       };
     }
 
-    if (isReadOnlyGit(baseCommand, workingDirectory)) {
-      logInfo(`Allowing read-only git command with output limiter: ${command}`);
-      return { behavior: 'allow', updatedInput: { ...input, command: withoutExternalGitHelpers(rawCommand) } };
-    }
+    const gitSubcommand = readOnlyGitSubcommand(baseCommand, workingDirectory);
+    if (gitSubcommand) return allowReadOnlyGit(gitSubcommand, rawCommand, input);
     if (matchesAllowedPrefix(baseCommand)) {
       logInfo(`Allowing bash command with output limiter: ${command}`);
       debug(`Allowing bash command with output limiter: ${command}`);
@@ -409,10 +433,8 @@ export function installerCanUseTool(
   }
 
   // Check if command starts with any allowed prefix
-  if (isReadOnlyGit(normalized, workingDirectory)) {
-    logInfo(`Allowing read-only git command: ${command}`);
-    return { behavior: 'allow', updatedInput: { ...input, command: withoutExternalGitHelpers(rawCommand) } };
-  }
+  const gitSubcommand = readOnlyGitSubcommand(normalized, workingDirectory);
+  if (gitSubcommand) return allowReadOnlyGit(gitSubcommand, rawCommand, input);
 
   if (matchesAllowedPrefix(normalized)) {
     logInfo(`Allowing bash command: ${command}`);

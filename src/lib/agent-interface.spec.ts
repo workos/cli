@@ -661,6 +661,14 @@ describe('installerCanUseTool', () => {
       expect(command('git status --short')).toBe('git status --short');
     });
 
+    it('denies diff/show/log when the helper-disabling rewrite cannot apply', () => {
+      expect(verdict('git 2>&1 diff')).toBe('deny');
+      expect(verdict('git 2>&1 log -p | head -20')).toBe('deny');
+      expect(verdict('git 2>&1 diff git log')).toBe('deny');
+      expect(verdict('git status 2>&1')).toBe('allow');
+      expect(verdict('git diff --stat 2>&1 | tail -5')).toBe('allow');
+    });
+
     it('allows syntax checks per tool without allowing code execution', () => {
       expect(verdict('python3 -m py_compile server.py')).toBe('allow');
       expect(verdict('python3 -m venv .venv')).toBe('allow');
