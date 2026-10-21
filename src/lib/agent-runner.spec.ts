@@ -12,7 +12,7 @@ vi.mock('./validation/security-checks.js', () => ({
 }));
 vi.mock('../steps/index.js', () => ({}));
 vi.mock('./workos-management.js', () => ({ autoConfigureWorkOSEnvironment: vi.fn() }));
-vi.mock('./env-writer.js', () => ({ writeEnvLocal: vi.fn() }));
+vi.mock('./env-writer.js', () => ({ writeEnvLocal: vi.fn(), writeEnvFile: vi.fn() }));
 vi.mock('../utils/ui-utils.js', () => ({
   ensurePackageIsInstalled: vi.fn(),
   getOrAskForWorkOSCredentials: vi.fn(async () => ({ apiKey: 'test-key', clientId: 'client_test' })),
@@ -28,7 +28,7 @@ import { initializeAgent, runAgent } from './agent-interface.js';
 import { runAgentInstaller } from './agent-runner.js';
 import { validateInstallation, quickCheckValidateAndFormat } from './validation/index.js';
 import { autoConfigureWorkOSEnvironment } from './workos-management.js';
-import { writeEnvLocal } from './env-writer.js';
+import { writeEnvFile, writeEnvLocal } from './env-writer.js';
 import { ensurePackageIsInstalled, getOrAskForWorkOSCredentials, getPackageDotJson } from '../utils/ui-utils.js';
 
 const options: InstallerOptions = {
@@ -257,6 +257,33 @@ describe('project manifest checks', () => {
     expect(ensurePackageIsInstalled).not.toHaveBeenCalled();
     expect(runAgent).toHaveBeenCalledTimes(1);
   });
+
+  it.each(['kotlin', 'php', 'php-laravel'] as const)(
+    'writes %s credentials to .env even when the caller supplied them',
+    async (integration) => {
+      await runAgentInstaller(
+        {
+          ...config,
+          metadata: { ...config.metadata, integration, language: 'php', skillName: `workos-${integration}` },
+        },
+        { ...options, apiKey: 'sk_test', clientId: 'client_test' },
+      );
+
+      expect(writeEnvFile).toHaveBeenCalledWith(
+        options.installDir,
+        expect.objectContaining({
+          WORKOS_API_KEY: 'test-key',
+          WORKOS_CLIENT_ID: 'client_test',
+          WORKOS_REDIRECT_URI: expect.any(String),
+        }),
+      );
+      expect(writeEnvLocal).not.toHaveBeenCalled();
+      const prompt = vi.mocked(runAgent).mock.calls[0][1];
+      expect(prompt).toContain('configured in .env:');
+      expect(prompt).not.toContain('.env.local');
+      expect(prompt).not.toContain('WORKOS_COOKIE_PASSWORD');
+    },
+  );
 
   it('does not require a framework package for vanilla JS', async () => {
     await runAgentInstaller(

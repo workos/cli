@@ -22,7 +22,7 @@ import { autoConfigureWorkOSEnvironment } from './workos-management.js';
 import { assertSupportedNextJsRouter, assertNextjsSignInRouteAvailable } from '../integrations/nextjs/utils.js';
 import { detectPort, resolveRedirectUri } from './port-detection.js';
 import { buildSignInSection } from './sign-in-route.js';
-import { writeEnvLocal } from './env-writer.js';
+import { writeEnvFile, writeEnvLocal } from './env-writer.js';
 
 /**
  * Universal agent-powered wizard runner.
@@ -97,7 +97,16 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
 
   // Write environment variables to .env.local BEFORE agent runs
   // Skip if caller already handled this (prevents double-writing)
-  if (!callerHandledConfig) {
+  if (!isJavaScriptProject) {
+    // Non-JS projects use .env. The installer's environment step skips non-JS apps, so
+    // write credentials here even when the caller supplied them; otherwise the agent
+    // starts with none (Kotlin, PHP, Laravel).
+    writeEnvFile(options.installDir, {
+      ...(apiKey ? { WORKOS_API_KEY: apiKey } : {}),
+      WORKOS_CLIENT_ID: clientId,
+      WORKOS_REDIRECT_URI: resolveRedirectUri(config.metadata.integration, options),
+    });
+  } else if (!callerHandledConfig) {
     const redirectUri = resolveRedirectUri(config.metadata.integration, options);
 
     // Next.js requires NEXT_PUBLIC_ prefix for client-side env vars
@@ -329,7 +338,8 @@ async function buildIntegrationPrompt(
     ...(config.environment.requiresApiKey ? ['WORKOS_API_KEY'] : []),
     'WORKOS_CLIENT_ID',
     config.metadata.integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI',
-    'WORKOS_COOKIE_PASSWORD',
+    // Only the .env.local writer generates a cookie password; non-JS SDKs configure their own.
+    ...(isJavaScript ? ['WORKOS_COOKIE_PASSWORD'] : []),
   ];
   const envVarList = envVars.map((v) => `- ${v}`).join('\n');
   const signInSection = buildSignInSection(config);
@@ -343,7 +353,7 @@ async function buildIntegrationPrompt(
 
 ## Environment
 
-The following environment variables have been configured in .env.local:
+The following environment variables have been configured in ${config.metadata.language === 'javascript' ? '.env.local' : '.env'}:
 ${envVarList}
 
 ${baseContent ? `## General Guidelines\n\n${baseContent}\n\n` : ''}## Integration Instructions
