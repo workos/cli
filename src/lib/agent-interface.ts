@@ -105,9 +105,14 @@ export type AgentRunConfig = {
 /**
  * Appended to Claude Code's system prompt for every installer run. It states up front
  * what installerCanUseTool enforces, so the agent doesn't discover the rules one
- * denied command at a time. Keep it in sync with the allowlist below.
+ * denied command at a time, and only promises post-run checks the runner performs.
+ * Keep it in sync with the allowlist below.
  */
-export const INSTALLER_SYSTEM_PROMPT_APPEND = `# WorkOS installer environment
+export function buildInstallerSystemPromptAppend({ validatesAfterRun }: { validatesAfterRun: boolean }): string {
+  const afterRun = validatesAfterRun
+    ? 'After you finish, the installer typechecks and builds the project and sends you any errors to fix.'
+    : "Run the project's build or syntax check yourself before you finish; the installer does not check it afterwards.";
+  return `# WorkOS installer environment
 
 You are running inside the WorkOS CLI installer, not an interactive session, and your working directory is the user's project.
 
@@ -115,9 +120,10 @@ You are running inside the WorkOS CLI installer, not an interactive session, and
 - Run one command per Bash call from the working directory. Don't use \`cd\`, \`&&\`, \`;\`, \`$(...)\`, or pipes other than \`| head\` or \`| tail\`.
 - Inspect files with Read, Grep, and Glob, not Bash.
 - Bash has no network access: no curl, \`npm view\`, or \`git clone\`. Use WebFetch to read documentation. The \`workos\` CLI is not available to you.
-- Don't start dev servers or open a browser to test sign-in. After you finish, the installer typechecks and builds the project and sends you any errors to fix.
-- Don't change WorkOS dashboard settings (redirect URIs, Sign-out URI, Initiate login URI, CORS). The installer configures supported settings after your code passes validation. List anything you could not verify as unverified.
+- Don't start dev servers or open a browser to test sign-in; report sign-in flows as untested. ${afterRun}
+- Don't change WorkOS dashboard settings (redirect URIs, Sign-out URI, Initiate login URI, CORS). The installer configures supported settings itself. List anything you could not verify as unverified.
 - Leave changes unstaged: don't stage, commit, or create branches.`;
+}
 
 /**
  * Package managers that can be used to run commands.
@@ -258,12 +264,20 @@ function isReadOnlyGit(command: string, cwd?: string): boolean {
   return !parts.slice(i + 1).some((arg) => UNSAFE_GIT_ARG.test(arg));
 }
 
-/** Strip `cd <working directory> && ` so the rest is judged on its own. */
+/** Characters a `cd` target may contain; anything else could expand in the shell. */
+const PLAIN_PATH = /^[A-Za-z0-9_./@+,=:%-]+$/;
+
+/**
+ * Strip `cd <working directory> && ` so the rest is judged on its own. Callers must
+ * check the unstripped command for DANGEROUS_OPERATORS first: the shell runs the
+ * original text, so a path like "/proj/$(id)/.." must never be resolved away.
+ */
 function stripCdIntoWorkingDirectory(command: string, cwd?: string): string {
   if (!cwd) return command;
   const match = command.match(/^cd\s+(?:"([^"]+)"|'([^']+)'|(\S+))\s*&&\s*(\S.*)$/s);
   if (!match) return command;
   const dir = match[1] ?? match[2] ?? match[3];
+  if (!PLAIN_PATH.test(dir)) return command;
   return resolve(cwd, dir) === resolve(cwd) ? match[4] : command;
 }
 
@@ -311,25 +325,25 @@ export function installerCanUseTool(
     return { behavior: 'allow', updatedInput: input };
   }
 
-  const command = stripCdIntoWorkingDirectory(
-    (typeof input.command === 'string' ? input.command : '').trim(),
-    workingDirectory,
-  );
+  const rawCommand = (typeof input.command === 'string' ? input.command : '').trim();
 
-  // Block definitely dangerous operators: ; ` $ ( )
-  if (DANGEROUS_OPERATORS.test(command)) {
-    logWarn(`Denying bash command with dangerous operators: ${command}`);
-    debug(`Denying bash command with dangerous operators: ${command}`);
+  // Block definitely dangerous operators: ; ` $ ( ). Checked on the raw command, since
+  // that is what Bash runs, before any `cd <working directory> &&` prefix is removed.
+  if (DANGEROUS_OPERATORS.test(rawCommand)) {
+    logWarn(`Denying bash command with dangerous operators: ${rawCommand}`);
+    debug(`Denying bash command with dangerous operators: ${rawCommand}`);
     analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
       action: 'bash command denied',
       reason: 'dangerous operators',
-      command,
+      command: rawCommand,
     });
     return {
       behavior: 'deny',
       message: `Bash command not allowed. Shell operators like ; \` $ ( ) and newlines are not permitted. Run one command per Bash call.`,
     };
   }
+
+  const command = stripCdIntoWorkingDirectory(rawCommand, workingDirectory);
 
   // Normalize: remove safe stderr redirection (2>&1, 2>&2, etc.)
   const normalized = command.replace(/\s*\d*>&\d+\s*/g, ' ').trim();
@@ -750,7 +764,11 @@ export async function runAgent(
         tools: { type: 'preset', preset: 'claude_code' },
         // Without this the SDK sends an empty system prompt, so the agent never gets
         // Claude Code's tool guidance (Read/Grep over cat/grep) or our installer rules.
-        systemPrompt: { type: 'preset', preset: 'claude_code', append: INSTALLER_SYSTEM_PROMPT_APPEND },
+        systemPrompt: {
+          type: 'preset',
+          preset: 'claude_code',
+          append: buildInstallerSystemPromptAppend({ validatesAfterRun: Boolean(retryConfig && maxRetries > 0) }),
+        },
         // Load no ~/.claude or project settings. Omitted, the SDK (since 0.2.89) loads them
         // all: the user's plugins, MCP servers, hooks, CLAUDE.md, and permission rules,
         // which apply before installerCanUseTool and would bypass the Bash gate.

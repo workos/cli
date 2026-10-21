@@ -352,7 +352,7 @@ ${refContent}
 
 ${
   baseContent && !setupContent
-    ? `The references above link to workos-authkit-setup.md. It covers dashboard configuration and browser checks that this installer handles itself, so you don't need to read it.
+    ? `The references above link to workos-authkit-setup.md. It covers dashboard configuration, which this installer handles itself, and browser checks, which you can't run here, so you don't need to read it.
 
 `
     : ''

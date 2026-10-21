@@ -181,17 +181,30 @@ describe('runAgent retry loop', () => {
     expect(options.strictMcpConfig).toBe(true);
   });
 
-  it('states installer rules in the system prompt', async () => {
+  const systemAppendFor = async (retryConfig?: { maxRetries: number; validateAndFormat: () => Promise<null> }) => {
+    mockQuery.mockReset();
     mockQuery.mockImplementation(createMockSDKResponse([{ text: 'Done!' }]));
+    await runAgent(makeAgentConfig(), 'Test prompt', makeOptions(), undefined, emitter, retryConfig);
+    const { options } = mockQuery.mock.calls[0][0] as {
+      options: { systemPrompt: { type: string; preset: string; append: string } };
+    };
+    expect(options.systemPrompt).toMatchObject({ type: 'preset', preset: 'claude_code' });
+    return options.systemPrompt.append;
+  };
 
-    await runAgent(makeAgentConfig(), 'Test prompt', makeOptions(), undefined, emitter);
+  it('states installer rules in the system prompt', async () => {
+    const append = await systemAppendFor();
+    expect(append).toContain('WorkOS installer environment');
+    expect(append).toContain('Inspect files with Read, Grep, and Glob');
+  });
 
-    const { options } = mockQuery.mock.calls[0][0] as { options: Record<string, unknown> };
-    expect(options.systemPrompt).toEqual({
-      type: 'preset',
-      preset: 'claude_code',
-      append: expect.stringContaining('WorkOS installer environment'),
-    });
+  it('only promises post-run build feedback when the runner validates', async () => {
+    const withoutValidation = await systemAppendFor();
+    expect(withoutValidation).toContain('the installer does not check it afterwards');
+    expect(withoutValidation).not.toContain('sends you any errors to fix');
+
+    const withValidation = await systemAppendFor({ maxRetries: 2, validateAndFormat: async () => null });
+    expect(withValidation).toContain('sends you any errors to fix');
   });
 
   it('passes agent messages to options.onAgentMessage', async () => {
@@ -610,6 +623,14 @@ describe('installerCanUseTool', () => {
       expect(verdict('cd /proj && bun run build 2>&1 | tail -20')).toBe('allow');
       expect(verdict('cd /other && bun run build')).toBe('deny');
       expect(verdict('cd /proj && bun run build && curl http://x/')).toBe('deny');
+    });
+
+    it('denies shell code hidden in a cd path that resolves to the working directory', () => {
+      expect(verdict('cd "/proj/$(id)/.." && git status')).toBe('deny');
+      expect(verdict('cd /proj/`id`/.. && git status')).toBe('deny');
+      expect(verdict("cd '/proj/${HOME}/..' && bun run build")).toBe('deny');
+      expect(verdict('cd /proj/*/.. && git status')).toBe('deny');
+      expect(verdict('cd "/proj/x y/.." && git status')).toBe('deny');
     });
 
     it('allows read-only git and denies git that writes or runs programs', () => {
