@@ -148,4 +148,27 @@ describe('debug logging', () => {
     const { getLogFilePath } = await import('./debug.js');
     expect(getLogFilePath()).toBeNull();
   });
+
+  it('keeps concurrent scoped runs in separate log files', async () => {
+    const { runWithLogFile, initLogFile, logInfo, getLogFilePath } = await import('./debug.js');
+    const dir = mkdtempSync(join(tmpdir(), 'workos-scoped-log-'));
+    const a = join(dir, 'a', 'run.log');
+    const b = join(dir, 'b', 'run.log');
+    const run = (path: string, message: string) =>
+      runWithLogFile(path, async () => {
+        initLogFile();
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        logInfo(message);
+        return getLogFilePath();
+      });
+
+    const [pathA, pathB] = await Promise.all([run(a, 'from-a'), run(b, 'from-b')]);
+
+    expect([pathA, pathB]).toEqual([a, b]);
+    expect(readFileSync(a, 'utf8')).toContain('from-a');
+    expect(readFileSync(a, 'utf8')).not.toContain('from-b');
+    expect(readFileSync(b, 'utf8')).toContain('from-b');
+    expect(readFileSync(b, 'utf8')).not.toContain('from-a');
+    rmSync(dir, { recursive: true, force: true });
+  });
 });

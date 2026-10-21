@@ -22,7 +22,7 @@ import { autoConfigureWorkOSEnvironment } from './workos-management.js';
 import { assertSupportedNextJsRouter, assertNextjsSignInRouteAvailable } from '../integrations/nextjs/utils.js';
 import { detectPort, resolveRedirectUri } from './port-detection.js';
 import { buildSignInSection } from './sign-in-route.js';
-import { writeEnvLocal } from './env-writer.js';
+import { writeEnvFile, writeEnvLocal } from './env-writer.js';
 
 /**
  * Universal agent-powered wizard runner.
@@ -41,8 +41,14 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
   // Git check is now handled by the state machine - no need to check here
 
   // Framework detection and version
-  const packageJson = await getPackageDotJson(options);
-  await ensurePackageIsInstalled(packageJson, config.detection.packageName, config.detection.packageDisplayName);
+  // Only JS integrations have a package.json; reading it elsewhere aborts the install
+  // (Kotlin, PHP, Laravel). Vanilla JS is the fallback for any JS project, so it has
+  // no framework package to require.
+  const isJavaScriptProject = config.metadata.language === 'javascript';
+  const packageJson = isJavaScriptProject ? await getPackageDotJson(options) : {};
+  if (isJavaScriptProject && config.metadata.integration !== 'vanilla-js') {
+    await ensurePackageIsInstalled(packageJson, config.detection.packageName, config.detection.packageDisplayName);
+  }
 
   const frameworkVersion = config.detection.getVersion(packageJson);
 
@@ -91,7 +97,16 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
 
   // Write environment variables to .env.local BEFORE agent runs
   // Skip if caller already handled this (prevents double-writing)
-  if (!callerHandledConfig) {
+  if (!isJavaScriptProject) {
+    // Non-JS projects use .env. The installer's environment step skips non-JS apps, so
+    // write credentials here even when the caller supplied them; otherwise the agent
+    // starts with none (Kotlin, PHP, Laravel).
+    writeEnvFile(options.installDir, {
+      ...(apiKey ? { WORKOS_API_KEY: apiKey } : {}),
+      WORKOS_CLIENT_ID: clientId,
+      WORKOS_REDIRECT_URI: resolveRedirectUri(config.metadata.integration, options),
+    });
+  } else if (!callerHandledConfig) {
     const redirectUri = resolveRedirectUri(config.metadata.integration, options);
 
     // Next.js requires NEXT_PUBLIC_ prefix for client-side env vars
@@ -323,7 +338,8 @@ async function buildIntegrationPrompt(
     ...(config.environment.requiresApiKey ? ['WORKOS_API_KEY'] : []),
     'WORKOS_CLIENT_ID',
     config.metadata.integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI',
-    'WORKOS_COOKIE_PASSWORD',
+    // Only the .env.local writer generates a cookie password; non-JS SDKs configure their own.
+    ...(isJavaScript ? ['WORKOS_COOKIE_PASSWORD'] : []),
   ];
   const envVarList = envVars.map((v) => `- ${v}`).join('\n');
   const signInSection = buildSignInSection(config);
@@ -337,7 +353,7 @@ async function buildIntegrationPrompt(
 
 ## Environment
 
-The following environment variables have been configured in .env.local:
+The following environment variables have been configured in ${config.metadata.language === 'javascript' ? '.env.local' : '.env'}:
 ${envVarList}
 
 ${baseContent ? `## General Guidelines\n\n${baseContent}\n\n` : ''}## Integration Instructions
@@ -345,21 +361,27 @@ ${baseContent ? `## General Guidelines\n\n${baseContent}\n\n` : ''}## Integratio
 ${refContent}
 
 ${
-  setupContent
-    ? `## Required Application Setup and Verification
+  baseContent && !setupContent
+    ? `The references above link to workos-authkit-setup.md. It covers dashboard configuration, which this installer handles itself, and browser checks, which you can't run here, so you don't need to read it.
+
+`
+    : ''
+}${
+    setupContent
+      ? `## Required Application Setup and Verification
 
 ${setupContent}
 
 ## Installer execution boundary
 
 The setup reference above is already included in this prompt. Do not read a relative workos-authkit-setup.md from the app directory.
-The agent's shell permissions do not allow WorkOS management commands. Do not run workos, install another CLI, use curl or SDK scripts to bypass that boundary, or attempt dashboard authentication. Implement and validate the app code only. The installer handles supported dashboard configuration outside the agent after code validation; unavailable configuration must remain explicitly unverified.
+Don't install another CLI or use SDK scripts to change WorkOS settings or authenticate to the dashboard. Implement and validate the app code only.
 
 Create a dedicated /sign-in GET route in the App Router using getSignInUrl() from @workos-inc/authkit-nextjs and redirect(await getSignInUrl()) from next/navigation. Keep the OAuth callback using handleAuth() separate. The Initiate login URI is the app origin plus /sign-in, NEVER the callback URI. Read existing files before editing; do not replace an unrelated existing sign-in flow. If a page already serves /sign-in (including inside route groups), stop: this installer cannot place a route handler alongside that page. Never delete the page or create a conflicting route. Keep /sign-in public and follow the SDK README for PKCE cookie handling.
 Do not claim the full integration or browser flows are verified. Report code implementation separately from application configuration and browser testing.
 `
-    : ''
-}
+      : ''
+  }
 
 ${signInSection}Report your progress using [STATUS] prefixes.
 

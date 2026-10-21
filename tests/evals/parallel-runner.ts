@@ -122,7 +122,19 @@ export class ParallelRunner {
         lastToolCalls = agentResult.toolCalls;
 
         const grader = new scenario.grader(workDir);
-        const gradeResult = await grader.grade();
+        const graded = await grader.grade();
+        // The installer can reject a result the grader would accept (e.g. a missing
+        // Next.js /sign-in route fails its validation), so an installer failure fails
+        // the scenario too.
+        const gradeResult = agentResult.success
+          ? graded
+          : {
+              passed: false,
+              checks: [
+                { name: 'Installer completed', passed: false, message: agentResult.error ?? 'Installer failed' },
+                ...graded.checks,
+              ],
+            };
 
         // Collect key files for quality grading (only on pass to avoid wasted effort)
         const keyFiles =
@@ -133,6 +145,7 @@ export class ParallelRunner {
           passed: gradeResult.passed,
           duration: Date.now() - startTime,
           checks: gradeResult.checks,
+          ...(agentResult.success ? {} : { error: agentResult.error ?? 'Installer failed' }),
           agentOutput: agentResult.output,
           attempts: attempt,
           latencyMetrics: agentResult.latencyMetrics,

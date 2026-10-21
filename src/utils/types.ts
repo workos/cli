@@ -120,6 +120,12 @@ export type InstallerOptions = {
   maxRetries?: number;
 
   /**
+   * Observe every message from the agent session. Used by evals to record tool
+   * calls and latency while running the real integration flow.
+   */
+  onAgentMessage?: (message: import('@anthropic-ai/claude-agent-sdk').SDKMessage) => void;
+
+  /**
    * Scaffold a new Next.js app when run in an empty directory.
    * Auto-enabled in headless mode; opt-in via --scaffold in interactive mode.
    */

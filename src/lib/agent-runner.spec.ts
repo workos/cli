@@ -12,7 +12,7 @@ vi.mock('./validation/security-checks.js', () => ({
 }));
 vi.mock('../steps/index.js', () => ({}));
 vi.mock('./workos-management.js', () => ({ autoConfigureWorkOSEnvironment: vi.fn() }));
-vi.mock('./env-writer.js', () => ({ writeEnvLocal: vi.fn() }));
+vi.mock('./env-writer.js', () => ({ writeEnvLocal: vi.fn(), writeEnvFile: vi.fn() }));
 vi.mock('../utils/ui-utils.js', () => ({
   ensurePackageIsInstalled: vi.fn(),
   getOrAskForWorkOSCredentials: vi.fn(async () => ({ apiKey: 'test-key', clientId: 'client_test' })),
@@ -28,8 +28,8 @@ import { initializeAgent, runAgent } from './agent-interface.js';
 import { runAgentInstaller } from './agent-runner.js';
 import { validateInstallation, quickCheckValidateAndFormat } from './validation/index.js';
 import { autoConfigureWorkOSEnvironment } from './workos-management.js';
-import { writeEnvLocal } from './env-writer.js';
-import { getOrAskForWorkOSCredentials } from '../utils/ui-utils.js';
+import { writeEnvFile, writeEnvLocal } from './env-writer.js';
+import { ensurePackageIsInstalled, getOrAskForWorkOSCredentials, getPackageDotJson } from '../utils/ui-utils.js';
 
 const options: InstallerOptions = {
   debug: false,
@@ -242,5 +242,67 @@ describe('installer prompt', () => {
     await expect(runAgentInstaller(config, options)).rejects.toThrow('Missing bundled setup reference');
     expect(initializeAgent).not.toHaveBeenCalled();
     expect(runAgent).not.toHaveBeenCalled();
+  });
+});
+
+describe('project manifest checks', () => {
+  it.each([
+    ['kotlin', 'kotlin', 'workos-kotlin'],
+    ['php', 'php', 'workos-php'],
+    ['php-laravel', 'php', 'workos-php-laravel'],
+  ] as const)('does not read package.json for %s projects', async (integration, language, skillName) => {
+    await runAgentInstaller({ ...config, metadata: { ...config.metadata, integration, language, skillName } }, options);
+
+    expect(getPackageDotJson).not.toHaveBeenCalled();
+    expect(ensurePackageIsInstalled).not.toHaveBeenCalled();
+    expect(runAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['kotlin', 'php', 'php-laravel'] as const)(
+    'writes %s credentials to .env even when the caller supplied them',
+    async (integration) => {
+      await runAgentInstaller(
+        {
+          ...config,
+          metadata: { ...config.metadata, integration, language: 'php', skillName: `workos-${integration}` },
+        },
+        { ...options, apiKey: 'sk_test', clientId: 'client_test' },
+      );
+
+      expect(writeEnvFile).toHaveBeenCalledWith(
+        options.installDir,
+        expect.objectContaining({
+          WORKOS_API_KEY: 'test-key',
+          WORKOS_CLIENT_ID: 'client_test',
+          WORKOS_REDIRECT_URI: expect.any(String),
+        }),
+      );
+      expect(writeEnvLocal).not.toHaveBeenCalled();
+      const prompt = vi.mocked(runAgent).mock.calls[0][1];
+      expect(prompt).toContain('configured in .env:');
+      expect(prompt).not.toContain('.env.local');
+      expect(prompt).not.toContain('WORKOS_COOKIE_PASSWORD');
+    },
+  );
+
+  it('does not require a framework package for vanilla JS', async () => {
+    await runAgentInstaller(
+      {
+        ...config,
+        metadata: { ...config.metadata, integration: 'vanilla-js', skillName: 'workos-authkit-vanilla-js' },
+        detection: { packageName: 'workos', packageDisplayName: 'Vanilla JavaScript', getVersion: () => undefined },
+      },
+      options,
+    );
+
+    expect(getPackageDotJson).toHaveBeenCalled();
+    expect(ensurePackageIsInstalled).not.toHaveBeenCalled();
+    expect(runAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it('still requires the framework package for other JS integrations', async () => {
+    await runAgentInstaller(config, options);
+
+    expect(ensurePackageIsInstalled).toHaveBeenCalledWith(expect.anything(), 'next', 'Next.js');
   });
 });

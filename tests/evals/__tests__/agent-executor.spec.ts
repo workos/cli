@@ -4,8 +4,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 // Hoist mocks so they're available in vi.mock factories
-const { mockRunAgent, mockConfig, mockCredentials } = vi.hoisted(() => ({
+const { mockRunAgent, mockIntegrationRun, mockConfigureEnv, mockConfig, mockCredentials } = vi.hoisted(() => ({
   mockRunAgent: vi.fn(),
+  mockIntegrationRun: vi.fn(),
+  mockConfigureEnv: vi.fn(async () => {}),
   mockConfig: {
     model: 'test-model',
     workos: { clientId: 'client_test', authkitDomain: 'test.workos.com', llmGatewayUrl: 'http://localhost:8000' },
@@ -32,6 +34,15 @@ const { mockRunAgent, mockConfig, mockCredentials } = vi.hoisted(() => ({
 // Mock the production runAgent — this is what we're testing the wiring to
 vi.mock('../../../src/lib/agent-interface.js', () => ({
   runAgent: mockRunAgent,
+}));
+
+vi.mock('../../../src/lib/run-with-core.js', () => ({ configureInstallEnvironment: mockConfigureEnv }));
+
+// The eval runs the real integration flow; the integration itself is mocked here.
+vi.mock('../../../src/lib/registry.js', () => ({
+  getRegistry: vi.fn(async () => ({
+    get: (name: string) => (name === 'unknown' ? undefined : { run: mockIntegrationRun }),
+  })),
 }));
 
 vi.mock('../../../src/lib/agent-sdk-assets.js', () => ({
@@ -68,6 +79,7 @@ vi.mock('../../../src/utils/debug.js', () => ({
   logError: vi.fn(),
   initLogFile: vi.fn(),
   getLogFilePath: vi.fn(() => null),
+  runWithLogFile: vi.fn((_path: string, fn: () => unknown) => fn()),
 }));
 
 vi.mock('../../../src/utils/analytics.js', () => ({
@@ -92,29 +104,119 @@ describe('AgentExecutor', () => {
     // Create package.json so env writing works
     writeFileSync(join(testDir, 'package.json'), JSON.stringify({ name: 'test' }));
     mockRunAgent.mockReset();
+    mockIntegrationRun.mockReset();
+    mockConfigureEnv.mockClear();
+    mockConfig.model = 'test-model';
+    delete process.env.EVAL_MODEL;
   });
 
   afterEach(() => {
     rmSync(testDir, { recursive: true, force: true });
   });
 
-  it('calls production runAgent with correct AgentRunConfig', async () => {
-    mockRunAgent.mockResolvedValue({ retryCount: 0 });
+  it('runs the real integration with installer options like production', async () => {
+    mockIntegrationRun.mockResolvedValue('done');
 
     const executor = new AgentExecutor(testDir, 'nextjs');
-    await executor.run();
+    const result = await executor.run();
 
-    expect(mockRunAgent).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(true);
+    expect(mockIntegrationRun).toHaveBeenCalledTimes(1);
+    const [options] = mockIntegrationRun.mock.calls[0];
+    expect(options).toMatchObject({
+      installDir: testDir,
+      ci: true,
+      skipAuth: true,
+      direct: true,
+      apiKey: 'sk_test_key',
+      clientId: 'client_test_id',
+      noValidate: false,
+      maxRetries: 2,
+    });
+    expect(typeof options.onAgentMessage).toBe('function');
+    expect(options.emitter).toBeDefined();
+    expect(mockRunAgent).not.toHaveBeenCalled();
+  });
 
-    const [agentRunConfig] = mockRunAgent.mock.calls[0];
-    expect(agentRunConfig.workingDirectory).toBe(testDir);
-    expect(agentRunConfig.model).toBe('test-model');
-    // Must match production so every tool call goes through installerCanUseTool
-    expect(agentRunConfig.allowedTools).toEqual([]);
-    expect(agentRunConfig.mcpServers).toBeUndefined();
-    // Direct mode — no gateway URL
-    expect(agentRunConfig.sdkEnv.ANTHROPIC_API_KEY).toBe('sk-ant-test');
-    expect(agentRunConfig.sdkEnv.ANTHROPIC_BASE_URL).toBeUndefined();
+  it('disables validation retries when correction is disabled', async () => {
+    mockIntegrationRun.mockResolvedValue('done');
+
+    await new AgentExecutor(testDir, 'nextjs').run({ enabled: false, maxRetries: 0 });
+
+    expect(mockIntegrationRun.mock.calls[0][0]).toMatchObject({ noValidate: true, maxRetries: 0 });
+  });
+
+  it('counts agent:retry events as correction attempts', async () => {
+    mockIntegrationRun.mockImplementation(async (options) => {
+      options.emitter.emit('agent:retry', { attempt: 1, maxRetries: 2 });
+      options.emitter.emit('agent:retry', { attempt: 2, maxRetries: 2 });
+      return 'done';
+    });
+
+    const result = await new AgentExecutor(testDir, 'nextjs').run();
+
+    expect(result.success).toBe(true);
+    expect(result.correctionAttempts).toBe(2);
+    expect(result.selfCorrected).toBe(true);
+  });
+
+  it('maps a thrown integration error to a failed result', async () => {
+    mockIntegrationRun.mockRejectedValue(new Error('Installation validation failed'));
+
+    const result = await new AgentExecutor(testDir, 'nextjs').run();
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('Installation validation failed');
+    expect(result.selfCorrected).toBe(false);
+  });
+
+  it('records tool calls and text from agent messages', async () => {
+    mockIntegrationRun.mockImplementation(async (options) => {
+      options.onAgentMessage({
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: 'Installing AuthKit...' },
+            { type: 'tool_use', name: 'Read', input: { file_path: 'package.json' } },
+          ],
+        },
+      });
+      return 'done';
+    });
+
+    const result = await new AgentExecutor(testDir, 'nextjs').run();
+
+    expect(result.output).toContain('Installing AuthKit...');
+    expect(result.toolCalls).toEqual([expect.objectContaining({ tool: 'Read' })]);
+  });
+
+  it('applies EVAL_MODEL to the installer config', async () => {
+    process.env.EVAL_MODEL = 'claude-opus-5-5';
+    mockIntegrationRun.mockResolvedValue('done');
+
+    await new AgentExecutor(testDir, 'nextjs').run();
+
+    expect(mockConfig.model).toBe('claude-opus-5-5');
+  });
+
+  it('writes the installer env file before running the integration', async () => {
+    mockIntegrationRun.mockImplementation(async () => {
+      expect(mockConfigureEnv).toHaveBeenCalledWith({
+        integration: 'nextjs',
+        credentials: { apiKey: 'sk_test_key', clientId: 'client_test_id' },
+        options: expect.objectContaining({ installDir: testDir, ci: true }),
+      });
+      return 'done';
+    });
+
+    const result = await new AgentExecutor(testDir, 'nextjs').run();
+
+    expect(result.success).toBe(true);
+    expect(writeEnvLocal).not.toHaveBeenCalled();
+  });
+
+  it('rejects a framework with no installer integration', async () => {
+    await expect(new AgentExecutor(testDir, 'unknown').run()).rejects.toThrow('No installer integration');
   });
 
   it('uses isolated Ruby environment and explicit callback without inheriting host secrets', async () => {
@@ -134,151 +236,5 @@ describe('AgentExecutor', () => {
     expect(readFileSync(join(testDir, '.env'), 'utf8')).toContain(
       'WORKOS_REDIRECT_URI=http://app.fizzy.localhost:3006/auth/callback',
     );
-  });
-
-  it('passes RetryConfig when correction is enabled', async () => {
-    mockRunAgent.mockResolvedValue({ retryCount: 0 });
-
-    const executor = new AgentExecutor(testDir, 'nextjs');
-    await executor.run({ enabled: true, maxRetries: 3 });
-
-    const retryConfig = mockRunAgent.mock.calls[0][5]; // 6th arg
-    expect(retryConfig).toBeDefined();
-    expect(retryConfig.maxRetries).toBe(3);
-    expect(typeof retryConfig.validateAndFormat).toBe('function');
-  });
-
-  it('passes no RetryConfig when correction is disabled', async () => {
-    mockRunAgent.mockResolvedValue({ retryCount: 0 });
-
-    const executor = new AgentExecutor(testDir, 'nextjs');
-    await executor.run({ enabled: false, maxRetries: 0 });
-
-    const retryConfig = mockRunAgent.mock.calls[0][5];
-    expect(retryConfig).toBeUndefined();
-  });
-
-  it('passes InstallerOptions with skipAuth=true', async () => {
-    mockRunAgent.mockResolvedValue({ retryCount: 0 });
-
-    const executor = new AgentExecutor(testDir, 'nextjs');
-    await executor.run();
-
-    const installerOptions = mockRunAgent.mock.calls[0][2]; // 3rd arg
-    expect(installerOptions.skipAuth).toBe(true);
-    expect(installerOptions.installDir).toBe(testDir);
-  });
-
-  it('passes onMessage callback as 7th argument', async () => {
-    mockRunAgent.mockResolvedValue({ retryCount: 0 });
-
-    const executor = new AgentExecutor(testDir, 'nextjs');
-    await executor.run();
-
-    const onMessage = mockRunAgent.mock.calls[0][6]; // 7th arg
-    expect(typeof onMessage).toBe('function');
-  });
-
-  it('maps retryCount=0 to correctionAttempts=0, selfCorrected=false', async () => {
-    mockRunAgent.mockResolvedValue({ retryCount: 0 });
-
-    const executor = new AgentExecutor(testDir, 'nextjs');
-    const result = await executor.run();
-
-    expect(result.success).toBe(true);
-    expect(result.correctionAttempts).toBe(0);
-    expect(result.selfCorrected).toBe(false);
-  });
-
-  it('maps retryCount>0 to selfCorrected=true on success', async () => {
-    mockRunAgent.mockResolvedValue({ retryCount: 2 });
-
-    const executor = new AgentExecutor(testDir, 'nextjs');
-    const result = await executor.run();
-
-    expect(result.success).toBe(true);
-    expect(result.correctionAttempts).toBe(2);
-    expect(result.selfCorrected).toBe(true);
-  });
-
-  it('maps runAgent error result to failed AgentResult', async () => {
-    mockRunAgent.mockResolvedValue({
-      error: 'EXECUTION_ERROR',
-      errorMessage: 'SDK crashed',
-      retryCount: 1,
-    });
-
-    const executor = new AgentExecutor(testDir, 'nextjs');
-    const result = await executor.run();
-
-    expect(result.success).toBe(false);
-    expect(result.error).toBe('SDK crashed');
-    expect(result.correctionAttempts).toBe(1);
-    expect(result.selfCorrected).toBe(false);
-  });
-
-  it('handles runAgent throwing an exception', async () => {
-    mockRunAgent.mockRejectedValue(new Error('Connection refused'));
-
-    const executor = new AgentExecutor(testDir, 'nextjs');
-    const result = await executor.run();
-
-    expect(result.success).toBe(false);
-    expect(result.error).toBe('Connection refused');
-    expect(result.correctionAttempts).toBe(0);
-  });
-
-  it('writes env vars before calling runAgent', async () => {
-    mockRunAgent.mockResolvedValue({ retryCount: 0 });
-
-    const executor = new AgentExecutor(testDir, 'nextjs');
-    await executor.run();
-
-    expect(writeEnvLocal).toHaveBeenCalledWith(testDir, {
-      WORKOS_API_KEY: 'sk_test_key',
-      WORKOS_CLIENT_ID: 'client_test_id',
-    });
-  });
-
-  it('onMessage callback collects text output from assistant messages', async () => {
-    mockRunAgent.mockResolvedValue({ retryCount: 0 });
-
-    const executor = new AgentExecutor(testDir, 'nextjs');
-    await executor.run();
-
-    // Get the onMessage callback and simulate a message
-    const onMessage = mockRunAgent.mock.calls[0][6];
-    onMessage({
-      type: 'assistant',
-      message: {
-        content: [{ type: 'text', text: 'Installing AuthKit...' }],
-      },
-    });
-
-    // Run again to verify output is collected (can't check internal state,
-    // but we can verify it doesn't throw)
-    expect(onMessage).toBeDefined();
-  });
-
-  it('builds prompt with correct skill name for framework', async () => {
-    mockRunAgent.mockResolvedValue({ retryCount: 0 });
-
-    const executor = new AgentExecutor(testDir, 'react-router');
-    await executor.run();
-
-    const prompt = mockRunAgent.mock.calls[0][1]; // 2nd arg
-    expect(prompt).toContain('workos-authkit-react-router');
-    expect(prompt).toContain('react-router');
-  });
-
-  it('defaults to correction enabled with maxRetries=2', async () => {
-    mockRunAgent.mockResolvedValue({ retryCount: 0 });
-
-    const executor = new AgentExecutor(testDir, 'nextjs');
-    await executor.run(); // no retryConfig arg — uses default
-
-    const retryConfig = mockRunAgent.mock.calls[0][5];
-    expect(retryConfig).toBeDefined();
-    expect(retryConfig.maxRetries).toBe(2);
   });
 });

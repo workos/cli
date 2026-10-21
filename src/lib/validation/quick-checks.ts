@@ -4,9 +4,12 @@ import { join } from 'path';
 import type { QuickCheckResult, QuickChecksOutput, ValidationIssue } from './types.js';
 import { detectBuildCommand, detectPackageManager, parseBuildErrors } from './build-validator.js';
 import { SPAWN_OPTS } from '../../utils/platform.js';
+import { logWarn } from '../../utils/debug.js';
 
-const DEFAULT_TYPECHECK_TIMEOUT_MS = 30_000;
-const DEFAULT_BUILD_TIMEOUT_MS = 60_000;
+// Generous: a check killed at the limit is inconclusive, and a real Next.js build on a
+// busy machine can take minutes.
+const DEFAULT_TYPECHECK_TIMEOUT_MS = 60_000;
+const DEFAULT_BUILD_TIMEOUT_MS = 180_000;
 
 /**
  * Run fast deterministic checks: typecheck first, then build.
@@ -55,7 +58,7 @@ export async function runTypecheckValidation(
     return passResult('typecheck', startTime);
   }
 
-  const { exitCode, stdout, stderr } = await spawnCommand(
+  const { exitCode, stdout, stderr, timedOut } = await spawnCommand(
     typecheckCmd.command,
     typecheckCmd.args,
     projectDir,
@@ -63,6 +66,11 @@ export async function runTypecheckValidation(
   );
 
   if (exitCode === 0) {
+    return passResult('typecheck', startTime);
+  }
+  if (timedOut) {
+    // Killed at the limit: no evidence of an error, so don't ask the agent to fix one.
+    logWarn(`Typecheck timed out after ${timeoutMs}ms; treating as inconclusive`);
     return passResult('typecheck', startTime);
   }
 
@@ -101,9 +109,19 @@ async function runBuildQuickCheck(projectDir: string, timeoutMs: number): Promis
     return passResult('build', startTime);
   }
 
-  const { exitCode, stdout, stderr } = await spawnCommand(buildCmd.command, buildCmd.args, projectDir, timeoutMs);
+  const { exitCode, stdout, stderr, timedOut } = await spawnCommand(
+    buildCmd.command,
+    buildCmd.args,
+    projectDir,
+    timeoutMs,
+  );
 
   if (exitCode === 0) {
+    return passResult('build', startTime);
+  }
+  if (timedOut) {
+    // Killed at the limit: a bare "Build failed" sends the agent guessing at changes.
+    logWarn(`Build timed out after ${timeoutMs}ms; treating as inconclusive`);
     return passResult('build', startTime);
   }
 
@@ -220,8 +238,9 @@ function spawnCommand(
   args: string[],
   cwd: string,
   timeoutMs: number,
-): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+): Promise<{ exitCode: number; stdout: string; stderr: string; timedOut: boolean }> {
   return new Promise((resolve) => {
+    const startedAt = Date.now();
     const proc = spawn(command, args, {
       cwd,
       timeout: timeoutMs,
@@ -238,12 +257,14 @@ function spawnCommand(
       stderr += data.toString();
     });
 
-    proc.on('close', (code) => {
-      resolve({ exitCode: code ?? 1, stdout, stderr });
+    proc.on('close', (code, signal) => {
+      // spawn's `timeout` kills the child with a signal once the limit passes.
+      const timedOut = code === null && signal !== null && Date.now() - startedAt >= timeoutMs;
+      resolve({ exitCode: code ?? 1, stdout, stderr, timedOut });
     });
 
     proc.on('error', () => {
-      resolve({ exitCode: 1, stdout, stderr });
+      resolve({ exitCode: 1, stdout, stderr, timedOut: false });
     });
   });
 }

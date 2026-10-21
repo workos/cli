@@ -9,6 +9,10 @@ import { quickCheckValidateAndFormat } from '../../src/lib/validation/quick-chec
 import { runAgent, type AgentRunConfig, type RetryConfig } from '../../src/lib/agent-interface.js';
 import { ensureClaudeCodeExecutable } from '../../src/lib/agent-sdk-assets.js';
 import type { InstallerOptions } from '../../src/utils/types.js';
+import { getRegistry } from '../../src/lib/registry.js';
+import { createInstallerEventEmitter } from '../../src/lib/events.js';
+import { configureInstallEnvironment } from '../../src/lib/run-with-core.js';
+import { runWithLogFile } from '../../src/utils/debug.js';
 import type { ToolCall, LatencyMetrics } from './types.js';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 
@@ -95,7 +99,23 @@ export class AgentExecutor {
       ...(this.options.redirectUri ? { WORKOS_REDIRECT_URI: this.options.redirectUri } : {}),
     };
 
-    if (JS_FRAMEWORKS.includes(this.framework)) {
+    if (JS_FRAMEWORKS.includes(this.framework) && !this.options.environment) {
+      // Same env file the installer writes before running the integration, including
+      // the framework's redirect URI key and any client-side prefixed copies.
+      await configureInstallEnvironment({
+        integration: this.framework,
+        credentials: { apiKey: this.credentials.workosApiKey, clientId: this.credentials.workosClientId },
+        options: {
+          debug: false,
+          forceInstall: false,
+          installDir: this.workDir,
+          local: false,
+          ci: true,
+          skipAuth: true,
+          ...(this.options.redirectUri ? { redirectUri: this.options.redirectUri } : {}),
+        },
+      });
+    } else if (JS_FRAMEWORKS.includes(this.framework)) {
       writeEnvLocal(this.workDir, envVars);
     } else {
       // Git ignores cannot protect tracked files. Refuse rather than silently
@@ -123,6 +143,11 @@ export class AgentExecutor {
       writeEnvFile(this.workDir, envVars);
     }
 
+    if (!this.options.environment) {
+      return this.runProductionIntegration(config, toolCalls, collectedOutput, label);
+    }
+
+    // Isolated real-app fixtures (Fizzy) keep their own allowlisted environment and prompt.
     const skillName = SKILL_NAMES[this.framework];
     const prompt = this.buildPrompt(skillName);
 
@@ -200,6 +225,67 @@ export class AgentExecutor {
         latencyMetrics: this.latencyTracker.finish(),
         error: error instanceof Error ? error.message : String(error),
         correctionAttempts: 0,
+        selfCorrected: false,
+      };
+    }
+  }
+
+  /**
+   * Run the framework's real installer integration, so the eval measures the same
+   * prompt, tool gate, and validation/retry loop that users get.
+   */
+  private async runProductionIntegration(
+    config: AgentRetryConfig,
+    toolCalls: ToolCall[],
+    collectedOutput: string[],
+    label: string,
+  ): Promise<AgentResult> {
+    const integration = (await getRegistry()).get(this.framework);
+    if (!integration) throw new Error(`No installer integration for framework: ${this.framework}`);
+
+    if (process.env.EVAL_MODEL) getConfig().model = process.env.EVAL_MODEL;
+
+    let correctionAttempts = 0;
+    const emitter = createInstallerEventEmitter();
+    emitter.on('agent:retry', () => correctionAttempts++);
+
+    const options: InstallerOptions = {
+      debug: this.options.verbose ?? false,
+      forceInstall: false,
+      installDir: this.workDir,
+      local: false,
+      ci: true,
+      skipAuth: true,
+      direct: true,
+      // Passing credentials marks configuration as caller-handled: no dashboard calls.
+      apiKey: this.credentials.workosApiKey,
+      clientId: this.credentials.workosClientId,
+      ...(this.options.redirectUri ? { redirectUri: this.options.redirectUri } : {}),
+      noValidate: !config.enabled,
+      maxRetries: config.maxRetries,
+      emitter,
+      onAgentMessage: (message) => this.trackMessage(message, toolCalls, collectedOutput, label),
+    };
+
+    const base = () => ({
+      output: collectedOutput.join('\n'),
+      toolCalls,
+      latencyMetrics: this.latencyTracker.finish(),
+      correctionAttempts,
+    });
+
+    // Scenarios run concurrently in one process; give each its own installer log.
+    const logName = `${(this.options.scenarioName ?? this.framework).replace(/[^a-z0-9]+/gi, '-')}-${Date.now()}.log`;
+    const logFile = join(process.cwd(), 'tests', 'eval-results', 'installer-logs', logName);
+
+    try {
+      await runWithLogFile(logFile, () => integration.run(options));
+      return { ...base(), success: true, selfCorrected: correctionAttempts > 0 };
+    } catch (error) {
+      return {
+        ...base(),
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
         selfCorrected: false,
       };
     }

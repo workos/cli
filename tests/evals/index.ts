@@ -8,6 +8,8 @@ import { diffRuns, printDiff } from './commands/diff.js';
 import { listHistory, pruneHistory } from './commands/history.js';
 
 async function main() {
+  // Eval runs call the real installer integrations; keep them out of installer telemetry.
+  process.env.WORKOS_TELEMETRY ??= 'false';
   const options = parseArgs(process.argv.slice(2));
 
   if (options.help) {

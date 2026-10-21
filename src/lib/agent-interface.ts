@@ -3,7 +3,7 @@
  * Uses Claude Agent SDK directly with WorkOS MCP server
  */
 
-import { dirname } from 'path';
+import { dirname, resolve } from 'path';
 import { getSkillsDir as getSkillsPackageDir } from './skills-assets.js';
 import { ensureClaudeCodeExecutable } from './agent-sdk-assets.js';
 import { debug, logInfo, logWarn, logError, initLogFile, getLogFilePath } from '../utils/debug.js';
@@ -103,6 +103,29 @@ export type AgentRunConfig = {
 };
 
 /**
+ * Appended to Claude Code's system prompt for every installer run. It states up front
+ * what installerCanUseTool enforces, so the agent doesn't discover the rules one
+ * denied command at a time, and only promises post-run checks the runner performs.
+ * Keep it in sync with the allowlist below.
+ */
+export function buildInstallerSystemPromptAppend({ validatesAfterRun }: { validatesAfterRun: boolean }): string {
+  const afterRun = validatesAfterRun
+    ? 'After you finish, the installer typechecks and builds the project and sends you any errors to fix.'
+    : "Run the project's build or syntax check yourself before you finish; the installer does not check it afterwards.";
+  return `# WorkOS installer environment
+
+You are running inside the WorkOS CLI installer, not an interactive session, and your working directory is the user's project.
+
+- Bash runs only: package-manager install/add/remove commands; the project's build, typecheck, lint, format, and test scripts; language checks such as \`go build\`, \`go vet\`, \`mix compile\`, \`python3 -m py_compile\`, \`ruby -c\`, \`php -l\`, \`dotnet build\`, and \`./gradlew build\`; and read-only git (\`status\`, \`diff\`, \`log\`, \`show\`, \`ls-files\`).
+- Run one command per Bash call from the working directory. Don't use \`cd\`, \`&&\`, \`;\`, \`$(...)\`, or pipes other than \`| head\` or \`| tail\`.
+- Inspect files with Read, Grep, and Glob, not Bash.
+- Bash has no network access: no curl, \`npm view\`, or \`git clone\`. Use WebFetch to read documentation. The \`workos\` CLI is not available to you.
+- Don't start dev servers or open a browser to test sign-in; report sign-in flows as untested. ${afterRun}
+- Don't change WorkOS dashboard settings (redirect URIs, Sign-out URI, Initiate login URI, CORS). The installer configures supported settings itself. List anything you could not verify as unverified.
+- Leave changes unstaged: don't stage, commit, or create branches.`;
+}
+
+/**
  * Package managers that can be used to run commands.
  * Includes JS and non-JS ecosystem package managers for multi-SDK support.
  */
@@ -153,10 +176,16 @@ const PACKAGE_MANAGERS = [
  * Note: Linting tools are in LINTING_TOOLS and checked separately.
  */
 const SAFE_SCRIPTS = [
-  // Package installation
+  // Package installation and removal
   'install',
   'add',
   'ci',
+  'remove',
+  'uninstall',
+  'get', // go get
+  'require', // composer require
+  'mod tidy',
+  'mod download',
   // Build
   'build',
   // Type checking (various naming conventions)
@@ -205,6 +234,94 @@ const SAFE_SCRIPTS = [
 const DANGEROUS_OPERATORS = /[;`$()\n\r]/;
 
 /**
+ * Per-tool arguments that only check syntax or create a local environment.
+ * Kept per tool because the same flag can execute code elsewhere
+ * (`ruby -c` checks syntax; `python -c` runs code).
+ */
+const TOOL_SAFE_ARGS: Record<string, string[]> = {
+  python: ['-m py_compile', '-m compileall', '-m venv', '-m pip install'],
+  python3: ['-m py_compile', '-m compileall', '-m venv', '-m pip install'],
+  uv: ['venv', 'pip install', 'sync'],
+  ruby: ['-c '],
+  php: ['-l '],
+};
+
+/** Read-only git subcommands the agent may use to see what changed. */
+const READ_ONLY_GIT_SUBCOMMANDS = ['status', 'diff', 'log', 'show', 'ls-files', 'rev-parse'];
+/** git arguments that write files or run external programs. */
+const UNSAFE_GIT_ARG = /^(-c|-o|--output.*|--ext-diff|--textconv|--exec.*|--upload-pack.*|--open-files-in-pager.*)$/;
+
+/** The read-only git subcommand `command` runs, or null if it isn't an allowed read-only git call. */
+function readOnlyGitSubcommand(command: string, cwd?: string): string | null {
+  // Quotes and backslashes are removed by the shell, so `"--output=x"` or `--out\put`
+  // would slip past the token checks below. Without them, the split matches what runs.
+  if (/['"\\]/.test(command)) return null;
+  const parts = command.split(/\s+/);
+  if (parts[0] !== 'git') return null;
+  let i = 1;
+  if (parts[i] === '--no-pager') i++;
+  if (parts[i] === '-C') {
+    if (!cwd || !parts[i + 1] || resolve(cwd, parts[i + 1]) !== resolve(cwd)) return null;
+    i += 2;
+  }
+  if (!READ_ONLY_GIT_SUBCOMMANDS.includes(parts[i])) return null;
+  return parts.slice(i + 1).some((arg) => UNSAFE_GIT_ARG.test(arg)) ? null : parts[i];
+}
+
+/** Subcommands that can run external diff or textconv helpers. */
+const GIT_DIFF_SUBCOMMANDS = ['diff', 'show', 'log'];
+
+/**
+ * Make an allowed read-only git command unable to run external diff or textconv
+ * programs, whatever the user's or repo's git config says.
+ */
+function withoutExternalGitHelpers(command: string): string {
+  // Anchored: only the git call at the start (after an optional `cd <dir> &&`) is
+  // rewritten, so a later "git log" in the arguments can't satisfy the check.
+  return command.replace(
+    /^((?:cd\s+\S+\s*&&\s*)?git(?:\s+--no-pager)?(?:\s+-C\s+\S+)?)\s+(diff|show|log)\b/,
+    '$1 $2 --no-ext-diff --no-textconv',
+  );
+}
+
+/**
+ * Allow a read-only git command, or deny it when it could run external helpers and
+ * the helper-disabling rewrite can't be applied (e.g. `git 2>&1 diff`).
+ */
+function allowReadOnlyGit(subcommand: string, rawCommand: string, input: Record<string, unknown>): PermissionResult {
+  if (!GIT_DIFF_SUBCOMMANDS.includes(subcommand)) {
+    logInfo(`Allowing read-only git command: ${rawCommand}`);
+    return { behavior: 'allow', updatedInput: input };
+  }
+  const command = withoutExternalGitHelpers(rawCommand);
+  if (command === rawCommand) {
+    return {
+      behavior: 'deny',
+      message: `Bash command not allowed. Write read-only git as \`git ${subcommand} [args]\`, with options after the subcommand.`,
+    };
+  }
+  logInfo(`Allowing read-only git command: ${command}`);
+  return { behavior: 'allow', updatedInput: { ...input, command } };
+}
+
+/** Characters a `cd` target may contain; anything else could expand in the shell. */
+const PLAIN_PATH = /^[A-Za-z0-9_./@+,=:%-]+$/;
+
+/**
+ * Strip `cd <working directory> && ` so the rest is judged on its own. Callers must
+ * check the unstripped command for DANGEROUS_OPERATORS first: the shell runs the
+ * original text, so a path like "/proj/$(id)/.." must never be resolved away.
+ */
+function stripCdIntoWorkingDirectory(command: string, cwd?: string): string {
+  if (!cwd) return command;
+  const match = command.match(/^cd\s+(?:"([^"]+)"|'([^']+)'|(\S+))\s*&&\s*(\S.*)$/s);
+  if (!match) return command;
+  const dir = match[1] ?? match[2] ?? match[3];
+  if (!PLAIN_PATH.test(dir)) return command;
+  return resolve(cwd, dir) === resolve(cwd) ? match[4] : command;
+}
+
+/**
  * Check if command is an allowed package manager command.
  * Matches: <pkg-manager> [run|exec] <safe-script> [args...]
  */
@@ -226,7 +343,8 @@ function matchesAllowedPrefix(command: string): boolean {
   // Check if script starts with any safe script name or linting tool
   return (
     SAFE_SCRIPTS.some((safe) => scriptPart.startsWith(safe)) ||
-    LINTING_TOOLS.some((tool) => scriptPart.startsWith(tool))
+    LINTING_TOOLS.some((tool) => scriptPart.startsWith(tool)) ||
+    (TOOL_SAFE_ARGS[parts[0]] ?? []).some((arg) => parts.slice(1).join(' ').startsWith(arg))
   );
 }
 
@@ -237,28 +355,35 @@ function matchesAllowedPrefix(command: string): boolean {
  * - Piping to tail/head for output limiting is allowed
  * - Stderr redirection (2>&1) is allowed
  */
-export function installerCanUseTool(toolName: string, input: Record<string, unknown>): PermissionResult {
+export function installerCanUseTool(
+  toolName: string,
+  input: Record<string, unknown>,
+  workingDirectory?: string,
+): PermissionResult {
   // Allow all non-Bash tools
   if (toolName !== 'Bash') {
     return { behavior: 'allow', updatedInput: input };
   }
 
-  const command = (typeof input.command === 'string' ? input.command : '').trim();
+  const rawCommand = (typeof input.command === 'string' ? input.command : '').trim();
 
-  // Block definitely dangerous operators: ; ` $ ( )
-  if (DANGEROUS_OPERATORS.test(command)) {
-    logWarn(`Denying bash command with dangerous operators: ${command}`);
-    debug(`Denying bash command with dangerous operators: ${command}`);
+  // Block definitely dangerous operators: ; ` $ ( ). Checked on the raw command, since
+  // that is what Bash runs, before any `cd <working directory> &&` prefix is removed.
+  if (DANGEROUS_OPERATORS.test(rawCommand)) {
+    logWarn(`Denying bash command with dangerous operators: ${rawCommand}`);
+    debug(`Denying bash command with dangerous operators: ${rawCommand}`);
     analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
       action: 'bash command denied',
       reason: 'dangerous operators',
-      command,
+      command: rawCommand,
     });
     return {
       behavior: 'deny',
       message: `Bash command not allowed. Shell operators like ; \` $ ( ) and newlines are not permitted. Run one command per Bash call.`,
     };
   }
+
+  const command = stripCdIntoWorkingDirectory(rawCommand, workingDirectory);
 
   // Normalize: remove safe stderr redirection (2>&1, 2>&2, etc.)
   const normalized = command.replace(/\s*\d*>&\d+\s*/g, ' ').trim();
@@ -283,6 +408,8 @@ export function installerCanUseTool(toolName: string, input: Record<string, unkn
       };
     }
 
+    const gitSubcommand = readOnlyGitSubcommand(baseCommand, workingDirectory);
+    if (gitSubcommand) return allowReadOnlyGit(gitSubcommand, rawCommand, input);
     if (matchesAllowedPrefix(baseCommand)) {
       logInfo(`Allowing bash command with output limiter: ${command}`);
       debug(`Allowing bash command with output limiter: ${command}`);
@@ -306,6 +433,9 @@ export function installerCanUseTool(toolName: string, input: Record<string, unkn
   }
 
   // Check if command starts with any allowed prefix
+  const gitSubcommand = readOnlyGitSubcommand(normalized, workingDirectory);
+  if (gitSubcommand) return allowReadOnlyGit(gitSubcommand, rawCommand, input);
+
   if (matchesAllowedPrefix(normalized)) {
     logInfo(`Allowing bash command: ${command}`);
     debug(`Allowing bash command: ${command}`);
@@ -321,7 +451,7 @@ export function installerCanUseTool(toolName: string, input: Record<string, unkn
   });
   return {
     behavior: 'deny',
-    message: `Bash command not allowed. Only install, build, typecheck, lint, and formatting commands are permitted.`,
+    message: `Bash command not allowed. Only install, build, typecheck, lint, format, test, syntax-check, and read-only git commands are permitted. Use Read, Grep, and Glob to inspect files.`,
   };
 }
 
@@ -672,11 +802,18 @@ export async function runAgent(
         env: agentConfig.sdkEnv,
         canUseTool: (toolName, input) => {
           logInfo('canUseTool called:', { toolName, input });
-          const result = installerCanUseTool(toolName, input);
+          const result = installerCanUseTool(toolName, input, agentConfig.workingDirectory);
           logInfo('canUseTool result:', result);
           return Promise.resolve(result);
         },
         tools: { type: 'preset', preset: 'claude_code' },
+        // Without this the SDK sends an empty system prompt, so the agent never gets
+        // Claude Code's tool guidance (Read/Grep over cat/grep) or our installer rules.
+        systemPrompt: {
+          type: 'preset',
+          preset: 'claude_code',
+          append: buildInstallerSystemPromptAppend({ validatesAfterRun: Boolean(retryConfig && maxRetries > 0) }),
+        },
         // Load no ~/.claude or project settings. Omitted, the SDK (since 0.2.89) loads them
         // all: the user's plugins, MCP servers, hooks, CLAUDE.md, and permission rules,
         // which apply before installerCanUseTool and would bypass the Bash gate.
@@ -710,6 +847,7 @@ export async function runAgent(
       }
       try {
         onMessage?.(message);
+        options.onAgentMessage?.(message);
       } catch {
         /* non-critical */
       }
