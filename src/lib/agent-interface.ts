@@ -252,6 +252,9 @@ const READ_ONLY_GIT_SUBCOMMANDS = ['status', 'diff', 'log', 'show', 'ls-files', 
 const UNSAFE_GIT_ARG = /^(-c|-o|--output.*|--ext-diff|--textconv|--exec.*|--upload-pack.*|--open-files-in-pager.*)$/;
 
 function isReadOnlyGit(command: string, cwd?: string): boolean {
+  // Quotes and backslashes are removed by the shell, so `"--output=x"` or `--out\put`
+  // would slip past the token checks below. Without them, the split matches what runs.
+  if (/['"\\]/.test(command)) return false;
   const parts = command.split(/\s+/);
   if (parts[0] !== 'git') return false;
   let i = 1;
@@ -262,6 +265,17 @@ function isReadOnlyGit(command: string, cwd?: string): boolean {
   }
   if (!READ_ONLY_GIT_SUBCOMMANDS.includes(parts[i])) return false;
   return !parts.slice(i + 1).some((arg) => UNSAFE_GIT_ARG.test(arg));
+}
+
+/**
+ * Make an allowed read-only git command unable to run external diff or textconv
+ * programs, whatever the user's or repo's git config says.
+ */
+function withoutExternalGitHelpers(command: string): string {
+  return command.replace(
+    /\bgit((?:\s+--no-pager)?(?:\s+-C\s+\S+)?)\s+(diff|show|log)\b/,
+    'git$1 $2 --no-ext-diff --no-textconv',
+  );
 }
 
 /** Characters a `cd` target may contain; anything else could expand in the shell. */
@@ -368,7 +382,11 @@ export function installerCanUseTool(
       };
     }
 
-    if (matchesAllowedPrefix(baseCommand) || isReadOnlyGit(baseCommand, workingDirectory)) {
+    if (isReadOnlyGit(baseCommand, workingDirectory)) {
+      logInfo(`Allowing read-only git command with output limiter: ${command}`);
+      return { behavior: 'allow', updatedInput: { ...input, command: withoutExternalGitHelpers(rawCommand) } };
+    }
+    if (matchesAllowedPrefix(baseCommand)) {
       logInfo(`Allowing bash command with output limiter: ${command}`);
       debug(`Allowing bash command with output limiter: ${command}`);
       return { behavior: 'allow', updatedInput: input };
@@ -391,7 +409,12 @@ export function installerCanUseTool(
   }
 
   // Check if command starts with any allowed prefix
-  if (matchesAllowedPrefix(normalized) || isReadOnlyGit(normalized, workingDirectory)) {
+  if (isReadOnlyGit(normalized, workingDirectory)) {
+    logInfo(`Allowing read-only git command: ${command}`);
+    return { behavior: 'allow', updatedInput: { ...input, command: withoutExternalGitHelpers(rawCommand) } };
+  }
+
+  if (matchesAllowedPrefix(normalized)) {
     logInfo(`Allowing bash command: ${command}`);
     debug(`Allowing bash command: ${command}`);
     return { behavior: 'allow', updatedInput: input };

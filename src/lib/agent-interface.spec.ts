@@ -644,6 +644,23 @@ describe('installerCanUseTool', () => {
       expect(verdict('git push')).toBe('deny');
     });
 
+    it('denies quoted or escaped git flags that the shell would unwrap', () => {
+      expect(verdict('git diff "--output=/tmp/x"')).toBe('deny');
+      expect(verdict("git diff '--ext-diff'")).toBe('deny');
+      expect(verdict('git diff --out\\put=/tmp/x')).toBe('deny');
+    });
+
+    it('runs read-only git without external diff or textconv helpers', () => {
+      const command = (input: string) =>
+        (installerCanUseTool('Bash', { command: input }, cwd) as { updatedInput: { command: string } }).updatedInput
+          .command;
+      expect(command('git diff --stat')).toBe('git diff --no-ext-diff --no-textconv --stat');
+      expect(command('cd /proj && git -C /proj log -p | head -50')).toBe(
+        'cd /proj && git -C /proj log --no-ext-diff --no-textconv -p | head -50',
+      );
+      expect(command('git status --short')).toBe('git status --short');
+    });
+
     it('allows syntax checks per tool without allowing code execution', () => {
       expect(verdict('python3 -m py_compile server.py')).toBe('allow');
       expect(verdict('python3 -m venv .venv')).toBe('allow');
