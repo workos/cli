@@ -300,6 +300,14 @@ export async function runConnectionTest(
   baseUrl?: string,
 ): Promise<void> {
   const client = createWorkOSClient(apiKey, baseUrl);
+  if (apiKey.startsWith('sk_live_')) {
+    // Production environments reject http/localhost redirect URIs, so the callback can never land.
+    exitWithError({
+      code: 'production_environment',
+      message:
+        'connection test needs a localhost redirect URI, which production environments do not allow. Use a staging API key.',
+    });
+  }
   const clientId = resolveClientId(options);
   const port = options.port ?? DEFAULT_CALLBACK_PORT;
   const timeoutSeconds = options.timeoutSeconds ?? DEFAULT_TEST_TIMEOUT_SECONDS;

@@ -366,6 +366,11 @@ describe('connection commands', () => {
       expect(mockSdk.sso.getAuthorizationUrl).not.toHaveBeenCalled();
     });
 
+    it('refuses production API keys before touching the environment', async () => {
+      await expect(runConnectionTest('conn_01ABC', {}, 'sk_live_123')).rejects.toThrow(CliExit);
+      expect(mockRedirectUriAdd).not.toHaveBeenCalled();
+    });
+
     it('fails on IdP error callback', async () => {
       const run = runConnectionTest('conn_01ABC', {}, 'sk_test');
       await dispatchCallback((state) => `error=access_denied&error_description=denied&state=${state}`);
