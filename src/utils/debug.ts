@@ -1,5 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readdirSync, unlinkSync } from 'fs';
-import { join } from 'path';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { dirname, join } from 'path';
 import { homedir } from 'os';
 import chalk from 'chalk';
 import { prepareMessage } from './logging.js';
@@ -9,6 +10,13 @@ import { isJsonMode } from './output.js';
 
 let debugEnabled = false;
 let sessionLogPath: string | null = null;
+/** A log file scoped to one async context, so concurrent runs (evals) don't share a path. */
+const scopedLogPath = new AsyncLocalStorage<string>();
+
+/** Run `fn` with all installer log lines written to `path` instead of the session log. */
+export function runWithLogFile<T>(path: string, fn: () => T): T {
+  return scopedLogPath.run(path, fn);
+}
 
 const LOG_DIR = join(homedir(), '.workos', 'logs');
 const MAX_LOG_FILES = 10;
@@ -45,6 +53,16 @@ function rotateLogFiles(): void {
 }
 
 export function initLogFile(): void {
+  const scoped = scopedLogPath.getStore();
+  if (scoped) {
+    try {
+      mkdirSync(dirname(scoped), { recursive: true });
+      appendFileSync(scoped, `WorkOS AuthKit Installer Run: ${new Date().toISOString()}\n`);
+    } catch {
+      /* logging must never break the run */
+    }
+    return;
+  }
   try {
     rotateLogFiles();
     const dir = ensureLogDir();
@@ -59,7 +77,7 @@ export function initLogFile(): void {
 }
 
 export function getLogFilePath(): string | null {
-  return sessionLogPath;
+  return scopedLogPath.getStore() ?? sessionLogPath;
 }
 
 function writeLog(level: 'INFO' | 'WARN' | 'ERROR', emoji: string, args: unknown[]): string {
@@ -73,10 +91,11 @@ function writeLog(level: 'INFO' | 'WARN' | 'ERROR', emoji: string, args: unknown
   }
 
   // Write to log file
-  if (sessionLogPath) {
+  const logPath = scopedLogPath.getStore() ?? sessionLogPath;
+  if (logPath) {
     try {
       const timestamp = new Date().toISOString();
-      appendFileSync(sessionLogPath, `[${timestamp}] ${emoji} ${level}: ${msg}\n`);
+      appendFileSync(logPath, `[${timestamp}] ${emoji} ${level}: ${msg}\n`);
     } catch {
       // Ignore write failures
     }
