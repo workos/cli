@@ -394,6 +394,19 @@ describe('connection commands', () => {
       expect(mockSdk.sso.getAuthorizationUrl).not.toHaveBeenCalled();
     });
 
+    it('errors instead of prompting when registration fails in JSON mode', async () => {
+      setOutputMode('json');
+      mockRedirectUriAdd.mockRejectedValue(new Error('forbidden'));
+      await expect(runConnectionTest('conn_01ABC', {}, 'sk_test')).rejects.toThrow(CliExit);
+      expect(mockConfirm).not.toHaveBeenCalled();
+      expect(consoleOutput).toEqual([]);
+    });
+
+    it.each([0, -1, 65536, 1.5, Number.NaN])('rejects --port %s before registering anything', async (port) => {
+      await expect(runConnectionTest('conn_01ABC', { port }, 'sk_test')).rejects.toThrow(CliExit);
+      expect(mockRedirectUriAdd).not.toHaveBeenCalled();
+    });
+
     it('prompts to add redirect URI manually when registration fails', async () => {
       mockRedirectUriAdd.mockRejectedValue(new Error('forbidden'));
       mockConfirm.mockResolvedValue(true);
@@ -422,6 +435,18 @@ describe('connection commands', () => {
       expect(output.redirectUri).toBe('http://localhost:4807/callback');
       expect(output.redirectUriRegistered).toBe(true);
       expect(output.profile.email).toBe('user@example.com');
+    });
+
+    it('shows the login URL on stderr in JSON mode before waiting for the callback', async () => {
+      setOutputMode('json');
+      const run = runConnectionTest('conn_01ABC', {}, 'sk_test');
+      await vi.waitFor(() => {
+        expect(stderrOutput.some((l) => l.includes('https://api.workos.com/sso/authorize?mock=1'))).toBe(true);
+      });
+      expect(consoleOutput).toEqual([]);
+      await dispatchCallback((state) => `code=abc&state=${state}`);
+      await run;
+      expect(consoleOutput).toHaveLength(1);
     });
   });
 

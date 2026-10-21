@@ -310,6 +310,10 @@ export async function runConnectionTest(
   }
   const clientId = resolveClientId(options);
   const port = options.port ?? DEFAULT_CALLBACK_PORT;
+  // Port 0 would let the OS pick a port that no longer matches the registered redirect URI.
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    exitWithError({ code: 'invalid_port', message: `--port must be an integer from 1 to 65535 (got ${port}).` });
+  }
   const timeoutSeconds = options.timeoutSeconds ?? DEFAULT_TEST_TIMEOUT_SECONDS;
   const redirectUri = `http://localhost:${port}/callback`;
 
@@ -333,7 +337,7 @@ export async function runConnectionTest(
         );
       }
     } catch {
-      if (!isPromptAllowed()) {
+      if (!isPromptAllowed() || isJsonMode()) {
         exitWithError({
           code: 'redirect_uri_registration_failed',
           message: `Could not register redirect URI automatically. Add ${redirectUri} to your environment's redirect URIs in the WorkOS Dashboard, then re-run with the same --port.`,
@@ -370,7 +374,10 @@ export async function runConnectionTest(
     });
 
     try {
-      if (!isJsonMode()) {
+      if (isJsonMode()) {
+        // stdout is reserved for the final JSON, but agents still need the URL to hand to a human.
+        console.error(`Open this URL to start the SSO flow: ${authorizationUrl}`);
+      } else {
         console.log(`\nOpen the following URL to start the SSO flow:`);
         console.log(chalk.cyan(`  ${authorizationUrl}`));
         console.log(chalk.dim(`\nWaiting for callback on ${redirectUri} (timeout: ${timeoutSeconds}s)...`));
