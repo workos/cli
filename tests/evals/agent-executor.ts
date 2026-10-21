@@ -11,6 +11,8 @@ import { ensureClaudeCodeExecutable } from '../../src/lib/agent-sdk-assets.js';
 import type { InstallerOptions } from '../../src/utils/types.js';
 import { getRegistry } from '../../src/lib/registry.js';
 import { createInstallerEventEmitter } from '../../src/lib/events.js';
+import { configureInstallEnvironment } from '../../src/lib/run-with-core.js';
+import { runWithLogFile } from '../../src/utils/debug.js';
 import type { ToolCall, LatencyMetrics } from './types.js';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 
@@ -97,7 +99,23 @@ export class AgentExecutor {
       ...(this.options.redirectUri ? { WORKOS_REDIRECT_URI: this.options.redirectUri } : {}),
     };
 
-    if (JS_FRAMEWORKS.includes(this.framework)) {
+    if (JS_FRAMEWORKS.includes(this.framework) && !this.options.environment) {
+      // Same env file the installer writes before running the integration, including
+      // the framework's redirect URI key and any client-side prefixed copies.
+      await configureInstallEnvironment({
+        integration: this.framework,
+        credentials: { apiKey: this.credentials.workosApiKey, clientId: this.credentials.workosClientId },
+        options: {
+          debug: false,
+          forceInstall: false,
+          installDir: this.workDir,
+          local: false,
+          ci: true,
+          skipAuth: true,
+          ...(this.options.redirectUri ? { redirectUri: this.options.redirectUri } : {}),
+        },
+      });
+    } else if (JS_FRAMEWORKS.includes(this.framework)) {
       writeEnvLocal(this.workDir, envVars);
     } else {
       // Git ignores cannot protect tracked files. Refuse rather than silently
@@ -256,8 +274,12 @@ export class AgentExecutor {
       correctionAttempts,
     });
 
+    // Scenarios run concurrently in one process; give each its own installer log.
+    const logName = `${(this.options.scenarioName ?? this.framework).replace(/[^a-z0-9]+/gi, '-')}-${Date.now()}.log`;
+    const logFile = join(process.cwd(), 'tests', 'eval-results', 'installer-logs', logName);
+
     try {
-      await integration.run(options);
+      await runWithLogFile(logFile, () => integration.run(options));
       return { ...base(), success: true, selfCorrected: correctionAttempts > 0 };
     } catch (error) {
       return {

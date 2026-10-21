@@ -4,9 +4,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 // Hoist mocks so they're available in vi.mock factories
-const { mockRunAgent, mockIntegrationRun, mockConfig, mockCredentials } = vi.hoisted(() => ({
+const { mockRunAgent, mockIntegrationRun, mockConfigureEnv, mockConfig, mockCredentials } = vi.hoisted(() => ({
   mockRunAgent: vi.fn(),
   mockIntegrationRun: vi.fn(),
+  mockConfigureEnv: vi.fn(async () => {}),
   mockConfig: {
     model: 'test-model',
     workos: { clientId: 'client_test', authkitDomain: 'test.workos.com', llmGatewayUrl: 'http://localhost:8000' },
@@ -34,6 +35,8 @@ const { mockRunAgent, mockIntegrationRun, mockConfig, mockCredentials } = vi.hoi
 vi.mock('../../../src/lib/agent-interface.js', () => ({
   runAgent: mockRunAgent,
 }));
+
+vi.mock('../../../src/lib/run-with-core.js', () => ({ configureInstallEnvironment: mockConfigureEnv }));
 
 // The eval runs the real integration flow; the integration itself is mocked here.
 vi.mock('../../../src/lib/registry.js', () => ({
@@ -76,6 +79,7 @@ vi.mock('../../../src/utils/debug.js', () => ({
   logError: vi.fn(),
   initLogFile: vi.fn(),
   getLogFilePath: vi.fn(() => null),
+  runWithLogFile: vi.fn((_path: string, fn: () => unknown) => fn()),
 }));
 
 vi.mock('../../../src/utils/analytics.js', () => ({
@@ -101,6 +105,7 @@ describe('AgentExecutor', () => {
     writeFileSync(join(testDir, 'package.json'), JSON.stringify({ name: 'test' }));
     mockRunAgent.mockReset();
     mockIntegrationRun.mockReset();
+    mockConfigureEnv.mockClear();
     mockConfig.model = 'test-model';
     delete process.env.EVAL_MODEL;
   });
@@ -194,17 +199,20 @@ describe('AgentExecutor', () => {
     expect(mockConfig.model).toBe('claude-opus-5-5');
   });
 
-  it('writes env vars before running the integration', async () => {
+  it('writes the installer env file before running the integration', async () => {
     mockIntegrationRun.mockImplementation(async () => {
-      expect(writeEnvLocal).toHaveBeenCalledWith(testDir, {
-        WORKOS_API_KEY: 'sk_test_key',
-        WORKOS_CLIENT_ID: 'client_test_id',
+      expect(mockConfigureEnv).toHaveBeenCalledWith({
+        integration: 'nextjs',
+        credentials: { apiKey: 'sk_test_key', clientId: 'client_test_id' },
+        options: expect.objectContaining({ installDir: testDir, ci: true }),
       });
       return 'done';
     });
 
     const result = await new AgentExecutor(testDir, 'nextjs').run();
+
     expect(result.success).toBe(true);
+    expect(writeEnvLocal).not.toHaveBeenCalled();
   });
 
   it('rejects a framework with no installer integration', async () => {
