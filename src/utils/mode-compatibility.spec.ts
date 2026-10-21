@@ -14,12 +14,11 @@ describe('mode compatibility matrix', () => {
   const originalEnv = process.env;
   const originalIsTTY = process.stdout.isTTY;
   const originalStderrIsTTY = process.stderr.isTTY;
-  const interactionEnvKeys = ['WORKOS_MODE', 'WORKOS_NO_PROMPT', 'CI', 'GITHUB_ACTIONS', 'WORKOS_AGENT'] as const;
+  const interactionEnvKeys = ['WORKOS_MODE', 'CI', 'GITHUB_ACTIONS', 'WORKOS_AGENT'] as const;
 
   beforeEach(() => {
     process.env = { ...originalEnv };
     delete process.env.WORKOS_FORCE_TTY;
-    delete process.env.WORKOS_NO_PROMPT;
     delete process.env.WORKOS_MODE;
     delete process.env.CI;
     delete process.env.GITHUB_ACTIONS;
@@ -47,7 +46,7 @@ describe('mode compatibility matrix', () => {
     setup: () => { argv?: string[]; jsonFlag?: boolean };
     expectOutput: 'human' | 'json';
     expectMode: 'human' | 'agent' | 'ci';
-    expectSource: 'flag' | 'env' | 'workos_no_prompt' | 'ci_env' | 'agent_env' | 'non_tty' | 'default';
+    expectSource: 'flag' | 'env' | 'ci_env' | 'agent_env' | 'non_tty' | 'default';
   };
 
   const rows: Row[] = [
@@ -74,16 +73,16 @@ describe('mode compatibility matrix', () => {
       expectSource: 'non_tty',
     },
     {
-      name: 'WORKOS_NO_PROMPT=1 maps output to json and interaction to agent (legacy compatibility)',
+      name: 'WORKOS_MODE=agent on a TTY forces json output and agent interaction',
       setup: () => {
         Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true });
         Object.defineProperty(process.stderr, 'isTTY', { value: true, writable: true });
-        process.env.WORKOS_NO_PROMPT = '1';
+        process.env.WORKOS_MODE = 'agent';
         return {};
       },
       expectOutput: 'json',
       expectMode: 'agent',
-      expectSource: 'workos_no_prompt',
+      expectSource: 'env',
     },
     {
       name: 'WORKOS_FORCE_TTY=1 forces human output but does not change interaction mode (non-TTY)',

@@ -1,3 +1,5 @@
+import type { CredentialSource } from '../lib/installer-core.types.js';
+
 export type InstallerOptions = {
   /**
    * Whether to enable debug mode.
@@ -45,6 +47,14 @@ export type InstallerOptions = {
   clientId?: string;
 
   /**
+   * How the WorkOS credentials were resolved by the state machine
+   * (`cli`|`env`|`stored`|`device`|`manual`). Threaded downstream so
+   * user-facing copy can be source-accurate (e.g. avoid claiming the user
+   * "provided" credentials on the auto-provisioned path).
+   */
+  credentialSource?: CredentialSource;
+
+  /**
    * App homepage URL for WorkOS dashboard config.
    * Defaults to http://localhost:{detected_port}
    */
@@ -57,12 +67,12 @@ export type InstallerOptions = {
   redirectUri?: string;
 
   /**
-   * [Experimental] Enable visual dashboard mode
+   * Use the plain CLI output instead of the full-screen installer (--no-tui).
    */
-  dashboard?: boolean;
+  noTui?: boolean;
 
   /**
-   * Event emitter for dashboard mode
+   * Event emitter for installer state machine events
    */
   emitter?: import('../lib/events.js').InstallerEventEmitter;
 
@@ -77,7 +87,7 @@ export type InstallerOptions = {
   noValidate?: boolean;
 
   /**
-   * Skip post-install commit and PR workflow
+   * @deprecated Ignored: installer changes are always left uncommitted.
    */
   noCommit?: boolean;
 
@@ -87,7 +97,7 @@ export type InstallerOptions = {
   noBranch?: boolean;
 
   /**
-   * Auto-create pull request after installation
+   * @deprecated Ignored: the installer never pushes or creates pull requests.
    */
   createPr?: boolean;
 
@@ -110,6 +120,12 @@ export type InstallerOptions = {
   maxRetries?: number;
 
   /**
+   * Observe every message from the agent session. Used by evals to record tool
+   * calls and latency while running the real integration flow.
+   */
+  onAgentMessage?: (message: import('@anthropic-ai/claude-agent-sdk').SDKMessage) => void;
+
+  /**
    * Scaffold a new Next.js app when run in an empty directory.
    * Auto-enabled in headless mode; opt-in via --scaffold in interactive mode.
    */
@@ -120,6 +136,9 @@ export type InstallerOptions = {
    * Overrides detection from npm_config_user_agent.
    */
   pm?: string;
+
+  /** Select App Router in mixed projects; Pages-only projects remain unsupported. */
+  router?: 'app';
 };
 
 export interface Feature {

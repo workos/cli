@@ -1,4 +1,4 @@
-import { getReference } from '@workos/skills';
+import { getReference } from './skills-assets.js';
 import { SPINNER_MESSAGE, type FrameworkConfig } from './framework-config.js';
 import { validateInstallation, quickCheckValidateAndFormat } from './validation/index.js';
 import {
@@ -13,14 +13,16 @@ import {
   getOrAskForWorkOSCredentials,
   getPackageDotJson,
   isUsingTypeScript,
-} from '../utils/clack-utils.js';
+} from '../utils/ui-utils.js';
 import { analytics } from '../utils/analytics.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from './constants.js';
 import { initializeAgent, runAgent, type RetryConfig } from './agent-interface.js';
 import { uploadEnvironmentVariablesStep } from '../steps/index.js';
 import { autoConfigureWorkOSEnvironment } from './workos-management.js';
-import { detectPort, getCallbackPath } from './port-detection.js';
-import { writeEnvLocal } from './env-writer.js';
+import { assertSupportedNextJsRouter, assertNextjsSignInRouteAvailable } from '../integrations/nextjs/utils.js';
+import { detectPort, resolveRedirectUri } from './port-detection.js';
+import { buildSignInSection } from './sign-in-route.js';
+import { writeEnvFile, writeEnvLocal } from './env-writer.js';
 
 /**
  * Universal agent-powered wizard runner.
@@ -39,8 +41,14 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
   // Git check is now handled by the state machine - no need to check here
 
   // Framework detection and version
-  const packageJson = await getPackageDotJson(options);
-  await ensurePackageIsInstalled(packageJson, config.detection.packageName, config.detection.packageDisplayName);
+  // Only JS integrations have a package.json; reading it elsewhere aborts the install
+  // (Kotlin, PHP, Laravel). Vanilla JS is the fallback for any JS project, so it has
+  // no framework package to require.
+  const isJavaScriptProject = config.metadata.language === 'javascript';
+  const packageJson = isJavaScriptProject ? await getPackageDotJson(options) : {};
+  if (isJavaScriptProject && config.metadata.integration !== 'vanilla-js') {
+    await ensurePackageIsInstalled(packageJson, config.detection.packageName, config.detection.packageDisplayName);
+  }
 
   const frameworkVersion = config.detection.getVersion(packageJson);
 
@@ -55,8 +63,15 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
     integration: config.metadata.integration,
   });
 
+  // Reject unsupported routers before requesting credentials or changing the project.
+  const frameworkContext = config.metadata.gatherContext ? await config.metadata.gatherContext(options) : {};
+  if (config.metadata.integration === 'nextjs') {
+    assertSupportedNextJsRouter(frameworkContext.router);
+    await assertNextjsSignInRouteAvailable(options.installDir);
+  }
+
   // Get WorkOS credentials (API key optional for client-only SDKs)
-  const { apiKey, clientId } = await getOrAskForWorkOSCredentials(options, config.environment.requiresApiKey);
+  let { apiKey, clientId } = await getOrAskForWorkOSCredentials(options, config.environment.requiresApiKey);
 
   // Check if caller (state machine) already configured WorkOS environment
   // If credentials were passed via options, the caller handled config+env writing
@@ -64,23 +79,35 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
 
   // Auto-configure WorkOS environment (redirect URI, CORS, homepage)
   // Skip if caller already handled this (prevents duplicate dashboard config output)
-  if (!callerHandledConfig && apiKey && config.environment.requiresApiKey) {
+  // Next.js URL setup runs after validation in the caller, which chooses either
+  // dashboard targeting or the API-only callback path, never both.
+  if (!callerHandledConfig && apiKey && config.environment.requiresApiKey && config.metadata.integration !== 'nextjs') {
     const port = detectPort(config.metadata.integration, options.installDir);
-    await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, port, {
+    const result = await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, port, {
+      clientId,
+      interactive: !options.ci,
       homepageUrl: options.homepageUrl,
       redirectUri: options.redirectUri,
     });
+    if (result?.recoveredCredentials) {
+      ({ apiKey, clientId } = result.recoveredCredentials);
+      Object.assign(options, result.recoveredCredentials);
+    }
   }
-
-  // Gather framework-specific context (e.g., Next.js router, React Native platform)
-  const frameworkContext = config.metadata.gatherContext ? await config.metadata.gatherContext(options) : {};
 
   // Write environment variables to .env.local BEFORE agent runs
   // Skip if caller already handled this (prevents double-writing)
-  if (!callerHandledConfig) {
-    const port = detectPort(config.metadata.integration, options.installDir);
-    const callbackPath = getCallbackPath(config.metadata.integration);
-    const redirectUri = options.redirectUri || `http://localhost:${port}${callbackPath}`;
+  if (!isJavaScriptProject) {
+    // Non-JS projects use .env. The installer's environment step skips non-JS apps, so
+    // write credentials here even when the caller supplied them; otherwise the agent
+    // starts with none (Kotlin, PHP, Laravel).
+    writeEnvFile(options.installDir, {
+      ...(apiKey ? { WORKOS_API_KEY: apiKey } : {}),
+      WORKOS_CLIENT_ID: clientId,
+      WORKOS_REDIRECT_URI: resolveRedirectUri(config.metadata.integration, options),
+    });
+  } else if (!callerHandledConfig) {
+    const redirectUri = resolveRedirectUri(config.metadata.integration, options);
 
     // Next.js requires NEXT_PUBLIC_ prefix for client-side env vars
     const redirectUriKey =
@@ -136,8 +163,16 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
         validateAndFormat: async (workingDirectory: string) => {
           const quickPrompt = await quickCheckValidateAndFormat(workingDirectory);
           const security = await runInstallSecurityChecks(integration, workingDirectory);
-          if (quickPrompt === null && security.blocking.length === 0) return null;
-          return [quickPrompt, formatSecurityFindingsForAgent(security.findings)]
+          // Only the Next.js rules were curated for a blocking gate in this installer.
+          const errors =
+            integration === 'nextjs'
+              ? (await validateInstallation(integration, workingDirectory, { runBuild: false })).issues.filter(
+                  (issue) => issue.severity === 'error',
+                )
+              : [];
+          if (quickPrompt === null && security.blocking.length === 0 && errors.length === 0) return null;
+          const completenessPrompt = errors.map((issue) => `${issue.message}. ${issue.hint ?? ''}`).join('\n');
+          return [quickPrompt, completenessPrompt, formatSecurityFindingsForAgent(security.findings)]
             .filter((p): p is string => Boolean(p))
             .join('\n\n');
         },
@@ -194,8 +229,8 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
     // Block success: an error-severity security finding that survived the
     // self-correction retries fails the install rather than shipping silently.
     // Throwing routes through the state machine's error state (success: false,
-    // non-zero exit) and skips the commit/PR steps, leaving the insecure code
-    // uncommitted for the user to inspect.
+    // non-zero exit), leaving the insecure code uncommitted for the user to
+    // inspect.
     if (security.blocking.length > 0) {
       analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
         action: 'security gate blocked install',
@@ -204,6 +239,15 @@ export async function runAgentInstaller(config: FrameworkConfig, options: Instal
       });
       await analytics.shutdown('error');
       throw new Error(formatBlockingSecurityError(security.blocking));
+    }
+    if (integration === 'nextjs' && !validationResult.passed) {
+      await analytics.shutdown('error');
+      throw new Error(
+        `Installation validation failed:\n${validationResult.issues
+          .filter((issue) => issue.severity === 'error')
+          .map((issue) => `${issue.message}. ${issue.hint ?? ''}`)
+          .join('\n')}`,
+      );
     }
   }
 
@@ -281,9 +325,12 @@ async function buildIntegrationPrompt(
   // Base template has JS-centric assumptions (node_modules, lockfiles, AuthKitProvider)
   // so only load it for JavaScript integrations; backend SDKs bypass this entirely
   const isJavaScript = config.metadata.language === 'javascript';
-  const [baseContent, refContent] = await Promise.all([
+  // Inline shared setup too: relative links in the framework reference do not
+  // resolve from the app directory, and agents can skip them entirely.
+  const [baseContent, refContent, setupContent] = await Promise.all([
     isJavaScript ? getReference('workos-authkit-base') : Promise.resolve(''),
     getReference(skillName),
+    config.metadata.integration === 'nextjs' ? getReference('workos-authkit-setup') : Promise.resolve(''),
   ]);
 
   // Build env var list dynamically based on what was actually configured
@@ -291,9 +338,11 @@ async function buildIntegrationPrompt(
     ...(config.environment.requiresApiKey ? ['WORKOS_API_KEY'] : []),
     'WORKOS_CLIENT_ID',
     config.metadata.integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI',
-    'WORKOS_COOKIE_PASSWORD',
+    // Only the .env.local writer generates a cookie password; non-JS SDKs configure their own.
+    ...(isJavaScript ? ['WORKOS_COOKIE_PASSWORD'] : []),
   ];
   const envVarList = envVars.map((v) => `- ${v}`).join('\n');
+  const signInSection = buildSignInSection(config);
 
   return `You are integrating WorkOS AuthKit into this ${config.metadata.name} application.
 
@@ -304,14 +353,37 @@ async function buildIntegrationPrompt(
 
 ## Environment
 
-The following environment variables have been configured in .env.local:
+The following environment variables have been configured in ${config.metadata.language === 'javascript' ? '.env.local' : '.env'}:
 ${envVarList}
 
 ${baseContent ? `## General Guidelines\n\n${baseContent}\n\n` : ''}## Integration Instructions
 
 ${refContent}
 
-Report your progress using [STATUS] prefixes.
+${
+  baseContent && !setupContent
+    ? `The references above link to workos-authkit-setup.md. It covers dashboard configuration, which this installer handles itself, and browser checks, which you can't run here, so you don't need to read it.
+
+`
+    : ''
+}${
+    setupContent
+      ? `## Required Application Setup and Verification
+
+${setupContent}
+
+## Installer execution boundary
+
+The setup reference above is already included in this prompt. Do not read a relative workos-authkit-setup.md from the app directory.
+Don't install another CLI or use SDK scripts to change WorkOS settings or authenticate to the dashboard. Implement and validate the app code only.
+
+Create a dedicated /sign-in GET route in the App Router using getSignInUrl() from @workos-inc/authkit-nextjs and redirect(await getSignInUrl()) from next/navigation. Keep the OAuth callback using handleAuth() separate. The Initiate login URI is the app origin plus /sign-in, NEVER the callback URI. Read existing files before editing; do not replace an unrelated existing sign-in flow. If a page already serves /sign-in (including inside route groups), stop: this installer cannot place a route handler alongside that page. Never delete the page or create a conflicting route. Keep /sign-in public and follow the SDK README for PKCE cookie handling.
+Do not claim the full integration or browser flows are verified. Report code implementation separately from application configuration and browser testing.
+`
+      : ''
+  }
+
+${signInSection}Report your progress using [STATUS] prefixes.
 
 Begin integration now.`;
 }

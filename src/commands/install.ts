@@ -1,10 +1,13 @@
 import { runInstaller } from '../run.js';
 import type { InstallerArgs } from '../run.js';
-import clack from '../utils/clack.js';
+import ui from '../utils/ui.js';
 import { exitWithError, isJsonMode } from '../utils/output.js';
-import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
+import { ExitCode, exitWithCode, resolveErrorCode } from '../utils/exit-codes.js';
+import { isCiMode } from '../utils/interaction-mode.js';
 import type { ArgumentsCamelCase } from 'yargs';
-import { autoInstallSkills } from './install-skill.js';
+import { InstallDeclinedError } from '../lib/installer-errors.js';
+import { CliExit } from '../utils/cli-exit.js';
+import { maybeRunSetupAfter } from './setup.js';
 
 /**
  * Handle install command execution.
@@ -12,8 +15,8 @@ import { autoInstallSkills } from './install-skill.js';
 export async function handleInstall(argv: ArgumentsCamelCase<InstallerArgs>): Promise<void> {
   const options = { ...argv };
 
-  // CI mode validation
-  if (options.ci) {
+  // CI mode validation — trigger for the hidden --ci flag or WORKOS_MODE=ci.
+  if (options.ci || isCiMode()) {
     if (!options.apiKey) {
       exitWithError({ code: 'missing_args', message: 'CI mode requires --api-key (WorkOS API key sk_xxx)' });
     }
@@ -30,14 +33,24 @@ export async function handleInstall(argv: ArgumentsCamelCase<InstallerArgs>): Pr
 
   try {
     await runInstaller(options);
-    const skillResult = await autoInstallSkills();
-    if (skillResult && !isJsonMode()) {
-      const skillWord = skillResult.skills.length === 1 ? 'skill' : 'skills';
-      clack.log.info(
-        `Installed ${skillResult.skills.length} WorkOS ${skillWord} for ${skillResult.agents.join(', ')}. Your coding agent now has up-to-date WorkOS guidance.`,
-      );
-    }
+
+    // One consented moment offers skills + MCP together. Self-gating
+    // (human/TTY-only, decline-respecting) and best-effort — never fails install.
+    await maybeRunSetupAfter('install');
   } catch (err) {
+    // Structured exits (e.g. the environment picker's cancel, exit 2) carry
+    // their own code and messaging — masking them as installer_error would
+    // turn a clean cancel into a failure.
+    if (err instanceof CliExit) throw err;
+    if (err instanceof InstallDeclinedError) {
+      // The integration already printed actionable guidance; exit non-zero
+      // so scripts don't proceed as if AuthKit were installed.
+      if (isJsonMode()) {
+        exitWithError({ code: err.code, message: err.message });
+      }
+      exitWithCode(resolveErrorCode(err.code).exit);
+    }
+
     const { getLogFilePath } = await import('../utils/debug.js');
     const logPath = getLogFilePath();
 
@@ -52,7 +65,7 @@ export async function handleInstall(argv: ArgumentsCamelCase<InstallerArgs>): Pr
       console.error(err.stack);
     }
     if (logPath) {
-      clack.log.info(`Debug logs: ${logPath}`);
+      ui.log.info(`Debug logs: ${logPath}`);
     }
     exitWithCode(ExitCode.GENERAL_ERROR);
   }

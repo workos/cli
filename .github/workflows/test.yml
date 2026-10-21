@@ -1,0 +1,117 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Socket Firewall
+        id: socket-firewall
+        uses: workos/setup-socket-firewall@ca93dd8aa351f54f4729fe3377a9be23c631c25d
+        with:
+          token: ${{ secrets.PUBLIC_SOCKET_FIREWALL_TOKEN }}
+          allow-external-fork-fallback: true
+          configure-bun: true
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: 1.4.3
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Teardown Socket Firewall
+        if: steps.socket-firewall.outputs.active == 'true'
+        uses: workos/setup-socket-firewall/teardown@ca93dd8aa351f54f4729fe3377a9be23c631c25d
+
+      - name: Test
+        run: bun run test
+
+      # `bun run test` regenerates the manifests via its pre-hook, so a stale
+      # committed manifest shows up as a diff here.
+      - name: Check committed integration manifest is fresh
+        run: git diff --exit-code src/integrations/_manifest.ts
+
+      # Compile the same baseline variant that release.yml ships for linux-x64,
+      # not the host-default "modern" build — they embed different Bun runtimes.
+      - name: Build standalone binary
+        env:
+          WORKOS_BUILD_TARGET: bun-linux-x64-baseline
+        run: bun run build
+
+      # The full command contract (exit codes, structured JSON errors, JSON
+      # output — see scripts/command-smoke.sh) must hold standalone: no Bun,
+      # no Node.js, no node_modules, and no network.
+      - name: Smoke test command contract without Bun, Node.js, or network
+        run: >-
+          docker run --rm --network none
+          --volume "${PWD}/dist/workos:/workos:ro"
+          --volume "${PWD}/scripts/command-smoke.sh:/command-smoke.sh:ro"
+          --env HOME=/tmp/home
+          debian:bookworm-slim
+          sh /command-smoke.sh /workos
+
+      # `internal verify-assets` performs the first-run download of the pinned
+      # Agent SDK executable (checksum-verified) and spawns it, so a broken
+      # download path fails every PR here instead of on a user's first
+      # `workos install`. Needs network; still no Bun/Node/node_modules.
+      - name: Smoke test agent runtime first-run download
+        run: >-
+          docker run --rm
+          --volume "${PWD}/dist/workos:/workos:ro"
+          --env HOME=/tmp/home
+          debian:bookworm-slim
+          sh -eu -c
+          '/workos internal verify-assets --json'
+
+      # Authenticated command execution against a real WorkOS staging
+      # environment: list plus a create → get → delete round-trip. The secret
+      # is a dedicated staging-environment API key; fork PRs receive no
+      # secrets, so this skips there instead of failing.
+      - name: Smoke test authenticated commands
+        env:
+          WORKOS_API_KEY: ${{ secrets.WORKOS_SMOKE_API_KEY }}
+          # Optional: set when the smoke key belongs to a non-default API host
+          # (e.g. an internal staging deployment).
+          WORKOS_SMOKE_API_URL: ${{ secrets.WORKOS_SMOKE_API_URL }}
+        run: |
+          if [ -z "$WORKOS_API_KEY" ]; then
+            echo "Skipped: WORKOS_SMOKE_API_KEY secret not available (fork PR or not yet configured)"
+            exit 0
+          fi
+          if [ -n "$WORKOS_SMOKE_API_URL" ]; then
+            export WORKOS_API_URL="$WORKOS_SMOKE_API_URL"
+          fi
+          sh scripts/command-smoke.sh ./dist/workos
+
+      # Publish the generated packages to a throwaway local registry and run
+      # the real user flows — `npx workos`, `npm install -g workos`, platform
+      # selection, and the launcher's no-binary error path — from a hermetic
+      # environment. This exercises the npm machinery the in-repo launcher
+      # check can't (registry fetch, optionalDependencies, npx cache/bin).
+      - name: Setup Socket Firewall for npm distribution smoke
+        uses: workos/setup-socket-firewall@ca93dd8aa351f54f4729fe3377a9be23c631c25d
+        with:
+          token: ${{ secrets.PUBLIC_SOCKET_FIREWALL_TOKEN }}
+          allow-external-fork-fallback: true
+          configure-bun: true
+
+      - name: Smoke test npm distribution against a local registry
+        env:
+          WORKOS_NPM_ALLOW_MISSING: '1'
+        run: |
+          cp dist/workos dist/workos-linux-x64
+          bun run ./scripts/gen-npm-packages.ts
+          bun run ./scripts/npm-dist-smoke.ts

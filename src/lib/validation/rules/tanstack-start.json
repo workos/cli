@@ -16,11 +16,11 @@
   ],
   "files": [
     {
-      "path": "app/routes/**/*callback*.{ts,tsx}",
+      "path": "{app,src}/routes/**/{*callback*,*callback*/index,*callback*/route}.{ts,tsx,js,jsx}",
       "mustContainAny": ["handleAuth", "handleCallback", "@workos/authkit", "@workos-inc/authkit"]
     },
     {
-      "path": "app/**/*.{ts,tsx}",
+      "path": "{app,src}/**/*.{ts,tsx,js,jsx}",
       "mustContainAny": ["getAuth", "getUser", "getSignInUrl", "signOut", "authkitMiddleware"]
     }
   ]

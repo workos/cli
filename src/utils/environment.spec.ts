@@ -14,7 +14,7 @@ describe('environment', () => {
     });
 
     it('returns true in agent interaction mode', () => {
-      setInteractionMode({ mode: 'agent', source: 'workos_no_prompt' });
+      setInteractionMode({ mode: 'agent', source: 'agent_env' });
       expect(isNonInteractiveEnvironment()).toBe(true);
     });
 

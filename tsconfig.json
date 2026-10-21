@@ -25,7 +25,7 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
 
-    // JSX for React/Ink dashboard
+    // JSX for the full-screen installer (Ink/React)
     "jsx": "react-jsx",
 
     // Output

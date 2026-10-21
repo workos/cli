@@ -1,0 +1,23 @@
+{
+  "repository": "https://github.com/basecamp/fizzy",
+  "commit": "477c943e0506f109e5bc83ae9dadbe519732c045",
+  "archiveUrl": "https://codeload.github.com/basecamp/fizzy/tar.gz/477c943e0506f109e5bc83ae9dadbe519732c045",
+  "archiveSha256": "4cfc52d62d082f304a946dcf02d6097886100f1430eb502daf503e9f2439a628",
+  "license": "O'Saasy",
+  "licenseFile": "LICENSE.md",
+  "ruby": "3.4.8",
+  "bundler": "4.0.18",
+  "origin": "http://app.fizzy.localhost:3006",
+  "redirectUri": "http://app.fizzy.localhost:3006/auth/callback",
+  "launcher": "bin/dev",
+  "isolatedLauncher": "bundle exec rails server -b 127.0.0.1 -p 3006",
+  "patches": [],
+  "seeds": "None. Test database only; no development seed/reset. Synthetic identities require approved account policy.",
+  "baselineIdentity": "None; account-linking, membership/role assignment and creation policy undecided.",
+  "prerequisites": [
+    "Ruby 3.4.8 and Bundler 4.0.18 on a toolchain PATH, not auto-installing shims",
+    "Native build tools, SQLite and libvips; see pinned Brewfile/.mise.toml for platform prerequisites",
+    "Public gem and pinned Git dependency access for explicit bootstrap (never Gemfile.saas)",
+    "Browser/driver and local app.fizzy.localhost resolution for later behavioral checks"
+  ]
+}

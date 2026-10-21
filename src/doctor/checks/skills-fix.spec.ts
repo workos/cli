@@ -150,8 +150,8 @@ describe('--fix sibling protection (integration via real refreshWorkOSSkills)', 
 
   it('only writes to skills on the FIXABLE_SKILLS allowlist; planted siblings are untouched', async () => {
     // Re-import after unmocking so we get the real impls. The real
-    // refreshWorkOSSkills resolves its skill source via @workos/skills's
-    // getSkillsDir(), so we cannot mock the source side here — the meaningful
+    // refreshWorkOSSkills resolves its source via the materialized embedded
+    // skills tree, so the meaningful
     // assertion is target-side: pre-existing sibling skill dirs at the agent's
     // target path must NOT be touched, regardless of what's in the bundled
     // source. The opts.skills allowlist is what scopes refresh.

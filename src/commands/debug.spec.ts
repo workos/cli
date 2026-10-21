@@ -66,10 +66,10 @@ vi.mock('../utils/output.js', () => ({
   }),
 }));
 
-// Mock clack
+// Mock the UI facade
 const mockConfirm = vi.fn();
 const mockIsCancel = vi.fn(() => false);
-vi.mock('../utils/clack.js', () => ({
+vi.mock('../utils/ui.js', () => ({
   default: {
     confirm: (...args: unknown[]) => mockConfirm(...args),
     isCancel: (...args: unknown[]) => mockIsCancel(...args),
@@ -593,16 +593,16 @@ describe('debug commands', () => {
 
     it('outputs valid JSON in json mode', async () => {
       jsonMode = true;
-      process.env.WORKOS_NO_PROMPT = '1';
+      process.env.WORKOS_DEBUG = '1';
 
       await runDebugEnv();
 
       const parsed = JSON.parse(consoleOutput[0]);
-      expect(parsed.variables.WORKOS_NO_PROMPT.value).toBe('1');
-      expect(parsed.set).toContain('WORKOS_NO_PROMPT');
-      expect(parsed.unset).not.toContain('WORKOS_NO_PROMPT');
+      expect(parsed.variables.WORKOS_DEBUG.value).toBe('1');
+      expect(parsed.set).toContain('WORKOS_DEBUG');
+      expect(parsed.unset).not.toContain('WORKOS_DEBUG');
 
-      delete process.env.WORKOS_NO_PROMPT;
+      delete process.env.WORKOS_DEBUG;
     });
 
     it('lists all known env vars', async () => {
@@ -614,7 +614,7 @@ describe('debug commands', () => {
       expect(Object.keys(parsed.variables)).toContain('WORKOS_API_KEY');
       expect(Object.keys(parsed.variables)).toContain('WORKOS_FORCE_TTY');
       expect(Object.keys(parsed.variables)).toContain('WORKOS_TELEMETRY');
-      expect(Object.keys(parsed.variables)).toContain('INSTALLER_DEV');
+      expect(Object.keys(parsed.variables)).toContain('WORKOS_DEV');
     });
   });
 });

@@ -6,10 +6,10 @@ vi.mock('../utils/output.js', () => ({
   isJsonMode: () => jsonMode,
 }));
 
-// Spy on the box renderer instead of writing to stderr.
-const mockRenderStderrBox = vi.fn();
+// Spy on the flat notice renderer instead of writing to stderr.
+const mockRenderStderrNotice = vi.fn();
 vi.mock('../utils/box.js', () => ({
-  renderStderrBox: (...args: unknown[]) => mockRenderStderrBox(...args),
+  renderStderrNotice: (...args: unknown[]) => mockRenderStderrNotice(...args),
 }));
 
 // Control the persisted-state gates and spy on the mark.
@@ -39,23 +39,23 @@ describe('telemetry-notice', () => {
   it('human + unshown + not-opted-out → renders once and marks shown', () => {
     maybeShowTelemetryNotice();
 
-    expect(mockRenderStderrBox).toHaveBeenCalledTimes(1);
+    expect(mockRenderStderrNotice).toHaveBeenCalledTimes(1);
     expect(mockMarkNoticeShown).toHaveBeenCalledTimes(1);
   });
 
   it('renders the opt-out command via formatWorkOSCommand (npx-safe, not hardcoded)', () => {
     maybeShowTelemetryNotice();
 
-    const inner = mockRenderStderrBox.mock.calls[0]?.[0] as string;
+    const inner = mockRenderStderrNotice.mock.calls[0]?.[0] as string;
     expect(inner).toContain(formatWorkOSCommand('telemetry opt-out'));
   });
 
   it('second call in the same session → no second render (per-session guard)', () => {
     maybeShowTelemetryNotice();
-    expect(mockRenderStderrBox).toHaveBeenCalledTimes(1);
+    expect(mockRenderStderrNotice).toHaveBeenCalledTimes(1);
 
     maybeShowTelemetryNotice();
-    expect(mockRenderStderrBox).toHaveBeenCalledTimes(1);
+    expect(mockRenderStderrNotice).toHaveBeenCalledTimes(1);
     expect(mockMarkNoticeShown).toHaveBeenCalledTimes(1);
   });
 
@@ -64,7 +64,7 @@ describe('telemetry-notice', () => {
 
     maybeShowTelemetryNotice();
 
-    expect(mockRenderStderrBox).not.toHaveBeenCalled();
+    expect(mockRenderStderrNotice).not.toHaveBeenCalled();
     expect(mockMarkNoticeShown).not.toHaveBeenCalled();
     // The flag must stay unset so a real human still sees it later.
     expect(noticeShown).toBe(false);
@@ -75,7 +75,7 @@ describe('telemetry-notice', () => {
 
     maybeShowTelemetryNotice();
 
-    expect(mockRenderStderrBox).not.toHaveBeenCalled();
+    expect(mockRenderStderrNotice).not.toHaveBeenCalled();
     expect(mockMarkNoticeShown).not.toHaveBeenCalled();
   });
 
@@ -84,13 +84,13 @@ describe('telemetry-notice', () => {
 
     maybeShowTelemetryNotice();
 
-    expect(mockRenderStderrBox).not.toHaveBeenCalled();
+    expect(mockRenderStderrNotice).not.toHaveBeenCalled();
     expect(mockMarkNoticeShown).not.toHaveBeenCalled();
   });
 
   it('marks shown only AFTER rendering (display-then-persist order)', () => {
     const calls: string[] = [];
-    mockRenderStderrBox.mockImplementation(() => calls.push('render'));
+    mockRenderStderrNotice.mockImplementation(() => calls.push('render'));
     mockMarkNoticeShown.mockImplementation(() => {
       calls.push('mark');
       noticeShown = true;
@@ -102,7 +102,7 @@ describe('telemetry-notice', () => {
   });
 
   it('never throws if rendering fails; does not mark on failure', () => {
-    mockRenderStderrBox.mockImplementation(() => {
+    mockRenderStderrNotice.mockImplementation(() => {
       throw new Error('render boom');
     });
 
@@ -112,12 +112,12 @@ describe('telemetry-notice', () => {
 
   it('resetTelemetryNoticeState allows the notice to render again', () => {
     maybeShowTelemetryNotice();
-    expect(mockRenderStderrBox).toHaveBeenCalledTimes(1);
+    expect(mockRenderStderrNotice).toHaveBeenCalledTimes(1);
 
     // Simulate a fresh process where the flag was not persisted.
     noticeShown = false;
     resetTelemetryNoticeState();
     maybeShowTelemetryNotice();
-    expect(mockRenderStderrBox).toHaveBeenCalledTimes(2);
+    expect(mockRenderStderrNotice).toHaveBeenCalledTimes(2);
   });
 });

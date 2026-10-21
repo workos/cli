@@ -2,6 +2,20 @@ import type { InstallerAdapter, AdapterConfig } from './types.js';
 import type { InstallerEventEmitter, InstallerEvents } from '../events.js';
 import { writeNDJSON } from '../../utils/ndjson.js';
 import { ExitCode } from '../../utils/exit-codes.js';
+import { classifyAgentFailure, formatAgentFailure, type AgentFailureKind } from '../failure-classifier.js';
+
+/**
+ * Structured `code` emitted per failure kind. These are part of the NDJSON
+ * contract, so the existing codes must not be renamed; kinds without a
+ * dedicated code stay on `installer_error` and stream the raw message.
+ */
+const ERROR_CODES: Partial<Record<AgentFailureKind, string>> = {
+  service_outage: 'service_unavailable',
+  rate_limited: 'rate_limited',
+  deterministic: 'deterministic_error',
+  network: 'network_error',
+  process_exit: 'process_error',
+};
 
 /**
  * Options controlling headless adapter behavior.
@@ -11,9 +25,9 @@ export interface HeadlessOptions {
   apiKey?: string;
   clientId?: string;
   noBranch?: boolean;
-  noCommit?: boolean;
-  createPr?: boolean;
   noGitCheck?: boolean;
+  /** CI mode (WORKOS_MODE=ci, or --ci when headless): pipelines never stop for a dirty tree. */
+  ci?: boolean;
 }
 
 /**
@@ -30,6 +44,7 @@ export class HeadlessAdapter implements InstallerAdapter {
   private options: HeadlessOptions;
   private isStarted = false;
   private scaffolded = false;
+  private lastFileOp: string | null = null;
   private handlers = new Map<string, (...args: unknown[]) => void>();
 
   constructor(config: AdapterConfig & { options: HeadlessOptions }) {
@@ -81,6 +96,11 @@ export class HeadlessAdapter implements InstallerAdapter {
     this.subscribe('agent:start', this.handleAgentStart);
     this.subscribe('agent:progress', this.handleAgentProgress);
 
+    // File operations + tool calls — path/detail only, never content
+    this.subscribe('file:write', this.handleFileWrite);
+    this.subscribe('file:edit', this.handleFileEdit);
+    this.subscribe('agent:tool', this.handleAgentTool);
+
     // Validation
     this.subscribe('validation:start', this.handleValidationStart);
     this.subscribe('validation:issues', this.handleValidationIssues);
@@ -90,16 +110,10 @@ export class HeadlessAdapter implements InstallerAdapter {
     this.subscribe('branch:prompt', this.handleBranchPrompt);
     this.subscribe('branch:created', this.handleBranchCreated);
 
-    // Post-install — auto-resolve
+    // Post-install
     this.subscribe('postinstall:changes', this.handlePostInstallChanges);
-    this.subscribe('postinstall:commit:prompt', this.handleCommitPrompt);
-    this.subscribe('postinstall:commit:success', this.handleCommitSuccess);
-    this.subscribe('postinstall:commit:failed', this.handleCommitFailed);
-    this.subscribe('postinstall:pr:prompt', this.handlePrPrompt);
-    this.subscribe('postinstall:pr:success', this.handlePrSuccess);
-    this.subscribe('postinstall:pr:failed', this.handlePrFailed);
-    this.subscribe('postinstall:push:failed', this.handlePushFailed);
-    this.subscribe('postinstall:manual', this.handleManualInstructions);
+    this.subscribe('postinstall:nochanges', () => writeNDJSON({ type: 'postinstall:nochanges' }));
+    this.subscribe('postinstall:unavailable', (result) => writeNDJSON({ type: 'postinstall:unavailable', ...result }));
 
     // Terminal events
     this.subscribe('complete', this.handleComplete);
@@ -181,7 +195,7 @@ export class HeadlessAdapter implements InstallerAdapter {
   private handleGitDirty = ({ files }: InstallerEvents['git:dirty']): void => {
     writeNDJSON({ type: 'git:status', dirty: true, files });
 
-    if (this.options.noGitCheck) {
+    if (this.options.noGitCheck || this.options.ci) {
       writeNDJSON({ type: 'git:decision', action: 'continue' });
       this.sendEvent({ type: 'GIT_CONFIRMED' });
       return;
@@ -195,7 +209,7 @@ export class HeadlessAdapter implements InstallerAdapter {
         'Commit or stash your changes, or rerun with --no-git-check to proceed.',
     });
     writeNDJSON({ type: 'git:decision', action: 'cancel' });
-    this.sendEvent({ type: 'GIT_CANCELLED' });
+    this.sendEvent({ type: 'GIT_CANCELED' });
     process.exit(ExitCode.GENERAL_ERROR);
   };
 
@@ -258,8 +272,8 @@ export class HeadlessAdapter implements InstallerAdapter {
     writeNDJSON({ type: 'staging:fetching' });
   };
 
-  private handleStagingSuccess = (): void => {
-    writeNDJSON({ type: 'staging:success' });
+  private handleStagingSuccess = ({ source }: InstallerEvents['staging:success']): void => {
+    writeNDJSON({ type: 'staging:success', source });
   };
 
   // ===== Config =====
@@ -277,6 +291,26 @@ export class HeadlessAdapter implements InstallerAdapter {
   private handleAgentProgress = ({ step, detail }: InstallerEvents['agent:progress']): void => {
     const message = detail ? `${step}: ${detail}` : step;
     writeNDJSON({ type: 'agent:progress', message });
+  };
+
+  // ===== File Operations (path-only, no content) =====
+
+  private writeFileOp(type: 'file:write' | 'file:edit', path: string): void {
+    if (path === this.lastFileOp) return; // dedupe consecutive same-path ops
+    this.lastFileOp = path;
+    writeNDJSON({ type, path });
+  }
+
+  private handleFileWrite = ({ path }: InstallerEvents['file:write']): void => {
+    this.writeFileOp('file:write', path);
+  };
+
+  private handleFileEdit = ({ path }: InstallerEvents['file:edit']): void => {
+    this.writeFileOp('file:edit', path);
+  };
+
+  private handleAgentTool = ({ kind, detail }: InstallerEvents['agent:tool']): void => {
+    writeNDJSON({ type: 'agent:tool', kind, detail });
   };
 
   // ===== Validation =====
@@ -311,87 +345,57 @@ export class HeadlessAdapter implements InstallerAdapter {
     writeNDJSON({ type: 'branch:created', name: branch });
   };
 
-  // ===== Post-install (auto-resolve) =====
+  // ===== Post-install =====
 
   private handlePostInstallChanges = ({ files }: InstallerEvents['postinstall:changes']): void => {
     writeNDJSON({ type: 'postinstall:changes', files, count: files.length });
   };
 
-  private handleCommitPrompt = (): void => {
-    if (this.options.noCommit) {
-      writeNDJSON({ type: 'commit:skipped', reason: '--no-commit flag' });
-      this.sendEvent({ type: 'COMMIT_DECLINED' });
-    } else {
-      writeNDJSON({ type: 'commit:auto' });
-      this.sendEvent({ type: 'COMMIT_APPROVED' });
-    }
-  };
-
-  private handleCommitSuccess = ({ message }: InstallerEvents['postinstall:commit:success']): void => {
-    writeNDJSON({ type: 'commit:created', message });
-  };
-
-  private handleCommitFailed = ({ error }: InstallerEvents['postinstall:commit:failed']): void => {
-    writeNDJSON({ type: 'commit:failed', error });
-  };
-
-  private handlePrPrompt = (): void => {
-    if (this.options.createPr) {
-      writeNDJSON({ type: 'pr:creating' });
-      this.sendEvent({ type: 'PR_APPROVED' });
-    } else {
-      writeNDJSON({ type: 'pr:skipped', reason: '--create-pr not set' });
-      this.sendEvent({ type: 'PR_DECLINED' });
-    }
-  };
-
-  private handlePrSuccess = ({ url }: InstallerEvents['postinstall:pr:success']): void => {
-    writeNDJSON({ type: 'pr:created', url });
-  };
-
-  private handlePrFailed = ({ error }: InstallerEvents['postinstall:pr:failed']): void => {
-    writeNDJSON({ type: 'pr:failed', error });
-  };
-
-  private handlePushFailed = ({ error }: InstallerEvents['postinstall:push:failed']): void => {
-    writeNDJSON({ type: 'push:failed', error });
-  };
-
-  private handleManualInstructions = ({ instructions }: InstallerEvents['postinstall:manual']): void => {
-    writeNDJSON({ type: 'postinstall:manual', instructions });
-  };
-
   // ===== Terminal Events =====
 
-  private handleComplete = ({ success, summary }: InstallerEvents['complete']): void => {
-    writeNDJSON({ type: 'complete', success, summary, scaffolded: this.scaffolded });
+  private handleComplete = ({ success, summary, completion }: InstallerEvents['complete']): void => {
+    writeNDJSON({
+      type: 'complete',
+      success,
+      summary,
+      scaffolded: this.scaffolded,
+      // Spread structured fields only when present, so existing consumers that
+      // emit `complete` without `completion` keep their exact payload shape.
+      ...(completion
+        ? {
+            integration: completion.integration,
+            devCommand: completion.devCommand,
+            url: completion.url,
+            files: completion.files,
+            ...(completion.changeDetection ? { changeDetection: completion.changeDetection } : {}),
+            nextSteps: completion.nextSteps,
+            ...(completion.applicationSetup ? { applicationSetup: completion.applicationSetup } : {}),
+          }
+        : {}),
+    });
   };
 
-  private handleError = ({ message, stack }: InstallerEvents['error']): void => {
-    const isServiceError =
-      /\b50[0-9]\b/.test(message) || /server_error|internal_error|overloaded|service.*unavailable/i.test(message);
-    const isRateLimit = /\b429\b/.test(message) || /rate.limit/i.test(message);
-    const isNetworkError = /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|fetch failed/i.test(message);
-    const isProcessExit = /process exited with code/i.test(message);
-
-    let code = 'installer_error';
-    let displayMessage = message;
-
-    if (isServiceError) {
-      code = 'service_unavailable';
-      displayMessage = 'The AI service is temporarily unavailable. Please try again in a few minutes.';
-    } else if (isRateLimit) {
-      code = 'rate_limited';
-      displayMessage = 'The AI service is currently rate-limited. Please wait a minute and try again.';
-    } else if (isNetworkError) {
-      code = 'network_error';
-      displayMessage = 'Could not connect to the AI service. Check your internet connection and try again.';
-    } else if (isProcessExit) {
-      code = 'process_error';
-      displayMessage = 'The AI agent process exited unexpectedly. Try running again with --debug for details.';
+  private handleError = ({ message, stack, code: declineCode }: InstallerEvents['error']): void => {
+    // A structured decline (e.g. unsupported framework version) is already
+    // user-facing — don't rewrite it as an AI-service failure.
+    if (declineCode) {
+      writeNDJSON({ type: 'error', code: declineCode, message });
+      this.debugLog(stack ?? '');
+      return;
     }
 
-    writeNDJSON({ type: 'error', code, message: displayMessage });
+    // The verdict comes from the shared classifier so JSON consumers and the
+    // interactive path cannot disagree about whether a retry is worth trying.
+    const kind = classifyAgentFailure(message);
+    const code = ERROR_CODES[kind];
+
+    writeNDJSON({
+      type: 'error',
+      code: code ?? 'installer_error',
+      // Kinds with no dedicated code keep streaming the raw message — JSON
+      // consumers depend on it where we have nothing better to say.
+      message: code ? formatAgentFailure(kind, message) : message,
+    });
     this.debugLog(stack ?? '');
   };
 }

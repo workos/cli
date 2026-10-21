@@ -3,29 +3,25 @@
  * Uses Claude Agent SDK directly with WorkOS MCP server
  */
 
-import { dirname } from 'path';
-import { getSkillsDir as getSkillsPackageDir } from '@workos/skills';
+import { dirname, resolve } from 'path';
+import { getSkillsDir as getSkillsPackageDir } from './skills-assets.js';
+import { ensureClaudeCodeExecutable } from './agent-sdk-assets.js';
 import { debug, logInfo, logWarn, logError, initLogFile, getLogFilePath } from '../utils/debug.js';
 import type { InstallerOptions } from '../utils/types.js';
 import { analytics } from '../utils/analytics.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from './constants.js';
 import { LINTING_TOOLS } from './safe-tools.js';
-import { getLlmGatewayUrlFromHost } from '../utils/urls.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
 import { getConfig } from './settings.js';
+import { getLlmGatewayUrl } from '../utils/urls.js';
 import { getCredentials, hasCredentials } from './credentials.js';
 import { ensureValidToken } from './token-refresh.js';
 import type { InstallerEventEmitter } from './events.js';
 import { startCredentialProxy, startClaimTokenProxy, type CredentialProxyHandle } from './credential-proxy.js';
 import { getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
 import { getAuthkitDomain, getCliAuthClientId } from './settings.js';
-import type {
-  SDKMessage,
-  SDKUserMessage,
-  Options as AgentSDKOptions,
-  PermissionResult,
-  query as queryFn,
-} from '@anthropic-ai/claude-agent-sdk';
+import { classifyAgentFailure, formatAgentFailure } from './failure-classifier.js';
+import type { SDKMessage, SDKUserMessage, PermissionResult, query as queryFn } from '@anthropic-ai/claude-agent-sdk';
 
 // File content cache for computing edit diffs
 const fileContentCache = new Map<string, string>();
@@ -63,6 +59,9 @@ const SERVICE_UNAVAILABLE_PREFIX = '__SERVICE_UNAVAILABLE__';
 /** Internal prefix used to tag rate-limit errors from handleSDKMessage */
 const RATE_LIMITED_PREFIX = '__RATE_LIMITED__';
 
+/** Internal prefix used to tag failures that will recur on every retry */
+const DETERMINISTIC_PREFIX = '__DETERMINISTIC__';
+
 /**
  * Error types that can be returned from agent execution.
  * These correspond to the error signals that the agent emits.
@@ -97,11 +96,34 @@ export interface RetryConfig {
  */
 export type AgentRunConfig = {
   workingDirectory: string;
-  mcpServers: AgentSDKOptions['mcpServers'];
   model: string;
   allowedTools: string[];
   sdkEnv: Record<string, string | undefined>;
+  claudeExecutablePath: string;
 };
+
+/**
+ * Appended to Claude Code's system prompt for every installer run. It states up front
+ * what installerCanUseTool enforces, so the agent doesn't discover the rules one
+ * denied command at a time, and only promises post-run checks the runner performs.
+ * Keep it in sync with the allowlist below.
+ */
+export function buildInstallerSystemPromptAppend({ validatesAfterRun }: { validatesAfterRun: boolean }): string {
+  const afterRun = validatesAfterRun
+    ? 'After you finish, the installer typechecks and builds the project and sends you any errors to fix.'
+    : "Run the project's build or syntax check yourself before you finish; the installer does not check it afterwards.";
+  return `# WorkOS installer environment
+
+You are running inside the WorkOS CLI installer, not an interactive session, and your working directory is the user's project.
+
+- Bash runs only: package-manager install/add/remove commands; the project's build, typecheck, lint, format, and test scripts; language checks such as \`go build\`, \`go vet\`, \`mix compile\`, \`python3 -m py_compile\`, \`ruby -c\`, \`php -l\`, \`dotnet build\`, and \`./gradlew build\`; and read-only git (\`status\`, \`diff\`, \`log\`, \`show\`, \`ls-files\`).
+- Run one command per Bash call from the working directory. Don't use \`cd\`, \`&&\`, \`;\`, \`$(...)\`, or pipes other than \`| head\` or \`| tail\`.
+- Inspect files with Read, Grep, and Glob, not Bash.
+- Bash has no network access: no curl, \`npm view\`, or \`git clone\`. Use WebFetch to read documentation. The \`workos\` CLI is not available to you.
+- Don't start dev servers or open a browser to test sign-in; report sign-in flows as untested. ${afterRun}
+- Don't change WorkOS dashboard settings (redirect URIs, Sign-out URI, Initiate login URI, CORS). The installer configures supported settings itself. List anything you could not verify as unverified.
+- Leave changes unstaged: don't stage, commit, or create branches.`;
+}
 
 /**
  * Package managers that can be used to run commands.
@@ -154,10 +176,16 @@ const PACKAGE_MANAGERS = [
  * Note: Linting tools are in LINTING_TOOLS and checked separately.
  */
 const SAFE_SCRIPTS = [
-  // Package installation
+  // Package installation and removal
   'install',
   'add',
   'ci',
+  'remove',
+  'uninstall',
+  'get', // go get
+  'require', // composer require
+  'mod tidy',
+  'mod download',
   // Build
   'build',
   // Type checking (various naming conventions)
@@ -198,9 +226,100 @@ const SAFE_SCRIPTS = [
 
 /**
  * Dangerous shell operators that could allow command injection.
+ * Newlines and carriage returns are included because the shell treats them as
+ * command separators equivalent to `;`, so a payload like `npm install\n<cmd>`
+ * would otherwise smuggle a second command past the allowlist.
  * Note: We handle `2>&1` and `| tail/head` separately as safe patterns.
  */
-const DANGEROUS_OPERATORS = /[;`$()]/;
+const DANGEROUS_OPERATORS = /[;`$()\n\r]/;
+
+/**
+ * Per-tool arguments that only check syntax or create a local environment.
+ * Kept per tool because the same flag can execute code elsewhere
+ * (`ruby -c` checks syntax; `python -c` runs code).
+ */
+const TOOL_SAFE_ARGS: Record<string, string[]> = {
+  python: ['-m py_compile', '-m compileall', '-m venv', '-m pip install'],
+  python3: ['-m py_compile', '-m compileall', '-m venv', '-m pip install'],
+  uv: ['venv', 'pip install', 'sync'],
+  ruby: ['-c '],
+  php: ['-l '],
+};
+
+/** Read-only git subcommands the agent may use to see what changed. */
+const READ_ONLY_GIT_SUBCOMMANDS = ['status', 'diff', 'log', 'show', 'ls-files', 'rev-parse'];
+/** git arguments that write files or run external programs. */
+const UNSAFE_GIT_ARG = /^(-c|-o|--output.*|--ext-diff|--textconv|--exec.*|--upload-pack.*|--open-files-in-pager.*)$/;
+
+/** The read-only git subcommand `command` runs, or null if it isn't an allowed read-only git call. */
+function readOnlyGitSubcommand(command: string, cwd?: string): string | null {
+  // Quotes and backslashes are removed by the shell, so `"--output=x"` or `--out\put`
+  // would slip past the token checks below. Without them, the split matches what runs.
+  if (/['"\\]/.test(command)) return null;
+  const parts = command.split(/\s+/);
+  if (parts[0] !== 'git') return null;
+  let i = 1;
+  if (parts[i] === '--no-pager') i++;
+  if (parts[i] === '-C') {
+    if (!cwd || !parts[i + 1] || resolve(cwd, parts[i + 1]) !== resolve(cwd)) return null;
+    i += 2;
+  }
+  if (!READ_ONLY_GIT_SUBCOMMANDS.includes(parts[i])) return null;
+  return parts.slice(i + 1).some((arg) => UNSAFE_GIT_ARG.test(arg)) ? null : parts[i];
+}
+
+/** Subcommands that can run external diff or textconv helpers. */
+const GIT_DIFF_SUBCOMMANDS = ['diff', 'show', 'log'];
+
+/**
+ * Make an allowed read-only git command unable to run external diff or textconv
+ * programs, whatever the user's or repo's git config says.
+ */
+function withoutExternalGitHelpers(command: string): string {
+  // Anchored: only the git call at the start (after an optional `cd <dir> &&`) is
+  // rewritten, so a later "git log" in the arguments can't satisfy the check.
+  return command.replace(
+    /^((?:cd\s+\S+\s*&&\s*)?git(?:\s+--no-pager)?(?:\s+-C\s+\S+)?)\s+(diff|show|log)\b/,
+    '$1 $2 --no-ext-diff --no-textconv',
+  );
+}
+
+/**
+ * Allow a read-only git command, or deny it when it could run external helpers and
+ * the helper-disabling rewrite can't be applied (e.g. `git 2>&1 diff`).
+ */
+function allowReadOnlyGit(subcommand: string, rawCommand: string, input: Record<string, unknown>): PermissionResult {
+  if (!GIT_DIFF_SUBCOMMANDS.includes(subcommand)) {
+    logInfo(`Allowing read-only git command: ${rawCommand}`);
+    return { behavior: 'allow', updatedInput: input };
+  }
+  const command = withoutExternalGitHelpers(rawCommand);
+  if (command === rawCommand) {
+    return {
+      behavior: 'deny',
+      message: `Bash command not allowed. Write read-only git as \`git ${subcommand} [args]\`, with options after the subcommand.`,
+    };
+  }
+  logInfo(`Allowing read-only git command: ${command}`);
+  return { behavior: 'allow', updatedInput: { ...input, command } };
+}
+
+/** Characters a `cd` target may contain; anything else could expand in the shell. */
+const PLAIN_PATH = /^[A-Za-z0-9_./@+,=:%-]+$/;
+
+/**
+ * Strip `cd <working directory> && ` so the rest is judged on its own. Callers must
+ * check the unstripped command for DANGEROUS_OPERATORS first: the shell runs the
+ * original text, so a path like "/proj/$(id)/.." must never be resolved away.
+ */
+function stripCdIntoWorkingDirectory(command: string, cwd?: string): string {
+  if (!cwd) return command;
+  const match = command.match(/^cd\s+(?:"([^"]+)"|'([^']+)'|(\S+))\s*&&\s*(\S.*)$/s);
+  if (!match) return command;
+  const dir = match[1] ?? match[2] ?? match[3];
+  if (!PLAIN_PATH.test(dir)) return command;
+  return resolve(cwd, dir) === resolve(cwd) ? match[4] : command;
+}
 
 /**
  * Check if command is an allowed package manager command.
@@ -224,7 +343,8 @@ function matchesAllowedPrefix(command: string): boolean {
   // Check if script starts with any safe script name or linting tool
   return (
     SAFE_SCRIPTS.some((safe) => scriptPart.startsWith(safe)) ||
-    LINTING_TOOLS.some((tool) => scriptPart.startsWith(tool))
+    LINTING_TOOLS.some((tool) => scriptPart.startsWith(tool)) ||
+    (TOOL_SAFE_ARGS[parts[0]] ?? []).some((arg) => parts.slice(1).join(' ').startsWith(arg))
   );
 }
 
@@ -235,28 +355,35 @@ function matchesAllowedPrefix(command: string): boolean {
  * - Piping to tail/head for output limiting is allowed
  * - Stderr redirection (2>&1) is allowed
  */
-export function installerCanUseTool(toolName: string, input: Record<string, unknown>): PermissionResult {
+export function installerCanUseTool(
+  toolName: string,
+  input: Record<string, unknown>,
+  workingDirectory?: string,
+): PermissionResult {
   // Allow all non-Bash tools
   if (toolName !== 'Bash') {
     return { behavior: 'allow', updatedInput: input };
   }
 
-  const command = (typeof input.command === 'string' ? input.command : '').trim();
+  const rawCommand = (typeof input.command === 'string' ? input.command : '').trim();
 
-  // Block definitely dangerous operators: ; ` $ ( )
-  if (DANGEROUS_OPERATORS.test(command)) {
-    logWarn(`Denying bash command with dangerous operators: ${command}`);
-    debug(`Denying bash command with dangerous operators: ${command}`);
+  // Block definitely dangerous operators: ; ` $ ( ). Checked on the raw command, since
+  // that is what Bash runs, before any `cd <working directory> &&` prefix is removed.
+  if (DANGEROUS_OPERATORS.test(rawCommand)) {
+    logWarn(`Denying bash command with dangerous operators: ${rawCommand}`);
+    debug(`Denying bash command with dangerous operators: ${rawCommand}`);
     analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
       action: 'bash command denied',
       reason: 'dangerous operators',
-      command,
+      command: rawCommand,
     });
     return {
       behavior: 'deny',
-      message: `Bash command not allowed. Shell operators like ; \` $ ( ) are not permitted.`,
+      message: `Bash command not allowed. Shell operators like ; \` $ ( ) and newlines are not permitted. Run one command per Bash call.`,
     };
   }
+
+  const command = stripCdIntoWorkingDirectory(rawCommand, workingDirectory);
 
   // Normalize: remove safe stderr redirection (2>&1, 2>&2, etc.)
   const normalized = command.replace(/\s*\d*>&\d+\s*/g, ' ').trim();
@@ -281,6 +408,8 @@ export function installerCanUseTool(toolName: string, input: Record<string, unkn
       };
     }
 
+    const gitSubcommand = readOnlyGitSubcommand(baseCommand, workingDirectory);
+    if (gitSubcommand) return allowReadOnlyGit(gitSubcommand, rawCommand, input);
     if (matchesAllowedPrefix(baseCommand)) {
       logInfo(`Allowing bash command with output limiter: ${command}`);
       debug(`Allowing bash command with output limiter: ${command}`);
@@ -304,6 +433,9 @@ export function installerCanUseTool(toolName: string, input: Record<string, unkn
   }
 
   // Check if command starts with any allowed prefix
+  const gitSubcommand = readOnlyGitSubcommand(normalized, workingDirectory);
+  if (gitSubcommand) return allowReadOnlyGit(gitSubcommand, rawCommand, input);
+
   if (matchesAllowedPrefix(normalized)) {
     logInfo(`Allowing bash command: ${command}`);
     debug(`Allowing bash command: ${command}`);
@@ -319,7 +451,7 @@ export function installerCanUseTool(toolName: string, input: Record<string, unkn
   });
   return {
     behavior: 'deny',
-    message: `Bash command not allowed. Only install, build, typecheck, lint, and formatting commands are permitted.`,
+    message: `Bash command not allowed. Only install, build, typecheck, lint, format, test, syntax-check, and read-only git commands are permitted. Use Read, Grep, and Glob to inspect files.`,
   };
 }
 
@@ -375,7 +507,7 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
       analytics.setTag('api_mode', 'direct');
     } else {
       // Gateway mode (existing behavior)
-      const gatewayUrl = getLlmGatewayUrlFromHost();
+      const gatewayUrl = getLlmGatewayUrl();
 
       // Check for unclaimed environment — use claim token auth
       const activeEnv = getActiveEnvironment();
@@ -405,7 +537,7 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
         }
 
         // Check if we have refresh token capability and proxy is not disabled
-        if (creds.refreshToken && process.env.INSTALLER_DISABLE_PROXY !== '1') {
+        if (creds.refreshToken && process.env.WORKOS_DISABLE_PROXY !== '1') {
           // Start credential proxy with lazy refresh
           logInfo('[agent-interface] Starting credential proxy with lazy refresh...');
           const appConfig = getConfig();
@@ -447,7 +579,7 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
               message: `Note: Run \`${formatWorkOSCommand('auth login')}\` to enable extended sessions`,
             });
           } else {
-            logWarn('[agent-interface] Proxy disabled via INSTALLER_DISABLE_PROXY');
+            logWarn('[agent-interface] Proxy disabled via WORKOS_DISABLE_PROXY');
           }
 
           const refreshResult = await ensureValidToken();
@@ -489,18 +621,40 @@ export async function initializeAgent(config: AgentConfig, options: InstallerOpt
       analytics.setTag('api_mode', activeProxyHandle ? 'gateway-proxy' : 'gateway');
     }
 
-    // Configure WorkOS MCP docs server for accessing WorkOS documentation
+    // First run from a compiled binary downloads the pinned agent runtime
+    // (~230MB, one-time, cached under ~/.workos); dev resolves node_modules.
+    let lastReportedPct = -1;
+    const claudeExecutablePath = await ensureClaudeCodeExecutable(
+      ({ receivedBytes, totalBytes }) => {
+        if (!totalBytes) return;
+        const pct = Math.floor((receivedBytes / totalBytes) * 100);
+        if (pct >= lastReportedPct + 25 || (lastReportedPct === -1 && pct === 0)) {
+          lastReportedPct = pct;
+          options.emitter?.emit('status', {
+            message: `Downloading Claude agent runtime (one-time, ${Math.round(totalBytes / 1024 / 1024)}MB): ${pct}%`,
+          });
+        }
+      },
+      () => {
+        // The retry restarts the byte count at 0; reset the throttle so the
+        // fresh attempt's progress isn't suppressed until it re-passes the peak.
+        lastReportedPct = -1;
+        options.emitter?.emit('status', { message: 'Download interrupted; retrying…' });
+      },
+    );
+
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: config.workingDirectory,
-      mcpServers: {
-        workos: {
-          command: 'npx',
-          args: ['-y', '@workos/mcp-docs-server'],
-        },
-      },
       model: getConfig().model,
-      allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch'],
+      // Empty on purpose. A tool listed here is auto-approved BEFORE `canUseTool`
+      // (installerCanUseTool) runs, which both defeats the Bash safety gate and
+      // triggers the SDK's CLAUDE_SDK_CAN_USE_TOOL_SHADOWED warning. Leaving this
+      // empty routes every tool call through canUseTool so the gate is
+      // authoritative. Tool *availability* comes from the `tools` preset below,
+      // not from this list.
+      allowedTools: [],
       sdkEnv,
+      claudeExecutablePath,
     };
 
     const configInfo = { workingDirectory: agentRunConfig.workingDirectory, authMode, useMcp: false };
@@ -645,17 +799,30 @@ export async function runAgent(
         model: agentConfig.model,
         cwd: agentConfig.workingDirectory,
         permissionMode: 'acceptEdits',
-        mcpServers: agentConfig.mcpServers,
         env: agentConfig.sdkEnv,
         canUseTool: (toolName, input) => {
           logInfo('canUseTool called:', { toolName, input });
-          const result = installerCanUseTool(toolName, input);
+          const result = installerCanUseTool(toolName, input, agentConfig.workingDirectory);
           logInfo('canUseTool result:', result);
           return Promise.resolve(result);
         },
         tools: { type: 'preset', preset: 'claude_code' },
+        // Without this the SDK sends an empty system prompt, so the agent never gets
+        // Claude Code's tool guidance (Read/Grep over cat/grep) or our installer rules.
+        systemPrompt: {
+          type: 'preset',
+          preset: 'claude_code',
+          append: buildInstallerSystemPromptAppend({ validatesAfterRun: Boolean(retryConfig && maxRetries > 0) }),
+        },
+        // Load no ~/.claude or project settings. Omitted, the SDK (since 0.2.89) loads them
+        // all: the user's plugins, MCP servers, hooks, CLAUDE.md, and permission rules,
+        // which apply before installerCanUseTool and would bypass the Bash gate.
+        settingSources: [],
+        // Only MCP servers we pass explicitly (none), even if the SDK's defaults change again.
+        strictMcpConfig: true,
         allowedTools: agentConfig.allowedTools,
         plugins: [{ type: 'local', path: pluginPath }],
+        pathToClaudeCodeExecutable: agentConfig.claudeExecutablePath,
         // Capture stderr from CLI subprocess for debugging
         stderr: (data: string) => {
           logInfo('CLI stderr:', data);
@@ -680,6 +847,7 @@ export async function runAgent(
       }
       try {
         onMessage?.(message);
+        options.onAgentMessage?.(message);
       } catch {
         /* non-critical */
       }
@@ -696,7 +864,7 @@ export async function runAgent(
         logError('AI service unavailable:', detail);
         return {
           error: AgentErrorType.SERVICE_UNAVAILABLE,
-          errorMessage: 'The AI service is temporarily unavailable. Please try again in a few minutes.',
+          errorMessage: formatAgentFailure('service_outage', detail),
         };
       }
       if (sdkError.startsWith(RATE_LIMITED_PREFIX)) {
@@ -704,7 +872,18 @@ export async function runAgent(
         logError('AI service rate-limited:', detail);
         return {
           error: AgentErrorType.SERVICE_UNAVAILABLE,
-          errorMessage: 'The AI service is currently rate-limited. Please wait a minute and try again.',
+          errorMessage: formatAgentFailure('rate_limited', detail),
+        };
+      }
+      if (sdkError.startsWith(DETERMINISTIC_PREFIX)) {
+        const detail = sdkError.slice(DETERMINISTIC_PREFIX.length);
+        // A gateway 500 is not automatically an outage: its generic branch also
+        // fires for request-shape failures, which recur on every attempt. Say so
+        // instead of sending the user round another four-minute run.
+        logError('Agent failure will recur on retry:', detail);
+        return {
+          error: AgentErrorType.EXECUTION_ERROR,
+          errorMessage: formatAgentFailure('deterministic', detail),
         };
       }
       logError('Agent SDK error:', sdkError);
@@ -841,6 +1020,15 @@ function handleSDKMessage(
               }
             }
 
+            // Surface Bash commands (post-permission: this branch only fires for
+            // tool calls that were actually allowed, unlike the canUseTool closure).
+            if (toolName === 'Bash' && input) {
+              const command = input.command as string;
+              if (command) {
+                emitter?.emit('agent:tool', { kind: 'command', detail: command });
+              }
+            }
+
             // Track Read operations for caching file content later
             if (toolName === 'Read' && input && block.id) {
               const filePath = input.file_path as string;
@@ -904,19 +1092,28 @@ function handleSDKMessage(
       const isResultError = (message as Record<string, unknown>).is_error === true;
 
       if (isResultError) {
-        const resultText = typeof message.result === 'string' ? message.result : '';
+        const resultRecord = message as unknown as Record<string, unknown>;
+        const resultText =
+          typeof resultRecord.result === 'string'
+            ? resultRecord.result
+            : Array.isArray(resultRecord.errors)
+              ? resultRecord.errors.filter((error): error is string => typeof error === 'string').join('\n')
+              : '';
         logError('Agent result marked as error:', resultText);
 
-        // Detect rate limiting (429) — check before 5xx so it gets distinct messaging
-        if (/\b429\b/.test(resultText) || /rate.limit/i.test(resultText)) {
-          return `${RATE_LIMITED_PREFIX}${resultText}`;
+        // One shared classifier owns the transient-vs-deterministic decision
+        // (failure-classifier.ts). This only maps its verdict onto the prefix
+        // protocol runAgent reads back below.
+        switch (classifyAgentFailure(resultText)) {
+          case 'rate_limited':
+            return `${RATE_LIMITED_PREFIX}${resultText}`;
+          case 'service_outage':
+            return `${SERVICE_UNAVAILABLE_PREFIX}${resultText}`;
+          case 'deterministic':
+            return `${DETERMINISTIC_PREFIX}${resultText}`;
+          default:
+            return resultText || 'Agent execution failed';
         }
-
-        // Detect service unavailability (API 500, upstream outage)
-        if (/\b50[0-9]\b/.test(resultText) || /server_error|internal_error|overloaded/.test(resultText)) {
-          return `${SERVICE_UNAVAILABLE_PREFIX}${resultText}`;
-        }
-        return resultText || 'Agent execution failed';
       }
 
       if (message.subtype === 'success') {

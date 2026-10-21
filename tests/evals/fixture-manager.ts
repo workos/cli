@@ -1,8 +1,9 @@
-import { cp, rm, mkdtemp } from 'node:fs/promises';
+import { cp, rm, mkdtemp, mkdir } from 'node:fs/promises';
 import { existsSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileNoThrow } from '../../src/utils/exec-file.js';
+import { bootstrapFizzy, prepareFizzyFixture } from './fizzy-fixture.js';
 
 export interface FixtureOptions {
   keepOnFail?: boolean;
@@ -21,6 +22,19 @@ export class FixtureManager {
   }
 
   async setup(): Promise<string> {
+    if (this.framework === 'ruby' && this.state === 'fizzy') {
+      if (process.env.FIZZY_APPROVED_RUN !== '1' || !process.env.FIZZY_ARCHIVE) {
+        throw new Error(
+          'Fizzy eval requires explicit spending/policy approval (FIZZY_APPROVED_RUN=1) and FIZZY_ARCHIVE. Use tests/evals/fizzy.ts for offline preparation.',
+        );
+      }
+      const parent = join(process.cwd(), '.artifacts/fizzy-evals');
+      await mkdir(parent, { recursive: true });
+      this.tempDir = await mkdtemp(join(parent, 'attempt-'));
+      const app = await prepareFizzyFixture(this.tempDir, process.env.FIZZY_ARCHIVE);
+      await bootstrapFizzy(this.tempDir);
+      return app;
+    }
     // Create temp directory with random suffix for parallel safety
     const suffix = Math.random().toString(36).substring(2, 8);
     this.tempDir = await mkdtemp(join(tmpdir(), `eval-${this.framework}-${this.state}-${suffix}-`));
@@ -63,8 +77,8 @@ export class FixtureManager {
   private async installDependencies(workDir: string): Promise<void> {
     // JS projects
     if (existsSync(join(workDir, 'package.json'))) {
-      const result = await execFileNoThrow('pnpm', ['install'], { cwd: workDir });
-      if (result.status !== 0) throw new Error(`pnpm install failed: ${result.stderr}`);
+      const result = await execFileNoThrow('bun', ['install'], { cwd: workDir });
+      if (result.status !== 0) throw new Error(`bun install failed: ${result.stderr}`);
       return;
     }
 

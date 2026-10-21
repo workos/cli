@@ -28,7 +28,7 @@ Every fixture must:
 ### Node.js (`node/`)
 
 - **Manifest**: `package.json`
-- **Install**: `pnpm install`
+- **Install**: `bun install`
 - **partial-install**: `@workos-inc/node` in package.json, WorkOS client initialized, login route incomplete (TODO), no callback route
 - **conflicting-auth**: `passport` + `passport-local` with working form-based auth, express-session configured
 

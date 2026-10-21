@@ -61,6 +61,28 @@ describe('runListSkills', () => {
     return { runListSkills, resetMode: () => output.setOutputMode('human') };
   }
 
+  it('exits with a structured error when skills materialization fails', async () => {
+    vi.resetModules();
+    vi.doMock('./install-skill.js', async (importOriginal) => {
+      const mod = await importOriginal<typeof import('./install-skill.js')>();
+      return {
+        ...mod,
+        getSkillsDir: () => {
+          throw new Error('embedded asset extraction failed');
+        },
+        createAgents: () => ({ test: makeTestAgent() }),
+        detectAgents: () => [makeTestAgent()],
+      };
+    });
+    const { runListSkills } = await import('./list-skills.js');
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(runListSkills({})).rejects.toSatisfy((err) => err instanceof Error && err.name === 'CliExit');
+    const output = errorSpy.mock.calls.map((c) => c.join(' ')).join('\n');
+    expect(output).toContain('https://github.com/workos/cli/releases/latest');
+    errorSpy.mockRestore();
+  });
+
   it('lists available and installed skills', async () => {
     mkdirSync(join(skillsDir, 'skill-a'), { recursive: true });
     writeFileSync(join(skillsDir, 'skill-a', 'SKILL.md'), '# A');

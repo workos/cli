@@ -1,13 +1,6 @@
 export type InteractionMode = 'human' | 'agent' | 'ci';
 
-export type InteractionModeSource =
-  | 'flag'
-  | 'env'
-  | 'workos_no_prompt'
-  | 'ci_env'
-  | 'agent_env'
-  | 'non_tty'
-  | 'default';
+export type InteractionModeSource = 'flag' | 'env' | 'ci_env' | 'agent_env' | 'non_tty' | 'default';
 
 export interface InteractionModeInfo {
   mode: InteractionMode;
@@ -97,10 +90,6 @@ export function resolveInteractionMode(options: ResolveInteractionModeOptions = 
 
   if (env.WORKOS_MODE !== undefined) {
     return { mode: parseModeValue(env.WORKOS_MODE, 'env'), source: 'env' };
-  }
-
-  if (isTruthy(env.WORKOS_NO_PROMPT)) {
-    return { mode: 'agent', source: 'workos_no_prompt' };
   }
 
   if (hasCiMarker(env)) {

@@ -1,9 +1,24 @@
-import { readFile } from 'fs/promises';
+import { open, readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import fg from 'fast-glob';
 import type { ValidationResult, ValidationRules, ValidationIssue } from './types.js';
 import { runBuildValidation } from './build-validator.js';
+import { detectPort, getClientEnvPrefix, getSignInPath } from '../port-detection.js';
+import { nextjsRoutePath, findNextjsSignInPage } from '../../integrations/nextjs/utils.js';
+import nextjsRules from './rules/nextjs.json' with { type: 'json' };
+import reactRouterRules from './rules/react-router.json' with { type: 'json' };
+import reactRules from './rules/react.json' with { type: 'json' };
+import tanstackStartRules from './rules/tanstack-start.json' with { type: 'json' };
+import vanillaJsRules from './rules/vanilla-js.json' with { type: 'json' };
+
+const RULES_BY_FRAMEWORK: Readonly<Record<string, ValidationRules>> = {
+  nextjs: nextjsRules as ValidationRules,
+  'react-router': reactRouterRules as ValidationRules,
+  react: reactRules as ValidationRules,
+  'tanstack-start': tanstackStartRules as ValidationRules,
+  'vanilla-js': vanillaJsRules as ValidationRules,
+};
 
 export interface ValidateOptions {
   variant?: string;
@@ -52,26 +67,21 @@ export async function validateInstallation(
 }
 
 async function loadRules(framework: string, variant?: string): Promise<ValidationRules | null> {
-  const rulesPath = new URL(`./rules/${framework}.json`, import.meta.url);
-  try {
-    const content = await readFile(rulesPath, 'utf-8');
-    const rules = JSON.parse(content) as ValidationRules;
+  const rules = RULES_BY_FRAMEWORK[framework];
+  if (!rules) return null;
 
-    // Merge variant rules if specified
-    if (variant && rules.variants?.[variant]) {
-      const variantRules = rules.variants[variant];
-      return {
-        ...rules,
-        files: [...rules.files, ...(variantRules.files || [])],
-        packages: [...rules.packages, ...(variantRules.packages || [])],
-        envVars: [...rules.envVars, ...(variantRules.envVars || [])],
-      };
-    }
-
-    return rules;
-  } catch {
-    return null; // No rules for this framework yet
+  // Merge variant rules if specified
+  if (variant && rules.variants?.[variant]) {
+    const variantRules = rules.variants[variant];
+    return {
+      ...rules,
+      files: [...rules.files, ...(variantRules.files || [])],
+      packages: [...rules.packages, ...(variantRules.packages || [])],
+      envVars: [...rules.envVars, ...(variantRules.envVars || [])],
+    };
   }
+
+  return rules;
 }
 
 export async function validatePackages(rules: ValidationRules, projectDir: string): Promise<ValidationIssue[]> {
@@ -95,12 +105,14 @@ export async function validatePackages(rules: ValidationRules, projectDir: strin
     const location = rule.location || 'any';
     const searchIn = location === 'any' ? allDeps : location === 'dependencies' ? deps : devDeps;
 
-    if (!searchIn[rule.name]) {
+    if (![rule.name, ...(rule.alternates || [])].some((name) => searchIn[name])) {
       issues.push({
         type: 'package',
         severity: 'error',
         message: `Missing package: ${rule.name}`,
-        hint: `Run: npm install ${rule.name}`,
+        hint: `Run: npm install ${location === 'devDependencies' ? '--save-dev ' : ''}${rule.name}${
+          rule.alternates?.length ? ` (or one of: ${rule.alternates.join(', ')})` : ''
+        }`,
       });
     }
   }
@@ -159,6 +171,9 @@ export async function validateFiles(rules: ValidationRules, projectDir: string):
     let matches: string[];
     try {
       matches = await fg(rule.path, { cwd: projectDir });
+      if (rules.framework === 'nextjs' && rule.urlPath) {
+        matches = matches.filter((file) => nextjsRoutePath(file) === rule.urlPath);
+      }
     } catch {
       // Invalid glob pattern - skip
       continue;
@@ -174,43 +189,46 @@ export async function validateFiles(rules: ValidationRules, projectDir: string):
       continue;
     }
 
-    // Check content patterns
+    // Any matching file may satisfy the rule, but its patterns must occur together.
     if (rule.mustContain || rule.mustContainAny) {
-      const filePath = join(projectDir, matches[0]);
-      let content: string;
-      try {
-        content = await readFile(filePath, 'utf-8');
-      } catch {
-        // File read error - skip content checks
-        continue;
-      }
+      let patternIssues: ValidationIssue[] | undefined;
+      for (const file of matches) {
+        let content: string;
+        try {
+          content = await readFile(join(projectDir, file), 'utf-8');
+        } catch {
+          // A failed read must not hide another matching file.
+          continue;
+        }
 
-      // All must be present
-      if (rule.mustContain) {
-        for (const pattern of rule.mustContain) {
+        const fileIssues: ValidationIssue[] = [];
+        for (const pattern of rule.mustContain ?? []) {
           if (!content.includes(pattern)) {
-            issues.push({
+            fileIssues.push({
               type: 'pattern',
-              severity: 'warning',
-              message: `File ${matches[0]} missing expected pattern: "${pattern}"`,
-              hint: `Ensure ${matches[0]} contains: ${pattern}`,
+              severity: rule.severity ?? 'warning',
+              message: `File ${file} missing expected pattern: "${pattern}"`,
+              hint: `Ensure ${file} contains: ${pattern}`,
             });
           }
         }
-      }
-
-      // At least one must be present
-      if (rule.mustContainAny) {
-        const hasAny = rule.mustContainAny.some((p) => content.includes(p));
-        if (!hasAny) {
-          issues.push({
+        if (rule.mustContainAny && !rule.mustContainAny.some((pattern) => content.includes(pattern))) {
+          fileIssues.push({
             type: 'pattern',
-            severity: 'warning',
-            message: `File ${matches[0]} missing one of: ${rule.mustContainAny.join(', ')}`,
-            hint: `Ensure ${matches[0]} contains one of these patterns`,
+            severity: rule.severity ?? 'warning',
+            message: `File ${file} missing one of: ${rule.mustContainAny.join(', ')}`,
+            hint: `Ensure ${file} contains one of these patterns`,
           });
         }
+
+        if (fileIssues.length === 0) {
+          patternIssues = [];
+          break;
+        }
+        // Retain one file's actionable diagnostics only if no match satisfies the rule.
+        patternIssues ??= fileIssues;
       }
+      issues.push(...(patternIssues ?? []));
     }
   }
 
@@ -229,13 +247,26 @@ export async function validateFrameworkSpecific(framework: string, projectDir: s
 
   // Framework-specific validations
   switch (framework) {
-    case 'nextjs':
+    case 'nextjs': {
+      const signInPage = await findNextjsSignInPage(projectDir);
+      if (signInPage)
+        issues.push({
+          type: 'file',
+          severity: 'error',
+          message: `Page ${signInPage} conflicts with the required /sign-in route handler`,
+          hint: 'Keep the existing page unchanged and configure AuthKit manually, or move it before running the installer.',
+        });
       await validateNextjsRedirectUri(projectDir, issues);
       await validateNextjsMiddlewarePlacement(projectDir, issues);
       await validateCookiePasswordLength(projectDir, issues, 'WORKOS_COOKIE_PASSWORD');
       break;
+    }
     case 'react':
       await validateReactProviderWrapping(projectDir, issues);
+      await validateClientOnlyApp(framework, projectDir, issues);
+      break;
+    case 'vanilla-js':
+      await validateClientOnlyApp(framework, projectDir, issues);
       break;
     case 'react-router':
       await validateReactRouterRedirectUri(projectDir, issues);
@@ -248,6 +279,149 @@ export async function validateFrameworkSpecific(framework: string, projectDir: s
   }
 
   return issues;
+}
+
+/** Check callback configuration, not whether arbitrary client routes execute. */
+async function validateClientOnlyApp(framework: string, projectDir: string, issues: ValidationIssue[]) {
+  const signInPath = getSignInPath(framework);
+  const prefix = getClientEnvPrefix(projectDir);
+  if (signInPath)
+    issues.push({
+      type: 'file',
+      severity: 'warning',
+      message: `Client-side ${signInPath} route requires browser verification`,
+      hint: `Open ${signInPath} while signed out and confirm it starts AuthKit sign-in without a click. Then set the app origin plus ${signInPath} as the Initiate login URI in the WorkOS dashboard; the installer leaves that setting unchanged.`,
+    });
+  const { sources, complete } = await readClientSource(projectDir, prefix);
+  if (!complete)
+    issues.push({
+      type: 'file',
+      severity: 'warning',
+      message: 'Client source checks were incomplete; callback configuration could not be fully checked',
+      hint: 'The check is limited to 256 source files, 256 KiB per file, and 4 MiB total. Check that the SDK uses the installed redirect URI in the browser.',
+    });
+  if (complete && !sources.some((content) => content.includes('redirectUri')))
+    issues.push({
+      type: 'pattern',
+      severity: 'error',
+      message: 'The AuthKit client does not set redirectUri',
+      hint: 'Pass the installed WORKOS_REDIRECT_URI env var as redirectUri to AuthKitProvider or createClient(). The SDK default, the page origin, is not registered.',
+    });
+  if (!prefix) return;
+  const expected = BROWSER_REDIRECT_ENV[prefix];
+  const reads = new Set(
+    sources.flatMap((content) => [...content.matchAll(REDIRECT_ENV_REFERENCE)].map(([read]) => read)),
+  );
+  reads.delete(expected);
+  for (const read of reads)
+    issues.push({
+      type: 'env',
+      severity: 'error',
+      message: `The client reads ${read}, but the installer exposes ${expected}`,
+      hint: `Read ${expected} as the redirect URI.`,
+    });
+}
+
+/** The one expression each bundler's browser code must use to read the installed redirect URI. */
+const BROWSER_REDIRECT_ENV = {
+  VITE_: 'import.meta.env.VITE_WORKOS_REDIRECT_URI',
+  REACT_APP_: 'process.env.REACT_APP_WORKOS_REDIRECT_URI',
+} satisfies Record<NonNullable<ReturnType<typeof getClientEnvPrefix>>, string>;
+
+/** A redirect URI env read, e.g. import.meta.env.VITE_WORKOS_REDIRECT_URI. */
+const REDIRECT_ENV_REFERENCE = /(?:import\.meta\.env|process\.env)\.\w*WORKOS_REDIRECT_URI\b/g;
+
+const MAX_SOURCE_FILES = 256;
+const MAX_SOURCE_BYTES = 256 * 1024;
+const MAX_SCAN_BYTES = 4 * 1024 * 1024;
+
+/** Read at most limit + 1 bytes, rather than loading a huge file before checking. */
+async function readBoundedSource(path: string, limit: number): Promise<string | undefined> {
+  try {
+    const handle = await open(path, 'r');
+    try {
+      const bytes = Buffer.alloc(limit + 1);
+      let length = 0;
+      while (length < bytes.length) {
+        const { bytesRead } = await handle.read(bytes, length, bytes.length - length, null);
+        if (bytesRead === 0) break;
+        length += bytesRead;
+      }
+      return length > limit ? undefined : bytes.subarray(0, length).toString('utf8');
+    } finally {
+      await handle.close();
+    }
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Bounded checks of conventional client source roots, not a module resolver.
+ * Server-only paths and other workspace packages are deliberately excluded.
+ * Keep src/auth.config.ts: unlike the root bundler config, it can be browser code.
+ * Incomplete scans are inconclusive, not evidence of missing configuration.
+ */
+async function readClientSource(
+  projectDir: string,
+  prefix: ReturnType<typeof getClientEnvPrefix>,
+): Promise<{ sources: string[]; complete: boolean }> {
+  const extension = '*.{ts,tsx,js,jsx,mjs,html,htm}';
+  const files = fg.stream(
+    prefix === 'REACT_APP_' ? [`src/**/${extension}`] : [extension, `{src,app,client}/**/${extension}`],
+    {
+      cwd: projectDir,
+      followSymbolicLinks: false,
+      suppressErrors: false,
+      ignore: [
+        '**/{node_modules,dist,build,coverage,server,api,functions,scripts,packages,examples,fixtures,__tests__}/**',
+        '**/.*/**',
+        '**/*.{spec,test,server}.*',
+        '**/server.*',
+        '*.config.*',
+      ],
+    },
+  );
+  const sources: string[] = [];
+  let remaining = MAX_SCAN_BYTES;
+  try {
+    for await (const file of files) {
+      if (sources.length >= MAX_SOURCE_FILES) return { sources, complete: false };
+      const content = await readBoundedSource(join(projectDir, String(file)), Math.min(MAX_SOURCE_BYTES, remaining));
+      if (content === undefined) return { sources, complete: false };
+      remaining -= Buffer.byteLength(content);
+      sources.push(content);
+    }
+  } catch {
+    return { sources, complete: false };
+  }
+  return { sources, complete: true };
+}
+
+/**
+ * Compares the redirect URI's effective port to the detected dev server port,
+ * for local dev hosts only, and records an error-severity issue on mismatch.
+ * Skips production URIs and placeholder hosts like http://test.
+ */
+function validateRedirectUriPort(url: URL, framework: string, projectDir: string, issues: ValidationIssue[]): void {
+  // Only enforce for local dev hosts; skip production URIs and placeholder
+  // hosts like http://test. Node parses IPv6 hostnames with brackets: [::1].
+  const localHosts = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+  if (!localHosts.has(url.hostname)) return;
+
+  const effectivePort = url.port || (url.protocol === 'https:' ? '443' : '80');
+  const detected = detectPort(framework, projectDir);
+
+  if (Number(effectivePort) !== detected) {
+    issues.push({
+      type: 'env',
+      severity: 'error',
+      message: `Redirect URI port :${effectivePort} does not match the detected dev server port :${detected}`,
+      hint:
+        `Update the redirect URI to use port :${detected} in .env.local and the WorkOS dashboard ` +
+        `(redirect URI, CORS origin, homepage URL), or change your dev server to run on port ${effectivePort}.`,
+    });
+  }
 }
 
 /**
@@ -277,6 +451,7 @@ async function validateNextjsRedirectUri(projectDir: string, issues: ValidationI
   try {
     const url = new URL(redirectUri);
     callbackPath = url.pathname;
+    validateRedirectUriPort(url, 'nextjs', projectDir, issues);
   } catch {
     issues.push({
       type: 'env',
@@ -290,19 +465,8 @@ async function validateNextjsRedirectUri(projectDir: string, issues: ValidationI
   // Remove leading slash for path matching
   const routePath = callbackPath.replace(/^\//, '');
 
-  // Check if route file exists at expected location (Next.js App Router)
-  const routePatterns = [
-    `app/${routePath}/route.ts`,
-    `app/${routePath}/route.tsx`,
-    `app/${routePath}/route.js`,
-    `app/${routePath}/route.jsx`,
-    `src/app/${routePath}/route.ts`,
-    `src/app/${routePath}/route.tsx`,
-    `src/app/${routePath}/route.js`,
-    `src/app/${routePath}/route.jsx`,
-  ];
-
-  const routeExists = routePatterns.some((pattern) => existsSync(join(projectDir, pattern)));
+  const routeFiles = await fg('{,src/}app/**/route.{ts,tsx,js,jsx}', { cwd: projectDir });
+  const routeExists = routeFiles.some((file) => nextjsRoutePath(file) === callbackPath);
 
   if (!routeExists) {
     // Check what routes DO exist to give a better hint
@@ -316,10 +480,10 @@ async function validateNextjsRedirectUri(projectDir: string, issues: ValidationI
     let hint = `Create a route handler at app/${routePath}/route.ts`;
     if (existingRoutes.length > 0) {
       // Found a route at a different path - likely the mismatch
-      const actualPath = '/' + existingRoutes[0].replace(/^(src\/)?app\//, '').replace(/\/route\.(ts|tsx|js|jsx)$/, '');
+      const actualPath = nextjsRoutePath(existingRoutes[0]);
       hint =
         `Found callback route at ${existingRoutes[0]} but redirect URI points to ${callbackPath}. Either:\n` +
-        `  1. Change NEXT_PUBLIC_WORKOS_REDIRECT_URI to http://localhost:3000${actualPath}\n` +
+        `  1. Change NEXT_PUBLIC_WORKOS_REDIRECT_URI to ${new URL(redirectUri).origin}${actualPath}\n` +
         `  2. Move the route to app/${routePath}/route.ts`;
     }
 
@@ -360,6 +524,7 @@ async function validateReactRouterRedirectUri(projectDir: string, issues: Valida
   try {
     const url = new URL(redirectUri);
     callbackPath = url.pathname;
+    validateRedirectUriPort(url, 'react-router', projectDir, issues);
   } catch {
     issues.push({
       type: 'env',
@@ -418,7 +583,7 @@ async function validateReactRouterRedirectUri(projectDir: string, issues: Valida
           .replace(/\./g, '/');
       hint =
         `Found callback route at ${actualFile} but redirect URI points to ${callbackPath}. Either:\n` +
-        `  1. Change WORKOS_REDIRECT_URI to http://localhost:3000${actualPath}\n` +
+        `  1. Change WORKOS_REDIRECT_URI to ${new URL(redirectUri).origin}${actualPath}\n` +
         `  2. Move the route to app/routes/${dotPath}.tsx`;
     }
 
@@ -435,7 +600,8 @@ async function validateReactRouterRedirectUri(projectDir: string, issues: Valida
  * Validates that the TanStack Start redirect URI matches an existing callback route.
  *
  * TanStack Start uses file-based routing:
- * - /auth/callback → app/routes/auth/callback.tsx
+ * Checks conventional nested, flat, index, and route files under app/routes or src/routes.
+ * Custom router configuration and runtime handler behavior are not inferred from source.
  */
 async function validateTanstackStartRedirectUri(projectDir: string, issues: ValidationIssue[]): Promise<void> {
   const envPath = join(projectDir, '.env.local');
@@ -458,6 +624,7 @@ async function validateTanstackStartRedirectUri(projectDir: string, issues: Vali
   try {
     const url = new URL(redirectUri);
     callbackPath = url.pathname;
+    validateRedirectUriPort(url, 'tanstack-start', projectDir, issues);
   } catch {
     issues.push({
       type: 'env',
@@ -470,38 +637,40 @@ async function validateTanstackStartRedirectUri(projectDir: string, issues: Vali
 
   const routePath = callbackPath.replace(/^\//, '');
 
-  // TanStack Start route patterns
-  const routePatterns = [
-    `app/routes/${routePath}.tsx`,
-    `app/routes/${routePath}.ts`,
-    `app/routes/${routePath}.jsx`,
-    `app/routes/${routePath}.js`,
-    `app/routes/${routePath}/index.tsx`,
-    `app/routes/${routePath}/index.ts`,
-    `app/routes/${routePath}/index.jsx`,
-    `app/routes/${routePath}/index.js`,
-  ];
+  const dotPath = routePath.replace(/\//g, '.');
+  const routePatterns = ['app', 'src'].flatMap((root) =>
+    [routePath, dotPath].flatMap((path) =>
+      ['', '/index', '/route', '.index', '.route'].flatMap((suffix) =>
+        ['ts', 'tsx', 'js', 'jsx'].map((ext) => `${root}/routes/${path}${suffix}.${ext}`),
+      ),
+    ),
+  );
 
   const routeExists = routePatterns.some((pattern) => existsSync(join(projectDir, pattern)));
 
   if (!routeExists) {
-    const existingRoutes = await fg(['app/routes/**/*callback*.{ts,tsx,js,jsx}'], {
-      cwd: projectDir,
-    });
+    const existingRoutes = await fg(
+      [
+        '{app,src}/routes/**/*callback*.{ts,tsx,js,jsx}',
+        '{app,src}/routes/**/*callback*/{index,route}.{ts,tsx,js,jsx}',
+      ],
+      { cwd: projectDir },
+    );
 
-    let hint = `Create a route at app/routes/${routePath}.tsx`;
+    let hint = `Create a route at app/routes/${routePath}.tsx or src/routes/${routePath}.tsx`;
     if (existingRoutes.length > 0) {
       const actualFile = existingRoutes[0];
       const actualPath =
         '/' +
         actualFile
-          .replace(/^app\/routes\//, '')
+          .replace(/^(app|src)\/routes\//, '')
           .replace(/\.(tsx?|jsx?)$/, '')
-          .replace(/\/index$/, '');
+          .replace(/\./g, '/')
+          .replace(/\/(index|route)$/, '');
       hint =
         `Found callback route at ${actualFile} but redirect URI points to ${callbackPath}. Either:\n` +
-        `  1. Change WORKOS_REDIRECT_URI to http://localhost:3000${actualPath}\n` +
-        `  2. Move the route to app/routes/${routePath}.tsx`;
+        `  1. Change WORKOS_REDIRECT_URI to ${new URL(redirectUri).origin}${actualPath}\n` +
+        `  2. Move the route to app/routes/${routePath}.tsx or src/routes/${routePath}.tsx`;
     }
 
     issues.push({

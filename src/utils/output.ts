@@ -7,11 +7,13 @@
  */
 
 import chalk from 'chalk';
+import { writeSync } from 'node:fs';
 import { CliExit } from './cli-exit.js';
 import { resolveErrorCode } from './exit-codes.js';
 import { formatTable, type TableColumn } from './table.js';
 import type { RecoveryHints } from './recovery-hints.js';
 import type { InteractionModeInfo } from './interaction-mode.js';
+import type { ResolvedApiBaseUrl } from '../lib/api-key.js';
 
 export type OutputMode = 'human' | 'json';
 
@@ -23,14 +25,15 @@ let currentMode: OutputMode = 'human';
  * Priority:
  * 1. Explicit --json flag
  * 2. WORKOS_FORCE_TTY env var → human output compatibility
- * 3. WORKOS_NO_PROMPT legacy compatibility → json
- * 4. Non-TTY auto-detection → json
- * 5. Default → human
+ * 3. Non-TTY auto-detection → json
+ * 4. Default → human
+ *
+ * Note: agent interaction mode (WORKOS_MODE=agent) also forces JSON output,
+ * applied separately via resolveEffectiveOutputMode().
  */
 export function resolveOutputMode(jsonFlag?: boolean): OutputMode {
   if (jsonFlag) return 'json';
   if (process.env.WORKOS_FORCE_TTY === '1' || process.env.WORKOS_FORCE_TTY === 'true') return 'human';
-  if (process.env.WORKOS_NO_PROMPT === '1' || process.env.WORKOS_NO_PROMPT === 'true') return 'json';
   if (!process.stdout.isTTY) return 'json';
   return 'human';
 }
@@ -60,6 +63,39 @@ export function isJsonMode(): boolean {
 /** Write structured JSON to stdout (one line, no pretty-print). */
 export function outputJson(data: unknown): void {
   console.log(JSON.stringify(data));
+}
+
+/**
+ * Write structured JSON straight to fd 1, synchronously.
+ *
+ * Writes to a piped stdout are asynchronous and buffered, so a payload larger
+ * than the 64KiB pipe buffer loses its tail when the process exits before the
+ * buffer drains. The `--help --json` command tree is ~70KiB, so
+ * `workos --help --json | jq` emitted truncated, unparseable JSON with no
+ * error at all. `writeSync` returns only once the bytes are handed off, so
+ * nothing is left pending at exit.
+ *
+ * Reserved for the command tree. Ordinary `outputJson` stays on `console.log`:
+ * every other payload is far below the pipe buffer, and the specs capture JSON
+ * output by spying on `console.log`.
+ *
+ * EAGAIN on a non-blocking pipe is retried rather than thrown, so a slow reader
+ * cannot turn into a lost payload. EPIPE is swallowed (the reader went away,
+ * e.g. `| head`).
+ */
+export function outputJsonSync(data: unknown): void {
+  const buf = Buffer.from(`${JSON.stringify(data)}\n`, 'utf8');
+  let offset = 0;
+  while (offset < buf.length) {
+    try {
+      offset += writeSync(1, buf, offset, buf.length - offset);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'EAGAIN') continue;
+      if (code === 'EPIPE') return;
+      throw err;
+    }
+  }
 }
 
 /** Write a success result — chalk in human mode, JSON in json mode. */
@@ -111,6 +147,26 @@ export function outputError(error: StructuredError): void {
       console.error(chalk.dim(`→ ${firstHint.description}${suffix}`));
     }
   }
+}
+
+/**
+ * Format the "you are not talking to prod" indicator, or null when the base URL
+ * is the default. Pure — the caller decides whether/how to emit it.
+ */
+export function formatApiBaseUrlIndicator(resolved: ResolvedApiBaseUrl): string | null {
+  if (resolved.source === 'default') return null;
+  const tag = resolved.source === 'env' ? resolved.via : `profile "${resolved.via}"`;
+  return `→ ${resolved.baseUrl} (${tag})`;
+}
+
+/**
+ * Emit the base-URL indicator to stderr in human mode only. Suppressed in JSON
+ * mode so piped/agent output stays clean. No-op when the base URL is default.
+ */
+export function outputApiBaseUrlIndicator(resolved: ResolvedApiBaseUrl): void {
+  if (currentMode === 'json') return;
+  const line = formatApiBaseUrlIndicator(resolved);
+  if (line) console.error(chalk.dim(line));
 }
 
 /** Write tabular data — chalk table in human mode, JSON array in json mode. */

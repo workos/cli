@@ -33,12 +33,12 @@ describe('recovery-hints', () => {
       expect(recovery.hints[0].hostShellRequired).toBeUndefined();
     });
 
-    it('uses npx invocation when called via npm exec', () => {
+    it('uses the standalone binary when npm variables are present', () => {
       const recovery = authLoginRecovery({
         mode: 'agent',
         env: { npm_command: 'exec' },
       });
-      expect(recovery.hints[0].command).toBe('npx workos@latest auth login');
+      expect(recovery.hints[0].command).toBe('workos auth login');
     });
   });
 

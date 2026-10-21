@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 
-vi.mock('../lib/settings.js', () => ({
-  getVersion: vi.fn(() => '0.7.3'),
-}));
+vi.mock('../lib/settings.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/settings.js')>();
+  return { ...actual, getVersion: vi.fn(() => '0.7.3') };
+});
 
 const { buildCommandTree, extractHelpJsonCommand } = await import('./help-json.js');
 
@@ -26,6 +27,7 @@ describe('help-json', () => {
 
     it('resolves command aliases', () => {
       expect(extractHelpJsonCommand(['org', '--help', '--json'])).toBe('organization');
+      expect(extractHelpJsonCommand(['integrate', '--help', '--json'])).toBe('install');
     });
   });
 
@@ -56,7 +58,8 @@ describe('help-json', () => {
           'auth status',
           'skills',
           'doctor',
-          'env',
+          'verify-login',
+          'profile',
           'organization',
           'user',
           'install',
@@ -64,10 +67,13 @@ describe('help-json', () => {
       );
     });
 
-    it('does not include hidden dashboard command', () => {
-      const tree = buildCommandTree();
-      const names = (tree as { commands: { name: string }[] }).commands.map((c) => c.name);
-      expect(names).not.toContain('dashboard');
+    it('only advertises App Router for the installer', () => {
+      const tree = buildCommandTree('install') as {
+        options: { name: string; choices?: string[]; description: string }[];
+      };
+      const router = tree.options.find((option) => option.name === 'router');
+      expect(router?.choices).toEqual(['app']);
+      expect(router?.description).toContain('Pages-only projects are refused');
     });
 
     it('includes global options with types and defaults', () => {
@@ -97,10 +103,10 @@ describe('help-json', () => {
 
   describe('buildCommandTree() — subcommand subtrees', () => {
     it('returns env subtree with subcommands', () => {
-      const tree = buildCommandTree('env');
-      expect(tree.name).toBe('env');
+      const tree = buildCommandTree('profile');
+      expect(tree.name).toBe('profile');
       const subNames = tree.commands!.map((c) => c.name);
-      expect(subNames).toEqual(expect.arrayContaining(['add', 'remove', 'switch', 'list']));
+      expect(subNames).toEqual(expect.arrayContaining(['add', 'remove', 'switch', 'list', 'claim', 'provision']));
     });
 
     it('returns organization subtree with CRUD subcommands', () => {
@@ -124,9 +130,39 @@ describe('help-json', () => {
     });
   });
 
+  describe('accurate command copy', () => {
+    it('migrations description advertises the generic-CSV / Supabase path', () => {
+      const tree = buildCommandTree('migrations');
+      expect(tree.name).toBe('migrations');
+      expect(tree.description).toMatch(/CSV/i);
+      expect(tree.description).toMatch(/Supabase/i);
+    });
+
+    it('migrations subcommands include the discoverable export entry point', () => {
+      const tree = buildCommandTree('migrations');
+      const subNames = tree.commands!.map((c) => c.name);
+      expect(subNames).toContain('export');
+      // process-roles is the name the package actually registers (not process-role-definitions)
+      expect(subNames).toContain('process-roles');
+      expect(subNames).not.toContain('process-role-definitions');
+    });
+
+    it('env remove description states it is local-only', () => {
+      const env = buildCommandTree('profile');
+      const remove = env.commands!.find((c) => c.name === 'remove');
+      expect(remove!.description).toMatch(/local/i);
+    });
+
+    it('env claim description states the action is permanent', () => {
+      const env = buildCommandTree('profile');
+      const claim = env.commands!.find((c) => c.name === 'claim');
+      expect(claim!.description).toMatch(/permanent/i);
+    });
+  });
+
   describe('positional schemas', () => {
     it('env add has optional positionals', () => {
-      const env = buildCommandTree('env');
+      const env = buildCommandTree('profile');
       const add = env.commands!.find((c) => c.name === 'add');
       expect(add).toBeDefined();
       expect(add!.positionals).toBeDefined();
@@ -136,7 +172,7 @@ describe('help-json', () => {
     });
 
     it('env remove has required positional', () => {
-      const env = buildCommandTree('env');
+      const env = buildCommandTree('profile');
       const remove = env.commands!.find((c) => c.name === 'remove');
       expect(remove!.positionals![0].required).toBe(true);
     });
@@ -181,11 +217,14 @@ describe('help-json', () => {
       expect(optNames).toEqual(expect.arrayContaining(['limit', 'before', 'after', 'order']));
     });
 
-    it('user list has email and organization filters', () => {
+    it('user list has email filter and environment override', () => {
       const user = buildCommandTree('user');
       const list = user.commands!.find((c) => c.name === 'list');
       const optNames = list!.options!.map((o) => o.name);
-      expect(optNames).toEqual(expect.arrayContaining(['email', 'organization']));
+      // --organization was dropped in the dashboard-plane migration (no backing
+      // variable on the list operation); --environment-id targets the env.
+      expect(optNames).toEqual(expect.arrayContaining(['email', 'environment-id']));
+      expect(optNames).not.toContain('organization');
     });
   });
 });

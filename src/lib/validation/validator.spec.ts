@@ -2,7 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { validateInstallation } from './validator.js';
+import { validateFiles, validateInstallation, validatePackages } from './validator.js';
+import type { FileRule, PackageRule } from './types.js';
+import tanstackRules from './rules/tanstack-start.json' with { type: 'json' };
 
 describe('validateInstallation', () => {
   let testDir: string;
@@ -155,6 +157,76 @@ describe('validateInstallation', () => {
   });
 
   describe('file validation', () => {
+    it.each(['app', 'src/app'])('accepts route groups for both sign-in and callback under %s', async (app) => {
+      const files = {
+        'package.json': JSON.stringify({ dependencies: { '@workos-inc/authkit-nextjs': '^2.0.0' } }),
+        '.env.local': `WORKOS_API_KEY=sk_test_key\nWORKOS_CLIENT_ID=client_test\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=${'x'.repeat(32)}\n`,
+        [`${app}/layout.tsx`]: 'export default function Layout() { return <AuthKitProvider />; }',
+        [`${app.startsWith('src/') ? 'src/' : ''}middleware.ts`]: 'export const authkitMiddleware = () => {};',
+        [`${app}/(auth)/callback/route.ts`]:
+          "import { handleAuth } from '@workos-inc/authkit-nextjs'; export const GET = handleAuth();",
+        [`${app}/(auth)/(public)/sign-in/route.ts`]:
+          "import { getSignInUrl } from '@workos-inc/authkit-nextjs'; import { redirect } from 'next/navigation'; export async function GET() { return redirect(await getSignInUrl()); }",
+      };
+      for (const [file, content] of Object.entries(files)) {
+        mkdirSync(join(testDir, file, '..'), { recursive: true });
+        writeFileSync(join(testDir, file), content);
+      }
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+      expect(result.issues.filter((issue) => issue.severity === 'error')).toEqual([]);
+      expect(result.passed).toBe(true);
+    });
+
+    it('does not mistake /account/sign-in for /sign-in', async () => {
+      mkdirSync(join(testDir, 'app/account/sign-in'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'app/account/sign-in/route.ts'),
+        "import { getSignInUrl } from '@workos-inc/authkit-nextjs'; export async function GET() { return redirect(await getSignInUrl()); }",
+      );
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+      expect(result.issues.some((issue) => issue.type === 'file' && issue.message.includes('sign-in'))).toBe(true);
+    });
+
+    it('requires an initiate-login route distinct from the callback', async () => {
+      mkdirSync(join(testDir, 'app', 'callback'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'app', 'callback', 'route.ts'),
+        "import { handleAuth } from '@workos-inc/authkit-nextjs'; export const GET = handleAuth();",
+      );
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+      expect(result.issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ type: 'file', severity: 'error', message: expect.stringContaining('sign-in') }),
+        ]),
+      );
+    });
+
+    it('rejects a callback handler masquerading as the sign-in route', async () => {
+      mkdirSync(join(testDir, 'app', 'sign-in'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'app', 'sign-in', 'route.ts'),
+        "import { handleAuth } from '@workos-inc/authkit-nextjs'; export const GET = handleAuth();",
+      );
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+      expect(result.issues.some((issue) => issue.message.includes('getSignInUrl') && issue.severity === 'error')).toBe(
+        true,
+      );
+    });
+
+    it.each(['app', 'src/app'])('accepts the SDK-backed sign-in route under %s', async (appDir) => {
+      mkdirSync(join(testDir, appDir, 'sign-in'), { recursive: true });
+      writeFileSync(
+        join(testDir, appDir, 'sign-in', 'route.ts'),
+        `
+        import { getSignInUrl } from '@workos-inc/authkit-nextjs';
+        import { redirect } from 'next/navigation';
+        export async function GET() { return redirect(await getSignInUrl()); }
+      `,
+      );
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+      expect(result.issues.filter((issue) => issue.message.includes('sign-in'))).toEqual([]);
+    });
+
     it('detects missing callback route file', async () => {
       writeFileSync(
         join(testDir, 'package.json'),
@@ -203,6 +275,59 @@ describe('validateInstallation', () => {
   });
 
   describe('pattern validation', () => {
+    it.each(['a', 'z'])('checks all TanStack source and callback matches (valid file: %s)', async (valid) => {
+      mkdirSync(join(testDir, 'src/routes'), { recursive: true });
+      for (const name of ['a', 'z']) {
+        writeFileSync(join(testDir, `src/${name}.ts`), name === valid ? 'authkitMiddleware()' : 'export {};');
+        writeFileSync(
+          join(testDir, `src/routes/${name}.callback.tsx`),
+          name === valid ? 'handleCallbackRoute()' : 'export {};',
+        );
+      }
+      expect(await validateFiles(tanstackRules, testDir)).toEqual([]);
+    });
+
+    it.each(['a', 'z'])('accepts a later file satisfying both pattern constraints (valid file: %s)', async (valid) => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      for (const name of ['a', 'z'])
+        writeFileSync(join(testDir, `src/${name}.ts`), name === valid ? 'getSignInUrl redirect GET' : 'export {};');
+      const files: FileRule[] = [
+        {
+          path: 'src/*.ts',
+          mustContain: ['getSignInUrl', 'redirect'],
+          mustContainAny: ['GET', 'POST'],
+        },
+      ];
+      expect(await validateFiles({ framework: 'test', packages: [], envVars: [], files }, testDir)).toEqual([]);
+    });
+
+    it('does not combine incomplete files into one valid handler', async () => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(join(testDir, 'src/a.ts'), 'getSignInUrl redirect');
+      writeFileSync(join(testDir, 'src/z.ts'), 'GET');
+      const files: FileRule[] = [
+        {
+          path: 'src/*.ts',
+          mustContain: ['getSignInUrl', 'redirect'],
+          mustContainAny: ['GET', 'POST'],
+          severity: 'error',
+        },
+      ];
+      const issues = await validateFiles({ framework: 'test', packages: [], envVars: [], files }, testDir);
+      expect(issues.length).toBeGreaterThan(0);
+      expect(issues.every((issue) => issue.type === 'pattern' && issue.severity === 'error')).toBe(true);
+    });
+
+    it('still warns when no TanStack match contains the expected calls', async () => {
+      mkdirSync(join(testDir, 'src/routes'), { recursive: true });
+      writeFileSync(join(testDir, 'src/a.ts'), 'export {};');
+      writeFileSync(join(testDir, 'src/routes/a.callback.tsx'), 'export {};');
+      writeFileSync(join(testDir, 'src/routes/z.callback.tsx'), 'export {};');
+      const issues = await validateFiles(tanstackRules, testDir);
+      expect(issues).toHaveLength(2);
+      expect(issues.every((issue) => issue.type === 'pattern' && issue.severity === 'warning')).toBe(true);
+    });
+
     it('detects missing pattern in file', async () => {
       writeFileSync(
         join(testDir, 'package.json'),
@@ -291,6 +416,15 @@ describe('validateInstallation', () => {
       writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
       writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
 
+      mkdirSync(join(testDir, 'app', 'sign-in'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'app', 'sign-in', 'route.ts'),
+        `
+        import { getSignInUrl } from '@workos-inc/authkit-nextjs';
+        import { redirect } from 'next/navigation';
+        export async function GET() { return redirect(await getSignInUrl()); }
+      `,
+      );
       const result = await validateInstallation('nextjs', testDir);
 
       // All required files exist with required patterns, should pass
@@ -373,7 +507,7 @@ describe('validateInstallation', () => {
       // Redirect URI says /auth/callback but route is at /callback
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost:5173/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       // Route exists at DIFFERENT path (dot notation)
       mkdirSync(join(testDir, 'app', 'routes'), { recursive: true });
@@ -390,7 +524,7 @@ describe('validateInstallation', () => {
       writeFileSync(join(testDir, 'package.json'), JSON.stringify({ dependencies: { 'react-router': '^7.0.0' } }));
       writeFileSync(
         join(testDir, '.env.local'),
-        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+        'WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost:5173/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
       );
       // Route at correct path using dot notation: auth.callback.tsx
       mkdirSync(join(testDir, 'app', 'routes'), { recursive: true });
@@ -400,6 +534,95 @@ describe('validateInstallation', () => {
 
       const mismatchIssue = result.issues.find((i) => i.message.includes('no matching route file'));
       expect(mismatchIssue).toBeUndefined();
+    });
+  });
+
+  describe('TanStack validation regressions', () => {
+    function fixture(root: string, route: string, extension: string) {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({
+          dependencies: {
+            '@workos/authkit-tanstack-react-start': '^1.0.0',
+            '@tanstack/react-start': '^1.0.0',
+          },
+        }),
+      );
+      writeFileSync(
+        join(testDir, '.env.local'),
+        `WORKOS_API_KEY=sk_test\nWORKOS_CLIENT_ID=client_test\nWORKOS_REDIRECT_URI=https://example.com/api/auth/callback\nWORKOS_COOKIE_PASSWORD=${'x'.repeat(32)}\n`,
+      );
+      mkdirSync(join(testDir, root, 'routes', route, '..'), { recursive: true });
+      writeFileSync(join(testDir, root, 'routes', `${route}.${extension}`), 'handleCallback(); getAuth();');
+      writeFileSync(join(testDir, root, `start.${extension}`), 'authkitMiddleware();');
+    }
+
+    const layouts = [
+      'api/auth/callback',
+      'api.auth.callback',
+      'api/auth/callback/index',
+      'api/auth/callback/route',
+      'api.auth.callback.index',
+    ];
+    const cases = ['app', 'src'].flatMap((root) =>
+      layouts.flatMap((route) => ['ts', 'tsx', 'js', 'jsx'].map((ext) => [root, route, ext])),
+    );
+    it.each(cases)('accepts %s/routes/%s.%s', async (root, route, ext) => {
+      fixture(root, route, ext);
+      const result = await validateInstallation('tanstack-start', testDir, { runBuild: false });
+      expect(result.issues).toEqual([]);
+      expect(result.passed).toBe(true);
+    });
+
+    it.each(['app', 'src'].flatMap((root) => layouts.map((route) => [root, route])))(
+      'gives a useful mismatch hint for %s/routes/%s',
+      async (root, route) => {
+        fixture(root, route, 'tsx');
+        writeFileSync(join(testDir, '.env.local'), 'WORKOS_REDIRECT_URI=https://example.com/wrong/callback\n');
+        const result = await validateInstallation('tanstack-start', testDir, { runBuild: false });
+        const issue = result.issues.find((i) => i.message.includes('no matching route file'));
+        expect(issue?.severity).toBe('error');
+        expect(issue?.hint).toContain(`${root}/routes/${route}.tsx`);
+        expect(issue?.hint).toContain('https://example.com/api/auth/callback');
+      },
+    );
+
+    it('still rejects genuinely missing packages and callback files', async () => {
+      fixture('src', 'api/auth/callback', 'tsx');
+      rmSync(join(testDir, 'src/routes'), { recursive: true });
+      writeFileSync(join(testDir, 'package.json'), JSON.stringify({ dependencies: {} }));
+      const result = await validateInstallation('tanstack-start', testDir, { runBuild: false });
+      expect(result.passed).toBe(false);
+      expect(result.issues.filter((i) => i.type === 'package')).toHaveLength(2);
+      expect(result.issues.some((i) => i.message.startsWith('Missing file:') && i.message.includes('callback'))).toBe(
+        true,
+      );
+      expect(result.issues.some((i) => i.message.includes('no matching route file'))).toBe(true);
+    });
+  });
+
+  describe('generic package alternates', () => {
+    const locations = [undefined, 'any', 'dependencies', 'devDependencies'] as const;
+    it.each(
+      locations.flatMap((location) =>
+        ['dependencies', 'devDependencies'].flatMap((installedIn) =>
+          ['primary', 'alternate'].map((name) => ({ location, installedIn, name })),
+        ),
+      ),
+    )('respects $location for $name in $installedIn', async ({ location, installedIn, name }) => {
+      writeFileSync(join(testDir, 'package.json'), JSON.stringify({ [installedIn]: { [name]: '1.0.0' } }));
+      const rule = { name: 'primary', alternates: ['alternate'], location };
+      const issues = await validatePackages({ framework: 'test', packages: [rule], files: [], envVars: [] }, testDir);
+      expect(issues).toHaveLength(!location || location === 'any' || location === installedIn ? 0 : 1);
+    });
+
+    it('reports a missing package with alternate installation guidance', async () => {
+      writeFileSync(join(testDir, 'package.json'), '{}');
+      const rule: PackageRule = { name: 'primary', alternates: ['alternate'], location: 'devDependencies' };
+      const issues = await validatePackages({ framework: 'test', packages: [rule], files: [], envVars: [] }, testDir);
+      expect(issues[0]).toMatchObject({ type: 'package', severity: 'error', message: 'Missing package: primary' });
+      expect(issues[0].hint).toContain('alternate');
+      expect(issues[0].hint).toContain('--save-dev');
     });
   });
 
@@ -670,6 +893,215 @@ describe('validateInstallation', () => {
     });
   });
 
+  describe('client-only configuration checks', () => {
+    const signInIssue = (issues: { message: string }[]) => issues.find((i) => i.message.includes('/login route'));
+    const redirectIssue = (issues: { message: string }[]) => issues.find((i) => i.message.includes('redirectUri'));
+    const envReadIssue = (issues: { message: string }[]) =>
+      issues.find((i) => i.message.startsWith('The client reads'));
+
+    it('requests browser verification rather than declaring a React route missing', async () => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(join(testDir, 'src', 'App.tsx'), 'const { signIn } = useAuth();');
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      expect(signInIssue(result.issues)?.severity).toBe('warning');
+      expect(signInIssue(result.issues)?.message).toContain('requires browser verification');
+    });
+
+    it('does not claim to verify a React route from source patterns', async () => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(join(testDir, 'src', 'App.tsx'), '<Route path="/login" element={<Login />} />');
+      writeFileSync(
+        join(testDir, 'src', 'Login.tsx'),
+        "function Login() { useEffect(() => { if (window.location.pathname === '/login') signIn(); }, []); }",
+      );
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      expect(signInIssue(result.issues)?.severity).toBe('warning');
+    });
+
+    it('requests browser verification even for a static sign-in page', async () => {
+      mkdirSync(join(testDir, 'login'), { recursive: true });
+      writeFileSync(join(testDir, 'login', 'index.html'), '<script>authkit.signIn()</script>');
+
+      const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
+
+      expect(signInIssue(result.issues)?.severity).toBe('warning');
+    });
+
+    it('ignores /login mentions inside node_modules', async () => {
+      mkdirSync(join(testDir, 'node_modules', 'pkg'), { recursive: true });
+      writeFileSync(join(testDir, 'node_modules', 'pkg', 'index.js'), "location.assign('/login')");
+
+      const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
+
+      expect(signInIssue(result.issues)).toBeDefined();
+    });
+
+    it.each([
+      "const path = window.location.pathname;\nif (path === '/login') signIn();",
+      "if ('/login' === location.pathname) signIn();",
+    ])('leaves pathname behavior to browser verification: %s', async (code) => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(join(testDir, 'src', 'main.tsx'), code);
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      expect(signInIssue(result.issues)?.severity).toBe('warning');
+    });
+
+    it('does not treat a link to /login as the route', async () => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(join(testDir, 'src', 'App.tsx'), '<a href="/login">Sign in</a>');
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      expect(signInIssue(result.issues)?.severity).toBe('warning');
+    });
+
+    it('reads AuthKit setup from a config file inside src/', async () => {
+      writeFileSync(join(testDir, 'package.json'), JSON.stringify({ devDependencies: { vite: '^6.0.0' } }));
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'src', 'auth.config.ts'),
+        "export const routes = [{ path: '/login', component: Login }];\nfunction Login() { useEffect(() => { if (window.location.pathname === '/login') signIn(); }, []); }\nexport const redirectUri = import.meta.env.VITE_WORKOS_REDIRECT_URI;",
+      );
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      expect(signInIssue(result.issues)?.severity).toBe('warning');
+      expect(redirectIssue(result.issues)).toBeUndefined();
+    });
+
+    it.each(['src/server/auth.ts', 'src/server.ts', 'server.js', 'api/auth.ts', 'functions/login.ts'])(
+      'lets Vite server code in %s read the unprefixed redirect URI, wherever it lives',
+      async (file) => {
+        writeFileSync(join(testDir, 'package.json'), JSON.stringify({ devDependencies: { vite: '^6.0.0' } }));
+        mkdirSync(join(testDir, file, '..'), { recursive: true });
+        mkdirSync(join(testDir, 'src'), { recursive: true });
+        writeFileSync(join(testDir, file), 'const callback = process.env.WORKOS_REDIRECT_URI;');
+        writeFileSync(
+          join(testDir, 'src', 'main.ts'),
+          'createClient(clientId, { redirectUri: import.meta.env.VITE_WORKOS_REDIRECT_URI });',
+        );
+
+        const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
+
+        expect(envReadIssue(result.issues)).toBeUndefined();
+      },
+    );
+
+    it('lets a Create React App server outside src/ read the unprefixed redirect URI', async () => {
+      writeFileSync(join(testDir, 'package.json'), JSON.stringify({ dependencies: { 'react-scripts': '5.0.1' } }));
+      writeFileSync(join(testDir, 'server.js'), 'const callback = process.env.WORKOS_REDIRECT_URI;');
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'src', 'index.tsx'),
+        '<AuthKitProvider redirectUri={process.env.REACT_APP_WORKOS_REDIRECT_URI}><App /></AuthKitProvider>',
+      );
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      expect(envReadIssue(result.issues)).toBeUndefined();
+    });
+
+    it('ignores a /login route declared only in a test file', async () => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(join(testDir, 'src', 'App.test.tsx'), '<Route path="/login" element={<Login />} />');
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      expect(signInIssue(result.issues)).toBeDefined();
+    });
+
+    it('does not accept a /login page that never starts sign-in', async () => {
+      mkdirSync(join(testDir, 'login'), { recursive: true });
+      writeFileSync(join(testDir, 'login', 'index.html'), '<h1>Log in</h1>');
+
+      const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
+
+      expect(signInIssue(result.issues)).toBeDefined();
+    });
+
+    it('lets vite.config.ts read the unprefixed redirect URI', async () => {
+      writeFileSync(join(testDir, 'package.json'), JSON.stringify({ devDependencies: { vite: '^6.0.0' } }));
+      writeFileSync(join(testDir, 'vite.config.ts'), 'const callback = process.env.WORKOS_REDIRECT_URI;');
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'src', 'main.ts'),
+        'createClient(clientId, { redirectUri: import.meta.env.VITE_WORKOS_REDIRECT_URI });',
+      );
+
+      const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
+
+      expect(envReadIssue(result.issues)).toBeUndefined();
+    });
+
+    it.each([
+      'import.meta.env.WORKOS_REDIRECT_URI',
+      'import.meta.env.REACT_APP_WORKOS_REDIRECT_URI',
+      'process.env.VITE_WORKOS_REDIRECT_URI',
+    ])('flags Vite browser code that reads %s', async (read) => {
+      writeFileSync(join(testDir, 'package.json'), JSON.stringify({ devDependencies: { vite: '^6.0.0' } }));
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(join(testDir, 'src', 'main.ts'), `createClient(clientId, { redirectUri: ${read} });`);
+
+      const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
+
+      expect(result.issues).toContainEqual(
+        expect.objectContaining({
+          severity: 'error',
+          message: `The client reads ${read}, but the installer exposes import.meta.env.VITE_WORKOS_REDIRECT_URI`,
+        }),
+      );
+    });
+
+    it('flags a Create React App client that reads the unprefixed redirect URI', async () => {
+      writeFileSync(join(testDir, 'package.json'), JSON.stringify({ dependencies: { 'react-scripts': '5.0.1' } }));
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'src', 'index.tsx'),
+        '<AuthKitProvider redirectUri={process.env.WORKOS_REDIRECT_URI}><App /></AuthKitProvider>',
+      );
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      expect(result.issues).toContainEqual(
+        expect.objectContaining({
+          message:
+            'The client reads process.env.WORKOS_REDIRECT_URI, but the installer exposes process.env.REACT_APP_WORKOS_REDIRECT_URI',
+        }),
+      );
+    });
+
+    it('fails a client app that leaves redirectUri at the SDK default', async () => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'src', 'main.tsx'),
+        '<AuthKitProvider clientId="client_test"><App /></AuthKitProvider>',
+      );
+
+      const result = await validateInstallation('react', testDir, { runBuild: false });
+
+      expect(redirectIssue(result.issues)?.severity).toBe('error');
+    });
+
+    it('accepts a client app that passes redirectUri', async () => {
+      mkdirSync(join(testDir, 'src'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'src', 'main.ts'),
+        'createClient(clientId, { redirectUri: import.meta.env.VITE_WORKOS_REDIRECT_URI });',
+      );
+      writeFileSync(join(testDir, '.env.local'), 'VITE_WORKOS_REDIRECT_URI=http://localhost:5173/callback\n');
+
+      const result = await validateInstallation('vanilla-js', testDir, { runBuild: false });
+
+      expect(redirectIssue(result.issues)).toBeUndefined();
+    });
+  });
+
   describe('duplicate env var detection', () => {
     it('detects conflicting values between .env and .env.local', async () => {
       writeFileSync(
@@ -817,6 +1249,176 @@ describe('validateInstallation', () => {
       const envIssue = result.issues.find((i) => i.type === 'env' && i.message.includes('WORKOS_CLIENT_ID'));
       expect(envIssue?.hint).toContain('REACT_APP_WORKOS_CLIENT_ID');
       expect(envIssue?.hint).toContain('VITE_WORKOS_CLIENT_ID');
+    });
+  });
+
+  describe('redirect URI port validation', () => {
+    const portError = (result: { issues: { severity: string; message: string }[] }) =>
+      result.issues.find((i) => i.severity === 'error' && /port/i.test(i.message));
+
+    it('flags TanStack redirect URI port that mismatches the vite.config port (friction scenario)', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@tanstack/react-start': '^1.0.0' } }),
+      );
+      // dev server runs on 8080 (Vite), but the redirect URI points at :3000
+      writeFileSync(join(testDir, 'vite.config.ts'), 'export default { server: { host: "::", port: 8080 } }\n');
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_1234567890123456789012345\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost:3000/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      mkdirSync(join(testDir, 'app', 'routes', 'auth', 'callback'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'app', 'routes', 'auth', 'callback', 'index.tsx'),
+        'export default function Callback() {}',
+      );
+
+      const result = await validateInstallation('tanstack-start', testDir, { runBuild: false });
+
+      expect(result.passed).toBe(false);
+      expect(portError(result)).toBeDefined();
+    });
+
+    it('does not flag a port issue when TanStack redirect URI port matches the vite.config port', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@tanstack/react-start': '^1.0.0' } }),
+      );
+      writeFileSync(join(testDir, 'vite.config.ts'), 'export default { server: { host: "::", port: 8080 } }\n');
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_1234567890123456789012345\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost:8080/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      mkdirSync(join(testDir, 'app', 'routes', 'auth', 'callback'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'app', 'routes', 'auth', 'callback', 'index.tsx'),
+        'export default function Callback() {}',
+      );
+
+      const result = await validateInstallation('tanstack-start', testDir, { runBuild: false });
+
+      expect(portError(result)).toBeUndefined();
+      const mismatchIssue = result.issues.find((i) => i.message.includes('no matching route file'));
+      expect(mismatchIssue).toBeUndefined();
+    });
+
+    it('flags React Router redirect URI port against the default 5173 (helper in isolation)', async () => {
+      writeFileSync(join(testDir, 'package.json'), JSON.stringify({ dependencies: { 'react-router': '^7.0.0' } }));
+      // No vite.config → detected port is the RR default 5173; env points at :3000
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_1234567890123456789012345\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      mkdirSync(join(testDir, 'app', 'routes'), { recursive: true });
+      writeFileSync(join(testDir, 'app', 'routes', 'callback.tsx'), 'export default function Callback() {}');
+
+      const result = await validateInstallation('react-router', testDir, { runBuild: false });
+
+      expect(result.passed).toBe(false);
+      expect(portError(result)).toBeDefined();
+    });
+
+    it('flags Next.js redirect URI port against a -p dev-script port', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({
+          dependencies: { '@workos-inc/authkit-nextjs': '^1.0.0' },
+          scripts: { dev: 'next dev -p 4000' },
+        }),
+      );
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_1234567890123456789012345\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:3000/api/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      mkdirSync(join(testDir, 'app', 'api', 'auth', 'callback'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'app', 'api', 'auth', 'callback', 'route.ts'),
+        "import { handleAuth } from '@workos-inc/authkit-nextjs';",
+      );
+      writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
+      writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
+
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+
+      expect(portError(result)).toBeDefined();
+    });
+
+    it('skips the port check for non-local (production) hosts', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({ dependencies: { '@tanstack/react-start': '^1.0.0' } }),
+      );
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_1234567890123456789012345\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=https://app.example.com/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      mkdirSync(join(testDir, 'app', 'routes', 'auth', 'callback'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'app', 'routes', 'auth', 'callback', 'index.tsx'),
+        'export default function Callback() {}',
+      );
+
+      const result = await validateInstallation('tanstack-start', testDir, { runBuild: false });
+
+      expect(portError(result)).toBeUndefined();
+    });
+
+    it('normalizes a missing port to the protocol default (80) before comparing', async () => {
+      writeFileSync(join(testDir, 'package.json'), JSON.stringify({ dependencies: { 'react-router': '^7.0.0' } }));
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_1234567890123456789012345\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://localhost/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      mkdirSync(join(testDir, 'app', 'routes'), { recursive: true });
+      writeFileSync(join(testDir, 'app', 'routes', 'callback.tsx'), 'export default function Callback() {}');
+
+      const result = await validateInstallation('react-router', testDir, { runBuild: false });
+
+      expect(portError(result)).toBeDefined();
+    });
+
+    it('recognizes the IPv6 localhost form [::1]', async () => {
+      writeFileSync(join(testDir, 'package.json'), JSON.stringify({ dependencies: { 'react-router': '^7.0.0' } }));
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_1234567890123456789012345\nWORKOS_CLIENT_ID=client_test_id\nWORKOS_REDIRECT_URI=http://[::1]:3000/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      mkdirSync(join(testDir, 'app', 'routes'), { recursive: true });
+      writeFileSync(join(testDir, 'app', 'routes', 'callback.tsx'), 'export default function Callback() {}');
+
+      const result = await validateInstallation('react-router', testDir, { runBuild: false });
+
+      expect(portError(result)).toBeDefined();
+    });
+
+    it('route-mismatch hint uses the redirect URI real origin, not a hardcoded localhost:3000', async () => {
+      writeFileSync(
+        join(testDir, 'package.json'),
+        JSON.stringify({
+          dependencies: { '@workos-inc/authkit-nextjs': '^1.0.0' },
+          scripts: { dev: 'next dev -p 8080' },
+        }),
+      );
+      // detected port (8080) matches the env port so no port-mismatch noise
+      writeFileSync(
+        join(testDir, '.env.local'),
+        'WORKOS_API_KEY=sk_test_1234567890123456789012345\nWORKOS_CLIENT_ID=client_test_id\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=http://localhost:8080/auth/callback\nWORKOS_COOKIE_PASSWORD=supersecretpasswordthatis32chars!\n',
+      );
+      // route lives at a DIFFERENT path → triggers the mismatch hint
+      mkdirSync(join(testDir, 'app', 'api', 'auth', 'callback'), { recursive: true });
+      writeFileSync(
+        join(testDir, 'app', 'api', 'auth', 'callback', 'route.ts'),
+        "import { handleAuth } from '@workos-inc/authkit-nextjs';",
+      );
+      writeFileSync(join(testDir, 'middleware.ts'), 'export const authkitMiddleware = () => {};');
+      writeFileSync(join(testDir, 'app', 'layout.tsx'), '<AuthKitProvider>');
+
+      const result = await validateInstallation('nextjs', testDir, { runBuild: false });
+
+      const mismatchIssue = result.issues.find((i) => i.message.includes('no matching route file'));
+      expect(mismatchIssue).toBeDefined();
+      expect(mismatchIssue?.hint).toContain('http://localhost:8080');
+      expect(mismatchIssue?.hint).not.toContain('localhost:3000');
     });
   });
 });

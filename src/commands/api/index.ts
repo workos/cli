@@ -1,13 +1,13 @@
 import chalk from 'chalk';
-import { readFile } from 'node:fs/promises';
 import { loadCatalog, endpointsByTag } from './catalog.js';
 import { apiRequest } from './request.js';
 import { resolveApiBaseUrl } from '../../lib/api-key.js';
 import { exitWithError, isJsonMode, outputJson } from '../../utils/output.js';
 import { ExitCode, exitWithCode } from '../../utils/exit-codes.js';
-import { isCiMode, isPromptAllowed } from '../../utils/interaction-mode.js';
-import { confirmationRecovery } from '../../utils/recovery-hints.js';
-import { formatWorkOSCommandArgs } from '../../utils/command-invocation.js';
+import { isCiMode, isPromptAllowed, getInteractionMode } from '../../utils/interaction-mode.js';
+import { confirmationRecovery, authLoginRecovery, missingArgsRecovery } from '../../utils/recovery-hints.js';
+import { formatWorkOSCommand, formatWorkOSCommandArgs } from '../../utils/command-invocation.js';
+import { resolveInputBody } from '../../utils/request-body.js';
 import { colorMethod, printResponse } from './format.js';
 
 export { colorMethod } from './format.js';
@@ -25,15 +25,15 @@ export interface ApiCommandOptions {
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 export async function runApiInteractive(options?: { apiKey?: string }): Promise<void> {
-  // Interactive mode is inherently human-oriented (clack prompts, preview text,
+  // Interactive mode is inherently human-oriented (interactive prompts, preview text,
   // etc.). Refuse to enter it whenever JSON output was requested, regardless of
   // TTY status, so stdout stays machine-readable.
   if (isJsonMode()) {
     exitWithError({
       code: 'tty_required',
-      message: 'Interactive mode is not available with --json. Provide an endpoint or use `workos api ls`.',
+      message: `Interactive mode is not available with --json. Provide an endpoint or use \`${formatWorkOSCommand('api ls')}\`.`,
       details: {
-        usage: ['workos api <endpoint>', 'workos api ls [filter]'],
+        usage: [formatWorkOSCommand('api <endpoint>'), formatWorkOSCommand('api ls [filter]')],
       },
     });
   }
@@ -41,8 +41,7 @@ export async function runApiInteractive(options?: { apiKey?: string }): Promise<
   if (!isPromptAllowed()) {
     exitWithError({
       code: 'tty_required',
-      message:
-        'Interactive API mode requires human mode. Usage: workos api <endpoint> or workos api ls [filter]. Example: workos api /user_management/users',
+      message: `Interactive API mode requires human mode. Usage: ${formatWorkOSCommand('api <endpoint>')} or ${formatWorkOSCommand('api ls [filter]')}. Example: ${formatWorkOSCommand('api /user_management/users')}`,
     });
   }
 
@@ -95,7 +94,7 @@ export async function runApiLs(filter?: string): Promise<void> {
 }
 
 export async function runApiRequest(endpoint: string, options: ApiCommandOptions): Promise<void> {
-  const body = await resolveBody(options);
+  const body = await resolveInputBody(options);
   const hasBody = body !== undefined;
   const method = (options.method ?? (hasBody ? 'POST' : 'GET')).toUpperCase();
   const baseUrl = resolveApiBaseUrl();
@@ -141,12 +140,12 @@ export async function runApiRequest(endpoint: string, options: ApiCommandOptions
         recovery: confirmationRecovery(confirmCommand),
       });
     }
-    const clack = (await import('../../utils/clack.js')).default;
+    const ui = (await import('../../utils/ui.js')).default;
     console.log(`\n${chalk.yellow('About to')} ${method} ${endpoint}`);
     if (hasBody) prettyPrint(body);
-    const ok = await clack.confirm({ message: 'Proceed?' });
-    if (!ok || clack.isCancel(ok)) {
-      exitWithCode(ExitCode.CANCELLED);
+    const ok = await ui.confirm({ message: 'Proceed?' });
+    if (!ok || ui.isCancel(ok)) {
+      exitWithCode(ExitCode.CANCELED);
     }
   }
 
@@ -161,10 +160,22 @@ export async function runApiRequest(endpoint: string, options: ApiCommandOptions
   printResponse(response, { includeStatus: options.include });
 
   if (response.status >= 400) {
+    // Give the caller a concrete next step keyed off the status: re-auth for
+    // 401/403, discover endpoints for 404.
+    const recovery =
+      response.status === 401 || response.status === 403
+        ? authLoginRecovery({ mode: getInteractionMode().mode })
+        : response.status === 404
+          ? missingArgsRecovery(
+              formatWorkOSCommand('api ls'),
+              'List available endpoints, then re-run with a valid path.',
+            )
+          : undefined;
     exitWithError({
       code: `http_${response.status}`,
       message: `API request failed with status ${response.status}`,
       apiContext: { status: response.status },
+      ...(recovery && { recovery }),
     });
   }
 }
@@ -191,37 +202,6 @@ function buildConfirmationCommand(endpoint: string, method: string, options: Api
   }
   args.push('--yes');
   return formatWorkOSCommandArgs(args);
-}
-
-async function resolveBody(options: ApiCommandOptions): Promise<string | undefined> {
-  if (options.data !== undefined) return options.data;
-  if (options.file) {
-    if (options.file === '-') {
-      const chunks: Buffer[] = [];
-      for await (const chunk of process.stdin) {
-        chunks.push(chunk);
-      }
-      const stdinBody = Buffer.concat(chunks).toString('utf-8');
-      if (stdinBody.length === 0) {
-        exitWithError({
-          code: 'empty_stdin_body',
-          message:
-            'Reading request body from stdin (--file -) yielded no data. Pipe data into the command or pass --data instead.',
-        });
-      }
-      return stdinBody;
-    }
-    try {
-      return await readFile(options.file, 'utf-8');
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      exitWithError({
-        code: 'file_read_error',
-        message: `Could not read request body file "${options.file}": ${message}`,
-      });
-    }
-  }
-  return undefined;
 }
 
 function prettyPrint(jsonString: string): void {

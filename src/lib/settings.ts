@@ -13,8 +13,6 @@ export interface InstallerConfig {
   workos: {
     clientId: string;
     authkitDomain: string;
-    llmGatewayUrl: string;
-    telemetryUrl: string;
   };
   telemetry: {
     enabled: boolean;
@@ -23,7 +21,6 @@ export interface InstallerConfig {
   proxy: {
     refreshThresholdMs: number;
   };
-  nodeVersion: string;
   logging: {
     debugMode: boolean;
   };
@@ -36,6 +33,8 @@ export interface InstallerConfig {
     [key: string]: {
       port: number;
       callbackPath: string;
+      /** The app route that starts sign-in (Initiate login URI), when the SDK guide fixes one. */
+      signInPath?: string;
     };
   };
   legacy: {
@@ -57,8 +56,13 @@ export function getConfig(): InstallerConfig {
 }
 
 /**
- * Get the CLI auth client ID.
- * Env var overrides config default.
+ * Get the CLI auth client ID (from config; not env-overridable).
+ *
+ * NOTE: WORKOS_CLIENT_ID is already claimed by the developer's own
+ * application client ID (read by credential-discovery.ts). Overriding
+ * the CLI's own OAuth client ID with it causes token refresh to use the
+ * wrong client and clear credentials. Use a distinct env var if an
+ * override is needed.
  */
 export function getCliAuthClientId(): string {
   return config.workos.clientId;
@@ -67,23 +71,11 @@ export function getCliAuthClientId(): string {
 /**
  * Get the AuthKit domain.
  * Env var overrides config default.
+ *
+ * Note: WorkOS service endpoints (API, dashboard, LLM gateway, telemetry)
+ * live in utils/urls.ts. AuthKit's domain stays here because it's config-
+ * backed rather than derived from the API host.
  */
 export function getAuthkitDomain(): string {
   return process.env.WORKOS_AUTHKIT_DOMAIN || config.workos.authkitDomain;
-}
-
-/**
- * Get the LLM gateway URL.
- * Env var overrides config default.
- */
-export function getLlmGatewayUrl(): string {
-  return process.env.WORKOS_LLM_GATEWAY_URL || config.workos.llmGatewayUrl;
-}
-
-/**
- * Get the CLI telemetry URL.
- * Env var overrides config default.
- */
-export function getTelemetryUrl(): string {
-  return process.env.WORKOS_TELEMETRY_URL || config.workos.telemetryUrl;
 }

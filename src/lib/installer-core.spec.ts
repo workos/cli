@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createActor, fromPromise } from 'xstate';
+import { createActor, fromPromise, waitFor } from 'xstate';
 import { installerMachine } from './installer-core.js';
 import { createInstallerEventEmitter } from './events.js';
 import type { InstallerOptions } from '../utils/types.js';
@@ -13,6 +13,7 @@ import type {
 } from './installer-core.types.js';
 import type { EnvFileInfo } from './credential-discovery.js';
 import type { StagingCredentials } from './staging-api.js';
+import type { ChangeDetection } from './post-install.js';
 
 // Shared mock actors for reuse across tests
 const baseMockActors = {
@@ -39,6 +40,7 @@ const baseMockActors = {
     branch: input.name,
   })),
   configureEnvironment: fromPromise<void, { context: InstallerMachineContext }>(async () => {}),
+  detectChanges: fromPromise<ChangeDetection, { installDir: string }>(async () => ({ state: 'unchanged', files: [] })),
   runAgent: fromPromise<AgentOutput, { context: InstallerMachineContext }>(async () => ({
     success: true,
     summary: 'Done!',
@@ -75,7 +77,6 @@ function createTestActor(overrides?: Partial<InstallerOptions>, actorOverrides?:
     local: true,
     ci: false,
     skipAuth: false,
-    dashboard: false,
     emitter,
     ...overrides,
   };
@@ -180,7 +181,6 @@ describe('InstallerCore State Machine', () => {
         local: true,
         ci: false,
         skipAuth: false,
-        dashboard: false,
         emitter,
       };
 
@@ -225,7 +225,6 @@ describe('InstallerCore State Machine', () => {
         local: true,
         ci: false,
         skipAuth: true,
-        dashboard: false,
         emitter,
       };
 
@@ -278,7 +277,6 @@ describe('InstallerCore State Machine', () => {
         local: true,
         ci: false,
         skipAuth: true,
-        dashboard: false,
         emitter,
       };
 
@@ -300,15 +298,60 @@ describe('InstallerCore State Machine', () => {
       dirtyActor.send({ type: 'START' });
       await new Promise((r) => setTimeout(r, 50));
 
-      dirtyActor.send({ type: 'GIT_CANCELLED' });
+      dirtyActor.send({ type: 'GIT_CANCELED' });
       await new Promise((r) => setTimeout(r, 50));
 
-      expect(dirtyActor.getSnapshot().value).toBe('cancelled');
+      expect(dirtyActor.getSnapshot().value).toBe('canceled');
       dirtyActor.stop();
     });
   });
 
   describe('full flow', () => {
+    it('reports an unexpected inspection rejection without claiming no changes or failing the installation', async () => {
+      const { actor, emitter } = createTestActor(
+        { skipAuth: true, apiKey: 'offline', clientId: 'offline' },
+        {
+          detectChanges: fromPromise(async () => {
+            throw new Error('inspection rejected');
+          }),
+        },
+      );
+      const inspection: unknown[] = [];
+      emitter.on('postinstall:nochanges', () => inspection.push('unchanged'));
+      emitter.on('postinstall:unavailable', (result) => inspection.push(result));
+      actor.start();
+      actor.send({ type: 'START' });
+      await waitFor(actor, (s) => s.status === 'done', { timeout: 1000 });
+      expect(actor.getSnapshot().value).toBe('complete');
+      expect(inspection).toEqual([{ reason: 'error', error: 'Error: inspection rejected' }]);
+      actor.stop();
+    });
+    it('retains pending application setup for the completion actor', async () => {
+      const applicationSetup = {
+        clientId: 'client_123',
+        redirectUri: 'http://localhost:3000/callback',
+        signOutUri: 'http://localhost:3000/',
+        initiateLoginUri: 'http://localhost:3000/sign-in',
+        verified: false,
+        reason: 'No dashboard session.',
+      };
+      const { actor } = createTestActor(
+        { skipAuth: true, noCommit: true, apiKey: 'sk_test_123', clientId: 'client_123' },
+        {
+          runAgent: fromPromise<AgentOutput, { context: InstallerMachineContext }>(async () => ({
+            success: true,
+            summary: 'App code installed; setup pending.',
+            applicationSetup,
+          })),
+        },
+      );
+      actor.start();
+      actor.send({ type: 'START' });
+      await waitFor(actor, (snapshot) => snapshot.context.applicationSetup !== undefined);
+      expect(actor.getSnapshot().context.applicationSetup).toEqual(applicationSetup);
+      actor.stop();
+    });
+
     it('completes the full wizard flow with provided credentials', async () => {
       const emitter = createInstallerEventEmitter();
       const options: InstallerOptions = {
@@ -319,7 +362,6 @@ describe('InstallerCore State Machine', () => {
         local: true,
         ci: false,
         skipAuth: true,
-        dashboard: false,
         emitter,
         apiKey: 'sk_test_123',
         clientId: 'client_123',
@@ -372,7 +414,6 @@ describe('InstallerCore State Machine', () => {
         local: true,
         ci: false,
         skipAuth: true,
-        dashboard: false,
         emitter,
         // No credentials provided - should wait for CREDENTIALS_SUBMITTED
       };
@@ -414,6 +455,71 @@ describe('InstallerCore State Machine', () => {
       actor.stop();
     });
 
+    it('keeps an env-file provenance through the cli-flags short-circuit', async () => {
+      // runWithCore backfills options.apiKey/clientId from the project's
+      // .env.local — the path a freshly provisioned unclaimed environment takes.
+      // Those credentials must not be relabeled 'cli', or the installer tells
+      // the user it is using credentials they never provided.
+      const emitter = createInstallerEventEmitter();
+      const options: InstallerOptions = {
+        debug: false,
+        forceInstall: false,
+        installDir: '/test/project',
+        default: false,
+        local: true,
+        ci: false,
+        skipAuth: true,
+        emitter,
+        apiKey: 'sk_test_provisioned',
+        clientId: 'client_provisioned',
+        credentialSource: 'env',
+      };
+
+      const found: Array<{ source?: string }> = [];
+      emitter.on('credentials:found', (payload) => found.push(payload));
+
+      const actor = createActor(installerMachine.provide({ actors: baseMockActors }), {
+        input: { emitter, options },
+      });
+      actor.start();
+      actor.send({ type: 'START' });
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(found).toHaveLength(1);
+      expect(found[0].source).toBe('env');
+      actor.stop();
+    });
+
+    it('labels credentials that really came from flags as cli', async () => {
+      const emitter = createInstallerEventEmitter();
+      const options: InstallerOptions = {
+        debug: false,
+        forceInstall: false,
+        installDir: '/test/project',
+        default: false,
+        local: true,
+        ci: false,
+        skipAuth: true,
+        emitter,
+        apiKey: 'sk_test_flag',
+        clientId: 'client_flag',
+      };
+
+      const found: Array<{ source?: string }> = [];
+      emitter.on('credentials:found', (payload) => found.push(payload));
+
+      const actor = createActor(installerMachine.provide({ actors: baseMockActors }), {
+        input: { emitter, options },
+      });
+      actor.start();
+      actor.send({ type: 'START' });
+      await new Promise((r) => setTimeout(r, 200));
+
+      expect(found).toHaveLength(1);
+      expect(found[0].source).toBe('cli');
+      actor.stop();
+    });
+
     it('skips device auth when checkStoredAuth returns true (unclaimed env)', async () => {
       const emitter = createInstallerEventEmitter();
       const options: InstallerOptions = {
@@ -424,7 +530,6 @@ describe('InstallerCore State Machine', () => {
         local: true,
         ci: false,
         skipAuth: true,
-        dashboard: false,
         emitter,
         // No CLI credentials — forces credential gathering flow
       };
@@ -442,10 +547,12 @@ describe('InstallerCore State Machine', () => {
             deviceAuthStarted = true;
             throw new Error('device auth should not be called');
           }),
-          fetchStagingCredentials: fromPromise<StagingCredentials, void>(async () => ({
-            clientId: 'client_unclaimed',
-            apiKey: 'sk_test_unclaimed',
-          })),
+          fetchStagingCredentials: fromPromise<StagingCredentials, { installDir: string; envScanConsent?: boolean }>(
+            async () => ({
+              clientId: 'client_unclaimed',
+              apiKey: 'sk_test_unclaimed',
+            }),
+          ),
         },
       });
 
@@ -474,7 +581,6 @@ describe('InstallerCore State Machine', () => {
         local: true,
         ci: false,
         skipAuth: true,
-        dashboard: false,
         emitter,
       };
 
@@ -579,12 +685,12 @@ describe('InstallerCore State Machine', () => {
       actor.send({ type: 'START' });
       await new Promise((r) => setTimeout(r, 50));
 
-      actor.send({ type: 'SCAFFOLD_CANCELLED' });
+      actor.send({ type: 'SCAFFOLD_CANCELED' });
       await new Promise((r) => setTimeout(r, 50));
 
       expect(ran).toBe(false);
       expect(skipped).toBe(true);
-      expect(actor.getSnapshot().value).toBe('cancelled');
+      expect(actor.getSnapshot().value).toBe('canceled');
       actor.stop();
     });
 

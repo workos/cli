@@ -4,15 +4,15 @@ import pkg from '../package.json' with { type: 'json' };
 export const version = pkg.version;
 
 export const config = {
-  model: 'claude-opus-4-5-20251101',
+  model: 'claude-opus-5-5',
   doctorModel: 'claude-haiku-4-5-20251001',
 
-  // Production defaults - override via env vars for local dev
+  // Production defaults - override via env vars for local dev.
+  // The LLM gateway and CLI telemetry endpoints live under the WorkOS API
+  // host, so they're derived from WORKOS_API_URL rather than configured here.
   workos: {
     clientId: 'client_01KFKHSZWK9ADVJV854PDFQCCR',
     authkitDomain: 'https://signin.workos.com',
-    llmGatewayUrl: 'https://api.workos.com/llm-gateway',
-    telemetryUrl: 'https://api.workos.com/cli',
   },
 
   telemetry: {
@@ -24,8 +24,6 @@ export const config = {
     // Refresh token when it expires within this window (default: 1 minute)
     refreshThresholdMs: 60_000,
   },
-
-  nodeVersion: '>=20.20',
 
   logging: {
     debugMode: false,
@@ -41,54 +39,77 @@ export const config = {
     nextjs: {
       port: 3000,
       callbackPath: '/auth/callback',
+      signInPath: '/sign-in',
     },
     react: {
       port: 5173,
       callbackPath: '/callback',
+      signInPath: '/login',
     },
     tanstackStart: {
       port: 3000,
       callbackPath: '/api/auth/callback',
+      signInPath: '/api/auth/sign-in',
     },
     reactRouter: {
       port: 5173,
       callbackPath: '/callback',
+      signInPath: '/login',
     },
     vanillaJs: {
       port: 5173,
       callbackPath: '/callback',
+      signInPath: '/login',
     },
     python: {
       port: 8000,
       callbackPath: '/auth/callback/',
+      signInPath: '/auth/login/',
     },
     ruby: {
       port: 3000,
       callbackPath: '/auth/callback',
+      signInPath: '/auth/login',
     },
     php: {
       port: 8000,
       callbackPath: '/auth/callback',
+      signInPath: '/login.php',
     },
     phpLaravel: {
       port: 8000,
       callbackPath: '/auth/callback',
+      signInPath: '/login',
     },
     go: {
       port: 8080,
       callbackPath: '/auth/callback',
+      signInPath: '/auth/login',
     },
     dotnet: {
       port: 5000,
       callbackPath: '/auth/callback',
+      signInPath: '/auth/login',
     },
     elixir: {
       port: 4000,
       callbackPath: '/auth/callback',
+      signInPath: '/auth/sign-in',
+    },
+    sveltekit: {
+      port: 5173,
+      callbackPath: '/callback',
+      signInPath: '/sign-in',
+    },
+    node: {
+      port: 3000,
+      callbackPath: '/auth/callback',
+      signInPath: '/login',
     },
     kotlin: {
       port: 8080,
       callbackPath: '/auth/callback',
+      signInPath: '/auth/login',
     },
   },
 

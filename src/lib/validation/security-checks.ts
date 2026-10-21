@@ -1,6 +1,7 @@
 import { checkAuthPatterns } from '../../doctor/checks/auth-patterns.js';
 import type { AuthPatternFinding, FrameworkInfo, EnvironmentInfo, SdkInfo } from '../../doctor/types.js';
 import type { ValidationIssue } from './types.js';
+import { formatWorkOSCommand } from '../../utils/command-invocation.js';
 
 /**
  * The "security subset" of `workos doctor`'s auth-pattern checks that the
@@ -117,6 +118,6 @@ export function formatBlockingSecurityError(blocking: AuthPatternFinding[]): str
     '',
     ...lines,
     '',
-    'Fix the issues above (or run `workos doctor` for details and remediation) and re-run the installer.',
+    `Fix the issues above (or run \`${formatWorkOSCommand('doctor')}\` for details and remediation) and re-run the installer.`,
   ].join('\n');
 }

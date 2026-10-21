@@ -14,9 +14,17 @@ pnpm-debug.log
 
 dist/
 coverage/
+.*.bun-build
+
+# .NET build output
+bin/
+obj/
 
 # Generated
 src/version.ts
+src/generated/skills-manifest.ts
+src/generated/agent-sdk-manifest.ts
+src/generated/runtime-deps-manifest.ts
 
 .eslintcache
 .vscode/launch.json
@@ -28,6 +36,9 @@ src/version.ts
 .idea
 *.sublime-*
 dist/
+
+# Isolated local preparation and verification artifacts
+.artifacts/
 
 # Eval results
 tests/eval-results/

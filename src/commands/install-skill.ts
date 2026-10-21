@@ -3,9 +3,11 @@ import { dirname, join } from 'path';
 import { existsSync } from 'fs';
 import { mkdir, mkdtemp, cp, rename, rm, readdir, readFile, stat, access, writeFile } from 'fs/promises';
 import chalk from 'chalk';
-import { getSkillsDir as getSkillsPackageDir } from '@workos/skills';
+import { BUNDLED_SKILLS_VERSION, getSkillsDir as getSkillsPackageDir } from '../lib/skills-assets.js';
 import { IS_WINDOWS } from '../utils/platform.js';
 import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
+import { exitWithError } from '../utils/output.js';
+import { logError } from '../utils/debug.js';
 
 export const SKILL_VERSION_MARKER_FILENAME = '.workos-skill-version';
 
@@ -25,21 +27,10 @@ async function pathExists(p: string): Promise<boolean> {
 }
 
 /**
- * Read the bundled @workos/skills version by walking up from the skills
- * directory to the package.json. The package's `exports` map doesn't expose
- * package.json, so we resolve it by filesystem convention.
- * Returns null if the version can't be determined — callers treat that as
- * "no marker written" rather than failing the install.
+ * Read the @workos/skills version captured when the asset manifest was generated.
  */
-export async function getBundledSkillsVersion(skillsDir: string = getSkillsPackageDir()): Promise<string | null> {
-  try {
-    // skillsDir = <packageRoot>/plugins/workos/skills
-    const packageRoot = dirname(dirname(dirname(skillsDir)));
-    const pkgJson = JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8'));
-    return typeof pkgJson.version === 'string' ? pkgJson.version : null;
-  } catch {
-    return null;
-  }
+export async function getBundledSkillsVersion(): Promise<string> {
+  return BUNDLED_SKILLS_VERSION;
 }
 
 export interface AgentConfig {
@@ -86,6 +77,18 @@ export interface InstallSkillOptions {
 
 export function getSkillsDir(): string {
   return getSkillsPackageDir();
+}
+
+/**
+ * Exit with the structured "corrupted installation" error. Shared by every
+ * command that materializes the embedded skills, so extraction failures get
+ * an actionable message instead of a raw stack trace.
+ */
+export function exitSkillsUnreadable(skillsDir?: string): never {
+  exitWithError({
+    code: 'SKILLS_DIR_READ_FAILED',
+    message: `Could not read bundled skills${skillsDir ? ` at ${skillsDir}` : ''}. Your WorkOS CLI installation may be corrupted. Download a fresh binary from https://github.com/workos/cli/releases/latest.`,
+  });
 }
 
 export async function discoverSkills(skillsDir: string): Promise<string[]> {
@@ -196,8 +199,16 @@ async function cleanupStaleOrphans(parent: string, skillName: string): Promise<v
 export async function runInstallSkill(options: InstallSkillOptions): Promise<void> {
   const home = homedir();
   const agents = createAgents(home);
-  const skillsDir = getSkillsDir();
-  const skills = await discoverSkills(skillsDir);
+
+  let skillsDir: string | undefined;
+  let skills: string[];
+  try {
+    skillsDir = getSkillsDir();
+    skills = await discoverSkills(skillsDir);
+  } catch (error) {
+    logError('Failed to read skills directory:', error);
+    exitSkillsUnreadable(skillsDir);
+  }
 
   const targetSkills = options.skill ? skills.filter((s) => options.skill!.includes(s)) : skills;
 
@@ -249,13 +260,11 @@ export async function runInstallSkill(options: InstallSkillOptions): Promise<voi
   // successful install, so `workos doctor` doesn't immediately flag the
   // freshly-installed skills as stale or missing. Same primitive as
   // refreshWorkOSSkills — single source of truth for marker semantics.
-  const version = await getBundledSkillsVersion(skillsDir);
-  if (version) {
-    const succeededAgents = new Set<AgentConfig>();
-    for (const r of successful) succeededAgents.add(r.agent);
-    for (const agent of succeededAgents) {
-      await writeAgentSkillMarker(agent, version);
-    }
+  const version = await getBundledSkillsVersion();
+  const succeededAgents = new Set<AgentConfig>();
+  for (const r of successful) succeededAgents.add(r.agent);
+  for (const agent of succeededAgents) {
+    await writeAgentSkillMarker(agent, version);
   }
 
   if (failed.length > 0) {
@@ -331,7 +340,17 @@ async function writeAgentSkillMarker(agent: AgentConfig, version: string): Promi
  */
 export async function refreshWorkOSSkills(opts: RefreshOptions = {}): Promise<RefreshResult | null> {
   const home = homedir();
-  const skillsDir = getSkillsDir();
+
+  let skillsDir: string;
+  try {
+    skillsDir = getSkillsDir();
+  } catch (error) {
+    // Best-effort hook: a failed embedded-assets extraction must not crash
+    // install/login flows. `doctor` reports the corruption separately.
+    logError('Failed to materialize bundled skills:', error);
+    return null;
+  }
+
   const detected = opts.agents ?? detectAgents(createAgents(home));
   const allSkills = await discoverSkills(skillsDir).catch(() => []);
   const skills = opts.skills ? allSkills.filter((s) => opts.skills!.includes(s)) : allSkills;
@@ -339,7 +358,7 @@ export async function refreshWorkOSSkills(opts: RefreshOptions = {}): Promise<Re
 
   if (skills.length === 0 || detected.length === 0) return null;
 
-  const version = await getBundledSkillsVersion(skillsDir);
+  const version = await getBundledSkillsVersion();
   const perAgentBefore: Record<string, string | null> = {};
   const perAgentAfter: Record<string, string | null> = {};
   const succeededAgents: AgentConfig[] = [];
@@ -362,7 +381,7 @@ export async function refreshWorkOSSkills(opts: RefreshOptions = {}): Promise<Re
 
     if (agentSucceeded) {
       succeededAgents.push(agent);
-      if (writeMarker && version) {
+      if (writeMarker) {
         await writeAgentSkillMarker(agent, version);
       }
     }

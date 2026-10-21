@@ -36,7 +36,7 @@ export function createEventCapture() {
     'git:clean',
     'git:dirty',
     'git:dirty:confirmed',
-    'git:dirty:cancelled',
+    'git:dirty:canceled',
     'credentials:gathering',
     'credentials:found',
     'credentials:request',
@@ -47,6 +47,7 @@ export function createEventCapture() {
     'agent:progress',
     'agent:success',
     'agent:failure',
+    'agent:tool',
     'file:write',
     'file:edit',
     'prompt:request',
@@ -88,48 +89,4 @@ export function createEventCapture() {
     /** Get count of events */
     count: () => events.length,
   };
-}
-
-/**
- * Compare two event type sequences for equality.
- * Returns match result with diff info if different.
- */
-export function compareEventSequences(
-  seq1: InstallerEventName[],
-  seq2: InstallerEventName[],
-): { match: boolean; diff?: string } {
-  // Check lengths
-  if (seq1.length !== seq2.length) {
-    return {
-      match: false,
-      diff:
-        `Length mismatch: ${seq1.length} vs ${seq2.length}\n` +
-        `Seq1: ${seq1.join(' → ')}\n` +
-        `Seq2: ${seq2.join(' → ')}`,
-    };
-  }
-
-  // Check each position
-  for (let i = 0; i < seq1.length; i++) {
-    if (seq1[i] !== seq2[i]) {
-      return {
-        match: false,
-        diff:
-          `Event ${i} differs: "${seq1[i]}" vs "${seq2[i]}"\n` +
-          `Context: ...${seq1.slice(Math.max(0, i - 2), i + 3).join(' → ')}...`,
-      };
-    }
-  }
-
-  return { match: true };
-}
-
-/**
- * Filter out non-deterministic events for comparison.
- * Some events (like timestamps) shouldn't affect sequence equality.
- */
-export function filterDeterministicEvents(events: InstallerEventName[]): InstallerEventName[] {
-  // Currently all events are deterministic, but this could filter
-  // things like progress events with variable timing
-  return events;
 }

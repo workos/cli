@@ -5,11 +5,14 @@ import type { ConnectionType, Profile } from '@workos-inc/node';
 import { createWorkOSClient } from '../lib/workos-client.js';
 import { getActiveEnvironment } from '../lib/config-store.js';
 import { formatTable } from '../utils/table.js';
+import { printPaginationFooter } from '../utils/resource-command.js';
+import { resolveInputBody } from '../utils/request-body.js';
 import { outputSuccess, outputJson, isJsonMode, exitWithError } from '../utils/output.js';
 import { createApiErrorHandler } from '../lib/api-error-handler.js';
 import { isCiMode, isHumanMode, isPromptAllowed } from '../utils/interaction-mode.js';
 import { CliExit } from '../utils/cli-exit.js';
-import clack from '../utils/clack.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
+import ui from '../utils/ui.js';
 
 const handleApiError = createApiErrorHandler('Connection');
 
@@ -72,14 +75,100 @@ export async function runConnectionList(
       ),
     );
 
-    const { before, after } = result.listMetadata;
-    if (before && after) {
-      console.log(chalk.dim(`Before: ${before}  After: ${after}`));
-    } else if (before) {
-      console.log(chalk.dim(`Before: ${before}`));
-    } else if (after) {
-      console.log(chalk.dim(`After: ${after}`));
+    printPaginationFooter(result.listMetadata);
+  } catch (error) {
+    handleApiError(error);
+  }
+}
+
+export interface ConnectionBodyOptions {
+  org?: string;
+  name?: string;
+  externalId?: string;
+  type?: string;
+  data?: string;
+  file?: string;
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+async function resolveConnectionBody(options: ConnectionBodyOptions): Promise<Record<string, unknown>> {
+  let body: Record<string, unknown> = {};
+
+  const raw = await resolveInputBody(options);
+  if (raw !== undefined) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      exitWithError({
+        code: 'invalid_json_body',
+        message: 'Request body must be valid JSON.',
+      });
     }
+    if (!isJsonObject(parsed)) {
+      exitWithError({
+        code: 'invalid_json_body',
+        message: 'Request body must be a JSON object.',
+      });
+    }
+    body = { ...parsed };
+  }
+
+  if (options.org !== undefined) body.organization_id = options.org;
+  if (options.name !== undefined) body.name = options.name;
+  if (options.externalId !== undefined) body.external_id = options.externalId;
+  if (options.type !== undefined) body.connection_type = options.type;
+
+  return body;
+}
+
+export async function runConnectionCreate(
+  options: ConnectionBodyOptions,
+  apiKey: string,
+  baseUrl?: string,
+): Promise<void> {
+  const body = await resolveConnectionBody(options);
+
+  if (typeof body.organization_id !== 'string' || body.organization_id.length === 0) {
+    exitWithError({
+      code: 'missing_organization_id',
+      message: 'An organization ID is required. Pass --org or include organization_id in the JSON body.',
+    });
+  }
+
+  const client = createWorkOSClient(apiKey, baseUrl);
+
+  try {
+    const connection = await client.connections.create(body);
+    outputSuccess('Created connection', connection);
+  } catch (error) {
+    handleApiError(error);
+  }
+}
+
+export async function runConnectionUpdate(
+  id: string,
+  options: ConnectionBodyOptions,
+  apiKey: string,
+  baseUrl?: string,
+): Promise<void> {
+  const body = await resolveConnectionBody(options);
+
+  if (Object.keys(body).length === 0) {
+    exitWithError({
+      code: 'empty_update_body',
+      message: 'Nothing to update. Pass at least one field flag, or a JSON body via --data or --file.',
+    });
+  }
+
+  const client = createWorkOSClient(apiKey, baseUrl);
+
+  try {
+    const connection = await client.connections.update(id, body);
+    outputSuccess('Updated connection', connection);
   } catch (error) {
     handleApiError(error);
   }
@@ -112,12 +201,12 @@ export async function runConnectionDelete(
       });
     }
 
-    const confirmed = await clack.confirm({
+    const confirmed = await ui.confirm({
       message: `Delete connection ${id}? This cannot be undone.`,
     });
 
-    if (clack.isCancel(confirmed) || !confirmed) {
-      console.log('Delete cancelled.');
+    if (ui.isCancel(confirmed) || !confirmed) {
+      console.log('Delete canceled.');
       return;
     }
   }
@@ -154,8 +243,7 @@ function resolveClientId(options: ConnectionTestOptions): string {
   if (!clientId) {
     exitWithError({
       code: 'no_client_id',
-      message:
-        'No client ID found. Pass --client-id, set WORKOS_CLIENT_ID, or run `workos env add` to configure an environment.',
+      message: `No client ID found. Pass --client-id, set WORKOS_CLIENT_ID, or run \`${formatWorkOSCommand('profile add')}\` to configure a profile.`,
     });
   }
   return clientId;
@@ -247,8 +335,8 @@ export async function runConnectionTest(
       console.log(chalk.yellow(`Could not register the redirect URI automatically.`));
       console.log(`Add the following redirect URI in the WorkOS Dashboard (Redirects section):`);
       console.log(chalk.bold(`  ${redirectUri}`));
-      const confirmed = await clack.confirm({ message: 'Added the redirect URI? Continue with the test?' });
-      if (clack.isCancel(confirmed) || !confirmed) {
+      const confirmed = await ui.confirm({ message: 'Added the redirect URI? Continue with the test?' });
+      if (ui.isCancel(confirmed) || !confirmed) {
         console.log('Test cancelled.');
         return;
       }

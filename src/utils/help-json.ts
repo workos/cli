@@ -8,6 +8,7 @@
 
 import { getVersion } from '../lib/settings.js';
 import { COMMAND_ALIASES } from '../lib/command-aliases.js';
+import { MIGRATIONS_DESCRIPTION } from '../lib/constants.js';
 
 export interface OptionSchema {
   name: string;
@@ -65,6 +66,37 @@ const apiKeyOpt: OptionSchema = {
   hidden: false,
 };
 
+const environmentIdOpt: OptionSchema = {
+  name: 'environment-id',
+  type: 'string',
+  description: 'Environment ID (defaults to the active environment)',
+  required: false,
+  hidden: false,
+};
+
+const confirmYesOpt: OptionSchema = {
+  name: 'yes',
+  type: 'boolean',
+  description: 'Skip the confirmation prompt',
+  required: false,
+  default: false,
+  alias: 'y',
+  hidden: false,
+};
+
+// require-flag ops never prompt interactively (see `requireConfirmationFlag`);
+// the flag only gates non-interactive callers, so the copy differs from the
+// destructive-prompt `confirmYesOpt`. Matches `team change-role`/`set-mfa`.
+const requireFlagYesOpt: OptionSchema = {
+  name: 'yes',
+  type: 'boolean',
+  description: 'Confirm in non-interactive mode',
+  required: false,
+  default: false,
+  alias: 'y',
+  hidden: false,
+};
+
 const paginationOpts: OptionSchema[] = [
   { name: 'limit', type: 'number', description: 'Maximum number of results to return', required: false, hidden: false },
   {
@@ -110,6 +142,448 @@ const commands: CommandSchema[] = [
     name: 'auth status',
     description: 'Show current authentication status',
     options: [insecureStorageOpt],
+  },
+  {
+    name: 'whoami',
+    description: 'Show the authenticated user, team, and environment (dashboard session)',
+    options: [
+      insecureStorageOpt,
+      {
+        name: 'environment-id',
+        type: 'string',
+        description: 'Environment ID to target (defaults to the active environment)',
+        required: false,
+        hidden: false,
+      },
+    ],
+  },
+  {
+    name: 'environment',
+    description: 'Manage WorkOS environments (list, use, create, rename) on the dashboard account plane',
+    options: [insecureStorageOpt],
+    commands: [
+      {
+        name: 'list',
+        description: "List the current team's environments",
+      },
+      {
+        name: 'use',
+        description: 'Point the active environment profile at a team environment',
+        positionals: [
+          {
+            name: 'environmentId',
+            type: 'string',
+            description: 'Environment ID to target (see `environment list`); omit to pick interactively',
+            required: false,
+          },
+        ],
+      },
+      {
+        name: 'create',
+        description: 'Create a sandbox or production environment',
+        positionals: [{ name: 'name', type: 'string', description: 'Environment name', required: true }],
+        options: [
+          {
+            name: 'sandbox',
+            type: 'boolean',
+            description: 'Create a sandbox environment',
+            required: false,
+            default: false,
+            hidden: false,
+          },
+          {
+            name: 'environment-id',
+            type: 'string',
+            description:
+              'Environment ID whose project receives the new environment (defaults to the active environment)',
+            required: false,
+            hidden: false,
+          },
+        ],
+      },
+      {
+        name: 'rename',
+        description: 'Rename an environment',
+        positionals: [
+          { name: 'environmentId', type: 'string', description: 'Environment ID', required: true },
+          { name: 'name', type: 'string', description: 'New environment name', required: true },
+        ],
+      },
+    ],
+  },
+  {
+    name: 'project',
+    description: 'Manage WorkOS projects (create, rename, list) on the dashboard account plane',
+    options: [insecureStorageOpt],
+    commands: [
+      {
+        name: 'create',
+        description: 'Create a project with fresh staging and production environments',
+        positionals: [{ name: 'name', type: 'string', description: 'Project name', required: true }],
+        options: [
+          {
+            name: 'production',
+            type: 'boolean',
+            description: 'Provision a production environment (use --no-production for staging only)',
+            required: false,
+            default: true,
+            hidden: false,
+          },
+          {
+            name: 'yes',
+            type: 'boolean',
+            description: 'Confirm in non-interactive mode',
+            required: false,
+            default: false,
+            alias: 'y',
+            hidden: false,
+          },
+        ],
+      },
+      {
+        name: 'rename',
+        description: 'Rename a project',
+        positionals: [
+          { name: 'projectId', type: 'string', description: 'Project ID', required: true },
+          { name: 'name', type: 'string', description: 'New project name', required: true },
+        ],
+      },
+      {
+        name: 'list',
+        description: 'List projects in the current team',
+      },
+    ],
+  },
+  {
+    name: 'authkit',
+    description:
+      'Manage AuthKit app config (redirect URIs, CORS, logout URIs, branding) on the dashboard account plane',
+    options: [insecureStorageOpt],
+    commands: [
+      {
+        name: 'redirect-uris',
+        description: 'Manage AuthKit redirect URIs',
+        commands: [
+          {
+            name: 'list',
+            description: 'List configured redirect URIs for an environment',
+            options: [
+              {
+                name: 'environment-id',
+                type: 'string',
+                description: 'Environment ID (defaults to the active environment)',
+                required: false,
+                hidden: false,
+              },
+              {
+                name: 'limit',
+                type: 'number',
+                description: 'Maximum number of URIs to return',
+                required: false,
+                hidden: false,
+              },
+            ],
+          },
+          {
+            name: 'set',
+            description: 'Set the allowed redirect URIs for an environment (replaces the full list)',
+            options: [
+              {
+                name: 'environment-id',
+                type: 'string',
+                description: 'Environment ID (defaults to the active environment)',
+                required: false,
+                hidden: false,
+              },
+              { name: 'uri', type: 'string', description: 'Redirect URI (repeatable)', required: true, hidden: false },
+              {
+                name: 'default',
+                type: 'string',
+                description: 'Which URI to mark as the default',
+                required: false,
+                hidden: false,
+              },
+              {
+                name: 'dry-run',
+                type: 'boolean',
+                description: 'Validate without saving',
+                required: false,
+                default: false,
+                hidden: false,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        name: 'cors',
+        description: 'Manage AuthKit CORS web origins',
+        commands: [
+          {
+            name: 'get',
+            description: 'Show the allowed web origins (CORS) for an environment',
+            options: [
+              {
+                name: 'environment-id',
+                type: 'string',
+                description: 'Environment ID (defaults to the active environment)',
+                required: false,
+                hidden: false,
+              },
+            ],
+          },
+          {
+            name: 'set',
+            description: 'Set the allowed web origins (CORS) for an environment (replaces the full list)',
+            options: [
+              {
+                name: 'environment-id',
+                type: 'string',
+                description: 'Environment ID (defaults to the active environment)',
+                required: false,
+                hidden: false,
+              },
+              { name: 'origin', type: 'string', description: 'Web origin (repeatable)', required: true, hidden: false },
+              {
+                name: 'dry-run',
+                type: 'boolean',
+                description: 'Validate without saving',
+                required: false,
+                default: false,
+                hidden: false,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        name: 'logout-uris',
+        description: 'Manage AuthKit logout URIs',
+        commands: [
+          {
+            name: 'list',
+            description: 'List configured logout URIs for an environment',
+            options: [
+              {
+                name: 'environment-id',
+                type: 'string',
+                description: 'Environment ID (defaults to the active environment)',
+                required: false,
+                hidden: false,
+              },
+              {
+                name: 'limit',
+                type: 'number',
+                description: 'Maximum number of URIs to return',
+                required: false,
+                hidden: false,
+              },
+            ],
+          },
+          {
+            name: 'set',
+            description: 'Set the allowed logout URIs for an environment (replaces the full list)',
+            options: [
+              {
+                name: 'environment-id',
+                type: 'string',
+                description: 'Environment ID (defaults to the active environment)',
+                required: false,
+                hidden: false,
+              },
+              { name: 'uri', type: 'string', description: 'Logout URI (repeatable)', required: true, hidden: false },
+              {
+                name: 'default',
+                type: 'string',
+                description: 'Which URI to mark as the default',
+                required: false,
+                hidden: false,
+              },
+              {
+                name: 'dry-run',
+                type: 'boolean',
+                description: 'Validate without saving',
+                required: false,
+                default: false,
+                hidden: false,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    name: 'branding',
+    description: 'Manage branding images (logo, icon, favicon) for an environment',
+    options: [insecureStorageOpt],
+    commands: [
+      {
+        name: 'get',
+        description: 'Show branding (logos, theme) for an environment',
+        options: [
+          {
+            name: 'environment-id',
+            type: 'string',
+            description: 'Environment ID (defaults to the active environment)',
+            required: false,
+            hidden: false,
+          },
+        ],
+      },
+      {
+        name: 'set',
+        description: 'Upload branding images (logo, icon, favicon) for an environment',
+        positionals: [
+          {
+            name: 'slot',
+            type: 'string',
+            description: 'Which image to set (logo, logo-dark, icon, icon-dark, favicon, favicon-dark)',
+            required: false,
+          },
+          { name: 'file', type: 'string', description: 'Path to the image file', required: false },
+        ],
+        options: [
+          {
+            name: 'environment-id',
+            type: 'string',
+            description: 'Environment ID (defaults to the active environment)',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'logo',
+            type: 'string',
+            description: 'Path to the light-mode logo image',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'logo-dark',
+            type: 'string',
+            description: 'Path to the dark-mode logo image',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'icon',
+            type: 'string',
+            description: 'Path to the light-mode app icon image',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'icon-dark',
+            type: 'string',
+            description: 'Path to the dark-mode app icon image',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'favicon',
+            type: 'string',
+            description: 'Path to the light-mode favicon',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'favicon-dark',
+            type: 'string',
+            description: 'Path to the dark-mode favicon',
+            required: false,
+            hidden: false,
+          },
+        ],
+        examples: [
+          'workos branding set icon ./icon.png',
+          'workos branding set --logo ./logo.png --icon ./icon.png --favicon ./favicon.ico',
+        ],
+      },
+    ],
+  },
+  {
+    name: 'team',
+    description: 'Manage the WorkOS dashboard team (members, invites, settings)',
+    options: [insecureStorageOpt],
+    commands: [
+      {
+        name: 'members',
+        description: 'List members of the current team',
+      },
+      {
+        name: 'invite',
+        description: 'Invite a user to the current team by email',
+        positionals: [{ name: 'email', type: 'string', description: 'Email address to invite', required: true }],
+        options: [
+          { name: 'role', type: 'string', description: 'Role (ADMIN, MEMBER, ...)', required: true, hidden: false },
+          { name: 'first-name', type: 'string', description: 'First name', required: false, hidden: false },
+          { name: 'last-name', type: 'string', description: 'Last name', required: false, hidden: false },
+        ],
+      },
+      {
+        name: 'change-role',
+        description: "Change a team member's role",
+        positionals: [
+          { name: 'membershipId', type: 'string', description: 'Team membership ID', required: true },
+          { name: 'role', type: 'string', description: 'New role (ADMIN, MEMBER, ...)', required: true },
+        ],
+        options: [
+          {
+            name: 'yes',
+            type: 'boolean',
+            description: 'Confirm in non-interactive mode',
+            required: false,
+            default: false,
+            alias: 'y',
+            hidden: false,
+          },
+        ],
+      },
+      {
+        name: 'remove',
+        description: 'Remove a member from the current team',
+        positionals: [{ name: 'membershipId', type: 'string', description: 'Team membership ID', required: true }],
+        options: [
+          {
+            name: 'yes',
+            type: 'boolean',
+            description: 'Skip the confirmation prompt',
+            required: false,
+            default: false,
+            alias: 'y',
+            hidden: false,
+          },
+        ],
+      },
+      {
+        name: 'resend-invite',
+        description: 'Resend an expired team invitation',
+        positionals: [{ name: 'membershipId', type: 'string', description: 'Team membership ID', required: true }],
+      },
+      {
+        name: 'update',
+        description: 'Rename the current team',
+        positionals: [{ name: 'name', type: 'string', description: 'New team name', required: true }],
+      },
+      {
+        name: 'set-mfa',
+        description: 'Set whether MFA is required for the team',
+        positionals: [
+          { name: 'required', type: 'boolean', description: 'true to require MFA, false to relax', required: true },
+        ],
+        options: [
+          {
+            name: 'yes',
+            type: 'boolean',
+            description: 'Confirm in non-interactive mode',
+            required: false,
+            default: false,
+            alias: 'y',
+            hidden: false,
+          },
+        ],
+      },
+    ],
   },
   {
     name: 'telemetry',
@@ -185,6 +659,44 @@ const commands: CommandSchema[] = [
     ],
   },
   {
+    name: 'mcp',
+    description: 'Manage the WorkOS MCP server in coding agents (Claude Code, Codex, Cursor)',
+    commands: [
+      {
+        name: 'install',
+        description: 'Configure the WorkOS MCP server in detected coding agents',
+        options: [
+          {
+            name: 'agent',
+            type: 'array',
+            description: 'Target specific agent(s): claude-code, codex, cursor',
+            required: false,
+            alias: 'a',
+            hidden: false,
+          },
+        ],
+      },
+      {
+        name: 'remove',
+        description: 'Remove the WorkOS MCP server from coding agents',
+        options: [
+          {
+            name: 'agent',
+            type: 'array',
+            description: 'Target specific agent(s): claude-code, codex, cursor',
+            required: false,
+            alias: 'a',
+            hidden: false,
+          },
+        ],
+      },
+      {
+        name: 'status',
+        description: 'Show which coding agents have the WorkOS MCP server configured',
+      },
+    ],
+  },
+  {
     name: 'doctor',
     description: 'Diagnose WorkOS AuthKit integration issues in the current project',
     options: [
@@ -246,8 +758,33 @@ const commands: CommandSchema[] = [
     ],
   },
   {
-    name: 'env',
-    description: 'Manage environment configurations (API keys, endpoints, active environment)',
+    name: 'verify-login',
+    description:
+      'Verify the AuthKit login loop end-to-end against the active environment (creates and deletes a throwaway user)',
+    options: [
+      insecureStorageOpt,
+      apiKeyOpt,
+      {
+        name: 'client-id',
+        type: 'string',
+        description: 'WorkOS client ID (overrides the active environment)',
+        required: false,
+        hidden: false,
+      },
+      {
+        name: 'method',
+        type: 'string',
+        description: 'Authentication method to verify',
+        required: false,
+        default: 'password',
+        choices: ['password'],
+        hidden: false,
+      },
+    ],
+  },
+  {
+    name: 'profile',
+    description: 'Manage local environment profiles (API keys, endpoints, active profile)',
     options: [insecureStorageOpt],
     commands: [
       {
@@ -275,7 +812,8 @@ const commands: CommandSchema[] = [
       },
       {
         name: 'remove',
-        description: 'Remove an environment configuration',
+        description:
+          'Remove an environment from local CLI config (does not delete or unclaim the environment in WorkOS)',
         positionals: [{ name: 'name', type: 'string', description: 'Environment name to remove', required: true }],
       },
       {
@@ -289,12 +827,26 @@ const commands: CommandSchema[] = [
       },
       {
         name: 'claim',
-        description: 'Claim an unclaimed WorkOS environment (link it to your account)',
+        description: 'Claim an unclaimed WorkOS environment — link it to your account (permanent — cannot be undone)',
         options: [
           {
             name: 'json',
             type: 'boolean',
             description: 'Output in JSON format',
+            required: false,
+            default: false,
+            hidden: false,
+          },
+        ],
+      },
+      {
+        name: 'provision',
+        description: 'Provision a new unclaimed WorkOS environment (credentials only, no code changes)',
+        options: [
+          {
+            name: 'json',
+            type: 'boolean',
+            description: 'Output provisioned credentials (apiKey, clientId, claimToken) as JSON',
             required: false,
             default: false,
             hidden: false,
@@ -371,8 +923,8 @@ const commands: CommandSchema[] = [
   },
   {
     name: 'organization',
-    description: 'Manage WorkOS organizations (create, update, get, list, delete)',
-    options: [insecureStorageOpt, apiKeyOpt],
+    description: 'Manage WorkOS organizations (create, update, get, list, delete) in the active environment',
+    options: [insecureStorageOpt],
     commands: [
       {
         name: 'create',
@@ -386,6 +938,7 @@ const commands: CommandSchema[] = [
             required: false,
           },
         ],
+        options: [environmentIdOpt],
       },
       {
         name: 'update',
@@ -396,11 +949,13 @@ const commands: CommandSchema[] = [
           { name: 'domain', type: 'string', description: 'Domain to add or update', required: false },
           { name: 'state', type: 'string', description: 'Domain state (verified or pending)', required: false },
         ],
+        options: [environmentIdOpt],
       },
       {
         name: 'get',
         description: 'Get an organization by its ID',
         positionals: [{ name: 'orgId', type: 'string', description: 'Organization ID (org_*)', required: true }],
+        options: [environmentIdOpt],
       },
       {
         name: 'list',
@@ -409,29 +964,32 @@ const commands: CommandSchema[] = [
           {
             name: 'domain',
             type: 'string',
-            description: 'Filter organizations by domain',
+            description: 'Filter organizations by domain (name/domain search)',
             required: false,
             hidden: false,
           },
           ...paginationOpts,
+          environmentIdOpt,
         ],
       },
       {
         name: 'delete',
         description: 'Delete an organization by its ID',
         positionals: [{ name: 'orgId', type: 'string', description: 'Organization ID (org_*)', required: true }],
+        options: [confirmYesOpt, environmentIdOpt],
       },
     ],
   },
   {
     name: 'user',
-    description: 'Manage WorkOS user management users (get, list, update, delete)',
-    options: [insecureStorageOpt, apiKeyOpt],
+    description: 'Manage AuthKit users (get, list, update, delete) in the active environment',
+    options: [insecureStorageOpt],
     commands: [
       {
         name: 'get',
         description: 'Get a user by their ID',
         positionals: [{ name: 'userId', type: 'string', description: 'User ID (user_*)', required: true }],
+        options: [environmentIdOpt],
       },
       {
         name: 'list',
@@ -440,35 +998,23 @@ const commands: CommandSchema[] = [
           {
             name: 'email',
             type: 'string',
-            description: 'Filter users by email address',
-            required: false,
-            hidden: false,
-          },
-          {
-            name: 'organization',
-            type: 'string',
-            description: 'Filter users by organization ID',
+            description: 'Filter users by email address (search)',
             required: false,
             hidden: false,
           },
           ...paginationOpts,
+          environmentIdOpt,
         ],
       },
       {
         name: 'update',
-        description: 'Update user properties (name, email verification, password, external ID)',
+        description: 'Update user properties (name, email, locale, external ID)',
         positionals: [{ name: 'userId', type: 'string', description: 'User ID (user_*)', required: true }],
         options: [
           { name: 'first-name', type: 'string', description: 'First name', required: false, hidden: false },
           { name: 'last-name', type: 'string', description: 'Last name', required: false, hidden: false },
-          {
-            name: 'email-verified',
-            type: 'boolean',
-            description: 'Email verification status',
-            required: false,
-            hidden: false,
-          },
-          { name: 'password', type: 'string', description: 'New password', required: false, hidden: false },
+          { name: 'email', type: 'string', description: 'New email address', required: false, hidden: false },
+          { name: 'locale', type: 'string', description: 'Locale (e.g. en-US)', required: false, hidden: false },
           {
             name: 'external-id',
             type: 'string',
@@ -476,36 +1022,38 @@ const commands: CommandSchema[] = [
             required: false,
             hidden: false,
           },
+          environmentIdOpt,
         ],
       },
       {
         name: 'delete',
         description: 'Delete a user by their ID',
         positionals: [{ name: 'userId', type: 'string', description: 'User ID (user_*)', required: true }],
+        options: [confirmYesOpt, environmentIdOpt],
       },
     ],
   },
   // --- Resource Management Commands ---
   {
     name: 'role',
-    description: 'Manage WorkOS roles (environment and organization-scoped)',
+    description: 'Manage roles in the active environment (environment and organization-scoped)',
     options: [
       insecureStorageOpt,
-      apiKeyOpt,
       {
         name: 'org',
         type: 'string',
-        description: 'Organization ID (for org-scoped roles)',
+        description: 'Organization ID (for organization roles)',
         required: false,
         hidden: false,
       },
     ],
     commands: [
-      { name: 'list', description: 'List roles', options: [] },
+      { name: 'list', description: 'List roles', options: [environmentIdOpt] },
       {
         name: 'get',
         description: 'Get a role by slug',
         positionals: [{ name: 'slug', type: 'string', description: 'Role slug', required: true }],
+        options: [environmentIdOpt],
       },
       {
         name: 'create',
@@ -514,6 +1062,8 @@ const commands: CommandSchema[] = [
           { name: 'slug', type: 'string', description: 'Role slug', required: true, hidden: false },
           { name: 'name', type: 'string', description: 'Role name', required: true, hidden: false },
           { name: 'description', type: 'string', description: 'Role description', required: false, hidden: false },
+          requireFlagYesOpt,
+          environmentIdOpt,
         ],
       },
       {
@@ -523,12 +1073,15 @@ const commands: CommandSchema[] = [
         options: [
           { name: 'name', type: 'string', description: 'New name', required: false, hidden: false },
           { name: 'description', type: 'string', description: 'New description', required: false, hidden: false },
+          requireFlagYesOpt,
+          environmentIdOpt,
         ],
       },
       {
         name: 'delete',
         description: 'Delete an org-scoped role (requires --org)',
         positionals: [{ name: 'slug', type: 'string', description: 'Role slug', required: true }],
+        options: [confirmYesOpt, environmentIdOpt],
       },
       {
         name: 'set-permissions',
@@ -542,6 +1095,8 @@ const commands: CommandSchema[] = [
             required: true,
             hidden: false,
           },
+          requireFlagYesOpt,
+          environmentIdOpt,
         ],
       },
       {
@@ -551,6 +1106,7 @@ const commands: CommandSchema[] = [
           { name: 'slug', type: 'string', description: 'Role slug', required: true },
           { name: 'permissionSlug', type: 'string', description: 'Permission slug', required: true },
         ],
+        options: [requireFlagYesOpt, environmentIdOpt],
       },
       {
         name: 'remove-permission',
@@ -559,19 +1115,21 @@ const commands: CommandSchema[] = [
           { name: 'slug', type: 'string', description: 'Role slug', required: true },
           { name: 'permissionSlug', type: 'string', description: 'Permission slug', required: true },
         ],
+        options: [requireFlagYesOpt, environmentIdOpt],
       },
     ],
   },
   {
     name: 'permission',
-    description: 'Manage WorkOS permissions',
-    options: [insecureStorageOpt, apiKeyOpt],
+    description: 'Manage permissions in the active environment',
+    options: [insecureStorageOpt],
     commands: [
-      { name: 'list', description: 'List permissions', options: [...paginationOpts] },
+      { name: 'list', description: 'List permissions', options: [environmentIdOpt] },
       {
         name: 'get',
         description: 'Get a permission',
         positionals: [{ name: 'slug', type: 'string', description: 'Permission slug', required: true }],
+        options: [environmentIdOpt],
       },
       {
         name: 'create',
@@ -586,6 +1144,8 @@ const commands: CommandSchema[] = [
             required: false,
             hidden: false,
           },
+          requireFlagYesOpt,
+          environmentIdOpt,
         ],
       },
       {
@@ -595,134 +1155,242 @@ const commands: CommandSchema[] = [
         options: [
           { name: 'name', type: 'string', description: 'New name', required: false, hidden: false },
           { name: 'description', type: 'string', description: 'New description', required: false, hidden: false },
+          requireFlagYesOpt,
+          environmentIdOpt,
         ],
       },
       {
         name: 'delete',
         description: 'Delete a permission',
         positionals: [{ name: 'slug', type: 'string', description: 'Permission slug', required: true }],
+        options: [confirmYesOpt, environmentIdOpt],
       },
     ],
   },
   {
     name: 'membership',
-    description: 'Manage organization memberships',
-    options: [insecureStorageOpt, apiKeyOpt],
+    description: 'Manage organization memberships in the active environment',
+    options: [insecureStorageOpt],
     commands: [
       {
         name: 'list',
-        description: 'List memberships',
+        description: 'List memberships by user or organization',
         options: [
-          { name: 'org', type: 'string', description: 'Filter by organization ID', required: false, hidden: false },
-          { name: 'user', type: 'string', description: 'Filter by user ID', required: false, hidden: false },
-          ...paginationOpts,
+          { name: 'org', type: 'string', description: 'Organization ID (org_*)', required: false, hidden: false },
+          { name: 'user', type: 'string', description: 'User ID (user_*)', required: false, hidden: false },
+          {
+            name: 'limit',
+            type: 'number',
+            description: 'Maximum number of results to return (--org only)',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'before',
+            type: 'string',
+            description: 'Pagination cursor for results before a specific item (--org only)',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'after',
+            type: 'string',
+            description: 'Pagination cursor for results after a specific item (--org only)',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'order',
+            type: 'string',
+            description: 'Sort order, asc or desc (--org only)',
+            required: false,
+            choices: ['asc', 'desc'],
+            hidden: false,
+          },
+          environmentIdOpt,
         ],
       },
       {
         name: 'get',
-        description: 'Get a membership',
+        description: 'Get a membership by its ID',
         positionals: [{ name: 'id', type: 'string', description: 'Membership ID', required: true }],
+        options: [environmentIdOpt],
       },
       {
         name: 'create',
-        description: 'Create a membership',
+        description: 'Add a user to an organization',
         options: [
-          { name: 'org', type: 'string', description: 'Organization ID', required: true, hidden: false },
-          { name: 'user', type: 'string', description: 'User ID', required: true, hidden: false },
-          { name: 'role', type: 'string', description: 'Role slug', required: false, hidden: false },
+          { name: 'org', type: 'string', description: 'Organization ID (org_*)', required: true, hidden: false },
+          { name: 'user', type: 'string', description: 'User ID (user_*)', required: true, hidden: false },
+          {
+            name: 'role',
+            type: 'string',
+            description: 'Role ID (role_*) to assign',
+            required: false,
+            hidden: false,
+          },
+          environmentIdOpt,
         ],
       },
       {
         name: 'update',
-        description: 'Update a membership',
+        description: "Change a membership's role",
         positionals: [{ name: 'id', type: 'string', description: 'Membership ID', required: true }],
-        options: [{ name: 'role', type: 'string', description: 'New role slug', required: false, hidden: false }],
+        options: [
+          {
+            name: 'role',
+            type: 'string',
+            description: 'Role ID (role_*) to assign',
+            required: false,
+            hidden: false,
+          },
+          requireFlagYesOpt,
+          environmentIdOpt,
+        ],
       },
       {
         name: 'delete',
-        description: 'Delete a membership',
+        description: 'Delete a membership (removes the user from the organization)',
         positionals: [{ name: 'id', type: 'string', description: 'Membership ID', required: true }],
+        options: [confirmYesOpt, environmentIdOpt],
       },
       {
         name: 'deactivate',
         description: 'Deactivate a membership',
         positionals: [{ name: 'id', type: 'string', description: 'Membership ID', required: true }],
+        options: [requireFlagYesOpt, environmentIdOpt],
       },
       {
         name: 'reactivate',
         description: 'Reactivate a membership',
         positionals: [{ name: 'id', type: 'string', description: 'Membership ID', required: true }],
+        options: [environmentIdOpt],
       },
     ],
   },
   {
     name: 'invitation',
-    description: 'Manage user invitations',
-    options: [insecureStorageOpt, apiKeyOpt],
+    description: 'Manage user invitations in the active environment',
+    options: [insecureStorageOpt],
     commands: [
       {
         name: 'list',
         description: 'List invitations',
         options: [
-          { name: 'org', type: 'string', description: 'Filter by organization ID', required: false, hidden: false },
-          { name: 'email', type: 'string', description: 'Filter by email', required: false, hidden: false },
-          ...paginationOpts,
+          { name: 'org', type: 'string', description: 'Organization ID (org_*)', required: false, hidden: false },
+          { name: 'email', type: 'string', description: 'Filter by email (search)', required: false, hidden: false },
+          {
+            name: 'limit',
+            type: 'number',
+            description: 'Maximum number of results to return',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'before',
+            type: 'string',
+            description: 'Pagination cursor for results before a specific item',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'after',
+            type: 'string',
+            description: 'Pagination cursor for results after a specific item',
+            required: false,
+            hidden: false,
+          },
+          environmentIdOpt,
         ],
       },
       {
         name: 'get',
-        description: 'Get an invitation',
+        description: 'Get an invitation (searches the most recent invitations)',
         positionals: [{ name: 'id', type: 'string', description: 'Invitation ID', required: true }],
+        options: [environmentIdOpt],
       },
       {
         name: 'send',
         description: 'Send an invitation',
         options: [
-          { name: 'email', type: 'string', description: 'Email address', required: true, hidden: false },
-          { name: 'org', type: 'string', description: 'Organization ID', required: false, hidden: false },
-          { name: 'role', type: 'string', description: 'Role slug', required: false, hidden: false },
+          { name: 'email', type: 'string', description: 'Email address to invite', required: true, hidden: false },
+          { name: 'org', type: 'string', description: 'Organization ID (org_*)', required: false, hidden: false },
           {
-            name: 'expires-in-days',
-            type: 'number',
-            description: 'Expiration in days',
+            name: 'role',
+            type: 'string',
+            description: 'Role ID (role_*) to assign on acceptance',
             required: false,
             hidden: false,
           },
+          {
+            name: 'expires-in-days',
+            type: 'number',
+            description: 'Expiration in days (default 7)',
+            required: false,
+            hidden: false,
+          },
+          environmentIdOpt,
         ],
       },
       {
         name: 'revoke',
         description: 'Revoke an invitation',
         positionals: [{ name: 'id', type: 'string', description: 'Invitation ID', required: true }],
+        options: [confirmYesOpt, environmentIdOpt],
       },
       {
         name: 'resend',
         description: 'Resend an invitation',
         positionals: [{ name: 'id', type: 'string', description: 'Invitation ID', required: true }],
+        options: [environmentIdOpt],
       },
     ],
   },
   {
     name: 'session',
-    description: 'Manage user sessions',
-    options: [insecureStorageOpt, apiKeyOpt],
+    description: 'Manage user sessions in the active environment',
+    options: [insecureStorageOpt],
     commands: [
       {
         name: 'list',
         description: 'List sessions for a user',
-        positionals: [{ name: 'userId', type: 'string', description: 'User ID', required: true }],
-        options: [...paginationOpts],
+        positionals: [{ name: 'userId', type: 'string', description: 'User ID (user_*)', required: true }],
+        options: [
+          {
+            name: 'limit',
+            type: 'number',
+            description: 'Maximum number of results to return',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'before',
+            type: 'string',
+            description: 'Pagination cursor for results before a specific item',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'after',
+            type: 'string',
+            description: 'Pagination cursor for results after a specific item',
+            required: false,
+            hidden: false,
+          },
+          environmentIdOpt,
+        ],
       },
       {
         name: 'revoke',
         description: 'Revoke a session',
         positionals: [{ name: 'sessionId', type: 'string', description: 'Session ID', required: true }],
+        options: [confirmYesOpt, environmentIdOpt],
       },
     ],
   },
   {
     name: 'connection',
-    description: 'Manage SSO connections (read/delete/test)',
+    description: 'Manage SSO connections',
     options: [insecureStorageOpt, apiKeyOpt],
     commands: [
       {
@@ -738,6 +1406,66 @@ const commands: CommandSchema[] = [
         name: 'get',
         description: 'Get a connection',
         positionals: [{ name: 'id', type: 'string', description: 'Connection ID', required: true }],
+      },
+      {
+        name: 'create',
+        description: 'Create a connection',
+        options: [
+          { name: 'org', type: 'string', description: 'Organization ID', required: false, hidden: false },
+          { name: 'name', type: 'string', description: 'Connection name', required: false, hidden: false },
+          {
+            name: 'external-id',
+            type: 'string',
+            description: 'Customer-owned identifier',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'type',
+            type: 'string',
+            description: 'Connection type (e.g. GenericSAML, GenericOIDC)',
+            required: false,
+            hidden: false,
+          },
+          { name: 'data', type: 'string', description: 'JSON request body', required: false, hidden: false },
+          {
+            name: 'file',
+            type: 'string',
+            description: 'Read JSON request body from a file, or - for stdin',
+            required: false,
+            hidden: false,
+          },
+        ],
+      },
+      {
+        name: 'update',
+        description: 'Update a connection',
+        positionals: [{ name: 'id', type: 'string', description: 'Connection ID', required: true }],
+        options: [
+          { name: 'name', type: 'string', description: 'Connection name', required: false, hidden: false },
+          {
+            name: 'external-id',
+            type: 'string',
+            description: 'Customer-owned identifier',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'type',
+            type: 'string',
+            description: 'Connection type (e.g. GenericSAML, GenericOIDC)',
+            required: false,
+            hidden: false,
+          },
+          { name: 'data', type: 'string', description: 'JSON request body', required: false, hidden: false },
+          {
+            name: 'file',
+            type: 'string',
+            description: 'Read JSON request body from a file, or - for stdin',
+            required: false,
+            hidden: false,
+          },
+        ],
       },
       {
         name: 'test',
@@ -843,11 +1571,11 @@ const commands: CommandSchema[] = [
   {
     name: 'event',
     description: 'Query WorkOS events',
-    options: [insecureStorageOpt, apiKeyOpt],
+    options: [insecureStorageOpt],
     commands: [
       {
         name: 'list',
-        description: 'List events',
+        description: 'List events in the active environment',
         options: [
           {
             name: 'events',
@@ -856,7 +1584,6 @@ const commands: CommandSchema[] = [
             required: true,
             hidden: false,
           },
-          { name: 'org', type: 'string', description: 'Filter by organization ID', required: false, hidden: false },
           {
             name: 'range-start',
             type: 'string',
@@ -865,7 +1592,21 @@ const commands: CommandSchema[] = [
             hidden: false,
           },
           { name: 'range-end', type: 'string', description: 'Range end (ISO date)', required: false, hidden: false },
-          ...paginationOpts,
+          {
+            name: 'after',
+            type: 'string',
+            description: 'Pagination cursor for results after a specific item',
+            required: false,
+            hidden: false,
+          },
+          {
+            name: 'limit',
+            type: 'number',
+            description: 'Maximum number of results to return',
+            required: false,
+            hidden: false,
+          },
+          environmentIdOpt,
         ],
       },
     ],
@@ -918,68 +1659,75 @@ const commands: CommandSchema[] = [
   },
   {
     name: 'feature-flag',
-    description: 'Manage feature flags',
-    options: [insecureStorageOpt, apiKeyOpt],
+    description: 'Manage feature flags in the active environment',
+    options: [insecureStorageOpt],
     commands: [
-      { name: 'list', description: 'List feature flags', options: [...paginationOpts] },
+      { name: 'list', description: 'List feature flags', options: [...paginationOpts, environmentIdOpt] },
       {
         name: 'get',
         description: 'Get a feature flag',
         positionals: [{ name: 'slug', type: 'string', description: 'Feature flag slug', required: true }],
+        options: [environmentIdOpt],
       },
       {
         name: 'enable',
         description: 'Enable a feature flag',
         positionals: [{ name: 'slug', type: 'string', description: 'Feature flag slug', required: true }],
+        options: [environmentIdOpt],
       },
       {
         name: 'disable',
         description: 'Disable a feature flag',
         positionals: [{ name: 'slug', type: 'string', description: 'Feature flag slug', required: true }],
+        options: [environmentIdOpt],
       },
       {
         name: 'add-target',
-        description: 'Add a target to a feature flag',
+        description: 'Add a target (user or organization) to a feature flag',
         positionals: [
           { name: 'slug', type: 'string', description: 'Feature flag slug', required: true },
-          { name: 'targetId', type: 'string', description: 'Target ID', required: true },
+          { name: 'targetId', type: 'string', description: 'Target ID (user_* or org_*)', required: true },
         ],
+        options: [environmentIdOpt],
       },
       {
         name: 'remove-target',
-        description: 'Remove a target from a feature flag',
+        description: 'Remove a target (user or organization) from a feature flag',
         positionals: [
           { name: 'slug', type: 'string', description: 'Feature flag slug', required: true },
-          { name: 'targetId', type: 'string', description: 'Target ID', required: true },
+          { name: 'targetId', type: 'string', description: 'Target ID (user_* or org_*)', required: true },
         ],
+        options: [environmentIdOpt],
       },
     ],
   },
   {
     name: 'webhook',
     description: 'Manage webhooks',
-    options: [insecureStorageOpt, apiKeyOpt],
+    options: [insecureStorageOpt],
     commands: [
-      { name: 'list', description: 'List webhooks' },
+      { name: 'list', description: 'List webhook endpoints', options: [environmentIdOpt] },
       {
         name: 'create',
-        description: 'Create a webhook',
+        description: 'Create a webhook endpoint (the signing secret is only visible in the WorkOS Dashboard)',
         options: [
-          { name: 'url', type: 'string', description: 'Webhook endpoint URL', required: true, hidden: false },
+          { name: 'url', type: 'string', description: 'Webhook endpoint URL (HTTPS)', required: true, hidden: false },
           { name: 'events', type: 'string', description: 'Comma-separated event types', required: true, hidden: false },
+          environmentIdOpt,
         ],
       },
       {
         name: 'delete',
-        description: 'Delete a webhook',
-        positionals: [{ name: 'id', type: 'string', description: 'Webhook ID', required: true }],
+        description: 'Delete a webhook endpoint',
+        positionals: [{ name: 'id', type: 'string', description: 'Webhook endpoint ID', required: true }],
+        options: [confirmYesOpt, environmentIdOpt],
       },
     ],
   },
   {
     name: 'config',
-    description: 'Manage WorkOS configuration (redirect URIs, CORS, homepage)',
-    options: [insecureStorageOpt, apiKeyOpt],
+    description: 'Manage AuthKit app configuration (redirect URIs, CORS, homepage)',
+    options: [insecureStorageOpt],
     commands: [
       {
         name: 'redirect',
@@ -987,8 +1735,10 @@ const commands: CommandSchema[] = [
         commands: [
           {
             name: 'add',
-            description: 'Add a redirect URI',
+            description:
+              'Add a redirect URI (merges over the current list; a concurrent edit elsewhere may be overwritten)',
             positionals: [{ name: 'uri', type: 'string', description: 'Redirect URI', required: true }],
+            options: [environmentIdOpt],
           },
         ],
       },
@@ -998,8 +1748,10 @@ const commands: CommandSchema[] = [
         commands: [
           {
             name: 'add',
-            description: 'Add a CORS origin',
+            description:
+              'Add a CORS origin (merges over the current list; a concurrent edit elsewhere may be overwritten)',
             positionals: [{ name: 'origin', type: 'string', description: 'CORS origin', required: true }],
+            options: [environmentIdOpt],
           },
         ],
       },
@@ -1009,8 +1761,9 @@ const commands: CommandSchema[] = [
         commands: [
           {
             name: 'set',
-            description: 'Set the homepage URL',
+            description: "Set the app homepage URL on the environment's AuthKit application",
             positionals: [{ name: 'url', type: 'string', description: 'Homepage URL', required: true }],
+            options: [environmentIdOpt],
           },
         ],
       },
@@ -1019,28 +1772,22 @@ const commands: CommandSchema[] = [
   {
     name: 'portal',
     description: 'Manage Admin Portal',
-    options: [insecureStorageOpt, apiKeyOpt],
+    options: [insecureStorageOpt],
     commands: [
       {
         name: 'generate-link',
-        description: 'Generate an Admin Portal link',
+        description:
+          'Generate an Admin Portal setup link (expires prior links of the same intent; --return-url/--success-url and the audit_logs intent are not supported on this plane)',
         options: [
           {
             name: 'intent',
             type: 'string',
-            description: 'Portal intent (sso, dsync, audit_logs, log_streams)',
+            description: 'Portal intent (sso, dsync, log_streams, domain_verification, certificate_renewal)',
             required: true,
             hidden: false,
           },
           { name: 'org', type: 'string', description: 'Organization ID', required: true, hidden: false },
-          {
-            name: 'return-url',
-            type: 'string',
-            description: 'Return URL after portal',
-            required: false,
-            hidden: false,
-          },
-          { name: 'success-url', type: 'string', description: 'Success URL', required: false, hidden: false },
+          environmentIdOpt,
         ],
       },
     ],
@@ -1199,28 +1946,34 @@ const commands: CommandSchema[] = [
   {
     name: 'org-domain',
     description: 'Manage organization domains',
-    options: [insecureStorageOpt, apiKeyOpt],
+    options: [insecureStorageOpt],
     commands: [
       {
         name: 'get',
         description: 'Get a domain',
         positionals: [{ name: 'id', type: 'string', description: 'Domain ID', required: true }],
+        options: [environmentIdOpt],
       },
       {
         name: 'create',
-        description: 'Create a domain',
+        description: 'Add a domain to an organization (added as verified)',
         positionals: [{ name: 'domain', type: 'string', description: 'Domain name', required: true }],
-        options: [{ name: 'org', type: 'string', description: 'Organization ID', required: true, hidden: false }],
+        options: [
+          { name: 'org', type: 'string', description: 'Organization ID (org_*)', required: true, hidden: false },
+          environmentIdOpt,
+        ],
       },
       {
         name: 'verify',
-        description: 'Verify a domain',
+        description: 'Restart verification for a domain (issues a fresh verification token)',
         positionals: [{ name: 'id', type: 'string', description: 'Domain ID', required: true }],
+        options: [environmentIdOpt],
       },
       {
         name: 'delete',
         description: 'Delete a domain',
         positionals: [{ name: 'id', type: 'string', description: 'Domain ID', required: true }],
+        options: [confirmYesOpt, environmentIdOpt],
       },
     ],
   },
@@ -1247,6 +2000,24 @@ const commands: CommandSchema[] = [
         description: 'Create an example workos-seed.yml file',
         required: false,
         default: false,
+        hidden: false,
+      },
+    ],
+  },
+  {
+    name: 'setup',
+    description: 'Set up your coding agent (install WorkOS skills + MCP server)',
+    options: [
+      insecureStorageOpt,
+      { name: 'agents', type: 'string', description: 'Comma-separated agent keys', required: false, hidden: false },
+      { name: 'skills-only', type: 'boolean', description: 'Install skills only', required: false, hidden: false },
+      { name: 'mcp-only', type: 'boolean', description: 'Install the MCP server only', required: false, hidden: false },
+      { name: 'yes', type: 'boolean', description: 'Install without prompting', required: false, hidden: false },
+      {
+        name: 'reset',
+        type: 'boolean',
+        description: 'Re-enable automatic setup offers',
+        required: false,
         hidden: false,
       },
     ],
@@ -1359,13 +2130,15 @@ const commands: CommandSchema[] = [
         default: false,
         hidden: false,
       },
+      // Distinct from --force-install above: this one overrides the
+      // "AuthKit is already installed" preflight guard, and the guard's own
+      // error tells agents to pass it, so it has to be discoverable here.
       {
-        name: 'dashboard',
+        name: 'force',
         type: 'boolean',
-        description: 'Run with visual dashboard mode',
+        description: 'Continue even if AuthKit is already installed in this project',
         required: false,
         default: false,
-        alias: 'd',
         hidden: false,
       },
       {
@@ -1379,17 +2152,15 @@ const commands: CommandSchema[] = [
       {
         name: 'commit',
         type: 'boolean',
-        description: 'Auto-commit after installation (use --no-commit to skip)',
+        description: 'Deprecated no-op (--commit/--no-commit); installer changes are left uncommitted',
         required: false,
-        default: true,
         hidden: false,
       },
       {
         name: 'create-pr',
         type: 'boolean',
-        description: 'Auto-create pull request after installation',
+        description: 'Deprecated no-op; the installer never pushes or creates pull requests',
         required: false,
-        default: false,
         hidden: false,
       },
       {
@@ -1400,16 +2171,43 @@ const commands: CommandSchema[] = [
         default: true,
         hidden: false,
       },
+      {
+        name: 'tui',
+        type: 'boolean',
+        description: 'Use the full-screen installer in an interactive terminal (use --no-tui for plain output)',
+        required: false,
+        default: true,
+        hidden: false,
+      },
+      {
+        name: 'router',
+        type: 'string',
+        description: 'Use Next.js App Router in mixed projects (Pages-only projects are refused)',
+        choices: ['app'],
+        required: false,
+        hidden: false,
+      },
     ],
   },
   {
     name: 'migrations',
-    description: 'Migrate users from identity providers (Auth0, Cognito, Clerk, Firebase) to WorkOS',
+    description: MIGRATIONS_DESCRIPTION,
     options: [insecureStorageOpt, apiKeyOpt],
     commands: [
+      {
+        name: 'export',
+        description:
+          'Export identity data from a source provider (or any provider via CSV, e.g. Supabase) into a WorkOS migration package',
+      },
+      { name: 'export-template', description: 'Export a blank CSV template with headers and example rows' },
       { name: 'import', description: 'Import users from CSV into WorkOS' },
       { name: 'import-package', description: 'Import a migration package directory' },
+      {
+        name: 'generate-package-template',
+        description: 'Generate an empty migration package skeleton for manual or scripted population',
+      },
       { name: 'validate', description: 'Validate a WorkOS migration CSV file' },
+      { name: 'validate-package', description: 'Validate a migration package directory against the schema contract' },
       { name: 'export-auth0', description: 'Export users from Auth0' },
       { name: 'export-cognito', description: 'Export users from AWS Cognito' },
       { name: 'merge-passwords', description: 'Merge Auth0 password exports into CSV' },
@@ -1417,8 +2215,45 @@ const commands: CommandSchema[] = [
       { name: 'transform-firebase', description: 'Transform Firebase JSON to WorkOS format' },
       { name: 'analyze', description: 'Analyze import errors and generate retry plan' },
       { name: 'enroll-totp', description: 'Enroll TOTP MFA factors' },
-      { name: 'process-role-definitions', description: 'Create roles and assign in WorkOS' },
+      { name: 'process-roles', description: 'Create roles and assign permissions in WorkOS' },
       { name: 'wizard', description: 'Guided interactive migration wizard' },
+    ],
+  },
+  {
+    name: 'emulate',
+    description: 'Start a local WorkOS API emulator',
+    options: [
+      {
+        name: 'port',
+        type: 'number',
+        description: 'Port to listen on',
+        required: false,
+        default: 4100,
+        alias: 'p',
+        hidden: false,
+      },
+      {
+        name: 'seed',
+        type: 'string',
+        description: 'Path to seed config file (YAML or JSON)',
+        required: false,
+        alias: 's',
+        hidden: false,
+      },
+      {
+        name: 'interactive',
+        type: 'boolean',
+        description: 'Show login pages for SSO/AuthKit',
+        required: false,
+        default: false,
+        alias: 'i',
+        hidden: false,
+      },
+    ],
+    examples: [
+      'workos emulate',
+      'workos emulate --port 9100 --json',
+      'workos emulate --seed workos-emulate.config.yaml',
     ],
   },
 ];
@@ -1484,7 +2319,7 @@ export function extractHelpJsonCommand(argv: string[]): string | undefined {
  */
 /**
  * Top-level command names (first token of each registered command). Used by
- * telemetry to recognise real commands without trusting arbitrary argv tokens
+ * telemetry to recognize real commands without trusting arbitrary argv tokens
  * (so option values / secrets are never recorded as a command name).
  */
 export function getTopLevelCommandNames(): string[] {

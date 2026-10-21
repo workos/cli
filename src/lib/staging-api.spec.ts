@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { fetchStagingCredentials, StagingApiError } from './staging-api.js';
+import { logError } from '../utils/debug.js';
+vi.mock('../utils/debug.js', () => ({ logInfo: vi.fn(), logError: vi.fn() }));
 
 describe('staging-api', () => {
   const mockFetch = vi.fn();
@@ -8,6 +10,7 @@ describe('staging-api', () => {
   beforeEach(() => {
     globalThis.fetch = mockFetch;
     mockFetch.mockReset();
+    vi.mocked(logError).mockClear();
   });
 
   afterEach(() => {
@@ -59,6 +62,14 @@ describe('staging-api', () => {
       expect(result).toEqual({ clientId: 'camel_client', apiKey: 'camel_key' });
     });
 
+    it('does not expose credential response bodies or transport messages in logs or errors', async () => {
+      mockFetch.mockResolvedValueOnce(new Response('sk_test_fake_private', { status: 500 }));
+      await expect(fetchStagingCredentials('fake-token')).rejects.toThrow('HTTP 500');
+      mockFetch.mockRejectedValueOnce(new Error('sk_test_fake_private'));
+      await expect(fetchStagingCredentials('fake-token')).rejects.toThrow('Network error while fetching credentials.');
+      expect(JSON.stringify(vi.mocked(logError).mock.calls)).not.toContain('sk_test_fake_private');
+    });
+
     it('throws StagingApiError on 401', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
@@ -106,7 +117,7 @@ describe('staging-api', () => {
         text: async () => 'Internal Server Error',
       });
 
-      await expect(fetchStagingCredentials('token')).rejects.toThrow('Failed to fetch credentials: 500');
+      await expect(fetchStagingCredentials('token')).rejects.toThrow('Failed to fetch credentials: HTTP 500');
     });
 
     it('throws StagingApiError when response missing clientId', async () => {
@@ -130,7 +141,7 @@ describe('staging-api', () => {
     it('throws StagingApiError on network error', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network failed'));
 
-      await expect(fetchStagingCredentials('token')).rejects.toThrow('Network error: Network failed');
+      await expect(fetchStagingCredentials('token')).rejects.toThrow('Network error while fetching credentials.');
     });
 
     it('throws StagingApiError on timeout (AbortError)', async () => {

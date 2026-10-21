@@ -11,6 +11,8 @@ const INTEGRATION_TO_SETTINGS_KEY: Record<string, string> = {
   'tanstack-start': 'tanstackStart',
   'react-router': 'reactRouter',
   'vanilla-js': 'vanillaJs',
+  sveltekit: 'sveltekit',
+  node: 'node',
   python: 'python',
   ruby: 'ruby',
   php: 'php',
@@ -34,6 +36,39 @@ export function getCallbackPath(integration: Integration): string {
   return settings.frameworks[settingsKey]?.callbackPath ?? DEFAULT_CALLBACK_PATH;
 }
 
+/** The app's OAuth callback: the explicit override, else localhost on the detected port. */
+export function resolveRedirectUri(
+  integration: Integration,
+  { installDir, redirectUri }: { installDir: string; redirectUri?: string },
+  port?: number,
+): string {
+  return (
+    redirectUri || `http://localhost:${port ?? detectPort(integration, installDir)}${getCallbackPath(integration)}`
+  );
+}
+
+/** The env prefix a client bundler exposes to browser code: Vite, then Create React App. */
+export function getClientEnvPrefix(installDir: string): 'VITE_' | 'REACT_APP_' | undefined {
+  let deps: Record<string, string> = {};
+  try {
+    const pkg = JSON.parse(fs.readFileSync(join(installDir, 'package.json'), 'utf-8'));
+    deps = { ...pkg.dependencies, ...pkg.devDependencies };
+  } catch {
+    // No readable package.json - rely on the Vite config check
+  }
+  if (
+    deps.vite ||
+    ['vite.config.ts', 'vite.config.js', 'vite.config.mjs'].some((f) => fs.existsSync(join(installDir, f)))
+  )
+    return 'VITE_';
+  return deps['react-scripts'] ? 'REACT_APP_' : undefined;
+}
+
+/** The route that starts sign-in, or undefined when the SDK guide does not fix one. */
+export function getSignInPath(integration: Integration): string | undefined {
+  return settings.frameworks[INTEGRATION_TO_SETTINGS_KEY[integration]]?.signInPath;
+}
+
 /**
  * Parse port from Vite config file.
  * Looks for server.port in vite.config.{ts,js,mjs}
@@ -48,6 +83,20 @@ function parseViteConfigPort(configPath: string): number | null {
     }
   } catch {
     // File doesn't exist or can't be read
+  }
+  return null;
+}
+
+/**
+ * Try vite.config.{ts,js,mjs} in installDir for a server.port value.
+ * NOTE: parseViteConfigPort uses a greedy first-match /port\s*:\s*.../ regex,
+ * so an unrelated `port:` (e.g. hmr.port) appearing before server.port wins.
+ * Pre-existing behavior for all Vite frameworks — not a regression here.
+ */
+function parseViteConfigPortFromDir(installDir: string): number | null {
+  for (const p of ['vite.config.ts', 'vite.config.js', 'vite.config.mjs']) {
+    const port = parseViteConfigPort(join(installDir, p));
+    if (port) return port;
   }
   return null;
 }
@@ -206,24 +255,18 @@ export function detectPort(integration: Integration, installDir: string): number
       break;
 
     case 'tanstack-start':
-      detectedPort = parseTanStackPort(installDir);
+      // Modern @tanstack/react-start is Vite-based (port in vite.config.ts);
+      // legacy Vinxi projects use app.config.ts. Try Vite first.
+      detectedPort = parseViteConfigPortFromDir(installDir) ?? parseTanStackPort(installDir);
       break;
 
     case 'react':
     case 'react-router':
-    case 'vanilla-js': {
+    case 'vanilla-js':
+    case 'sveltekit':
       // Vite-based frameworks
-      const viteConfigs = [
-        join(installDir, 'vite.config.ts'),
-        join(installDir, 'vite.config.js'),
-        join(installDir, 'vite.config.mjs'),
-      ];
-      for (const configPath of viteConfigs) {
-        detectedPort = parseViteConfigPort(configPath);
-        if (detectedPort) break;
-      }
+      detectedPort = parseViteConfigPortFromDir(installDir);
       break;
-    }
 
     case 'dotnet':
       detectedPort = parseDotnetPort(installDir);

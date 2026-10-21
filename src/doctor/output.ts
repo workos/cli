@@ -3,8 +3,8 @@ import { homedir } from 'os';
 import { createAgents } from '../commands/install-skill.js';
 import type { InteractionModeSource } from '../utils/interaction-mode.js';
 import type { DoctorReport, Issue } from './types.js';
-import { renderSummaryBox, type SummaryBoxItem } from '../utils/summary-box.js';
-import type { LockExpression } from '../utils/lock-art.js';
+import { renderSummaryBox, type SummaryBoxItem, type SummaryTone } from '../utils/summary-box.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 export interface FormatOptions {
   verbose?: boolean;
@@ -27,7 +27,8 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
     console.log(`   Language:         ${report.language.name}`);
   }
   if (report.language.name === 'JavaScript/TypeScript' || report.language.name === 'Unknown') {
-    console.log(`   Runtime:          Node.js ${report.runtime.nodeVersion}`);
+    const runtime = report.runtime.nodeVersion ? `Node.js ${report.runtime.nodeVersion}` : 'Node.js not detected';
+    console.log(`   Runtime:          ${runtime}`);
   }
   if (report.framework.name) {
     const variant = report.framework.variant ? ` (${report.framework.variant})` : '';
@@ -195,6 +196,25 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
     }
   }
 
+  // MCP Server (per detected coding agent)
+  if (report.mcp) {
+    console.log('');
+    console.log('MCP Server');
+    for (const agent of report.mcp.agents) {
+      if (agent.misconfigured) {
+        console.log(`   ${Chalk.yellow('!')} ${agent.agent}: configured with an unexpected URL`);
+      } else if (agent.configured) {
+        const authentication = agent.authentication === 'not-verified' ? ' (OAuth not verified)' : '';
+        console.log(`   ${Chalk.green('✓')} ${agent.agent}: configured${authentication}`);
+      } else {
+        console.log(`   ${agent.agent}: ${Chalk.dim('not configured')}`);
+      }
+    }
+    if (report.mcp.agents.some((agent) => agent.authentication === 'not-verified')) {
+      console.log(`   ${Chalk.dim('Recovery:')} ${report.mcp.docsUrl}`);
+    }
+  }
+
   // Verbose mode additions
   if (options?.verbose) {
     console.log('');
@@ -232,12 +252,8 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
 
   console.log('');
 
-  // Summary box with lock character
-  const expression: LockExpression = report.summary.healthy
-    ? 'success'
-    : report.summary.errors > 0
-      ? 'error'
-      : 'warning';
+  // Summary box: its title line carries the outcome
+  const tone: SummaryTone = report.summary.healthy ? 'success' : report.summary.errors > 0 ? 'error' : 'warning';
 
   const title = report.summary.healthy
     ? 'WorkOS Integration Healthy'
@@ -252,10 +268,10 @@ export function formatReport(report: DoctorReport, options?: FormatOptions): voi
 
   console.log(
     renderSummaryBox({
-      expression,
+      tone,
       title,
       items,
-      footer: 'workos doctor --copy | https://workos.com/docs',
+      footer: `${formatWorkOSCommand('doctor --copy')} | https://workos.com/docs`,
     }),
   );
   console.log('');
@@ -267,8 +283,6 @@ export function formatInteractionModeSource(source: InteractionModeSource): stri
       return '--mode';
     case 'env':
       return 'WORKOS_MODE';
-    case 'workos_no_prompt':
-      return 'WORKOS_NO_PROMPT';
     case 'ci_env':
       return 'CI environment';
     case 'agent_env':

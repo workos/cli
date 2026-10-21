@@ -13,10 +13,12 @@ import type {
   WorkspaceCheckOutput,
 } from './installer-core.types.js';
 import type { InstallerOptions } from '../utils/types.js';
+import type { CompletionData } from './events.js';
+import type { ChangeDetection } from './post-install.js';
 import type { DeviceAuthResult, DeviceAuthResponse } from './device-auth.js';
 import type { StagingCredentials } from './staging-api.js';
-import { getManualPrInstructions } from './post-install.js';
-import { hasGhCli } from '../utils/git-utils.js';
+import { InstallDeclinedError } from './installer-errors.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 export const installerMachine = setup({
   types: {
@@ -67,8 +69,8 @@ export const installerMachine = setup({
     emitGitConfirmed: ({ context }) => {
       context.emitter.emit('git:dirty:confirmed', {});
     },
-    emitGitCancelled: ({ context }) => {
-      context.emitter.emit('git:dirty:cancelled', {});
+    emitGitCanceled: ({ context }) => {
+      context.emitter.emit('git:dirty:canceled', {});
     },
     emitScaffoldChecking: ({ context }) => {
       context.emitter.emit('scaffold:checking', {});
@@ -130,7 +132,10 @@ export const installerMachine = setup({
       context.emitter.emit('credentials:request', { requiresApiKey });
     },
     emitCredentialsFound: ({ context }) => {
-      context.emitter.emit('credentials:found', {});
+      context.emitter.emit('credentials:found', {
+        source: context.options.credentialSource === 'env' ? 'env' : 'cli',
+        credentials: { clientId: context.options.clientId, apiKey: context.options.apiKey },
+      });
     },
     emitEnvDetected: ({ context }) => {
       context.emitter.emit('credentials:env:detected', { files: context.envFilesDetected ?? [] });
@@ -164,7 +169,10 @@ export const installerMachine = setup({
       context.emitter.emit('staging:fetching', {});
     },
     emitStagingSuccess: ({ context }) => {
-      context.emitter.emit('staging:success', {});
+      context.emitter.emit('staging:success', {
+        source: context.deviceAuth ? 'device' : 'stored',
+        credentials: context.credentials,
+      });
     },
     emitStagingError: ({ context }) => {
       const message = context.error?.message ?? 'Failed to fetch staging credentials';
@@ -227,93 +235,56 @@ export const installerMachine = setup({
       },
     }),
 
-    emitCancelled: ({ context }) => {
-      context.emitter.emit('complete', { success: false, summary: 'Installer cancelled by user' });
+    emitCanceled: ({ context }) => {
+      context.emitter.emit('complete', { success: false, summary: 'Installer canceled by user' });
     },
     emitError: ({ context }) => {
-      const message = context.error?.message ?? 'An unexpected error occurred';
-      context.emitter.emit('error', { message, stack: context.error?.stack });
-      context.emitter.emit('complete', { success: false });
+      // Must NOT be 'An unexpected error occurred': that is the LLM gateway's
+      // generic-500 signature, which the failure classifier reads as a
+      // deterministic AI failure. A git/fs/detection error reaching the error
+      // state without an assigned `error` would otherwise be blamed on the AI.
+      const message = context.error?.message ?? 'The installer failed for an unknown reason';
+      // Declines carry a structured code so machine consumers can tell "we
+      // refused to install" apart from unexpected failures.
+      const declineCode = context.error instanceof InstallDeclinedError ? context.error.code : undefined;
+      context.emitter.emit('error', {
+        message,
+        stack: context.error?.stack,
+        ...(declineCode ? { code: declineCode } : {}),
+      });
+      context.emitter.emit('complete', { success: false, ...(declineCode ? { summary: message } : {}) });
     },
     // Post-install actions
-    assignChangedFiles: assign({
-      changedFiles: ({ event }) => {
-        const doneEvent = event as unknown as { output: { hasChanges: boolean; files: string[] } };
-        return doneEvent.output?.files ?? [];
-      },
+    assignChangeDetection: assign(({ event }) => {
+      const result = (event as unknown as { output: ChangeDetection }).output;
+      return { changedFiles: result.files, changeDetection: result };
     }),
-    emitChangesDetected: ({ context }) => {
-      context.emitter.emit('postinstall:changes', { files: context.changedFiles ?? [] });
-    },
-    emitNoChanges: ({ context }) => {
-      context.emitter.emit('postinstall:nochanges', {});
-    },
-    emitCommitPrompt: ({ context }) => {
-      context.emitter.emit('postinstall:commit:prompt', {});
-    },
-    emitGeneratingCommitMessage: ({ context }) => {
-      context.emitter.emit('postinstall:commit:generating', {});
-    },
-    assignCommitMessage: assign({
-      commitMessage: ({ event }) => {
-        const doneEvent = event as unknown as { output: string };
-        return doneEvent.output;
+    assignChangeDetectionError: assign(({ event }) => ({
+      changedFiles: [],
+      changeDetection: {
+        state: 'error' as const,
+        files: [] as [],
+        error: String((event as unknown as { error: unknown }).error),
       },
-    }),
-    emitCommitting: ({ context }) => {
-      context.emitter.emit('postinstall:commit:committing', { message: context.commitMessage ?? '' });
-    },
-    emitCommitSuccess: ({ context }) => {
-      context.emitter.emit('postinstall:commit:success', { message: context.commitMessage ?? '' });
-    },
-    emitCommitFailed: ({ context }) => {
-      const message = context.error?.message ?? 'Commit failed';
-      context.emitter.emit('postinstall:commit:failed', { error: message });
-    },
-    emitPrPrompt: ({ context }) => {
-      context.emitter.emit('postinstall:pr:prompt', {});
-    },
-    emitGeneratingPrDescription: ({ context }) => {
-      context.emitter.emit('postinstall:pr:generating', {});
-    },
-    assignPrDescription: assign({
-      prDescription: ({ event }) => {
-        const doneEvent = event as unknown as { output: string };
-        return doneEvent.output;
-      },
-    }),
-    emitPushing: ({ context }) => {
-      context.emitter.emit('postinstall:pr:pushing', {});
-    },
-    emitPushFailed: ({ context }) => {
-      const message = context.error?.message ?? 'Push failed';
-      context.emitter.emit('postinstall:push:failed', { error: message });
-    },
-    emitCreatingPr: ({ context }) => {
-      context.emitter.emit('postinstall:pr:creating', {});
-    },
-    assignPrUrl: assign({
-      prUrl: ({ event }) => {
-        const doneEvent = event as unknown as { output: string };
-        return doneEvent.output;
-      },
-    }),
-    emitPrCreated: ({ context }) => {
-      context.emitter.emit('postinstall:pr:success', { url: context.prUrl ?? '' });
-    },
-    emitPrFailed: ({ context }) => {
-      const message = context.error?.message ?? 'PR creation failed';
-      context.emitter.emit('postinstall:pr:failed', { error: message });
-    },
-    emitManualInstructions: ({ context }) => {
-      const branch = context.currentBranch ?? 'HEAD';
-      const instructions = getManualPrInstructions(branch);
-      context.emitter.emit('postinstall:manual', { instructions });
+    })),
+    emitChangeDetection: ({ context }) => {
+      const result = context.changeDetection;
+      if (result?.state === 'changed') context.emitter.emit('postinstall:changes', { files: result.files });
+      else if (result?.state === 'unchanged') context.emitter.emit('postinstall:nochanges', {});
+      else if (result?.state === 'not-git' || result?.state === 'error') {
+        context.emitter.emit('postinstall:unavailable', {
+          reason: result.state,
+          ...(result.state === 'error' ? { error: result.error } : {}),
+        });
+      }
     },
     emitComplete: ({ context }) => {
       const summary = context.agentSummary ?? 'WorkOS AuthKit installed successfully!';
-      context.emitter.emit('complete', { success: true, summary });
+      context.emitter.emit('complete', { success: true, summary, completion: context.completion });
     },
+    assignCompletion: assign({
+      completion: ({ event }) => (event as unknown as { output?: CompletionData }).output,
+    }),
   },
 
   guards: {
@@ -321,8 +292,6 @@ export const installerMachine = setup({
     gitIsClean: ({ context }) => context.gitIsClean === true,
     hasCredentials: ({ context }) => context.options.apiKey !== undefined && context.options.clientId !== undefined,
     hasIntegration: ({ context }) => context.integration !== undefined,
-    shouldSkipPostInstall: ({ context }) => context.options.noCommit === true,
-    hasGhCli: () => hasGhCli(),
     // Read from the actor's done event (output), not context: the
     // assignWorkspaceResult action has not run yet when guards are evaluated.
     notScaffoldable: ({ event }) => !(event as unknown as { output: WorkspaceCheckOutput }).output?.scaffoldable,
@@ -354,6 +323,9 @@ export const installerMachine = setup({
     runAgent: fromPromise<AgentOutput, { context: InstallerMachineContext }>(async () => {
       throw new Error('runAgent not implemented - provide via machine.provide()');
     }),
+    buildCompletion: fromPromise<CompletionData | undefined, { context: InstallerMachineContext }>(async () => {
+      throw new Error('buildCompletion not implemented - provide via machine.provide()');
+    }),
     // Credential discovery actors
     detectEnvFiles: fromPromise<EnvFileInfo, { installDir: string }>(async () => {
       throw new Error('detectEnvFiles not implemented - provide via machine.provide()');
@@ -370,9 +342,11 @@ export const installerMachine = setup({
     >(async () => {
       throw new Error('runDeviceAuth not implemented - provide via machine.provide()');
     }),
-    fetchStagingCredentials: fromPromise<StagingCredentials, void>(async () => {
-      throw new Error('fetchStagingCredentials not implemented - provide via machine.provide()');
-    }),
+    fetchStagingCredentials: fromPromise<StagingCredentials, { installDir: string; envScanConsent?: boolean }>(
+      async () => {
+        throw new Error('fetchStagingCredentials not implemented - provide via machine.provide()');
+      },
+    ),
     // Branch check actors
     checkBranch: fromPromise<BranchCheckOutput, void>(async () => {
       throw new Error('checkBranch not implemented - provide via machine.provide()');
@@ -381,26 +355,8 @@ export const installerMachine = setup({
       throw new Error('createBranch not implemented - provide via machine.provide()');
     }),
     // Post-install actors
-    detectChanges: fromPromise<{ hasChanges: boolean; files: string[] }, void>(async () => {
+    detectChanges: fromPromise<ChangeDetection, { installDir: string }>(async () => {
       throw new Error('detectChanges not implemented - provide via machine.provide()');
-    }),
-    generateCommitMessage: fromPromise<string, { integration: string; files: string[]; direct?: boolean }>(async () => {
-      throw new Error('generateCommitMessage not implemented - provide via machine.provide()');
-    }),
-    commitChanges: fromPromise<void, { message: string; cwd: string }>(async () => {
-      throw new Error('commitChanges not implemented - provide via machine.provide()');
-    }),
-    generatePrDescription: fromPromise<
-      string,
-      { integration: string; files: string[]; commitMessage: string; direct?: boolean }
-    >(async () => {
-      throw new Error('generatePrDescription not implemented - provide via machine.provide()');
-    }),
-    pushBranch: fromPromise<void, { cwd: string }>(async () => {
-      throw new Error('pushBranch not implemented - provide via machine.provide()');
-    }),
-    createPr: fromPromise<string, { title: string; body: string; cwd: string }>(async () => {
-      throw new Error('createPr not implemented - provide via machine.provide()');
     }),
   },
 }).createMachine({
@@ -424,7 +380,7 @@ export const installerMachine = setup({
   // Global event handlers - CANCEL can be sent from any state
   on: {
     CANCEL: {
-      target: '.cancelled',
+      target: '.canceled',
     },
   },
 
@@ -507,8 +463,8 @@ export const installerMachine = setup({
             SCAFFOLD_CONFIRMED: {
               target: 'running',
             },
-            SCAFFOLD_CANCELLED: {
-              target: '#installer.cancelled',
+            SCAFFOLD_CANCELED: {
+              target: '#installer.canceled',
               actions: ['emitScaffoldSkipped', { type: 'emitStateExit', params: { state: 'scaffold' } }],
             },
           },
@@ -608,9 +564,9 @@ export const installerMachine = setup({
                   target: 'done',
                   actions: ['emitGitConfirmed'],
                 },
-                GIT_CANCELLED: {
-                  target: '#installer.cancelled',
-                  actions: ['emitGitCancelled'],
+                GIT_CANCELED: {
+                  target: '#installer.canceled',
+                  actions: ['emitGitCanceled'],
                 },
               },
             },
@@ -653,7 +609,7 @@ export const installerMachine = setup({
                   target: 'done',
                 },
                 BRANCH_CANCEL: {
-                  target: '#installer.cancelled',
+                  target: '#installer.canceled',
                 },
               },
             },
@@ -704,7 +660,7 @@ export const installerMachine = setup({
                     `Because this directory isn't empty, a new app wasn't scaffolded, and no recognized ` +
                     `framework (such as a package.json with Next.js) was found to install into.\n\n` +
                     `Next steps:\n` +
-                    `  - New app: run \`workos install\` in an empty directory to scaffold Next.js + AuthKit.\n` +
+                    `  - New app: run \`${formatWorkOSCommand('install')}\` in an empty directory to scaffold Next.js + AuthKit.\n` +
                     `  - Existing project: run from the directory that contains your package.json, or pass --install-dir <path>.`,
                 );
               },
@@ -726,7 +682,14 @@ export const installerMachine = setup({
               target: '#installer.configuring',
               guard: 'hasCredentials',
               actions: [
-                assign({ credentialSource: () => 'cli' as CredentialSource }),
+                // 'cli' means the user handed us these credentials. Credentials
+                // that only reached `options` because runWithCore backfilled them
+                // from the project's env file are not that, and calling them 'cli'
+                // is what made a freshly provisioned unclaimed environment
+                // announce itself as "the WorkOS credentials you provided".
+                assign({
+                  credentialSource: ({ context }) => context.options.credentialSource ?? ('cli' as CredentialSource),
+                }),
                 'emitCredentialsFound',
                 { type: 'emitStateExit', params: { state: 'gatheringCredentials' } },
               ],
@@ -779,7 +742,7 @@ export const installerMachine = setup({
               actions: assign({ envScanConsent: () => false }),
             },
             CANCEL: {
-              target: '#installer.cancelled',
+              target: '#installer.canceled',
               actions: { type: 'emitStateExit', params: { state: 'gatheringCredentials' } },
             },
           },
@@ -877,6 +840,10 @@ export const installerMachine = setup({
           invoke: {
             id: 'fetchStagingCredentials',
             src: 'fetchStagingCredentials',
+            input: ({ context }) => ({
+              installDir: context.options.installDir,
+              envScanConsent: context.envScanConsent,
+            }),
             onDone: {
               target: '#installer.configuring',
               actions: [
@@ -915,7 +882,7 @@ export const installerMachine = setup({
               target: 'runningDeviceAuth',
             },
             CANCEL: {
-              target: '#installer.cancelled',
+              target: '#installer.canceled',
               actions: { type: 'emitStateExit', params: { state: 'gatheringCredentials' } },
             },
           },
@@ -977,6 +944,7 @@ export const installerMachine = setup({
                   const output = event.output as AgentOutput;
                   return output.summary;
                 },
+                applicationSetup: ({ event }) => (event.output as AgentOutput).applicationSetup,
               }),
               ({ context, event }) => {
                 const output = event.output as AgentOutput;
@@ -993,162 +961,21 @@ export const installerMachine = setup({
       },
     },
 
+    // Post-install: record what changed so the completion summary can list the
+    // files. Changes are deliberately left uncommitted for the user to review —
+    // the installer never commits or opens PRs on its own.
     postInstall: {
-      initial: 'checking',
+      initial: 'detectingChanges',
       entry: [{ type: 'emitStateEnter', params: { state: 'postInstall' } }],
       states: {
-        checking: {
-          always: [
-            {
-              target: '#installer.complete',
-              guard: 'shouldSkipPostInstall',
-            },
-            { target: 'detectingChanges' },
-          ],
-        },
-
         detectingChanges: {
           invoke: {
             id: 'detectChanges',
             src: 'detectChanges',
-            onDone: [
-              {
-                target: 'promptingCommit',
-                guard: ({ event }) => (event.output as { hasChanges: boolean; files: string[] }).hasChanges,
-                actions: ['assignChangedFiles', 'emitChangesDetected'],
-              },
-              {
-                target: 'done',
-                actions: ['emitNoChanges'],
-              },
-            ],
-            onError: { target: 'done' },
+            input: ({ context }) => ({ installDir: context.options.installDir }),
+            onDone: { target: 'done', actions: ['assignChangeDetection', 'emitChangeDetection'] },
+            onError: { target: 'done', actions: ['assignChangeDetectionError', 'emitChangeDetection'] },
           },
-        },
-
-        promptingCommit: {
-          entry: ['emitCommitPrompt'],
-          on: {
-            COMMIT_APPROVED: { target: 'generatingCommitMessage' },
-            COMMIT_DECLINED: { target: 'done' },
-            CANCEL: { target: '#installer.cancelled' },
-          },
-        },
-
-        generatingCommitMessage: {
-          entry: ['emitGeneratingCommitMessage'],
-          invoke: {
-            id: 'generateCommitMessage',
-            src: 'generateCommitMessage',
-            input: ({ context }) => ({
-              integration: context.integration ?? 'project',
-              files: context.changedFiles ?? [],
-              direct: context.options.direct,
-            }),
-            onDone: {
-              target: 'committing',
-              actions: ['assignCommitMessage'],
-            },
-          },
-        },
-
-        committing: {
-          entry: ['emitCommitting'],
-          invoke: {
-            id: 'commitChanges',
-            src: 'commitChanges',
-            input: ({ context }) => ({
-              message: context.commitMessage ?? '',
-              cwd: context.options.installDir,
-            }),
-            onDone: {
-              target: 'checkingGhCli',
-              actions: ['emitCommitSuccess'],
-            },
-            onError: {
-              target: 'done',
-              actions: ['assignError', 'emitCommitFailed'],
-            },
-          },
-        },
-
-        checkingGhCli: {
-          always: [
-            {
-              target: 'promptingPr',
-              guard: 'hasGhCli',
-            },
-            {
-              target: 'showingManualInstructions',
-            },
-          ],
-        },
-
-        promptingPr: {
-          entry: ['emitPrPrompt'],
-          on: {
-            PR_APPROVED: { target: 'generatingPrDescription' },
-            PR_DECLINED: { target: 'done' },
-            CANCEL: { target: '#installer.cancelled' },
-          },
-        },
-
-        generatingPrDescription: {
-          entry: ['emitGeneratingPrDescription'],
-          invoke: {
-            id: 'generatePrDescription',
-            src: 'generatePrDescription',
-            input: ({ context }) => ({
-              integration: context.integration ?? 'project',
-              files: context.changedFiles ?? [],
-              commitMessage: context.commitMessage ?? '',
-              direct: context.options.direct,
-            }),
-            onDone: {
-              target: 'pushing',
-              actions: ['assignPrDescription'],
-            },
-          },
-        },
-
-        pushing: {
-          entry: ['emitPushing'],
-          invoke: {
-            id: 'pushBranch',
-            src: 'pushBranch',
-            input: ({ context }) => ({ cwd: context.options.installDir }),
-            onDone: { target: 'creatingPr' },
-            onError: {
-              target: 'showingManualInstructions',
-              actions: ['assignError', 'emitPushFailed'],
-            },
-          },
-        },
-
-        creatingPr: {
-          entry: ['emitCreatingPr'],
-          invoke: {
-            id: 'createPr',
-            src: 'createPr',
-            input: ({ context }) => ({
-              title: context.commitMessage ?? '',
-              body: context.prDescription ?? '',
-              cwd: context.options.installDir,
-            }),
-            onDone: {
-              target: 'done',
-              actions: ['assignPrUrl', 'emitPrCreated'],
-            },
-            onError: {
-              target: 'done',
-              actions: ['assignError', 'emitPrFailed'],
-            },
-          },
-        },
-
-        showingManualInstructions: {
-          entry: ['emitManualInstructions'],
-          always: { target: 'done' },
         },
 
         done: {
@@ -1156,7 +983,20 @@ export const installerMachine = setup({
         },
       },
       onDone: {
-        target: 'complete',
+        target: 'buildingCompletion',
+      },
+    },
+
+    // Compute the structured completion payload before entering `complete`.
+    // `emitComplete` is a synchronous entry action, but the builder is async
+    // (lockfile-aware dev command, port detection), so it must run in an actor
+    // first. Errors never block completion — they fall through to the static box.
+    buildingCompletion: {
+      invoke: {
+        src: 'buildCompletion',
+        input: ({ context }) => ({ context }),
+        onDone: { target: 'complete', actions: ['assignCompletion'] },
+        onError: { target: 'complete' },
       },
     },
 
@@ -1165,9 +1005,9 @@ export const installerMachine = setup({
       entry: [{ type: 'emitStateEnter', params: { state: 'complete' } }, 'emitComplete'],
     },
 
-    cancelled: {
+    canceled: {
       type: 'final',
-      entry: [{ type: 'emitStateEnter', params: { state: 'cancelled' } }, 'emitCancelled'],
+      entry: [{ type: 'emitStateEnter', params: { state: 'canceled' } }, 'emitCanceled'],
     },
 
     error: {

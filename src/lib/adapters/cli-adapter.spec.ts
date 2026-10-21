@@ -5,8 +5,9 @@ import { createInstallerEventEmitter } from '../events.js';
 // Mock console.log to capture styled output
 const mockConsoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
 
-// Mock clack
-vi.mock('../../utils/clack.js', () => ({
+// Mock the UI facade
+vi.mock('../../utils/ui.js', () => ({
+  getUiHost: vi.fn(() => null),
   default: {
     intro: vi.fn(),
     log: {
@@ -21,6 +22,7 @@ vi.mock('../../utils/clack.js', () => ({
       start: vi.fn(),
       stop: vi.fn(),
       message: vi.fn(),
+      clear: vi.fn(),
     })),
     confirm: vi.fn(),
     text: vi.fn(),
@@ -29,6 +31,17 @@ vi.mock('../../utils/clack.js', () => ({
     outro: vi.fn(),
   },
 }));
+
+// The adapter names the environment when the active profile has resolved one;
+// default to no active profile so the fallback copy stays under test.
+const mockGetActiveEnvironment = vi.fn();
+vi.mock('../config-store.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../config-store.js')>();
+  return {
+    ...actual,
+    getActiveEnvironment: (...args: unknown[]) => mockGetActiveEnvironment(...args),
+  };
+});
 
 vi.mock('../settings.js', () => ({
   getConfig: vi.fn(() => ({
@@ -63,6 +76,14 @@ vi.mock('../../utils/cli-symbols.js', () => ({
     progressFilled: '▓',
     progressEmpty: '░',
   },
+  // Identity functions so summary-box renders without chalk color codes.
+  palette: {
+    accent: (text: string) => text,
+    green: (text: string) => text,
+    red: (text: string) => text,
+    yellow: (text: string) => text,
+    cyan: (text: string) => text,
+  },
 }));
 
 describe('CLIAdapter', () => {
@@ -85,27 +106,27 @@ describe('CLIAdapter', () => {
   describe('start', () => {
     it('subscribes to events on start', async () => {
       await adapter.start();
-      const clack = await import('../../utils/clack.js');
+      const ui = await import('../../utils/ui.js');
 
-      // Emit auth:success - uses clack.log.success
+      // Emit auth:success - uses ui.log.success
       emitter.emit('auth:success', {});
 
-      expect(clack.default.log.success).toHaveBeenCalledWith('Authenticated');
+      expect(ui.default.log.success).toHaveBeenCalledWith('Authenticated');
     });
 
     it('shows intro on start', async () => {
-      const clack = await import('../../utils/clack.js');
+      const ui = await import('../../utils/ui.js');
       await adapter.start();
 
-      expect(clack.default.intro).toHaveBeenCalledWith('Welcome to the WorkOS AuthKit installer');
+      expect(ui.default.intro).toHaveBeenCalledWith('WorkOS', 'AuthKit installer');
     });
 
     it('is idempotent', async () => {
-      const clack = await import('../../utils/clack.js');
+      const ui = await import('../../utils/ui.js');
       await adapter.start();
       await adapter.start(); // Second call should be no-op
 
-      expect(clack.default.intro).toHaveBeenCalledTimes(1);
+      expect(ui.default.intro).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -114,13 +135,13 @@ describe('CLIAdapter', () => {
       await adapter.start();
       await adapter.stop();
 
-      const clack = await import('../../utils/clack.js');
+      const ui = await import('../../utils/ui.js');
       vi.clearAllMocks();
 
       // Emit an event - handler should NOT be called
       emitter.emit('auth:checking', {});
 
-      expect(clack.default.log.step).not.toHaveBeenCalled();
+      expect(ui.default.log.step).not.toHaveBeenCalled();
     });
 
     it('is idempotent', async () => {
@@ -134,32 +155,33 @@ describe('CLIAdapter', () => {
   describe('event handling', () => {
     it('shows detection complete message', async () => {
       await adapter.start();
-      const clack = await import('../../utils/clack.js');
+      const ui = await import('../../utils/ui.js');
 
       emitter.emit('detection:complete', { integration: 'nextjs' });
 
-      // Uses clack.log.success
-      expect(clack.default.log.success).toHaveBeenCalled();
+      // Uses ui.log.success
+      expect(ui.default.log.success).toHaveBeenCalled();
     });
 
     it('shows spinner on agent:start', async () => {
       await adapter.start();
-      const clack = await import('../../utils/clack.js');
+      const ui = await import('../../utils/ui.js');
 
       emitter.emit('agent:start', {});
 
-      expect(clack.default.spinner).toHaveBeenCalled();
+      expect(ui.default.spinner).toHaveBeenCalled();
     });
 
     it('updates spinner on agent:progress', async () => {
       await adapter.start();
-      const clack = await import('../../utils/clack.js');
+      const ui = await import('../../utils/ui.js');
       const spinnerMock = {
         start: vi.fn(),
         stop: vi.fn(),
         message: vi.fn(),
+        clear: vi.fn(),
       };
-      vi.mocked(clack.default.spinner).mockReturnValue(spinnerMock);
+      vi.mocked(ui.default.spinner).mockReturnValue(spinnerMock);
 
       emitter.emit('agent:start', {});
       emitter.emit('agent:progress', { step: 'Installing', detail: 'packages' });
@@ -169,8 +191,8 @@ describe('CLIAdapter', () => {
 
     it('sends GIT_CONFIRMED on confirm', async () => {
       await adapter.start();
-      const clack = await import('../../utils/clack.js');
-      vi.mocked(clack.default.confirm).mockResolvedValue(true);
+      const ui = await import('../../utils/ui.js');
+      vi.mocked(ui.default.confirm).mockResolvedValue(true);
 
       emitter.emit('git:dirty', { files: ['file1.ts'] });
 
@@ -180,23 +202,23 @@ describe('CLIAdapter', () => {
       expect(sendEvent).toHaveBeenCalledWith({ type: 'GIT_CONFIRMED' });
     });
 
-    it('sends GIT_CANCELLED on decline', async () => {
+    it('sends GIT_CANCELED on decline', async () => {
       await adapter.start();
-      const clack = await import('../../utils/clack.js');
-      vi.mocked(clack.default.confirm).mockResolvedValue(false);
+      const ui = await import('../../utils/ui.js');
+      vi.mocked(ui.default.confirm).mockResolvedValue(false);
 
       emitter.emit('git:dirty', { files: ['file1.ts'] });
 
       await new Promise((r) => setTimeout(r, 10));
 
-      expect(sendEvent).toHaveBeenCalledWith({ type: 'GIT_CANCELLED' });
+      expect(sendEvent).toHaveBeenCalledWith({ type: 'GIT_CANCELED' });
     });
 
     it('sends CREDENTIALS_SUBMITTED on credentials form', async () => {
       await adapter.start();
-      const clack = await import('../../utils/clack.js');
-      vi.mocked(clack.default.text).mockResolvedValueOnce('client_123'); // clientId
-      vi.mocked(clack.default.password).mockResolvedValueOnce('sk_test'); // apiKey (now uses password input)
+      const ui = await import('../../utils/ui.js');
+      vi.mocked(ui.default.text).mockResolvedValueOnce('client_123'); // clientId
+      vi.mocked(ui.default.password).mockResolvedValueOnce('sk_test'); // apiKey (now uses password input)
 
       emitter.emit('credentials:request', { requiresApiKey: true });
 
@@ -209,11 +231,11 @@ describe('CLIAdapter', () => {
       });
     });
 
-    it('sends CANCEL when credentials form is cancelled', async () => {
+    it('sends CANCEL when credentials form is canceled', async () => {
       await adapter.start();
-      const clack = await import('../../utils/clack.js');
-      vi.mocked(clack.default.isCancel).mockReturnValue(true);
-      vi.mocked(clack.default.text).mockResolvedValue(Symbol('cancel'));
+      const ui = await import('../../utils/ui.js');
+      vi.mocked(ui.default.isCancel).mockReturnValue(true);
+      vi.mocked(ui.default.text).mockResolvedValue(Symbol('cancel'));
 
       emitter.emit('credentials:request', { requiresApiKey: false });
 
@@ -222,15 +244,105 @@ describe('CLIAdapter', () => {
       expect(sendEvent).toHaveBeenCalledWith({ type: 'CANCEL' });
     });
 
-    it('shows success summary box on complete', async () => {
+    it('shows structured success summary box on complete', async () => {
       await adapter.start();
       const consoleSpy = vi.spyOn(console, 'log');
 
-      emitter.emit('complete', { success: true, summary: 'All done!' });
+      emitter.emit('complete', {
+        success: true,
+        summary: 'All done!',
+        completion: {
+          integration: 'nextjs',
+          devCommand: 'pnpm run dev',
+          url: 'http://localhost:3000',
+          files: ['app/auth/route.ts'],
+          nextSteps: [
+            'Run `pnpm run dev` to start your dev server',
+            'Open http://localhost:3000 to test authentication',
+          ],
+          docsUrl: 'https://workos.com/docs/user-management/authkit/nextjs',
+          dashboardUrl: 'https://dashboard.workos.com',
+        },
+      });
 
       const output = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
       expect(output).toContain('WorkOS AuthKit Installed');
+      expect(output).toContain('pnpm run dev');
+      expect(output).toContain('app/auth/route.ts');
       consoleSpy.mockRestore();
+    });
+
+    it('renders persistent step lines for file operations', async () => {
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('agent:start', {});
+      emitter.emit('file:write', { path: '/proj/src/auth.ts', content: 'secret' });
+      emitter.emit('file:edit', { path: '/proj/src/app.ts', oldContent: 'a', newContent: 'b' });
+
+      const stepCalls = vi.mocked(ui.default.log.step).mock.calls.map((c) => String(c[0]));
+      expect(stepCalls.some((s) => s.includes('src/auth.ts'))).toBe(true);
+      expect(stepCalls.some((s) => s.includes('src/app.ts'))).toBe(true);
+    });
+
+    it('dedupes consecutive same-path file operations', async () => {
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('agent:start', {});
+      emitter.emit('file:edit', { path: '/proj/src/app.ts', oldContent: 'a', newContent: 'b' });
+      emitter.emit('file:edit', { path: '/proj/src/app.ts', oldContent: 'b', newContent: 'c' });
+
+      const appCalls = vi.mocked(ui.default.log.step).mock.calls.filter((c) => String(c[0]).includes('src/app.ts'));
+      expect(appCalls).toHaveLength(1);
+    });
+
+    it('does not clobber the phase message back to a generic string', async () => {
+      vi.useFakeTimers();
+      try {
+        await adapter.start();
+        const ui = await import('../../utils/ui.js');
+        const spinnerMock = { start: vi.fn(), stop: vi.fn(), message: vi.fn(), clear: vi.fn() };
+        vi.mocked(ui.default.spinner).mockReturnValue(spinnerMock);
+
+        emitter.emit('agent:start', {});
+        emitter.emit('agent:progress', { step: 'Configuring middleware' });
+        vi.advanceTimersByTime(5000);
+
+        const clobbered = spinnerMock.message.mock.calls
+          .map((c) => String(c[0]))
+          .filter((m) => /Running AI agent/.test(m));
+        expect(clobbered).toHaveLength(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('leaves spinner ownership to the facade when logging a file op', async () => {
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+      const spinnerMock = { start: vi.fn(), stop: vi.fn(), message: vi.fn(), clear: vi.fn() };
+      vi.mocked(ui.default.spinner).mockReturnValue(spinnerMock);
+
+      emitter.emit('agent:start', {});
+      emitter.emit('agent:progress', { step: 'Configuring middleware' });
+      emitter.emit('file:write', { path: '/proj/src/auth.ts', content: 'x' });
+
+      expect(spinnerMock.stop).not.toHaveBeenCalled();
+      expect(spinnerMock.start).toHaveBeenCalledTimes(1);
+      expect(spinnerMock.message).toHaveBeenCalledWith('Configuring middleware');
+      expect(ui.default.log.step).toHaveBeenCalledWith(expect.stringContaining('src/auth.ts'));
+    });
+
+    it('renders Bash tool calls as step lines (agent:tool)', async () => {
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('agent:start', {});
+      emitter.emit('agent:tool', { kind: 'command', detail: 'pnpm add @workos-inc/authkit-nextjs' });
+
+      const stepCalls = vi.mocked(ui.default.log.step).mock.calls.map((c) => String(c[0]));
+      expect(stepCalls.some((s) => s.includes('pnpm add @workos-inc/authkit-nextjs'))).toBe(true);
     });
 
     it('shows error summary box on failure complete', async () => {
@@ -245,19 +357,17 @@ describe('CLIAdapter', () => {
       consoleSpy.mockRestore();
     });
 
-    it('keeps npx in auth recovery hints when launched through npm exec', async () => {
+    it('uses the standalone binary in auth recovery hints', async () => {
       const originalNpmCommand = process.env.npm_command;
       process.env.npm_command = 'exec';
 
       try {
         await adapter.start();
-        const clack = await import('../../utils/clack.js');
+        const ui = await import('../../utils/ui.js');
 
         emitter.emit('error', { message: 'authentication failed', stack: undefined });
 
-        expect(clack.default.log.info).toHaveBeenCalledWith(
-          'Try running: npx workos@latest auth logout && npx workos@latest install',
-        );
+        expect(ui.default.log.info).toHaveBeenCalledWith('Try running: workos auth logout && workos install');
       } finally {
         if (originalNpmCommand === undefined) {
           delete process.env.npm_command;
@@ -265,6 +375,283 @@ describe('CLIAdapter', () => {
           process.env.npm_command = originalNpmCommand;
         }
       }
+    });
+  });
+
+  describe('error rendering', () => {
+    async function renderError(message: string): Promise<string> {
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('error', { message, stack: undefined });
+
+      return [...vi.mocked(ui.default.log.error).mock.calls, ...vi.mocked(ui.default.log.info).mock.calls]
+        .map((c) => String(c[0]))
+        .join('\n');
+    }
+
+    // The gateway's generic 500 fires for deterministic request failures too, so
+    // this is the interactive copy the reporter hit: four more minutes, same 500.
+    it('does not advise waiting for the gateway generic 500', async () => {
+      const output = await renderError(
+        'API Error: 500 {"error":{"type":"internal_error","message":"An unexpected error occurred"}}',
+      );
+
+      expect(output).not.toMatch(/temporarily unavailable/i);
+      expect(output).not.toMatch(/few minutes|try again shortly|wait a minute/i);
+      expect(output).toMatch(/could not complete this request/i);
+    });
+
+    // installer-core re-emits runAgent's already-rendered message, so the
+    // adapter classifies our own copy on the real path — not the raw SDK text.
+    it('keeps the deterministic copy when handed an already-rendered message', async () => {
+      const output = await renderError(
+        'The AI service could not complete this request. The same request is likely to fail the same way, so waiting will not help. Re-run with --debug to see the underlying error.',
+      );
+
+      expect(output).not.toMatch(/temporarily unavailable/i);
+
+      // The headline must be re-derived, not echoed: a pass-through of the
+      // already-rendered string would put all three sentences in log.error.
+      const ui = await import('../../utils/ui.js');
+      expect(vi.mocked(ui.default.log.error).mock.calls[0]?.[0]).toBe(
+        'The AI service could not complete this request.',
+      );
+    });
+
+    it('still shows the transient copy for a real 503', async () => {
+      const output = await renderError('API Error: 503 Service Unavailable');
+
+      expect(output).toMatch(/temporarily unavailable/i);
+      expect(output).toMatch(/few minutes/i);
+    });
+
+    it('renders the raw message when nothing matches', async () => {
+      const output = await renderError('Something broke');
+
+      expect(output).toMatch(/Something broke/);
+      expect(output).toMatch(/--debug/);
+    });
+  });
+
+  describe('staging success copy', () => {
+    it('device path announces a fresh environment without "retrieved"', async () => {
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('staging:fetching', {});
+      emitter.emit('staging:success', { source: 'device' });
+
+      const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls).toContain('Set up a WorkOS environment for this install');
+      expect(calls.join('\n')).not.toMatch(/retrieved/i);
+    });
+
+    it('stored path announces reuse of the active environment', async () => {
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('staging:fetching', {});
+      emitter.emit('staging:success', { source: 'stored' });
+
+      const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls).toContain('Using your active WorkOS environment');
+      expect(calls.join('\n')).not.toMatch(/retrieved/i);
+    });
+
+    it('stored path names the environment when the profile supplied the credentials', async () => {
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'staging-3',
+        type: 'sandbox',
+        apiKey: 'sk_test_x',
+        clientId: 'client_x',
+        environmentName: 'Staging',
+        projectName: 'cli-branding-smoke',
+      });
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('staging:fetching', {});
+      emitter.emit('staging:success', { source: 'stored', credentials: { clientId: 'client_x', apiKey: 'sk_test_x' } });
+
+      const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls).toContain('Using environment: cli-branding-smoke > Staging (staging-3)');
+    });
+
+    it('stored path never names the profile for mixed project-key credentials', async () => {
+      // Defense in depth: if the credentials in use ever combine another
+      // source's client ID with a different API key (a project-kept key was
+      // the case that motivated this gate), the profile must not be named —
+      // the app's API calls target the key's environment, not the profile's.
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'staging-3',
+        type: 'sandbox',
+        apiKey: 'sk_test_x',
+        clientId: 'client_x',
+        environmentName: 'Staging',
+        projectName: 'cli-branding-smoke',
+      });
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('staging:fetching', {});
+      emitter.emit('staging:success', {
+        source: 'stored',
+        credentials: { clientId: 'client_x', apiKey: 'sk_test_project' },
+      });
+
+      const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls).toContain('Using your active WorkOS environment');
+      expect(calls.join('\n')).not.toContain('Using environment:');
+    });
+
+    it('stored path never names a profile that could not have supplied the credentials', async () => {
+      // No clientId: the credentials actor falls through to cached/fetched
+      // staging credentials, so naming this profile would label the wrong
+      // environment (see run-with-core.ts fetchStagingCredentials).
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'staging-3',
+        type: 'sandbox',
+        apiKey: 'sk_test_x',
+        environmentName: 'Staging',
+        projectName: 'cli-branding-smoke',
+      });
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('staging:fetching', {});
+      emitter.emit('staging:success', { source: 'stored' });
+
+      const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls).toContain('Using your active WorkOS environment');
+      expect(calls.join('\n')).not.toContain('Using environment:');
+    });
+
+    it('unclaimed copy also covers the cli-flags path, which is where provisioning lands', async () => {
+      // runWithCore backfills options.apiKey/clientId from the .env.local that
+      // provisioning just wrote, so a freshly provisioned environment
+      // short-circuits at checkingCliFlags and never reaches staging
+      // resolution. The copy has to exist on this path or it never fires.
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'unclaimed',
+        type: 'unclaimed',
+        apiKey: 'sk_test_x',
+        clientId: 'client_x',
+        claimToken: 'ct_x',
+        authkitDomain: 'witty-rest-53.authkit.app',
+      });
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('credentials:found', {
+        source: 'env',
+        credentials: { clientId: 'client_x', apiKey: 'sk_test_x' },
+      });
+
+      const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls).toContain('Using a new WorkOS environment created for this install (witty-rest-53.authkit.app)');
+      expect(calls.join('\n')).not.toContain('Found existing WorkOS credentials');
+    });
+
+    it('names .env.local for an env-file backfill into a claimed environment', async () => {
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'staging-3',
+        type: 'sandbox',
+        apiKey: 'sk_test_x',
+        clientId: 'client_x',
+      });
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('credentials:found', {
+        source: 'env',
+        credentials: { clientId: 'client_x', apiKey: 'sk_test_x' },
+      });
+
+      const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls).toContain('Found existing WorkOS credentials in .env.local');
+    });
+
+    it('never claims .env.local for credentials passed as flags', async () => {
+      mockGetActiveEnvironment.mockReturnValue(null);
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('credentials:found', {
+        source: 'cli',
+        credentials: { clientId: 'client_flag', apiKey: 'sk_test_flag' },
+      });
+
+      const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls.join('\n')).not.toContain('.env.local');
+    });
+
+    it('says the environment is new and names it by AuthKit domain when unclaimed', async () => {
+      // Provisioning returns no environmentId/environmentName, so the generic
+      // "Using your active WorkOS environment" made a just-created environment
+      // read as one the user already had — the friction that sent people to the
+      // dashboard to compare client IDs.
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'unclaimed',
+        type: 'unclaimed',
+        apiKey: 'sk_test_x',
+        clientId: 'client_x',
+        claimToken: 'ct_x',
+        authkitDomain: 'witty-rest-53.authkit.app',
+      });
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('staging:fetching', {});
+      emitter.emit('staging:success', { source: 'stored', credentials: { clientId: 'client_x', apiKey: 'sk_test_x' } });
+
+      const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls).toContain('Using a new WorkOS environment created for this install (witty-rest-53.authkit.app)');
+      expect(calls.join('\n')).not.toContain('Using your active WorkOS environment');
+    });
+
+    it('drops the domain suffix for an unclaimed env provisioned before authkitDomain was stored', async () => {
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'unclaimed',
+        type: 'unclaimed',
+        apiKey: 'sk_test_x',
+        clientId: 'client_x',
+        claimToken: 'ct_x',
+      });
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('staging:fetching', {});
+      emitter.emit('staging:success', { source: 'stored', credentials: { clientId: 'client_x', apiKey: 'sk_test_x' } });
+
+      const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls).toContain('Using a new WorkOS environment created for this install');
+    });
+
+    it('keeps the generic copy when an unclaimed profile did not supply the credentials', async () => {
+      // A leftover unclaimed profile can sit active while the install used the
+      // project's own keys — calling that environment "created for this install"
+      // would be a lie about which environment the app now targets.
+      mockGetActiveEnvironment.mockReturnValue({
+        name: 'unclaimed',
+        type: 'unclaimed',
+        apiKey: 'sk_test_x',
+        clientId: 'client_x',
+        claimToken: 'ct_x',
+        authkitDomain: 'witty-rest-53.authkit.app',
+      });
+      await adapter.start();
+      const ui = await import('../../utils/ui.js');
+
+      emitter.emit('staging:fetching', {});
+      emitter.emit('staging:success', {
+        source: 'stored',
+        credentials: { clientId: 'client_x', apiKey: 'sk_test_project' },
+      });
+
+      const calls = vi.mocked(ui.default.log.success).mock.calls.map((c) => String(c[0]));
+      expect(calls).toContain('Using your active WorkOS environment');
+      expect(calls.join('\n')).not.toContain('created for this install');
     });
   });
 });

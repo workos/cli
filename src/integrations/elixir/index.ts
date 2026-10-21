@@ -5,10 +5,11 @@ import { enableDebugLogs } from '../../utils/debug.js';
 import { SPINNER_MESSAGE } from '../../lib/framework-config.js';
 import { analytics } from '../../utils/analytics.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from '../../lib/constants.js';
-import { getOrAskForWorkOSCredentials } from '../../utils/clack-utils.js';
+import { getOrAskForWorkOSCredentials } from '../../utils/ui-utils.js';
 import { initializeAgent, runAgent } from '../../lib/agent-interface.js';
 import { writeEnvLocal } from '../../lib/env-writer.js';
-import { getReference } from '@workos/skills';
+import { getReference } from '../../lib/skills-assets.js';
+import { buildSignInSection } from '../../lib/sign-in-route.js';
 
 export const config: FrameworkConfig = {
   metadata: {
@@ -172,7 +173,7 @@ Note: For Elixir/Phoenix, these should be read via System.get_env() in config/ru
 
 ${refContent}
 
-Report your progress using [STATUS] prefixes.
+${buildSignInSection(config)}Report your progress using [STATUS] prefixes.
 
 Begin integration now.`;
 }

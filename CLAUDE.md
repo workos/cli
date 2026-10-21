@@ -4,7 +4,8 @@ WorkOS CLI for installing AuthKit integrations and managing WorkOS resources (or
 
 ## Architecture
 
-- Three adapters (CLI, Dashboard, Headless) subscribe to `InstallerEventEmitter` state machine events, selected by TTY detection
+- Three adapters subscribe to `InstallerEventEmitter` state machine events, chosen by `selectInstallerAdapter()`: Headless in JSON mode; the full-screen TUI (`src/tui/`, Ink) for a human at an interactive terminal of at least 80×24 unless `--no-tui`; CLI otherwise. The TUI adapter wraps the CLI adapter and redirects `ui` output/prompts via `setUiHost()`, so prompt logic lives in one place
+- Full-screen installer copy (tips, announcements, walkthrough, task labels) is data in `src/tui/content/installer-content.json`, validated by tests
 - `OutputMode` (`human`/`json`) resolved once at startup in `bin.ts`, drives all formatting
 - `installerCanUseTool()` in `agent-interface.ts` restricts Bash to safe commands only
 - Config/credentials stored in system keyring with file fallback
@@ -12,15 +13,47 @@ WorkOS CLI for installing AuthKit integrations and managing WorkOS resources (or
 ## Non-TTY Behavior
 
 - **Output**: Auto-switches to JSON when piped or `--json` flag. `WORKOS_FORCE_TTY=1` overrides.
-- **Auth**: Exits code 4 instead of opening browser. Requires prior `workos auth login` or `WORKOS_API_KEY` env var.
+- **Auth**: Exits code 4 instead of opening browser. Resource commands (organization, user, role, permission, membership, invitation, session, event, feature-flag, org-domain, portal, webhook, config) use the dashboard session from a prior `workos auth login`; expired access tokens refresh silently while the stored refresh token is valid, so only a truly dead session exits 4. `WORKOS_API_KEY` applies only to `workos api` and the still-REST commands (`connection`, `directory`, `audit-log`, `api-key`, `vault`, plus the workflow/debug commands `seed`, `setup-org`, `onboard-user`, `verify-login`, `debug-sso`, `debug-sync`, `migrations`).
 - **Errors**: Structured JSON to stderr: `{ "error": { "code": "...", "message": "..." } }`
-- **Exit codes**: 0=success, 1=error, 2=cancelled, 4=auth required (follows `gh` CLI convention)
-- **Headless flags**: `--no-branch`, `--no-commit`, `--create-pr`, `--no-git-check`
+- **Exit codes**: 0=success, 1=error, 2=canceled, 4=auth required (follows `gh` CLI convention)
+- **Headless flags**: `--no-branch`, `--no-git-check`. CI mode (`WORKOS_MODE=ci`) auto-continues past a dirty tree without `--no-git-check`; agent mode requires the flag.
+- **Installer Git policy**: Generated changes stay unstaged/uncommitted; pre-existing staging is preserved. No installer-controlled staging, commits, pushes, PR creation, or commit/PR text generation. `--commit`, `--no-commit`, and `--create-pr` are deprecated compatibility-only no-ops, with human-only notices. Branch prompts/`--no-branch` remain unchanged; branches do not isolate uncommitted work. Change reporting is scoped to `installDir` and may include pre-existing changes.
+
+## JSON Output Conventions
+
+`--json` output is a public API: users script against it with jq and in CI. The
+backend's vocabulary is an implementation detail and must never leak through
+untranslated, or the next backend migration becomes another user-visible break.
+Route every enum and metadata field through `src/utils/output-conventions.ts`
+rather than hand-normalizing per command.
+
+- **Keys are camelCase.**
+- **Enum values are lowercase.** Backends emit assorted casings (`Verified`,
+  `PENDING`, `Active`); the CLI emits one convention. Use `enumOut()`.
+- **Enum input is case-insensitive.** Whatever the CLI prints for a field it
+  accepts for that field ("forgiving in, canonical out"). Use `enumIn()`.
+- **`state` is the lifecycle-state key** on every resource, not `status`.
+- **`metadata` is an object map**, not GraphQL's array of pairs, so
+  `.metadata.foo` resolves in jq. Use `metadataToMap()`.
+- **Internal/backend-only fields are dropped** from curated shapes.
+
+When a spec mocks a backend response, feed it the backend's real casing
+(`'Verified'`) and assert the lowercase output. A mock that feeds already-correct
+values never exercises the normalization, which is exactly how a casing bug
+shipped once already.
+
+`scripts/parity-smoke.ts` compares this branch against `../main` and fails on any
+unexpected field divergence. Its `ACCEPTED` map lists deliberate curations only;
+a casing-only difference appearing there is a bug, not an accepted divergence.
+
+## Spelling
+
+Use American English in code, comments, docs and UI copy (`canceled`, `behavior`, `organization`). The `cancelled` values that already ship are public contracts: the JSON error code, `termination.reason`, `installer.outcome`, `setup.outcome` and the `workos debug reset --json` key. Leave them as they are unless you also plan the migration.
 
 ## Tech Constraints
 
-- **pnpm** only
-- Avoid Node-specific sync APIs (crypto, fs sync) unless necessary
+- **Bun** only; the shipped CLI is a Bun-compiled standalone binary
+- Runtime assets must be statically imported or materialized from the compiled binary. Two exceptions: (1) the Agent SDK `claude` executable is downloaded on first agent use — pinned by version + sha256 in the generated manifest — and cached under `~/.workos/cache/agent-sdk/`; (2) runtime dep bundles (`@workos/migrations`, `@workos/emulate`) are resolved from the npm registry against semver ranges baked in the generated manifest (only versions strictly newer than the compiled-in one, also baked, are ever run; the cache is shared across CLI installs), integrity-verified, cached under `~/.workos/cache/<dep>/`, and always fall back to the compiled-in module (`WORKOS_RUNTIME_DEPS=0` kill switch) — see `src/lib/runtime-assets.ts`
 
 ## Commit Conventions
 
@@ -29,18 +62,17 @@ WorkOS CLI for installing AuthKit integrations and managing WorkOS resources (or
 ## Commands
 
 ```bash
-pnpm build        # Build the project
-pnpm dev          # Dev mode (build + watch + link)
-pnpm test         # Run tests
-pnpm typecheck    # Type check
+bun run build        # Build the standalone binary
+bun run dev          # Run source in watch mode
+bun run test         # Run tests
+bun run typecheck    # Type check
 ```
 
 ## Adding a New Framework
 
-1. Create `src/{framework}/{framework}-installer-agent.ts`
-2. Add to `Integration` enum in `lib/constants.ts`
-3. Add detection logic in `lib/config.ts`
-4. Wire up in `run.ts` switch statement
+1. Create `src/integrations/{framework}/index.ts` exporting `config` and `run`
+2. Run `bun run generate` to refresh `src/integrations/_manifest.ts`
+3. Add or update detection and validation tests for the integration
 
 ## Adding a New Resource Command
 
@@ -77,7 +109,7 @@ All commands automatically emit a `command` telemetry event with name, duration,
 
 **Exiting with errors:** Use `exitWithError()` or `exitWithCode()` from handlers — they throw `CliExit` which the lifecycle catches, classifies, and records.
 
-**Skip list**: Commands in `SKIP_TELEMETRY_COMMANDS` (`command-telemetry.ts`) are excluded from command-level telemetry because they have their own session-based telemetry. Currently: `install`, `dashboard`, `root` (the default `$0` handler).
+**Skip list**: Commands in `SKIP_TELEMETRY_COMMANDS` (`command-telemetry.ts`) are excluded from command-level telemetry because they have their own session-based telemetry. Currently: `install`, `root` (the default `$0` handler).
 
 **Aliases**: if you register a command with multiple names (e.g., `['organization', 'org']`), add the alias to `src/lib/command-aliases.ts` so metrics don't fragment.
 
@@ -85,7 +117,7 @@ All commands automatically emit a `command` telemetry event with name, duration,
 
 **Do:**
 
-- Follow the adapter pattern (`CLI`, `Dashboard`, `Headless`) in `src/integrations/` when adding framework installers
+- Follow the adapter pattern (`CLI`, `TUI`, `Headless`) in `src/integrations/` when adding framework installers
 - Use `InstallerEventEmitter` for state machine events -- see existing adapters for examples
 - Add both human and JSON output modes -- check `OutputMode` usage in `src/bin.ts`
 - Follow existing command patterns in `src/commands/organization.ts` when adding resource commands
@@ -94,14 +126,14 @@ All commands automatically emit a `command` telemetry event with name, duration,
 **Don't:**
 
 - Use Node-specific sync APIs (crypto, fs sync) unless necessary
-- Use npm or yarn -- pnpm only
+- Add runtime filesystem discovery or import.meta.url-relative package asset reads
 - Skip JSON mode tests in spec files
 - Forget to wire up new frameworks in `src/run.ts` switch statement
 
 ## PR Checklist
 
-- [ ] `pnpm build` passes
-- [ ] `pnpm test` passes
-- [ ] `pnpm typecheck` passes
+- [ ] `bun run build` passes
+- [ ] `bun run test` passes
+- [ ] `bun run typecheck` passes
 - [ ] Conventional Commit message format used (`feat:`, `fix:`, `feat!:` for breaking)
 - [ ] New commands include JSON mode support and tests

@@ -1,4 +1,4 @@
-import type { InstallerEventEmitter } from './events.js';
+import type { InstallerEventEmitter, CompletionData } from './events.js';
 import type { InstallerOptions } from '../utils/types.js';
 import type { Integration } from './constants.js';
 import type { PackageManager } from './scaffold/scaffold.js';
@@ -50,16 +50,12 @@ export interface InstallerMachineContext {
   currentBranch?: string;
   /** Whether current branch is protected */
   isProtectedBranch?: boolean;
-  /** Files changed during agent execution (for post-install) */
+  /** Current changed files, including any pre-existing changes (git-relative). */
   changedFiles?: string[];
-  /** AI-generated commit message */
-  commitMessage?: string;
-  /** AI-generated PR description */
-  prDescription?: string;
-  /** URL of created PR */
-  prUrl?: string;
+  changeDetection?: import('./post-install.js').ChangeDetection;
   /** Summary message from agent execution */
   agentSummary?: string;
+  applicationSetup?: import('./authkit-application-setup.js').AuthkitApplicationSetup;
   /** Whether the install directory is empty and can be scaffolded into */
   scaffoldable?: boolean;
   /** Package manager resolved for the scaffolded app */
@@ -68,6 +64,8 @@ export interface InstallerMachineContext {
   autoScaffold?: boolean;
   /** Whether create-next-app actually ran and succeeded (for telemetry) */
   scaffolded?: boolean;
+  /** Structured completion data for the success summary (built pre-complete) */
+  completion?: CompletionData;
 }
 
 /**
@@ -86,10 +84,10 @@ export type InstallerMachineEvent =
   | { type: 'START' }
   | { type: 'SKIP_AUTH' }
   | { type: 'GIT_CONFIRMED' }
-  | { type: 'GIT_CANCELLED' }
+  | { type: 'GIT_CANCELED' }
   // Scaffold events
   | { type: 'SCAFFOLD_CONFIRMED' }
-  | { type: 'SCAFFOLD_CANCELLED' }
+  | { type: 'SCAFFOLD_CANCELED' }
   | { type: 'CREDENTIALS_SUBMITTED'; apiKey: string; clientId: string }
   | { type: 'CANCEL' }
   // Credential discovery events
@@ -99,12 +97,7 @@ export type InstallerMachineEvent =
   // Branch check events
   | { type: 'BRANCH_CREATE' }
   | { type: 'BRANCH_CONTINUE' }
-  | { type: 'BRANCH_CANCEL' }
-  // Post-install events
-  | { type: 'COMMIT_APPROVED' }
-  | { type: 'COMMIT_DECLINED' }
-  | { type: 'PR_APPROVED' }
-  | { type: 'PR_DECLINED' };
+  | { type: 'BRANCH_CANCEL' };
 
 /**
  * Output from the detection actor.
@@ -127,6 +120,7 @@ export interface GitCheckOutput {
 export interface AgentOutput {
   success: boolean;
   summary?: string;
+  applicationSetup?: import('./authkit-application-setup.js').AuthkitApplicationSetup;
   error?: Error;
 }
 

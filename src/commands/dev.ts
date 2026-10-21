@@ -1,5 +1,8 @@
-import { createEmulator, type EmulatorSeedConfig } from '../emulate/index.js';
+// Type-only: the compiled-in package stays the compile-time contract even when
+// a runtime-downloaded bundle provides the implementation (emulate-loader.ts).
+import type { EmulatorSeedConfig } from '@workos/emulate';
 import { resolveDevCommand } from '../lib/dev-command.js';
+import { resolveCreateEmulator } from '../lib/emulate-loader.js';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -8,6 +11,7 @@ import chalk from 'chalk';
 import { IS_WINDOWS, SPAWN_OPTS } from '../utils/platform.js';
 import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
 import { exitWithError } from '../utils/output.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 export interface DevArgs {
   port: number;
@@ -41,18 +45,9 @@ function autoDetectSeedFile(): EmulatorSeedConfig | null {
 }
 
 /**
- * Build the env vars object to inject into the child process.
- *
- * Sets both the base URL style (`WORKOS_API_BASE_URL`) and the decomposed
- * style (`WORKOS_API_HOSTNAME` + `WORKOS_API_PORT` + `WORKOS_API_HTTPS`)
- * so the emulator works with authkit SDKs (which read the decomposed vars)
- * and direct SDK consumers (which may use the base URL).
- */
-/**
  * Default seed data for `workos dev` so the AuthKit login flow works
- * out of the box. Provides a test user, an organization with a verified
- * domain, and a membership linking the two. Skipped when the user
- * provides `--seed` or a `workos-emulate.config.*` file is auto-detected.
+ * out of the box. Skipped when the user provides `--seed` or a
+ * `workos-emulate.config.*` file is auto-detected.
  */
 export const DEFAULT_DEV_SEED: EmulatorSeedConfig = {
   users: [
@@ -72,6 +67,14 @@ export const DEFAULT_DEV_SEED: EmulatorSeedConfig = {
   ],
 };
 
+/**
+ * Build the env vars object to inject into the child process.
+ *
+ * Sets both the base URL style (`WORKOS_API_BASE_URL`) and the decomposed
+ * style (`WORKOS_API_HOSTNAME` + `WORKOS_API_PORT` + `WORKOS_API_HTTPS`)
+ * so the emulator works with authkit SDKs (which read the decomposed vars)
+ * and direct SDK consumers (which may use the base URL).
+ */
 export function buildDevEnv(emulatorUrl: string, apiKey = 'sk_test_default'): Record<string, string> {
   const url = new URL(emulatorUrl);
   return {
@@ -89,6 +92,7 @@ export async function runDev(argv: DevArgs): Promise<void> {
   const seedConfig = userSeed ?? DEFAULT_DEV_SEED;
 
   // 1. Start emulator
+  const createEmulator = await resolveCreateEmulator();
   const emulator = await createEmulator({
     port: argv.port,
     seed: seedConfig,
@@ -128,7 +132,7 @@ export async function runDev(argv: DevArgs): Promise<void> {
     });
   } catch {
     console.error(chalk.red(`Failed to start: ${devCmd.command} ${devCmd.args.join(' ')}`));
-    console.error(chalk.dim('Try specifying the command explicitly: workos dev -- <your-command>'));
+    console.error(chalk.dim(`Try specifying the command explicitly: ${formatWorkOSCommand('dev -- <your-command>')}`));
     await emulator.close();
     exitWithCode(ExitCode.GENERAL_ERROR);
   }
@@ -137,7 +141,9 @@ export async function runDev(argv: DevArgs): Promise<void> {
     console.error(chalk.red(`Failed to start: ${devCmd.command}`));
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
       console.error(chalk.dim(`Command not found: ${devCmd.command}`));
-      console.error(chalk.dim('Try specifying the command explicitly: workos dev -- <your-command>'));
+      console.error(
+        chalk.dim(`Try specifying the command explicitly: ${formatWorkOSCommand('dev -- <your-command>')}`),
+      );
     } else {
       console.error(chalk.dim(err.message));
     }

@@ -24,6 +24,48 @@ export interface CliPreferences {
     /** ISO timestamp the first-run notice was shown — written in Phase 2 only. */
     noticeShownAt?: string;
   };
+  /**
+   * Legacy MCP-install onboarding state. The MCP offer folded into `setup` (see
+   * commands/setup.ts); these fields are retained for back-compat so a user who
+   * declined the old standalone MCP offer is still treated as setup-declined
+   * (see isSetupDeclined). Kept in this plain-JSON store alongside telemetry.
+   */
+  mcp?: {
+    /**
+     * true => the user explicitly declined an automatic MCP install offer. The
+     * decline is absolute: no automatic surface (prompt or banner) asks again;
+     * `workos mcp install` stays available manually.
+     */
+    promptDeclined?: boolean;
+    /** ISO timestamp the one-time MCP banner was shown. */
+    bannerShownAt?: string;
+  };
+  /**
+   * Consolidated agent-setup onboarding state (skills + MCP). Owned by
+   * commands/setup.ts. `declined` is absolute for the automatic surfaces
+   * (post-login / post-install); `workos setup` stays available manually.
+   * Legacy `mcp.promptDeclined` is treated as an implicit setup-decline on read
+   * (see isSetupDeclined) so users who already declined MCP are never re-asked.
+   */
+  setup?: {
+    declined?: boolean;
+    /** ISO timestamp the user completed a setup run. */
+    completedAt?: string;
+    /**
+     * Bundled skills version the automatic stale-skills update prompt was last
+     * answered for. Suppresses re-asking until a newer CLI ships newer skills.
+     */
+    skillsUpdateOfferedVersion?: string;
+    /**
+     * Bundled skills version whose offer was accepted but left at least one
+     * agent stale. Such a version gets exactly one more offer — the refresh
+     * demonstrably works for some agents, so the miss is worth one retry —
+     * after which it lands in `skillsUpdateOfferedVersion` and goes quiet for
+     * good. Bounding it is the point: a permanently unwritable skills dir must
+     * not re-ask after every single command.
+     */
+    skillsUpdateRetryVersion?: string;
+  };
 }
 
 /** Effective source of the resolved telemetry-enabled decision. */
@@ -113,11 +155,15 @@ export function savePreferences(next: CliPreferences): void {
     // No existing file (or unreadable) — start from empty.
   }
 
-  const merged: CliPreferences = {
-    ...current,
-    ...next,
-    ...(current.telemetry || next.telemetry ? { telemetry: { ...current.telemetry, ...next.telemetry } } : {}),
-  };
+  // Shallow-merge each known nested group (one level) so writing one field
+  // (e.g. setup.completedAt) never clobbers a sibling written at a different
+  // time (e.g. setup.declined). A new nested group is one entry in this list.
+  const merged: CliPreferences = { ...current, ...next };
+  for (const key of ['telemetry', 'mcp', 'setup'] as const) {
+    if (current[key] || next[key]) {
+      Object.assign(merged, { [key]: { ...current[key], ...next[key] } });
+    }
+  }
 
   fs.mkdirSync(path.dirname(filePath), { recursive: true, mode: 0o700 });
   fs.writeFileSync(filePath, JSON.stringify(merged), { encoding: 'utf8', mode: 0o600 });
@@ -150,6 +196,60 @@ export function markNoticeShown(): void {
 }
 
 /**
+ * Whether an automatic setup offer should be suppressed. Absolute once the user
+ * declines. Treats the legacy `mcp.promptDeclined` flag as an implicit decline
+ * so anyone who declined the old MCP offer is never re-prompted by the new flow.
+ */
+export function isSetupDeclined(): boolean {
+  const prefs = getPreferences();
+  return prefs.setup?.declined === true || prefs.mcp?.promptDeclined === true;
+}
+
+/** Whether the user has completed a setup run (ever). */
+export function isSetupCompleted(): boolean {
+  return !!getPreferences().setup?.completedAt;
+}
+
+/** Persist an explicit setup decline. Throws on write failure (see savePreferences). */
+export function recordSetupDeclined(): void {
+  savePreferences({ setup: { declined: true } });
+}
+
+/** Persist a completed setup run, stamping the current time. */
+export function recordSetupCompleted(): void {
+  savePreferences({ setup: { completedAt: new Date().toISOString() } });
+}
+
+/** Bundled skills version the stale-skills update prompt was last answered for. */
+export function getSkillsUpdateOfferedVersion(): string | undefined {
+  return getPreferences().setup?.skillsUpdateOfferedVersion;
+}
+
+/** Persist that the stale-skills update prompt was answered for `version`. */
+export function recordSkillsUpdateOffered(version: string): void {
+  savePreferences({ setup: { skillsUpdateOfferedVersion: version } });
+}
+
+/** True when `version` has already burned its one post-failure retry offer. */
+export function hasSkillsUpdateRetried(version: string): boolean {
+  return getPreferences().setup?.skillsUpdateRetryVersion === version;
+}
+
+/**
+ * Persist that `version` is owed one more offer after an incomplete refresh.
+ * Clearing the answered-version is what re-opens the offer for the agents that
+ * are still stale; the retry marker is what bounds it to exactly one more.
+ */
+export function recordSkillsUpdateRetry(version: string): void {
+  savePreferences({ setup: { skillsUpdateOfferedVersion: undefined, skillsUpdateRetryVersion: version } });
+}
+
+/** Clear the setup decline (new + legacy) so automatic offers resume. For `workos setup --reset`. */
+export function clearSetupDecline(): void {
+  savePreferences({ setup: { declined: false }, mcp: { promptDeclined: false } });
+}
+
+/**
  * Tri-state env override for telemetry.
  *
  * Only the explicit strings 'true' / 'false' count as an override. Any other
@@ -157,7 +257,7 @@ export function markNoticeShown(): void {
  * through to the saved preference.
  *
  * This is a deliberate, documented change from the old `WORKOS_TELEMETRY !==
- * 'false'` behaviour: previously `WORKOS_TELEMETRY=1` forced telemetry on even
+ * 'false'` behavior: previously `WORKOS_TELEMETRY=1` forced telemetry on even
  * for opted-out users; now an opt-out is respected unless the env var
  * explicitly says 'true'.
  */

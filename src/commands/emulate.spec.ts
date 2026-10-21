@@ -1,147 +1,117 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import { createEmulator, type Emulator } from '../emulate/index.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
-describe('createEmulator', () => {
-  let emulator: Emulator | undefined;
+const mocks = vi.hoisted(() => ({
+  createEmulator: vi.fn(),
+  close: vi.fn(),
+}));
 
-  afterEach(async () => {
-    if (emulator) {
-      await emulator.close();
-      emulator = undefined;
+vi.mock('@workos/emulate', () => ({
+  createEmulator: mocks.createEmulator,
+}));
+
+const { runEmulate } = await import('./emulate.js');
+
+const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGBREAK'] as const;
+
+describe('runEmulate', () => {
+  let originalListeners: Record<(typeof SIGNALS)[number], ReturnType<typeof process.listeners>>;
+  let cwd: string;
+  let tempDir: string;
+
+  beforeEach(() => {
+    originalListeners = {
+      SIGINT: process.listeners('SIGINT'),
+      SIGTERM: process.listeners('SIGTERM'),
+      SIGBREAK: process.listeners('SIGBREAK'),
+    };
+    cwd = process.cwd();
+    tempDir = mkdtempSync(join(tmpdir(), 'workos-emulate-'));
+    process.chdir(tempDir);
+
+    mocks.close.mockResolvedValue(undefined);
+    mocks.createEmulator.mockResolvedValue({
+      url: 'http://localhost:4100',
+      port: 4100,
+      apiKey: 'sk_test_default',
+      close: mocks.close,
+    });
+
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    process.chdir(cwd);
+    rmSync(tempDir, { recursive: true, force: true });
+    vi.restoreAllMocks();
+    mocks.createEmulator.mockReset();
+    mocks.close.mockReset();
+
+    for (const signal of SIGNALS) {
+      process.removeAllListeners(signal);
+      for (const listener of originalListeners[signal]) {
+        process.on(signal, listener);
+      }
     }
   });
 
-  it('starts on random port and serves health check', async () => {
-    emulator = await createEmulator({ port: 0 });
-    expect(emulator.port).toBeGreaterThan(0);
-    expect(emulator.url).toContain(`localhost:${emulator.port}`);
+  it('starts the external emulator package on the requested port', async () => {
+    await runEmulate({ port: 0, interactive: false });
 
-    const res = await fetch(`${emulator.url}/health`);
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.status).toBe('ok');
-  });
-
-  it('accepts API key and returns user list', async () => {
-    emulator = await createEmulator({ port: 0 });
-
-    const res = await fetch(`${emulator.url}/user_management/users`, {
-      headers: { Authorization: 'Bearer sk_test_default' },
-    });
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as any;
-    expect(body.object).toBe('list');
-    expect(body.data).toEqual([]);
-  });
-
-  it('rejects missing API key', async () => {
-    emulator = await createEmulator({ port: 0 });
-
-    const res = await fetch(`${emulator.url}/user_management/users`);
-    expect(res.status).toBe(401);
-  });
-
-  it('seeds users from config', async () => {
-    emulator = await createEmulator({
+    expect(mocks.createEmulator).toHaveBeenCalledWith({
       port: 0,
-      seed: {
-        users: [{ email: 'seeded@test.com', first_name: 'Seeded' }],
-      },
+      seed: undefined,
+      interactiveAuth: false,
     });
-
-    const res = await fetch(`${emulator.url}/user_management/users`, {
-      headers: { Authorization: 'Bearer sk_test_default' },
-    });
-    const body = (await res.json()) as any;
-    expect(body.data).toHaveLength(1);
-    expect(body.data[0].email).toBe('seeded@test.com');
   });
 
-  it('reset() clears and re-seeds data', async () => {
-    emulator = await createEmulator({
-      port: 0,
-      seed: {
-        users: [{ email: 'reset@test.com' }],
-      },
-    });
+  it('prints startup details as JSON when requested', async () => {
+    await runEmulate({ port: 4100, json: true });
 
-    // Create an extra user
-    await fetch(`${emulator.url}/user_management/users`, {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer sk_test_default',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email: 'extra@test.com' }),
-    });
-
-    const before = (await (
-      await fetch(`${emulator.url}/user_management/users`, {
-        headers: { Authorization: 'Bearer sk_test_default' },
-      })
-    ).json()) as any;
-    expect(before.data).toHaveLength(2);
-
-    emulator.reset();
-
-    const after = (await (
-      await fetch(`${emulator.url}/user_management/users`, {
-        headers: { Authorization: 'Bearer sk_test_default' },
-      })
-    ).json()) as any;
-    expect(after.data).toHaveLength(1);
-    expect(after.data[0].email).toBe('reset@test.com');
+    expect(console.log).toHaveBeenCalledWith(
+      JSON.stringify({
+        url: 'http://localhost:4100',
+        port: 4100,
+        apiKey: 'sk_test_default',
+        health: 'http://localhost:4100/health',
+      }),
+    );
   });
 
-  it('supports custom API keys', async () => {
-    emulator = await createEmulator({
-      port: 0,
-      seed: {
-        apiKeys: { sk_test_custom: { environment: 'staging' } },
-      },
-    });
+  it('passes the interactive flag through to the emulator package', async () => {
+    await runEmulate({ port: 4100, interactive: true });
 
-    // Default key should not work
-    const res1 = await fetch(`${emulator.url}/user_management/users`, {
-      headers: { Authorization: 'Bearer sk_test_default' },
+    expect(mocks.createEmulator).toHaveBeenCalledWith({
+      port: 4100,
+      seed: undefined,
+      interactiveAuth: true,
     });
-    expect(res1.status).toBe(401);
-
-    // Custom key should work
-    const res2 = await fetch(`${emulator.url}/user_management/users`, {
-      headers: { Authorization: 'Bearer sk_test_custom' },
-    });
-    expect(res2.status).toBe(200);
   });
 
-  it('exposes the primary API key on the emulator object', async () => {
-    emulator = await createEmulator({ port: 0 });
-    expect(emulator.apiKey).toBe('sk_test_default');
+  it('loads an explicit JSON seed file', async () => {
+    const seedPath = join(tempDir, 'seed.json');
+    writeFileSync(seedPath, JSON.stringify({ users: [{ email: 'test@example.com' }] }));
+
+    await runEmulate({ port: 4100, seed: seedPath });
+
+    expect(mocks.createEmulator).toHaveBeenCalledWith({
+      port: 4100,
+      seed: { users: [{ email: 'test@example.com' }] },
+      interactiveAuth: undefined,
+    });
   });
 
-  it('exposes custom API key when seed.apiKeys is provided', async () => {
-    emulator = await createEmulator({
-      port: 0,
-      seed: { apiKeys: { sk_test_custom: { environment: 'staging' } } },
-    });
-    expect(emulator.apiKey).toBe('sk_test_custom');
-  });
+  it('auto-detects workos-emulate config files', async () => {
+    writeFileSync('workos-emulate.config.yaml', 'users:\n  - email: yaml@example.com\n');
 
-  it('issues JWT tokens with correct issuer when using port 0', async () => {
-    emulator = await createEmulator({
-      port: 0,
-      seed: { users: [{ email: 'jwt@test.com', password: 'pass' }] },
-    });
+    await runEmulate({ port: 4100 });
 
-    const res = await fetch(`${emulator.url}/user_management/authenticate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ grant_type: 'password', email: 'jwt@test.com', password: 'pass' }),
+    expect(mocks.createEmulator).toHaveBeenCalledWith({
+      port: 4100,
+      seed: { users: [{ email: 'yaml@example.com' }] },
+      interactiveAuth: undefined,
     });
-    expect(res.status).toBe(200);
-
-    const body = (await res.json()) as any;
-    const payload = JSON.parse(Buffer.from(body.access_token.split('.')[1], 'base64url').toString('utf-8'));
-    expect(payload.iss).toBe(emulator.url);
   });
 });

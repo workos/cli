@@ -1,0 +1,282 @@
+/**
+ * Environment targeting for dashboard-plane (account-plane) commands.
+ *
+ * Under the REST plane the API key *is* the environment. Under the dashboard
+ * plane the server resolves the caller's team and — when no environment header
+ * is sent, or the sent ID isn't recognized as the team's — silently falls back
+ * to the team's production environment (see `dashboard-graphql.ts`). That
+ * fallback is exactly the hazard this module exists to kill:
+ *
+ * **Invariant: environment-scoped dashboard requests always carry an
+ * environment ID resolved through `resolveEnvironmentTarget()`, and a
+ * stored-but-unrecognized ID produces a structured error — never a request the
+ * server would misroute to production.**
+ *
+ * Resolution precedence mirrors the API-key chain (`api-key.ts`):
+ * `--environment-id` flag → active profile's stored `environmentId` → clientId
+ * join against the team's environments → one-time picker (human mode) →
+ * structured `environment_unresolved` error.
+ *
+ * Every effective ID is validated against a fresh fetch of the team's
+ * environments before the operation runs. The server silently falls back to
+ * production for an unknown header, so trusting a stale ID is unsafe even for
+ * reads: it can return real production data instead of an error. Whenever the
+ * team's environments are fetched, stored profiles are opportunistically
+ * healed via their clientId joins.
+ */
+
+import ui from '../utils/ui.js';
+import { getConfig, getActiveEnvironment, setProfileEnvironmentId, type CliConfig } from './config-store.js';
+import { dashboardGraphqlRequest, DashboardGraphqlError } from './dashboard-graphql.js';
+import { getOperation, resolveExecutableDocument } from '../catalog/operation.js';
+import { refreshIfExpired, DASHBOARD_ERROR_MESSAGES } from './command-auth.js';
+import { exitWithError } from '../utils/output.js';
+import { isPromptAllowed } from '../utils/interaction-mode.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
+import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
+
+export interface EnvironmentTargetOptions {
+  /** `--environment-id` flag value (or an explicit positional target). */
+  flagValue?: string;
+  /** Retained so call sites can describe their operation kind; all targets validate. */
+  forMutation: boolean;
+}
+
+export interface EnvironmentTarget {
+  environmentId: string;
+  source: 'flag' | 'profile' | 'picker';
+}
+
+export interface TeamEnvironment {
+  id: string;
+  name: string | null;
+  sandbox?: boolean | null;
+  clientId?: string | null;
+  /** Owning project's name. Environment names are only unique per project. */
+  projectName?: string | null;
+}
+
+interface TeamProjectsData {
+  currentTeam: {
+    projectsV2: Array<{ name: string | null; environments: TeamEnvironment[] | null }> | null;
+  } | null;
+}
+
+/**
+ * "Project > Environment" when the project is known. Teams can hold multiple
+ * projects and environment names are only unique per project, so a bare
+ * "Staging" is ambiguous the moment two projects both have one.
+ */
+export function formatEnvironmentLabel(env: Pick<TeamEnvironment, 'id' | 'name' | 'projectName'>): string {
+  const name = env.name ?? env.id;
+  return env.projectName ? `${env.projectName} > ${name}` : name;
+}
+
+/** The two remedies every unresolved/stale message must name. */
+function remedies(): string {
+  return `Pass --environment-id, or run \`${formatWorkOSCommand('profile switch')}\` to select an environment.`;
+}
+
+/**
+ * Fetch the team's environments (projects → environments) with the caller's
+ * bearer. Throws the underlying transport/server error — callers decide
+ * whether that is fatal (`resolveEnvironmentTarget`) or best-effort
+ * (`tryResolveProfileEnvironmentId`).
+ */
+export async function fetchTeamEnvironments(token: string, signal?: AbortSignal): Promise<TeamEnvironment[]> {
+  const op = getOperation('teamProjectsV2');
+  const data = await dashboardGraphqlRequest<TeamProjectsData>(resolveExecutableDocument(op), { token, signal });
+  const projects = data.currentTeam?.projectsV2 ?? [];
+  return projects.flatMap((project) =>
+    (project.environments ?? []).map((env) => ({ ...env, projectName: project.name })),
+  );
+}
+
+/**
+ * Opportunistic healing: whenever the team's environments are fetched anyway,
+ * re-join every clientId-bearing profile and persist the environment ID and
+ * name if they changed (e.g. the environment was recreated or renamed).
+ * Profiles without a clientId are never touched. Note: a picker choice
+ * persisted onto a clientId-bearing profile (the foreign-profile fall-through,
+ * where the join missed) could be overridden here if that clientId later
+ * appears in the team's list — the join is then the fresher truth for this
+ * team, so that override is desired.
+ *
+ * Writes only happen on change (`setProfileEnvironmentId` no-ops otherwise),
+ * so a steady-state heal never churns the keyring. Takes the already-read
+ * config: every caller has one in hand, and the store read is keyring IPC.
+ */
+export function healProfiles(config: CliConfig | null, environments: TeamEnvironment[]): void {
+  if (!config) return;
+  for (const [key, profile] of Object.entries(config.environments)) {
+    if (!profile.clientId) continue;
+    const match = environments.find((env) => env.clientId === profile.clientId);
+    if (match) setProfileEnvironmentId(key, match.id, match.name, match.projectName);
+  }
+}
+
+function exitStale(environmentId: string): never {
+  exitWithError({
+    code: 'environment_stale',
+    message:
+      `Environment "${environmentId}" was not found in your WorkOS team — it may have been deleted or recreated. ` +
+      remedies(),
+  });
+}
+
+export async function promptForEnvironment(environments: TeamEnvironment[]): Promise<string | null> {
+  const choice = await ui.select({
+    message: 'Select the WorkOS environment to target',
+    options: environments.map((env) => ({
+      value: env.id,
+      label: `${formatEnvironmentLabel(env)}${env.sandbox ? ' [Sandbox]' : ''}`,
+      hint: env.id,
+    })),
+  });
+  if (ui.isCancel(choice)) return null;
+  return String(choice);
+}
+
+/**
+ * Single choke point answering: which environment does this invocation target,
+ * and is that answer safe to act on?
+ *
+ * Never resolves to "no environment": when nothing can be determined it exits
+ * with a structured `environment_unresolved` error (proceeding without the
+ * header is forbidden — it would hit the server's silent production fallback).
+ */
+export async function resolveEnvironmentTarget(
+  token: string,
+  options: EnvironmentTargetOptions,
+): Promise<EnvironmentTarget> {
+  const flagValue = options.flagValue?.trim() || undefined;
+
+  // Every path needs the team's environment list. The dashboard server treats
+  // an unknown environment header as "use production", so a stale read target
+  // is just as unsafe as a stale mutation target.
+  let environments: TeamEnvironment[];
+  try {
+    environments = await fetchTeamEnvironments(token);
+  } catch (error) {
+    // A 403 is not transient — the team lacks the capability or the account
+    // isn't team-backed. Surface the forbidden copy instead of a retry hint.
+    if (error instanceof DashboardGraphqlError && error.code === 'forbidden') {
+      exitWithError({ code: 'forbidden', message: DASHBOARD_ERROR_MESSAGES.forbidden });
+    }
+    exitWithError({
+      code: 'environment_unresolved',
+      message: `Could not resolve the target WorkOS environment (network or server error). Try again. ${remedies()}`,
+    });
+  }
+
+  if (environments.length === 0) {
+    exitWithError({
+      code: 'environment_unresolved',
+      message:
+        'No WorkOS environments are visible to this account. Check your team access in the WorkOS dashboard. ' +
+        remedies(),
+    });
+  }
+
+  // One store read serves healing and the picker-persist branch below; only
+  // the post-heal active-profile re-read needs fresher state than this snapshot.
+  const config = getConfig();
+
+  // Heal before validating: a stale stored ID whose profile clientId still
+  // joins to a live environment is silently repaired instead of erroring.
+  healProfiles(config, environments);
+
+  if (flagValue) {
+    // An explicit-but-mistyped ID hitting the server's silent fallback on a
+    // delete is exactly the hazard the invariant exists to kill — validate
+    // flag-supplied IDs like stored ones.
+    if (!environments.some((env) => env.id === flagValue)) {
+      exitStale(flagValue);
+    }
+    return { environmentId: flagValue, source: 'flag' };
+  }
+
+  // Re-read: healing above may have just stored a fresh ID.
+  const profile = getActiveEnvironment();
+  if (profile?.environmentId) {
+    if (!environments.some((env) => env.id === profile.environmentId)) {
+      exitStale(profile.environmentId);
+    }
+    return { environmentId: profile.environmentId, source: 'profile' };
+  }
+
+  if (isPromptAllowed()) {
+    const choice = await promptForEnvironment(environments);
+    if (choice === null) exitWithCode(ExitCode.CANCELED);
+    // Persist so the picker runs at most once per profile (no-op without an
+    // active profile — the choice then applies to this invocation only).
+    // Healing never changes which profile is active, so the earlier config
+    // snapshot is still authoritative for the profile name.
+    if (config?.activeEnvironment) {
+      const chosen = environments.find((env) => env.id === choice);
+      setProfileEnvironmentId(config.activeEnvironment, choice, chosen?.name, chosen?.projectName);
+    }
+    return { environmentId: choice, source: 'picker' };
+  }
+
+  exitWithError({
+    code: 'environment_unresolved',
+    message: `Could not determine which WorkOS environment to target. ${remedies()}`,
+  });
+}
+
+export interface TryResolveProfileOptions {
+  /** Bearer to use; when omitted, a stored session is refreshed if possible. */
+  token?: string;
+  /** Offer the one-time picker in human mode when the clientId join misses. */
+  allowPicker?: boolean;
+}
+
+/**
+ * Best-effort resolution for a named profile, used by `env add`, `env switch`,
+ * and post-login staging provisioning. Joins via the profile's clientId; in
+ * human mode (and with `allowPicker`) falls back to the one-time picker.
+ *
+ * Never throws and never exits: profile creation/switch/login must succeed
+ * regardless — resolution defers to first dashboard-command use.
+ */
+export async function tryResolveProfileEnvironmentId(
+  envKey: string,
+  options: TryResolveProfileOptions = {},
+): Promise<boolean> {
+  try {
+    const config = getConfig();
+    const profile = config?.environments[envKey];
+    if (!profile) return false;
+    if (profile.environmentId) return true;
+
+    const token = options.token ?? (await refreshIfExpired())?.accessToken;
+    if (!token) return false;
+
+    const environments = await fetchTeamEnvironments(token);
+    if (environments.length === 0) return false;
+
+    if (profile.clientId) {
+      const match = environments.find((env) => env.clientId === profile.clientId);
+      if (match) {
+        setProfileEnvironmentId(envKey, match.id, match.name, match.projectName);
+        return true;
+      }
+      // A clientId that joins nothing usually means a foreign profile (an API
+      // key from another team) — never guess. Fall through to the picker in
+      // human mode; otherwise defer to first dashboard-command use.
+    }
+
+    if (options.allowPicker && isPromptAllowed()) {
+      const choice = await promptForEnvironment(environments);
+      if (choice === null) return false; // cancel skips resolution, never aborts the caller
+      const chosen = environments.find((env) => env.id === choice);
+      setProfileEnvironmentId(envKey, choice, chosen?.name, chosen?.projectName);
+      return true;
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}

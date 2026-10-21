@@ -5,7 +5,7 @@
  * to verify SDK method signatures are correct.
  *
  * Usage:
- *   WORKOS_API_KEY=sk_test_xxx pnpm tsx scripts/smoke-test.ts
+ *   WORKOS_API_KEY=sk_test_xxx bun run scripts/smoke-test.ts
  */
 
 import { writeFileSync, unlinkSync, existsSync } from 'node:fs';

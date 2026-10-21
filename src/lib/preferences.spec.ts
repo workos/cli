@@ -30,6 +30,12 @@ const {
   getTelemetrySource,
   getPreferencesPath,
   clearPreferences,
+  getSkillsUpdateOfferedVersion,
+  recordSkillsUpdateOffered,
+  hasSkillsUpdateRetried,
+  recordSkillsUpdateRetry,
+  recordSetupDeclined,
+  isSetupDeclined,
   __resetPreferencesCache,
 } = await import('./preferences.js');
 
@@ -308,6 +314,36 @@ describe('preferences', () => {
       clearPreferences();
       __resetPreferencesCache(); // simulate a new process
       expect(getPreferences()).toEqual({});
+    });
+  });
+
+  describe('stale-skills offer state', () => {
+    it('re-opens the offer when marking a retry, and bounds it to one', () => {
+      recordSkillsUpdateOffered('2.0.0');
+      expect(getSkillsUpdateOfferedVersion()).toBe('2.0.0');
+      expect(hasSkillsUpdateRetried('2.0.0')).toBe(false);
+
+      recordSkillsUpdateRetry('2.0.0');
+
+      // Clearing the answered-version is what makes the next command offer again.
+      expect(getSkillsUpdateOfferedVersion()).toBeUndefined();
+      expect(hasSkillsUpdateRetried('2.0.0')).toBe(true);
+      // A newer bundled version is a fresh question, not a spent retry.
+      expect(hasSkillsUpdateRetried('3.0.0')).toBe(false);
+
+      // Second incomplete refresh: the recorded version stands and it goes quiet.
+      recordSkillsUpdateOffered('2.0.0');
+      expect(getSkillsUpdateOfferedVersion()).toBe('2.0.0');
+    });
+
+    it('survives a fresh process and never clobbers a setup sibling', () => {
+      recordSetupDeclined();
+      recordSkillsUpdateRetry('2.0.0');
+      __resetPreferencesCache(); // simulate a new process reading from disk
+
+      expect(hasSkillsUpdateRetried('2.0.0')).toBe(true);
+      expect(getSkillsUpdateOfferedVersion()).toBeUndefined();
+      expect(isSetupDeclined()).toBe(true);
     });
   });
 });

@@ -14,7 +14,7 @@ export async function listLogs(): Promise<void> {
       .slice(0, 10);
 
     if (logFiles.length === 0) {
-      console.log('No eval log files found. Run `pnpm eval` first.');
+      console.log('No eval log files found. Run `bun run eval` first.');
       return;
     }
 
@@ -24,10 +24,10 @@ export async function listLogs(): Promise<void> {
       const size = Math.round(stat.size / 1024);
       console.log(`  ${file} (${size}KB)`);
     }
-    console.log(`\nUse 'pnpm eval:show <filename>' to view details.`);
+    console.log(`\nUse 'bun run eval:show <filename>' to view details.`);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      console.log('No eval log files found. Run `pnpm eval` first.');
+      console.log('No eval log files found. Run `bun run eval` first.');
     } else {
       throw error;
     }
@@ -68,7 +68,7 @@ export async function showLog(filename: string): Promise<void> {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       console.error(`Log file not found: ${filename}`);
-      console.error(`Use 'pnpm eval:logs' to list available files.`);
+      console.error(`Use 'bun run eval:logs' to list available files.`);
       process.exit(1);
     } else if (error instanceof SyntaxError) {
       console.error(`Invalid JSON in log file: ${filename}`);

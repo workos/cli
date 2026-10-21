@@ -1,8 +1,8 @@
 import type { Integration } from '../lib/constants.js';
 import { traceStep } from '../telemetry.js';
 import { analytics } from '../utils/analytics.js';
-import clack from '../utils/clack.js';
-import { getPackageDotJson, getUncommittedOrUntrackedFiles, isInGitRepo } from '../utils/clack-utils.js';
+import ui from '../utils/ui.js';
+import { getPackageDotJson, getUncommittedOrUntrackedFiles, isInGitRepo } from '../utils/ui-utils.js';
 import { hasPackageInstalled } from '../utils/package-json.js';
 import type { InstallerOptions } from '../utils/types.js';
 import { spawn } from 'node:child_process';
@@ -38,7 +38,7 @@ export async function runPrettierStep({
       return;
     }
 
-    const prettierSpinner = clack.spinner();
+    const prettierSpinner = ui.spinner();
     prettierSpinner.start('Running Prettier on your files.');
 
     try {

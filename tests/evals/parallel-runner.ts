@@ -1,6 +1,7 @@
 import pLimit from 'p-limit';
 import type { EvalResult, Grader, GradeCheck, ToolCall } from './types.js';
 import { FixtureManager } from './fixture-manager.js';
+import { FIZZY_FIXTURE, fizzyEnvironment } from './fizzy-fixture.js';
 import { AgentExecutor } from './agent-executor.js';
 import { detectConcurrency } from './concurrency.js';
 import { evalEvents } from './events.js';
@@ -45,31 +46,10 @@ export class ParallelRunner {
   }
 
   async run(): Promise<EvalResult[]> {
-    const startTime = Date.now();
-    let completed = 0;
     const limit = pLimit(this.concurrency);
-
-    // Emit progress updates every 500ms
-    const progressInterval = setInterval(() => {
-      evalEvents.emitProgress({
-        completed,
-        total: this.scenarios.length,
-        running: this.activeFixtures.size,
-        elapsed: Date.now() - startTime,
-      });
-    }, 500);
-
-    const tasks = this.scenarios.map((scenario) =>
-      limit(async () => {
-        const result = await this.runScenario(scenario);
-        completed++;
-        return result;
-      }),
-    );
-
+    const tasks = this.scenarios.map((scenario) => limit(() => this.runScenario(scenario)));
     const results = await Promise.allSettled(tasks);
 
-    clearInterval(progressInterval);
     evalEvents.emitRunComplete();
 
     return results.map((result, i) => {
@@ -88,13 +68,17 @@ export class ParallelRunner {
 
   private async runScenario(scenario: Scenario): Promise<EvalResult> {
     const scenarioName = `${scenario.framework}/${scenario.state}`;
+    const isFizzy = scenarioName === 'ruby/fizzy';
+    // This source-only grader deliberately cannot pass acceptance. Never turn
+    // that pending result into additional paid attempts, regardless of options.
+    const maxAttempts = isFizzy ? 1 : this.options.maxAttempts;
     console.log(`Starting: ${scenarioName}`);
 
     let lastResult: EvalResult | null = null;
     let lastToolCalls: ToolCall[] = [];
     let attempt = 0;
 
-    while (attempt < this.options.maxAttempts && !this.isShuttingDown) {
+    while (attempt < maxAttempts && !this.isShuttingDown) {
       attempt++;
 
       // Emit start/retry event
@@ -107,7 +91,7 @@ export class ParallelRunner {
       if (attempt === 1) {
         evalEvents.emitScenarioStart(eventPayload);
       } else {
-        console.log(`[${scenarioName}] Retry attempt ${attempt}/${this.options.maxAttempts}...`);
+        console.log(`[${scenarioName}] Retry attempt ${attempt}/${maxAttempts}...`);
         evalEvents.emitScenarioRetry(eventPayload);
       }
 
@@ -125,23 +109,43 @@ export class ParallelRunner {
         const executor = new AgentExecutor(workDir, scenario.framework, {
           verbose: this.options.verbose,
           scenarioName,
+          ...(isFizzy
+            ? {
+                environment: { ...fizzyEnvironment(fixtureManager.getTempDir()!), BUNDLE_FROZEN: 'false' },
+                redirectUri: FIZZY_FIXTURE.redirectUri,
+              }
+            : {}),
         });
         const agentResult = await executor.run(
-          this.options.noCorrection ? { enabled: false, maxRetries: 0 } : undefined,
+          isFizzy || this.options.noCorrection ? { enabled: false, maxRetries: 0 } : undefined,
         );
         lastToolCalls = agentResult.toolCalls;
 
         const grader = new scenario.grader(workDir);
-        const gradeResult = await grader.grade();
+        const graded = await grader.grade();
+        // The installer can reject a result the grader would accept (e.g. a missing
+        // Next.js /sign-in route fails its validation), so an installer failure fails
+        // the scenario too.
+        const gradeResult = agentResult.success
+          ? graded
+          : {
+              passed: false,
+              checks: [
+                { name: 'Installer completed', passed: false, message: agentResult.error ?? 'Installer failed' },
+                ...graded.checks,
+              ],
+            };
 
         // Collect key files for quality grading (only on pass to avoid wasted effort)
-        const keyFiles = gradeResult.passed ? await collectKeyFiles(workDir, scenario.framework) : undefined;
+        const keyFiles =
+          !isFizzy && gradeResult.passed ? await collectKeyFiles(workDir, scenario.framework) : undefined;
 
         lastResult = {
           scenario: scenarioName,
           passed: gradeResult.passed,
           duration: Date.now() - startTime,
           checks: gradeResult.checks,
+          ...(agentResult.success ? {} : { error: agentResult.error ?? 'Installer failed' }),
           agentOutput: agentResult.output,
           attempts: attempt,
           latencyMetrics: agentResult.latencyMetrics,

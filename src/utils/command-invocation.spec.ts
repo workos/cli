@@ -6,12 +6,12 @@ describe('command invocation helpers', () => {
     expect(getWorkOSCommand({})).toBe('workos');
   });
 
-  it('uses npx workos@latest when launched by npm exec', () => {
-    expect(getWorkOSCommand({ npm_command: 'exec' })).toBe('npx workos@latest');
+  it('uses the standalone binary name even when npm variables are present', () => {
+    expect(getWorkOSCommand({ npm_command: 'exec' })).toBe('workos');
   });
 
   it('formats commands with the detected invocation', () => {
-    expect(formatWorkOSCommand('auth login', { npm_command: 'exec' })).toBe('npx workos@latest auth login');
+    expect(formatWorkOSCommand('auth login', { npm_command: 'exec' })).toBe('workos auth login');
   });
 
   it('quotes shell arguments that contain JSON or shell metacharacters', () => {

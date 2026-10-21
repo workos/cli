@@ -2,7 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { detectPort, getCallbackPath } from './port-detection.js';
+import { detectPort, getCallbackPath, getSignInPath } from './port-detection.js';
+import { buildSignInSection } from './sign-in-route.js';
+import type { FrameworkConfig } from './framework-config.js';
 
 describe('port-detection — python/Django defaults', () => {
   let dir: string;
@@ -154,4 +156,113 @@ describe('port-detection — ruby/rails puma', () => {
     await writeFile(join(dir, 'config', 'puma.rb'), 'workers 2\nport 4000\n');
     expect(detectPort('ruby', dir)).toBe(4000);
   });
+});
+
+describe('port-detection — tanstack-start config', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'port-tanstack-'));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('parses port from vite.config.ts (modern @tanstack/react-start)', async () => {
+    await writeFile(
+      join(dir, 'vite.config.ts'),
+      "import { defineConfig } from 'vite'\nexport default defineConfig({ server: { host: '::', port: 8080 }, plugins: [] })\n",
+    );
+    expect(detectPort('tanstack-start', dir)).toBe(8080);
+  });
+
+  it('falls back to legacy app.config.ts (Vinxi) when no vite config', async () => {
+    await writeFile(join(dir, 'app.config.ts'), 'export default { server: { port: 4200 } }\n');
+    expect(detectPort('tanstack-start', dir)).toBe(4200);
+  });
+
+  it('prefers vite.config.ts over app.config.ts when both present', async () => {
+    await writeFile(
+      join(dir, 'vite.config.ts'),
+      "import { defineConfig } from 'vite'\nexport default defineConfig({ server: { port: 8080 } })\n",
+    );
+    await writeFile(join(dir, 'app.config.ts'), 'export default { server: { port: 4200 } }\n');
+    expect(detectPort('tanstack-start', dir)).toBe(8080);
+  });
+
+  it.each(['vite.config.js', 'vite.config.mjs'])('parses port from %s', async (fileName) => {
+    await writeFile(join(dir, fileName), 'export default { server: { port: 5555 } }\n');
+    expect(detectPort('tanstack-start', dir)).toBe(5555);
+  });
+
+  it('falls back to default 3000 when no config file present', () => {
+    expect(detectPort('tanstack-start', dir)).toBe(3000);
+  });
+});
+
+describe('port-detection — vite frameworks', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'port-vite-'));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it.each(['react', 'react-router', 'vanilla-js'] as const)('%s parses port from vite.config.ts', async (framework) => {
+    await writeFile(
+      join(dir, 'vite.config.ts'),
+      "import { defineConfig } from 'vite'\nexport default defineConfig({ server: { port: 4200 } })\n",
+    );
+    expect(detectPort(framework, dir)).toBe(4200);
+  });
+
+  it.each(['react', 'react-router', 'vanilla-js'] as const)(
+    '%s falls back to default 5173 when no vite config present',
+    (framework) => {
+      expect(detectPort(framework, dir)).toBe(5173);
+    },
+  );
+});
+
+describe('sign-in routes from the SDK docs', () => {
+  it('uses the SvelteKit README defaults', () => {
+    expect(detectPort('sveltekit', '/nonexistent')).toBe(5173);
+    expect(getCallbackPath('sveltekit')).toBe('/callback');
+    expect(getSignInPath('sveltekit')).toBe('/sign-in');
+  });
+
+  it.each([
+    ['nextjs', '/sign-in'],
+    ['react', '/login'],
+    ['vanilla-js', '/login'],
+    ['react-router', '/login'],
+    ['tanstack-start', '/api/auth/sign-in'],
+    ['node', '/login'],
+    ['python', '/auth/login/'],
+    ['ruby', '/auth/login'],
+    ['php', '/login.php'],
+    ['php-laravel', '/login'],
+    ['go', '/auth/login'],
+    ['dotnet', '/auth/login'],
+    ['kotlin', '/auth/login'],
+    ['elixir', '/auth/sign-in'],
+  ])('%s starts sign-in at %s', (integration, path) => {
+    expect(getSignInPath(integration)).toBe(path);
+  });
+
+  it.each(['ruby', 'go', 'dotnet', 'elixir', 'python'])(
+    'gives the custom %s prompt the route to pin',
+    (integration) => {
+      expect(
+        buildSignInSection({
+          metadata: { integration } as FrameworkConfig['metadata'],
+          environment: { requiresApiKey: true } as FrameworkConfig['environment'],
+        }),
+      ).toContain(`the app origin plus ${getSignInPath(integration)}.`);
+    },
+  );
 });

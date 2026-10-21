@@ -63,6 +63,31 @@ describe('runQuickChecks', () => {
     expect(result.agentRetryPrompt).toBeNull();
   });
 
+  it('treats a build killed at the time limit as inconclusive, not a failure', async () => {
+    const killed = () => {
+      const proc = new EventEmitter() as any;
+      proc.stdout = new EventEmitter();
+      proc.stderr = new EventEmitter();
+      setTimeout(() => proc.emit('close', null, 'SIGTERM'), 30);
+      return proc;
+    };
+    mockSpawn.mockImplementationOnce(() => createMockProcess(0)).mockImplementationOnce(killed);
+
+    const result = await runQuickChecks(testDir, { timeoutMs: 10 });
+
+    expect(result.passed).toBe(true);
+    expect(result.agentRetryPrompt).toBeNull();
+  });
+
+  it('still fails a build that exits non-zero within the time limit', async () => {
+    mockSpawn.mockImplementationOnce(() => createMockProcess(0)).mockImplementationOnce(() => createMockProcess(1));
+
+    const result = await runQuickChecks(testDir, { timeoutMs: 10_000 });
+
+    expect(result.passed).toBe(false);
+    expect(result.results[1].phase).toBe('build');
+  });
+
   it('short-circuits build when typecheck fails', async () => {
     const tsError = "src/middleware.ts(42,5): error TS2345: Argument of type 'string | undefined' is not assignable";
 

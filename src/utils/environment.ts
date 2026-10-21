@@ -1,4 +1,4 @@
-import { getPackageDotJson } from './clack-utils.js';
+import { getPackageDotJson } from './ui-utils.js';
 import type { InstallerOptions } from './types.js';
 import fg from 'fast-glob';
 import { isHumanMode } from './interaction-mode.js';

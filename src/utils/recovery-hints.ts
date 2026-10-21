@@ -91,6 +91,19 @@ export function confirmationRecovery(command?: string): RecoveryHints {
   };
 }
 
+/** Build a recovery hint for a transient network / connection failure. */
+export function networkRetryRecovery(options: { command?: string; docsUrl?: string } = {}): RecoveryHints {
+  return {
+    hints: [
+      {
+        description: 'Check your network connection and try again.',
+        ...(options.command && { command: options.command }),
+        ...(options.docsUrl && { docsUrl: options.docsUrl }),
+      },
+    ],
+  };
+}
+
 /** Build a `missing_args` recovery hint, attaching a command only when it is directly runnable. */
 export function missingArgsRecovery(command: string | undefined, description: string): RecoveryHints {
   return {

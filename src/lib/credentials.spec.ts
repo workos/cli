@@ -142,6 +142,9 @@ describe('credentials', () => {
       saveCredentials(validCreds);
       // Corrupt the file
       writeFileSync(credentialsFile, 'not valid json');
+      // External corruption is only observable from a fresh process —
+      // credential reads are cached in-process. Reset to simulate one.
+      setInsecureStorage(true);
       expect(getCredentials()).toBeNull();
     });
   });

@@ -1,6 +1,6 @@
 import type { ArgumentsCamelCase } from 'yargs';
 import { runDoctor, outputReport } from '../doctor/index.js';
-import clack from '../utils/clack.js';
+import ui from '../utils/ui.js';
 import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
 import { CliExit } from '../utils/cli-exit.js';
 
@@ -37,7 +37,7 @@ export async function handleDoctor(argv: ArgumentsCamelCase<DoctorArgs>): Promis
   } catch (error) {
     if (error instanceof CliExit) throw error;
     if (!options.json) {
-      clack.log.error(`Doctor failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      ui.log.error(`Doctor failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } else {
       console.error(
         JSON.stringify({

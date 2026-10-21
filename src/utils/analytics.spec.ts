@@ -63,9 +63,12 @@ const mockSettingsConfig = {
   legacy: { oauthPort: 3000 },
 };
 vi.mock('../lib/settings.js', () => ({
-  getTelemetryUrl: () => mockGetTelemetryUrl(),
   getConfig: () => mockSettingsConfig,
   getVersion: () => '0.12.1',
+}));
+
+vi.mock('./urls.js', () => ({
+  getTelemetryUrl: () => mockGetTelemetryUrl(),
 }));
 
 // Mock credentials for initForNonInstaller
@@ -119,9 +122,11 @@ describe('Analytics', () => {
         },
       }));
       vi.doMock('../lib/settings.js', () => ({
-        getTelemetryUrl: () => mockGetTelemetryUrl(),
         getConfig: () => mockSettingsConfig,
         getVersion: () => '0.12.1',
+      }));
+      vi.doMock('./urls.js', () => ({
+        getTelemetryUrl: () => mockGetTelemetryUrl(),
       }));
       vi.doMock('../lib/credentials.js', () => ({
         getCredentials: () => mockGetCredentials(),
@@ -284,7 +289,7 @@ describe('Analytics', () => {
 
     describe('sessionStart', () => {
       it('queues session.start event with version and mode', () => {
-        analytics.sessionStart('tui', '2.0.0');
+        analytics.sessionStart('cli', '2.0.0');
 
         expect(mockQueueEvent).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -292,7 +297,7 @@ describe('Analytics', () => {
             sessionId: 'test-session-id-123',
             attributes: expect.objectContaining({
               'installer.version': '2.0.0',
-              'installer.mode': 'tui',
+              'installer.mode': 'cli',
             }),
           }),
         );
@@ -317,7 +322,7 @@ describe('Analytics', () => {
         const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'session.start')[0];
         expect(event.attributes).toHaveProperty('env.os');
         expect(event.attributes).toHaveProperty('env.os_version');
-        expect(event.attributes).toHaveProperty('env.node_version');
+        expect(event.attributes).toHaveProperty('env.runtime_version');
         expect(event.attributes).toHaveProperty('env.shell');
         expect(typeof event.attributes['env.ci']).toBe('boolean');
       });
@@ -364,7 +369,7 @@ describe('Analytics', () => {
         );
       });
 
-      it('supports cancelled outcome', async () => {
+      it('supports canceled outcome', async () => {
         await analytics.shutdown('cancelled');
 
         expect(mockQueueEvent).toHaveBeenCalledWith(
@@ -377,7 +382,7 @@ describe('Analytics', () => {
       });
 
       it('includes env fingerprint and installer.mode', async () => {
-        analytics.sessionStart('tui', '1.0.0');
+        analytics.sessionStart('cli', '1.0.0');
         mockQueueEvent.mockClear();
 
         await analytics.shutdown('success');
@@ -385,10 +390,10 @@ describe('Analytics', () => {
         const event = mockQueueEvent.mock.calls.find((c) => c[0].type === 'session.end')[0];
         expect(event.attributes).toHaveProperty('env.os');
         expect(event.attributes).toHaveProperty('env.os_version');
-        expect(event.attributes).toHaveProperty('env.node_version');
+        expect(event.attributes).toHaveProperty('env.runtime_version');
         expect(event.attributes).toHaveProperty('env.shell');
         expect(typeof event.attributes['env.ci']).toBe('boolean');
-        expect(event.attributes['installer.mode']).toBe('tui');
+        expect(event.attributes['installer.mode']).toBe('cli');
       });
     });
 
@@ -591,6 +596,28 @@ describe('Analytics', () => {
         expect(event.attributes['termination.reason']).toBeUndefined();
         expect(event.attributes['api.status']).toBeUndefined();
       });
+
+      it('merges extraAttributes into the event attributes', () => {
+        analytics.emitCommandEvent('mcp offer', 0, true, {
+          extraAttributes: { 'mcp.entry_point': 'banner', 'mcp.shown': true },
+        });
+
+        const event = mockQueueEvent.mock.calls.find((c: any) => c[0].type === 'command')[0];
+        expect(event.attributes['mcp.entry_point']).toBe('banner');
+        expect(event.attributes['mcp.shown']).toBe(true);
+        expect(event.attributes['command.name']).toBe('mcp offer');
+      });
+
+      it('extraAttributes cannot override standard command fields', () => {
+        analytics.emitCommandEvent('mcp offer', 5, true, {
+          extraAttributes: { 'command.name': 'evil', 'command.success': false, 'device.id': 'spoofed' },
+        });
+
+        const event = mockQueueEvent.mock.calls.find((c: any) => c[0].type === 'command')[0];
+        expect(event.attributes['command.name']).toBe('mcp offer');
+        expect(event.attributes['command.success']).toBe(true);
+        expect(event.attributes['device.id']).toBe(TEST_DEVICE_ID);
+      });
     });
 
     describe('captureUnhandledCrash', () => {
@@ -609,7 +636,7 @@ describe('Analytics', () => {
               'crash.command': 'install',
               'cli.version': '1.0.0',
               'env.os': expect.any(String),
-              'env.node_version': expect.any(String),
+              'env.runtime_version': expect.any(String),
             }),
           }),
         );
@@ -826,9 +853,11 @@ describe('Analytics', () => {
         },
       }));
       vi.doMock('../lib/settings.js', () => ({
-        getTelemetryUrl: () => mockGetTelemetryUrl(),
         getConfig: () => mockSettingsConfig,
         getVersion: () => '0.12.1',
+      }));
+      vi.doMock('./urls.js', () => ({
+        getTelemetryUrl: () => mockGetTelemetryUrl(),
       }));
       vi.doMock('../lib/credentials.js', () => ({
         getCredentials: () => mockGetCredentials(),

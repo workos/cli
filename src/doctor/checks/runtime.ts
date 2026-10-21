@@ -3,7 +3,14 @@ import { execFileNoThrow } from '../../utils/exec-file.js';
 import type { DoctorOptions, RuntimeInfo } from '../types.js';
 
 export async function checkRuntime(options: DoctorOptions): Promise<RuntimeInfo> {
-  const nodeVersion = process.version;
+  // The CLI is a compiled Bun binary, so process.version is Bun's baked-in
+  // Node-compat constant — probe the host's actual Node.js instead, since
+  // this reports on the user's project environment.
+  let nodeVersion: string | null = null;
+  const nodeResult = await execFileNoThrow('node', ['--version']);
+  if (nodeResult.status === 0) {
+    nodeVersion = nodeResult.stdout.trim();
+  }
 
   const managers = detectAllPackageManagers(options);
   const primaryManager = managers[0] ?? null;

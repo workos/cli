@@ -1,17 +1,27 @@
 import { createActor, fromPromise } from 'xstate';
 import open from 'open';
-import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
 import { installerMachine } from './installer-core.js';
 import { createInstallerEventEmitter } from './events.js';
+import type { CompletionData, InstallerEventEmitter, SetupItemId, SetupItemStatus } from './events.js';
+import { buildCompletionData, applicationSetupNextSteps } from './completion-data.js';
+import {
+  readNextjsApplicationSetup,
+  buildApplicationSetup,
+  configureAuthkitApplication,
+  type AuthkitApplicationSetup,
+} from './authkit-application-setup.js';
+import { validateInstallation } from './validation/index.js';
+import { resolveDevCommand } from './dev-command.js';
+import { getConfig as getInstallerSettings } from './settings.js';
 import { CLIAdapter } from './adapters/cli-adapter.js';
-import { DashboardAdapter } from './adapters/dashboard-adapter.js';
+import { selectInstallerAdapter, type InstallerAdapterKind } from './adapters/select-adapter.js';
 import type { InstallerAdapter } from './adapters/types.js';
 import type { InstallerOptions } from '../utils/types.js';
 import { getInteractionMode, isAgentMode, isCiMode } from '../utils/interaction-mode.js';
 import { getOutputMode, isJsonMode, resolveEffectiveOutputMode, setOutputMode } from '../utils/output.js';
 import type {
   InstallerMachineContext,
+  CredentialSource,
   DetectionOutput,
   GitCheckOutput,
   AgentOutput,
@@ -20,32 +30,34 @@ import type {
 } from './installer-core.types.js';
 import { isScaffoldableEmptyDir, resolvePackageManager, runCreateNextApp } from './scaffold/index.js';
 import type { Integration } from './constants.js';
-import { parseEnvFile } from '../utils/env-parser.js';
+import { readProjectEnvCredentials } from './project-env.js';
+import type { ProjectEnvCredentials } from './project-env.js';
 import { enableDebugLogs, initLogFile, logInfo, logError } from '../utils/debug.js';
 
-import { getAccessToken, saveCredentials, getStagingCredentials, saveStagingCredentials } from './credentials.js';
-import { getConfig, saveConfig, getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
+import { getAccessToken, saveCredentials } from './credentials.js';
+import { getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
 import { checkForEnvFiles, discoverCredentials } from './credential-discovery.js';
 import { requestDeviceCode, pollForToken } from './device-auth.js';
-import { fetchStagingCredentials as fetchStagingCredentialsApi } from './staging-api.js';
-import { getCliAuthClientId, getAuthkitDomain, getTelemetryUrl } from './settings.js';
+import { getCliAuthClientId, getAuthkitDomain } from './settings.js';
+import { getTelemetryUrl } from '../utils/urls.js';
 import { analytics } from '../utils/analytics.js';
 import { getVersion } from './settings.js';
-import { isInGitRepo, getUncommittedOrUntrackedFiles } from '../utils/clack-utils.js';
+import { isInGitRepo, getUncommittedOrUntrackedFiles } from '../utils/ui-utils.js';
 import {
   getCurrentBranch,
   isProtectedBranch,
   createBranch as createGitBranch,
   branchExists,
 } from '../utils/git-utils.js';
-import { detectChanges, stageAndCommit, pushBranch as pushGitBranch, createPullRequest } from './post-install.js';
+import { detectChanges } from './post-install.js';
 import {
-  generateCommitMessage as generateCommitMessageAi,
-  generatePrDescription as generatePrDescriptionAi,
-} from './ai-content.js';
-import { autoConfigureWorkOSEnvironment } from './workos-management.js';
-import { detectPort, getCallbackPath } from './port-detection.js';
-import { writeEnvLocal } from './env-writer.js';
+  assertSupportedNextJsRouter,
+  getNextJsRouter,
+  assertNextjsSignInRouteAvailable,
+} from '../integrations/nextjs/utils.js';
+import { detectPort, getClientEnvPrefix, getSignInPath, resolveRedirectUri } from './port-detection.js';
+import { writeEnvLocal, replaceRecoveredEnvCredentials } from './env-writer.js';
+import type { ConfigurationCredentials } from './configuration-recovery.js';
 import { getRegistry } from './registry.js';
 import { observeHostFailure } from './host-probe.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
@@ -57,24 +69,6 @@ async function runIntegrationInstallerFn(integration: Integration, options: Inst
     throw new Error(`Unknown integration: ${integration}`);
   }
   return mod.run(options);
-}
-
-function readExistingCredentials(installDir: string): { apiKey?: string; clientId?: string } {
-  const envPath = join(installDir, '.env.local');
-  if (!existsSync(envPath)) {
-    return {};
-  }
-
-  try {
-    const content = readFileSync(envPath, 'utf-8');
-    const envVars = parseEnvFile(content);
-    return {
-      apiKey: envVars.WORKOS_API_KEY || undefined,
-      clientId: envVars.WORKOS_CLIENT_ID || undefined,
-    };
-  } catch {
-    return {};
-  }
 }
 
 async function detectIntegrationFn(options: Pick<InstallerOptions, 'installDir'>): Promise<Integration | undefined> {
@@ -100,7 +94,7 @@ export async function detectSingleIntegration(
   integration: string,
   options: Pick<InstallerOptions, 'installDir'>,
 ): Promise<boolean> {
-  const { getPackageDotJson } = await import('../utils/clack-utils.js');
+  const { getPackageDotJson } = await import('../utils/ui-utils.js');
   const { hasPackageInstalled } = await import('../utils/package-json.js');
   const { existsSync } = await import('node:fs');
   const { join } = await import('node:path');
@@ -168,6 +162,226 @@ export async function detectSingleIntegration(
   return false;
 }
 
+/**
+ * Provenance label for the credential pair `runWithCore` hands the machine.
+ *
+ * Only a pair the user supplied nothing toward can honestly name the project's
+ * env file as its origin. That total backfill is the path a freshly provisioned
+ * unclaimed environment takes — provisioning writes .env.local before the
+ * machine starts — and labeling it 'cli' is what made the installer claim
+ * credentials the user had never provided.
+ *
+ * A mixed pair keeps the caller's source instead: one flag plus one backfill is
+ * not an env-file resolution, and calling it one makes the installer announce
+ * `.env.local` as the origin of a value the user typed on the command line.
+ */
+export function resolveCredentialSource(
+  options: Pick<InstallerOptions, 'apiKey' | 'clientId' | 'credentialSource'>,
+  existingCreds: ProjectEnvCredentials,
+): CredentialSource | undefined {
+  const userSuppliedEither = Boolean(options.apiKey || options.clientId);
+  const backfilledFromProjectEnv = !userSuppliedEither && Boolean(existingCreds.apiKey || existingCreds.clientId);
+  return backfilledFromProjectEnv ? 'env' : options.credentialSource;
+}
+
+export async function configureInstallEnvironment(
+  context: Pick<InstallerMachineContext, 'options' | 'integration' | 'credentials'> &
+    Partial<Pick<InstallerMachineContext, 'emitter'>>,
+): Promise<void> {
+  const { options: installerOptions, integration, credentials } = context;
+  if (!integration || !credentials) throw new Error('Missing integration or credentials');
+  // Each item of the dashboard's AuthKit checklist reports as it goes, so the
+  // full-screen installer can tick it off.
+  const step = (id: SetupItemId, status: SetupItemStatus, detail?: string) =>
+    context.emitter?.emit('config:step', { step: id, status, ...(detail ? { detail } : {}) });
+
+  const registry = await getRegistry();
+  const mod = registry.get(integration);
+  if (!mod) return;
+  const isJavascript = mod.config.metadata.language === 'javascript';
+
+  if (integration === 'nextjs') {
+    assertSupportedNextJsRouter(await getNextJsRouter(installerOptions));
+    await assertNextjsSignInRouteAvailable(installerOptions.installDir);
+  }
+
+  const port = detectPort(integration, installerOptions.installDir);
+  // All URL writes wait until after the agent. Select one target then, even if
+  // credentials and the dashboard session refer to different environments or
+  // the session changes between preparation and application setup.
+  if (isJavascript) step('env-vars', 'started');
+
+  // Non-JavaScript agents write their own env files in the project's format.
+  if (!isJavascript) return;
+
+  const redirectUri = resolveRedirectUri(integration, installerOptions, port);
+
+  const redirectUriKey = integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
+  // Client bundlers expose only prefixed vars to browser code.
+  const clientPrefix = mod.config.environment.requiresApiKey
+    ? undefined
+    : getClientEnvPrefix(installerOptions.installDir);
+  try {
+    writeEnvLocal(installerOptions.installDir, {
+      ...(credentials.apiKey ? { WORKOS_API_KEY: credentials.apiKey } : {}),
+      WORKOS_CLIENT_ID: credentials.clientId,
+      [redirectUriKey]: redirectUri,
+      ...(clientPrefix
+        ? {
+            [`${clientPrefix}WORKOS_CLIENT_ID`]: credentials.clientId,
+            [`${clientPrefix}WORKOS_REDIRECT_URI`]: redirectUri,
+          }
+        : {}),
+    });
+  } catch (error) {
+    step('env-vars', 'failed', error instanceof Error ? error.message : String(error));
+    throw error;
+  }
+  step('env-vars', 'done');
+}
+
+async function credentialAdopter(
+  context: Pick<InstallerMachineContext, 'options' | 'integration'> &
+    Partial<Pick<InstallerMachineContext, 'credentials'>>,
+  clientId: string,
+  apiKey?: string,
+): Promise<((pair: ConfigurationCredentials) => Promise<void>) | undefined> {
+  if (
+    !apiKey ||
+    !context.credentials ||
+    !context.integration ||
+    (await getRegistry()).get(context.integration)?.config.metadata.language !== 'javascript'
+  )
+    return undefined;
+  return async (pair) => {
+    await replaceRecoveredEnvCredentials(context.options.installDir, { apiKey, clientId }, pair);
+    Object.assign(context.credentials!, pair);
+    Object.assign(context.options, pair);
+  };
+}
+
+/** The actual post-agent Next.js path: validate the saved app before any URL writes. */
+export async function configureNextjsApplicationUrls(
+  context: Pick<InstallerMachineContext, 'options' | 'credentials' | 'emitter' | 'integration'>,
+): Promise<AuthkitApplicationSetup> {
+  const { options, credentials, emitter } = context;
+  const setup = await readNextjsApplicationSetup(options.installDir, options.homepageUrl);
+  if (setup.redirectUri !== resolveRedirectUri('nextjs', options)) {
+    throw new Error('The app callback URL changed during installation. Confirm it before configuring WorkOS.');
+  }
+  const validation = await validateInstallation('nextjs', options.installDir, { runBuild: false });
+  if (!validation.passed) {
+    throw new Error(
+      `Application setup is incomplete:\n${validation.issues
+        .filter((issue) => issue.severity === 'error')
+        .map((issue) => `${issue.message}. ${issue.hint ?? ''}`)
+        .join('\n')}`,
+    );
+  }
+  const adopt = await credentialAdopter(context, credentials?.clientId ?? '', credentials?.apiKey);
+  return reportAppUrlSetup(emitter, () =>
+    configureAuthkitApplication(setup, credentials?.clientId ?? '', credentials?.apiKey, {
+      adoptCredentials: adopt,
+      interactive: !options.ci,
+    }),
+  );
+}
+
+export const NO_SIGN_IN_ROUTE_REASON = 'This framework has no fixed sign-in route to use.';
+
+/**
+ * Report the app URLs `configure` sets (the dashboard checklist's redirect,
+ * initiate login, and sign-out URIs) as `app-urls:step` events.
+ *
+ * `configureAuthkitApplication` throws when the callback isn't registered,
+ * which fails the install (and the items still running with it). When it
+ * returns, the callback is registered; CORS and sign-out have their own results,
+ * so pending initiate-login setup does not hide settings already saved.
+ */
+export async function reportAppUrlSetup(
+  emitter: Pick<InstallerEventEmitter, 'emit'>,
+  configure: () => Promise<AuthkitApplicationSetup>,
+  { includeRedirect = true, includeCors = false }: { includeRedirect?: boolean; includeCors?: boolean } = {},
+): Promise<AuthkitApplicationSetup> {
+  const step = (id: SetupItemId, status: SetupItemStatus, detail?: string) =>
+    emitter.emit('app-urls:step', { step: id, status, ...(detail ? { detail } : {}) });
+  const ids = ['initiate-login-uri', 'sign-out-uri'] as const;
+  for (const id of includeRedirect ? (['redirect-uri', ...ids] as const) : ids) step(id, 'started');
+  if (includeCors) step('cors-origin', 'started');
+  const setup = await configure();
+  if (includeRedirect) step('redirect-uri', 'done');
+  if (includeCors)
+    step('cors-origin', setup.corsRegistered ? 'done' : 'skipped', setup.corsRegistered ? undefined : setup.reason);
+  const settle = (id: SetupItemId) => (setup.verified ? step(id, 'done') : step(id, 'skipped', setup.reason));
+  if (setup.initiateLoginUri === undefined)
+    step('initiate-login-uri', 'skipped', setup.initiateLoginReason ?? setup.reason);
+  else settle('initiate-login-uri');
+  if (setup.signOutRegistered) step('sign-out-uri', 'done');
+  else settle('sign-out-uri');
+  return setup;
+}
+
+/**
+ * Configure all URLs for SDKs other than Next.js after the agent, using one
+ * target selected here. An unregistered callback fails the install.
+ */
+export async function configureOtherApplicationUrls(
+  context: Pick<InstallerMachineContext, 'options' | 'integration' | 'emitter'> &
+    Partial<Pick<InstallerMachineContext, 'credentials'>>,
+  clientId: string,
+  apiKey?: string,
+): Promise<AuthkitApplicationSetup | undefined> {
+  const { options: installerOptions, integration } = context;
+  if (!integration || integration === 'nextjs') return undefined;
+  const signInPath = getSignInPath(integration);
+  const clientOnly = (await getRegistry()).get(integration)?.config.environment.requiresApiKey === false;
+  const redirectUri = resolveRedirectUri(integration, installerOptions);
+  const setup: AuthkitApplicationSetup = {
+    ...buildApplicationSetup({
+      clientId,
+      redirectUri,
+      homepageUrl: installerOptions.homepageUrl,
+      signInPath,
+    }),
+    corsOrigin: new URL(redirectUri).origin,
+    ...(!signInPath ? { initiateLoginReason: NO_SIGN_IN_ROUTE_REASON } : {}),
+  };
+  // Source patterns cannot prove that a client route is mounted and starts sign-in.
+  // Keep generating the route, but leave this dashboard setting for a browser check.
+  if (signInPath && clientOnly) {
+    delete setup.initiateLoginUri;
+    setup.initiateLoginReason = `Client-side ${signInPath} requires browser verification. Confirm it starts sign-in without a click, then set the Initiate login URI in the WorkOS dashboard. The existing setting was left unchanged.`;
+  }
+  const adopt = await credentialAdopter(context, clientId, apiKey);
+  return reportAppUrlSetup(
+    context.emitter,
+    () =>
+      configureAuthkitApplication(setup, clientId, apiKey, {
+        adoptCredentials: adopt,
+        interactive: !installerOptions.ci,
+      }),
+    {
+      includeCors: true,
+    },
+  );
+}
+
+/** Pick the installer adapter for this process's output mode and terminal. */
+export function resolveAdapterKind(options: Pick<InstallerOptions, 'ci' | 'noTui'>): InstallerAdapterKind {
+  return selectInstallerAdapter({
+    json: isJsonMode(),
+    interaction: getInteractionMode().mode,
+    ci: Boolean(options.ci),
+    stdinTTY: Boolean(process.stdin.isTTY),
+    stdoutTTY: Boolean(process.stdout.isTTY),
+    stderrTTY: Boolean(process.stderr.isTTY),
+    columns: process.stdout.columns ?? 0,
+    rows: process.stdout.rows ?? 0,
+    noTui: Boolean(options.noTui),
+    term: process.env.TERM,
+  });
+}
+
 export async function runWithCore(options: InstallerOptions): Promise<void> {
   // Initialize debug/logging early so we capture all failures
   initLogFile();
@@ -176,7 +390,6 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   }
   logInfo('Wizard starting with options:', {
     debug: options.debug,
-    dashboard: options.dashboard,
     local: options.local,
     ci: options.ci,
     skipAuth: options.skipAuth,
@@ -187,11 +400,12 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   const gatewayUrl = getTelemetryUrl();
   analytics.setGatewayUrl(gatewayUrl);
 
-  const existingCreds = readExistingCredentials(options.installDir);
+  const existingCreds = readProjectEnvCredentials(options.installDir);
   const augmentedOptions: InstallerOptions = {
     ...options,
     apiKey: options.apiKey || existingCreds.apiKey,
     clientId: options.clientId || existingCreds.clientId,
+    credentialSource: resolveCredentialSource(options, existingCreds),
   };
 
   const emitter = createInstallerEventEmitter();
@@ -207,7 +421,18 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
   if (nonHumanMode && !isJsonMode()) {
     setOutputMode(resolveEffectiveOutputMode(getOutputMode(), getInteractionMode()));
   }
-  const headlessMode = nonHumanMode && isJsonMode();
+  // Headless (no prompts, structured output) is for MACHINE output only: JSON.
+  // A prompt cannot render into a JSON stream, so any JSON run must be headless.
+  // We deliberately do NOT route a human session with non-TTY stdin here:
+  // headless auto-approves branch/scaffold, and applying those unattended
+  // to a session the user never opted into would violate the "nothing is written
+  // until you confirm" contract. Those sessions keep the CLIAdapter, which now
+  // fails fast with a clear `prompt_unavailable` error on the first prompt
+  // (see CLIAdapter's handler-error catch) instead of hanging or auto-writing.
+  // A person at a real terminal of at least 80x24 gets the full-screen
+  // installer unless they pass --no-tui.
+  const adapterKind = resolveAdapterKind(augmentedOptions);
+  const headlessMode = adapterKind === 'headless';
 
   let adapter: InstallerAdapter;
   if (headlessMode) {
@@ -220,13 +445,19 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         apiKey: augmentedOptions.apiKey,
         clientId: augmentedOptions.clientId,
         noBranch: augmentedOptions.noBranch,
-        noCommit: augmentedOptions.noCommit,
-        createPr: augmentedOptions.createPr,
         noGitCheck: augmentedOptions.noGitCheck,
+        ci: augmentedOptions.ci,
       },
     });
-  } else if (options.dashboard) {
-    adapter = new DashboardAdapter({ emitter, sendEvent, debug: augmentedOptions.debug });
+  } else if (adapterKind === 'tui') {
+    // Loaded on demand so Ink and React stay off every other path.
+    const { TuiAdapter } = await import('./adapters/tui-adapter.js');
+    adapter = new TuiAdapter({
+      emitter,
+      sendEvent,
+      debug: augmentedOptions.debug,
+      installDir: augmentedOptions.installDir,
+    });
   } else {
     adapter = new CLIAdapter({ emitter, sendEvent, debug: augmentedOptions.debug });
   }
@@ -283,43 +514,9 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         return { isClean: files.length === 0, files };
       }),
 
-      configureEnvironment: fromPromise<void, { context: InstallerMachineContext }>(async ({ input }) => {
-        const { context } = input;
-        const { options: installerOptions, integration, credentials } = context;
-
-        if (!integration || !credentials) {
-          throw new Error('Missing integration or credentials');
-        }
-
-        // Non-JS integrations own their env file writing (e.g. Python writes
-        // .env inside its own run()). Skip here so we don't leak a .env.local
-        // with JS-flavored vars (WORKOS_COOKIE_PASSWORD, wrong redirect port).
-        const registry = await getRegistry();
-        const mod = registry.get(integration);
-        if (mod?.config.metadata.language !== 'javascript') {
-          return;
-        }
-
-        const port = detectPort(integration, installerOptions.installDir);
-        const callbackPath = getCallbackPath(integration);
-        const redirectUri = installerOptions.redirectUri || `http://localhost:${port}${callbackPath}`;
-
-        const requiresApiKey = ['nextjs', 'tanstack-start', 'react-router'].includes(integration);
-        if (credentials.apiKey && requiresApiKey) {
-          await autoConfigureWorkOSEnvironment(credentials.apiKey, integration, port, {
-            homepageUrl: installerOptions.homepageUrl,
-            redirectUri: installerOptions.redirectUri,
-          });
-        }
-
-        const redirectUriKey = integration === 'nextjs' ? 'NEXT_PUBLIC_WORKOS_REDIRECT_URI' : 'WORKOS_REDIRECT_URI';
-
-        writeEnvLocal(installerOptions.installDir, {
-          ...(credentials.apiKey ? { WORKOS_API_KEY: credentials.apiKey } : {}),
-          WORKOS_CLIENT_ID: credentials.clientId,
-          [redirectUriKey]: redirectUri,
-        });
-      }),
+      configureEnvironment: fromPromise<void, { context: InstallerMachineContext }>(({ input }) =>
+        configureInstallEnvironment(input.context),
+      ),
 
       runAgent: fromPromise<AgentOutput, { context: InstallerMachineContext }>(async ({ input }) => {
         const { context } = input;
@@ -332,14 +529,26 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         try {
           const agentOptions: InstallerOptions = {
             ...installerOptions,
+            ...(integration === 'nextjs' ? { router: 'app' as const } : {}),
             apiKey: credentials?.apiKey,
             clientId: credentials?.clientId,
+            credentialSource: context.credentialSource,
             emitter: context.emitter,
           };
           const summary = await runIntegrationInstallerFn(integration, agentOptions);
+          let applicationSetup;
+          if (integration === 'nextjs') {
+            applicationSetup = await configureNextjsApplicationUrls(context);
+          } else if (credentials?.clientId) {
+            applicationSetup = await configureOtherApplicationUrls(context, credentials.clientId, credentials.apiKey);
+          }
           return {
             success: true,
-            summary: summary || `Successfully installed WorkOS AuthKit for ${integration}!`,
+            applicationSetup,
+            summary:
+              integration === 'nextjs' && applicationSetup
+                ? ['App code installed.', ...applicationSetupNextSteps(applicationSetup)].join('\n')
+                : summary || `Successfully installed WorkOS AuthKit for ${integration}!`,
           };
         } catch (error) {
           return {
@@ -348,6 +557,57 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
           };
         }
       }),
+
+      buildCompletion: fromPromise<CompletionData | undefined, { context: InstallerMachineContext }>(
+        async ({ input }) => {
+          const {
+            integration,
+            changedFiles,
+            changeDetection,
+            options: installerOptions,
+            credentials,
+            applicationSetup,
+          } = input.context;
+          if (!integration) return undefined;
+          try {
+            const registry = await getRegistry();
+            const mod = registry.get(integration);
+            const cfg = mod?.config;
+            const settings = getInstallerSettings();
+            // Read the config now, at the end of the install, not from a value
+            // captured earlier: the environment can be claimed mid-install (the
+            // browser claim CTA), and a claimed environment must not be told to
+            // claim itself. Exact credential match is required — a leftover
+            // unclaimed profile can sit active while this install used the
+            // project's own keys, and pointing that user at `claim` would name
+            // an environment their app never touched.
+            const activeEnv = getActiveEnvironment();
+            const usedUnclaimedEnv = Boolean(
+              activeEnv &&
+              isUnclaimedEnvironment(activeEnv) &&
+              credentials &&
+              activeEnv.apiKey === credentials.apiKey &&
+              activeEnv.clientId === credentials.clientId,
+            );
+            return await buildCompletionData(
+              { integration, changedFiles, changeDetection, installDir: installerOptions.installDir },
+              {
+                resolveDevCommand,
+                detectPort,
+                docsUrl: cfg?.metadata.docsUrl ?? settings.documentation.workosDocsUrl,
+                dashboardUrl: settings.documentation.dashboardUrl,
+                frameworkNextSteps: cfg?.ui.getOutroNextSteps?.({}) ?? [],
+                signInSnippet: cfg?.ui.getSignInSnippet?.({}),
+                claimCommand: usedUnclaimedEnv ? formatWorkOSCommand('profile claim') : undefined,
+                applicationSetup,
+              },
+            );
+          } catch {
+            // Degrade to the static fallback box rather than blocking completion.
+            return undefined;
+          }
+        },
+      ),
 
       // Credential discovery actors
       detectEnvFiles: fromPromise(async ({ input }) => {
@@ -416,40 +676,9 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
         return { result, deviceAuth };
       }),
 
-      fetchStagingCredentials: fromPromise(async () => {
-        const activeEnv = getActiveEnvironment();
-        if (activeEnv?.clientId && activeEnv?.apiKey) {
-          return { clientId: activeEnv.clientId, apiKey: activeEnv.apiKey };
-        }
-
-        const cached = getStagingCredentials();
-        if (cached) return cached;
-
-        const token = getAccessToken();
-        if (!token) throw new Error('No access token available');
-
-        const staging = await fetchStagingCredentialsApi(token);
-        saveStagingCredentials(staging);
-
-        try {
-          const config = getConfig() ?? { environments: {} };
-          if (!config.environments['default']) {
-            config.environments['default'] = {
-              name: 'default',
-              type: staging.apiKey.startsWith('sk_test_') ? 'sandbox' : 'production',
-              apiKey: staging.apiKey,
-              clientId: staging.clientId,
-            };
-            if (!config.activeEnvironment) {
-              config.activeEnvironment = 'default';
-            }
-            saveConfig(config);
-          }
-        } catch {
-          // Don't block install if config-store write fails
-        }
-
-        return staging;
+      fetchStagingCredentials: fromPromise(async ({ input }) => {
+        const { resolveStagingCredentials } = await import('./resolve-install-credentials.js');
+        return resolveStagingCredentials(input.installDir, input.envScanConsent);
       }),
 
       // Branch check actors
@@ -472,34 +701,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
       }),
 
       // Post-install actors
-      detectChanges: fromPromise<{ hasChanges: boolean; files: string[] }, void>(async () => {
-        return detectChanges();
-      }),
-
-      generateCommitMessage: fromPromise<string, { integration: string; files: string[]; direct?: boolean }>(
-        async ({ input }) => {
-          return generateCommitMessageAi(input.integration, input.files, { direct: input.direct });
-        },
-      ),
-
-      commitChanges: fromPromise<void, { message: string; cwd: string }>(async ({ input }) => {
-        stageAndCommit(input.message, input.cwd);
-      }),
-
-      generatePrDescription: fromPromise<
-        string,
-        { integration: string; files: string[]; commitMessage: string; direct?: boolean }
-      >(async ({ input }) => {
-        return generatePrDescriptionAi(input.integration, input.files, input.commitMessage, { direct: input.direct });
-      }),
-
-      pushBranch: fromPromise<void, { cwd: string }>(async ({ input }) => {
-        pushGitBranch(input.cwd);
-      }),
-
-      createPr: fromPromise<string, { title: string; body: string; cwd: string }>(async ({ input }) => {
-        return createPullRequest(input.title, input.body, input.cwd);
-      }),
+      detectChanges: fromPromise(async ({ input }) => detectChanges(input.installDir)),
     },
   });
 
@@ -542,8 +744,27 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
 
   await adapter.start();
 
+  // Environment pick lives AFTER the brand mark (adapter.start) and BEFORE the
+  // machine starts (branch prompt, detection, …), so the flow reads: banner →
+  // choose environment → install steps. Running pre-machine also means the
+  // machine's own auth check sees the PICKED profile — switching to a profile
+  // that still needs a login is handled by the in-flow device auth. Explicit
+  // credentials (flag/env var) and headless runs skip it; the helper itself
+  // guards JSON mode, project-owned keys, and single-profile configs.
+  if (!headlessMode && !augmentedOptions.apiKey && !process.env.WORKOS_API_KEY) {
+    const { maybePickInstallEnvironment } = await import('./resolve-install-credentials.js');
+    try {
+      await maybePickInstallEnvironment(getActiveEnvironment(), augmentedOptions.installDir);
+    } catch (error) {
+      // Canceling the picker ends the run before the try/finally below, so
+      // release the adapter here (the full-screen one owns the terminal).
+      await adapter.stop();
+      throw error;
+    }
+  }
+
   analytics.configureAuthFromAvailableSources();
-  const mode = headlessMode ? 'headless' : augmentedOptions.dashboard ? 'tui' : 'cli';
+  const mode = adapterKind;
   analytics.sessionStart(mode, getVersion());
 
   let installerStatus: 'success' | 'error' | 'cancelled' = 'success';
@@ -564,7 +785,7 @@ export async function runWithCore(options: InstallerOptions): Promise<void> {
             const err = snapshot.context.error;
             installerStatus = 'error';
             reject(err ?? new Error('Wizard failed'));
-          } else if (snapshot.value === 'cancelled') {
+          } else if (snapshot.value === 'canceled') {
             installerStatus = 'cancelled';
             resolve();
           } else {

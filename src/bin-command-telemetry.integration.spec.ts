@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url';
  * That captures the real event payload, independent of debug-log formatting.
  */
 const binPath = fileURLToPath(new URL('./bin.ts', import.meta.url));
-const forceInsecureStorageImport = new URL('./test/force-insecure-storage.ts', import.meta.url).href;
+const forceInsecureStorageImport = fileURLToPath(new URL('./test/force-insecure-storage.ts', import.meta.url));
 const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 
 let sandboxTmp: string;
@@ -59,22 +59,20 @@ function runCli(args: string[], envOverrides: NodeJS.ProcessEnv = {}) {
     // silently produce no event and fail. Tests that exercise env precedence
     // override this explicitly via envOverrides.
     WORKOS_TELEMETRY: 'true',
-    // Unroutable URL: the flush fails, so the queued events are persisted to
-    // the pending file on exit where we can inspect the real payload.
-    WORKOS_TELEMETRY_URL: 'http://127.0.0.1:59999/cli',
+    // Unroutable API base: telemetry derives ${WORKOS_API_URL}/cli, so the
+    // flush fails and the queued events are persisted to the pending file on
+    // exit where we can inspect the real payload. (The tested commands fail
+    // validation / crash before any real API call, so this host is never hit.)
+    WORKOS_API_URL: 'http://127.0.0.1:59999',
     WORKOS_API_KEY: 'sk_dummy_for_test',
     ...envOverrides,
   };
 
-  const result = spawnSync(
-    process.execPath,
-    ['--import', 'tsx', '--import', forceInsecureStorageImport, binPath, ...args],
-    {
-      cwd: repoRoot,
-      encoding: 'utf-8',
-      env,
-    },
-  );
+  const result = spawnSync('bun', ['--preload', forceInsecureStorageImport, binPath, ...args], {
+    cwd: repoRoot,
+    encoding: 'utf-8',
+    env,
+  });
 
   const events: Array<{ type: string; attributes?: Record<string, unknown> }> = [];
   const pendingDir = join(sandboxTmp, 'workos-cli-telemetry');

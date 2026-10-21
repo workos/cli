@@ -1,10 +1,11 @@
 import chalk from 'chalk';
 import { createWorkOSClient } from '../lib/workos-client.js';
 import { formatTable } from '../utils/table.js';
+import { printPaginationFooter } from '../utils/resource-command.js';
 import { outputSuccess, outputJson, isJsonMode, exitWithError } from '../utils/output.js';
 import { createApiErrorHandler } from '../lib/api-error-handler.js';
 import { isCiMode, isPromptAllowed } from '../utils/interaction-mode.js';
-import clack from '../utils/clack.js';
+import ui from '../utils/ui.js';
 
 const handleApiError = createApiErrorHandler('Directory');
 
@@ -61,14 +62,7 @@ export async function runDirectoryList(options: DirectoryListOptions, apiKey: st
       ),
     );
 
-    const { before, after } = result.listMetadata;
-    if (before && after) {
-      console.log(chalk.dim(`Before: ${before}  After: ${after}`));
-    } else if (before) {
-      console.log(chalk.dim(`Before: ${before}`));
-    } else if (after) {
-      console.log(chalk.dim(`After: ${after}`));
-    }
+    printPaginationFooter(result.listMetadata);
   } catch (error) {
     handleApiError(error);
   }
@@ -101,12 +95,12 @@ export async function runDirectoryDelete(
       });
     }
 
-    const confirmed = await clack.confirm({
+    const confirmed = await ui.confirm({
       message: `Delete directory ${id}? This cannot be undone.`,
     });
 
-    if (clack.isCancel(confirmed) || !confirmed) {
-      console.log('Delete cancelled.');
+    if (ui.isCancel(confirmed) || !confirmed) {
+      console.log('Delete canceled.');
       return;
     }
   }
@@ -177,14 +171,7 @@ export async function runDirectoryListUsers(
       ),
     );
 
-    const { before, after } = result.listMetadata;
-    if (before && after) {
-      console.log(chalk.dim(`Before: ${before}  After: ${after}`));
-    } else if (before) {
-      console.log(chalk.dim(`Before: ${before}`));
-    } else if (after) {
-      console.log(chalk.dim(`After: ${after}`));
-    }
+    printPaginationFooter(result.listMetadata);
   } catch (error) {
     handleApiError(error);
   }
@@ -226,14 +213,7 @@ export async function runDirectoryListGroups(
 
     console.log(formatTable([{ header: 'ID' }, { header: 'Name' }, { header: 'Created' }], rows));
 
-    const { before, after } = result.listMetadata;
-    if (before && after) {
-      console.log(chalk.dim(`Before: ${before}  After: ${after}`));
-    } else if (before) {
-      console.log(chalk.dim(`Before: ${before}`));
-    } else if (after) {
-      console.log(chalk.dim(`After: ${after}`));
-    }
+    printPaginationFooter(result.listMetadata);
   } catch (error) {
     handleApiError(error);
   }

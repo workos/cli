@@ -4,6 +4,160 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0](https://github.com/workos/cli/compare/v0.22.0...v0.23.0) (2026-09-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* `workos install --dashboard` / `-d` and `workos dashboard` are removed. Use `workos install`.
+
+### Features
+
+* **install:** full-screen installer with a dashboard-aligned checklist ([#247](https://github.com/workos/cli/issues/247)) ([db7eace](https://github.com/workos/cli/commit/db7eace65f156b90e40d91c9111e8bd4403f21c6))
+
+
+### Bug Fixes
+
+* **deps:** update minor and patch updates ([#242](https://github.com/workos/cli/issues/242)) ([26c7905](https://github.com/workos/cli/commit/26c79056c0eda297be3e8dac08a0ac5a4f047fb8))
+* **deps:** upgrade WorkOS packages and migrate SDK calls ([#243](https://github.com/workos/cli/issues/243)) ([7f6eac2](https://github.com/workos/cli/commit/7f6eac23b961c1c6ddeaf564682e90c9813ebc56))
+* **install:** configure and verify AuthKit application URLs ([#244](https://github.com/workos/cli/issues/244)) ([77a78ac](https://github.com/workos/cli/commit/77a78ac84b9fcf782a2020dc118f39d2955d091e))
+* **install:** configure sandbox application URLs across SDKs ([#250](https://github.com/workos/cli/issues/250)) ([586b2fa](https://github.com/workos/cli/commit/586b2fa1b88a9631accd4b4d69f28468a4f08760))
+* **install:** support current TanStack Start setup and callback registration ([#253](https://github.com/workos/cli/issues/253)) ([c69ccd2](https://github.com/workos/cli/commit/c69ccd20b8fac75b90dd43ec51443c494ceec459))
+* **install:** verify claim status before setting a default homepage ([#252](https://github.com/workos/cli/issues/252)) ([60578d0](https://github.com/workos/cli/commit/60578d0cabb63407dce8bd16198dbae4ee805414))
+* isolate diagnostic subprocess working directories ([#238](https://github.com/workos/cli/issues/238)) ([601079d](https://github.com/workos/cli/commit/601079dbc48e52faa2655086c4880e0d44f1e8f0))
+
+
+### Code Refactoring
+
+* remove the Ink dashboard TUI ([#246](https://github.com/workos/cli/issues/246)) ([8b92fd5](https://github.com/workos/cli/commit/8b92fd5f4ae7bd1a1213b1864fc3d9c321b394d7))
+
+## [0.22.0](https://github.com/workos/cli/compare/v0.21.1...v0.22.0) (2026-08-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* both commands now require `workos auth login` (API keys are no longer accepted; --api-key removed) and emit new curated JSON shapes (top-level resource objects, camelCase, no list_metadata — the authoritative examples live in each command's spec file). Flag mapping, old -> new:
+    - organization list: --domain now maps to server-side search
+      (name/domain); every subcommand gains --environment-id
+    - organization delete / user delete: gain --yes (destructive
+      confirmation: prompt, --yes bypass, non-interactive refusal)
+    - user list: --organization dropped (no backing filter on this plane);
+      --email now maps to server-side search
+    - user update: --email-verified and --password dropped (not supported on
+      this plane); --email and --locale added; now requires at least one
+      update flag
+
+### Features
+
+* add connection create and update commands ([#221](https://github.com/workos/cli/issues/221)) ([9a53443](https://github.com/workos/cli/commit/9a53443952645af6c03a9e63852102b1866bc05a))
+* add integrate alias for install ([#235](https://github.com/workos/cli/issues/235)) ([1adbe84](https://github.com/workos/cli/commit/1adbe84797bdd258f33a6b31eba9cdcd147a1587))
+* **install:** let the user pick the environment during install ([#230](https://github.com/workos/cli/issues/230)) ([8eb9408](https://github.com/workos/cli/commit/8eb9408e8700afc9308052c1bf064a2aec2a8ae5))
+* **install:** name the environment in installer status lines ([#231](https://github.com/workos/cli/issues/231)) ([c7d5cb8](https://github.com/workos/cli/commit/c7d5cb865229c1e57cf20550ca39a39e505ff36d))
+* **install:** show the whole team in the environment picker ([#232](https://github.com/workos/cli/issues/232)) ([d8919df](https://github.com/workos/cli/commit/d8919df221282f634cd82b5536f199964ef32111))
+* make dashboard environments first-class in the CLI ([#228](https://github.com/workos/cli/issues/228)) ([e344173](https://github.com/workos/cli/commit/e344173f66547dd7a413365ed63853ee4e9be54c))
+* migrate resource commands to the dashboard account plane ([#201](https://github.com/workos/cli/issues/201)) ([35a5d7e](https://github.com/workos/cli/commit/35a5d7e6a1116d5272cbebccb4db43237dd5dacd))
+* prefix the project name on environment display labels ([#229](https://github.com/workos/cli/issues/229)) ([cc51696](https://github.com/workos/cli/commit/cc51696c9bb08c4371582b6c6c5cb602aa380f74))
+
+
+### Bug Fixes
+
+* **install:** surface unclaimed environments honestly ([#234](https://github.com/workos/cli/issues/234)) ([ad8f85f](https://github.com/workos/cli/commit/ad8f85fcfbbc2427212ba1a0494cd59fc73aef7b))
+
+## [0.21.1](https://github.com/workos/cli/compare/v0.21.0...v0.21.1) (2026-08-19)
+
+
+### Bug Fixes
+
+* **auth:** stop repeated macOS keychain password prompts ([#225](https://github.com/workos/cli/issues/225)) ([d8f1fbc](https://github.com/workos/cli/commit/d8f1fbc80a1e1cc50e026dc224529e282eee5cf8))
+* **deps:** update minor and patch updates ([#223](https://github.com/workos/cli/issues/223)) ([fcb26ce](https://github.com/workos/cli/commit/fcb26ce7d68e2e4b52537082ab86f5c3e72a3407))
+
+## [0.21.0](https://github.com/workos/cli/compare/v0.20.2...v0.21.0) (2026-08-07)
+
+
+### ⚠ BREAKING CHANGES
+
+* `workos install` now stops in a project that already has an AuthKit SDK installed. Pass `--force` to continue.
+* the automatic setup offer after login/install now defaults to No; pressing Enter at the prompt declines instead of installing. Non-interactive contexts remain untouched (nothing is ever installed without --yes).
+
+### AUTH-6734
+
+* make skill/MCP install explicit opt-in ([#218](https://github.com/workos/cli/issues/218)) ([8d4a1dc](https://github.com/workos/cli/commit/8d4a1dc98b38b0de7bcc89a975d71997cea9c229))
+
+
+### Features
+
+* stop the installer from clobbering configured AuthKit projects ([#205](https://github.com/workos/cli/issues/205)) ([04896f6](https://github.com/workos/cli/commit/04896f6742d3ffd11e5e58b7b6ed3fbd61b769d0))
+
+
+### Bug Fixes
+
+* **mcp:** distinguish MCP configuration from OAuth authentication ([#214](https://github.com/workos/cli/issues/214)) ([d6ce322](https://github.com/workos/cli/commit/d6ce322bfc5789549b03058c3ef77520ba24e43a))
+
+## [0.20.2](https://github.com/workos/cli/compare/v0.20.1...v0.20.2) (2026-07-27)
+
+
+### Bug Fixes
+
+* block newlines in installer Bash allowlist ([#198](https://github.com/workos/cli/issues/198)) ([7929803](https://github.com/workos/cli/commit/792980385778d9d7c0f54611a7743668ad87199f))
+* **deps:** update minor and patch updates ([#194](https://github.com/workos/cli/issues/194)) ([b9b1704](https://github.com/workos/cli/commit/b9b1704e35c7c2357f7aace6dc6f5af512be0f66))
+* **release:** hoist install out of the formula's on_arm blocks ([#212](https://github.com/workos/cli/issues/212)) ([6550742](https://github.com/workos/cli/commit/6550742940ce1b6e571db9834e962a3fec7eb027))
+* **release:** write the tap formula to Formula/workos.rb ([f4a104e](https://github.com/workos/cli/commit/f4a104e413d2a7c3ddfc54979d85d3de0851d53a))
+* restrict workos doctor credential base URL to trusted hosts ([#199](https://github.com/workos/cli/issues/199)) ([fc4f424](https://github.com/workos/cli/commit/fc4f424a7bcb7fc3faff20ddf5ccfaeb3007f6ad))
+
+## [0.20.1](https://github.com/workos/cli/compare/v0.20.0...v0.20.1) (2026-07-26)
+
+
+### Bug Fixes
+
+* detect Bun compiled binary when import.meta.url percent-encodes ~BUN ([#208](https://github.com/workos/cli/issues/208)) ([4c66d6e](https://github.com/workos/cli/commit/4c66d6e255c9b55b600d9fb1c980116679fc9a49))
+
+## [0.20.0](https://github.com/workos/cli/compare/v0.19.0...v0.20.0) (2026-07-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* The npm package no longer exports a library API — `main`/`exports` are gone and it only provides the `workos` binary. Development now requires Bun >= 1.3.0 instead of Node >= 22.11.
+
+### Features
+
+* Add Homebrew channel and install-aware updates ([#196](https://github.com/workos/cli/issues/196)) ([c524855](https://github.com/workos/cli/commit/c5248559cd0c9625a8b40cf29f85abd3efb78135))
+* Ship the CLI as a Bun standalone binary ([#195](https://github.com/workos/cli/issues/195)) ([a5e9b46](https://github.com/workos/cli/commit/a5e9b468cdd62ccf973ae9d1f5046b214cac1d68))
+
+## [0.19.0](https://github.com/workos/cli/compare/v0.18.0...v0.19.0) (2026-07-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* `workos auth login` and `workos install` no longer auto-install skills. Skills + MCP are installed only through the consented setup flow (`workos setup`, or the post-login/install offer on a human TTY). Agent / CI / non-TTY / JSON runs write nothing.
+
+### Features
+
+* add env provision + verify-login commands, fix non-interactive installs (agent/CI), Vite port detection, and misleading command hints ([#192](https://github.com/workos/cli/issues/192)) ([dd20929](https://github.com/workos/cli/commit/dd20929ffeba24d35b0276f7b4336d11a104895a))
+* consent-gated agent setup and flat CLI output ([#200](https://github.com/workos/cli/issues/200)) ([9b0deb8](https://github.com/workos/cli/commit/9b0deb8daca054958f6e28623c3cc970c4a3a68b))
+
+
+### Bug Fixes
+
+* **deps:** bump @workos/openapi-spec to drop tree-sitter chain ([#204](https://github.com/workos/cli/issues/204)) ([7b03394](https://github.com/workos/cli/commit/7b03394593e155d4f3cad5ba9779f4fd7663b683)), closes [#202](https://github.com/workos/cli/issues/202)
+* Extract emulator to @workos/emulate ([#171](https://github.com/workos/cli/issues/171)) ([d20c0ca](https://github.com/workos/cli/commit/d20c0ca29144d2f10949b77a320f147589cdc801))
+
+## [0.18.0](https://github.com/workos/cli/compare/v0.17.1...v0.18.0) (2026-07-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* WORKOS_LLM_GATEWAY_URL and WORKOS_TELEMETRY_URL are removed (derived from WORKOS_API_URL); WORKOS_NO_PROMPT is removed (use WORKOS_MODE=agent); INSTALLER_DEV is renamed to WORKOS_DEV and INSTALLER_DISABLE_PROXY to WORKOS_DISABLE_PROXY.
+
+### Features
+
+* add MCP server install for coding agents (workos mcp) ([#184](https://github.com/workos/cli/issues/184)) ([f040f72](https://github.com/workos/cli/commit/f040f726f5b9ae2077b391596014939482f7dae1))
+* consolidate and rename CLI environment variables ([#180](https://github.com/workos/cli/issues/180)) ([2e0e3ca](https://github.com/workos/cli/commit/2e0e3ca70a7842b4744f6618679e192a62d6f801))
+
+
+### Bug Fixes
+
+* **deps:** update minor and patch updates ([#178](https://github.com/workos/cli/issues/178)) ([496b473](https://github.com/workos/cli/commit/496b473d5bc24e12bc55efe8d9269e122d4b658b))
+
 ## [0.17.1](https://github.com/workos/cli/compare/v0.17.0...v0.17.1) (2026-06-08)
 
 

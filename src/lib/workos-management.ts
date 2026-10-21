@@ -1,15 +1,35 @@
+import {
+  DashboardConfigError,
+  isConfigurationUnauthorized,
+  recoverConfigurationAccess,
+  configurationRecoveryHint,
+  type ConfigurationCredentials,
+} from './configuration-recovery.js';
 import type { Integration } from './constants.js';
+import type { SetupItemId, SetupItemStatus } from './events.js';
+import type { EnvironmentConfig } from './config-store.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from './constants.js';
 import { analytics } from '../utils/analytics.js';
-import clack from '../utils/clack.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
+import ui from '../utils/ui.js';
+import { getActiveEnvironment, isUnclaimedEnvironment } from './config-store.js';
 import { getCallbackPath } from './port-detection.js';
+import { createClaimNonce } from './unclaimed-env-api.js';
 
 const WORKOS_API_BASE = 'https://api.workos.com';
 
+const HOMEPAGE_URL_ENDPOINT = '/user_management/app_homepage_url';
+
+/** Provenance wording when no stored environment can be named. */
+const SUPPLIED_KEY_PROVENANCE = 'the API key supplied to this run';
+
 export interface AutoConfigResult {
+  /** Accepted only after the complete retry succeeds; callers must adopt both values. */
+  recoveredCredentials?: ConfigurationCredentials;
   redirectUri: { success: boolean; alreadyExists: boolean };
   corsOrigin: { success: boolean; alreadyExists: boolean };
-  homepageUrl: { success: boolean };
+  /** Absent when the homepage was left alone; callback/CORS success does not imply complete setup. */
+  homepageUrl?: { success: boolean; alreadyExists: boolean };
 }
 
 interface FetchError {
@@ -19,18 +39,20 @@ interface FetchError {
 }
 
 async function workosRequest(
-  method: 'POST' | 'PUT',
+  method: 'GET' | 'POST' | 'PUT',
   endpoint: string,
   apiKey: string,
-  body: Record<string, string>,
+  body?: Record<string, string>,
 ): Promise<Response> {
   return fetch(`${WORKOS_API_BASE}${endpoint}`, {
     method,
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
+      // Only declare a body's type when there is a body. A bodyless GET that
+      // claims `application/json` is malformed, and strict proxies may reject it.
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
     },
-    body: JSON.stringify(body),
+    ...(body ? { body: JSON.stringify(body) } : {}),
   });
 }
 
@@ -65,14 +87,17 @@ async function createRedirectUri(apiKey: string, uri: string): Promise<{ success
     return { success: true, alreadyExists: true };
   }
 
-  throw new Error(error.message || `HTTP ${error.status}`);
+  throw new DashboardConfigError(error.status);
 }
 
 /**
  * Create a CORS origin in WorkOS.
  * Returns success on 201 or 409 (already exists).
  */
-async function createCorsOrigin(apiKey: string, origin: string): Promise<{ success: boolean; alreadyExists: boolean }> {
+export async function createCorsOrigin(
+  apiKey: string,
+  origin: string,
+): Promise<{ success: boolean; alreadyExists: boolean }> {
   const response = await workosRequest('POST', '/user_management/cors_origins', apiKey, { origin });
 
   if (response.ok) {
@@ -85,33 +110,126 @@ async function createCorsOrigin(apiKey: string, origin: string): Promise<{ succe
     return { success: true, alreadyExists: true };
   }
 
-  throw new Error(error.message || `HTTP ${error.status}`);
+  throw new DashboardConfigError(error.status);
 }
 
 /**
- * Set the app homepage URL in WorkOS.
+ * Set the app homepage URL in WorkOS, skipping the write when it already matches.
+ *
+ * The homepage URL is a single-valued setting, so an unconditional PUT silently
+ * overwrites whatever a logged-in user already had configured. Reading first
+ * makes the common case a no-op that reports itself honestly.
+ *
+ * With preserveExisting, only fill a confirmed empty homepage; failed reads
+ * must not turn an implicit default into an overwrite. Legacy callers retain
+ * the read-failure fallback to PUT.
  */
-async function setHomepageUrl(apiKey: string, url: string): Promise<{ success: boolean }> {
-  const response = await workosRequest('PUT', '/user_management/app_homepage_url', apiKey, { url });
+export async function setHomepageUrl(
+  apiKey: string,
+  url: string,
+  { preserveExisting = false }: { preserveExisting?: boolean } = {},
+): Promise<{ success: boolean; alreadyExists: boolean }> {
+  try {
+    const current = await workosRequest('GET', HOMEPAGE_URL_ENDPOINT, apiKey);
+    if (current.ok) {
+      const data = (await current.json()) as { url?: string } | null;
+      if (preserveExisting && (!data || !('url' in data) || (data.url != null && typeof data.url !== 'string'))) {
+        throw new Error('Could not read the current homepage URL.');
+      }
+      if (data?.url === url || (preserveExisting && data?.url)) {
+        return { success: true, alreadyExists: true };
+      }
+    } else if (current.status === 401 || preserveExisting) {
+      throw new DashboardConfigError(current.status);
+    }
+  } catch (error) {
+    if (preserveExisting || isConfigurationUnauthorized(error)) throw error;
+    // Legacy callers fall through to the write on read failures.
+  }
+
+  const response = await workosRequest('PUT', HOMEPAGE_URL_ENDPOINT, apiKey, { url });
 
   if (!response.ok) {
     const error = await parseFetchError(response);
-    throw new Error(error.message || `HTTP ${error.status}`);
+    throw new DashboardConfigError(error.status);
   }
 
-  return { success: true };
+  return { success: true, alreadyExists: false };
+}
+
+/** Best-effort live claim check; this is not atomic with the later homepage write. */
+export async function isUnclaimedEnvironmentKey(apiKey: string, clientId?: string): Promise<boolean> {
+  try {
+    const environment = getActiveEnvironment();
+    if (
+      !environment ||
+      !isUnclaimedEnvironment(environment) ||
+      environment.apiKey !== apiKey ||
+      (clientId !== undefined && environment.clientId !== clientId)
+    )
+      return false;
+    const claim = await createClaimNonce(environment.clientId, environment.claimToken);
+    return !claim.alreadyClaimed;
+  } catch {
+    // Unavailable keyring or claim status: unknown, so leave the homepage alone.
+    return false;
+  }
+}
+
+/**
+ * Where the credentials being used came from, so the rows below say *where* the
+ * writes landed and not just what was written.
+ *
+ * Derived locally: the WorkOS API exposes no environment identity this module
+ * can reach (`workosRequest` is GET/POST/PUT against user_management only, and
+ * the config store holds no environment id). `activeEnvironment.name` is a
+ * local label, so it is only ever a parenthetical, never an authoritative id.
+ *
+ * The stored active environment is only named when its key is the one that
+ * actually did the writes — `--api-key` (or `WORKOS_API_KEY`) bypasses the
+ * store entirely, and naming an untouched environment is exactly the confusion
+ * this row exists to prevent.
+ */
+function describeCredentialProvenance(apiKey: string): string {
+  let activeEnv: EnvironmentConfig | null = null;
+  try {
+    activeEnv = getActiveEnvironment();
+  } catch {
+    // Keyring locked or unavailable — a label is not worth aborting over.
+    return SUPPLIED_KEY_PROVENANCE;
+  }
+
+  if (!activeEnv || activeEnv.apiKey !== apiKey) return SUPPLIED_KEY_PROVENANCE;
+
+  if (isUnclaimedEnvironment(activeEnv)) {
+    return `a new unclaimed environment (${activeEnv.name}) — run \`${formatWorkOSCommand('profile claim')}\` to keep it`;
+  }
+
+  return `your active environment (${activeEnv.name})`;
 }
 
 export interface AutoConfigOptions {
+  /** Required to verify a replacement key against this application. */
+  clientId?: string;
+  /** Explicit CI callers may disable recovery even in a human terminal. */
+  interactive?: boolean;
   /** Custom homepage URL (defaults to http://localhost:{port}) */
   homepageUrl?: string;
   /** Custom redirect URI (defaults to framework convention) */
   redirectUri?: string;
+  /** Told as each checklist item starts and resolves. */
+  onStep?: (step: SetupItemId, status: SetupItemStatus, detail?: string) => void;
 }
+
+/** Why local-development URLs are never written with a production key. */
+export const SANDBOX_ONLY_REASON =
+  'Automatic setup only runs on sandbox environments (sk_test_ keys). Set production URLs in the WorkOS dashboard.';
 
 /**
  * Auto-configure WorkOS dashboard settings for local development.
  * Sets redirect URI, CORS origin, and homepage URL via the WorkOS API.
+ * Sandbox keys only: these are localhost URLs, and a production key can reach
+ * the installer from a flag, the project's env file, or the active profile.
  *
  * @param apiKey - WorkOS API key (sk_xxx)
  * @param integration - Framework integration type
@@ -126,23 +244,102 @@ export async function autoConfigureWorkOSEnvironment(
   port: number,
   options: AutoConfigOptions = {},
 ): Promise<AutoConfigResult | null> {
+  try {
+    return await autoConfigureOnce(apiKey, integration, port, options);
+  } catch (error) {
+    if (!isConfigurationUnauthorized(error)) throw error;
+    const recovered = await recoverConfigurationAccess({ apiKey, clientId: options.clientId }, options.interactive);
+    let reason =
+      'reason' in recovered ? recovered.reason : `Unauthorized recovery exhausted. ${configurationRecoveryHint()}`;
+    if ('credentials' in recovered && recovered.credentials) {
+      try {
+        const result = await autoConfigureOnce(recovered.credentials.apiKey, integration, port, options);
+        if (result) return { ...result, recoveredCredentials: recovered.credentials };
+        reason = 'Configuration retry failed. Credentials were left unchanged.';
+      } catch {
+        // The single retry is exhausted. No staged credentials escape on failure.
+      }
+    }
+    ui.log.warn(reason);
+    ui.log.info('Configure these settings manually in the WorkOS dashboard:');
+    const baseUrl = `http://localhost:${port}`;
+    ui.rows([
+      { key: 'Redirect URI', value: options.redirectUri || `${baseUrl}${getCallbackPath(integration)}` },
+      { key: 'CORS origin', value: baseUrl },
+      ...(options.homepageUrl ? [{ key: 'Homepage URL', value: options.homepageUrl }] : []),
+    ]);
+    return null;
+  }
+}
+
+async function autoConfigureOnce(
+  apiKey: string,
+  integration: Integration,
+  port: number,
+  options: AutoConfigOptions,
+): Promise<AutoConfigResult | null> {
   const baseUrl = `http://localhost:${port}`;
   const callbackPath = getCallbackPath(integration);
   const callbackUrl = options.redirectUri || `${baseUrl}${callbackPath}`;
   const homepageUrlValue = options.homepageUrl || baseUrl;
+  const onStep = options.onStep ?? (() => {});
 
-  clack.log.step('Configuring WorkOS dashboard settings via API...');
-  clack.log.info(`  Redirect URI: ${callbackUrl}`);
-  clack.log.info(`  CORS origin: ${baseUrl}`);
-  clack.log.info(`  Homepage URL: ${homepageUrlValue}`);
+  // The key's prefix is the one local fact the API enforces; a profile's
+  // `type` is only a local label. Checked here, not in a caller, because
+  // several callers (the installer machine, agent-runner, some integrations'
+  // own run()) reach this function.
+  if (!apiKey.startsWith('sk_test_')) {
+    for (const step of ['redirect-uri', 'cors-origin'] as const) onStep(step, 'skipped', SANDBOX_ONLY_REASON);
+    ui.log.warn(SANDBOX_ONLY_REASON);
+    analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
+      action: 'workos environment auto-config skipped',
+      integration,
+      reason: 'non-sandbox key',
+    });
+    return null;
+  }
+
+  // The homepage is one value per environment, and the REST API can set it
+  // but not read it (the GET answers 404), so this step can't tell whether
+  // someone already chose one. Write only an explicit homepage or a default
+  // for an environment the server still reports as unclaimed. Local claim
+  // status can be stale. With a login, the later dashboard step reads the
+  // current value and fills an empty one. Recheck on recovery: a replacement
+  // staging pair does not transfer the stored claim token or prove the target
+  // is still unclaimed. Leave the default alone when ownership is unverified.
+  const writeHomepage = Boolean(options.homepageUrl) || (await isUnclaimedEnvironmentKey(apiKey));
+
+  ui.log.step('Configuring WorkOS dashboard settings...');
+
+  // Report each item as it resolves, not when the whole batch does.
+  const track = <T extends { alreadyExists: boolean }>(step: SetupItemId, write: Promise<T>): Promise<T> => {
+    onStep(step, 'started');
+    return write.then(
+      (result) => {
+        onStep(step, result.alreadyExists ? 'already-set' : 'done');
+        return result;
+      },
+      (error: unknown) => {
+        onStep(step, 'failed', isConfigurationUnauthorized(error) ? 'Unauthorized' : 'Configuration request failed');
+        throw error;
+      },
+    );
+  };
 
   try {
-    const [redirectUri, corsOrigin, homepageUrl] = await Promise.all([
-      createRedirectUri(apiKey, callbackUrl),
-      createCorsOrigin(apiKey, baseUrl),
-      setHomepageUrl(apiKey, homepageUrlValue),
-    ]);
-
+    // Settle every in-flight write before offering recovery. These are additive
+    // upserts (or an explicit homepage override), so the same-target retry is safe.
+    const requests = [
+      track('redirect-uri', createRedirectUri(apiKey, callbackUrl)),
+      track('cors-origin', createCorsOrigin(apiKey, baseUrl)),
+      writeHomepage ? setHomepageUrl(apiKey, homepageUrlValue) : undefined,
+    ] as const;
+    const settled = await Promise.allSettled(requests);
+    const failures = settled.filter((result) => result.status === 'rejected');
+    // A simultaneous non-auth failure must not be disguised as an auth failure.
+    const failure = failures.find((result) => !isConfigurationUnauthorized(result.reason)) ?? failures[0];
+    if (failure) throw failure.reason;
+    const [redirectUri, corsOrigin, homepageUrl] = await Promise.all(requests);
     const results: AutoConfigResult = { redirectUri, corsOrigin, homepageUrl };
 
     analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
@@ -151,39 +348,53 @@ export async function autoConfigureWorkOSEnvironment(
       port,
       redirectUri: redirectUri.alreadyExists ? 'existed' : 'created',
       corsOrigin: corsOrigin.alreadyExists ? 'existed' : 'created',
+      homepageUrl: !homepageUrl ? 'skipped' : homepageUrl.alreadyExists ? 'existed' : 'updated',
     });
 
-    // Build user feedback
-    const messages: string[] = [];
-    messages.push(
-      redirectUri.alreadyExists
-        ? `Redirect URI: ${callbackUrl} (already existed)`
-        : `Redirect URI: ${callbackUrl} (created)`,
-    );
-    messages.push(
-      corsOrigin.alreadyExists ? `CORS origin: ${baseUrl} (already existed)` : `CORS origin: ${baseUrl} (created)`,
-    );
-    messages.push(`Homepage URL: ${homepageUrlValue} (updated)`);
-
-    clack.log.success('WorkOS dashboard configured:\n  ' + messages.join('\n  '));
+    // Aligned key/value feedback: value in accent, a dim status for "already
+    // existed" vs. a green status for a fresh create/update. The provenance row
+    // comes first — it is the context for the three rows below it.
+    if (homepageUrl) ui.log.success('WorkOS dashboard configured');
+    else {
+      ui.log.warn('Callback and CORS configured; homepage left unchanged.');
+      ui.log.info('Check the homepage in the WorkOS dashboard, or supply --homepage-url to explicitly override it.');
+    }
+    ui.rows([
+      { key: 'Environment', value: describeCredentialProvenance(apiKey), statusKind: 'muted' },
+      {
+        key: 'Redirect URI',
+        value: callbackUrl,
+        status: redirectUri.alreadyExists ? 'already set' : 'created',
+        statusKind: redirectUri.alreadyExists ? 'muted' : 'ok',
+      },
+      {
+        key: 'CORS origin',
+        value: baseUrl,
+        status: corsOrigin.alreadyExists ? 'already set' : 'created',
+        statusKind: corsOrigin.alreadyExists ? 'muted' : 'ok',
+      },
+      homepageUrl
+        ? {
+            key: 'Homepage URL',
+            value: homepageUrlValue,
+            status: homepageUrl.alreadyExists ? 'already set' : 'updated',
+            statusKind: homepageUrl.alreadyExists ? 'muted' : 'ok',
+          }
+        : {
+            key: 'Homepage URL',
+            value: homepageUrlValue,
+            status: 'not changed; check the dashboard',
+            statusKind: 'warn',
+          },
+    ]);
 
     return results;
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
+    if (isConfigurationUnauthorized(error)) throw error;
+    const message = error instanceof DashboardConfigError ? error.message : 'Configuration request failed';
+    ui.log.warn(`Could not configure WorkOS dashboard: ${message}`);
 
-    // Provide specific guidance for common errors
-    if (message.includes('401') || message.includes('Invalid API key')) {
-      clack.log.warn('Could not configure WorkOS dashboard: Invalid API key');
-    } else if (message.includes('403') || message.includes('permission')) {
-      clack.log.warn('Could not configure WorkOS dashboard: API key lacks permission');
-    } else if (message.includes('422') || message.includes('Validation')) {
-      clack.log.warn(`Could not configure WorkOS dashboard: Validation error`);
-      clack.log.info(`  Error: ${message}`);
-    } else {
-      clack.log.warn(`Could not configure WorkOS dashboard: ${message}`);
-    }
-
-    clack.log.info('You can configure these settings manually in the WorkOS dashboard.');
+    ui.log.info('You can configure these settings manually in the WorkOS dashboard.');
 
     analytics.capture(INSTALLER_INTERACTION_EVENT_NAME, {
       action: 'workos environment auto-config failed',

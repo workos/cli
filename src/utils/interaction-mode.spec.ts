@@ -44,23 +44,14 @@ describe('interaction-mode', () => {
       ).toEqual({ mode: 'agent', source: 'flag' });
     });
 
-    it('WORKOS_MODE beats WORKOS_NO_PROMPT', () => {
+    it('WORKOS_MODE beats env-based detection', () => {
       expect(
         resolveInteractionMode({
-          env: { WORKOS_MODE: 'human', WORKOS_NO_PROMPT: '1' },
+          env: { WORKOS_MODE: 'human', CI: '1' },
           stdoutIsTTY: false,
           stderrIsTTY: false,
         }),
       ).toEqual({ mode: 'human', source: 'env' });
-    });
-
-    it('WORKOS_NO_PROMPT=true maps to agent compatibility mode', () => {
-      expect(
-        resolveInteractionMode({ env: { WORKOS_NO_PROMPT: 'true' }, stdoutIsTTY: true, stderrIsTTY: true }),
-      ).toEqual({
-        mode: 'agent',
-        source: 'workos_no_prompt',
-      });
     });
 
     it('CI markers beat agent markers when no explicit mode is set', () => {

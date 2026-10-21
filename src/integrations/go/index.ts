@@ -8,11 +8,12 @@ import { enableDebugLogs } from '../../utils/debug.js';
 import { analytics } from '../../utils/analytics.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from '../../lib/constants.js';
 import { initializeAgent, runAgent } from '../../lib/agent-interface.js';
-import { getOrAskForWorkOSCredentials } from '../../utils/clack-utils.js';
+import { getOrAskForWorkOSCredentials } from '../../utils/ui-utils.js';
 import { autoConfigureWorkOSEnvironment } from '../../lib/workos-management.js';
 import { validateInstallation } from '../../lib/validation/index.js';
 import { parseEnvFile } from '../../utils/env-parser.js';
-import { getReference } from '@workos/skills';
+import { getReference } from '../../lib/skills-assets.js';
+import { buildSignInSection } from '../../lib/sign-in-route.js';
 
 /** Default port for Go HTTP servers */
 const GO_DEFAULT_PORT = 8080;
@@ -126,16 +127,22 @@ export async function run(options: InstallerOptions): Promise<string> {
   });
 
   // Get WorkOS credentials
-  const { apiKey, clientId } = await getOrAskForWorkOSCredentials(options, config.environment.requiresApiKey);
+  let { apiKey, clientId } = await getOrAskForWorkOSCredentials(options, config.environment.requiresApiKey);
 
   // Auto-configure WorkOS environment (redirect URI, CORS)
   const callerHandledConfig = Boolean(options.apiKey || options.clientId);
   if (!callerHandledConfig && apiKey) {
     const redirectUri = options.redirectUri || `http://localhost:${GO_DEFAULT_PORT}${GO_CALLBACK_PATH}`;
-    await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, GO_DEFAULT_PORT, {
+    const result = await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, GO_DEFAULT_PORT, {
+      clientId,
+      interactive: !options.ci,
       homepageUrl: options.homepageUrl,
       redirectUri,
     });
+    if (result?.recoveredCredentials) {
+      ({ apiKey, clientId } = result.recoveredCredentials);
+      Object.assign(options, result.recoveredCredentials);
+    }
   }
 
   // Gather Go-specific context
@@ -184,7 +191,7 @@ The following environment variables have been configured in .env:
 
 ${refContent}
 
-Report your progress using [STATUS] prefixes.
+${buildSignInSection(config)}Report your progress using [STATUS] prefixes.
 
 Begin integration now.`;
 

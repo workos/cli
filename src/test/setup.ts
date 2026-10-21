@@ -9,12 +9,41 @@ import { vi } from 'vitest';
  * file-fallback storage is forced, so an un-mocked spec would wipe a
  * developer's real CLI login (this happened — that's why this exists).
  *
- * Specs that need richer keyring behaviour (e.g. simulating an unavailable
+ * Specs that need richer keyring behavior (e.g. simulating an unavailable
  * keychain) still declare their own vi.mock('@napi-rs/keyring', ...); a
  * per-file mock overrides this global default. The __IS_TEST_MOCK__ sentinel
  * is asserted by src/test/keyring-isolation.spec.ts so removing this setup
  * fails CI instead of silently re-arming the footgun.
  */
+// Same guardrail for the darwin backend: on macOS credential-store routes
+// through /usr/bin/security (see src/lib/darwin-keychain.ts), which would
+// touch the real `workos-cli` keychain item just like the native binding.
+vi.mock('../lib/darwin-keychain.js', () => {
+  const store = new Map<string, string>();
+  return {
+    __IS_TEST_MOCK__: true,
+    DarwinSecurityEntry: class MockDarwinSecurityEntry {
+      private key: string;
+
+      constructor(service: string, account: string) {
+        this.key = `${service}:${account}`;
+      }
+
+      getPassword(): string | null {
+        return store.get(this.key) ?? null;
+      }
+
+      setPassword(password: string): void {
+        store.set(this.key, password);
+      }
+
+      deletePassword(): void {
+        store.delete(this.key);
+      }
+    },
+  };
+});
+
 vi.mock('@napi-rs/keyring', () => {
   const store = new Map<string, string>();
   return {

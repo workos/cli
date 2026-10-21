@@ -1,13 +1,18 @@
-import { writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { chmod, lstat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadCredentials } from './env-loader.js';
-import { writeEnvLocal } from '../../src/lib/env-writer.js';
-import { parseEnvFile } from '../../src/utils/env-parser.js';
+import { writeEnvFile, writeEnvLocal } from '../../src/lib/env-writer.js';
+import { execFileNoThrow } from '../../src/utils/exec-file.js';
 import { getConfig } from '../../src/lib/settings.js';
 import { LatencyTracker } from './latency-tracker.js';
 import { quickCheckValidateAndFormat } from '../../src/lib/validation/quick-checks.js';
 import { runAgent, type AgentRunConfig, type RetryConfig } from '../../src/lib/agent-interface.js';
+import { ensureClaudeCodeExecutable } from '../../src/lib/agent-sdk-assets.js';
 import type { InstallerOptions } from '../../src/utils/types.js';
+import { getRegistry } from '../../src/lib/registry.js';
+import { createInstallerEventEmitter } from '../../src/lib/events.js';
+import { configureInstallEnvironment } from '../../src/lib/run-with-core.js';
+import { runWithLogFile } from '../../src/utils/debug.js';
 import type { ToolCall, LatencyMetrics } from './types.js';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 
@@ -33,6 +38,9 @@ export interface AgentRetryConfig {
 export interface AgentExecutorOptions {
   verbose?: boolean;
   scenarioName?: string;
+  /** Allowlisted environment for isolated real-app fixtures. */
+  environment?: NodeJS.ProcessEnv;
+  redirectUri?: string;
 }
 
 // Skill name mapping for each framework
@@ -57,23 +65,6 @@ const SKILL_NAMES: Record<string, string> = {
 
 /** Frameworks that use package.json / .env.local */
 const JS_FRAMEWORKS = ['nextjs', 'react', 'react-router', 'tanstack-start', 'vanilla-js', 'sveltekit', 'node'];
-
-/**
- * Write a .env file (for non-JS frameworks).
- * Merges with existing .env if present.
- */
-function writeEnvFile(workDir: string, envVars: Record<string, string>): void {
-  const envPath = join(workDir, '.env');
-  let existing: Record<string, string> = {};
-  if (existsSync(envPath)) {
-    existing = parseEnvFile(readFileSync(envPath, 'utf-8'));
-  }
-  const merged = { ...existing, ...envVars };
-  const content = Object.entries(merged)
-    .map(([key, value]) => `${key}=${value}`)
-    .join('\n');
-  writeFileSync(envPath, content + '\n');
-}
 
 export class AgentExecutor {
   private options: AgentExecutorOptions;
@@ -105,19 +96,63 @@ export class AgentExecutor {
     const envVars = {
       WORKOS_API_KEY: this.credentials.workosApiKey,
       WORKOS_CLIENT_ID: this.credentials.workosClientId,
+      ...(this.options.redirectUri ? { WORKOS_REDIRECT_URI: this.options.redirectUri } : {}),
     };
 
-    if (JS_FRAMEWORKS.includes(this.framework)) {
+    if (JS_FRAMEWORKS.includes(this.framework) && !this.options.environment) {
+      // Same env file the installer writes before running the integration, including
+      // the framework's redirect URI key and any client-side prefixed copies.
+      await configureInstallEnvironment({
+        integration: this.framework,
+        credentials: { apiKey: this.credentials.workosApiKey, clientId: this.credentials.workosClientId },
+        options: {
+          debug: false,
+          forceInstall: false,
+          installDir: this.workDir,
+          local: false,
+          ci: true,
+          skipAuth: true,
+          ...(this.options.redirectUri ? { redirectUri: this.options.redirectUri } : {}),
+        },
+      });
+    } else if (JS_FRAMEWORKS.includes(this.framework)) {
       writeEnvLocal(this.workDir, envVars);
     } else {
+      // Git ignores cannot protect tracked files. Refuse rather than silently
+      // untracking a fixture or allowing secrets into its ordinary diff/artifacts.
+      const tracked = await execFileNoThrow('git', ['ls-files', '--', '.env', '.env.bak'], {
+        cwd: this.workDir,
+        env: this.options.environment,
+      });
+      if (tracked.status !== 0 || tracked.stdout.trim()) {
+        throw new Error('Refusing eval credentials: .env/.env.bak must be untracked in a Git fixture.');
+      }
+      for (const name of ['.env', '.env.bak']) {
+        const path = join(this.workDir, name);
+        const info = await lstat(path).catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== 'ENOENT') throw error;
+          return undefined;
+        });
+        if (info) {
+          if (!info.isFile()) throw new Error(`Refusing non-regular eval credential file: ${name}`);
+          // Tighten existing files before writing or backing up any credentials.
+          await chmod(path, 0o600);
+        }
+      }
+      // Shared writer installs ignores BEFORE .env/backup writes; new files are 0600.
       writeEnvFile(this.workDir, envVars);
     }
 
+    if (!this.options.environment) {
+      return this.runProductionIntegration(config, toolCalls, collectedOutput, label);
+    }
+
+    // Isolated real-app fixtures (Fizzy) keep their own allowlisted environment and prompt.
     const skillName = SKILL_NAMES[this.framework];
     const prompt = this.buildPrompt(skillName);
 
     const sdkEnv: Record<string, string | undefined> = {
-      ...process.env,
+      ...(this.options.environment ?? process.env),
       ANTHROPIC_API_KEY: this.credentials.anthropicApiKey,
       ANTHROPIC_BASE_URL: undefined,
       ANTHROPIC_AUTH_TOKEN: undefined,
@@ -127,15 +162,12 @@ export class AgentExecutor {
 
     const agentRunConfig: AgentRunConfig = {
       workingDirectory: this.workDir,
-      mcpServers: {
-        workos: {
-          command: 'npx',
-          args: ['-y', '@workos/mcp-docs-server'],
-        },
-      },
-      model: getConfig().model,
-      allowedTools: ['Skill', 'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep', 'WebFetch'],
+      model: process.env.EVAL_MODEL ?? getConfig().model,
+      // Empty like production: listed tools skip installerCanUseTool, which would let
+      // eval agents run commands (e.g. `workos`, `curl`) the shipped installer denies.
+      allowedTools: [],
       sdkEnv,
+      claudeExecutablePath: await ensureClaudeCodeExecutable(),
     };
 
     const installerOptions: InstallerOptions = {
@@ -198,6 +230,67 @@ export class AgentExecutor {
     }
   }
 
+  /**
+   * Run the framework's real installer integration, so the eval measures the same
+   * prompt, tool gate, and validation/retry loop that users get.
+   */
+  private async runProductionIntegration(
+    config: AgentRetryConfig,
+    toolCalls: ToolCall[],
+    collectedOutput: string[],
+    label: string,
+  ): Promise<AgentResult> {
+    const integration = (await getRegistry()).get(this.framework);
+    if (!integration) throw new Error(`No installer integration for framework: ${this.framework}`);
+
+    if (process.env.EVAL_MODEL) getConfig().model = process.env.EVAL_MODEL;
+
+    let correctionAttempts = 0;
+    const emitter = createInstallerEventEmitter();
+    emitter.on('agent:retry', () => correctionAttempts++);
+
+    const options: InstallerOptions = {
+      debug: this.options.verbose ?? false,
+      forceInstall: false,
+      installDir: this.workDir,
+      local: false,
+      ci: true,
+      skipAuth: true,
+      direct: true,
+      // Passing credentials marks configuration as caller-handled: no dashboard calls.
+      apiKey: this.credentials.workosApiKey,
+      clientId: this.credentials.workosClientId,
+      ...(this.options.redirectUri ? { redirectUri: this.options.redirectUri } : {}),
+      noValidate: !config.enabled,
+      maxRetries: config.maxRetries,
+      emitter,
+      onAgentMessage: (message) => this.trackMessage(message, toolCalls, collectedOutput, label),
+    };
+
+    const base = () => ({
+      output: collectedOutput.join('\n'),
+      toolCalls,
+      latencyMetrics: this.latencyTracker.finish(),
+      correctionAttempts,
+    });
+
+    // Scenarios run concurrently in one process; give each its own installer log.
+    const logName = `${(this.options.scenarioName ?? this.framework).replace(/[^a-z0-9]+/gi, '-')}-${Date.now()}.log`;
+    const logFile = join(process.cwd(), 'tests', 'eval-results', 'installer-logs', logName);
+
+    try {
+      await runWithLogFile(logFile, () => integration.run(options));
+      return { ...base(), success: true, selfCorrected: correctionAttempts > 0 };
+    } catch (error) {
+      return {
+        ...base(),
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        selfCorrected: false,
+      };
+    }
+  }
+
   private buildPrompt(skillName: string): string {
     return `You are integrating WorkOS AuthKit into this application.
 
@@ -206,9 +299,11 @@ export class AgentExecutor {
 - Working directory: ${this.workDir}
 
 ## Environment
-The following environment variables have been configured in .env.local:
+The following environment variables have been configured in ${JS_FRAMEWORKS.includes(this.framework) ? '.env.local' : '.env'}:
 - WORKOS_API_KEY
 - WORKOS_CLIENT_ID
+${this.options.redirectUri ? `- WORKOS_REDIRECT_URI=${this.options.redirectUri}\n` : ''}
+${this.framework === 'ruby' ? 'Ensure the app loads this file before SDK initialization. Never print or commit credentials.\nFor an existing authentication system, preserve identity/session/account boundaries and existing login methods. Do not invent account linking, auto-creation or membership/role assignment: ask for approved policy and leave unsupported behavior pending. Require visible login/account/logout controls, idempotent repeat login and protected access denied after logout. A source match is not behavioral evidence.' : ''}
 
 ## Your Task
 Use the \`${skillName}\` skill to integrate WorkOS AuthKit into this application.

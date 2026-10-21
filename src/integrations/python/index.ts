@@ -7,7 +7,8 @@ import { enableDebugLogs } from '../../utils/debug.js';
 import { analytics } from '../../utils/analytics.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from '../../lib/constants.js';
 import { parseEnvFile } from '../../utils/env-parser.js';
-import { getReference } from '@workos/skills';
+import { getReference } from '../../lib/skills-assets.js';
+import { buildSignInSection } from '../../lib/sign-in-route.js';
 
 /**
  * Detect which Python package manager the project uses.
@@ -186,7 +187,7 @@ The following environment variables have been configured in .env:
 
 ${refContent}
 
-Report your progress using [STATUS] prefixes.
+${buildSignInSection(config)}Report your progress using [STATUS] prefixes.
 
 Begin integration now.`;
 }

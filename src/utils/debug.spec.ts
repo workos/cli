@@ -12,8 +12,8 @@ vi.mock('os', async () => {
   return { ...actual, homedir: () => testDir };
 });
 
-// Mock clack to avoid side effects
-vi.mock('./clack.js', () => ({
+// Mock the UI facade
+vi.mock('./ui.js', () => ({
   default: {
     log: { info: vi.fn() },
   },
@@ -60,7 +60,7 @@ describe('debug logging', () => {
       const actual = await vi.importActual('os');
       return { ...actual, homedir: () => testDir };
     });
-    vi.doMock('./clack.js', () => ({
+    vi.doMock('./ui.js', () => ({
       default: { log: { info: vi.fn() } },
     }));
 
@@ -94,7 +94,7 @@ describe('debug logging', () => {
       const actual = await vi.importActual('os');
       return { ...actual, homedir: () => testDir };
     });
-    vi.doMock('./clack.js', () => ({
+    vi.doMock('./ui.js', () => ({
       default: { log: { info: vi.fn() } },
     }));
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -117,7 +117,7 @@ describe('debug logging', () => {
       const actual = await vi.importActual('os');
       return { ...actual, homedir: () => testDir };
     });
-    vi.doMock('./clack.js', () => ({
+    vi.doMock('./ui.js', () => ({
       default: { log: { info: vi.fn() } },
     }));
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -141,11 +141,34 @@ describe('debug logging', () => {
       const actual = await vi.importActual('os');
       return { ...actual, homedir: () => testDir };
     });
-    vi.doMock('./clack.js', () => ({
+    vi.doMock('./ui.js', () => ({
       default: { log: { info: vi.fn() } },
     }));
 
     const { getLogFilePath } = await import('./debug.js');
     expect(getLogFilePath()).toBeNull();
+  });
+
+  it('keeps concurrent scoped runs in separate log files', async () => {
+    const { runWithLogFile, initLogFile, logInfo, getLogFilePath } = await import('./debug.js');
+    const dir = mkdtempSync(join(tmpdir(), 'workos-scoped-log-'));
+    const a = join(dir, 'a', 'run.log');
+    const b = join(dir, 'b', 'run.log');
+    const run = (path: string, message: string) =>
+      runWithLogFile(path, async () => {
+        initLogFile();
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        logInfo(message);
+        return getLogFilePath();
+      });
+
+    const [pathA, pathB] = await Promise.all([run(a, 'from-a'), run(b, 'from-b')]);
+
+    expect([pathA, pathB]).toEqual([a, b]);
+    expect(readFileSync(a, 'utf8')).toContain('from-a');
+    expect(readFileSync(a, 'utf8')).not.toContain('from-b');
+    expect(readFileSync(b, 'utf8')).toContain('from-b');
+    expect(readFileSync(b, 'utf8')).not.toContain('from-a');
+    rmSync(dir, { recursive: true, force: true });
   });
 });

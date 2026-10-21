@@ -39,7 +39,6 @@ describe('doctor output', () => {
   it('formats interaction mode sources for human output', () => {
     expect(formatInteractionModeSource('flag')).toBe('--mode');
     expect(formatInteractionModeSource('env')).toBe('WORKOS_MODE');
-    expect(formatInteractionModeSource('workos_no_prompt')).toBe('WORKOS_NO_PROMPT');
     expect(formatInteractionModeSource('ci_env')).toBe('CI environment');
     expect(formatInteractionModeSource('agent_env')).toBe('agent environment');
     expect(formatInteractionModeSource('non_tty')).toBe('non-TTY');
@@ -83,6 +82,36 @@ describe('doctor output', () => {
     expect(output).toContain('Agent/CI context, host state may be unavailable');
     expect(output).toContain('WorkOS home directory (/Users/test/.workos)');
     expect(output).not.toContain('EACCES: permission denied');
+
+    log.mockRestore();
+  });
+
+  it('reports MCP configuration separately from unverified Codex OAuth', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    formatReport(
+      report({
+        mcp: {
+          serverUrl: 'https://mcp.workos.com/mcp',
+          docsUrl: 'https://workos.com/docs/mcp',
+          agents: [
+            {
+              agent: 'Codex',
+              available: true,
+              configured: true,
+              installed: true,
+              authentication: 'not-verified',
+            },
+          ],
+        },
+      }),
+    );
+
+    const output = log.mock.calls.map((call) => String(call[0])).join('\n');
+    expect(output).toContain('Codex: configured (OAuth not verified)');
+    expect(output).toContain('Recovery:');
+    expect(output).toContain('https://workos.com/docs/mcp');
+    expect(output).not.toContain('Codex: installed');
 
     log.mockRestore();
   });

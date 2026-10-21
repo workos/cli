@@ -60,6 +60,40 @@ vi.mock('@napi-rs/keyring', () => ({
   },
 }));
 
+// On darwin, config-store routes through DarwinSecurityEntry instead of the
+// native Entry. Back it with the SAME map + availability flag so every test
+// behaves identically on all platforms.
+vi.mock('./darwin-keychain.js', () => ({
+  DarwinSecurityEntry: class MockDarwinSecurityEntry {
+    private key: string;
+
+    constructor(service: string, account: string) {
+      this.key = `${service}:${account}`;
+    }
+
+    getPassword(): string | null {
+      if (!keyringAvailable) {
+        throw new Error('Keyring not available');
+      }
+      return mockKeyring.get(this.key) ?? null;
+    }
+
+    setPassword(password: string): void {
+      if (!keyringAvailable) {
+        throw new Error('Keyring not available');
+      }
+      mockKeyring.set(this.key, password);
+    }
+
+    deletePassword(): void {
+      if (!keyringAvailable && mockKeyring.has(this.key)) {
+        throw new Error('Keyring not available');
+      }
+      mockKeyring.delete(this.key);
+    }
+  },
+}));
+
 // Mock os.homedir BEFORE importing config-store module
 vi.mock('node:os', async (importOriginal) => {
   const original = await importOriginal<typeof import('node:os')>();
@@ -176,6 +210,9 @@ describe('config-store', () => {
     it('returns null for corrupted file', () => {
       saveConfig(sampleConfig);
       writeFileSync(configFile, 'not valid json');
+      // External corruption is only observable from a fresh process —
+      // config reads are cached in-process. Reset to simulate one.
+      setInsecureConfigStorage(true);
       expect(getConfig()).toBeNull();
     });
   });
@@ -433,6 +470,47 @@ describe('config-store', () => {
     });
   });
 
+  describe('owner identity fields', () => {
+    it('round-trips ownerEmail and ownerUserId through file storage', () => {
+      saveConfig({
+        activeEnvironment: 'staging',
+        environments: {
+          staging: {
+            name: 'staging',
+            type: 'sandbox',
+            apiKey: 'sk_test',
+            clientId: 'client_x',
+            ownerEmail: 'a@example.com',
+            ownerUserId: 'u1',
+          },
+        },
+      });
+      const env = getConfig()?.environments['staging'];
+      expect(env?.ownerEmail).toBe('a@example.com');
+      expect(env?.ownerUserId).toBe('u1');
+    });
+
+    it('round-trips owner fields through keyring storage', () => {
+      setInsecureConfigStorage(false);
+      saveConfig({
+        activeEnvironment: 'staging',
+        environments: {
+          staging: {
+            name: 'staging',
+            type: 'sandbox',
+            apiKey: 'sk_test',
+            clientId: 'client_x',
+            ownerEmail: 'a@example.com',
+            ownerUserId: 'u1',
+          },
+        },
+      });
+      const env = getConfig()?.environments['staging'];
+      expect(env?.ownerEmail).toBe('a@example.com');
+      expect(env?.ownerUserId).toBe('u1');
+    });
+  });
+
   describe('markEnvironmentClaimed', () => {
     it('renames environment from unclaimed to sandbox', () => {
       saveConfig({
@@ -457,6 +535,50 @@ describe('config-store', () => {
       expect(config?.environments['sandbox'].name).toBe('sandbox');
       expect(config?.environments['sandbox'].claimToken).toBeUndefined();
       expect(config?.activeEnvironment).toBe('sandbox');
+    });
+
+    it('leaves owner fields undefined when the unclaimed env had none', () => {
+      saveConfig({
+        activeEnvironment: 'unclaimed',
+        environments: {
+          unclaimed: {
+            name: 'unclaimed',
+            type: 'unclaimed',
+            apiKey: 'sk_test_xxx',
+            clientId: 'client_01ABC',
+            claimToken: 'ct_token',
+          },
+        },
+      });
+
+      markEnvironmentClaimed();
+
+      const sandbox = getConfig()?.environments['sandbox'];
+      expect(sandbox?.ownerEmail).toBeUndefined();
+      expect(sandbox?.ownerUserId).toBeUndefined();
+    });
+
+    it('carries through owner fields present on the unclaimed env', () => {
+      saveConfig({
+        activeEnvironment: 'unclaimed',
+        environments: {
+          unclaimed: {
+            name: 'unclaimed',
+            type: 'unclaimed',
+            apiKey: 'sk_test_xxx',
+            clientId: 'client_01ABC',
+            claimToken: 'ct_token',
+            ownerEmail: 'a@example.com',
+            ownerUserId: 'u1',
+          },
+        },
+      });
+
+      markEnvironmentClaimed();
+
+      const sandbox = getConfig()?.environments['sandbox'];
+      expect(sandbox?.ownerEmail).toBe('a@example.com');
+      expect(sandbox?.ownerUserId).toBe('u1');
     });
 
     it('does nothing when no config', () => {

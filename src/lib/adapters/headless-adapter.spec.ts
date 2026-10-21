@@ -125,13 +125,28 @@ describe('HeadlessAdapter', () => {
         files: ['package.json'],
       });
       expect(mockWriteNDJSON).toHaveBeenCalledWith(expect.objectContaining({ type: 'error', code: 'git_dirty' }));
-      expect(sendEvent).toHaveBeenCalledWith({ type: 'GIT_CANCELLED' });
+      expect(sendEvent).toHaveBeenCalledWith({ type: 'GIT_CANCELED' });
       expect(mockExit).toHaveBeenCalledWith(1);
       await adapter.stop();
     });
 
     it('continues when --no-git-check is set', async () => {
       const adapter = createAdapter({ noGitCheck: true });
+      await adapter.start();
+
+      emitter.emit('git:dirty', { files: ['package.json'] });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({
+        type: 'git:decision',
+        action: 'continue',
+      });
+      expect(sendEvent).toHaveBeenCalledWith({ type: 'GIT_CONFIRMED' });
+      expect(mockExit).not.toHaveBeenCalled();
+      await adapter.stop();
+    });
+
+    it('continues in CI mode without --no-git-check (WORKOS_MODE=ci bridges --ci)', async () => {
+      const adapter = createAdapter({ ci: true });
       await adapter.start();
 
       emitter.emit('git:dirty', { files: ['package.json'] });
@@ -239,56 +254,21 @@ describe('HeadlessAdapter', () => {
     });
   });
 
-  describe('commit auto-resolution', () => {
-    it('auto-commits by default', async () => {
+  describe('read-only post-install reporting', () => {
+    it('reports changed, unchanged, non-Git and inspection failures without sending approvals', async () => {
       const adapter = createAdapter();
       await adapter.start();
-
-      emitter.emit('postinstall:commit:prompt', {});
-
-      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'commit:auto' });
-      expect(sendEvent).toHaveBeenCalledWith({ type: 'COMMIT_APPROVED' });
-      await adapter.stop();
-    });
-
-    it('skips commit with --no-commit flag', async () => {
-      const adapter = createAdapter({ noCommit: true });
-      await adapter.start();
-
-      emitter.emit('postinstall:commit:prompt', {});
-
-      expect(mockWriteNDJSON).toHaveBeenCalledWith({
-        type: 'commit:skipped',
-        reason: '--no-commit flag',
-      });
-      expect(sendEvent).toHaveBeenCalledWith({ type: 'COMMIT_DECLINED' });
-      await adapter.stop();
-    });
-  });
-
-  describe('PR auto-resolution', () => {
-    it('skips PR by default', async () => {
-      const adapter = createAdapter();
-      await adapter.start();
-
-      emitter.emit('postinstall:pr:prompt', {});
-
-      expect(mockWriteNDJSON).toHaveBeenCalledWith({
-        type: 'pr:skipped',
-        reason: '--create-pr not set',
-      });
-      expect(sendEvent).toHaveBeenCalledWith({ type: 'PR_DECLINED' });
-      await adapter.stop();
-    });
-
-    it('creates PR with --create-pr flag', async () => {
-      const adapter = createAdapter({ createPr: true });
-      await adapter.start();
-
-      emitter.emit('postinstall:pr:prompt', {});
-
-      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'pr:creating' });
-      expect(sendEvent).toHaveBeenCalledWith({ type: 'PR_APPROVED' });
+      emitter.emit('postinstall:changes', { files: ['existing.ts', 'generated.ts'] });
+      emitter.emit('postinstall:nochanges', {});
+      emitter.emit('postinstall:unavailable', { reason: 'not-git' });
+      emitter.emit('postinstall:unavailable', { reason: 'error', error: 'inspection failed' });
+      expect(mockWriteNDJSON.mock.calls.map(([event]) => event)).toEqual([
+        { type: 'postinstall:changes', files: ['existing.ts', 'generated.ts'], count: 2 },
+        { type: 'postinstall:nochanges' },
+        { type: 'postinstall:unavailable', reason: 'not-git' },
+        { type: 'postinstall:unavailable', reason: 'error', error: 'inspection failed' },
+      ]);
+      expect(sendEvent).not.toHaveBeenCalled();
       await adapter.stop();
     });
   });
@@ -329,6 +309,56 @@ describe('HeadlessAdapter', () => {
     });
   });
 
+  describe('file operations', () => {
+    it('writes path-only NDJSON for file:write (never content)', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('file:write', { path: 'src/auth.ts', content: 'secret' });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'file:write', path: 'src/auth.ts' });
+      const leakedContent = mockWriteNDJSON.mock.calls.some((c) => c[0] && 'content' in (c[0] as object));
+      expect(leakedContent).toBe(false);
+      await adapter.stop();
+    });
+
+    it('writes path-only NDJSON for file:edit (never content)', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('file:edit', { path: 'src/app.ts', oldContent: 'a', newContent: 'b' });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'file:edit', path: 'src/app.ts' });
+      const leaked = mockWriteNDJSON.mock.calls.some(
+        (c) => c[0] && ('oldContent' in (c[0] as object) || 'newContent' in (c[0] as object)),
+      );
+      expect(leaked).toBe(false);
+      await adapter.stop();
+    });
+
+    it('dedupes consecutive same-path file operations', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('file:edit', { path: 'src/app.ts', oldContent: 'a', newContent: 'b' });
+      emitter.emit('file:edit', { path: 'src/app.ts', oldContent: 'b', newContent: 'c' });
+
+      const editCalls = mockWriteNDJSON.mock.calls.filter((c) => (c[0] as { type?: string })?.type === 'file:edit');
+      expect(editCalls).toHaveLength(1);
+      await adapter.stop();
+    });
+
+    it('writes agent:tool NDJSON for surfaced commands', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('agent:tool', { kind: 'command', detail: 'ls' });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'agent:tool', kind: 'command', detail: 'ls' });
+      await adapter.stop();
+    });
+  });
+
   describe('terminal events', () => {
     it('writes complete event', async () => {
       const adapter = createAdapter();
@@ -345,6 +375,49 @@ describe('HeadlessAdapter', () => {
       await adapter.stop();
     });
 
+    it('spreads structured completion fields into the complete event when present', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+      const applicationSetup = {
+        clientId: 'client_app',
+        redirectUri: 'http://localhost:3000/callback',
+        signOutUri: 'http://localhost:3000/',
+        initiateLoginUri: 'http://localhost:3000/sign-in',
+        verified: false,
+        callbackRegistered: true,
+        reason: 'Callback registered. Sign-out and initiate-login settings still need verification.',
+      };
+
+      emitter.emit('complete', {
+        success: true,
+        summary: 'ok',
+        completion: {
+          integration: 'nextjs',
+          devCommand: 'pnpm run dev',
+          url: 'http://localhost:3000',
+          files: ['a.ts'],
+          nextSteps: ['x'],
+          applicationSetup,
+          docsUrl: 'https://d',
+          dashboardUrl: 'https://dash',
+        },
+      });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'complete',
+          success: true,
+          integration: 'nextjs',
+          devCommand: 'pnpm run dev',
+          url: 'http://localhost:3000',
+          files: ['a.ts'],
+          nextSteps: ['x'],
+          applicationSetup,
+        }),
+      );
+      await adapter.stop();
+    });
+
     it('writes error event', async () => {
       const adapter = createAdapter();
       await adapter.start();
@@ -356,6 +429,70 @@ describe('HeadlessAdapter', () => {
         code: 'installer_error',
         message: 'Something broke',
       });
+      await adapter.stop();
+    });
+
+    it('passes a structured decline code through without rewriting the message', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      // "internal_error"-style pattern words in the message must not trigger
+      // the AI-service rewrites when the emitter supplied a code.
+      emitter.emit('error', {
+        message: 'Sorry: the installer cannot help with this framework version.',
+        code: 'unsupported_framework_version',
+      });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({
+        type: 'error',
+        code: 'unsupported_framework_version',
+        message: 'Sorry: the installer cannot help with this framework version.',
+      });
+      await adapter.stop();
+    });
+
+    // The gateway's generic 500 branch also fires for request-shape failures, so
+    // agents and CI must not be told to wait it out: the retry fails identically.
+    it('codes the gateway generic 500 as deterministic, not a transient outage', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('error', { message: 'API Error: 500 An unexpected error occurred', stack: undefined });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({
+        type: 'error',
+        code: 'deterministic_error',
+        message: expect.stringContaining('likely to fail the same way'),
+      });
+      expect(mockWriteNDJSON).not.toHaveBeenCalledWith(
+        expect.objectContaining({ message: expect.stringContaining('temporarily unavailable') }),
+      );
+      await adapter.stop();
+    });
+
+    it('still codes a real 503 as service_unavailable', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('error', { message: 'API Error: 503 Service Unavailable', stack: undefined });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({
+        type: 'error',
+        code: 'service_unavailable',
+        message: expect.stringContaining('temporarily unavailable'),
+      });
+      await adapter.stop();
+    });
+  });
+
+  describe('staging events', () => {
+    it('forwards the staging:success source onto the NDJSON stream', async () => {
+      const adapter = createAdapter();
+      await adapter.start();
+
+      emitter.emit('staging:success', { source: 'stored' });
+
+      expect(mockWriteNDJSON).toHaveBeenCalledWith({ type: 'staging:success', source: 'stored' });
       await adapter.stop();
     });
   });

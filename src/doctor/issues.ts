@@ -1,5 +1,6 @@
 import type { Issue, DoctorReport } from './types.js';
 import { getInstallHint, languageToSdkLanguage } from './checks/language.js';
+import { formatWorkOSCommand } from '../utils/command-invocation.js';
 
 export const ISSUE_DEFINITIONS = {
   MISSING_API_KEY: {
@@ -172,8 +173,26 @@ export function detectIssues(report: Omit<DoctorReport, 'issues' | 'summary'>): 
         code: 'SKILLS_OUTDATED',
         severity: 'warning',
         message: `WorkOS skills outdated for ${agentList} — bundled: ${report.skills.bundledVersion}`,
-        remediation: 'Run: workos skills install',
+        remediation: `Run: ${formatWorkOSCommand('skills install')}`,
         details: { bundledVersion: report.skills.bundledVersion, stale: stale.map((a) => a.agent) },
+      });
+    }
+  }
+
+  // MCP server URL drift — warn ONLY when a configured entry points at an
+  // unexpected URL. Absent MCP is never an issue: the user may have declined
+  // the offer, and doctor reports state without judging. Authentication remains
+  // client-managed and is not inferred from configuration presence.
+  if (report.mcp) {
+    const misconfigured = report.mcp.agents.filter((a) => a.misconfigured);
+    if (misconfigured.length > 0) {
+      const agentList = misconfigured.map((a) => a.agent).join(', ');
+      issues.push({
+        code: 'MCP_MISCONFIGURED',
+        severity: 'warning',
+        message: `WorkOS MCP server configured with an unexpected URL for ${agentList} — expected ${report.mcp.serverUrl}`,
+        remediation: `Run: ${formatWorkOSCommand('mcp install')}`,
+        details: { agents: misconfigured.map((a) => a.agent), expectedUrl: report.mcp.serverUrl },
       });
     }
   }

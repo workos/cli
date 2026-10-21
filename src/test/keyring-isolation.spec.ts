@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as keyring from '@napi-rs/keyring';
+import * as darwinKeychain from '../lib/darwin-keychain.js';
 
 /**
  * Guardrail: the test suite must NEVER touch the real OS keychain.
@@ -14,5 +15,9 @@ import * as keyring from '@napi-rs/keyring';
 describe('keyring test isolation', () => {
   it('replaces the real OS keychain with an in-memory mock during tests', () => {
     expect((keyring as Record<string, unknown>).__IS_TEST_MOCK__).toBe(true);
+  });
+
+  it('replaces the darwin /usr/bin/security backend with an in-memory mock during tests', () => {
+    expect((darwinKeychain as Record<string, unknown>).__IS_TEST_MOCK__).toBe(true);
   });
 });

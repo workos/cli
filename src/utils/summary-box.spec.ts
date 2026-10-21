@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { renderSummaryBox, type SummaryBoxItem } from './summary-box.js';
+import { palette } from './cli-symbols.js';
+import { compactLogoRows } from './logomark.js';
+import { renderSummaryBox, renderCompletionSummary, renderBrandMark, type SummaryBoxItem } from './summary-box.js';
+import type { CompletionData } from '../lib/events.js';
 
 // Simple ANSI code stripper (avoids needing strip-ansi as a dependency)
 function strip(str: string): string {
@@ -12,7 +15,7 @@ describe('summary-box', () => {
     it('renders a box with title and no items', () => {
       const result = strip(
         renderSummaryBox({
-          expression: 'success',
+          tone: 'success',
           title: 'All Good',
         }),
       );
@@ -30,7 +33,7 @@ describe('summary-box', () => {
       ];
       const result = strip(
         renderSummaryBox({
-          expression: 'warning',
+          tone: 'warning',
           title: 'Issues Found',
           items,
         }),
@@ -44,7 +47,7 @@ describe('summary-box', () => {
     it('renders footer with divider', () => {
       const result = strip(
         renderSummaryBox({
-          expression: 'success',
+          tone: 'success',
           title: 'Done',
           footer: 'pnpm dev',
         }),
@@ -57,7 +60,7 @@ describe('summary-box', () => {
     it('omits mid-border when no footer provided', () => {
       const result = strip(
         renderSummaryBox({
-          expression: 'success',
+          tone: 'success',
           title: 'Done',
         }),
       );
@@ -66,27 +69,24 @@ describe('summary-box', () => {
       expect(hasMidBorder).toBe(false);
     });
 
-    it('renders lock character in the box', () => {
-      const result = strip(
-        renderSummaryBox({
-          expression: 'success',
-          title: 'Test',
-        }),
-      );
-      // Should contain parts of the lock body
-      expect(result).toMatch(/[╔+]/);
-      expect(result).toMatch(/[╚+]/);
+    it('leads with a title line that carries the outcome', () => {
+      const line = (tone: 'success' | 'warning' | 'error') =>
+        strip(renderSummaryBox({ tone, title: 'Result' }))
+          .split('\n')
+          .find((l) => l.includes('Result'));
+      expect(line('success')).toMatch(/[✔+] Result/);
+      expect(line('warning')).toMatch(/! Result/);
+      expect(line('error')).toMatch(/[✗x] Result/);
     });
 
-    it('renders all three expressions without error', () => {
-      for (const expression of ['success', 'warning', 'error'] as const) {
-        expect(() => renderSummaryBox({ expression, title: `Test ${expression}` })).not.toThrow();
-      }
+    it('no longer draws the lock mascot', () => {
+      const result = strip(renderSummaryBox({ tone: 'success', title: 'Test' }));
+      for (const piece of ['╭───╮', '╔═', '◠', '▽']) expect(result).not.toContain(piece);
     });
 
     it('handles empty items array', () => {
       const result = renderSummaryBox({
-        expression: 'success',
+        tone: 'success',
         title: 'Clean',
         items: [],
       });
@@ -101,7 +101,7 @@ describe('summary-box', () => {
       }));
       const result = strip(
         renderSummaryBox({
-          expression: 'success',
+          tone: 'success',
           title: 'Many Items',
           items,
         }),
@@ -113,7 +113,7 @@ describe('summary-box', () => {
     it('box lines are consistent width', () => {
       const result = strip(
         renderSummaryBox({
-          expression: 'success',
+          tone: 'success',
           title: 'Width Test',
           items: [
             { type: 'done', text: 'Short' },
@@ -127,6 +127,137 @@ describe('summary-box', () => {
       for (const line of lines) {
         expect(line.length).toBe(firstLineWidth);
       }
+    });
+  });
+
+  describe('renderCompletionSummary', () => {
+    function makeCompletion(overrides: Partial<CompletionData> = {}): CompletionData {
+      return {
+        integration: 'nextjs',
+        devCommand: 'pnpm run dev',
+        url: 'http://localhost:8080',
+        files: ['app/auth/route.ts', '.env.local'],
+        nextSteps: ['Run `pnpm run dev` to start your dev server', 'Open http://localhost:8080 to test authentication'],
+        docsUrl: 'https://workos.com/docs/user-management/authkit/nextjs',
+        dashboardUrl: 'https://dashboard.workos.com',
+        ...overrides,
+      };
+    }
+
+    it('renders structured success data (dev command, files, url)', () => {
+      const result = strip(renderCompletionSummary(true, 'ignored on success', makeCompletion()));
+
+      expect(result).toContain('WorkOS AuthKit Installed');
+      expect(result).toContain('pnpm run dev');
+      expect(result).toContain('app/auth/route.ts');
+      expect(result).toContain('http://localhost:8080');
+      // The old static strings must NOT appear when structured data is present.
+      expect(result).not.toContain('Start dev server to test authentication');
+      expect(result).not.toContain('Visit WorkOS Dashboard to manage users');
+    });
+
+    it('caps the file list at 5 with a "…and N more" line', () => {
+      const files = Array.from({ length: 7 }, (_, i) => `file-${i + 1}.ts`);
+      const result = strip(renderCompletionSummary(true, undefined, makeCompletion({ files })));
+
+      expect(result).toContain('…and 2 more');
+      expect(result).not.toContain('file-6.ts');
+      expect(result).not.toContain('file-7.ts');
+    });
+
+    it('falls back to the static box when no completion data is present', () => {
+      const result = strip(renderCompletionSummary(true));
+
+      expect(result).toContain('WorkOS AuthKit Installed');
+      expect(result).toContain('Start dev server to test authentication');
+    });
+
+    it('labels pending dashboard configuration rather than claiming complete setup', () => {
+      const result = strip(
+        renderCompletionSummary(
+          true,
+          undefined,
+          makeCompletion({
+            applicationSetup: {
+              clientId: 'client_app',
+              redirectUri: 'http://localhost:8080/callback',
+              signOutUri: 'http://localhost:8080/',
+              initiateLoginUri: 'http://localhost:8080/sign-in',
+              verified: false,
+            },
+            nextSteps: ['Configure Initiate login URI: http://localhost:8080/sign-in'],
+          }),
+        ),
+      );
+      expect(result).toContain('! App code installed; WorkOS setup required');
+      expect(result).not.toContain('✔');
+      expect(result).toContain('http://localhost:8080/sign-in');
+    });
+
+    it('retains manual setup instructions when structured completion data is unavailable', () => {
+      const result = strip(renderCompletionSummary(true, 'Application setup is incomplete: configure /sign-in'));
+      expect(result).toContain('Application setup is incomplete: configure /sign-in');
+    });
+
+    it('renders the failure summary', () => {
+      const result = strip(renderCompletionSummary(false, 'Something went wrong'));
+
+      expect(result).toContain('Installation Failed');
+      expect(result).toContain('Something went wrong');
+    });
+
+    it('puts the outcome on the title line, not on a lock', () => {
+      const success = strip(renderCompletionSummary(true)).split('\n');
+      const failure = strip(renderCompletionSummary(false, 'Something went wrong')).split('\n');
+
+      expect(success[0]).toMatch(/^ {2}[✔+] WorkOS AuthKit Installed$/);
+      expect(failure[0]).toMatch(/^ {2}[✗x] Installation Failed$/);
+      // One ✗ for the outcome; the detail under it doesn't repeat it.
+      expect(failure[1]).toBe('  › Something went wrong');
+      for (const piece of ['╭───╮', '╔═', '◠', '×']) {
+        expect(success.join('\n')).not.toContain(piece);
+        expect(failure.join('\n')).not.toContain(piece);
+      }
+    });
+
+    it('renders de-boxed (variable-width lines, not a fixed-width box)', () => {
+      const result = strip(renderCompletionSummary(true, undefined, makeCompletion()));
+      // A bordered box forces every line to the same width; the flat summary does not.
+      const widths = new Set(
+        result
+          .split('\n')
+          .filter((l) => l.trim())
+          .map((l) => l.length),
+      );
+      expect(widths.size).toBeGreaterThan(1);
+    });
+  });
+
+  describe('renderBrandMark', () => {
+    it('draws the compact logomark with the wordmark and subtitle beside it', () => {
+      const lines = strip(renderBrandMark('AuthKit installer', { unicode: true })).split('\n');
+
+      expect(lines).toHaveLength(compactLogoRows().length);
+      compactLogoRows().forEach((row, i) => expect(lines[i].startsWith(`  ${row.trimEnd()}`)).toBe(true));
+      expect(lines[1]).toMatch(/WorkOS$/);
+      expect(lines[2]).toMatch(/AuthKit installer$/);
+      for (const line of lines) expect(line).toBe(line.trimEnd());
+    });
+
+    it('paints the mark in the WorkOS brand accent', () => {
+      const lines = renderBrandMark('AuthKit installer', { unicode: true }).split('\n');
+      expect(lines[0]).toBe(`  ${palette.accent(compactLogoRows()[0].trimEnd())}`);
+    });
+
+    it('renders without a subtitle', () => {
+      const result = strip(renderBrandMark(undefined, { unicode: true }));
+
+      expect(result).toContain('WorkOS');
+      expect(result).not.toContain('AuthKit installer');
+    });
+
+    it('falls back to one plain line without unicode', () => {
+      expect(strip(renderBrandMark('AuthKit installer', { unicode: false }))).toBe('  WorkOS  AuthKit installer');
     });
   });
 });

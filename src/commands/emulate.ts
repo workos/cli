@@ -1,8 +1,11 @@
-import { createEmulator, type EmulatorSeedConfig } from '../emulate/index.js';
+// Type-only: the compiled-in package stays the compile-time contract even when
+// a runtime-downloaded bundle provides the implementation (emulate-loader.ts).
+import type { Emulator, EmulatorSeedConfig } from '@workos/emulate';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import chalk from 'chalk';
+import { resolveCreateEmulator } from '../lib/emulate-loader.js';
 import { IS_WINDOWS } from '../utils/platform.js';
 import { exitWithError } from '../utils/output.js';
 
@@ -10,6 +13,7 @@ export interface EmulateArgs {
   port: number;
   seed?: string;
   json?: boolean;
+  interactive?: boolean;
 }
 
 function loadSeedFile(filePath: string): EmulatorSeedConfig {
@@ -37,7 +41,7 @@ function autoDetectSeedFile(): EmulatorSeedConfig | null {
   return null;
 }
 
-function printBanner(emulator: { url: string; port: number; apiKey: string }): void {
+function printBanner(emulator: Pick<Emulator, 'url' | 'apiKey'>): void {
   console.log();
   console.log(chalk.bold('  WorkOS Emulator'));
   console.log();
@@ -52,9 +56,11 @@ function printBanner(emulator: { url: string; port: number; apiKey: string }): v
 export async function runEmulate(argv: EmulateArgs): Promise<void> {
   const seedConfig = argv.seed ? loadSeedFile(argv.seed) : autoDetectSeedFile();
 
+  const createEmulator = await resolveCreateEmulator();
   const emulator = await createEmulator({
     port: argv.port,
     seed: seedConfig ?? undefined,
+    interactiveAuth: argv.interactive,
   });
 
   if (argv.json) {
@@ -72,7 +78,10 @@ export async function runEmulate(argv: EmulateArgs): Promise<void> {
 
   const shutdown = () => {
     if (!argv.json) console.log(`\n${chalk.dim('Shutting down...')}`);
-    emulator.close().then(() => process.exit(0));
+    emulator.close().then(
+      () => process.exit(0),
+      () => process.exit(1),
+    );
   };
   process.once('SIGINT', shutdown);
   process.once('SIGTERM', shutdown);

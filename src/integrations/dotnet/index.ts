@@ -12,13 +12,14 @@ function hasCsproj(installDir: string): boolean {
   }
 }
 import { SPINNER_MESSAGE } from '../../lib/framework-config.js';
-import { getOrAskForWorkOSCredentials } from '../../utils/clack-utils.js';
+import { getOrAskForWorkOSCredentials } from '../../utils/ui-utils.js';
 import { analytics } from '../../utils/analytics.js';
 import { INSTALLER_INTERACTION_EVENT_NAME } from '../../lib/constants.js';
 import { initializeAgent, runAgent } from '../../lib/agent-interface.js';
 import { autoConfigureWorkOSEnvironment } from '../../lib/workos-management.js';
 import { validateInstallation } from '../../lib/validation/index.js';
-import { getReference } from '@workos/skills';
+import { getReference } from '../../lib/skills-assets.js';
+import { buildSignInSection } from '../../lib/sign-in-route.js';
 
 export const config: FrameworkConfig = {
   metadata: {
@@ -91,16 +92,22 @@ export async function run(options: InstallerOptions): Promise<string> {
     integration: config.metadata.integration,
   });
 
-  const { apiKey, clientId } = await getOrAskForWorkOSCredentials(options, config.environment.requiresApiKey);
+  let { apiKey, clientId } = await getOrAskForWorkOSCredentials(options, config.environment.requiresApiKey);
 
   // Auto-configure WorkOS environment (redirect URI, CORS, homepage)
   const callerHandledConfig = Boolean(options.apiKey || options.clientId);
   if (!callerHandledConfig && apiKey) {
     const port = 5000; // ASP.NET Core default HTTP port
-    await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, port, {
+    const result = await autoConfigureWorkOSEnvironment(apiKey, config.metadata.integration, port, {
+      clientId,
+      interactive: !options.ci,
       homepageUrl: options.homepageUrl,
       redirectUri: options.redirectUri,
     });
+    if (result?.recoveredCredentials) {
+      ({ apiKey, clientId } = result.recoveredCredentials);
+      Object.assign(options, result.recoveredCredentials);
+    }
   }
 
   // Build prompt — credentials are passed via prompt context since .NET doesn't use .env.local
@@ -127,7 +134,7 @@ The following WorkOS credentials should be configured in appsettings.Development
 
 ${refContent}
 
-Report your progress using [STATUS] prefixes.
+${buildSignInSection(config)}Report your progress using [STATUS] prefixes.
 
 Begin integration now.`;
 

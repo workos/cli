@@ -10,7 +10,6 @@ export interface CliOptions {
   retry: number;
   noRetry: boolean;
   sequential: boolean;
-  noDashboard: boolean;
   noFail: boolean;
   noCorrection: boolean;
   quality: boolean;
@@ -40,6 +39,7 @@ const FRAMEWORKS = [
   'elixir',
 ];
 const STATES = [
+  'fizzy', // Opt-in only: also requires --framework=ruby and explicit approval.
   'example',
   'example-auth0',
   'partial-install',
@@ -60,7 +60,6 @@ export function parseArgs(args: string[]): CliOptions {
     retry: 2,
     noRetry: false,
     sequential: false,
-    noDashboard: false,
     noFail: false,
     noCorrection: false,
     quality: false,
@@ -147,8 +146,6 @@ export function parseArgs(args: string[]): CliOptions {
       options.state = state;
     } else if (arg === '--sequential') {
       options.sequential = true;
-    } else if (arg === '--no-dashboard') {
-      options.noDashboard = true;
     } else if (arg === '--no-fail') {
       options.noFail = true;
     } else if (arg === '--no-correction') {
@@ -167,7 +164,7 @@ export function parseArgs(args: string[]): CliOptions {
 
 export function printHelp(): void {
   console.log(`
-Usage: pnpm eval [command] [options]
+Usage: bun run eval [command] [options]
 
 Commands:
   run (default)       Run evaluations
@@ -200,8 +197,6 @@ Options:
 
   --sequential        Run scenarios sequentially (disable parallelism)
 
-  --no-dashboard      Disable live dashboard, use sequential logging
-
   --no-fail           Exit 0 even if success criteria thresholds not met
 
   --no-correction     Disable within-session agent self-correction retries
@@ -213,16 +208,16 @@ Options:
   --help, -h          Show this help message
 
 Examples:
-  pnpm eval                           # Run all 10 scenarios
-  pnpm eval --framework=nextjs        # Run only Next.js scenarios
-  pnpm eval --state=example           # Run only example app scenarios
-  pnpm eval --framework=react --state=example-auth0
+  bun run eval                           # Run all 10 scenarios
+  bun run eval --framework=nextjs        # Run only Next.js scenarios
+  bun run eval --state=example           # Run only example app scenarios
+  bun run eval --framework=react --state=example-auth0
                                       # Run specific scenario
-  pnpm eval --debug                   # Verbose output, keep failed dirs
-  pnpm eval --retry=3                 # More retry attempts
-  pnpm eval:history                   # List recent runs
-  pnpm eval:history --limit=20        # Show more runs
-  pnpm eval:diff <id1> <id2>          # Compare two runs
-  pnpm eval:prune --keep=5            # Keep only 5 most recent runs
+  bun run eval --debug                   # Verbose output, keep failed dirs
+  bun run eval --retry=3                 # More retry attempts
+  bun run eval:history                   # List recent runs
+  bun run eval:history --limit=20        # Show more runs
+  bun run eval:diff <id1> <id2>          # Compare two runs
+  bun run eval:prune --keep=5            # Keep only 5 most recent runs
 `);
 }
