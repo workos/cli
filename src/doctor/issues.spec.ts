@@ -61,4 +61,35 @@ describe('detectIssues', () => {
       }),
     );
   });
+
+  it.each([
+    ['@workos-inc/authkit-nextjs', 'https://workos.com/docs/sdks/authkit-nextjs#readme-optional-configuration'],
+    [
+      '@workos/authkit-tanstack-react-start',
+      'https://workos.com/docs/sdks/authkit-tanstack-start#readme-optional-configuration',
+    ],
+  ])('warns about an unset cookie domain for %s with SDK-specific docs', (name, docsUrl) => {
+    const report = baseReport();
+    report.sdk = { ...report.sdk, name, isAuthKit: true };
+
+    expect(detectIssues(report)).toContainEqual(expect.objectContaining({ code: 'COOKIE_DOMAIN_NOT_SET', docsUrl }));
+  });
+
+  it.each(['@workos-inc/authkit-remix', '@workos-inc/authkit-react', '@workos/authkit-sveltekit'])(
+    'does not warn about cookie domain for %s, which ignores WORKOS_COOKIE_DOMAIN',
+    (name) => {
+      const report = baseReport();
+      report.sdk = { ...report.sdk, name, isAuthKit: true };
+
+      expect(detectIssues(report).map((i) => i.code)).not.toContain('COOKIE_DOMAIN_NOT_SET');
+    },
+  );
+
+  it('does not warn when the cookie domain is set', () => {
+    const report = baseReport();
+    report.sdk = { ...report.sdk, name: '@workos-inc/authkit-nextjs', isAuthKit: true };
+    report.environment.cookieDomain = 'example.com';
+
+    expect(detectIssues(report).map((i) => i.code)).not.toContain('COOKIE_DOMAIN_NOT_SET');
+  });
 });

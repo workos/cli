@@ -23,7 +23,7 @@ export const ISSUE_DEFINITIONS = {
     severity: 'warning' as const,
     message: 'Cookie domain not explicitly set',
     remediation: 'Consider setting WORKOS_COOKIE_DOMAIN for cross-subdomain auth',
-    docsUrl: 'https://github.com/workos/authkit-nextjs#optional-configuration',
+    // docsUrl is per-SDK, see COOKIE_DOMAIN_DOCS
   },
   NO_SDK_FOUND: {
     severity: 'error' as const,
@@ -66,6 +66,13 @@ export const ISSUE_DEFINITIONS = {
   },
 };
 
+// Only these AuthKit SDKs read WORKOS_COOKIE_DOMAIN; the others ignore it.
+const COOKIE_DOMAIN_DOCS: Record<string, string> = {
+  '@workos-inc/authkit-nextjs': 'https://workos.com/docs/sdks/authkit-nextjs#readme-optional-configuration',
+  '@workos/authkit-tanstack-react-start':
+    'https://workos.com/docs/sdks/authkit-tanstack-start#readme-optional-configuration',
+};
+
 export function detectIssues(report: Omit<DoctorReport, 'issues' | 'summary'>): Issue[] {
   const issues: Issue[] = [];
 
@@ -99,8 +106,13 @@ export function detectIssues(report: Omit<DoctorReport, 'issues' | 'summary'>): 
     issues.push({ code: 'MISSING_CLIENT_ID', ...ISSUE_DEFINITIONS.MISSING_CLIENT_ID });
   }
 
-  if (report.sdk.isAuthKit && !report.environment.cookieDomain) {
-    issues.push({ code: 'COOKIE_DOMAIN_NOT_SET', ...ISSUE_DEFINITIONS.COOKIE_DOMAIN_NOT_SET });
+  const cookieDomainDocs = report.sdk.name ? COOKIE_DOMAIN_DOCS[report.sdk.name] : undefined;
+  if (cookieDomainDocs && !report.environment.cookieDomain) {
+    issues.push({
+      code: 'COOKIE_DOMAIN_NOT_SET',
+      ...ISSUE_DEFINITIONS.COOKIE_DOMAIN_NOT_SET,
+      docsUrl: cookieDomainDocs,
+    });
   }
 
   if (!report.hostExecution.ok) {
