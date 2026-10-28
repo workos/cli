@@ -14,6 +14,11 @@ export function registerSecret(value: string | undefined): void {
   if (value && value.length >= 8) registeredSecrets.add(value);
 }
 
+/** Test-only: forget every registered secret, so each test starts from a known state. */
+export function resetRegisteredSecretsForTests(): void {
+  registeredSecrets.clear();
+}
+
 /** Replace every registered secret value in `text` with `[REDACTED]`. */
 export function redactRegisteredSecrets(text: string): string {
   let redacted = text;

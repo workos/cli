@@ -22,7 +22,8 @@ const { runVerifyLogin } = await import('../commands/verify-login.js');
 const { CliExit } = await import('../utils/cli-exit.js');
 const { setOutputMode } = await import('../utils/output.js');
 const { sanitizeMessage, sanitizeStack } = await import('../utils/crash-reporter.js');
-const { redactCredentials } = await import('../utils/redact.js');
+const { redactCredentials, redactRegisteredSecrets, resetRegisteredSecretsForTests } =
+  await import('../utils/redact.js');
 
 // Distinctive values so any leak is easy to spot.
 const GITHUB_JWT = 'eyJhbGciOiJSUzI1NiJ9.eyJyZXBvIjoiYWNtZS9hcHAifQ.github-jwt-signature-SECRET';
@@ -99,6 +100,7 @@ describe('workload identity federation (wif)', () => {
 
     activeEnv = undefined;
     resetWifCacheForTests();
+    resetRegisteredSecretsForTests();
     setOutputMode('human');
 
     calls = [];
@@ -537,6 +539,21 @@ describe('workload identity federation (wif)', () => {
   });
 
   it('never leaks either token', async () => {
+    // Fresh values used only here, so redaction can't lean on an earlier test
+    // having registered them. The GitHub token is deliberately not JWT-shaped,
+    // so the telemetry checks exercise registration rather than the eyJ pattern.
+    const githubToken = 'gh-oidc-token-only-in-leak-test-SECRET';
+    const accessToken = 'wos-access-token-only-in-leak-test-SECRET';
+    const requestToken = 'actions-request-token-only-in-leak-test-SECRET';
+    process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN = requestToken;
+    githubHandler = () => json({ value: githubToken });
+
+    // Explicit starting state: beforeEach cleared the registry, and a value is
+    // only registered once the CLI has handled it.
+    for (const value of [githubToken, accessToken, requestToken]) {
+      expect(redactRegisteredSecrets(value)).toBe(value);
+    }
+
     const messages: string[] = [];
     const writes: string[] = [];
     vi.spyOn(process.stdout, 'write').mockImplementation((chunk: string | Uint8Array) => {
@@ -554,35 +571,30 @@ describe('workload identity federation (wif)', () => {
       } catch (error) {
         messages.push(String(error), error instanceof Error ? `${error.message}\n${error.stack}` : '');
       }
+      // Clears the token cache only; registered secrets stay, as in a real run.
       resetWifCacheForTests();
     }
 
     for (const mode of ['human', 'json'] as const) {
       setOutputMode(mode);
 
-      // Server echoes the assertion back in error_description.
-      tokenHandler = () => json({ error: 'invalid_grant', error_description: `bad assertion ${GITHUB_JWT}` }, 400);
+      // Before any access token exists, a failed exchange can only echo the GitHub token.
+      tokenHandler = () => json({ error: 'invalid_grant', error_description: `bad assertion ${githubToken}` }, 400);
       await capture(() => resolveApiKeyAsync());
 
-      // Network error whose message carries the assertion.
       tokenHandler = () => {
-        throw new TypeError(`socket hang up while sending ${GITHUB_JWT}`);
+        throw new TypeError(`socket hang up while sending ${githubToken}`);
       };
       await capture(() => resolveApiKeyAsync());
 
-      // Unrecognized error echoing both tokens.
-      tokenHandler = () =>
-        json({ error: 'server_error', error_description: `${GITHUB_JWT} / ${ACCESS_TOKEN}`, access_token: '' }, 500);
+      tokenHandler = () => new Response(`assertion=${githubToken}`, { status: 400 });
       await capture(() => resolveApiKeyAsync());
 
-      // Non-JSON body echoing the request.
-      tokenHandler = () => new Response(`assertion=${GITHUB_JWT}`, { status: 400 });
-      await capture(() => resolveApiKeyAsync());
-
-      // Successful exchange, then failures downstream of it.
-      tokenHandler = () => json({ access_token: ACCESS_TOKEN, token_type: 'Bearer', expires_in: 300 });
+      // A successful exchange gives the CLI an access token; then failures downstream of it.
+      tokenHandler = () => json({ access_token: accessToken, token_type: 'Bearer', expires_in: 300 });
       await capture(async () => {
         const token = await resolveApiKeyAsync();
+        expect(token).toBe(accessToken);
         await runVerifyLogin({
           apiKey: token,
           clientId: 'client_x',
@@ -597,19 +609,24 @@ describe('workload identity federation (wif)', () => {
         await workosRequest({ method: 'GET', path: '/organizations', apiKey: token, baseUrl: API_BASE });
       });
       apiHandler = () => json({ data: [], list_metadata: { before: null, after: null } });
+
+      // A later exchange fails and the server echoes both the new assertion and the access token it issued earlier.
+      tokenHandler = () =>
+        json({ error: 'server_error', error_description: `${githubToken} / ${accessToken}`, access_token: '' }, 500);
+      await capture(() => resolveApiKeyAsync());
     }
 
-    // Debug-log and telemetry redaction helpers know both values.
+    // Debug-log and telemetry redaction helpers know all three values.
     const redactedForTelemetry = [
-      sanitizeMessage(`failed with ${GITHUB_JWT} and ${ACCESS_TOKEN}`),
-      sanitizeStack(`Error: ${ACCESS_TOKEN}\n    at x (/src/lib/wif.ts:1:1)`),
-      JSON.stringify(redactCredentials({ assertion: GITHUB_JWT, nested: { token: ACCESS_TOKEN } })),
+      sanitizeMessage(`failed with ${githubToken} and ${accessToken} via ${requestToken}`),
+      sanitizeStack(`Error: ${accessToken}\n    at x (/src/lib/wif.ts:1:1)`),
+      JSON.stringify(redactCredentials({ assertion: githubToken, nested: { token: accessToken } })),
     ];
 
     const everything = [...messages, ...writes, ...stdout, ...stderr, ...redactedForTelemetry].join('\n');
     expect(stderr.length).toBeGreaterThan(0);
-    expect(everything).not.toContain(GITHUB_JWT);
-    expect(everything).not.toContain(ACCESS_TOKEN);
-    expect(everything).not.toContain(REQUEST_TOKEN);
+    expect(everything).not.toContain(githubToken);
+    expect(everything).not.toContain(accessToken);
+    expect(everything).not.toContain(requestToken);
   });
 });
