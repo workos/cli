@@ -1,0 +1,178 @@
+# Calls the WorkOS API from GitHub Actions with no WORKOS_API_KEY, using
+# workload identity federation (WIF): the job's GitHub OIDC token is exchanged
+# for a short-lived WorkOS access token. See ../../README.md for setup.
+#
+# The WorkOS server side (the `management-api-oauth` flag) is not deployed
+# yet, so this only works against an environment where it has been enabled.
+
+name: WorkOS WIF test
+
+on:
+  workflow_dispatch:
+    inputs:
+      cli_ref:
+        description: >-
+          workos/cli branch, tag or SHA to run from source in the CLI job. Leave empty to install
+          the published `workos` package (WIF is not in a published release yet).
+        required: false
+        default: ''
+
+permissions:
+  id-token: write # lets the job request a GitHub OIDC token
+  contents: read
+
+env:
+  WORKOS_CLIENT_ID: ${{ vars.WORKOS_CLIENT_ID }}
+  WORKOS_WIF_TOKEN_URL: ${{ vars.WORKOS_WIF_TOKEN_URL }}
+  WORKOS_API_URL: ${{ vars.WORKOS_API_URL || 'https://api.workos.com' }}
+  WORKOS_ENVIRONMENT_ID: ${{ vars.WORKOS_ENVIRONMENT_ID }}
+  # Must match the audience in the M2M application's trust rule.
+  WORKOS_WIF_AUDIENCE: https://api.workos.com
+
+jobs:
+  curl:
+    name: Plain curl
+    runs-on: ubuntu-latest
+    env:
+      ORG_NAME: wif-test-${{ github.run_id }}
+    steps:
+      # One step on purpose: the access token stays in this shell's memory and
+      # is never written to GITHUB_ENV or a file. No `set -x` anywhere, and
+      # both tokens are masked before anything else can print.
+      - name: Exchange the OIDC token, then list and create organizations
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          : "${WORKOS_CLIENT_ID:?Set the WORKOS_CLIENT_ID repository variable}"
+          : "${WORKOS_WIF_TOKEN_URL:?Set the WORKOS_WIF_TOKEN_URL repository variable}"
+          if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ] || [ -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]; then
+            echo "::error::No OIDC token available. Add 'permissions: id-token: write' to the workflow or job."
+            exit 1
+          fi
+
+          echo "::group::1. Request a GitHub OIDC token (audience ${WORKOS_WIF_AUDIENCE})"
+          id_token=$(curl -sS --fail \
+            -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            --get --data-urlencode "audience=${WORKOS_WIF_AUDIENCE}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}" | jq -r '.value // empty')
+          if [ -z "$id_token" ]; then
+            echo "::error::GitHub returned no OIDC token."
+            exit 1
+          fi
+          echo "::add-mask::${id_token}"
+          echo "Got a GitHub OIDC token."
+          echo "::endgroup::"
+
+          echo "::group::2. Exchange it at WORKOS_WIF_TOKEN_URL"
+          form=(
+            --data-urlencode "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer"
+            --data-urlencode "assertion=${id_token}"
+            --data-urlencode "client_id=${WORKOS_CLIENT_ID}"
+            --data-urlencode "resource=https://api.workos.com"
+          )
+          if [ -n "${WORKOS_WIF_SCOPE:-}" ]; then
+            form+=(--data-urlencode "scope=${WORKOS_WIF_SCOPE}")
+          fi
+          response=$(curl -sS -X POST "${WORKOS_WIF_TOKEN_URL}" \
+            -H 'Content-Type: application/x-www-form-urlencoded' \
+            -H 'Accept: application/json' \
+            "${form[@]}" \
+            -w '\n%{http_code}')
+          status=${response##*$'\n'}
+          body=${response%$'\n'*}
+          access_token=$(printf '%s' "$body" | jq -r '.access_token // empty' 2>/dev/null || true)
+          if [ "$status" != "200" ] || [ -z "$access_token" ]; then
+            # Print only the OAuth error fields, never the whole body.
+            printf '%s' "$body" | jq -c '{error, error_description}' 2>/dev/null || echo "(response was not JSON)"
+            echo "::error::Token exchange failed (HTTP ${status}). See the README's common errors."
+            exit 1
+          fi
+          echo "::add-mask::${access_token}"
+          echo "Got a WorkOS access token (expires in $(printf '%s' "$body" | jq -r '.expires_in')s)."
+          echo "::endgroup::"
+
+          auth=(-H "Authorization: Bearer ${access_token}")
+          if [ -n "${WORKOS_ENVIRONMENT_ID:-}" ]; then
+            auth+=(-H "x-url-environment-id: ${WORKOS_ENVIRONMENT_ID}")
+          fi
+
+          echo "::group::3. GET /organizations"
+          curl -sS --fail-with-body "${auth[@]}" "${WORKOS_API_URL}/organizations?limit=5" |
+            jq '{count: (.data | length), names: [.data[].name]}'
+          echo "::endgroup::"
+
+          echo "::group::4. POST /organizations (${ORG_NAME})"
+          org=$(curl -sS --fail-with-body "${auth[@]}" \
+            -H 'Content-Type: application/json' \
+            -d "{\"name\": \"${ORG_NAME}\"}" \
+            "${WORKOS_API_URL}/organizations")
+          org_id=$(printf '%s' "$org" | jq -r '.id')
+          printf '%s' "$org" | jq '{id, name}'
+          echo "::endgroup::"
+
+          echo "::group::5. Confirm it is listed"
+          curl -sS --fail-with-body "${auth[@]}" "${WORKOS_API_URL}/organizations?limit=100" |
+            jq -e --arg id "$org_id" 'any(.data[]; .id == $id)' >/dev/null
+          echo "::endgroup::"
+
+          echo "Created and listed ${ORG_NAME} (${org_id}) with a WIF access token."
+
+  cli:
+    name: workos CLI
+    runs-on: ubuntu-latest
+    env:
+      ORG_NAME: wif-test-${{ github.run_id }}-cli
+      CLI_REF: ${{ inputs.cli_ref }}
+    steps:
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+
+      - name: Install the published CLI
+        if: inputs.cli_ref == ''
+        run: bun add --global workos@latest
+
+      - name: Check out the CLI branch
+        if: inputs.cli_ref != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
+        with:
+          repository: workos/cli
+          ref: ${{ inputs.cli_ref }}
+          path: workos-cli
+          persist-credentials: false
+
+      - name: Run the CLI branch from source
+        if: inputs.cli_ref != ''
+        working-directory: workos-cli
+        run: |
+          bun install --frozen-lockfile
+          mkdir -p "$RUNNER_TEMP/bin"
+          printf '#!/usr/bin/env bash\nexec bun "%s/src/bin.ts" "$@"\n' "$PWD" > "$RUNNER_TEMP/bin/workos"
+          chmod +x "$RUNNER_TEMP/bin/workos"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Check there is no API key, so the CLI must use WIF
+        run: |
+          if [ -n "${WORKOS_API_KEY:-}" ]; then
+            echo "::error::Unset WORKOS_API_KEY: an API key always wins over WIF."
+            exit 1
+          fi
+          workos --version
+
+      # Each `workos` process does its own exchange and keeps the token in memory only.
+      - name: workos api GET /organizations
+        run: |
+          workos api '/organizations?limit=5' | jq '{count: (.data | length), names: [.data[].name]}'
+
+      - name: workos api POST /organizations
+        id: create
+        run: |
+          org=$(workos api /organizations --method POST --data "{\"name\": \"${ORG_NAME}\"}" --yes)
+          printf '%s' "$org" | jq '{id, name}'
+          echo "org_id=$(printf '%s' "$org" | jq -r '.id')" >> "$GITHUB_OUTPUT"
+
+      - name: Confirm it is listed
+        env:
+          ORG_ID: ${{ steps.create.outputs.org_id }}
+        run: |
+          workos api '/organizations?limit=100' | jq -e --arg id "$ORG_ID" 'any(.data[]; .id == $id)' >/dev/null
+          echo "Created and listed ${ORG_NAME} (${ORG_ID}) through the CLI with no WORKOS_API_KEY."
