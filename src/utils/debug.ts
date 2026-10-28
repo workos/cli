@@ -4,7 +4,7 @@ import { dirname, join } from 'path';
 import { homedir } from 'os';
 import chalk from 'chalk';
 import { prepareMessage } from './logging.js';
-import { redactCredentials } from './redact.js';
+import { redactCredentials, redactRegisteredSecrets } from './redact.js';
 import ui from './ui.js';
 import { isJsonMode } from './output.js';
 
@@ -82,7 +82,7 @@ export function getLogFilePath(): string | null {
 
 function writeLog(level: 'INFO' | 'WARN' | 'ERROR', emoji: string, args: unknown[]): string {
   const redactedArgs = args.map((a) => (typeof a === 'object' && a !== null ? redactCredentials(a) : a));
-  const msg = redactedArgs.map((a) => prepareMessage(a)).join(' ');
+  const msg = redactRegisteredSecrets(redactedArgs.map((a) => prepareMessage(a)).join(' '));
 
   // Write to console if debug enabled
   if (debugEnabled && !isJsonMode()) {
@@ -125,7 +125,7 @@ export function logError(...args: unknown[]): void {
 
 export function debug(...args: unknown[]): void {
   if (!isDebugEnabled()) return;
-  const msg = args.map((a) => prepareMessage(a)).join(' ');
+  const msg = redactRegisteredSecrets(args.map((a) => prepareMessage(a)).join(' '));
   ui.log.info(chalk.dim(msg));
 }
 
