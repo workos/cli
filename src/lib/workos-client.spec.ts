@@ -22,6 +22,13 @@ vi.mock('./api-key.js', () => ({
   resolveApiBaseUrl: () => 'https://api.workos.com',
 }));
 
+// WIF: treat one sentinel value as an issued access token (wif.spec.ts covers the real exchange).
+const mockWifFetch = vi.fn();
+vi.mock('./wif.js', () => ({
+  isWifAccessToken: (credential: string | undefined) => credential === 'wif_access_token',
+  createWifFetch: () => mockWifFetch,
+}));
+
 const { workosRequest, WorkOSApiError } = await import('./workos-api.js');
 const mockRequest = vi.mocked(workosRequest);
 
@@ -44,6 +51,16 @@ describe('workos-client', () => {
       const client = createWorkOSClient();
       expect(client.sdk.key).toBe('sk_test_default');
       expect(client.sdk.baseURL).toBe('https://api.workos.com');
+    });
+
+    it('leaves the SDK fetch untouched for an API key', () => {
+      const client = createWorkOSClient('sk_test_123');
+      expect((client.sdk as unknown as { options: { fetchFn?: unknown } }).options.fetchFn).toBeUndefined();
+    });
+
+    it('gives the SDK a refreshing fetch for a WIF access token', () => {
+      const client = createWorkOSClient('wif_access_token', 'https://api.workos.com');
+      expect((client.sdk as unknown as { options: { fetchFn?: unknown } }).options.fetchFn).toBe(mockWifFetch);
     });
 
     it('exposes sdk, redirectUris, corsOrigins, homepageUrl', () => {
