@@ -51,6 +51,11 @@ describe('api-key', () => {
     delete process.env.WORKOS_API_KEY;
     delete process.env.WORKOS_API_URL;
     delete process.env.WORKOS_API_BASE_URL;
+    // Keep these tests deterministic when the suite itself runs in GitHub Actions.
+    delete process.env.GITHUB_ACTIONS;
+    delete process.env.WORKOS_CLIENT_ID;
+    delete process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+    delete process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
   });
 
   afterEach(() => {
@@ -116,6 +121,57 @@ describe('api-key', () => {
         environments: { prod: { name: 'prod', type: 'production', apiKey: 'sk_stored' } },
       });
       expect(resolveApiKey({ apiKey: '' })).toBe('sk_stored');
+    });
+
+    // Full WIF coverage (exchange, caching, errors) lives in wif.spec.ts.
+    describe('in GitHub Actions with WORKOS_CLIENT_ID (workload identity federation)', () => {
+      beforeEach(() => {
+        process.env.GITHUB_ACTIONS = 'true';
+        process.env.WORKOS_CLIENT_ID = 'client_m2m';
+      });
+
+      it('WORKOS_API_KEY still wins', () => {
+        process.env.ACTIONS_ID_TOKEN_REQUEST_URL = 'https://token.example.com/idtoken?api-version=2.0';
+        process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN = 'request-token';
+        process.env.WORKOS_API_KEY = 'sk_env_var';
+        expect(resolveApiKey()).toBe('sk_env_var');
+      });
+
+      it('exits wif_unsupported_command when WIF applies but was not primed', () => {
+        process.env.ACTIONS_ID_TOKEN_REQUEST_URL = 'https://token.example.com/idtoken?api-version=2.0';
+        process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN = 'request-token';
+        saveConfig({
+          activeEnvironment: 'prod',
+          environments: { prod: { name: 'prod', type: 'production', apiKey: 'sk_stored' } },
+        });
+        expect(() => resolveApiKey()).toThrow(ExitError);
+        expect(mockExitWithError).toHaveBeenCalledWith(expect.objectContaining({ code: 'wif_unsupported_command' }));
+      });
+
+      it('without the OIDC request variables, uses a stored key as today', () => {
+        saveConfig({
+          activeEnvironment: 'prod',
+          environments: { prod: { name: 'prod', type: 'production', apiKey: 'sk_stored' } },
+        });
+        expect(resolveApiKey()).toBe('sk_stored');
+      });
+
+      it('without the OIDC request variables or any key, asks for id-token: write', () => {
+        mockExitWithError.mockClear();
+        expect(() => resolveApiKey()).toThrow(ExitError);
+        expect(mockExitWithError).toHaveBeenCalledWith(
+          expect.objectContaining({
+            code: 'wif_id_token_unavailable',
+            message: expect.stringContaining('permissions: id-token: write'),
+          }),
+        );
+      });
+
+      it('resolveOptionalApiKey ignores WIF', () => {
+        process.env.ACTIONS_ID_TOKEN_REQUEST_URL = 'https://token.example.com/idtoken?api-version=2.0';
+        process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN = 'request-token';
+        expect(resolveOptionalApiKey()).toBeUndefined();
+      });
     });
   });
 

@@ -88,8 +88,10 @@ export async function fetchSecrets(
 
 async function resolveRunApiKey(envName: string | undefined, flagApiKey?: string): Promise<string> {
   if (!envName) {
-    const { resolveApiKey } = await import('../lib/api-key.js');
-    return resolveApiKey({ apiKey: flagApiKey });
+    // Async variant: primes a WIF token in GitHub Actions (bin.ts skips
+    // `vault run`, whose --env and --dry-run paths need no WIF exchange).
+    const { resolveApiKeyAsync } = await import('../lib/api-key.js');
+    return resolveApiKeyAsync({ apiKey: flagApiKey });
   }
 
   const { getConfig } = await import('../lib/config-store.js');

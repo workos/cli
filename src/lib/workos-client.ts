@@ -13,6 +13,7 @@
 import { WorkOS } from '@workos-inc/node';
 import { workosRequest, type WorkOSListResponse } from './workos-api.js';
 import { resolveApiKey, resolveApiBaseUrl } from './api-key.js';
+import { createWifFetch, isWifAccessToken } from './wif.js';
 
 export interface AuditLogAction {
   action: string;
@@ -106,6 +107,9 @@ export function createWorkOSClient(apiKey?: string, baseUrl?: string): WorkOSCLI
     apiHostname: url.hostname,
     ...(url.port && { port: Number(url.port) }),
     ...(url.protocol === 'http:' && { https: false }),
+    // A WIF token is short-lived and needs x-url-environment-id: re-apply
+    // both on every SDK request instead of the headers fixed at construction.
+    ...(isWifAccessToken(key) && { fetchFn: createWifFetch(key) }),
   });
 
   return {

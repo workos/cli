@@ -309,7 +309,13 @@ All resource commands follow the same pattern: `workos <resource> <action> [args
 
 Most resource commands — organization, user, role, permission, membership, invitation, session, event, feature-flag, org-domain, portal, webhook, config, authkit, branding — authenticate with your WorkOS dashboard session from `workos auth login` and target the active environment (see `workos profile`). Pass `--environment-id <id>` on any of them to target a different environment for a single invocation. Access tokens refresh automatically while the session is valid, so a logged-in machine keeps working headlessly; a dead session exits with code 4.
 
-The remaining commands (`connection`, `directory`, `audit-log`, `api-key`, `vault`) still use the REST plane, as does the raw escape hatch `workos api`. Those resolve an API key via: `--api-key` flag → `WORKOS_API_KEY` env var → active environment's stored key.
+The remaining commands (`connection`, `directory`, `audit-log`, `api-key`, `vault`) still use the REST plane, as does the raw escape hatch `workos api`. Those resolve an API key via: `--api-key` flag → `WORKOS_API_KEY` env var → GitHub Actions workload identity federation (below) → active environment's stored key.
+
+#### GitHub Actions without an API key (workload identity federation)
+
+> Preview: the WorkOS server side is still being built (behind the `management-api-oauth` flag) and has no production endpoint yet.
+
+In a GitHub Actions job with `permissions: id-token: write`, `WORKOS_CLIENT_ID` set to an M2M application's client ID, and no `WORKOS_API_KEY`, the REST commands above (plus `seed`, `setup-org`, `onboard-user`, `debug-sso`, `debug-sync`) exchange the job's GitHub OIDC token at `WORKOS_WIF_TOKEN_URL` for a short-lived WorkOS access token. The token is held in memory only and refreshed before it expires. `verify-login` refuses WIF tokens because it can't confirm the environment isn't production, and `migrations` ignores WIF. See [`examples/wif-github-actions`](examples/wif-github-actions/) for a workflow and setup guide.
 
 #### organization
 
@@ -686,6 +692,11 @@ workos install --api-key sk_test_xxx --client-id client_xxx 2>/dev/null
 | Variable                 | Effect                                                                                                                                                                                           |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `WORKOS_API_KEY`         | API key for `workos api`, the still-REST commands (connection, directory, audit-log, api-key, vault), and workflow/debug commands. Resource commands use the `workos auth login` session instead |
+| `WORKOS_CLIENT_ID`       | In GitHub Actions with no API key: the M2M application's client ID, which turns on workload identity federation for the REST commands                                                            |
+| `WORKOS_WIF_TOKEN_URL`   | Workload identity federation token endpoint (`https://<your AuthKit domain>/oauth2/token`). Required for WIF; no default until the server side ships                                             |
+| `WORKOS_WIF_AUDIENCE`    | Audience requested for the GitHub OIDC token (default `https://api.workos.com`); must match the M2M application's trust rule                                                                     |
+| `WORKOS_WIF_SCOPE`       | Optional `scope` sent with the WIF token exchange                                                                                                                                                |
+| `WORKOS_ENVIRONMENT_ID`  | Sent as `x-url-environment-id` with WIF access tokens; machine tokens need it                                                                                                                    |
 | `WORKOS_API_URL`         | Override the API base URL for all CLI commands (e.g. a local API)                                                                                                                                |
 | `WORKOS_API_BASE_URL`    | Accepted alias for `WORKOS_API_URL` (what `workos dev` sets)                                                                                                                                     |
 | `WORKOS_MODE`            | Interaction mode: `human`, `agent`, or `ci`                                                                                                                                                      |
