@@ -85,10 +85,11 @@ export function exitWithMissingIdTokenPermission(): never {
 }
 
 /** Exit when WIF is the credential but the call site can't wait for the exchange. */
-export function exitWithWifUnsupported(command = 'This command'): never {
+export function exitWithWifUnsupported(): never {
   exitWithError({
     code: WIF_ERROR_CODES.unsupportedCommand,
-    message: `${command} can't authenticate with workload identity federation (WIF) yet. Set WORKOS_API_KEY for this step.`,
+    message:
+      "This command can't authenticate with workload identity federation (WIF) yet. Set WORKOS_API_KEY for this step.",
   });
 }
 

@@ -119,12 +119,9 @@ export async function runVerifyLogin(options: VerifyLoginOptions): Promise<void>
   const method: VerifyLoginMethod = options.method ?? 'password';
   const environment = options.envName ?? null;
 
-  // 1. Production refusal — before any SDK call. verify-login mutates real
-  // users, so it must never touch production. Refuse on either the stored env
-  // type OR a production-format key (belt-and-suspenders for keys passed via
-  // --api-key / WORKOS_API_KEY with no matching stored env).
-  // A WIF access token has no sk_test_/sk_live_ prefix, so the target
-  // environment's type can't be confirmed: refuse rather than risk production.
+  // 0. A workload identity federation (WIF) access token has no sk_test_/
+  // sk_live_ prefix, so the target environment's type can't be confirmed:
+  // refuse rather than risk production.
   if (isWifAccessToken(options.apiKey)) {
     exitWithError({
       code: 'wif_unsupported_command',
@@ -133,6 +130,11 @@ export async function runVerifyLogin(options: VerifyLoginOptions): Promise<void>
         'token targets a non-production environment. Set WORKOS_API_KEY to a sandbox (sk_test_) key for this step.',
     });
   }
+
+  // 1. Production refusal — before any SDK call. verify-login mutates real
+  // users, so it must never touch production. Refuse on either the stored env
+  // type OR a production-format key (belt-and-suspenders for keys passed via
+  // --api-key / WORKOS_API_KEY with no matching stored env).
   if (options.envType === 'production' || options.apiKey.startsWith('sk_live_')) {
     exitWithError({
       code: 'production_env_refused',
