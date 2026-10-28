@@ -381,7 +381,21 @@ interface EnvVarInfo {
 export const ENV_VAR_CATALOG: { name: string; effect: string }[] = [
   // Credentials
   { name: 'WORKOS_API_KEY', effect: 'Bypasses credential resolution — used directly for API calls' },
-  { name: 'WORKOS_CLIENT_ID', effect: 'WorkOS client ID used during credential resolution' },
+  {
+    name: 'WORKOS_CLIENT_ID',
+    effect:
+      'WorkOS client ID used during credential resolution; in GitHub Actions with no API key, the M2M app client ID that turns on workload identity federation (WIF)',
+  },
+  {
+    name: 'WORKOS_WIF_TOKEN_URL',
+    effect: 'WIF token endpoint (https://<your AuthKit domain>/oauth2/token); required for WIF, no default yet',
+  },
+  { name: 'WORKOS_WIF_AUDIENCE', effect: 'Audience for the GitHub OIDC token used by WIF (default: https://api.workos.com)' },
+  { name: 'WORKOS_WIF_SCOPE', effect: 'Optional scope sent with the WIF token exchange' },
+  {
+    name: 'WORKOS_ENVIRONMENT_ID',
+    effect: 'Environment ID sent as x-url-environment-id with WIF access tokens (machine tokens need it)',
+  },
   // Interaction & output
   { name: 'WORKOS_MODE', effect: 'Controls interaction behavior: human, agent, or CI' },
   { name: 'WORKOS_AGENT', effect: 'Set to "1" to force agent interaction mode' },

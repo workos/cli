@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 vi.mock('../../lib/api-key.js', () => ({
-  resolveApiKey: vi.fn(() => 'sk_test_default'),
+  resolveApiKeyAsync: vi.fn(async () => 'sk_test_default'),
   resolveApiBaseUrl: vi.fn(() => 'https://api.example.com'),
 }));
 
 const { apiRequest } = await import('./request.js');
-const { resolveApiKey, resolveApiBaseUrl } = await import('../../lib/api-key.js');
+const { resolveApiKeyAsync, resolveApiBaseUrl } = await import('../../lib/api-key.js');
 
 function buildResponse(body: string, init: ResponseInit = {}): Response {
   return new Response(body, init);
@@ -39,14 +39,14 @@ describe('apiRequest', () => {
         }),
       }),
     );
-    expect(resolveApiKey).not.toHaveBeenCalled();
+    expect(resolveApiKeyAsync).not.toHaveBeenCalled();
     expect(resolveApiBaseUrl).not.toHaveBeenCalled();
   });
 
-  it('falls back to resolveApiKey and resolveApiBaseUrl when not provided', async () => {
+  it('falls back to resolveApiKeyAsync and resolveApiBaseUrl when not provided', async () => {
     const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue(buildResponse('{}'));
     await apiRequest({ method: 'GET', path: '/users' });
-    expect(resolveApiKey).toHaveBeenCalled();
+    expect(resolveApiKeyAsync).toHaveBeenCalled();
     expect(resolveApiBaseUrl).toHaveBeenCalled();
     expect(fetchSpy).toHaveBeenCalledWith(
       'https://api.example.com/users',

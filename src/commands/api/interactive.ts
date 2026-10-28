@@ -2,7 +2,7 @@ import ui from '../../utils/ui.js';
 import { loadCatalog, endpointsByTag, type EndpointInfo } from './catalog.js';
 import { apiRequest } from './request.js';
 import { colorMethod, printResponse } from './format.js';
-import { resolveApiKey, resolveApiBaseUrl } from '../../lib/api-key.js';
+import { resolveApiKeyAsync, resolveApiBaseUrl } from '../../lib/api-key.js';
 import { ExitCode, exitWithCode } from '../../utils/exit-codes.js';
 import { exitWithError } from '../../utils/output.js';
 
@@ -143,7 +143,7 @@ export async function apiInteractive(options?: { apiKey?: string }): Promise<voi
   const response = await apiRequest({
     method: ep.method,
     path: fullPath,
-    apiKey: options?.apiKey ?? resolveApiKey(),
+    apiKey: options?.apiKey ?? (await resolveApiKeyAsync()),
     baseUrl: resolveApiBaseUrl(),
     body,
   });
