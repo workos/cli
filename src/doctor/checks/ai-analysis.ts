@@ -6,6 +6,7 @@ import { refreshAccessToken } from '../../lib/token-refresh-client.js';
 import { buildDoctorPrompt, type AnalysisContext } from '../agent-prompt.js';
 import type { AiAnalysis, AiFinding } from '../types.js';
 import { formatWorkOSCommand } from '../../utils/command-invocation.js';
+import { logInfo } from '../../utils/debug.js';
 
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
@@ -108,12 +109,8 @@ export async function checkAiAnalysis(context: AnalysisContext, options: { skipA
 
   const creds = getCredentials();
   if (!creds) {
-    const diag = diagnoseCredentials();
-    process.stderr.write('\n  [credential-debug]\n');
-    for (const line of diag) {
-      process.stderr.write(`    ${line}\n`);
-    }
-    process.stderr.write('\n');
+    // Debug-only: unconditional stderr lines corrupt piped and agent output.
+    for (const line of diagnoseCredentials()) logInfo('[credential-debug]', line);
     return skippedResult(`Not authenticated — run \`${formatWorkOSCommand('auth login')}\` for AI-powered analysis`);
   }
 

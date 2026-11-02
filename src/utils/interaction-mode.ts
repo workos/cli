@@ -70,13 +70,30 @@ function hasCiMarker(env: NodeJS.ProcessEnv): boolean {
   );
 }
 
+function isSet(value: string | undefined): boolean {
+  return value !== undefined && value.trim() !== '';
+}
+
+/**
+ * Agent markers follow @vercel/detect-agent, minus REPL_ID and the Copilot
+ * token variables, which are also set in human sessions.
+ */
 function hasAgentMarker(env: NodeJS.ProcessEnv): boolean {
   return (
     isTruthy(env.WORKOS_AGENT) ||
+    isSet(env.AI_AGENT) ||
     isTruthy(env.CLAUDECODE) ||
     isTruthy(env.CLAUDE_CODE) ||
     isTruthy(env.CURSOR_AGENT) ||
+    env.CURSOR_EXTENSION_HOST_ROLE === 'agent-exec' ||
     isTruthy(env.CODEX_SANDBOX) ||
+    isSet(env.CODEX_CI) ||
+    isSet(env.CODEX_THREAD_ID) ||
+    isSet(env.GEMINI_CLI) ||
+    isSet(env.ANTIGRAVITY_AGENT) ||
+    isSet(env.AUGMENT_AGENT) ||
+    env.OPENCODE === '1' ||
+    isSet(env.OPENCODE_CLIENT) ||
     env.CURSOR_TRACE_ID !== undefined
   );
 }
