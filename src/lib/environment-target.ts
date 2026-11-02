@@ -28,7 +28,7 @@
 import ui from '../utils/ui.js';
 import { getConfig, getActiveEnvironment, setProfileEnvironmentId, type CliConfig } from './config-store.js';
 import { dashboardGraphqlRequest, DashboardGraphqlError } from './dashboard-graphql.js';
-import { getOperation, resolveExecutableDocument } from '../catalog/operation.js';
+import { dashboardErrorMessage, getOperation, resolveExecutableDocument } from '../catalog/operation.js';
 import { refreshIfExpired, DASHBOARD_ERROR_MESSAGES } from './command-auth.js';
 import { exitWithError } from '../utils/output.js';
 import { isPromptAllowed } from '../utils/interaction-mode.js';
@@ -163,9 +163,11 @@ export async function resolveEnvironmentTarget(
     if (error instanceof DashboardGraphqlError && error.code === 'forbidden') {
       exitWithError({ code: 'forbidden', message: DASHBOARD_ERROR_MESSAGES.forbidden });
     }
+    const cause =
+      error instanceof DashboardGraphqlError ? `: ${dashboardErrorMessage(error)}` : ' (network or server error).';
     exitWithError({
       code: 'environment_unresolved',
-      message: `Could not resolve the target WorkOS environment (network or server error). Try again. ${remedies()}`,
+      message: `Could not resolve the target WorkOS environment${cause} Try again. ${remedies()}`,
     });
   }
 

@@ -288,6 +288,22 @@ describe('resolveEnvironmentTarget', () => {
       expect(err).not.toMatch(/graphql/i);
     });
 
+    it('names the server failure instead of blaming the network when the account plane errors', async () => {
+      seedProfile({ clientId: 'client_abc' });
+      mockGraphqlRequest.mockRejectedValue(
+        new DashboardGraphqlError('private details', 'graphql_error', undefined, 'INTERNAL_SERVER_ERROR'),
+      );
+      await expect(resolveEnvironmentTarget('tok', { forMutation: false })).rejects.toMatchObject({
+        name: 'CliExit',
+        context: { errorCode: 'environment_unresolved' },
+      });
+      const err = errorSpy.mock.calls.map((c) => c.map(String).join(' ')).join('\n');
+      expect(err).toContain('account plane could not complete this request (INTERNAL_SERVER_ERROR)');
+      expect(err).not.toMatch(/network or server error/i);
+      expect(err).not.toContain('private details');
+      expect(err).toContain('--environment-id');
+    });
+
     it('surfaces a 403 as forbidden guidance, not a transient retry hint', async () => {
       seedProfile({ clientId: 'client_abc' });
       mockGraphqlRequest.mockRejectedValue(new DashboardGraphqlError('denied', 'forbidden', 403));

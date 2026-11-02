@@ -54,6 +54,42 @@ describe('dashboardGraphqlUpload', () => {
     });
   });
 
+  it('maps an all-FORBIDDEN errors[] payload to forbidden (403)', async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({ errors: [{ message: 'private details', extensions: { code: 'FORBIDDEN' } }] }),
+    );
+    await expect(dashboardGraphqlRequest('query {}', { token: 'fake-token' })).rejects.toMatchObject({
+      code: 'forbidden',
+      status: 403,
+      message: expect.not.stringContaining('private details'),
+    });
+  });
+
+  it('keeps the server error code on graphql_error', async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({ errors: [{ message: 'boom' }, { message: 'x', extensions: { code: 'INTERNAL_SERVER_ERROR' } }] }),
+    );
+    await expect(dashboardGraphqlRequest('query {}', { token: 'fake-token' })).rejects.toMatchObject({
+      code: 'graphql_error',
+      serverCode: 'INTERNAL_SERVER_ERROR',
+    });
+  });
+
+  it('ignores a non-string server error code', async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({
+        errors: [
+          { message: 'boom', extensions: { code: 500 } },
+          { message: 'x', extensions: { code: {} } },
+        ],
+      }),
+    );
+    await expect(dashboardGraphqlRequest('query {}', { token: 'fake-token' })).rejects.toMatchObject({
+      code: 'graphql_error',
+      serverCode: undefined,
+    });
+  });
+
   /** The FormData handed to fetch on the most recent call. */
   function sentForm(): FormData {
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
