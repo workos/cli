@@ -226,11 +226,13 @@ const installerOptions = {
   },
   'api-key': {
     type: 'string' as const,
-    describe: 'WorkOS API key (required in non-interactive mode)',
+    describe:
+      'WorkOS API key. Optional: without credentials, the installer provisions an unclaimed environment (no account needed) that you can claim later',
   },
   'client-id': {
     type: 'string' as const,
-    describe: 'WorkOS client ID (required in non-interactive mode)',
+    describe:
+      'WorkOS client ID. Pass with --api-key; not needed when the installer provisions an unclaimed environment',
   },
   inspect: {
     default: false,

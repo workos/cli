@@ -537,8 +537,9 @@ workos org-domain delete <id> [--yes]
 workos install [options]
 
   --direct, -D            Use your own Anthropic API key (bypass llm-gateway)
-  --api-key <key>         WorkOS API key (required in non-interactive mode)
-  --client-id <id>        WorkOS client ID (required in non-interactive mode)
+  --api-key <key>         WorkOS API key (optional; without credentials the installer
+                          provisions an unclaimed environment you can claim later)
+  --client-id <id>        WorkOS client ID (pass with --api-key)
   --redirect-uri <uri>    Custom redirect URI
   --homepage-url <url>    Custom homepage URL
   --install-dir <path>    Installation directory

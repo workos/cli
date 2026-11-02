@@ -55,12 +55,18 @@ export function authLoginRecovery(options: { mode: InteractionMode; env?: NodeJS
     return {
       hints: [
         {
-          description: "Authenticate on the user's host shell.",
-          command: loginCommand,
-          hostShellRequired: true,
+          description:
+            'No WorkOS account needed: provision an unclaimed environment (no login), then re-run. ' +
+            `The user can claim it later with \`${formatWorkOSCommand('profile claim', env)}\`.`,
+          command: formatWorkOSCommand('env provision', env),
         },
         {
           description: 'Or set WORKOS_API_KEY before invoking the CLI.',
+        },
+        {
+          description: "Or authenticate on the user's host shell.",
+          command: loginCommand,
+          hostShellRequired: true,
         },
       ],
     };
@@ -74,6 +80,31 @@ export function authLoginRecovery(options: { mode: InteractionMode; env?: NodeJS
       },
       {
         description: 'Or set WORKOS_API_KEY.',
+      },
+    ],
+  };
+}
+
+/**
+ * Recovery hints for commands that act as the logged-in dashboard user and
+ * reject API keys, so WORKOS_API_KEY and unclaimed environments can't help.
+ */
+export function dashboardSessionRecovery(options: { mode: InteractionMode; env?: NodeJS.ProcessEnv }): RecoveryHints {
+  const env = options.env ?? process.env;
+  return {
+    hints: [
+      {
+        description:
+          options.mode === 'human'
+            ? 'Authenticate via browser-based device login.'
+            : "Authenticate on the user's host shell.",
+        command: formatWorkOSCommand('auth login', env),
+        ...(options.mode !== 'human' && { hostShellRequired: true }),
+      },
+      {
+        description:
+          'Or make the same request with an API key (WORKOS_API_KEY or an unclaimed environment) through the API command.',
+        command: formatWorkOSCommand('api ls', env),
       },
     ],
   };
