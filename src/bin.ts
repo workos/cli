@@ -227,12 +227,12 @@ const installerOptions = {
   'api-key': {
     type: 'string' as const,
     describe:
-      'WorkOS API key. Optional: without credentials, the installer provisions an unclaimed environment (no account needed) that you can claim later',
+      'WorkOS API key. Optional outside CI: without credentials, the installer provisions an unclaimed environment (no account needed) that you can claim later. Required in CI mode',
   },
   'client-id': {
     type: 'string' as const,
     describe:
-      'WorkOS client ID. Pass with --api-key; not needed when the installer provisions an unclaimed environment',
+      'WorkOS client ID. Pass with --api-key; not needed when the installer provisions an unclaimed environment. Required in CI mode',
   },
   inspect: {
     default: false,

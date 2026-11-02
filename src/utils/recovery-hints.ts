@@ -55,18 +55,12 @@ export function authLoginRecovery(options: { mode: InteractionMode; env?: NodeJS
     return {
       hints: [
         {
-          description:
-            'No WorkOS account needed: provision an unclaimed environment (no login), then re-run. ' +
-            `The user can claim it later with \`${formatWorkOSCommand('profile claim', env)}\`.`,
-          command: formatWorkOSCommand('env provision', env),
+          description: "Authenticate on the user's host shell.",
+          command: loginCommand,
+          hostShellRequired: true,
         },
         {
           description: 'Or set WORKOS_API_KEY before invoking the CLI.',
-        },
-        {
-          description: "Or authenticate on the user's host shell.",
-          command: loginCommand,
-          hostShellRequired: true,
         },
       ],
     };
@@ -80,6 +74,29 @@ export function authLoginRecovery(options: { mode: InteractionMode; env?: NodeJS
       },
       {
         description: 'Or set WORKOS_API_KEY.',
+      },
+    ],
+  };
+}
+
+/**
+ * Recovery hints for when no API key is configured anywhere. With no existing
+ * environment to preserve, provisioning an unclaimed one is the agent-safe
+ * first step; recovering access to an existing environment must not suggest it.
+ */
+export function noApiKeyRecovery(options: { env?: NodeJS.ProcessEnv } = {}): RecoveryHints {
+  const env = options.env ?? process.env;
+  return {
+    hints: [
+      {
+        description:
+          'No WorkOS account needed: provision an unclaimed environment (no login), then re-run. ' +
+          `It can be claimed later with \`${formatWorkOSCommand('profile claim', env)}\`.`,
+        command: formatWorkOSCommand('env provision', env),
+      },
+      {
+        description: 'Or set WORKOS_API_KEY, or add an existing environment.',
+        command: formatWorkOSCommand('profile add', env),
       },
     ],
   };

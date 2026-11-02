@@ -173,8 +173,7 @@ describe('exit-codes', () => {
         // expected
       }
       const call = vi.mocked(outputError).mock.calls.at(-1)![0];
-      expect(call.recovery?.hints[0]).toMatchObject({ command: expect.stringContaining('env provision') });
-      expect(call.recovery?.hints.at(-1)).toMatchObject({
+      expect(call.recovery?.hints[0]).toMatchObject({
         command: expect.stringContaining('auth login'),
         hostShellRequired: true,
       });

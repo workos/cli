@@ -4,6 +4,7 @@ import {
   confirmationRecovery,
   dashboardSessionRecovery,
   missingArgsRecovery,
+  noApiKeyRecovery,
 } from './recovery-hints.js';
 
 describe('recovery-hints', () => {
@@ -20,14 +21,16 @@ describe('recovery-hints', () => {
       });
     });
 
-    it('agent mode offers an unclaimed environment first, then the env var, then host-shell login', () => {
+    it('agent mode recommends host-shell login first and env var second, never a new environment', () => {
       const recovery = authLoginRecovery({ mode: 'agent', env: {} });
-      expect(recovery.hints[0]).toMatchObject({ command: 'workos env provision' });
-      expect(recovery.hints[0].hostShellRequired).toBeUndefined();
-      expect(recovery.hints[0].description).toContain('workos profile claim');
+      expect(recovery.hints[0]).toMatchObject({
+        command: 'workos auth login',
+        hostShellRequired: true,
+      });
       expect(recovery.hints[1].description).toMatch(/WORKOS_API_KEY/);
       expect(recovery.hints[1].command).toBeUndefined();
-      expect(recovery.hints[2]).toMatchObject({ command: 'workos auth login', hostShellRequired: true });
+      // Provisioning would switch the active profile away from the environment being recovered.
+      expect(recovery.hints.map((h) => h.command)).not.toContain('workos env provision');
     });
 
     it('human mode recommends device login without host-shell flag', () => {
@@ -43,8 +46,16 @@ describe('recovery-hints', () => {
         mode: 'agent',
         env: { npm_command: 'exec' },
       });
-      expect(recovery.hints[0].command).toBe('workos env provision');
-      expect(recovery.hints[2].command).toBe('workos auth login');
+      expect(recovery.hints[0].command).toBe('workos auth login');
+    });
+  });
+
+  describe('noApiKeyRecovery', () => {
+    it('offers an unclaimed environment first, then an existing one', () => {
+      const recovery = noApiKeyRecovery({ env: {} });
+      expect(recovery.hints[0]).toMatchObject({ command: 'workos env provision' });
+      expect(recovery.hints[0].description).toContain('workos profile claim');
+      expect(recovery.hints[1]).toMatchObject({ command: 'workos profile add' });
     });
   });
 
