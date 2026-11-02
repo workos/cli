@@ -164,7 +164,8 @@ async function sendDashboardRequest<T>(
       body.errors.map((e) => e.message).join('; '),
       'graphql_error',
       undefined,
-      body.errors.find((e) => e.extensions?.code)?.extensions?.code,
+      // Untrusted JSON: keep only a string code.
+      body.errors.map((e) => e.extensions?.code).find((code): code is string => typeof code === 'string'),
     );
   }
 

@@ -75,6 +75,21 @@ describe('dashboardGraphqlUpload', () => {
     });
   });
 
+  it('ignores a non-string server error code', async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({
+        errors: [
+          { message: 'boom', extensions: { code: 500 } },
+          { message: 'x', extensions: { code: {} } },
+        ],
+      }),
+    );
+    await expect(dashboardGraphqlRequest('query {}', { token: 'fake-token' })).rejects.toMatchObject({
+      code: 'graphql_error',
+      serverCode: undefined,
+    });
+  });
+
   /** The FormData handed to fetch on the most recent call. */
   function sentForm(): FormData {
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
