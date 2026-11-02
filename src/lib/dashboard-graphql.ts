@@ -40,6 +40,8 @@ export class DashboardGraphqlError extends Error {
     message: string,
     readonly code: DashboardGraphqlErrorCode,
     readonly status?: number,
+    /** Server-supplied error code (`errors[].extensions.code`) for `graphql_error`. */
+    readonly serverCode?: string,
   ) {
     super(message);
     this.name = 'DashboardGraphqlError';
@@ -154,7 +156,16 @@ async function sendDashboardRequest<T>(
     if (body.errors.every((error) => error.extensions?.code === 'UNAUTHENTICATED')) {
       throw new DashboardGraphqlError('The dashboard session was rejected.', 'forbidden', 401);
     }
-    throw new DashboardGraphqlError(body.errors.map((e) => e.message).join('; '), 'graphql_error');
+    // The capability gate (and role checks) answer HTTP 200 with FORBIDDEN, not a 403.
+    if (body.errors.every((error) => error.extensions?.code === 'FORBIDDEN')) {
+      throw new DashboardGraphqlError('The dashboard refused this request.', 'forbidden', 403);
+    }
+    throw new DashboardGraphqlError(
+      body.errors.map((e) => e.message).join('; '),
+      'graphql_error',
+      undefined,
+      body.errors.find((e) => e.extensions?.code)?.extensions?.code,
+    );
   }
 
   if (body.data == null) {

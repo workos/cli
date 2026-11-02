@@ -2,6 +2,7 @@ import { loadManagementCatalog } from './loader.js';
 import { DashboardGraphqlError } from '../lib/dashboard-graphql.js';
 import { DASHBOARD_ERROR_MESSAGES } from '../lib/command-auth.js';
 import { exitWithError } from '../utils/output.js';
+import { LEAK_PATTERN } from './curation.js';
 import type { CatalogOperation, ManagementCatalog } from './catalog-types.js';
 
 /**
@@ -60,6 +61,32 @@ export function getOperation(
 }
 
 /**
+ * Slimmer wire documents for operations whose catalog selection is far wider
+ * than anything the CLI reads. `teamProjectsV2` backs environment resolution
+ * for every env-scoped command, and its catalog version pulls the full
+ * Environment fragment (certificate expiry, custom domains, ...): one of those
+ * resolvers failing for one environment used to fail the whole team's reads.
+ * Keep the operation name: specs route on it.
+ */
+const DOCUMENT_OVERRIDES: Record<string, string> = {
+  teamProjectsV2: `query teamProjectsV2 {
+  currentTeam {
+    id
+    projectsV2 {
+      id
+      name
+      environments {
+        id
+        name
+        sandbox
+        clientId
+      }
+    }
+  }
+}`,
+};
+
+/**
  * Returns the full executable GraphQL document for an operation: its own
  * `document` text plus the definitions of every fragment it transitively
  * depends on.
@@ -74,6 +101,8 @@ export function resolveExecutableDocument(
   op: CatalogOperation,
   catalog: ManagementCatalog = loadManagementCatalog(undefined, { includeFeatureFlagged: true }),
 ): string {
+  const override = DOCUMENT_OVERRIDES[op.name];
+  if (override) return override;
   if (op.fragmentNames.length === 0) return op.document;
 
   const fragments = op.fragmentNames.map((fragmentName) => {
@@ -112,6 +141,16 @@ export function reportDashboardError(error: unknown): never {
 }
 
 /**
+ * The server's error code (e.g. `INTERNAL_SERVER_ERROR`) is the only server
+ * detail we echo: messages can carry private data. Codes are uppercase
+ * identifiers; anything else, or anything naming GraphQL, is dropped.
+ */
+function serverCodeSuffix(code: string | undefined): string {
+  const clean = code?.replace(/^GRAPHQL_/, '');
+  return clean && /^[A-Z][A-Z0-9_]*$/.test(clean) && !LEAK_PATTERN.test(clean) ? ` (${clean})` : '';
+}
+
+/**
  * Per-code user-facing copy. Exported so `no-graphql-leak.spec.ts` can run the
  * leak gate over every branch. `forbidden` (exit 1, not auth-recoverable) is
  * shared copy from {@link DASHBOARD_ERROR_MESSAGES}, distinct from the
@@ -127,6 +166,6 @@ export function dashboardErrorMessage(error: DashboardGraphqlError): string {
       return 'Could not reach the WorkOS account plane. Check your connection and try again.';
     case 'graphql_error':
     default:
-      return 'The WorkOS account plane could not complete this request.';
+      return `The WorkOS account plane could not complete this request${serverCodeSuffix(error.serverCode)}.`;
   }
 }

@@ -84,7 +84,7 @@ export const DASHBOARD_ERROR_MESSAGES: Record<
   /** 403 from the dashboard plane: capability off for the team, or no team. */
   get forbidden() {
     return (
-      'This account-plane capability is not enabled for this team, ' +
+      'This account-plane capability is not enabled for this team, your team role does not allow it, ' +
       'or the logged-in account is not backed by a WorkOS dashboard team.'
     );
   },
