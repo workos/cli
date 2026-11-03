@@ -93,7 +93,43 @@ describe('audit-log commands', () => {
       await runAuditLogCreateEvent('org_123', { file: 'event.json' }, 'sk_test');
 
       expect(mockReadFile).toHaveBeenCalledWith('event.json', 'utf-8');
-      expect(mockSdk.auditLogs.createEvent).toHaveBeenCalledWith('org_123', eventJson);
+      expect(mockSdk.auditLogs.createEvent).toHaveBeenCalledWith('org_123', {
+        ...eventJson,
+        occurredAt: new Date('2025-01-15T10:00:00Z'),
+      });
+    });
+
+    it('defaults occurredAt to now when the file omits it', async () => {
+      mockReadFile.mockResolvedValue(
+        JSON.stringify({ action: 'user.signed_in', actor: { id: 'user_01', type: 'user' }, targets: [], context: {} }),
+      );
+      mockSdk.auditLogs.createEvent.mockResolvedValue(undefined);
+
+      await runAuditLogCreateEvent('org_123', { file: 'event.json' }, 'sk_test');
+
+      const [, event] = mockSdk.auditLogs.createEvent.mock.calls[0];
+      expect(event.occurredAt).toBeInstanceOf(Date);
+      expect(Number.isNaN(event.occurredAt.getTime())).toBe(false);
+    });
+
+    it('rejects an invalid occurredAt in the file without calling the API', async () => {
+      mockReadFile.mockResolvedValue(
+        JSON.stringify({ action: 'user.signed_in', occurredAt: 'yesterday', actor: { id: 'user_01', type: 'user' } }),
+      );
+
+      await expect(runAuditLogCreateEvent('org_123', { file: 'event.json' }, 'sk_test')).rejects.toThrow();
+      expect(mockSdk.auditLogs.createEvent).not.toHaveBeenCalled();
+    });
+
+    it('rejects an invalid --occurred-at without calling the API', async () => {
+      await expect(
+        runAuditLogCreateEvent(
+          'org_123',
+          { action: 'user.signed_in', actorType: 'user', actorId: 'user_01', occurredAt: 'not-a-date' },
+          'sk_test',
+        ),
+      ).rejects.toThrow();
+      expect(mockSdk.auditLogs.createEvent).not.toHaveBeenCalled();
     });
 
     it('errors when required flags missing', async () => {
