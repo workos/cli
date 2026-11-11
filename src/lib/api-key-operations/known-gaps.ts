@@ -54,15 +54,14 @@ function sortForPairing(items: unknown[]): unknown[] {
  * is a leaf listed in {@link API_KEY_NULL_FIELDS} for `command`, which may be
  * `null` on the API-key side whatever the dashboard returned (a non-null value
  * there must still match). A whole object going null, an element losing its
- * keys, or an ID or email disappearing all fail. `ignoreKeys` drops keys at
- * any depth (pagination cursors are opaque and plane-specific).
+ * keys, or an ID or email disappearing all fail.
+ *
+ * Pass the entity (or the list of rows), never the output envelope: nothing is
+ * exempt inside it, so a `metadata.before` or `metadata.pagination` key is
+ * compared like any other field. Pagination cursors live in the envelope,
+ * outside what this compares.
  */
-export function apiKeyParityDiffs(
-  command: string,
-  session: unknown,
-  apiKey: unknown,
-  ignoreKeys: ReadonlySet<string> = new Set(),
-): string[] {
+export function apiKeyParityDiffs(command: string, session: unknown, apiKey: unknown): string[] {
   const diffs: string[] = [];
 
   function walk(path: string, s: unknown, k: unknown): void {
@@ -84,7 +83,6 @@ export function apiKeyParityDiffs(
     if (isPlainObject(s) && isPlainObject(k)) {
       const keys = new Set([...Object.keys(s), ...Object.keys(k)]);
       for (const key of keys) {
-        if (ignoreKeys.has(key)) continue;
         const child = path ? `${path}.${key}` : key;
         if (!(key in s) || !(key in k)) {
           diffs.push(`${child}: present only on the ${key in s ? 'session' : 'API-key'} side`);

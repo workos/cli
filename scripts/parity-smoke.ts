@@ -977,9 +977,6 @@ async function checkNew(c: { label: string; args: string[] }): Promise<void> {
  */
 const API_KEY_ACCEPTED: Record<string, string> = { ...API_KEY_NULL_FIELDS };
 
-/** Cursors are opaque and plane-specific; everything else must match exactly. */
-const CURSOR_KEYS = new Set(['before', 'after', 'listMetadata', 'list_metadata', 'pagination']);
-
 /**
  * The environment the session side is pinned to. Every session-side command
  * passes it as `--environment-id`, which the CLI refuses whenever ANY API key
@@ -1080,10 +1077,12 @@ async function checkSessionVsKey(c: ApiKeyCheck): Promise<any> {
     rows = sv.length;
     for (const row of sv) {
       const other = kv.find((candidate: any) => candidate?.[c.idKey!] === row?.[c.idKey!]);
-      diffs.push(...apiKeyParityDiffs(c.cmd, row, other, CURSOR_KEYS).map((d) => `${row?.[c.idKey!]}: ${d}`));
+      diffs.push(...apiKeyParityDiffs(c.cmd, row, other).map((d) => `${row?.[c.idKey!]}: ${d}`));
     }
   } else {
-    diffs.push(...apiKeyParityDiffs(c.cmd, sv, kv, CURSOR_KEYS));
+    // Only the entity is compared; the envelope's pagination cursors are
+    // opaque and plane-specific, and stay out of it.
+    diffs.push(...apiKeyParityDiffs(c.cmd, sv, kv));
   }
   for (const d of diffs) notes.push(`${C.red}FAIL${C.reset} ${c.label} ${d}`);
   const empty = Array.isArray(sv) && sv.length === 0;

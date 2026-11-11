@@ -979,6 +979,29 @@ describe('apiKeyParityDiffs, the shared session-vs-key parity gate', () => {
     expect(diffs[0]).toContain('impersonator');
   });
 
+  it('compares metadata keys named like pagination cursors with an API key', () => {
+    const org = { id: 'org_1', metadata: { before: 'v1', after: 'v2', pagination: 'v3' } };
+
+    expect(apiKeyParityDiffs('organization', org, org)).toEqual([]);
+    expect(
+      apiKeyParityDiffs('organization', org, { id: 'org_1', metadata: { before: 'changed', after: 'v2' } }),
+    ).toEqual([
+      'metadata.before: session="v1" apiKey="changed"',
+      'metadata.pagination: present only on the session side',
+    ]);
+    expect(apiKeyParityDiffs('organization', [org], [{ ...org, metadata: { ...org.metadata, after: null } }])).toEqual([
+      'metadata.after: session="v2" apiKey=null',
+    ]);
+    // The gate takes no exemption set any more (parity-smoke used to pass the
+    // cursor names, which skipped them at every depth): an extra argument
+    // must change nothing.
+    const gate = apiKeyParityDiffs as unknown as (...args: unknown[]) => string[];
+    const changed = { ...org, metadata: { ...org.metadata, before: 'changed' } };
+    expect(gate('organization', org, changed, new Set(['before']))).toEqual([
+      'metadata.before: session="v1" apiKey="changed"',
+    ]);
+  });
+
   it('rejects a lost email, a lost ID and a casing-only difference with an API key', () => {
     expect(
       apiKeyParityDiffs('session', sessionRow, {
