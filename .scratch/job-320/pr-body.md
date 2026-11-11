@@ -72,7 +72,7 @@ Keys and shapes are identical on both paths. These values differ because REST ha
 | `membership.type` | REST memberships carry no type |
 | `event.updatedAt` | REST events carry only a creation time |
 | `feature-flag` get: `accessType`, `organizationTargets`, `userTargets` | the REST flag endpoints expose neither |
-| `org-domain`: `verificationContent`, `domainCaptureEnabled` | REST returns the verification prefix/token separately, and has no capture flag |
+| `org-domain`: `subdomain`, `domainCaptureEnabled` | REST doesn't return either (the dashboard derives `subdomain` with a public-suffix parser this CLI doesn't ship) |
 | `portal`: `id`, `state`, `expiresAt` | REST `generate_link` returns only the URL |
 | `session.impersonator` id/firstName/lastName | REST names an impersonator by email only |
 | `session.provider` for OAuth sign-ins | REST reports every OAuth provider as plain `oauth`, so `GoogleOAuth` etc. can't be named |
@@ -85,7 +85,8 @@ Some fields are filled with extra REST reads rather than nulled. They are bounde
 
 Behavioral differences (not output fields):
 - **Search filters are exact matches.** `organization list --domain`, `user list --email` and `invitation list --email` use REST's exact-match filters (domain, email). The dashboard does a search.
-- **New domains start pending.** `org-domain create` on REST creates the domain `pending` (it needs DNS verification). The dashboard adds it verified. The output reports the real state.
+- **New domains start pending, with their DNS challenge.** `org-domain create` on REST creates the domain `pending` (it needs DNS verification); the dashboard adds it verified. The output reports the real state, and `verificationContent` carries the TXT record value to publish. On every domain read (`organization list/get`, `org-domain get/create/verify`) it's built exactly as the dashboard builds it: `<verification_prefix>=<verification_token>`, prefix defaulting to `verification_token`, null without a token.
+- **Full lists never truncate silently.** A full-list read stops at 5,000 records and fails with `list_too_long` rather than act on a partial list.
 - **Order, full lists and statuses are explicit.** Every key-path list sends an order (your `--order`, else `desc`, which returns the same newest-first rows as REST's `normal` default), so `after` is always the next page. Reads that must return a complete list (permissions, a user's memberships, redirect URIs, CORS origins) follow it to the end, and `config redirect add` still refuses to merge over more than one page of URIs. Membership listings and `membership delete` include every status (`active,inactive,pending`), so a deactivated membership is listed and can be deleted, as on the dashboard.
 - **`membership list --org` pages over memberships.** Its cursors are membership IDs on the key path and user IDs on the session path. They're opaque either way, and each path accepts its own cursors.
 - **`feature-flag add-target|remove-target` call REST's target endpoints directly.** REST can't list a flag's targets, so there's no read-merge-write, and remove-target can't pre-check that the target exists.
@@ -208,6 +209,7 @@ I also checked against a local fake API (`WORKOS_API_URL=http://127.0.0.1:<port>
   - the REST requests and outputs for every command's mutations;
   - not-found and 401 handling.
 - `src/commands/api-key-parity.spec.ts` covers JSON parity, described above.
+- `src/commands/api-key-flag.integration.spec.ts` drives the real CLI (subprocess, temp HOME, local HTTP stub) to check `--api-key` > `WORKOS_API_KEY` > unclaimed profile through actual yargs parsing, and the `--environment-id` refusal.
 - `src/lib/command-auth.spec.ts` covers:
   - the `resolveResourceApiKey()` precedence, against the real file-backed config store;
   - the updated copy. Two existing tests were renamed and updated, because their assertion that the copy says "does not accept API keys" is now the bug.
