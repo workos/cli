@@ -160,7 +160,7 @@ I also checked against a local fake API (`WORKOS_API_URL=http://127.0.0.1:<port>
     - resource commands reach that hint only when no key is set, and setting `WORKOS_API_KEY` or passing `--api-key` now fixes them;
     - the account commands still need the session.
   - So the hint should be reworded for whichever PR merges second.
-- **#270 (`fix/account-plane-forbidden-and-slim-team-query`).** It touches `command-auth.ts` (the `forbidden` copy only). It merges cleanly with this branch. This branch is cut from `origin/main`, not from #270, so #270's own changes (the slim team-environments query, sanitized server error codes, and their tests in `no-graphql-leak.spec.ts`, `dashboard-graphql.spec.ts` and `environment-target.spec.ts`) are not here. They land with #270; this PR deletes none of them.
+- **#270 (`fix/account-plane-forbidden-and-slim-team-query`).** It touches `command-auth.ts` (the `forbidden` copy only). It merges cleanly with this branch. This branch is cut from `origin/main`, not from #270, so #270's own changes (the slim team-environments query, sanitized server error codes, and their tests in `no-graphql-leak.spec.ts`, `dashboard-graphql.spec.ts` and `environment-target.spec.ts`) are not here. They land with #270; this PR deletes none of them. #270 also carries the slim `teamProjectsV2` query used by signed-in environment resolution, so whichever of the two PRs lands second rebases onto the other.
 - Neither branch was touched.
 
 ## Security read: key scope
