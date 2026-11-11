@@ -46,7 +46,7 @@ vi.mock('../lib/config-store.js', async (importActual) => {
 const { setOutputMode } = await import('../utils/output.js');
 const { resetInteractionModeForTests } = await import('../utils/interaction-mode.js');
 const { setResourceApiKeyFlag } = await import('../lib/resource-auth.js');
-const { API_KEY_NULL_FIELDS } = await import('../lib/api-key-operations/known-gaps.js');
+const { API_KEY_NULL_FIELDS, apiKeyParityDiffs } = await import('../lib/api-key-operations/known-gaps.js');
 const { runOrgList, runOrgGet } = await import('./organization.js');
 const { runUserList, runUserGet } = await import('./user.js');
 const { runRoleList, runRoleGet } = await import('./role.js');
@@ -432,35 +432,37 @@ async function viaApiKey(routes: Parameters<typeof rest.respond>[0], run: () => 
   return output;
 }
 
-type Json = Record<string, unknown> | unknown[];
+type Json = Record<string, unknown>;
 
-function at(value: Json, path: string[]): { parent: Record<string, unknown>; key: string } {
-  let node: unknown = value;
-  for (const segment of path.slice(0, -1)) node = (node as Record<string, unknown>)[segment];
-  return { parent: node as Record<string, unknown>, key: path[path.length - 1] };
+/** First value at a gap path (`[]` steps into the first element), for checking a fixture exercises the gap. */
+function firstAt(value: unknown, path: string): unknown {
+  let node: unknown = Array.isArray(value) ? value[0] : value;
+  for (const segment of path.split('.')) {
+    const key = segment.replace(/\[\]$/, '');
+    node = (node as Record<string, unknown> | null)?.[key];
+    if (segment.endsWith('[]')) node = Array.isArray(node) ? node[0] : undefined;
+  }
+  return node;
 }
 
 /**
- * Assert the two outputs are identical except `nullOnKeyPath` (dot paths into
- * the output), which must be null on the key path and must each be a listed
- * known gap (`command.field`).
+ * Assert the two outputs are identical: same envelope and pagination, and the
+ * entity (or rows) judged by the shared `apiKeyParityDiffs`, which allows only
+ * documented null leaves. `expectedGaps` names the gaps this fixture exercises
+ * (the session side has a value there), so a test can't pass vacuously.
  */
-function expectParity(
-  command: string,
-  session: Json,
-  apiKey: Json,
-  nullOnKeyPath: Array<{ path: string; field: string }> = [],
-): void {
-  const s = structuredClone(session);
-  const k = structuredClone(apiKey);
-  for (const { path, field } of nullOnKeyPath) {
-    expect(API_KEY_NULL_FIELDS, `${command}.${field} must be a documented gap`).toHaveProperty([`${command}.${field}`]);
-    const keyed = at(k, path.split('.'));
-    expect(keyed.parent[keyed.key], `${path} on the key path`).toBeNull();
-    const sessioned = at(s, path.split('.'));
-    sessioned.parent[sessioned.key] = null;
+function expectParity(command: string, session: Json, apiKey: Json, expectedGaps: string[] = []): void {
+  expect(Object.keys(apiKey).sort()).toEqual(Object.keys(session).sort());
+  const entityKey = Object.keys(session).find((key) => key !== 'pagination') as string;
+  const { [entityKey]: sessionEntity, ...sessionEnvelope } = session;
+  const { [entityKey]: apiKeyEntity, ...apiKeyEnvelope } = apiKey;
+  expect(apiKeyEnvelope).toEqual(sessionEnvelope);
+  expect(apiKeyParityDiffs(command, sessionEntity, apiKeyEntity)).toEqual([]);
+  for (const gap of expectedGaps) {
+    expect(API_KEY_NULL_FIELDS, `${command}.${gap} must be a documented gap`).toHaveProperty([`${command}.${gap}`]);
+    expect(firstAt(sessionEntity, gap), `${gap} has a value on the session side`).not.toBeNull();
+    expect(firstAt(apiKeyEntity, gap), `${gap} on the API-key side`).toBeNull();
   }
-  expect(k).toEqual(s);
 }
 
 describe('resource command --json parity, session vs API key', () => {
@@ -508,7 +510,7 @@ describe('resource command --json parity, session vs API key', () => {
     );
     const apiKey = await viaApiKey({ 'GET /organizations': restList([REST_ORG], 'org_1') }, () => runOrgList({}));
 
-    expectParity('organization', session, apiKey, [{ path: 'organizations.0.usersCount', field: 'usersCount' }]);
+    expectParity('organization', session, apiKey, ['usersCount']);
     expect(apiKey).toMatchObject({ organizations: [{ domains: [{ state: 'verified' }], metadata: { team: 'blue' } }] });
   });
 
@@ -519,7 +521,7 @@ describe('resource command --json parity, session vs API key', () => {
     );
     const apiKey = await viaApiKey({ 'GET /organizations/org_1': REST_ORG }, () => runOrgGet('org_1'));
 
-    expectParity('organization', session, apiKey, [{ path: 'organization.usersCount', field: 'usersCount' }]);
+    expectParity('organization', session, apiKey, ['usersCount']);
   });
 
   const userRestRoutes = {
@@ -546,11 +548,7 @@ describe('resource command --json parity, session vs API key', () => {
     );
     const apiKey = await viaApiKey(userRestRoutes, () => runUserList({}));
 
-    expectParity('user', session, apiKey, [
-      { path: 'users.0.sessionCount', field: 'sessionCount' },
-      { path: 'users.0.hasPassword', field: 'hasPassword' },
-      { path: 'users.0.emailVerifiedAt', field: 'emailVerifiedAt' },
-    ]);
+    expectParity('user', session, apiKey, ['sessionCount', 'hasPassword', 'emailVerifiedAt']);
     // Identities are filled from memberships, with role IDs/names resolved from slugs.
     expect(apiKey).toMatchObject({
       users: [
@@ -579,11 +577,38 @@ describe('resource command --json parity, session vs API key', () => {
     const apiKey = await viaApiKey(userRestRoutes, () => runUserGet('user_1'));
 
     expectParity('user', session, apiKey, [
-      { path: 'user.sessionCount', field: 'sessionCount' },
-      { path: 'user.hasPassword', field: 'hasPassword' },
-      { path: 'user.emailVerifiedAt', field: 'emailVerifiedAt' },
-      { path: 'user.authenticationFactors.0.lastVerifiedAt', field: 'authenticationFactors' },
+      'sessionCount',
+      'hasPassword',
+      'emailVerifiedAt',
+      'authenticationFactors[].lastVerifiedAt',
     ]);
+  });
+
+  it('user get shows an organization role that shadows an environment slug, matching the dashboard, with an API key', async () => {
+    const orgMember = { ...REST_ROLE_MEMBER, id: 'role_org_member', name: 'Org Member', type: 'OrganizationRole' };
+    const session = await viaSession(
+      () => ({
+        userlandUser: {
+          ...GQL_USER,
+          identities: { data: [{ ...GQL_IDENTITY, roles: [{ id: 'role_org_member', name: 'Org Member' }] }] },
+          authenticationFactors: [],
+        },
+      }),
+      () => runUserGet('user_1'),
+    );
+    const apiKey = await viaApiKey(
+      {
+        ...userRestRoutes,
+        'GET /user_management/users/user_1/auth_factors': restList([]),
+        // The organization's list carries both the inherited environment role and its own role of the same slug.
+        'GET /authorization/organizations/org_1/roles': { object: 'list', data: [REST_ROLE_MEMBER, orgMember] },
+      },
+      () => runUserGet('user_1'),
+    );
+    expectParity('user', session, apiKey, ['sessionCount', 'hasPassword', 'emailVerifiedAt']);
+    expect(apiKey).toMatchObject({
+      user: { identities: [{ roles: [{ id: 'role_org_member', name: 'Org Member' }] }] },
+    });
   });
 
   it('role list and get match with an API key', async () => {
@@ -669,7 +694,6 @@ describe('resource command --json parity, session vs API key', () => {
   });
 
   it('membership list (by user) and get match with an API key', async () => {
-    const membershipNull = (path: string) => [{ path, field: 'type' }];
     expectParity(
       'membership',
       await viaSession(
@@ -679,7 +703,7 @@ describe('resource command --json parity, session vs API key', () => {
       await viaApiKey({ 'GET /user_management/organization_memberships': restList([REST_MEMBERSHIP]) }, () =>
         runMembershipList({ user: 'user_1' }),
       ),
-      membershipNull('memberships.0.type'),
+      ['type'],
     );
     expectParity(
       'membership',
@@ -690,7 +714,7 @@ describe('resource command --json parity, session vs API key', () => {
       await viaApiKey({ 'GET /user_management/organization_memberships/om_1': REST_MEMBERSHIP }, () =>
         runMembershipGet('om_1'),
       ),
-      membershipNull('membership.type'),
+      ['type'],
     );
   });
 
@@ -752,6 +776,54 @@ describe('resource command --json parity, session vs API key', () => {
     expect(apiKey).toMatchObject({ webhookEndpoints: [{ state: 'active' }] });
   });
 
+  it('disabled webhook endpoints match with an API key (dashboard InActive, REST disabled)', async () => {
+    const session = await viaSession(
+      () => ({
+        webhookEndpoints: {
+          data: [{ ...GQL_ENDPOINT, state: 'InActive' }],
+          listMetadata: { before: null, after: null },
+        },
+      }),
+      () => runWebhookList({}),
+    );
+    const apiKey = await viaApiKey(
+      { 'GET /webhook_endpoints': restList([{ ...REST_ENDPOINT, status: 'disabled' }]) },
+      () => runWebhookList({}),
+    );
+    expectParity('webhook', session, apiKey);
+    expect(apiKey).toMatchObject({ webhookEndpoints: [{ state: 'in_active' }] });
+  });
+
+  it('session providers match with an API key, and an unnamed OAuth provider is a documented null', async () => {
+    const gqlSessions = [
+      { ...GQL_SESSION, id: 'session_magic', provider: 'MagicAuth' },
+      { ...GQL_SESSION, id: 'session_sso', provider: 'SingleSignOn' },
+      { ...GQL_SESSION, id: 'session_oauth', provider: 'GoogleOAuth' },
+    ];
+    const restSessions = [
+      { ...REST_SESSION, id: 'session_magic', auth_method: 'magic_code' },
+      { ...REST_SESSION, id: 'session_sso', auth_method: 'sso' },
+      { ...REST_SESSION, id: 'session_oauth', auth_method: 'oauth' },
+    ];
+    const session = await viaSession(
+      () => ({
+        userlandUser: { id: 'user_1', sessions: { data: gqlSessions, listMetadata: { before: null, after: null } } },
+      }),
+      () => runSessionList('user_1', {}),
+    );
+    const apiKey = await viaApiKey(
+      {
+        'GET /user_management/users/user_1/sessions': restList(restSessions),
+        'GET /organizations/org_1': REST_ORG,
+      },
+      () => runSessionList('user_1', {}),
+    );
+    expectParity('session', session, apiKey);
+    expect(apiKey).toMatchObject({
+      sessions: [{ provider: 'MagicAuth' }, { provider: 'SingleSignOn' }, { provider: null }],
+    });
+  });
+
   it('event list matches with an API key, newest first with the same cursor contract', async () => {
     const session = await viaSession(
       () => ({ environment: { events: { data: [GQL_EVENT], listMetadata: { before: 'event_0', after: null } } } }),
@@ -760,7 +832,7 @@ describe('resource command --json parity, session vs API key', () => {
     const apiKey = await viaApiKey({ 'GET /events': restList([REST_EVENT], 'event_0') }, () =>
       runEventList({ events: ['user.created'] }),
     );
-    expectParity('event', session, apiKey, [{ path: 'events.0.updatedAt', field: 'updatedAt' }]);
+    expectParity('event', session, apiKey, ['updatedAt']);
     expect(rest.callsTo('GET /events')[0].query).toMatchObject({ events: 'user.created', order: 'desc' });
   });
 
@@ -780,11 +852,7 @@ describe('resource command --json parity, session vs API key', () => {
       'feature-flag',
       await viaSession(router, () => runFeatureFlagGet('beta')),
       await viaApiKey(routes, () => runFeatureFlagGet('beta')),
-      [
-        { path: 'flag.accessType', field: 'accessType' },
-        { path: 'flag.organizationTargets', field: 'organizationTargets' },
-        { path: 'flag.userTargets', field: 'userTargets' },
-      ],
+      ['accessType', 'organizationTargets', 'userTargets'],
     );
   });
 
@@ -796,10 +864,7 @@ describe('resource command --json parity, session vs API key', () => {
       () => runOrgDomainGet('dom_1', {}),
     );
     const apiKey = await viaApiKey({ 'GET /organizations': restList([REST_ORG]) }, () => runOrgDomainGet('dom_1', {}));
-    expectParity('org-domain', session, apiKey, [
-      { path: 'domain.verificationContent', field: 'verificationContent' },
-      { path: 'domain.domainCaptureEnabled', field: 'domainCaptureEnabled' },
-    ]);
+    expectParity('org-domain', session, apiKey, ['verificationContent', 'domainCaptureEnabled']);
   });
 
   it('portal generate-link matches with an API key', async () => {
@@ -821,11 +886,59 @@ describe('resource command --json parity, session vs API key', () => {
     const apiKey = await viaApiKey({ 'POST /portal/generate_link': { link: 'https://setup.workos.com/x' } }, () =>
       runPortalGenerateLink({ intent: 'sso', organization: 'org_1' }),
     );
-    expectParity('portal', session, apiKey, [
-      { path: 'portalSetupLink.id', field: 'id' },
-      { path: 'portalSetupLink.state', field: 'state' },
-      { path: 'portalSetupLink.expiresAt', field: 'expiresAt' },
-    ]);
+    expectParity('portal', session, apiKey, ['id', 'state', 'expiresAt']);
     expect(rest.callsTo('POST /portal/generate_link')[0].body).toEqual({ organization: 'org_1', intent: 'sso' });
+  });
+});
+
+describe('apiKeyParityDiffs, the shared session-vs-key parity gate', () => {
+  const sessionUser = {
+    id: 'user_1',
+    email: 'jane@example.com',
+    authenticationFactors: [{ id: 'auth_factor_1', lastVerifiedAt: T1 }],
+  };
+  const sessionRow = {
+    id: 'session_1',
+    provider: 'Password',
+    impersonator: { id: 'user_admin', email: 'admin@example.com', firstName: 'Ada', lastName: 'Admin' },
+  };
+
+  it('accepts only documented null leaves with an API key', () => {
+    expect(
+      apiKeyParityDiffs('user', sessionUser, {
+        ...sessionUser,
+        authenticationFactors: [{ id: 'auth_factor_1', lastVerifiedAt: null }],
+      }),
+    ).toEqual([]);
+    expect(
+      apiKeyParityDiffs('session', sessionRow, {
+        ...sessionRow,
+        impersonator: { id: null, email: 'admin@example.com', firstName: null, lastName: null },
+      }),
+    ).toEqual([]);
+  });
+
+  it('rejects an auth factor that lost its keys with an API key', () => {
+    const diffs = apiKeyParityDiffs('user', sessionUser, { ...sessionUser, authenticationFactors: [{}] });
+    expect(diffs.join('\n')).toContain('authenticationFactors[].id: present only on the session side');
+  });
+
+  it('rejects an impersonator that went null as a whole with an API key', () => {
+    const diffs = apiKeyParityDiffs('session', sessionRow, { ...sessionRow, impersonator: null });
+    expect(diffs).toHaveLength(1);
+    expect(diffs[0]).toContain('impersonator');
+  });
+
+  it('rejects a lost email, a lost ID and a casing-only difference with an API key', () => {
+    expect(
+      apiKeyParityDiffs('session', sessionRow, {
+        ...sessionRow,
+        impersonator: { id: null, email: null, firstName: null, lastName: null },
+      }),
+    ).toEqual([expect.stringContaining('impersonator.email')]);
+    expect(apiKeyParityDiffs('user', [sessionUser], [{ ...sessionUser, id: undefined }])).not.toEqual([]);
+    expect(apiKeyParityDiffs('session', sessionRow, { ...sessionRow, provider: 'password' })).toEqual([
+      expect.stringContaining('provider'),
+    ]);
   });
 });

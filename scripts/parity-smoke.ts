@@ -48,10 +48,14 @@
  * API-key mode (`--api-key`): compares THIS branch against itself, dashboard
  * session vs API key, for every resource command's list/get. No ../main
  * needed. Same prereqs as above (a login, and a WORKOS_API_KEY for the same
- * environment the session targets). Unlike the branch-vs-main buckets, the two
- * sides must have IDENTICAL keys and values; the only allowed difference is a
- * field in API_KEY_ACCEPTED (REST has no source for it, so the key side is
- * null). The offline equivalent is src/commands/api-key-parity.spec.ts.
+ * environment the session targets). `whoami` first proves the login and finds
+ * its environment; every session-side command is pinned to it with
+ * --environment-id, which the CLI refuses whenever any API key applies, so the
+ * session side can't silently run on REST. Unlike the branch-vs-main buckets,
+ * the two sides must have IDENTICAL keys and values; the only allowed
+ * difference is a leaf in API_KEY_ACCEPTED (REST has no source for it), which
+ * may be null on the key side. The offline equivalent is
+ * src/commands/api-key-parity.spec.ts.
  *
  *   bun run scripts/parity-smoke.ts --api-key
  *
@@ -61,7 +65,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { API_KEY_NULL_FIELDS } from '../src/lib/api-key-operations/known-gaps.ts';
+import { API_KEY_NULL_FIELDS, apiKeyParityDiffs } from '../src/lib/api-key-operations/known-gaps.ts';
 
 const BRANCH_DIR = path.resolve(import.meta.dirname, '..');
 const MAIN_DIR = path.resolve(BRANCH_DIR, '../main');
@@ -965,65 +969,26 @@ async function checkNew(c: { label: string; args: string[] }): Promise<void> {
 
 // --- API-key mode: dashboard session vs API key, same branch ------------------------
 /**
- * Deliberate session-vs-key divergences, keyed `command.field`. Shared with the
- * offline spec via known-gaps.ts. Each is a field REST has no source for, so
- * the key side must be null; a casing-only difference is never listed here (it
- * is a bug and must fail).
+ * Deliberate session-vs-key divergences, keyed `command.path` (one leaf of the
+ * curated entity; `[]` steps into array elements). Shared with the offline
+ * spec via known-gaps.ts, and enforced by the same `apiKeyParityDiffs()`: a
+ * listed leaf may be null on the key side, and nothing else may differ (no
+ * missing keys, no emptied objects, no casing-only differences).
  */
 const API_KEY_ACCEPTED: Record<string, string> = { ...API_KEY_NULL_FIELDS };
 
 /** Cursors are opaque and plane-specific; everything else must match exactly. */
 const CURSOR_KEYS = new Set(['before', 'after', 'listMetadata', 'list_metadata', 'pagination']);
 
-function exact(v: unknown): unknown {
-  if (v === null || v === undefined) return null;
-  if (Array.isArray(v)) return v.map(exact).sort(cmp);
-  if (typeof v === 'object') {
-    const o: Record<string, unknown> = {};
-    for (const k of Object.keys(v as Record<string, unknown>).sort()) {
-      if (!CURSOR_KEYS.has(k)) o[k] = exact((v as Record<string, unknown>)[k]);
-    }
-    return o;
-  }
-  return v;
-}
-
 /**
- * True when `k` is `s` with some values replaced by null (and nothing else
- * changed): the key side lacks data REST can't supply but invents nothing.
+ * The environment the session side is pinned to. Every session-side command
+ * passes it as `--environment-id`, which the CLI refuses whenever ANY API key
+ * applies (WORKOS_API_KEY, --api-key, or an unclaimed active profile's stored
+ * key). So a session-side run either really goes through the dashboard login
+ * or fails loudly; it can never quietly fall back to REST and compare REST
+ * with itself.
  */
-function isNulledCopy(s: unknown, k: unknown): boolean {
-  if (k === null || k === undefined) return true;
-  if (Array.isArray(s) && Array.isArray(k)) {
-    return s.length === k.length && k.every((item, index) => isNulledCopy(s[index], item));
-  }
-  if (isPlainObject(s) && isPlainObject(k)) {
-    return Object.keys(k).every((key) => isNulledCopy(s[key], k[key]));
-  }
-  return JSON.stringify(s) === JSON.stringify(k);
-}
-
-/** Compare one entity: identical key sets, identical values, except accepted nulls. */
-function compareSessionVsKey(cmd: string, s: any, k: any): { diffs: string[]; accepted: string[] } {
-  const diffs: string[] = [];
-  const accepted: string[] = [];
-  const keys = new Set([...Object.keys(s ?? {}), ...Object.keys(k ?? {})]);
-  for (const key of keys) {
-    if (CURSOR_KEYS.has(key)) continue;
-    if (!(key in (s ?? {})) || !(key in (k ?? {}))) {
-      diffs.push(`${key}: present only on the ${key in (s ?? {}) ? 'session' : 'API-key'} side`);
-      continue;
-    }
-    if (JSON.stringify(exact(s[key])) === JSON.stringify(exact(k[key]))) continue;
-    const reason = API_KEY_ACCEPTED[`${cmd}.${key}`];
-    if (reason && isNulledCopy(s[key], k[key])) {
-      accepted.push(`${key} (${reason})`);
-    } else {
-      diffs.push(`${key}: session=${JSON.stringify(s[key])} key=${JSON.stringify(k[key])}`);
-    }
-  }
-  return { diffs, accepted };
-}
+let sessionEnvironmentId = '';
 
 interface ApiKeyCheck {
   cmd: string;
@@ -1036,10 +1001,32 @@ interface ApiKeyCheck {
 
 async function runBoth(args: string[]): Promise<[RunResult, RunResult]> {
   return Promise.all([
-    run(BRANCH_DIR, [...args, ...envArgs()], { withoutApiKey: true }),
+    run(BRANCH_DIR, [...args, '--environment-id', sessionEnvironmentId], { withoutApiKey: true }),
     // The key decides the environment; --environment-id is refused with a key.
     run(BRANCH_DIR, args),
   ]);
+}
+
+/**
+ * Prove a dashboard login exists and find the environment it targets, using
+ * `whoami` (session-only: it never uses a key). Pinning that environment on
+ * every session-side command is what keeps the session side honest.
+ */
+async function pinSessionEnvironment(): Promise<void> {
+  const r = await run(BRANCH_DIR, ['whoami', '--json', ...envArgs()], { withoutApiKey: true });
+  if (r.rc === 4) {
+    console.error('--api-key mode needs a dashboard login for the session side: run `workos auth login` first.');
+    process.exit(2);
+  }
+  const environmentId = parseJson(r.stdout)?.environment?.id;
+  if (r.rc !== 0 || typeof environmentId !== 'string' || !environmentId) {
+    console.error(
+      `could not resolve the session's environment (whoami rc=${r.rc} ${shortErr(r.stderr)}). ` +
+        'Set PARITY_ENV_ID, or switch to a claimed profile that targets the API key’s environment.',
+    );
+    process.exit(2);
+  }
+  sessionEnvironmentId = environmentId;
 }
 
 async function checkSessionVsKey(c: ApiKeyCheck): Promise<any> {
@@ -1060,8 +1047,7 @@ async function checkSessionVsKey(c: ApiKeyCheck): Promise<any> {
   }
   const sv = js[c.key];
   const kv = jk[c.key];
-  let diffs: string[] = [];
-  let accepted: string[] = [];
+  const diffs: string[] = [];
   let rows = 1;
   if (Array.isArray(sv) && Array.isArray(kv) && c.idKey) {
     const sIds = sv.map((row: any) => row?.[c.idKey!]).sort();
@@ -1073,17 +1059,12 @@ async function checkSessionVsKey(c: ApiKeyCheck): Promise<any> {
     rows = sv.length;
     for (const row of sv) {
       const other = kv.find((candidate: any) => candidate?.[c.idKey!] === row?.[c.idKey!]);
-      const r = compareSessionVsKey(c.cmd, row, other);
-      diffs.push(...r.diffs.map((d) => `${row?.[c.idKey!]}: ${d}`));
-      accepted.push(...r.accepted);
+      diffs.push(...apiKeyParityDiffs(c.cmd, row, other, CURSOR_KEYS).map((d) => `${row?.[c.idKey!]}: ${d}`));
     }
   } else {
-    const r = compareSessionVsKey(c.cmd, sv, kv);
-    diffs = r.diffs;
-    accepted = r.accepted;
+    diffs.push(...apiKeyParityDiffs(c.cmd, sv, kv, CURSOR_KEYS));
   }
   for (const d of diffs) notes.push(`${C.red}FAIL${C.reset} ${c.label} ${d}`);
-  for (const a of new Set(accepted)) notes.push(`${C.cyan}INFO${C.reset} ${c.label} accepted: ${a}`);
   const empty = Array.isArray(sv) && sv.length === 0;
   push(
     'API-KEY',
@@ -1093,7 +1074,7 @@ async function checkSessionVsKey(c: ApiKeyCheck): Promise<any> {
       ? `${diffs.length} UNEXPECTED diff(s)`
       : empty
         ? 'both sides empty — proves the call works, proves nothing about data'
-        : `${rows} row(s), identical keys and values${accepted.length ? `; ${new Set(accepted).size} accepted null field(s)` : ''}`,
+        : `${rows} row(s), identical keys and values apart from documented null gaps`,
   );
   return js;
 }
@@ -1105,6 +1086,8 @@ async function runApiKeyMode(): Promise<never> {
     console.error('--api-key mode needs WORKOS_API_KEY (or the branch .env.local) for the session’s environment');
     process.exit(2);
   }
+  await pinSessionEnvironment();
+  console.log(`              session pinned to environment ${sessionEnvironmentId}\n`);
 
   const lists: ApiKeyCheck[] = [
     {
@@ -1243,6 +1226,9 @@ async function runApiKeyMode(): Promise<never> {
     console.log(`\n${C.dim}field-level detail${C.reset}`);
     for (const n of notes) console.log(`  ${n}`);
   }
+  console.log(`\n${C.dim}documented null gaps (may be null on the API-key side)${C.reset}`);
+  for (const [field, reason] of Object.entries(API_KEY_ACCEPTED))
+    console.log(`  ${C.cyan}${field}${C.reset}  ${reason}`);
   const failed = rows.filter((r) => r.status === 'FAIL').length;
   const auth = rows.filter((r) => r.status === 'AUTH').length;
   console.log(
