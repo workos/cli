@@ -40,6 +40,8 @@ interface UserNode {
   lastName?: string | null;
   createdAt?: string | null;
   emailVerifiedAt?: string | null;
+  /** API-key path only: REST reports verification as a boolean, with no timestamp. Not in `--json`. */
+  emailVerified?: boolean | null;
   lastSignedInAt?: string | null;
   sessionCount?: number | null;
   hasPassword?: boolean | null;
@@ -113,7 +115,7 @@ export async function runUserGet(userId: string, options: UserGetOptions = {}): 
     ['ID', user.id],
     ['Email', user.email],
     ['Name', [user.firstName, user.lastName].filter(Boolean).join(' ') || null],
-    ['Verified', user.emailVerifiedAt ? 'Yes' : 'No'],
+    ['Verified', user.emailVerifiedAt || data.userlandUser.emailVerified ? 'Yes' : 'No'],
     ['Created', user.createdAt],
     ['Last sign-in', user.lastSignedInAt],
     ['External ID', user.externalId],
@@ -169,7 +171,7 @@ export async function runUserList(options: UserListOptions = {}): Promise<void> 
     user.email ?? chalk.dim('—'),
     user.firstName || chalk.dim('-'),
     user.lastName || chalk.dim('-'),
-    user.emailVerifiedAt ? 'Yes' : 'No',
+    user.emailVerifiedAt || user.emailVerified ? 'Yes' : 'No',
   ]);
   console.log(
     formatTable(

@@ -26,9 +26,9 @@
  */
 
 import chalk from 'chalk';
-import { requireCommandToken } from '../lib/command-auth.js';
-import { resolveEnvironmentTarget } from '../lib/environment-target.js';
-import { executeDashboardOperation } from '../lib/dashboard-operation.js';
+import { isApiKeyAuth, type ApiKeyAuth, type OperationAuth } from '../lib/resource-auth.js';
+import { changeFlagTarget, withApiKey } from '../lib/api-key-operations/index.js';
+import { executeDashboardOperation, resolveEnvScopedAuth } from '../lib/dashboard-operation.js';
 import { getOperation } from '../catalog/operation.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
 import { enumOut } from '../utils/output-conventions.js';
@@ -44,6 +44,8 @@ interface FlagEnvironmentNode {
   accessType?: string | null;
   organizations?: Array<{ id: string; name?: string | null }> | null;
   users?: Array<{ id: string; email?: string | null }> | null;
+  /** Set on the API-key path, where the REST API can't list a flag's targets. */
+  targetsUnknown?: boolean;
 }
 
 interface FlagNode {
@@ -85,8 +87,12 @@ function shapeFlagDetail(flag: FlagNode, environmentId: string) {
     ...shapeFlag(flag, environmentId),
     defaultEnabled: state?.defaultEnabled ?? false,
     accessType: enumOut(state?.accessType),
-    organizationTargets: (state?.organizations ?? []).map((org) => ({ id: org.id, name: org.name ?? null })),
-    userTargets: (state?.users ?? []).map((user) => ({ id: user.id, email: user.email ?? null })),
+    organizationTargets: state?.targetsUnknown
+      ? null
+      : (state?.organizations ?? []).map((org) => ({ id: org.id, name: org.name ?? null })),
+    userTargets: state?.targetsUnknown
+      ? null
+      : (state?.users ?? []).map((user) => ({ id: user.id, email: user.email ?? null })),
     tags: (flag.tags ?? []).map((tag) => tag.name ?? tag.id),
   };
 }
@@ -103,7 +109,10 @@ interface TeamProjectsData {
  * that joins no project means the stored ID went stale — same remedy as the
  * environment resolver's staleness error.
  */
-async function resolveProjectId(token: string, environmentId: string): Promise<string> {
+async function resolveProjectId(token: OperationAuth, environmentId: string): Promise<string> {
+  // With an API key the key is the environment and the REST flag endpoints
+  // aren't project-scoped, so there is no project to derive.
+  if (isApiKeyAuth(token)) return '';
   const op = getOperation('teamProjectsV2');
   // Team-scoped read: deliberately no environment header.
   const data = await executeDashboardOperation<TeamProjectsData>(op, { token });
@@ -134,11 +143,10 @@ export interface FeatureFlagListOptions {
 
 export async function runFeatureFlagList(options: FeatureFlagListOptions = {}): Promise<void> {
   const order = normalizeOrder(options.order);
-  const token = await requireCommandToken();
   const op = getOperation('flags');
 
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
     forMutation: op.kind === 'mutation',
   });
   const projectId = await resolveProjectId(token, environmentId);
@@ -195,7 +203,7 @@ export interface FeatureFlagEnvironmentOptions {
 
 /** Fetch a flag by slug within the resolved environment's project, or exit not_found. */
 async function requireFlagBySlug(
-  token: string,
+  token: OperationAuth,
   environmentId: string,
   projectId: string,
   slug: string,
@@ -213,10 +221,8 @@ async function requireFlagBySlug(
 }
 
 export async function runFeatureFlagGet(slug: string, options: FeatureFlagEnvironmentOptions = {}): Promise<void> {
-  const token = await requireCommandToken();
-
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
     forMutation: false,
   });
   const projectId = await resolveProjectId(token, environmentId);
@@ -235,9 +241,9 @@ export async function runFeatureFlagGet(slug: string, options: FeatureFlagEnviro
     ['Access type', flag.accessType],
     [
       'Organization targets',
-      flag.organizationTargets.length > 0 ? flag.organizationTargets.map((t) => t.id).join(', ') : null,
+      flag.organizationTargets?.length ? flag.organizationTargets.map((t) => t.id).join(', ') : null,
     ],
-    ['User targets', flag.userTargets.length > 0 ? flag.userTargets.map((t) => t.id).join(', ') : null],
+    ['User targets', flag.userTargets?.length ? flag.userTargets.map((t) => t.id).join(', ') : null],
     ['Created', flag.createdAt],
   ];
   printDetailFields(fields);
@@ -264,7 +270,7 @@ function requireEnvironmentState(flag: FlagNode, slug: string, environmentId: st
  * their change into the freshly fetched state and pass everything back.
  */
 async function executeFlagEnvironmentUpdate(
-  token: string,
+  token: OperationAuth,
   environmentId: string,
   slug: string,
   state: FlagEnvironmentNode,
@@ -301,11 +307,9 @@ async function executeFlagEnvironmentUpdate(
 }
 
 async function setFlagEnabled(slug: string, enabled: boolean, options: FeatureFlagEnvironmentOptions): Promise<void> {
-  const token = await requireCommandToken();
-
   // Environment-scoped mutation: pre-validated resolved target as header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
     forMutation: true,
   });
   const projectId = await resolveProjectId(token, environmentId);
@@ -345,12 +349,31 @@ export async function runFeatureFlagAddTarget(
   options: FeatureFlagEnvironmentOptions = {},
 ): Promise<void> {
   const key = targetListKey(targetId);
-  const token = await requireCommandToken();
 
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
     forMutation: true,
   });
+  if (isApiKeyAuth(token)) {
+    await changeTargetWithApiKey(token, slug, targetId, 'add');
+  } else {
+    await addTargetWithSession(token, environmentId, slug, targetId, key);
+  }
+
+  if (isJsonMode()) {
+    outputJson({ added: { flag: slug, targetId } });
+    return;
+  }
+  outputSuccess(`Added target ${chalk.bold(targetId)} to feature flag ${chalk.bold(slug)}`);
+}
+
+async function addTargetWithSession(
+  token: OperationAuth,
+  environmentId: string,
+  slug: string,
+  targetId: string,
+  key: 'organizationIds' | 'userIds',
+): Promise<void> {
   const projectId = await resolveProjectId(token, environmentId);
   const flag = await requireFlagBySlug(token, environmentId, projectId, slug);
   const state = requireEnvironmentState(flag, slug, environmentId);
@@ -361,12 +384,28 @@ export async function runFeatureFlagAddTarget(
   const merged = [...new Set([...current, targetId])];
 
   await executeFlagEnvironmentUpdate(token, environmentId, slug, state, { [key]: merged });
+}
 
-  if (isJsonMode()) {
-    outputJson({ added: { flag: slug, targetId } });
-    return;
+/**
+ * API-key path for add/remove-target: REST can't list a flag's targets, so
+ * call the target endpoint directly instead of read-merge-write.
+ */
+async function changeTargetWithApiKey(
+  token: ApiKeyAuth,
+  slug: string,
+  targetId: string,
+  action: 'add' | 'remove',
+): Promise<void> {
+  const changed = await withApiKey(token, (ctx) => changeFlagTarget(ctx, slug, targetId, action));
+  if (!changed) {
+    exitWithError({
+      code: 'not_found',
+      message:
+        action === 'add'
+          ? `Feature flag "${slug}" was not found.`
+          : `Feature flag "${slug}" has no target "${targetId}" in this environment.`,
+    });
   }
-  outputSuccess(`Added target ${chalk.bold(targetId)} to feature flag ${chalk.bold(slug)}`);
 }
 
 export async function runFeatureFlagRemoveTarget(
@@ -375,12 +414,31 @@ export async function runFeatureFlagRemoveTarget(
   options: FeatureFlagEnvironmentOptions = {},
 ): Promise<void> {
   const key = targetListKey(targetId);
-  const token = await requireCommandToken();
 
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
     forMutation: true,
   });
+  if (isApiKeyAuth(token)) {
+    await changeTargetWithApiKey(token, slug, targetId, 'remove');
+  } else {
+    await removeTargetWithSession(token, environmentId, slug, targetId, key);
+  }
+
+  if (isJsonMode()) {
+    outputJson({ removed: { flag: slug, targetId } });
+    return;
+  }
+  outputSuccess(`Removed target ${chalk.bold(targetId)} from feature flag ${chalk.bold(slug)}`);
+}
+
+async function removeTargetWithSession(
+  token: OperationAuth,
+  environmentId: string,
+  slug: string,
+  targetId: string,
+  key: 'organizationIds' | 'userIds',
+): Promise<void> {
   const projectId = await resolveProjectId(token, environmentId);
   const flag = await requireFlagBySlug(token, environmentId, projectId, slug);
   const state = requireEnvironmentState(flag, slug, environmentId);
@@ -396,10 +454,4 @@ export async function runFeatureFlagRemoveTarget(
   const remaining = current.filter((candidate) => candidate !== targetId);
 
   await executeFlagEnvironmentUpdate(token, environmentId, slug, state, { [key]: remaining });
-
-  if (isJsonMode()) {
-    outputJson({ removed: { flag: slug, targetId } });
-    return;
-  }
-  outputSuccess(`Removed target ${chalk.bold(targetId)} from feature flag ${chalk.bold(slug)}`);
 }

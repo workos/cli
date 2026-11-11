@@ -45,12 +45,27 @@
  * Env: PARITY_BRANCH_BIN, PARITY_MAIN_BIN (default: bun <dir>/src/bin.ts),
  *      PARITY_ENV_ID (pins --environment-id on branch commands).
  *
+ * API-key mode (`--api-key`): compares THIS branch against itself, dashboard
+ * session vs API key, for every resource command's list/get. No ../main
+ * needed. Same prereqs as above (a login, and a WORKOS_API_KEY for the same
+ * environment the session targets). `whoami` first proves the login and finds
+ * its environment; every session-side command is pinned to it with
+ * --environment-id, which the CLI refuses whenever any API key applies, so the
+ * session side can't silently run on REST. Unlike the branch-vs-main buckets,
+ * the two sides must have IDENTICAL keys and values; the only allowed
+ * difference is a leaf in API_KEY_ACCEPTED (REST has no source for it), which
+ * may be null on the key side. The offline equivalent is
+ * src/commands/api-key-parity.spec.ts.
+ *
+ *   bun run scripts/parity-smoke.ts --api-key
+ *
  * Exit: 0 if every executed check passed, 1 otherwise.
  */
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { API_KEY_NULL_FIELDS, apiKeyParityDiffs } from '../src/lib/api-key-operations/known-gaps.ts';
 
 const BRANCH_DIR = path.resolve(import.meta.dirname, '..');
 const MAIN_DIR = path.resolve(BRANCH_DIR, '../main');
@@ -62,6 +77,7 @@ const STRICT = process.argv.includes('--strict');
 // delivery. The address used is @example.com (RFC 2606 reserved, black-holed),
 // and the invitation is revoked during cleanup, but it stays opt-in.
 const INVITE = process.argv.includes('--invite');
+const API_KEY_MODE = process.argv.includes('--api-key');
 
 if (STRICT) {
   const missing = [!SEED && '--seed', !INVITE && '--invite', !MUTATE && '--mutate'].filter(Boolean);
@@ -71,11 +87,11 @@ if (STRICT) {
   }
 }
 
-if (!existsSync(path.join(MAIN_DIR, 'src/bin.ts'))) {
+if (!API_KEY_MODE && !existsSync(path.join(MAIN_DIR, 'src/bin.ts'))) {
   console.error(`main checkout not found: ${MAIN_DIR}/src/bin.ts`);
   process.exit(2);
 }
-for (const dir of [BRANCH_DIR, MAIN_DIR]) {
+for (const dir of API_KEY_MODE ? [BRANCH_DIR] : [BRANCH_DIR, MAIN_DIR]) {
   const pkg = JSON.parse(readFileSync(path.join(dir, 'package.json'), 'utf8'));
   if (pkg.name !== 'workos') {
     console.error(`${dir} is not the workos CLI (package.json name="${pkg.name}")`);
@@ -99,8 +115,10 @@ function envLocalKey(dir: string): string | undefined {
 }
 
 // Precedence: explicit env var > this branch's .env.local. Never main's, so the
-// REST plane is pinned to the same environment the branch targets.
-const API_KEY = process.env.WORKOS_API_KEY ?? envLocalKey(BRANCH_DIR);
+// REST plane is pinned to the same environment the branch targets. An empty
+// WORKOS_API_KEY counts as unset (as the CLI treats it), so the key and the
+// reported source always agree.
+const API_KEY = process.env.WORKOS_API_KEY || envLocalKey(BRANCH_DIR);
 const API_KEY_SOURCE = process.env.WORKOS_API_KEY ? 'env' : envLocalKey(BRANCH_DIR) ? 'branch .env.local' : 'NONE';
 
 function binFor(dir: string): { cmd: string; args: string[] } {
@@ -118,11 +136,50 @@ interface RunResult {
   stderr: string;
 }
 const COMMAND_TIMEOUT_MS = 60_000;
-function run(dir: string, cliArgs: string[]): Promise<RunResult> {
+
+/**
+ * Branch commands that must run on the dashboard session. These resource
+ * commands now switch to an API key whenever WORKOS_API_KEY is set, so in the
+ * default branch-vs-main mode the branch side must not inherit the key that
+ * main's REST side uses, or it would quietly compare REST with REST. The
+ * still-REST commands (connection, directory, audit-log, api) keep the key.
+ */
+const SESSION_PLANE_COMMANDS = new Set([
+  'organization',
+  'org',
+  'user',
+  'role',
+  'permission',
+  'membership',
+  'invitation',
+  'session',
+  'event',
+  'feature-flag',
+  'org-domain',
+  'portal',
+  'webhook',
+  'config',
+  'authkit',
+  'branding',
+  'whoami',
+  'project',
+  'team',
+  'environment',
+]);
+
+/**
+ * `withoutApiKey` runs the child with WORKOS_API_KEY unset (the dashboard
+ * session side). In the default mode, branch session-plane commands always
+ * run that way.
+ */
+function run(dir: string, cliArgs: string[], opts: { withoutApiKey?: boolean } = {}): Promise<RunResult> {
   const { cmd, args } = binFor(dir);
+  const sessionPlane =
+    opts.withoutApiKey || (!API_KEY_MODE && dir === BRANCH_DIR && SESSION_PLANE_COMMANDS.has(cliArgs[0]));
   return new Promise((resolve) => {
     const childEnv: NodeJS.ProcessEnv = { ...process.env };
     if (API_KEY) childEnv.WORKOS_API_KEY = API_KEY;
+    if (sessionPlane) delete childEnv.WORKOS_API_KEY;
     const p = spawn(cmd, [...args, ...cliArgs], { cwd: NEUTRAL_CWD, env: childEnv, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
@@ -158,7 +215,18 @@ function parseJson(stdout: string): any {
   }
 }
 
-const envArgs = (): string[] => (ENV_ID ? ['--environment-id', ENV_ID] : []);
+/**
+ * The environment the branch's session side is pinned to (see
+ * pinSessionEnvironment). Every branch session-side command passes it as
+ * `--environment-id`, which the CLI refuses whenever ANY API key applies
+ * (WORKOS_API_KEY, --api-key, or an unclaimed active profile's stored key), so
+ * a session-side run either really uses the dashboard login or fails loudly.
+ */
+let sessionEnvironmentId = '';
+const envArgs = (): string[] => {
+  const id = sessionEnvironmentId || ENV_ID;
+  return id ? ['--environment-id', id] : [];
+};
 const shortErr = (s: string): string => s.split('\n').filter(Boolean).slice(0, 2).join(' | ');
 
 // --- value normalization ---------------------------------------------------------
@@ -484,8 +552,9 @@ const NEW_ONLY = [
   { label: 'whoami', args: ['whoami', '--json'] },
   { label: 'project list', args: ['project', 'list', '--json'] },
   { label: 'team members', args: ['team', 'members', '--json'] },
-  { label: 'authkit redirect-uris list', args: ['authkit', 'redirect-uris', 'list', '--json', ...envArgs()] },
-  { label: 'branding get', args: ['branding', 'get', '--json', ...envArgs()] },
+  // Environment-scoped: checkNew appends the pinned --environment-id at run time.
+  { label: 'authkit redirect-uris list', args: ['authkit', 'redirect-uris', 'list', '--json'], envScoped: true },
+  { label: 'branding get', args: ['branding', 'get', '--json'], envScoped: true },
 ];
 
 // --- reporting -------------------------------------------------------------------
@@ -941,13 +1010,327 @@ async function checkEventPagination(): Promise<void> {
   push('PAGINATION', 'event', 'PASS', `${firstRows.length} + ${secondRows.length} distinct rows; page 2 is not newer`);
 }
 
-async function checkNew(c: { label: string; args: string[] }): Promise<void> {
-  const r = await run(BRANCH_DIR, c.args);
+async function checkNew(c: { label: string; args: string[]; envScoped?: boolean }): Promise<void> {
+  const r = await run(BRANCH_DIR, c.envScoped ? [...c.args, ...envArgs()] : c.args);
   if (r.rc === 4) return push('NEW', c.label, 'AUTH', 'auth required');
   if (r.rc !== 0) return push('NEW', c.label, 'FAIL', `exit ${r.rc} ${shortErr(r.stderr)}`);
   if (parseJson(r.stdout) === undefined) return push('NEW', c.label, 'FAIL', 'invalid JSON');
   push('NEW', c.label, 'PASS', 'valid JSON');
 }
+
+// --- API-key mode: dashboard session vs API key, same branch ------------------------
+/**
+ * Deliberate session-vs-key divergences, keyed `command.path` (one leaf of the
+ * curated entity; `[]` steps into array elements). Shared with the offline
+ * spec via known-gaps.ts, and enforced by the same `apiKeyParityDiffs()`: a
+ * listed leaf may be null on the key side, and nothing else may differ (no
+ * missing keys, no emptied objects, no casing-only differences).
+ */
+const API_KEY_ACCEPTED: Record<string, string> = { ...API_KEY_NULL_FIELDS };
+
+/** Entities actually compared field by field; a run that compared none proves nothing and fails. */
+let comparedEntities = 0;
+
+interface ApiKeyCheck {
+  cmd: string;
+  label: string;
+  args: string[];
+  /** Envelope key holding the list, or the single entity for a get. */
+  key: string;
+  idKey?: string;
+}
+
+async function runBoth(args: string[]): Promise<[RunResult, RunResult]> {
+  return Promise.all([
+    run(BRANCH_DIR, [...args, '--environment-id', sessionEnvironmentId], { withoutApiKey: true }),
+    // The key decides the environment; --environment-id is refused with a key.
+    run(BRANCH_DIR, args),
+  ]);
+}
+
+/**
+ * Prove a dashboard login exists and find the environment it targets, using
+ * `whoami` (session-only: it never uses a key). Pinning that environment on
+ * every session-side command is what keeps the session side honest.
+ */
+async function pinSessionEnvironment(): Promise<void> {
+  const r = await run(BRANCH_DIR, ['whoami', '--json', ...envArgs()], { withoutApiKey: true });
+  if (r.rc === 4) {
+    console.error('parity-smoke needs a dashboard login for the branch session side: run `workos auth login` first.');
+    process.exit(2);
+  }
+  const environmentId = parseJson(r.stdout)?.environment?.id;
+  if (r.rc !== 0 || typeof environmentId !== 'string' || !environmentId) {
+    console.error(
+      `could not resolve the session's environment (whoami rc=${r.rc} ${shortErr(r.stderr)}). ` +
+        'Set PARITY_ENV_ID, or switch to a claimed profile that targets the API key’s environment.',
+    );
+    process.exit(2);
+  }
+  sessionEnvironmentId = environmentId;
+}
+
+/**
+ * Prove the API-key side really runs with the key: the CLI refuses
+ * `--environment-id` only when an API key applies, so a key-side run that
+ * accepts it would be on the dashboard session (e.g. an empty key), and the
+ * comparison would be the session against itself.
+ */
+async function proveKeySide(): Promise<void> {
+  const r = await run(BRANCH_DIR, ['organization', 'list', '--json', '--environment-id', sessionEnvironmentId]);
+  const code = (() => {
+    try {
+      return JSON.parse(r.stderr.trim().split('\n').pop() ?? '')?.error?.code;
+    } catch {
+      return undefined;
+    }
+  })();
+  if (r.rc !== 1 || code !== 'invalid_argument') {
+    console.error(
+      `the API-key side is not running with the key (expected --environment-id to be refused, got rc=${r.rc} ${shortErr(r.stderr)}); ` +
+        'set a non-empty WORKOS_API_KEY for the session’s environment.',
+    );
+    process.exit(2);
+  }
+}
+
+async function checkSessionVsKey(c: ApiKeyCheck): Promise<any> {
+  const [s, k] = await runBoth(c.args);
+  if (s.rc === 4) {
+    push('API-KEY', c.label, 'AUTH', 'session side needs `workos auth login`');
+    return undefined;
+  }
+  if (s.rc !== 0 || k.rc !== 0) {
+    push('API-KEY', c.label, 'FAIL', `exit session=${s.rc} key=${k.rc} ${shortErr(s.stderr)}${shortErr(k.stderr)}`);
+    return undefined;
+  }
+  const js = parseJson(s.stdout);
+  const jk = parseJson(k.stdout);
+  if (js === undefined || jk === undefined) {
+    push('API-KEY', c.label, 'FAIL', 'invalid JSON on one side');
+    return undefined;
+  }
+  const sv = js[c.key];
+  const kv = jk[c.key];
+  // A check only counts when both sides returned real entities: a list of rows
+  // that each carry their ID, or a single entity object. A missing envelope
+  // key on both sides must not compare `undefined` with `undefined` and pass.
+  const isEntity = (value: unknown) => isPlainObject(value) && Object.keys(value).length > 0;
+  if (c.idKey) {
+    if (!Array.isArray(sv) || !Array.isArray(kv)) {
+      push('API-KEY', c.label, 'FAIL', `no "${c.key}" list on the ${Array.isArray(sv) ? 'API-key' : 'session'} side`);
+      return js;
+    }
+    const missingId = [...sv, ...kv].some((row: any) => !isEntity(row) || row[c.idKey!] == null);
+    if (missingId) {
+      push('API-KEY', c.label, 'FAIL', `a "${c.key}" row has no ${c.idKey}, so rows can't be paired`);
+      return js;
+    }
+  } else if (!isEntity(sv) || !isEntity(kv)) {
+    push('API-KEY', c.label, 'FAIL', `no "${c.key}" entity on the ${isEntity(sv) ? 'API-key' : 'session'} side`);
+    return js;
+  }
+  const diffs: string[] = [];
+  let rows = 1;
+  if (Array.isArray(sv) && Array.isArray(kv) && c.idKey) {
+    const sIds = sv.map((row: any) => row?.[c.idKey!]).sort();
+    const kIds = kv.map((row: any) => row?.[c.idKey!]).sort();
+    if (JSON.stringify(sIds) !== JSON.stringify(kIds)) {
+      push('API-KEY', c.label, 'FAIL', `row sets differ (session ${sv.length}, key ${kv.length}); same environment?`);
+      return js;
+    }
+    rows = sv.length;
+    for (const row of sv) {
+      const other = kv.find((candidate: any) => candidate?.[c.idKey!] === row?.[c.idKey!]);
+      diffs.push(...apiKeyParityDiffs(c.cmd, row, other).map((d) => `${row?.[c.idKey!]}: ${d}`));
+    }
+  } else {
+    // Only the entity is compared; the envelope's pagination cursors are
+    // opaque and plane-specific, and stay out of it.
+    diffs.push(...apiKeyParityDiffs(c.cmd, sv, kv));
+  }
+  for (const d of diffs) notes.push(`${C.red}FAIL${C.reset} ${c.label} ${d}`);
+  const empty = Array.isArray(sv) && sv.length === 0;
+  if (!diffs.length && !empty) comparedEntities += rows;
+  push(
+    'API-KEY',
+    c.label,
+    diffs.length ? 'FAIL' : empty ? 'SKIP' : 'PASS',
+    diffs.length
+      ? `${diffs.length} UNEXPECTED diff(s)`
+      : empty
+        ? 'both sides empty — proves the call works, proves nothing about data'
+        : `${rows} row(s), identical keys and values apart from documented null gaps`,
+  );
+  return js;
+}
+
+async function runApiKeyMode(): Promise<never> {
+  console.log(`parity-smoke --api-key  branch=${BRANCH_DIR}${ENV_ID ? `  env=${ENV_ID}` : ''}`);
+  console.log(`              api key source: ${API_KEY_SOURCE}\n`);
+  if (API_KEY_SOURCE === 'NONE') {
+    console.error('--api-key mode needs WORKOS_API_KEY (or the branch .env.local) for the session’s environment');
+    process.exit(2);
+  }
+  await pinSessionEnvironment();
+  await proveKeySide();
+  console.log(`              session pinned to environment ${sessionEnvironmentId}; key side confirmed on the key\n`);
+
+  const lists: ApiKeyCheck[] = [
+    {
+      cmd: 'organization',
+      label: 'organization list',
+      args: ['organization', 'list', '--json'],
+      key: 'organizations',
+      idKey: 'id',
+    },
+    { cmd: 'user', label: 'user list', args: ['user', 'list', '--json'], key: 'users', idKey: 'id' },
+    { cmd: 'role', label: 'role list', args: ['role', 'list', '--json'], key: 'roles', idKey: 'slug' },
+    {
+      cmd: 'permission',
+      label: 'permission list',
+      args: ['permission', 'list', '--json'],
+      key: 'permissions',
+      idKey: 'slug',
+    },
+    {
+      cmd: 'invitation',
+      label: 'invitation list',
+      args: ['invitation', 'list', '--json'],
+      key: 'invitations',
+      idKey: 'id',
+    },
+    {
+      cmd: 'feature-flag',
+      label: 'feature-flag list',
+      args: ['feature-flag', 'list', '--json'],
+      key: 'flags',
+      idKey: 'slug',
+    },
+    {
+      cmd: 'webhook',
+      label: 'webhook list',
+      args: ['webhook', 'list', '--json'],
+      key: 'webhookEndpoints',
+      idKey: 'id',
+    },
+    {
+      cmd: 'event',
+      label: 'event list',
+      args: ['event', 'list', '--events', 'organization.created,user.created', '--limit', '20', '--json'],
+      key: 'events',
+      idKey: 'id',
+    },
+  ];
+  const results = new Map<string, any>();
+  await Promise.all(lists.map(async (c) => results.set(c.cmd, await checkSessionVsKey(c))));
+
+  // Session-side preflight: if the organization sets differ the key targets a
+  // different environment and every row below is meaningless.
+  const orgRow = rows.find((row) => row.label === 'organization list');
+  if (orgRow?.status === 'FAIL' && orgRow.detail.startsWith('row sets differ')) {
+    console.log(`${C.red}aborting: the API key and the session target different environments${C.reset}`);
+  } else {
+    const first = (cmd: string, key: string) => results.get(cmd)?.[key]?.[0];
+    const org = first('organization', 'organizations');
+    const user = first('user', 'users');
+    const gets: ApiKeyCheck[] = [];
+    if (org)
+      gets.push({
+        cmd: 'organization',
+        label: 'organization get',
+        args: ['organization', 'get', org.id, '--json'],
+        key: 'organization',
+      });
+    if (user) {
+      gets.push({ cmd: 'user', label: 'user get', args: ['user', 'get', user.id, '--json'], key: 'user' });
+      gets.push({
+        cmd: 'membership',
+        label: 'membership list --user',
+        args: ['membership', 'list', '--user', user.id, '--json'],
+        key: 'memberships',
+        idKey: 'id',
+      });
+      gets.push({
+        cmd: 'session',
+        label: 'session list',
+        args: ['session', 'list', user.id, '--json'],
+        key: 'sessions',
+        idKey: 'id',
+      });
+    }
+    if (org)
+      gets.push({
+        cmd: 'membership',
+        label: 'membership list --org',
+        args: ['membership', 'list', '--org', org.id, '--json'],
+        key: 'memberships',
+        idKey: 'id',
+      });
+    const role = first('role', 'roles');
+    if (role) gets.push({ cmd: 'role', label: 'role get', args: ['role', 'get', role.slug, '--json'], key: 'role' });
+    const permission = first('permission', 'permissions');
+    if (permission)
+      gets.push({
+        cmd: 'permission',
+        label: 'permission get',
+        args: ['permission', 'get', permission.slug, '--json'],
+        key: 'permission',
+      });
+    const invitation = first('invitation', 'invitations');
+    if (invitation)
+      gets.push({
+        cmd: 'invitation',
+        label: 'invitation get',
+        args: ['invitation', 'get', invitation.id, '--json'],
+        key: 'invitation',
+      });
+    const flag = first('feature-flag', 'flags');
+    if (flag)
+      gets.push({
+        cmd: 'feature-flag',
+        label: 'feature-flag get',
+        args: ['feature-flag', 'get', flag.slug, '--json'],
+        key: 'flag',
+      });
+    const domain = org?.domains?.[0];
+    if (domain?.id)
+      gets.push({
+        cmd: 'org-domain',
+        label: 'org-domain get',
+        args: ['org-domain', 'get', domain.id, '--json'],
+        key: 'domain',
+      });
+    await Promise.all(gets.map(checkSessionVsKey));
+  }
+
+  const w = Math.max(...rows.map((r) => r.label.length), 20);
+  for (const r of rows) {
+    const color = r.status === 'PASS' ? C.green : r.status === 'FAIL' ? C.red : r.status === 'AUTH' ? C.yellow : C.dim;
+    console.log(`  ${color}${r.status.padEnd(4)}${C.reset}  ${r.label.padEnd(w)}  ${C.dim}${r.detail}${C.reset}`);
+  }
+  if (notes.length) {
+    console.log(`\n${C.dim}field-level detail${C.reset}`);
+    for (const n of notes) console.log(`  ${n}`);
+  }
+  console.log(`\n${C.dim}documented null gaps (may be null on the API-key side)${C.reset}`);
+  for (const [field, reason] of Object.entries(API_KEY_ACCEPTED))
+    console.log(`  ${C.cyan}${field}${C.reset}  ${reason}`);
+  const failed = rows.filter((r) => r.status === 'FAIL').length;
+  const auth = rows.filter((r) => r.status === 'AUTH').length;
+  if (comparedEntities === 0) {
+    console.log(
+      `\n${C.red}no entity was compared on both paths, so parity is unproven; seed the environment (organizations, users) and re-run${C.reset}`,
+    );
+  }
+  const blocked = failed > 0 || auth > 0 || comparedEntities === 0;
+  console.log(
+    `\n${blocked ? C.red : C.green}${rows.filter((r) => r.status === 'PASS').length} pass, ${failed} fail, ${auth} auth, ${comparedEntities} entities compared${C.reset}`,
+  );
+  process.exit(blocked ? 1 : 0);
+}
+
+if (API_KEY_MODE) await runApiKeyMode();
 
 // --- run -------------------------------------------------------------------------
 console.log(`parity-smoke  branch=${BRANCH_DIR}`);
@@ -962,6 +1345,12 @@ if (API_KEY_SOURCE === 'NONE') {
   );
   if (STRICT) process.exit(2);
 }
+
+// The branch's resource commands must run on the dashboard session: pin them
+// to the session's environment so any API key that could still apply (an
+// unclaimed active profile) is refused instead of silently used.
+await pinSessionEnvironment();
+console.log(`              branch session pinned to environment ${sessionEnvironmentId}\n`);
 
 await Promise.all(CONTROL.map(checkControl));
 
