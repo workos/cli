@@ -670,7 +670,12 @@ describe('resource commands with an API key', () => {
       expect(await json(() => runFeatureFlagRemoveTarget('beta', 'user_1'))).toEqual({
         removed: { flag: 'beta', targetId: 'user_1' },
       });
-      expect(rest.callsTo('PUT /feature-flags/beta/enable')).toHaveLength(1);
+      // Each command makes exactly its own write, in order, and nothing else writes.
+      expect(rest.calls.filter((call) => call.method !== 'GET').map((call) => `${call.method} ${call.path}`)).toEqual([
+        'PUT /feature-flags/beta/enable',
+        'POST /feature-flags/beta/targets/org_1',
+        'DELETE /feature-flags/beta/targets/user_1',
+      ]);
       // No project lookup on the key path: the key is the environment.
       expect(mockGraphqlRequest).not.toHaveBeenCalled();
     });
