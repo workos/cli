@@ -25,9 +25,11 @@ import {
   exitApiKeyUnsupported,
 } from './context.js';
 import { organizationOperations } from './organizations.js';
+import { userOperations } from './users.js';
 
 const OPERATIONS: Record<string, ApiKeyOperation> = {
   ...organizationOperations,
+  ...userOperations,
 };
 
 /**
