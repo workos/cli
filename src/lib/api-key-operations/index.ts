@@ -29,6 +29,7 @@ import { userOperations } from './users.js';
 import { membershipOperations } from './memberships.js';
 import { rbacOperations } from './rbac.js';
 import { platformOperations } from './platform.js';
+import { appConfigOperations } from './app-config.js';
 
 const OPERATIONS: Record<string, ApiKeyOperation> = {
   ...organizationOperations,
@@ -36,6 +37,7 @@ const OPERATIONS: Record<string, ApiKeyOperation> = {
   ...membershipOperations,
   ...rbacOperations,
   ...platformOperations,
+  ...appConfigOperations,
 };
 
 /**
@@ -102,3 +104,4 @@ export async function withApiKey<T>(auth: ApiKeyAuth, run: (ctx: ApiKeyContext) 
 
 export { exitApiKeyUnsupported, apiKeyUnsupportedMessage } from './context.js';
 export { changeFlagTarget } from './platform.js';
+export { setHomepageUrl } from './app-config.js';
