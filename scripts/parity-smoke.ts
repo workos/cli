@@ -990,6 +990,9 @@ const CURSOR_KEYS = new Set(['before', 'after', 'listMetadata', 'list_metadata',
  */
 let sessionEnvironmentId = '';
 
+/** Entities actually compared field by field; a run that compared none proves nothing and fails. */
+let comparedEntities = 0;
+
 interface ApiKeyCheck {
   cmd: string;
   label: string;
@@ -1047,6 +1050,24 @@ async function checkSessionVsKey(c: ApiKeyCheck): Promise<any> {
   }
   const sv = js[c.key];
   const kv = jk[c.key];
+  // A check only counts when both sides returned real entities: a list of rows
+  // that each carry their ID, or a single entity object. A missing envelope
+  // key on both sides must not compare `undefined` with `undefined` and pass.
+  const isEntity = (value: unknown) => isPlainObject(value) && Object.keys(value).length > 0;
+  if (c.idKey) {
+    if (!Array.isArray(sv) || !Array.isArray(kv)) {
+      push('API-KEY', c.label, 'FAIL', `no "${c.key}" list on the ${Array.isArray(sv) ? 'API-key' : 'session'} side`);
+      return js;
+    }
+    const missingId = [...sv, ...kv].some((row: any) => !isEntity(row) || row[c.idKey!] == null);
+    if (missingId) {
+      push('API-KEY', c.label, 'FAIL', `a "${c.key}" row has no ${c.idKey}, so rows can't be paired`);
+      return js;
+    }
+  } else if (!isEntity(sv) || !isEntity(kv)) {
+    push('API-KEY', c.label, 'FAIL', `no "${c.key}" entity on the ${isEntity(sv) ? 'API-key' : 'session'} side`);
+    return js;
+  }
   const diffs: string[] = [];
   let rows = 1;
   if (Array.isArray(sv) && Array.isArray(kv) && c.idKey) {
@@ -1066,6 +1087,7 @@ async function checkSessionVsKey(c: ApiKeyCheck): Promise<any> {
   }
   for (const d of diffs) notes.push(`${C.red}FAIL${C.reset} ${c.label} ${d}`);
   const empty = Array.isArray(sv) && sv.length === 0;
+  if (!diffs.length && !empty) comparedEntities += rows;
   push(
     'API-KEY',
     c.label,
@@ -1231,10 +1253,16 @@ async function runApiKeyMode(): Promise<never> {
     console.log(`  ${C.cyan}${field}${C.reset}  ${reason}`);
   const failed = rows.filter((r) => r.status === 'FAIL').length;
   const auth = rows.filter((r) => r.status === 'AUTH').length;
+  if (comparedEntities === 0) {
+    console.log(
+      `\n${C.red}no entity was compared on both paths, so parity is unproven; seed the environment (organizations, users) and re-run${C.reset}`,
+    );
+  }
+  const blocked = failed > 0 || auth > 0 || comparedEntities === 0;
   console.log(
-    `\n${failed ? C.red : C.green}${rows.filter((r) => r.status === 'PASS').length} pass, ${failed} fail, ${auth} auth${C.reset}`,
+    `\n${blocked ? C.red : C.green}${rows.filter((r) => r.status === 'PASS').length} pass, ${failed} fail, ${auth} auth, ${comparedEntities} entities compared${C.reset}`,
   );
-  process.exit(failed || auth ? 1 : 0);
+  process.exit(blocked ? 1 : 0);
 }
 
 if (API_KEY_MODE) await runApiKeyMode();
