@@ -52,13 +52,15 @@ const { runPermissionList, runPermissionGet, runPermissionCreate, runPermissionU
   await import('./permission.js');
 const { runMembershipList, runMembershipCreate, runMembershipUpdate, runMembershipDelete, runMembershipDeactivate } =
   await import('./membership.js');
-const { runInvitationSend, runInvitationRevoke } = await import('./invitation.js');
-const { runSessionRevoke } = await import('./session.js');
-const { runWebhookCreate, runWebhookDelete } = await import('./webhook.js');
-const { runFeatureFlagEnable, runFeatureFlagAddTarget, runFeatureFlagRemoveTarget } = await import('./feature-flag.js');
+const { runInvitationList, runInvitationSend, runInvitationRevoke } = await import('./invitation.js');
+const { runSessionList, runSessionRevoke } = await import('./session.js');
+const { runWebhookList, runWebhookCreate, runWebhookDelete } = await import('./webhook.js');
+const { runFeatureFlagList, runFeatureFlagEnable, runFeatureFlagAddTarget, runFeatureFlagRemoveTarget } =
+  await import('./feature-flag.js');
 const { runOrgDomainCreate, runOrgDomainVerify, runOrgDomainDelete } = await import('./org-domain.js');
 const { runConfigRedirectAdd, runConfigCorsAdd, runConfigHomepageUrlSet } = await import('./config.js');
-const { runAuthkitCorsSet, runAuthkitRedirectUrisSet, runAuthkitLogoutUrisList } = await import('./authkit.js');
+const { runAuthkitCorsSet, runAuthkitRedirectUrisSet, runAuthkitRedirectUrisList, runAuthkitLogoutUrisList } =
+  await import('./authkit.js');
 const { runBrandingGet } = await import('./branding.js');
 const { runEnvironmentRename } = await import('./environment.js');
 const { runTeamMembers } = await import('./team.js');
@@ -817,6 +819,7 @@ describe('resource commands with an API key', () => {
     it('adds redirect URIs and CORS origins without rewriting the rest with an API key', async () => {
       const existing = { object: 'redirect_uri', id: 'ru_1', uri: 'https://a.example.com/cb', default: true };
       let created = false;
+      let origins = [{ object: 'cors_origin', id: 'cors_1', origin: 'https://a.example.com' }];
       rest.respond({
         'GET /user_management/redirect_uris': () =>
           restList(
@@ -828,8 +831,13 @@ describe('resource commands with an API key', () => {
           created = true;
           return { object: 'redirect_uri', id: 'ru_2', uri: 'https://b.example.com/cb', default: false };
         },
-        'GET /user_management/cors_origins': restList([]),
-        'POST /user_management/cors_origins': { object: 'cors_origin', id: 'cors_1', origin: 'https://b.example.com' },
+        'GET /user_management/cors_origins': () => restList(origins),
+        'POST /user_management/cors_origins': (call: { body: unknown }) => {
+          const { origin } = call.body as { origin: string };
+          const created = { object: 'cors_origin', id: `cors_${origins.length + 1}`, origin };
+          origins = [...origins, created];
+          return created;
+        },
       });
 
       expect(await json(() => runConfigRedirectAdd('https://b.example.com/cb'))).toEqual({
@@ -844,6 +852,71 @@ describe('resource commands with an API key', () => {
         { uri: 'https://b.example.com/cb' },
       ]);
       expect(rest.callsTo('DELETE /user_management/redirect_uris/ru_1')).toHaveLength(0);
+      // Only the new origin is posted; the existing one is kept, not re-sent or dropped.
+      expect(rest.callsTo('POST /user_management/cors_origins').map((c) => c.body)).toEqual([
+        { origin: 'https://b.example.com' },
+      ]);
+      expect(origins.map((origin) => origin.origin)).toEqual(['https://a.example.com', 'https://b.example.com']);
+      // Adding an origin that already exists writes nothing.
+      expect(await json(() => runConfigCorsAdd('https://a.example.com'))).toEqual({
+        origin: 'https://a.example.com',
+        alreadyExists: true,
+      });
+      expect(rest.callsTo('POST /user_management/cors_origins')).toHaveLength(1);
+    });
+
+    it('refuses to add a redirect URI over a list longer than one page with an API key', async () => {
+      const uris = Array.from({ length: 100 }, (_, i) => ({
+        object: 'redirect_uri',
+        id: `ru_${i}`,
+        uri: `https://app.example.com/cb/${i}`,
+        default: i === 0,
+      }));
+      rest.respond({
+        // REST's default `normal` order puts the older-page cursor in `before`; only an
+        // explicit `desc` puts it in `after`, which is what the merge guard checks.
+        'GET /user_management/redirect_uris': (call: { query: Record<string, string> }) =>
+          call.query.order === 'desc' ? restList(uris, 'ru_99') : restList(uris, null, 'ru_99'),
+        'POST /user_management/redirect_uris': { object: 'redirect_uri', id: 'ru_new', uri: 'x', default: false },
+      });
+
+      const error = await expectExit(() => runConfigRedirectAdd('https://app.example.com/cb/new'));
+
+      expect(error.code).toBe('too_many_uris');
+      expect(rest.callsTo('GET /user_management/redirect_uris')[0].query).toMatchObject({
+        limit: '100',
+        order: 'desc',
+      });
+      expect(rest.calls.filter((call) => call.method !== 'GET')).toHaveLength(0);
+    });
+
+    it('asks every paginated list for an explicit order so after is the next page with an API key', async () => {
+      rest.respond({
+        'GET /organizations': restList([]),
+        'GET /user_management/invitations': restList([]),
+        'GET /webhook_endpoints': restList([]),
+        'GET /user_management/users/user_1/sessions': restList([]),
+        'GET /feature-flags': restList([]),
+        'GET /user_management/redirect_uris': restList([]),
+      });
+
+      await json(() => runOrgList({}));
+      await json(() => runInvitationList({}));
+      await json(() => runWebhookList({}));
+      await json(() => runSessionList('user_1', {}));
+      await json(() => runFeatureFlagList({}));
+      await json(() => runAuthkitRedirectUrisList({}));
+      await json(() => runOrgList({ order: 'asc' }));
+
+      expect(rest.calls.map((call) => `${call.path} ${call.query.order}`)).toEqual([
+        '/organizations desc',
+        '/user_management/invitations desc',
+        '/webhook_endpoints desc',
+        '/user_management/users/user_1/sessions desc',
+        '/feature-flags desc',
+        '/user_management/redirect_uris desc',
+        '/organizations asc',
+      ]);
     });
 
     it('sets the homepage URL with a null applicationId with an API key', async () => {

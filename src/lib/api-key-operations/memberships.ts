@@ -103,6 +103,7 @@ function listInvitations(ctx: ApiKeyContext, variables: Record<string, unknown>,
       // `--email` is the CLI's only search input; REST filters by exact email.
       email: str(variables.search),
       organization_id: organizationId,
+      order: restOrder(),
     },
   });
 }

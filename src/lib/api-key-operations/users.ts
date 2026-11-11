@@ -247,7 +247,12 @@ export const userOperations: Record<string, ApiKeyOperation> = {
       ctx.request<WorkOSListResponse<RestSession>>({
         method: 'GET',
         path: `/user_management/users/${encode(userId)}/sessions`,
-        params: { limit: num(variables.limit), before: str(variables.before), after: str(variables.after) },
+        params: {
+          limit: num(variables.limit),
+          before: str(variables.before),
+          after: str(variables.after),
+          order: restOrder(),
+        },
       }),
     );
     if (!page) return { userlandUser: null };

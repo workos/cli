@@ -19,6 +19,7 @@ import {
   listAll,
   listEnvelope,
   num,
+  restOrder,
   str,
 } from './context.js';
 import type { WorkOSListResponse } from '../workos-api.js';
@@ -50,10 +51,19 @@ function corsOrigins(ctx: ApiKeyContext): Promise<RestCorsOrigin[]> {
 
 export const appConfigOperations: Record<string, ApiKeyOperation> = {
   async redirectUris(variables, ctx) {
+    // The dashboard read defaults to 100 URIs. The order must be explicit so
+    // `after` is set whenever more URIs exist: `config redirect add` relies on
+    // it to refuse a merge over a truncated list, which would otherwise delete
+    // the URIs it never saw.
     const page = await ctx.request<WorkOSListResponse<RestRedirectUri>>({
       method: 'GET',
       path: '/user_management/redirect_uris',
-      params: { limit: num(variables.limit), before: str(variables.before), after: str(variables.after) },
+      params: {
+        limit: num(variables.limit) ?? 100,
+        before: str(variables.before),
+        after: str(variables.after),
+        order: restOrder(),
+      },
     });
     return { redirectUris: listEnvelope((page?.data ?? []).map(redirectUriNode), page?.list_metadata) };
   },

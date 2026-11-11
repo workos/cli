@@ -105,7 +105,12 @@ export const platformOperations: Record<string, ApiKeyOperation> = {
     const page = await ctx.request<WorkOSListResponse<RestWebhookEndpoint>>({
       method: 'GET',
       path: '/webhook_endpoints',
-      params: { limit: num(variables.limit), before: str(variables.before), after: str(variables.after) },
+      params: {
+        limit: num(variables.limit),
+        before: str(variables.before),
+        after: str(variables.after),
+        order: restOrder(),
+      },
     });
     const endpoints = (page?.data ?? []).map((endpoint) => ({
       id: endpoint.id,

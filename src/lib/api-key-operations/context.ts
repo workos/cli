@@ -105,9 +105,15 @@ export async function listAll<T>(
   return items;
 }
 
-/** `Asc`/`Desc` (the dashboard pagination enum) → REST `asc`/`desc`. */
-export function restOrder(order: unknown): string | undefined {
-  return typeof order === 'string' && order !== '' ? order.toLowerCase() : undefined;
+/**
+ * `Asc`/`Desc` (the dashboard pagination enum) → REST `asc`/`desc`, and `desc`
+ * when no order was asked for. Always explicit: several REST lists default to
+ * `normal` (newest first, but `after` walks toward NEWER records), and every
+ * list on this path must keep the CLI's contract that `after` is the next
+ * page. `desc` returns the same newest-first rows as `normal`.
+ */
+export function restOrder(order?: unknown): string {
+  return typeof order === 'string' && order !== '' ? order.toLowerCase() : 'desc';
 }
 
 export function str(value: unknown): string | undefined {
