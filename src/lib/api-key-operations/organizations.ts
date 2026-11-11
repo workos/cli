@@ -3,8 +3,10 @@
  * the WorkOS REST API (`/organizations`, `/organization_domains`).
  *
  * Fields the REST API has no source for (`usersCount`, a domain's
- * `subdomain`/`verificationContent`/`domainCaptureEnabled`) are returned
- * `null` rather than invented.
+ * `subdomain` and `domainCaptureEnabled`) are returned `null` rather than
+ * invented. A domain's DNS challenge is kept: REST returns its prefix and
+ * token, and `verificationContent` is built from them exactly as the dashboard
+ * builds it.
  */
 
 import type { WorkOSListResponse } from '../workos-api.js';
@@ -41,14 +43,32 @@ export function metadataPairs(metadata: Record<string, string> | null | undefine
   return Object.entries(metadata ?? {}).map(([key, value]) => ({ key, value }));
 }
 
-/** A REST organization domain in the dashboard `OrganizationDomain` selection. */
+/** The dashboard's prefix when a domain has none of its own (`DEFAULT_VERIFICATION_PREFIX`). */
+const DEFAULT_VERIFICATION_PREFIX = 'verification_token';
+
+/**
+ * The DNS TXT record value for a domain's verification challenge, as the
+ * dashboard reports it (`OrganizationDomain.verificationContent`):
+ * `<prefix>=<token>`, using the default prefix when the domain has none, and
+ * null when there is no token (nothing to verify).
+ */
+export function verificationContent(domain: RestOrganizationDomain): string | null {
+  if (!domain.verification_token) return null;
+  return `${domain.verification_prefix ?? DEFAULT_VERIFICATION_PREFIX}=${domain.verification_token}`;
+}
+
+/**
+ * A REST organization domain in the dashboard `OrganizationDomain` selection.
+ * `subdomain` stays null: the dashboard derives it with a public-suffix
+ * parser, and REST doesn't return it.
+ */
 export function domainNode(domain: RestOrganizationDomain) {
   return {
     id: domain.id,
     domain: domain.domain,
     state: domain.state ?? null,
     subdomain: null,
-    verificationContent: null,
+    verificationContent: verificationContent(domain),
     verificationStrategy: domain.verification_strategy ?? null,
   };
 }
@@ -161,7 +181,10 @@ export const organizationOperations: Record<string, ApiKeyOperation> = {
         }),
       );
     }
-    // The add operation selects id, state, domain and verificationStrategy.
+    // The dashboard's add selects id, state, domain and verificationStrategy:
+    // it adds domains already verified, so there is no challenge to show.
+    // REST adds them pending, so the DNS challenge needed to verify them rides
+    // along in the same `verificationContent` field.
     return {
       addDomains: {
         __typename: 'DomainsAdded',
@@ -170,6 +193,7 @@ export const organizationOperations: Record<string, ApiKeyOperation> = {
           state: d.state ?? null,
           domain: d.domain,
           verificationStrategy: d.verification_strategy ?? null,
+          verificationContent: verificationContent(d),
         })),
       },
     };

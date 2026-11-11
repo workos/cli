@@ -21,8 +21,8 @@ export const API_KEY_NULL_FIELDS: Record<string, string> = {
   'feature-flag.accessType': 'The REST flag endpoints expose no access type.',
   'feature-flag.organizationTargets': 'The REST flag endpoints cannot list a flag’s targets.',
   'feature-flag.userTargets': 'The REST flag endpoints cannot list a flag’s targets.',
-  'org-domain.verificationContent':
-    'REST returns verification_prefix and verification_token separately, not the combined record.',
+  'org-domain.subdomain':
+    'REST doesn’t return it; the dashboard derives it from the domain with a public-suffix parser.',
   'org-domain.domainCaptureEnabled': 'REST domains carry no domain-capture flag.',
   'portal.id': 'REST generate_link returns only the link URL.',
   'portal.state': 'REST generate_link returns only the link URL.',

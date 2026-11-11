@@ -57,7 +57,7 @@ const { runSessionList } = await import('./session.js');
 const { runWebhookList } = await import('./webhook.js');
 const { runEventList } = await import('./event.js');
 const { runFeatureFlagList, runFeatureFlagGet } = await import('./feature-flag.js');
-const { runOrgDomainGet } = await import('./org-domain.js');
+const { runOrgDomainGet, runOrgDomainVerify } = await import('./org-domain.js');
 const { runPortalGenerateLink } = await import('./portal.js');
 
 const rest = createRestMock();
@@ -864,7 +864,57 @@ describe('resource command --json parity, session vs API key', () => {
       () => runOrgDomainGet('dom_1', {}),
     );
     const apiKey = await viaApiKey({ 'GET /organizations': restList([REST_ORG]) }, () => runOrgDomainGet('dom_1', {}));
-    expectParity('org-domain', session, apiKey, ['verificationContent', 'domainCaptureEnabled']);
+    // The DNS challenge (`workos-verify=abc123`) comes through; only the capture flag has no REST source.
+    expectParity('org-domain', session, apiKey, ['domainCaptureEnabled']);
+    expect(apiKey).toMatchObject({
+      domain: { verificationContent: 'workos-verify=abc123', verificationStrategy: 'dns' },
+    });
+  });
+
+  it('org-domain verify returns the dashboard’s DNS challenge with an API key', async () => {
+    const pendingDomain = { ...GQL_DOMAIN, state: 'Pending' };
+    const restPending = { ...REST_ORG.domains[0], state: 'pending' };
+    const session = await viaSession(
+      () => ({ restartOrganizationDomainVerification: pendingDomain }),
+      () => runOrgDomainVerify('dom_1', {}),
+    );
+    const apiKey = await viaApiKey({ 'POST /organization_domains/dom_1/verify': restPending }, () =>
+      runOrgDomainVerify('dom_1', {}),
+    );
+    expectParity('org-domain', session, apiKey, ['domainCaptureEnabled']);
+    expect(apiKey).toEqual({
+      domain: {
+        id: 'dom_1',
+        domain: 'foo.com',
+        state: 'pending',
+        organizationId: null,
+        subdomain: null,
+        verificationStrategy: 'dns',
+        verificationContent: 'workos-verify=abc123',
+        domainCaptureEnabled: null,
+      },
+    });
+  });
+
+  it('org-domain verify uses the dashboard’s default record prefix when REST has none, with an API key', async () => {
+    const session = await viaSession(
+      () => ({
+        restartOrganizationDomainVerification: { ...GQL_DOMAIN, verificationContent: 'verification_token=tok_9' },
+      }),
+      () => runOrgDomainVerify('dom_1', {}),
+    );
+    const apiKey = await viaApiKey(
+      {
+        'POST /organization_domains/dom_1/verify': {
+          ...REST_ORG.domains[0],
+          verification_prefix: null,
+          verification_token: 'tok_9',
+        },
+      },
+      () => runOrgDomainVerify('dom_1', {}),
+    );
+    expectParity('org-domain', session, apiKey, ['domainCaptureEnabled']);
+    expect(apiKey).toMatchObject({ domain: { verificationContent: 'verification_token=tok_9' } });
   });
 
   it('portal generate-link matches with an API key', async () => {

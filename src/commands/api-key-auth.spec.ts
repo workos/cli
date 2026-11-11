@@ -750,6 +750,8 @@ describe('resource commands with an API key', () => {
         domain: 'bar.com',
         state: 'pending',
         verification_strategy: 'dns',
+        verification_prefix: 'workos-verify',
+        verification_token: 'tok_bar',
       };
       rest.respond({
         'POST /organization_domains': domain,
@@ -765,10 +767,19 @@ describe('resource commands with an API key', () => {
         organization_id: 'org_1',
         domain: 'bar.com',
       });
+      // REST adds the domain pending, so the DNS challenge needed to verify it must reach the output.
       expect(created).toMatchObject({
-        domain: { id: 'dom_2', state: 'pending', verificationStrategy: 'dns', organizationId: 'org_1' },
+        domain: {
+          id: 'dom_2',
+          state: 'pending',
+          verificationStrategy: 'dns',
+          verificationContent: 'workos-verify=tok_bar',
+          organizationId: 'org_1',
+        },
       });
-      expect(verified).toMatchObject({ domain: { id: 'dom_2', domain: 'bar.com' } });
+      expect(verified).toMatchObject({
+        domain: { id: 'dom_2', domain: 'bar.com', verificationContent: 'workos-verify=tok_bar' },
+      });
       expect(deleted).toEqual({ deleted: 'dom_2' });
     });
 
