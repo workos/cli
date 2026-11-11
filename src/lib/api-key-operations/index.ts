@@ -28,12 +28,14 @@ import { organizationOperations } from './organizations.js';
 import { userOperations } from './users.js';
 import { membershipOperations } from './memberships.js';
 import { rbacOperations } from './rbac.js';
+import { platformOperations } from './platform.js';
 
 const OPERATIONS: Record<string, ApiKeyOperation> = {
   ...organizationOperations,
   ...userOperations,
   ...membershipOperations,
   ...rbacOperations,
+  ...platformOperations,
 };
 
 /**
@@ -99,3 +101,4 @@ export async function withApiKey<T>(auth: ApiKeyAuth, run: (ctx: ApiKeyContext) 
 }
 
 export { exitApiKeyUnsupported, apiKeyUnsupportedMessage } from './context.js';
+export { changeFlagTarget } from './platform.js';
