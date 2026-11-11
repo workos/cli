@@ -115,8 +115,10 @@ function envLocalKey(dir: string): string | undefined {
 }
 
 // Precedence: explicit env var > this branch's .env.local. Never main's, so the
-// REST plane is pinned to the same environment the branch targets.
-const API_KEY = process.env.WORKOS_API_KEY ?? envLocalKey(BRANCH_DIR);
+// REST plane is pinned to the same environment the branch targets. An empty
+// WORKOS_API_KEY counts as unset (as the CLI treats it), so the key and the
+// reported source always agree.
+const API_KEY = process.env.WORKOS_API_KEY || envLocalKey(BRANCH_DIR);
 const API_KEY_SOURCE = process.env.WORKOS_API_KEY ? 'env' : envLocalKey(BRANCH_DIR) ? 'branch .env.local' : 'NONE';
 
 function binFor(dir: string): { cmd: string; args: string[] } {
@@ -134,13 +136,50 @@ interface RunResult {
   stderr: string;
 }
 const COMMAND_TIMEOUT_MS = 60_000;
-/** `withoutApiKey` runs the child with WORKOS_API_KEY unset (the dashboard-session side in --api-key mode). */
+
+/**
+ * Branch commands that must run on the dashboard session. These resource
+ * commands now switch to an API key whenever WORKOS_API_KEY is set, so in the
+ * default branch-vs-main mode the branch side must not inherit the key that
+ * main's REST side uses, or it would quietly compare REST with REST. The
+ * still-REST commands (connection, directory, audit-log, api) keep the key.
+ */
+const SESSION_PLANE_COMMANDS = new Set([
+  'organization',
+  'org',
+  'user',
+  'role',
+  'permission',
+  'membership',
+  'invitation',
+  'session',
+  'event',
+  'feature-flag',
+  'org-domain',
+  'portal',
+  'webhook',
+  'config',
+  'authkit',
+  'branding',
+  'whoami',
+  'project',
+  'team',
+  'environment',
+]);
+
+/**
+ * `withoutApiKey` runs the child with WORKOS_API_KEY unset (the dashboard
+ * session side). In the default mode, branch session-plane commands always
+ * run that way.
+ */
 function run(dir: string, cliArgs: string[], opts: { withoutApiKey?: boolean } = {}): Promise<RunResult> {
   const { cmd, args } = binFor(dir);
+  const sessionPlane =
+    opts.withoutApiKey || (!API_KEY_MODE && dir === BRANCH_DIR && SESSION_PLANE_COMMANDS.has(cliArgs[0]));
   return new Promise((resolve) => {
     const childEnv: NodeJS.ProcessEnv = { ...process.env };
     if (API_KEY) childEnv.WORKOS_API_KEY = API_KEY;
-    if (opts.withoutApiKey) delete childEnv.WORKOS_API_KEY;
+    if (sessionPlane) delete childEnv.WORKOS_API_KEY;
     const p = spawn(cmd, [...args, ...cliArgs], { cwd: NEUTRAL_CWD, env: childEnv, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
@@ -176,7 +215,18 @@ function parseJson(stdout: string): any {
   }
 }
 
-const envArgs = (): string[] => (ENV_ID ? ['--environment-id', ENV_ID] : []);
+/**
+ * The environment the branch's session side is pinned to (see
+ * pinSessionEnvironment). Every branch session-side command passes it as
+ * `--environment-id`, which the CLI refuses whenever ANY API key applies
+ * (WORKOS_API_KEY, --api-key, or an unclaimed active profile's stored key), so
+ * a session-side run either really uses the dashboard login or fails loudly.
+ */
+let sessionEnvironmentId = '';
+const envArgs = (): string[] => {
+  const id = sessionEnvironmentId || ENV_ID;
+  return id ? ['--environment-id', id] : [];
+};
 const shortErr = (s: string): string => s.split('\n').filter(Boolean).slice(0, 2).join(' | ');
 
 // --- value normalization ---------------------------------------------------------
@@ -502,8 +552,9 @@ const NEW_ONLY = [
   { label: 'whoami', args: ['whoami', '--json'] },
   { label: 'project list', args: ['project', 'list', '--json'] },
   { label: 'team members', args: ['team', 'members', '--json'] },
-  { label: 'authkit redirect-uris list', args: ['authkit', 'redirect-uris', 'list', '--json', ...envArgs()] },
-  { label: 'branding get', args: ['branding', 'get', '--json', ...envArgs()] },
+  // Environment-scoped: checkNew appends the pinned --environment-id at run time.
+  { label: 'authkit redirect-uris list', args: ['authkit', 'redirect-uris', 'list', '--json'], envScoped: true },
+  { label: 'branding get', args: ['branding', 'get', '--json'], envScoped: true },
 ];
 
 // --- reporting -------------------------------------------------------------------
@@ -959,8 +1010,8 @@ async function checkEventPagination(): Promise<void> {
   push('PAGINATION', 'event', 'PASS', `${firstRows.length} + ${secondRows.length} distinct rows; page 2 is not newer`);
 }
 
-async function checkNew(c: { label: string; args: string[] }): Promise<void> {
-  const r = await run(BRANCH_DIR, c.args);
+async function checkNew(c: { label: string; args: string[]; envScoped?: boolean }): Promise<void> {
+  const r = await run(BRANCH_DIR, c.envScoped ? [...c.args, ...envArgs()] : c.args);
   if (r.rc === 4) return push('NEW', c.label, 'AUTH', 'auth required');
   if (r.rc !== 0) return push('NEW', c.label, 'FAIL', `exit ${r.rc} ${shortErr(r.stderr)}`);
   if (parseJson(r.stdout) === undefined) return push('NEW', c.label, 'FAIL', 'invalid JSON');
@@ -976,16 +1027,6 @@ async function checkNew(c: { label: string; args: string[] }): Promise<void> {
  * missing keys, no emptied objects, no casing-only differences).
  */
 const API_KEY_ACCEPTED: Record<string, string> = { ...API_KEY_NULL_FIELDS };
-
-/**
- * The environment the session side is pinned to. Every session-side command
- * passes it as `--environment-id`, which the CLI refuses whenever ANY API key
- * applies (WORKOS_API_KEY, --api-key, or an unclaimed active profile's stored
- * key). So a session-side run either really goes through the dashboard login
- * or fails loudly; it can never quietly fall back to REST and compare REST
- * with itself.
- */
-let sessionEnvironmentId = '';
 
 /** Entities actually compared field by field; a run that compared none proves nothing and fails. */
 let comparedEntities = 0;
@@ -1015,7 +1056,7 @@ async function runBoth(args: string[]): Promise<[RunResult, RunResult]> {
 async function pinSessionEnvironment(): Promise<void> {
   const r = await run(BRANCH_DIR, ['whoami', '--json', ...envArgs()], { withoutApiKey: true });
   if (r.rc === 4) {
-    console.error('--api-key mode needs a dashboard login for the session side: run `workos auth login` first.');
+    console.error('parity-smoke needs a dashboard login for the branch session side: run `workos auth login` first.');
     process.exit(2);
   }
   const environmentId = parseJson(r.stdout)?.environment?.id;
@@ -1027,6 +1068,30 @@ async function pinSessionEnvironment(): Promise<void> {
     process.exit(2);
   }
   sessionEnvironmentId = environmentId;
+}
+
+/**
+ * Prove the API-key side really runs with the key: the CLI refuses
+ * `--environment-id` only when an API key applies, so a key-side run that
+ * accepts it would be on the dashboard session (e.g. an empty key), and the
+ * comparison would be the session against itself.
+ */
+async function proveKeySide(): Promise<void> {
+  const r = await run(BRANCH_DIR, ['organization', 'list', '--json', '--environment-id', sessionEnvironmentId]);
+  const code = (() => {
+    try {
+      return JSON.parse(r.stderr.trim().split('\n').pop() ?? '')?.error?.code;
+    } catch {
+      return undefined;
+    }
+  })();
+  if (r.rc !== 1 || code !== 'invalid_argument') {
+    console.error(
+      `the API-key side is not running with the key (expected --environment-id to be refused, got rc=${r.rc} ${shortErr(r.stderr)}); ` +
+        'set a non-empty WORKOS_API_KEY for the session’s environment.',
+    );
+    process.exit(2);
+  }
 }
 
 async function checkSessionVsKey(c: ApiKeyCheck): Promise<any> {
@@ -1108,7 +1173,8 @@ async function runApiKeyMode(): Promise<never> {
     process.exit(2);
   }
   await pinSessionEnvironment();
-  console.log(`              session pinned to environment ${sessionEnvironmentId}\n`);
+  await proveKeySide();
+  console.log(`              session pinned to environment ${sessionEnvironmentId}; key side confirmed on the key\n`);
 
   const lists: ApiKeyCheck[] = [
     {
@@ -1279,6 +1345,12 @@ if (API_KEY_SOURCE === 'NONE') {
   );
   if (STRICT) process.exit(2);
 }
+
+// The branch's resource commands must run on the dashboard session: pin them
+// to the session's environment so any API key that could still apply (an
+// unclaimed active profile) is refused instead of silently used.
+await pinSessionEnvironment();
+console.log(`              branch session pinned to environment ${sessionEnvironmentId}\n`);
 
 await Promise.all(CONTROL.map(checkControl));
 
