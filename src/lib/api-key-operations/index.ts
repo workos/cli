@@ -27,11 +27,13 @@ import {
 import { organizationOperations } from './organizations.js';
 import { userOperations } from './users.js';
 import { membershipOperations } from './memberships.js';
+import { rbacOperations } from './rbac.js';
 
 const OPERATIONS: Record<string, ApiKeyOperation> = {
   ...organizationOperations,
   ...userOperations,
   ...membershipOperations,
+  ...rbacOperations,
 };
 
 /**
