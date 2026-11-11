@@ -77,7 +77,13 @@ const FULL_LIST_MAX_PAGES = 50;
 
 /**
  * Read every page of a REST list. Used where the dashboard operation returns a
- * complete, unpaginated list (permissions, an organization's memberships).
+ * complete, unpaginated list (permissions, a user's memberships, redirect URIs,
+ * CORS origins).
+ *
+ * The order is always explicit: several endpoints default to `normal`, where
+ * `after` walks toward NEWER records, so following `after` from the first page
+ * would stop early and silently drop everything older. Under `desc`, `after`
+ * is the next (older) page, which is what the loop follows.
  */
 export async function listAll<T>(
   ctx: ApiKeyContext,
@@ -90,7 +96,7 @@ export async function listAll<T>(
     const result = await ctx.request<WorkOSListResponse<T> | { data: T[]; list_metadata?: undefined }>({
       method: 'GET',
       path,
-      params: { ...params, limit: FULL_LIST_PAGE_SIZE, ...(after ? { after } : {}) },
+      params: { order: 'desc', ...params, limit: FULL_LIST_PAGE_SIZE, ...(after ? { after } : {}) },
     });
     items.push(...(result?.data ?? []));
     after = result?.list_metadata?.after ?? undefined;

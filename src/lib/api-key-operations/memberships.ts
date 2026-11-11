@@ -18,7 +18,13 @@ import {
   restOrder,
   str,
 } from './context.js';
-import { findRole, membershipsForUser, organizationName, type RestMembership } from './lookups.js';
+import {
+  ALL_MEMBERSHIP_STATUSES,
+  findRole,
+  membershipsForUser,
+  organizationName,
+  type RestMembership,
+} from './lookups.js';
 import { exitWithError } from '../../utils/output.js';
 
 interface RestInvitation {
@@ -45,10 +51,22 @@ function membershipNode(membership: RestMembership) {
   };
 }
 
-function readMembership(ctx: ApiKeyContext, id: string): Promise<RestMembership | null> {
-  return orNull(
+/**
+ * Membership IDs this invocation has already resolved, keyed by organization +
+ * user. `membership delete <id>` reads the membership first (the dashboard
+ * removal is keyed by organization + user), so the removal can delete that
+ * exact ID instead of searching again.
+ */
+const resolvedMembershipIds = new Map<string, string>();
+const membershipKey = (organizationId: unknown, userId: unknown) => `${String(organizationId)}\u0000${String(userId)}`;
+
+async function readMembership(ctx: ApiKeyContext, id: string): Promise<RestMembership | null> {
+  const membership = await orNull(
     ctx.request<RestMembership>({ method: 'GET', path: `/user_management/organization_memberships/${encode(id)}` }),
   );
+  if (membership)
+    resolvedMembershipIds.set(membershipKey(membership.organization_id, membership.user_id), membership.id);
+  return membership;
 }
 
 async function organizationExists(ctx: ApiKeyContext, organizationId: string): Promise<boolean> {
@@ -117,6 +135,7 @@ export const membershipOperations: Record<string, ApiKeyOperation> = {
       path: '/user_management/organization_memberships',
       params: {
         organization_id: organizationId,
+        statuses: ALL_MEMBERSHIP_STATUSES,
         limit: num(variables.limit),
         before: str(variables.before),
         after: str(variables.after),
@@ -196,18 +215,28 @@ export const membershipOperations: Record<string, ApiKeyOperation> = {
 
   async removeMemberFromOrganization(variables, ctx) {
     const input = (variables.input ?? {}) as { organizationId?: string; userlandUserId?: string };
-    // REST deletes by membership ID; find the pair's membership first.
-    const page = await ctx.request<WorkOSListResponse<RestMembership>>({
-      method: 'GET',
-      path: '/user_management/organization_memberships',
-      params: { organization_id: input.organizationId, user_id: input.userlandUserId, limit: 1 },
-    });
-    const membership = page?.data?.[0];
+    // REST deletes by membership ID. Use the one this invocation already
+    // resolved; otherwise search the pair across every status (an inactive
+    // membership must still be deletable).
+    let membershipId = resolvedMembershipIds.get(membershipKey(input.organizationId, input.userlandUserId));
+    if (!membershipId) {
+      const page = await ctx.request<WorkOSListResponse<RestMembership>>({
+        method: 'GET',
+        path: '/user_management/organization_memberships',
+        params: {
+          organization_id: input.organizationId,
+          user_id: input.userlandUserId,
+          statuses: ALL_MEMBERSHIP_STATUSES,
+          limit: 1,
+        },
+      });
+      membershipId = page?.data?.[0]?.id;
+    }
     const removed =
-      membership &&
+      membershipId &&
       (await orNull(
         ctx
-          .request({ method: 'DELETE', path: `/user_management/organization_memberships/${encode(membership.id)}` })
+          .request({ method: 'DELETE', path: `/user_management/organization_memberships/${encode(membershipId)}` })
           .then(() => true),
       ));
     return {

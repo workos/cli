@@ -127,6 +127,16 @@ export interface RestMembership {
   updated_at?: string;
 }
 
+/**
+ * Every membership status. Membership listings pass it explicitly rather than
+ * relying on REST's default status filter, so inactive and pending
+ * memberships show up as they do on the dashboard.
+ */
+export const ALL_MEMBERSHIP_STATUSES = 'active,inactive,pending';
+
 export function membershipsForUser(ctx: ApiKeyContext, userId: string): Promise<RestMembership[]> {
-  return listAll<RestMembership>(ctx, '/user_management/organization_memberships', { user_id: userId });
+  return listAll<RestMembership>(ctx, '/user_management/organization_memberships', {
+    user_id: userId,
+    statuses: ALL_MEMBERSHIP_STATUSES,
+  });
 }

@@ -48,8 +48,9 @@ const { LEAK_PATTERN } = await import('../catalog/curation.js');
 const { runOrgList, runOrgGet, runOrgCreate, runOrgUpdate, runOrgDelete } = await import('./organization.js');
 const { runUserUpdate, runUserDelete } = await import('./user.js');
 const { runRoleCreate, runRoleUpdate, runRoleSetPermissions, runRoleDelete } = await import('./role.js');
-const { runPermissionCreate, runPermissionUpdate, runPermissionDelete } = await import('./permission.js');
-const { runMembershipCreate, runMembershipUpdate, runMembershipDelete, runMembershipDeactivate } =
+const { runPermissionList, runPermissionGet, runPermissionCreate, runPermissionUpdate, runPermissionDelete } =
+  await import('./permission.js');
+const { runMembershipList, runMembershipCreate, runMembershipUpdate, runMembershipDelete, runMembershipDeactivate } =
   await import('./membership.js');
 const { runInvitationSend, runInvitationRevoke } = await import('./invitation.js');
 const { runSessionRevoke } = await import('./session.js');
@@ -599,12 +600,71 @@ describe('resource commands with an API key', () => {
       const deleted = await json(() => runMembershipDelete('om_1', { yes: true }));
       const deactivated = await json(() => runMembershipDeactivate('om_1', { yes: true }));
 
-      expect(rest.callsTo('GET /user_management/organization_memberships')[0].query).toMatchObject({
-        organization_id: 'org_1',
-        user_id: 'user_1',
-      });
+      // The removal deletes the membership the command just resolved, by ID.
+      expect(rest.callsTo('DELETE /user_management/organization_memberships/om_1')).toHaveLength(1);
       expect(deleted).toEqual({ deleted: 'om_1' });
       expect(deactivated).toEqual({ deactivated: 'om_1' });
+    });
+
+    it('deletes a deactivated membership by the ID it resolved with an API key', async () => {
+      const inactive = { ...REST_MEMBERSHIP, id: 'om_inactive', user_id: 'user_2', status: 'inactive' };
+      rest.respond({
+        'GET /user_management/organization_memberships/om_inactive': inactive,
+        // Like REST's default status filter, a search without statuses finds no inactive membership.
+        'GET /user_management/organization_memberships': (call: { query: Record<string, string> }) =>
+          restList(call.query.statuses?.includes('inactive') ? [inactive] : []),
+        'DELETE /user_management/organization_memberships/om_inactive': { status: 204 },
+      });
+
+      const deleted = await json(() => runMembershipDelete('om_inactive', { yes: true }));
+
+      expect(deleted).toEqual({ deleted: 'om_inactive' });
+      expect(rest.callsTo('DELETE /user_management/organization_memberships/om_inactive')).toHaveLength(1);
+    });
+
+    it('lists memberships of every status, by user and by organization, with an API key', async () => {
+      rest.respond({
+        'GET /organizations/org_1': REST_ORG,
+        'GET /user_management/organization_memberships': restList([{ ...REST_MEMBERSHIP, status: 'inactive' }]),
+      });
+
+      const byUser = await json(() => runMembershipList({ user: 'user_1' }));
+      const byOrg = await json(() => runMembershipList({ org: 'org_1' }));
+
+      const searches = rest.callsTo('GET /user_management/organization_memberships');
+      expect(searches).toHaveLength(2);
+      for (const search of searches) expect(search.query.statuses).toBe('active,inactive,pending');
+      expect(byUser).toMatchObject({ memberships: [{ id: 'om_1', state: 'inactive' }] });
+      expect(byOrg).toMatchObject({ memberships: [{ id: 'om_1', state: 'inactive' }] });
+    });
+
+    it('reads every page of permissions in an explicit order with an API key', async () => {
+      const page = (from: number, count: number) =>
+        Array.from({ length: count }, (_, i) => ({
+          ...REST_PERMISSION,
+          id: `perm_${from + i}`,
+          slug: `p:${from + i}`,
+          name: `Permission ${from + i}`,
+        }));
+      rest.respond({
+        // Only an explicit order makes `after` the next page; without one the second page is never reached.
+        'GET /authorization/permissions': (call: { query: Record<string, string> }) => {
+          if (call.query.order !== 'desc') return restList(page(0, 100), null);
+          return call.query.after === 'perm_99' ? restList(page(100, 5)) : restList(page(0, 100), 'perm_99');
+        },
+      });
+
+      const listed = (await json(() => runPermissionList({}))) as { permissions: unknown[] };
+      const got = await json(() => runPermissionGet('p:104'));
+
+      expect(listed.permissions).toHaveLength(105);
+      expect(got).toMatchObject({ permission: { slug: 'p:104' } });
+      expect(rest.callsTo('GET /authorization/permissions').map((call) => call.query.after ?? null)).toEqual([
+        null,
+        'perm_99',
+        null,
+        'perm_99',
+      ]);
     });
 
     it('revokes invitations and sessions with an API key', async () => {
