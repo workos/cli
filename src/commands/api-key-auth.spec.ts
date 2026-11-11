@@ -640,6 +640,25 @@ describe('resource commands with an API key', () => {
       expect(byOrg).toMatchObject({ memberships: [{ id: 'om_1', state: 'inactive' }] });
     });
 
+    it('stops with an error instead of truncating a list past 5,000 records with an API key', async () => {
+      let served = 0;
+      rest.respond({
+        // Every page says there is another one.
+        'GET /authorization/permissions': () => {
+          const rows = Array.from({ length: 100 }, (_, i) => ({ ...REST_PERMISSION, id: `perm_${served * 100 + i}` }));
+          served += 1;
+          return restList(rows, `perm_${served * 100 - 1}`);
+        },
+      });
+
+      const error = await expectExit(() => runPermissionList({}));
+
+      expect(error.code).toBe('list_too_long');
+      expect(error.message).toContain('5000');
+      expect(stdout).toHaveLength(0);
+      expect(rest.callsTo('GET /authorization/permissions')).toHaveLength(50);
+    });
+
     it('reads every page of permissions in an explicit order with an API key', async () => {
       const page = (from: number, count: number) =>
         Array.from({ length: count }, (_, i) => ({

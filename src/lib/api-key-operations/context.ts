@@ -72,7 +72,7 @@ export function listEnvelope<T>(data: T[], listMetadata?: { before: string | nul
 
 /** REST page size used when an operation must return a complete list. */
 const FULL_LIST_PAGE_SIZE = 100;
-/** Hard stop for full-list reads, so a bad cursor can never loop forever. */
+/** Hard stop for full-list reads, so a bad cursor can never loop forever; hitting it is an error. */
 const FULL_LIST_MAX_PAGES = 50;
 
 /**
@@ -100,9 +100,17 @@ export async function listAll<T>(
     });
     items.push(...(result?.data ?? []));
     after = result?.list_metadata?.after ?? undefined;
-    if (!after) break;
+    if (!after) return items;
   }
-  return items;
+  // Still more pages after the cap. Callers rely on the list being complete
+  // (lookups by slug, list replaces), so acting on a partial one could report
+  // something missing or drop entries: stop instead of truncating silently.
+  exitWithError({
+    code: 'list_too_long',
+    message:
+      `More than ${FULL_LIST_PAGE_SIZE * FULL_LIST_MAX_PAGES} records came back from one list, ` +
+      'so this command stopped rather than act on a partial list.',
+  });
 }
 
 /**
