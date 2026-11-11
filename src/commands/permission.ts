@@ -25,9 +25,8 @@
  */
 
 import chalk from 'chalk';
-import { requireCommandToken } from '../lib/command-auth.js';
-import { resolveEnvironmentTarget } from '../lib/environment-target.js';
-import { runEnvScopedOperation, executeDashboardOperation } from '../lib/dashboard-operation.js';
+import type { OperationAuth } from '../lib/resource-auth.js';
+import { runEnvScopedOperation, executeDashboardOperation, resolveEnvScopedAuth } from '../lib/dashboard-operation.js';
 import { getOperation } from '../catalog/operation.js';
 import { confirmDestructive, requireConfirmationFlag } from '../catalog/confirm.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
@@ -62,7 +61,7 @@ function shapePermission(permission: PermissionNode) {
 }
 
 /** Fetch the environment's full permission set (the op is unpaginated). */
-async function fetchPermissions(token: string, environmentId: string): Promise<PermissionNode[]> {
+async function fetchPermissions(token: OperationAuth, environmentId: string): Promise<PermissionNode[]> {
   const op = getOperation('permissions');
   const data = await executeDashboardOperation<{
     permissionsForEnvironment: { permissions: PermissionNode[] } | null;
@@ -71,7 +70,11 @@ async function fetchPermissions(token: string, environmentId: string): Promise<P
 }
 
 /** Resolve a slug within the environment's permission list, or exit not_found. */
-async function requirePermissionBySlug(token: string, environmentId: string, slug: string): Promise<PermissionNode> {
+async function requirePermissionBySlug(
+  token: OperationAuth,
+  environmentId: string,
+  slug: string,
+): Promise<PermissionNode> {
   const permissions = await fetchPermissions(token, environmentId);
   const permission = permissions.find((candidate) => candidate.slug === slug);
   if (!permission) {
@@ -96,12 +99,10 @@ export interface PermissionEnvironmentOptions {
 }
 
 export async function runPermissionList(options: PermissionEnvironmentOptions = {}): Promise<void> {
-  const token = await requireCommandToken();
-
   // Environment-scoped read: the op takes the resolved ID as a variable and it
   // rides as the environment header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
     forMutation: false,
   });
 
@@ -128,10 +129,8 @@ export async function runPermissionList(options: PermissionEnvironmentOptions = 
 }
 
 export async function runPermissionGet(slug: string, options: PermissionEnvironmentOptions = {}): Promise<void> {
-  const token = await requireCommandToken();
-
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
     forMutation: false,
   });
 
@@ -217,12 +216,11 @@ export async function runPermissionUpdate(slug: string, options: PermissionUpdat
   // require-flag: a privilege-surface change; non-interactive callers must pass --yes.
   await requireConfirmationFlag(options, { action: `update permission ${slug}` });
 
-  const token = await requireCommandToken();
   const op = getOperation('updatePermission');
 
   // Environment-scoped mutation: pre-validated resolved target as header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
     forMutation: op.kind === 'mutation',
   });
 
@@ -275,12 +273,11 @@ export async function runPermissionDelete(slug: string, options: PermissionDelet
     action: `delete permission ${slug} — this permanently removes it from every role that uses it`,
   });
 
-  const token = await requireCommandToken();
   const op = getOperation('deletePermission');
 
   // Environment-scoped mutation: pre-validated resolved target as header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
     forMutation: op.kind === 'mutation',
   });
 

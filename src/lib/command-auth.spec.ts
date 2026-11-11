@@ -67,6 +67,8 @@ const { getCliAuthClientId } = await import('./settings.js');
 const { formatWorkOSCommand } = await import('../utils/command-invocation.js');
 const { CliExit } = await import('../utils/cli-exit.js');
 const { refreshIfExpired, requireCommandToken, DASHBOARD_ERROR_MESSAGES } = await import('./command-auth.js');
+const { saveConfig, clearConfig, setInsecureConfigStorage } = await import('./config-store.js');
+const { resolveResourceApiKey, setResourceApiKeyFlag } = await import('./resource-auth.js');
 
 async function expectAuthExit(promise: Promise<unknown>): Promise<CliExit> {
   try {
@@ -278,7 +280,7 @@ describe('command-auth', () => {
       expect(err).toContain(`\`${formatWorkOSCommand('api')}\``);
     });
 
-    it('adds the API-key caveat to the transient-failure copy when WORKOS_API_KEY is set', async () => {
+    it('says resource commands run with an API key in the transient-failure copy when WORKOS_API_KEY is set', async () => {
       vi.stubEnv('WORKOS_API_KEY', 'sk_test_x');
       saveCredentials(expiredCreds);
       mockRefreshAccessToken.mockResolvedValue({ success: false, errorType: 'network', error: 'Network error' });
@@ -289,7 +291,10 @@ describe('command-auth', () => {
       const err = consoleErrors.join('\n');
       expect(err).toContain(DASHBOARD_ERROR_MESSAGES.refreshFailedApiKeySet);
       expect(err).toContain('WORKOS_API_KEY');
-      expect(err).toContain('does not accept API keys');
+      // Resource commands now accept the key; the copy must not claim otherwise.
+      expect(err).not.toContain('does not accept API keys');
+      expect(err).toContain(`\`${formatWorkOSCommand('organization')}\``);
+      expect(err).toContain('needs a dashboard login');
       expect(err).not.toContain('Not logged in');
     });
 
@@ -304,7 +309,7 @@ describe('command-auth', () => {
       expect(mockRefreshAccessToken).not.toHaveBeenCalled();
     });
 
-    it('explains that API keys do not work here when WORKOS_API_KEY is set', async () => {
+    it('explains which commands run with an API key when WORKOS_API_KEY is set', async () => {
       vi.stubEnv('WORKOS_API_KEY', 'sk_test_x');
 
       await expectAuthExit(requireCommandToken());
@@ -312,9 +317,88 @@ describe('command-auth', () => {
       const err = consoleErrors.join('\n');
       expect(err).toContain(DASHBOARD_ERROR_MESSAGES.authRequiredApiKeySet);
       expect(err).toContain('WORKOS_API_KEY');
-      expect(err).toContain('does not accept API keys');
+      // Resource commands now accept the key; the copy must not claim otherwise.
+      expect(err).not.toContain('does not accept API keys');
+      expect(err).toContain(`\`${formatWorkOSCommand('organization')}\``);
+      expect(err).toContain(`\`${formatWorkOSCommand('user')}\``);
+      expect(err).toContain('needs a dashboard login');
       expect(err).toContain(`\`${formatWorkOSCommand('auth login')}\``);
       expect(err).toContain(`\`${formatWorkOSCommand('api')}\``);
+    });
+  });
+
+  describe('resolveResourceApiKey', () => {
+    const unclaimedProfile = {
+      name: 'unclaimed',
+      type: 'unclaimed' as const,
+      apiKey: 'sk_test_unclaimed',
+      clientId: 'client_unclaimed',
+      claimToken: 'claim_token',
+    };
+    const claimedProfile = { name: 'sandbox', type: 'sandbox' as const, apiKey: 'sk_test_claimed' };
+
+    function activate(profile: typeof unclaimedProfile | typeof claimedProfile): void {
+      saveConfig({ activeEnvironment: profile.name, environments: { [profile.name]: profile } });
+    }
+
+    beforeEach(() => {
+      setInsecureConfigStorage(true);
+      setResourceApiKeyFlag(undefined);
+      vi.stubEnv('WORKOS_API_URL', '');
+      vi.stubEnv('WORKOS_API_BASE_URL', '');
+    });
+
+    afterEach(() => {
+      setResourceApiKeyFlag(undefined);
+      clearConfig();
+    });
+
+    it('stays on the dashboard session with no key and a claimed profile, even one with an API key stored', () => {
+      activate(claimedProfile);
+      saveCredentials(validCreds);
+
+      expect(resolveResourceApiKey()).toBeNull();
+    });
+
+    it('uses the unclaimed profile key with an API key stored on an unclaimed active profile', () => {
+      activate(unclaimedProfile);
+
+      expect(resolveResourceApiKey()).toEqual({
+        kind: 'api-key',
+        apiKey: 'sk_test_unclaimed',
+        baseUrl: 'https://api.workos.com',
+        source: 'unclaimed-profile',
+      });
+    });
+
+    it('prefers an explicit WORKOS_API_KEY over the session with an API key in the environment', () => {
+      activate(claimedProfile);
+      saveCredentials(validCreds);
+      vi.stubEnv('WORKOS_API_KEY', 'sk_test_env');
+
+      expect(resolveResourceApiKey()).toMatchObject({ apiKey: 'sk_test_env', source: 'env' });
+    });
+
+    it('prefers WORKOS_API_KEY over an unclaimed profile key with an API key in the environment', () => {
+      activate(unclaimedProfile);
+      vi.stubEnv('WORKOS_API_KEY', 'sk_test_env');
+
+      expect(resolveResourceApiKey()).toMatchObject({ apiKey: 'sk_test_env', source: 'env' });
+    });
+
+    it('lets the --api-key flag win over everything with an API key passed explicitly', () => {
+      activate(unclaimedProfile);
+      vi.stubEnv('WORKOS_API_KEY', 'sk_test_env');
+      setResourceApiKeyFlag('sk_test_flag');
+
+      expect(resolveResourceApiKey()).toMatchObject({ apiKey: 'sk_test_flag', source: 'flag' });
+    });
+
+    it('returns null with an API key flag that is blank', () => {
+      activate(claimedProfile);
+      setResourceApiKeyFlag('   ');
+
+      expect(resolveResourceApiKey()).toBeNull();
     });
   });
 
@@ -325,6 +409,15 @@ describe('command-auth', () => {
       for (const [key, message] of entries) {
         expect(typeof message, key).toBe('string');
         expect(message.length, key).toBeGreaterThan(0);
+      }
+    });
+
+    it('no API-key-set variant says the resource commands reject keys, now that they run with an API key', () => {
+      for (const key of ['authRequiredApiKeySet', 'refreshFailedApiKeySet'] as const) {
+        const message = DASHBOARD_ERROR_MESSAGES[key];
+        expect(message, key).not.toMatch(/does not accept API keys|reject/i);
+        expect(message, key).toContain(`\`${formatWorkOSCommand('organization')}\``);
+        expect(message, key).toContain('run with the API key');
       }
     });
 

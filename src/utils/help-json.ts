@@ -66,6 +66,15 @@ const apiKeyOpt: OptionSchema = {
   hidden: false,
 };
 
+/** `--api-key` on the dashboard-plane resource commands (mirrors bin.ts `resourceApiKeyOption`). */
+const resourceApiKeyOpt: OptionSchema = {
+  name: 'api-key',
+  type: 'string',
+  description: 'WorkOS API key (runs the command with this key instead of your dashboard login)',
+  required: false,
+  hidden: false,
+};
+
 const environmentIdOpt: OptionSchema = {
   name: 'environment-id',
   type: 'string',
@@ -258,7 +267,7 @@ const commands: CommandSchema[] = [
     name: 'authkit',
     description:
       'Manage AuthKit app config (redirect URIs, CORS, logout URIs, branding) on the dashboard account plane',
-    options: [insecureStorageOpt],
+    options: [insecureStorageOpt, resourceApiKeyOpt],
     commands: [
       {
         name: 'redirect-uris',
@@ -416,7 +425,7 @@ const commands: CommandSchema[] = [
   {
     name: 'branding',
     description: 'Manage branding images (logo, icon, favicon) for an environment',
-    options: [insecureStorageOpt],
+    options: [insecureStorageOpt, resourceApiKeyOpt],
     commands: [
       {
         name: 'get',
@@ -924,7 +933,7 @@ const commands: CommandSchema[] = [
   {
     name: 'organization',
     description: 'Manage WorkOS organizations (create, update, get, list, delete) in the active environment',
-    options: [insecureStorageOpt],
+    options: [insecureStorageOpt, resourceApiKeyOpt],
     commands: [
       {
         name: 'create',
@@ -983,7 +992,7 @@ const commands: CommandSchema[] = [
   {
     name: 'user',
     description: 'Manage AuthKit users (get, list, update, delete) in the active environment',
-    options: [insecureStorageOpt],
+    options: [insecureStorageOpt, resourceApiKeyOpt],
     commands: [
       {
         name: 'get',
@@ -1039,6 +1048,7 @@ const commands: CommandSchema[] = [
     description: 'Manage roles in the active environment (environment and organization-scoped)',
     options: [
       insecureStorageOpt,
+      resourceApiKeyOpt,
       {
         name: 'org',
         type: 'string',
@@ -1122,7 +1132,7 @@ const commands: CommandSchema[] = [
   {
     name: 'permission',
     description: 'Manage permissions in the active environment',
-    options: [insecureStorageOpt],
+    options: [insecureStorageOpt, resourceApiKeyOpt],
     commands: [
       { name: 'list', description: 'List permissions', options: [environmentIdOpt] },
       {
@@ -1170,7 +1180,7 @@ const commands: CommandSchema[] = [
   {
     name: 'membership',
     description: 'Manage organization memberships in the active environment',
-    options: [insecureStorageOpt],
+    options: [insecureStorageOpt, resourceApiKeyOpt],
     commands: [
       {
         name: 'list',
@@ -1271,7 +1281,7 @@ const commands: CommandSchema[] = [
   {
     name: 'invitation',
     description: 'Manage user invitations in the active environment',
-    options: [insecureStorageOpt],
+    options: [insecureStorageOpt, resourceApiKeyOpt],
     commands: [
       {
         name: 'list',
@@ -1349,7 +1359,7 @@ const commands: CommandSchema[] = [
   {
     name: 'session',
     description: 'Manage user sessions in the active environment',
-    options: [insecureStorageOpt],
+    options: [insecureStorageOpt, resourceApiKeyOpt],
     commands: [
       {
         name: 'list',
@@ -1539,7 +1549,7 @@ const commands: CommandSchema[] = [
   {
     name: 'event',
     description: 'Query WorkOS events',
-    options: [insecureStorageOpt],
+    options: [insecureStorageOpt, resourceApiKeyOpt],
     commands: [
       {
         name: 'list',
@@ -1628,7 +1638,7 @@ const commands: CommandSchema[] = [
   {
     name: 'feature-flag',
     description: 'Manage feature flags in the active environment',
-    options: [insecureStorageOpt],
+    options: [insecureStorageOpt, resourceApiKeyOpt],
     commands: [
       { name: 'list', description: 'List feature flags', options: [...paginationOpts, environmentIdOpt] },
       {
@@ -1672,7 +1682,7 @@ const commands: CommandSchema[] = [
   {
     name: 'webhook',
     description: 'Manage webhooks',
-    options: [insecureStorageOpt],
+    options: [insecureStorageOpt, resourceApiKeyOpt],
     commands: [
       { name: 'list', description: 'List webhook endpoints', options: [environmentIdOpt] },
       {
@@ -1695,7 +1705,7 @@ const commands: CommandSchema[] = [
   {
     name: 'config',
     description: 'Manage AuthKit app configuration (redirect URIs, CORS, homepage)',
-    options: [insecureStorageOpt],
+    options: [insecureStorageOpt, resourceApiKeyOpt],
     commands: [
       {
         name: 'redirect',
@@ -1740,7 +1750,7 @@ const commands: CommandSchema[] = [
   {
     name: 'portal',
     description: 'Manage Admin Portal',
-    options: [insecureStorageOpt],
+    options: [insecureStorageOpt, resourceApiKeyOpt],
     commands: [
       {
         name: 'generate-link',
@@ -1914,7 +1924,7 @@ const commands: CommandSchema[] = [
   {
     name: 'org-domain',
     description: 'Manage organization domains',
-    options: [insecureStorageOpt],
+    options: [insecureStorageOpt, resourceApiKeyOpt],
     commands: [
       {
         name: 'get',

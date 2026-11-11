@@ -12,6 +12,7 @@ if (process.argv.includes('--local') || process.env.WORKOS_DEV) {
 import { getVersion } from './lib/settings.js';
 
 import yargs from 'yargs';
+import type { Argv } from 'yargs';
 import { ensureAuthenticated } from './lib/ensure-auth.js';
 import { InstallDeclinedError } from './lib/installer-errors.js';
 import { checkForUpdates } from './lib/version-check.js';
@@ -143,6 +144,27 @@ async function maybeWarnUnclaimed(): Promise<void> {
 }
 
 import { resolveInstallCredentials } from './lib/resolve-install-credentials.js';
+
+/**
+ * `--api-key` on the environment-scoped resource commands (organization, user,
+ * role, …): with it, or with WORKOS_API_KEY, the command runs on the WorkOS
+ * REST API with that key instead of the dashboard login. Same flag `workos api`
+ * and the still-REST commands take; see lib/resource-auth.ts for precedence.
+ */
+const resourceApiKeyOption = {
+  'api-key': {
+    type: 'string' as const,
+    describe: 'WorkOS API key (runs the command with this key instead of your dashboard login)',
+  },
+} as const;
+
+/** Add `--api-key` to a resource command group and hand it to the auth selector. */
+function withResourceApiKey<T>(yargs: Argv<T>): Argv<T> {
+  return yargs.options(resourceApiKeyOption).middleware(async (argv) => {
+    const { setResourceApiKeyFlag } = await import('./lib/resource-auth.js');
+    setResourceApiKeyFlag(argv.apiKey as string | undefined);
+  });
+}
 
 /** Shared insecure-storage option for commands that access credentials */
 const insecureStorageOption = {
@@ -579,7 +601,7 @@ async function runCli(): Promise<void> {
       'authkit',
       'Manage AuthKit app config (redirect URIs, CORS, logout URIs, branding) on the dashboard account plane',
       (yargs) => {
-        yargs.options(insecureStorageOption);
+        withResourceApiKey(yargs.options(insecureStorageOption));
 
         yargs.command('redirect-uris', 'Manage AuthKit redirect URIs', (yargs) => {
           registerSubcommand(
@@ -713,7 +735,7 @@ async function runCli(): Promise<void> {
       },
     )
     .command('branding', 'Manage branding images (logo, icon, favicon) for an environment', (yargs) => {
-      yargs.options(insecureStorageOption);
+      withResourceApiKey(yargs.options(insecureStorageOption));
       registerSubcommand(
         yargs,
         'get',
@@ -1301,7 +1323,7 @@ async function runCli(): Promise<void> {
       },
     )
     .command(['organization', 'org'], 'Manage WorkOS organizations (create, update, get, list, delete)', (yargs) => {
-      yargs.options(insecureStorageOption);
+      withResourceApiKey(yargs.options(insecureStorageOption));
       registerSubcommand(
         yargs,
         'create <name> [domains..]',
@@ -1406,7 +1428,7 @@ async function runCli(): Promise<void> {
       return yargs.demandCommand(1, 'Please specify an organization subcommand').strict();
     })
     .command('user', 'Manage AuthKit users (get, list, update, delete)', (yargs) => {
-      yargs.options(insecureStorageOption);
+      withResourceApiKey(yargs.options(insecureStorageOption));
       registerSubcommand(
         yargs,
         'get <userId>',
@@ -1496,10 +1518,12 @@ async function runCli(): Promise<void> {
     })
     // --- Resource Management Commands ---
     .command('role', 'Manage WorkOS roles (environment and organization-scoped)', (yargs) => {
-      yargs.options({
-        ...insecureStorageOption,
-        org: { type: 'string' as const, describe: 'Organization ID (for organization roles)' },
-      });
+      withResourceApiKey(
+        yargs.options({
+          ...insecureStorageOption,
+          org: { type: 'string' as const, describe: 'Organization ID (for organization roles)' },
+        }),
+      );
       registerSubcommand(
         yargs,
         'list',
@@ -1692,7 +1716,7 @@ async function runCli(): Promise<void> {
       return yargs.demandCommand(1, 'Please specify a role subcommand').strict();
     })
     .command('permission', 'Manage WorkOS permissions', (yargs) => {
-      yargs.options(insecureStorageOption);
+      withResourceApiKey(yargs.options(insecureStorageOption));
       registerSubcommand(
         yargs,
         'list',
@@ -1796,7 +1820,7 @@ async function runCli(): Promise<void> {
       return yargs.demandCommand(1, 'Please specify a permission subcommand').strict();
     })
     .command('membership', 'Manage organization memberships', (yargs) => {
-      yargs.options(insecureStorageOption);
+      withResourceApiKey(yargs.options(insecureStorageOption));
       registerSubcommand(
         yargs,
         'list',
@@ -1947,7 +1971,7 @@ async function runCli(): Promise<void> {
       return yargs.demandCommand(1, 'Please specify a membership subcommand').strict();
     })
     .command('invitation', 'Manage user invitations', (yargs) => {
-      yargs.options(insecureStorageOption);
+      withResourceApiKey(yargs.options(insecureStorageOption));
       registerSubcommand(
         yargs,
         'list',
@@ -2048,7 +2072,7 @@ async function runCli(): Promise<void> {
       return yargs.demandCommand(1, 'Please specify an invitation subcommand').strict();
     })
     .command('session', 'Manage user sessions', (yargs) => {
-      yargs.options(insecureStorageOption);
+      withResourceApiKey(yargs.options(insecureStorageOption));
       registerSubcommand(
         yargs,
         'list <userId>',
@@ -2335,7 +2359,7 @@ async function runCli(): Promise<void> {
       return yargs.demandCommand(1, 'Please specify a directory subcommand').strict();
     })
     .command('event', 'Query WorkOS events', (yargs) => {
-      yargs.options(insecureStorageOption);
+      withResourceApiKey(yargs.options(insecureStorageOption));
       registerSubcommand(
         yargs,
         'list',
@@ -2502,7 +2526,7 @@ async function runCli(): Promise<void> {
       return yargs.demandCommand(1, 'Please specify an audit-log subcommand').strict();
     })
     .command('feature-flag', 'Manage feature flags', (yargs) => {
-      yargs.options(insecureStorageOption);
+      withResourceApiKey(yargs.options(insecureStorageOption));
       registerSubcommand(
         yargs,
         'list',
@@ -2600,7 +2624,7 @@ async function runCli(): Promise<void> {
       return yargs.demandCommand(1, 'Please specify a feature-flag subcommand').strict();
     })
     .command('webhook', 'Manage webhooks', (yargs) => {
-      yargs.options(insecureStorageOption);
+      withResourceApiKey(yargs.options(insecureStorageOption));
       registerSubcommand(
         yargs,
         'list',
@@ -2654,7 +2678,7 @@ async function runCli(): Promise<void> {
       return yargs.demandCommand(1, 'Please specify a webhook subcommand').strict();
     })
     .command('config', 'Manage AuthKit app configuration (redirect URIs, CORS, homepage)', (yargs) => {
-      yargs.options(insecureStorageOption);
+      withResourceApiKey(yargs.options(insecureStorageOption));
       yargs.command('redirect', 'Manage redirect URIs', (yargs) => {
         registerSubcommand(
           yargs,
@@ -2709,7 +2733,7 @@ async function runCli(): Promise<void> {
       return yargs.demandCommand(1, 'Please specify a config subcommand').strict();
     })
     .command('portal', 'Manage Admin Portal', (yargs) => {
-      yargs.options(insecureStorageOption);
+      withResourceApiKey(yargs.options(insecureStorageOption));
       registerSubcommand(
         yargs,
         'generate-link',
@@ -2988,7 +3012,7 @@ async function runCli(): Promise<void> {
       return yargs.demandCommand(1, 'Please specify an api-key subcommand').strict();
     })
     .command('org-domain', 'Manage organization domains', (yargs) => {
-      yargs.options(insecureStorageOption);
+      withResourceApiKey(yargs.options(insecureStorageOption));
       registerSubcommand(
         yargs,
         'get <id>',
