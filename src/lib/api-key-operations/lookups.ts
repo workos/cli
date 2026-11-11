@@ -5,7 +5,6 @@
  * (one context), so a page of results costs one read per distinct key.
  */
 
-import type { WorkOSListResponse } from '../workos-api.js';
 import { type ApiKeyContext, encode, listAll, orNull } from './context.js';
 
 export interface RestRole {
@@ -89,7 +88,7 @@ export function organizationName(ctx: ApiKeyContext, organizationId: string): Pr
 
 /** Map with bounded concurrency, preserving order. */
 export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length);
+  const results: R[] = [];
   let next = 0;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (next < items.length) {
@@ -118,5 +117,3 @@ export interface RestMembership {
 export function membershipsForUser(ctx: ApiKeyContext, userId: string): Promise<RestMembership[]> {
   return listAll<RestMembership>(ctx, '/user_management/organization_memberships', { user_id: userId });
 }
-
-export type { WorkOSListResponse };

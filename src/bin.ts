@@ -159,8 +159,8 @@ const resourceApiKeyOption = {
 } as const;
 
 /** Add `--api-key` to a resource command group and hand it to the auth selector. */
-function withResourceApiKey<T>(yargs: Argv<T>): Argv<T> {
-  return yargs.options(resourceApiKeyOption).middleware(async (argv) => {
+function withResourceApiKey<T>(yargs: Argv<T>): void {
+  yargs.options(resourceApiKeyOption).middleware(async (argv) => {
     const { setResourceApiKeyFlag } = await import('./lib/resource-auth.js');
     setResourceApiKeyFlag(argv.apiKey as string | undefined);
   });

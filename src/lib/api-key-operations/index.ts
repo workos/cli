@@ -51,10 +51,6 @@ export const API_KEY_UNSUPPORTED: Record<string, string> = {
   updateAppBranding: 'AuthKit branding images have no WorkOS API endpoint',
 };
 
-export function hasApiKeyOperation(opName: string): boolean {
-  return opName in OPERATIONS;
-}
-
 /** What's missing for an operation the API key can't run, in user-facing terms. */
 export function apiKeyUnsupportedReason(opName: string): string {
   return API_KEY_UNSUPPORTED[opName] ?? 'this action has no WorkOS API endpoint';
@@ -98,7 +94,7 @@ export async function withApiKey<T>(auth: ApiKeyAuth, run: (ctx: ApiKeyContext) 
         apiContext: { status: 404, code: error.code ?? 'not_found' },
       });
     }
-    handleApiError(error);
+    return handleApiError(error);
   }
 }
 
