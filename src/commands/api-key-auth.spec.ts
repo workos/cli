@@ -446,6 +446,54 @@ describe('resource commands with an API key', () => {
       expect(set).toMatchObject({ role: { permissions: ['users:read', 'users:write'] } });
     });
 
+    it('never reports permissions it failed to set when the replace returns 404 with an API key', async () => {
+      rest.respond({
+        'GET /authorization/roles': { object: 'list', data: [REST_ROLE()] },
+        'PATCH /authorization/roles/admin': REST_ROLE(),
+        // The replace fails; the old role (still holding users:read) must not be reported as updated.
+        'PUT /authorization/roles/admin/permissions': { status: 404, body: { message: 'Role not found' } },
+        'GET /authorization/roles/admin': REST_ROLE(),
+      });
+
+      const error = await expectExit(() => runRoleSetPermissions('admin', [], { yes: true }));
+
+      expect(error.code).toBe('not_found');
+      expect(stdout).toHaveLength(0);
+      expect(rest.callsTo('GET /authorization/roles/admin')).toHaveLength(0);
+    });
+
+    it('refuses to report success when the server holds other permissions afterwards with an API key', async () => {
+      rest.respond({
+        'GET /authorization/roles': { object: 'list', data: [REST_ROLE()] },
+        'PATCH /authorization/roles/admin': REST_ROLE(),
+        'PUT /authorization/roles/admin/permissions': REST_ROLE({ permissions: ['users:read'] }),
+      });
+
+      const error = await expectExit(() => runRoleSetPermissions('admin', ['users:write'], { yes: true }));
+
+      expect(error.code).toBe('unexpected_result');
+      expect(error.message).toContain('did not change as requested');
+      expect(stdout).toHaveLength(0);
+    });
+
+    it('reads the role back after an empty-bodied permissions replace with an API key', async () => {
+      let replaced = false;
+      rest.respond({
+        'GET /authorization/roles': { object: 'list', data: [REST_ROLE()] },
+        'PATCH /authorization/roles/admin': REST_ROLE(),
+        'PUT /authorization/roles/admin/permissions': () => {
+          replaced = true;
+          return { status: 204 };
+        },
+        'GET /authorization/roles/admin': () => REST_ROLE({ permissions: replaced ? ['users:write'] : ['users:read'] }),
+      });
+
+      const out = await json(() => runRoleSetPermissions('admin', ['users:write'], { yes: true }));
+
+      expect(out).toMatchObject({ role: { slug: 'admin', permissions: ['users:write'] } });
+      expect(rest.callsTo('GET /authorization/roles/admin')).toHaveLength(1);
+    });
+
     it('reports an existing slug as already_exists on role create with an API key', async () => {
       rest.respond({
         'POST /authorization/roles': { status: 409, body: { message: 'exists', code: 'role_slug_already_exists' } },
@@ -655,6 +703,50 @@ describe('resource commands with an API key', () => {
       });
       expect(verified).toMatchObject({ domain: { id: 'dom_2', domain: 'bar.com' } });
       expect(deleted).toEqual({ deleted: 'dom_2' });
+    });
+
+    it('adds replacement redirect URIs before deleting old ones, so a rejected URI deletes nothing, with an API key', async () => {
+      const existing = { object: 'redirect_uri', id: 'ru_1', uri: 'https://a.example.com/cb', default: true };
+      rest.respond({
+        'GET /user_management/redirect_uris': restList([existing]),
+        'POST /user_management/redirect_uris': {
+          status: 422,
+          body: { message: 'Invalid redirect URI', code: 'invalid_uri' },
+        },
+        'DELETE /user_management/redirect_uris/ru_1': { status: 204 },
+      });
+
+      const error = await expectExit(() => runAuthkitRedirectUrisSet({ uris: ['not-a-url'] }));
+
+      expect(error.code).toBe('invalid_uri');
+      expect(rest.callsTo('POST /user_management/redirect_uris')).toHaveLength(1);
+      expect(rest.callsTo('DELETE /user_management/redirect_uris/ru_1')).toHaveLength(0);
+    });
+
+    it('replaces redirect URIs by adding first and deleting second with an API key', async () => {
+      const oldUri = { object: 'redirect_uri', id: 'ru_1', uri: 'https://a.example.com/cb', default: false };
+      const newUri = { object: 'redirect_uri', id: 'ru_2', uri: 'https://b.example.com/cb', default: false };
+      let state = [oldUri];
+      rest.respond({
+        'GET /user_management/redirect_uris': () => restList(state),
+        'POST /user_management/redirect_uris': () => {
+          state = [...state, newUri];
+          return newUri;
+        },
+        'DELETE /user_management/redirect_uris/ru_1': () => {
+          state = state.filter((uri) => uri.id !== 'ru_1');
+          return { status: 204 };
+        },
+      });
+
+      const out = await json(() => runAuthkitRedirectUrisSet({ uris: ['https://b.example.com/cb'] }));
+
+      const writes = rest.calls.filter((call) => call.method !== 'GET').map((call) => `${call.method} ${call.path}`);
+      expect(writes).toEqual(['POST /user_management/redirect_uris', 'DELETE /user_management/redirect_uris/ru_1']);
+      expect(out).toEqual({
+        redirectUris: [{ id: 'ru_2', uri: 'https://b.example.com/cb', isDefault: false }],
+        dryRun: false,
+      });
     });
 
     it('adds redirect URIs and CORS origins without rewriting the rest with an API key', async () => {

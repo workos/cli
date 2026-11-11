@@ -10,7 +10,9 @@
  */
 
 import { WorkOSApiError } from '../workos-api.js';
-import { type ApiKeyContext, type ApiKeyOperation, encode, listAll, orNull } from './context.js';
+import { type ApiKeyContext, type ApiKeyOperation, encode, listAll, NOT_FOUND, orNotFound, orNull } from './context.js';
+import { exitWithError } from '../../utils/output.js';
+import { formatWorkOSCommand } from '../../utils/command-invocation.js';
 import type { RestRole } from './lookups.js';
 
 interface RestPermission {
@@ -73,6 +75,11 @@ function permissionNode(permission: RestPermission) {
     createdAt: permission.created_at ?? null,
     updatedAt: permission.updated_at ?? null,
   };
+}
+
+function sameSlugs(actual: string[], expected: string[]): boolean {
+  const want = new Set(expected);
+  return actual.length === want.size && actual.every((slug) => want.has(slug));
 }
 
 function rolePath(ref: RoleRef): string {
@@ -148,7 +155,7 @@ export const rbacOperations: Record<string, ApiKeyOperation> = {
     const notFound = { updateRole: { __typename: 'RoleNotFound', roleId: input.roleId } };
     if (!ref) return notFound;
 
-    let role = await orNull(
+    const patched = await orNotFound(
       ctx.request<RestRole>({
         method: 'PATCH',
         path: rolePath(ref),
@@ -158,17 +165,33 @@ export const rbacOperations: Record<string, ApiKeyOperation> = {
         },
       }),
     );
-    if (!role) return notFound;
+    if (patched === NOT_FOUND) return notFound;
+    let role: RestRole | null = patched;
     if (input.permissions) {
-      role =
-        (await orNull(
-          ctx.request<RestRole>({
-            method: 'PUT',
-            path: `${rolePath(ref)}/permissions`,
-            body: { permissions: input.permissions },
-          }),
-        )) ?? (await readRole(ctx, ref));
-      if (!role) return notFound;
+      const replaced = await orNotFound(
+        ctx.request<RestRole>({
+          method: 'PUT',
+          path: `${rolePath(ref)}/permissions`,
+          body: { permissions: input.permissions },
+        }),
+      );
+      // A 404 here means nothing changed: never fall back to the old role.
+      if (replaced === NOT_FOUND) return notFound;
+      role = replaced;
+    }
+    // An empty 2xx body: read back what the server now holds.
+    role ??= await readRole(ctx, ref);
+    if (!role) return notFound;
+    // The command reports the requested permissions as the result, so confirm
+    // the server actually holds exactly those before letting it.
+    if (input.permissions && !sameSlugs(role.permissions ?? [], input.permissions)) {
+      exitWithError({
+        code: 'unexpected_result',
+        message:
+          `The permissions on role "${ref.slug}" did not change as requested. ` +
+          `Run \`${formatWorkOSCommand(`role get ${ref.slug}${ref.organizationId ? ` --org ${ref.organizationId}` : ''}`)}\` ` +
+          'to see what it holds now.',
+      });
     }
     return { updateRole: { __typename: 'RoleUpdated', role: roleNode(role) } };
   },

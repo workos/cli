@@ -22,7 +22,7 @@ export interface RestRole {
 
 interface Memo {
   environmentRoles?: Promise<RestRole[]>;
-  organizationRoles: Map<string, Promise<RestRole[]>>;
+  organizationRoles: Map<string, Promise<RestRole[] | null>>;
   organizationNames: Map<string, Promise<string | null>>;
 }
 
@@ -45,32 +45,45 @@ export function environmentRoles(ctx: ApiKeyContext): Promise<RestRole[]> {
   return memo.environmentRoles;
 }
 
-/** Roles assignable in an organization (its own roles plus the environment roles it inherits). */
-export function organizationRoles(ctx: ApiKeyContext, organizationId: string): Promise<RestRole[]> {
+/**
+ * Roles assignable in an organization: its own custom roles plus the
+ * environment roles it inherits. `null` when REST can't list them (e.g. the
+ * organization is gone).
+ */
+export function organizationRoles(ctx: ApiKeyContext, organizationId: string): Promise<RestRole[] | null> {
   const memo = memoFor(ctx);
   let roles = memo.organizationRoles.get(organizationId);
   if (!roles) {
-    roles = ctx
-      .request<{ data: RestRole[] }>({
+    roles = orNull(
+      ctx.request<{ data: RestRole[] }>({
         method: 'GET',
         path: `/authorization/organizations/${encode(organizationId)}/roles`,
-      })
-      .then((result) => result?.data ?? []);
+      }),
+    ).then((result) => (result ? (result.data ?? []) : null));
     memo.organizationRoles.set(organizationId, roles);
   }
   return roles;
 }
 
-/** Find a role by ID (or slug) among the environment roles, then the organization's. */
+/**
+ * Find a role by ID or slug as the organization sees it. An organization's
+ * custom role can reuse an environment role's slug and then wins inside that
+ * organization (as on the dashboard), so with an `organizationId` the
+ * organization's roles are searched first, preferring its custom role; the
+ * environment roles are the fallback.
+ */
 export async function findRole(
   ctx: ApiKeyContext,
   match: { id?: string; slug?: string },
   organizationId?: string | null,
 ): Promise<RestRole | undefined> {
   const matches = (role: RestRole) => (match.id ? role.id === match.id : role.slug === match.slug);
-  const fromEnvironment = (await environmentRoles(ctx)).find(matches);
-  if (fromEnvironment || !organizationId) return fromEnvironment;
-  return (await organizationRoles(ctx, organizationId)).find(matches);
+  if (organizationId) {
+    const candidates = ((await organizationRoles(ctx, organizationId)) ?? []).filter(matches);
+    const found = candidates.find((role) => role.type === 'OrganizationRole') ?? candidates[0];
+    if (found) return found;
+  }
+  return (await environmentRoles(ctx)).find(matches);
 }
 
 /** An organization's name, or `null` when it can't be read. */

@@ -49,6 +49,19 @@ export async function orNull<T>(read: Promise<T>): Promise<T | null> {
   }
 }
 
+/** Marks a REST 404, distinct from a 2xx with an empty body (which `workosRequest` returns as `null`). */
+export const NOT_FOUND = Symbol('not_found');
+
+/** Run a request; a REST 404 resolves to {@link NOT_FOUND}, so an empty success can't pass for "missing". */
+export async function orNotFound<T>(request: Promise<T>): Promise<T | typeof NOT_FOUND> {
+  try {
+    return await request;
+  } catch (error) {
+    if (isNotFound(error)) return NOT_FOUND;
+    throw error;
+  }
+}
+
 /** The dashboard list envelope: `{ data, listMetadata }`. */
 export function listEnvelope<T>(data: T[], listMetadata?: { before: string | null; after: string | null }) {
   return {

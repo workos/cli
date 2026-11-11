@@ -52,10 +52,16 @@ interface RestFlag {
   updated_at?: string;
 }
 
-/** REST `enabled` → the dashboard's `Active`; other states pass through. */
+/**
+ * REST endpoint status → the dashboard's `WebhookEndpointState` (`Active` /
+ * `InActive`, per the vendored catalog), so `enumOut` yields the same
+ * `active` / `in_active` on both paths.
+ */
+const WEBHOOK_STATE: Record<string, string> = { enabled: 'Active', disabled: 'InActive' };
+
 function webhookState(status: string | null | undefined): string | null {
   if (!status) return null;
-  return status === 'enabled' ? 'Active' : status;
+  return WEBHOOK_STATE[status] ?? status;
 }
 
 /** Flag environment IDs handed out by the flag reads → slug, for the update that follows. */

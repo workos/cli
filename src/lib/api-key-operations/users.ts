@@ -7,7 +7,8 @@
  * (user get), and session organization names. No REST source, returned
  * `null`: `sessionCount`, `hasPassword`, `emailVerifiedAt` (REST has only a
  * verified boolean, kept internally for the human view), a factor's
- * `lastVerifiedAt`, and a session impersonator's id/name.
+ * `lastVerifiedAt`, a session impersonator's id/name, and an OAuth session's
+ * provider.
  */
 
 import type { WorkOSListResponse } from '../workos-api.js';
@@ -118,16 +119,24 @@ const SESSION_STATE: Record<string, (session: RestSession) => Record<string, unk
 };
 
 /**
- * REST auth methods are snake_case (`password`, `magic_code`); the dashboard
- * reports the same values in PascalCase (`Password`), which the session shape
- * passes through as-is.
+ * REST `auth_method` → the dashboard's `SessionProvider` value (per the
+ * vendored catalog), which the session shape passes through as-is. REST
+ * reports every OAuth provider as plain `oauth`, so those (and `unknown`) have
+ * no dashboard equivalent and come back null.
  */
+const SESSION_PROVIDER: Record<string, string> = {
+  cross_app_auth: 'CrossAppAuth',
+  external_auth: 'ExternalAuth',
+  impersonation: 'Impersonation',
+  magic_code: 'MagicAuth',
+  migrated_session: 'MigratedSession',
+  passkey: 'Passkey',
+  password: 'Password',
+  sso: 'SingleSignOn',
+};
+
 function sessionProvider(method: string | null | undefined): string | null {
-  if (!method) return null;
-  return method
-    .split('_')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join('');
+  return method ? (SESSION_PROVIDER[method] ?? null) : null;
 }
 
 async function sessionNode(ctx: ApiKeyContext, session: RestSession) {
