@@ -39,9 +39,10 @@ function memoFor(ctx: ApiKeyContext): Memo {
 
 export function environmentRoles(ctx: ApiKeyContext): Promise<RestRole[]> {
   const memo = memoFor(ctx);
-  memo.environmentRoles ??= ctx
-    .request<{ data: RestRole[] }>({ method: 'GET', path: '/authorization/roles' })
-    .then((result) => result?.data ?? []);
+  // A 404 (no roles to list) reads as none, like an organization's roles.
+  memo.environmentRoles ??= orNull(
+    ctx.request<{ data: RestRole[] }>({ method: 'GET', path: '/authorization/roles' }),
+  ).then((result) => result?.data ?? []);
   return memo.environmentRoles;
 }
 

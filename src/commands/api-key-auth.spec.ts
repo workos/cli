@@ -569,7 +569,10 @@ describe('resource commands with an API key', () => {
       expect(rest.callsTo('PUT /user_management/organization_memberships/om_1')[0].body).toEqual({
         role_slug: 'member',
       });
-      expect(updated).toMatchObject({ membership: { id: 'om_1', role: 'member', state: 'active' } });
+      // The membership record reports the role by ID, as the dashboard does.
+      expect(updated).toMatchObject({
+        membership: { id: 'om_1', role: 'role_member', roles: ['role_member'], state: 'active' },
+      });
       expect(rest.callsTo('POST /user_management/invitations')[0].body).toEqual({
         email: 'n@example.com',
         expires_in_days: 7,

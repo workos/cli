@@ -3,7 +3,10 @@
  * `/user_management/organization_memberships` and `/user_management/invitations`.
  *
  * The CLI takes role IDs (`role_*`) for `--role`; REST takes role slugs, so the
- * ID is resolved through the roles endpoints first. A membership's `type` and
+ * ID is resolved through the roles endpoints first. Output goes the other way:
+ * REST names a membership's roles by slug, while the dashboard reports them by
+ * ID on membership records and by display name on an organization's
+ * identities, so slugs are resolved to match. A membership's `type` and
  * `directoryUserId` have no REST source and come back `null`.
  */
 
@@ -24,6 +27,7 @@ import {
   membershipsForUser,
   organizationName,
   type RestMembership,
+  type RestRole,
 } from './lookups.js';
 import { exitWithError } from '../../utils/output.js';
 
@@ -36,7 +40,24 @@ interface RestInvitation {
   created_at?: string;
 }
 
-function membershipNode(membership: RestMembership) {
+/**
+ * A membership's role slugs resolved to roles as its organization sees them.
+ * REST names roles by slug; the dashboard reports them by ID on a membership
+ * record and by display name on an organization's identities.
+ */
+async function membershipRoles(ctx: ApiKeyContext, membership: RestMembership) {
+  const lookup = (slug: string) => findRole(ctx, { slug }, membership.organization_id);
+  const role = membership.role ? ((await lookup(membership.role.slug)) ?? null) : null;
+  const roles = await Promise.all((membership.roles ?? []).map((entry) => lookup(entry.slug)));
+  return { role, roles: roles.filter((entry): entry is RestRole => entry !== undefined) };
+}
+
+/**
+ * A REST membership as the dashboard's membership record, whose `role` and
+ * `roles` are role IDs (`UserlandUserOrganizationMembership`), not slugs.
+ */
+async function membershipNode(ctx: ApiKeyContext, membership: RestMembership) {
+  const { role, roles } = await membershipRoles(ctx, membership);
   return {
     id: membership.id,
     type: null,
@@ -44,8 +65,8 @@ function membershipNode(membership: RestMembership) {
     organizationId: membership.organization_id ?? null,
     userlandUserId: membership.user_id ?? null,
     directoryUserId: null,
-    role: membership.role ?? null,
-    roles: membership.roles ?? [],
+    role: role?.id ?? null,
+    roles: roles.map((entry) => entry.id),
     createdAt: membership.created_at ?? null,
     updatedAt: membership.updated_at ?? null,
   };
@@ -123,7 +144,11 @@ async function setMembershipState(ctx: ApiKeyContext, id: unknown, action: 'deac
 export const membershipOperations: Record<string, ApiKeyOperation> = {
   async userlandUserOrganizationMemberships(variables, ctx) {
     const memberships = await membershipsForUser(ctx, String(variables.userlandUserId));
-    return { userlandUserOrganizationMemberships: { organizationMemberships: memberships.map(membershipNode) } };
+    return {
+      userlandUserOrganizationMemberships: {
+        organizationMemberships: await Promise.all(memberships.map((membership) => membershipNode(ctx, membership))),
+      },
+    };
   },
 
   async userlandUsersByOrg(variables, ctx) {
@@ -143,29 +168,36 @@ export const membershipOperations: Record<string, ApiKeyOperation> = {
         order: restOrder(variables.order),
       },
     });
-    const users = (page?.data ?? []).map((membership) => ({
-      id: membership.user_id,
-      identities: {
-        data: [
-          {
-            id: membership.id,
-            status: membership.status ?? null,
-            directoryUserId: null,
-            role: membership.role ?? null,
-            roles: membership.roles ?? [],
-            organization: { id: organizationId, name: membership.organization_name ?? null },
-            createdAt: membership.created_at ?? null,
-            updatedAt: membership.updated_at ?? null,
+    // The dashboard's by-organization identities select each role's display
+    // name only (`role { name }`, `roles { name }`), so that is what they carry.
+    const users = await Promise.all(
+      (page?.data ?? []).map(async (membership) => {
+        const { role, roles } = await membershipRoles(ctx, membership);
+        return {
+          id: membership.user_id,
+          identities: {
+            data: [
+              {
+                id: membership.id,
+                status: membership.status ?? null,
+                directoryUserId: null,
+                role: role ? { name: role.name } : null,
+                roles: roles.map((entry) => ({ name: entry.name })),
+                organization: { id: organizationId, name: membership.organization_name ?? null },
+                createdAt: membership.created_at ?? null,
+                updatedAt: membership.updated_at ?? null,
+              },
+            ],
           },
-        ],
-      },
-    }));
+        };
+      }),
+    );
     return { organization: { userlandUsers: listEnvelope(users, page?.list_metadata) } };
   },
 
   async userlandUserOrganizationMembership(variables, ctx) {
     const membership = await readMembership(ctx, String(variables.id));
-    return { userlandUserOrganizationMembership: membership ? membershipNode(membership) : null };
+    return { userlandUserOrganizationMembership: membership ? await membershipNode(ctx, membership) : null };
   },
 
   async addUserlandUserToOrg(variables, ctx) {
@@ -209,7 +241,7 @@ export const membershipOperations: Record<string, ApiKeyOperation> = {
     return {
       updateRoleOnOrganizationMembership: {
         __typename: 'RoleOnOrganizationMembershipUpdated',
-        organizationMembership: membershipNode(updated),
+        organizationMembership: await membershipNode(ctx, updated),
       },
     };
   },

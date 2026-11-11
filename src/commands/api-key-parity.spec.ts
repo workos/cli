@@ -148,15 +148,17 @@ const GQL_INVITE = {
   organization: { id: 'org_1', name: 'FooCorp' },
 };
 
+// The dashboard's membership record carries role IDs as plain strings
+// (`UserlandUserOrganizationMembership.role` / `.roles`).
 const GQL_MEMBERSHIP = {
   id: 'om_1',
-  type: 'Standard',
+  type: 'Manual',
   status: 'Active',
   organizationId: 'org_1',
   userlandUserId: 'user_1',
   directoryUserId: null,
-  role: { slug: 'member' },
-  roles: [{ slug: 'member' }],
+  role: 'role_member',
+  roles: ['role_member'],
   createdAt: T0,
   updatedAt: T1,
 };
@@ -700,8 +702,12 @@ describe('resource command --json parity, session vs API key', () => {
         () => ({ userlandUserOrganizationMemberships: { organizationMemberships: [GQL_MEMBERSHIP] } }),
         () => runMembershipList({ user: 'user_1' }),
       ),
-      await viaApiKey({ 'GET /user_management/organization_memberships': restList([REST_MEMBERSHIP]) }, () =>
-        runMembershipList({ user: 'user_1' }),
+      await viaApiKey(
+        {
+          'GET /user_management/organization_memberships': restList([REST_MEMBERSHIP]),
+          'GET /authorization/roles': { object: 'list', data: [REST_ROLE_MEMBER] },
+        },
+        () => runMembershipList({ user: 'user_1' }),
       ),
       ['type'],
     );
@@ -711,11 +717,29 @@ describe('resource command --json parity, session vs API key', () => {
         () => ({ userlandUserOrganizationMembership: GQL_MEMBERSHIP }),
         () => runMembershipGet('om_1'),
       ),
-      await viaApiKey({ 'GET /user_management/organization_memberships/om_1': REST_MEMBERSHIP }, () =>
-        runMembershipGet('om_1'),
+      await viaApiKey(
+        {
+          'GET /user_management/organization_memberships/om_1': REST_MEMBERSHIP,
+          'GET /authorization/roles': { object: 'list', data: [REST_ROLE_MEMBER] },
+        },
+        () => runMembershipGet('om_1'),
       ),
       ['type'],
     );
+  });
+
+  it('membership roles are role IDs on records and display names by organization, with an API key', async () => {
+    const routes = {
+      'GET /organizations/org_1': REST_ORG,
+      'GET /user_management/organization_memberships': restList([REST_MEMBERSHIP]),
+      'GET /authorization/roles': { object: 'list', data: [REST_ROLE_MEMBER] },
+    };
+    const byUser = await viaApiKey(routes, () => runMembershipList({ user: 'user_1' }));
+    const byOrg = await viaApiKey(routes, () => runMembershipList({ org: 'org_1' }));
+
+    // REST's slug ("member") must not leak: records carry the role ID, identities the name.
+    expect(byUser).toMatchObject({ memberships: [{ role: 'role_member', roles: ['role_member'] }] });
+    expect(byOrg).toMatchObject({ memberships: [{ role: 'Member', roles: ['Member'] }] });
   });
 
   it('membership list (by organization) matches with an API key', async () => {
@@ -726,7 +750,8 @@ describe('resource command --json parity, session vs API key', () => {
             data: [
               {
                 id: 'user_1',
-                identities: { data: [{ ...GQL_IDENTITY, role: { slug: 'member' }, roles: [{ slug: 'member' }] }] },
+                // The by-organization query selects only each role's name.
+                identities: { data: [{ ...GQL_IDENTITY, role: { name: 'Member' }, roles: [{ name: 'Member' }] }] },
               },
             ],
             listMetadata: { before: null, after: 'om_1' },
@@ -739,6 +764,7 @@ describe('resource command --json parity, session vs API key', () => {
       {
         'GET /organizations/org_1': REST_ORG,
         'GET /user_management/organization_memberships': restList([REST_MEMBERSHIP], 'om_1'),
+        'GET /authorization/roles': { object: 'list', data: [REST_ROLE_MEMBER] },
       },
       () => runMembershipList({ org: 'org_1' }),
     );
