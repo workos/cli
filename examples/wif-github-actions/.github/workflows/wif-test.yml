@@ -2,8 +2,9 @@
 # workload identity federation (WIF): the job's GitHub OIDC token is exchanged
 # for a short-lived WorkOS access token. See ../../README.md for setup.
 #
-# The WorkOS server side (the `management-api-oauth` flag) is not deployed
-# yet, so this only works against an environment where it has been enabled.
+# The WorkOS server side (the `workos-api-workload-identity` and
+# `management-api-oauth` flags) is not deployed yet, so this only works for a
+# team where it has been enabled.
 
 name: WorkOS WIF test
 
