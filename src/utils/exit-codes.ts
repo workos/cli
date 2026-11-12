@@ -38,6 +38,7 @@ const ERROR_CODE_MAP: Record<string, { reason: TerminationReason; exit: ExitCode
   wif_invalid_grant: { reason: 'auth_required', exit: ExitCode.AUTH_REQUIRED },
   wif_invalid_target: { reason: 'auth_required', exit: ExitCode.AUTH_REQUIRED },
   wif_invalid_client: { reason: 'auth_required', exit: ExitCode.AUTH_REQUIRED },
+  wif_unauthorized_client: { reason: 'auth_required', exit: ExitCode.AUTH_REQUIRED },
   wif_invalid_scope: { reason: 'auth_required', exit: ExitCode.AUTH_REQUIRED },
   wif_invalid_request: { reason: 'auth_required', exit: ExitCode.AUTH_REQUIRED },
   cancelled: { reason: 'cancelled', exit: ExitCode.CANCELED },
