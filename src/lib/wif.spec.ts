@@ -11,6 +11,7 @@ const {
   getWifState,
   isWifAccessToken,
   resetWifCacheForTests,
+  setWifRetryBackoffForTests,
   WIF_GRANT_TYPE,
   ENVIRONMENT_ID_HEADER,
 } = await import('./wif.js');
@@ -100,6 +101,7 @@ describe('workload identity federation (wif)', () => {
 
     activeEnv = undefined;
     resetWifCacheForTests();
+    setWifRetryBackoffForTests(0);
     resetRegisteredSecretsForTests();
     setOutputMode('human');
 
@@ -402,7 +404,7 @@ describe('workload identity federation (wif)', () => {
 
       tokenHandler = () => json({ access_token: ACCESS_TOKEN, token_type: 'Bearer', expires_in: 300 });
       expect(await getWifAccessToken()).toBe(ACCESS_TOKEN);
-      expect(tokenCalls()).toHaveLength(2);
+      expect(tokenCalls()).toHaveLength(4);
     });
   });
 
@@ -471,10 +473,11 @@ describe('workload identity federation (wif)', () => {
     it.each([
       ['invalid_grant', 'trust rules'],
       ['invalid_target', 'audience'],
-      ['invalid_client', 'WORKOS_CLIENT_ID'],
-      ['invalid_scope', 'WORKOS_WIF_SCOPE'],
+      ['invalid_client', 'Set WORKOS_CLIENT_ID to the client ID'],
+      ['unauthorized_client', 'Check that WORKOS_CLIENT_ID is an M2M application with an enabled GitHub trust rule'],
+      ['invalid_scope', 'Set WORKOS_WIF_SCOPE to scopes the application has, or unset it'],
       ['invalid_request', '/oauth2/token'],
-    ])('%s: names the error, includes error_description and a hint', async (error, hint) => {
+    ])('%s: names the error, includes error_description and says what to fix', async (error, hint) => {
       tokenHandler = () => json({ error, error_description: `server says ${error} happened` }, 400);
 
       const exit = await expectCliExit(resolveApiKeyAsync());
@@ -484,6 +487,31 @@ describe('workload identity federation (wif)', () => {
       expect(message).toContain(error);
       expect(message).toContain(`server says ${error} happened`);
       expect(message).toContain(hint);
+      // A 4xx is final: one GitHub token, one exchange.
+      expect(githubCalls()).toHaveLength(1);
+      expect(tokenCalls()).toHaveLength(1);
+    });
+
+    it('invalid_grant and invalid_target say which settings to compare', async () => {
+      tokenHandler = () => json({ error: 'invalid_grant' }, 400);
+      await expectCliExit(resolveApiKeyAsync());
+      expect(stderr.join('\n')).toContain("Check the trust rule's repository, ref and audience against this run");
+
+      stderr.length = 0;
+      tokenHandler = () => json({ error: 'invalid_target' }, 400);
+      await expectCliExit(resolveApiKeyAsync());
+      expect(stderr.join('\n')).toContain("Set the trust rule's audience and WORKOS_WIF_AUDIENCE to the same value");
+    });
+
+    it('unauthorized_client exits 4 and names every condition to check', async () => {
+      tokenHandler = () => json({ error: 'unauthorized_client' }, 400);
+
+      const exit = await expectCliExit(resolveApiKeyAsync());
+      expect(exit.context?.errorCode).toBe('wif_unauthorized_client');
+      expect(exit.exitCode).toBe(4);
+      const message = stderr.join('\n');
+      expect(message).toContain('turned on for your WorkOS team');
+      expect(message).toContain('non-production environment');
     });
 
     it('non-JSON response: generic message with the HTTP status', async () => {
@@ -506,6 +534,7 @@ describe('workload identity federation (wif)', () => {
       expect(exit.context?.errorCode).toBe('wif_exchange_failed');
       expect(stderr.join('\n')).toContain('Could not reach WORKOS_WIF_TOKEN_URL');
       expect(stderr.join('\n')).toContain('ECONNREFUSED');
+      expect(stderr.join('\n')).toContain('Check that WORKOS_WIF_TOKEN_URL is right and reachable');
     });
 
     it('success status without access_token: generic message with the HTTP status', async () => {
@@ -535,6 +564,238 @@ describe('workload identity federation (wif)', () => {
       expect(exit.context?.errorCode).toBe('wif_unsupported_command');
       expect(stderr.join('\n')).toContain('sandbox');
       expect(apiCalls()).toHaveLength(0);
+    });
+  });
+
+  describe('retries', () => {
+    function assertionOf(call: FetchCall): string | null {
+      return new URLSearchParams(String(call.init?.body)).get('assertion');
+    }
+
+    describe('API 401', () => {
+      /** 401 for the first access token, 200 for any later one. */
+      function rejectFirstToken(): void {
+        apiHandler = (_url, init) =>
+          new Headers(init?.headers).get('authorization') === `Bearer ${ACCESS_TOKEN}`
+            ? json({ message: 'Unauthorized' }, 401)
+            : json({ data: [], list_metadata: { before: null, after: null } });
+      }
+
+      it('apiRequest exchanges again and re-sends once with the new token', async () => {
+        process.env.WORKOS_ENVIRONMENT_ID = 'environment_01ABC';
+        rejectFirstToken();
+
+        const response = await apiRequest({
+          method: 'POST',
+          path: '/organizations',
+          body: '{"name":"acme"}',
+          baseUrl: API_BASE,
+        });
+
+        expect(response.status).toBe(200);
+        const sent = apiCalls();
+        expect(sent.map((c) => headersOf(c).get('authorization'))).toEqual([
+          `Bearer ${ACCESS_TOKEN}`,
+          `Bearer ${ACCESS_TOKEN_2}`,
+        ]);
+        for (const call of sent) {
+          expect(call.init?.method).toBe('POST');
+          expect(call.init?.body).toBe('{"name":"acme"}');
+          expect(headersOf(call).get(ENVIRONMENT_ID_HEADER)).toBe('environment_01ABC');
+        }
+        // The second exchange used its own GitHub OIDC token.
+        expect(githubCalls()).toHaveLength(2);
+        expect(tokenCalls()).toHaveLength(2);
+      });
+
+      it('workosRequest and the SDK client re-send once too', async () => {
+        rejectFirstToken();
+        const token = await resolveApiKeyAsync();
+
+        await workosRequest({ method: 'GET', path: '/audit_logs/actions', apiKey: token, baseUrl: API_BASE });
+        expect(apiCalls().map((c) => headersOf(c).get('authorization'))).toEqual([
+          `Bearer ${ACCESS_TOKEN}`,
+          `Bearer ${ACCESS_TOKEN_2}`,
+        ]);
+
+        // The SDK client still holds the first token; it now sends the replacement.
+        resetWifCacheForTests();
+        accessTokens = [ACCESS_TOKEN, ACCESS_TOKEN_2];
+        calls = [];
+        const stale = await resolveApiKeyAsync();
+        await createWorkOSClient(stale, API_BASE).sdk.organizations.listOrganizations();
+        expect(apiCalls().map((c) => headersOf(c).get('authorization'))).toEqual([
+          `Bearer ${ACCESS_TOKEN}`,
+          `Bearer ${ACCESS_TOKEN_2}`,
+        ]);
+        expect(tokenCalls()).toHaveLength(2);
+      });
+
+      it('a second 401 is returned, with no third request and no third exchange', async () => {
+        apiHandler = () => json({ message: 'Unauthorized' }, 401);
+
+        const response = await apiRequest({ method: 'GET', path: '/organizations', baseUrl: API_BASE });
+
+        expect(response.status).toBe(401);
+        expect(apiCalls()).toHaveLength(2);
+        expect(tokenCalls()).toHaveLength(2);
+      });
+
+      it.each([403, 404, 500])('does not re-send or exchange again on %i', async (status) => {
+        apiHandler = () => json({ message: 'nope' }, status);
+
+        const response = await apiRequest({ method: 'GET', path: '/organizations', baseUrl: API_BASE });
+
+        expect(response.status).toBe(status);
+        expect(apiCalls()).toHaveLength(1);
+        expect(tokenCalls()).toHaveLength(1);
+      });
+
+      it('never re-sends an API key request', async () => {
+        process.env.WORKOS_API_KEY = 'sk_test_env_key';
+        apiHandler = () => json({ message: 'Unauthorized' }, 401);
+
+        const response = await apiRequest({ method: 'GET', path: '/organizations', baseUrl: API_BASE });
+
+        expect(response.status).toBe(401);
+        expect(apiCalls()).toHaveLength(1);
+        expect(tokenCalls()).toHaveLength(0);
+      });
+
+      it('concurrent 401s share one re-exchange', async () => {
+        rejectFirstToken();
+        const token = await resolveApiKeyAsync();
+
+        await Promise.all([
+          workosRequest({ method: 'GET', path: '/a', apiKey: token, baseUrl: API_BASE }),
+          workosRequest({ method: 'GET', path: '/b', apiKey: token, baseUrl: API_BASE }),
+          workosRequest({ method: 'GET', path: '/c', apiKey: token, baseUrl: API_BASE }),
+        ]);
+
+        expect(tokenCalls()).toHaveLength(2);
+        expect(apiCalls()).toHaveLength(6);
+      });
+
+      it('a failed re-exchange exits with the WIF error, not a connection error', async () => {
+        const token = await resolveApiKeyAsync();
+        apiHandler = () => json({ message: 'Unauthorized' }, 401);
+        tokenHandler = () => json({ error: 'invalid_grant', error_description: 'trust disabled' }, 400);
+
+        for (const run of [
+          () => apiRequest({ method: 'GET', path: '/organizations', apiKey: token, baseUrl: API_BASE }),
+          () => workosRequest({ method: 'GET', path: '/organizations', apiKey: token, baseUrl: API_BASE }),
+        ]) {
+          const exit = await expectCliExit(run());
+          expect(exit.context?.errorCode).toBe('wif_invalid_grant');
+        }
+      });
+    });
+
+    describe('token exchange', () => {
+      it.each([500, 502, 503])('retries a %i with a fresh GitHub OIDC token', async (status) => {
+        const jwts = ['github-jwt-attempt-1', 'github-jwt-attempt-2'];
+        githubHandler = () => json({ value: jwts.shift() });
+        const responses = [
+          () => new Response('upstream down', { status }),
+          () => json({ access_token: ACCESS_TOKEN, token_type: 'Bearer', expires_in: 300 }),
+        ];
+        tokenHandler = () => responses.shift()!();
+
+        expect(await getWifAccessToken()).toBe(ACCESS_TOKEN);
+
+        expect(githubCalls()).toHaveLength(2);
+        expect(tokenCalls().map(assertionOf)).toEqual(['github-jwt-attempt-1', 'github-jwt-attempt-2']);
+        expect(stderr).toEqual([]);
+      });
+
+      it('retries a network error with a fresh GitHub OIDC token', async () => {
+        const jwts = ['github-jwt-attempt-1', 'github-jwt-attempt-2'];
+        githubHandler = () => json({ value: jwts.shift() });
+        let attempt = 0;
+        tokenHandler = () => {
+          if (++attempt === 1) throw new TypeError('fetch failed: ECONNRESET');
+          return json({ access_token: ACCESS_TOKEN, token_type: 'Bearer', expires_in: 300 });
+        };
+
+        expect(await getWifAccessToken()).toBe(ACCESS_TOKEN);
+
+        expect(tokenCalls().map(assertionOf)).toEqual(['github-jwt-attempt-1', 'github-jwt-attempt-2']);
+      });
+
+      it('gives up after three attempts and says so', async () => {
+        tokenHandler = () => json({ error: 'server_error', error_description: 'try later' }, 503);
+
+        const exit = await expectCliExit(resolveApiKeyAsync());
+
+        expect(exit.context?.errorCode).toBe('wif_exchange_failed');
+        expect(exit.exitCode).toBe(1);
+        expect(githubCalls()).toHaveLength(3);
+        expect(tokenCalls()).toHaveLength(3);
+        const message = stderr.join('\n');
+        expect(message).toContain('HTTP 503');
+        expect(message).toContain('Gave up after 3 attempts');
+        expect(message).toContain('re-run the job');
+      });
+
+      it('gives up after three network errors', async () => {
+        tokenHandler = () => {
+          throw new TypeError('fetch failed: ECONNREFUSED');
+        };
+
+        await expectCliExit(resolveApiKeyAsync());
+
+        expect(githubCalls()).toHaveLength(3);
+        expect(tokenCalls()).toHaveLength(3);
+        expect(stderr.join('\n')).toContain('Gave up after 3 attempts');
+      });
+
+      it.each([400, 401, 403, 404, 429])('does not retry a %i', async (status) => {
+        tokenHandler = () => json({ error: 'something_else' }, status);
+
+        const exit = await expectCliExit(resolveApiKeyAsync());
+
+        expect(exit.context?.errorCode).toBe('wif_exchange_failed');
+        expect(githubCalls()).toHaveLength(1);
+        expect(tokenCalls()).toHaveLength(1);
+        expect(stderr.join('\n')).not.toContain('attempts');
+      });
+
+      it('stops retrying when a later attempt gets a 4xx', async () => {
+        const responses = [
+          () => new Response('upstream down', { status: 503 }),
+          () => json({ error: 'invalid_grant' }, 400),
+        ];
+        tokenHandler = () => responses.shift()!();
+
+        const exit = await expectCliExit(resolveApiKeyAsync());
+
+        expect(exit.context?.errorCode).toBe('wif_invalid_grant');
+        expect(tokenCalls()).toHaveLength(2);
+      });
+
+      it('does not retry a failed GitHub OIDC request', async () => {
+        githubHandler = () => new Response('oops', { status: 500 });
+
+        await expectCliExit(resolveApiKeyAsync());
+
+        expect(githubCalls()).toHaveLength(1);
+        expect(tokenCalls()).toHaveLength(0);
+      });
+
+      it('waits between attempts, doubling each time', async () => {
+        setWifRetryBackoffForTests(500); // beforeEach puts it back to 0
+        const waits: number[] = [];
+        vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: () => void, ms?: number) => {
+          waits.push(ms ?? 0);
+          fn();
+          return 0;
+        }) as unknown as typeof setTimeout);
+        tokenHandler = () => new Response('upstream down', { status: 503 });
+
+        await expectCliExit(resolveApiKeyAsync());
+
+        expect(waits).toEqual([500, 1000]);
+      });
     });
   });
 
@@ -608,6 +869,24 @@ describe('workload identity federation (wif)', () => {
         apiHandler = () => json({ message: 'Unauthorized' }, 401);
         await workosRequest({ method: 'GET', path: '/organizations', apiKey: token, baseUrl: API_BASE });
       });
+      // A 401 that leads to a failed re-exchange, through each request layer.
+      const failReExchange = (): void => {
+        apiHandler = () => json({ message: 'Unauthorized' }, 401);
+        tokenHandler = () =>
+          json({ error: 'unauthorized_client', error_description: `no ${accessToken} for ${githubToken}` }, 400);
+      };
+      await capture(async () => {
+        const token = await resolveApiKeyAsync();
+        failReExchange();
+        await apiRequest({ method: 'GET', path: '/organizations', apiKey: token, baseUrl: API_BASE });
+      });
+      tokenHandler = () => json({ access_token: accessToken, token_type: 'Bearer', expires_in: 300 });
+      await capture(async () => {
+        const token = await resolveApiKeyAsync();
+        failReExchange();
+        await createWorkOSClient(token, API_BASE).sdk.organizations.listOrganizations();
+      });
+      expect(stderr.join('\n')).toContain('unauthorized_client');
       apiHandler = () => json({ data: [], list_metadata: { before: null, after: null } });
 
       // A later exchange fails and the server echoes both the new assertion and the access token it issued earlier.
