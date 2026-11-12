@@ -631,6 +631,21 @@ describe('workload identity federation (wif)', () => {
         expect(tokenCalls()).toHaveLength(2);
       });
 
+      it('releases the rejected response even when the re-exchange fails', async () => {
+        const rejected = json({ message: 'Unauthorized' }, 401);
+        const cancel = vi.spyOn(rejected.body!, 'cancel');
+        apiHandler = () => rejected;
+        let exchanges = 0;
+        tokenHandler = () =>
+          ++exchanges === 1
+            ? json({ access_token: ACCESS_TOKEN, token_type: 'Bearer', expires_in: 300 })
+            : json({ error: 'unauthorized_client' }, 400);
+
+        await expectCliExit(apiRequest({ method: 'GET', path: '/organizations', baseUrl: API_BASE }));
+
+        expect(cancel).toHaveBeenCalled();
+      });
+
       it('a second 401 is returned, with no third request and no third exchange', async () => {
         apiHandler = () => json({ message: 'Unauthorized' }, 401);
 
@@ -715,6 +730,22 @@ describe('workload identity federation (wif)', () => {
         tokenHandler = () => {
           if (++attempt === 1) throw new TypeError('fetch failed: ECONNRESET');
           return json({ access_token: ACCESS_TOKEN, token_type: 'Bearer', expires_in: 300 });
+        };
+
+        expect(await getWifAccessToken()).toBe(ACCESS_TOKEN);
+
+        expect(tokenCalls().map(assertionOf)).toEqual(['github-jwt-attempt-1', 'github-jwt-attempt-2']);
+      });
+
+      it('retries when the connection drops while the response body is read', async () => {
+        const jwts = ['github-jwt-attempt-1', 'github-jwt-attempt-2'];
+        githubHandler = () => json({ value: jwts.shift() });
+        let attempt = 0;
+        tokenHandler = () => {
+          if (++attempt > 1) return json({ access_token: ACCESS_TOKEN, token_type: 'Bearer', expires_in: 300 });
+          const dropped = new Response(null, { status: 200 });
+          dropped.text = () => Promise.reject(new TypeError('terminated'));
+          return dropped;
         };
 
         expect(await getWifAccessToken()).toBe(ACCESS_TOKEN);

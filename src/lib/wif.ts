@@ -194,9 +194,10 @@ export async function sendWithWifAuth(
   if (response.status !== 401 || !isWifAccessToken(credential)) return response;
 
   discardWifAccessToken(authHeaders.Authorization.slice('Bearer '.length));
-  const retryHeaders = await wifAuthHeaders(credential);
-  // Release the first response's connection; its body is never read.
+  // Release the first response's connection before exchanging again, so a
+  // failed exchange does not leave it open. Its body is never read.
   await response.body?.cancel().catch(() => undefined);
+  const retryHeaders = await wifAuthHeaders(credential);
   return send(retryHeaders);
 }
 
@@ -280,6 +281,10 @@ async function readJsonObject(response: Response): Promise<Record<string, unknow
   } catch {
     return undefined;
   }
+  return parseJsonObject(text);
+}
+
+function parseJsonObject(text: string): Record<string, unknown> | undefined {
   try {
     const parsed: unknown = JSON.parse(text);
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
@@ -390,12 +395,15 @@ async function attemptExchange(tokenUrl: string, assertion: string): Promise<Cac
   // Lifetime counts from before the request, so the cache errs early.
   const requestedAt = Date.now();
   let response: Response;
+  let text: string;
   try {
     response = await fetch(tokenUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
       body: form.toString(),
     });
+    // A connection that drops while the body is read is a network failure too.
+    text = await response.text();
   } catch (error) {
     const detail = describeNetworkError(error);
     return {
@@ -409,7 +417,7 @@ async function attemptExchange(tokenUrl: string, assertion: string): Promise<Cac
     };
   }
 
-  const body = await readJsonObject(response);
+  const body = parseJsonObject(text);
   const oauthError = typeof body?.error === 'string' ? body.error : undefined;
   const description =
     typeof body?.error_description === 'string' && body.error_description
