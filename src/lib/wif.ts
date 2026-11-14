@@ -36,7 +36,11 @@ export const ENVIRONMENT_ID_HEADER = 'x-url-environment-id';
 /** Refresh once less than this much lifetime is left, or less than 20% of it, whichever is smaller. */
 const REFRESH_MARGIN_MAX_MS = 60_000;
 const REFRESH_MARGIN_FRACTION = 0.2;
-/** Lifetime to assume when the server omits `expires_in`: the documented minimum (5 min). */
+/**
+ * Lifetime to assume when the server omits `expires_in`. WorkOS access tokens last one hour and the
+ * server says so in `expires_in`; this fallback is deliberately shorter, so the CLI exchanges again
+ * early instead of sending a token that may have expired.
+ */
 const DEFAULT_LIFETIME_SECONDS = 300;
 /** Exchange attempts in total (the first try plus retries) when the token endpoint is unreachable or answers 5xx. */
 const MAX_EXCHANGE_ATTEMPTS = 3;
