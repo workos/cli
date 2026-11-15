@@ -66,7 +66,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
         with:
-          bun-version: 1.4.3
+          bun-version: 1.4.4
 
       - name: Install all target-specific dependencies
         run: bun install --frozen-lockfile --os="*" --cpu="*"
@@ -214,7 +214,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
         with:
-          bun-version: 1.4.3
+          bun-version: 1.4.4
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # 6.5.0
         with:
@@ -306,7 +306,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
         with:
-          bun-version: 1.4.3
+          bun-version: 1.4.4
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # 8.0.2
         with:
@@ -325,7 +325,7 @@ jobs:
       # formula push needs.
       - name: Generate a tap-scoped token
         id: tap-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # 3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # 3.3.0
         with:
           app-id: ${{ vars.SDK_BOT_APP_ID }}
           private-key: ${{ secrets.SDK_BOT_PRIVATE_KEY }}
