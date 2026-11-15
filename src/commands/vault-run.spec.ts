@@ -16,6 +16,7 @@ vi.mock('../lib/workos-client.js', () => ({
 const mockResolveApiKey = vi.fn(() => 'sk_test_resolved');
 vi.mock('../lib/api-key.js', () => ({
   resolveApiKey: (...args: unknown[]) => mockResolveApiKey(...(args as [])),
+  resolveApiKeyAsync: async (...args: unknown[]) => mockResolveApiKey(...(args as [])),
   resolveApiBaseUrl: () => 'https://api.workos.com',
 }));
 

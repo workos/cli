@@ -92,7 +92,7 @@ vi.mock('./request.js', () => ({
 }));
 
 vi.mock('../../lib/api-key.js', () => ({
-  resolveApiKey: vi.fn(() => 'sk_test'),
+  resolveApiKeyAsync: vi.fn(async () => 'sk_test'),
   resolveApiBaseUrl: vi.fn(() => 'https://api.example.com'),
 }));
 
@@ -113,6 +113,7 @@ vi.mock('../../utils/ui.js', () => ({
 
 const { apiInteractive } = await import('./interactive.js');
 const { CliExit } = await import('../../utils/cli-exit.js');
+const { resolveApiKeyAsync } = await import('../../lib/api-key.js');
 
 async function expectExit(promise: Promise<unknown>, code: number): Promise<void> {
   try {
@@ -301,7 +302,7 @@ describe('apiInteractive', () => {
     );
   });
 
-  it('uses the provided apiKey override instead of resolveApiKey()', async () => {
+  it('uses the provided apiKey override instead of resolveApiKeyAsync()', async () => {
     mockSelect.mockResolvedValueOnce('Users').mockResolvedValueOnce(mockCatalog.endpoints[0]);
     mockConfirm.mockResolvedValueOnce(true);
     mockApiRequest.mockResolvedValueOnce(buildResponse());
@@ -309,6 +310,7 @@ describe('apiInteractive', () => {
     await apiInteractive({ apiKey: 'sk_override' });
 
     expect(mockApiRequest).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'sk_override' }));
+    expect(resolveApiKeyAsync).not.toHaveBeenCalled();
   });
 
   it('exits with code 1 when the response status is >= 400', async () => {

@@ -28,6 +28,18 @@ const ERROR_CODE_MAP: Record<string, { reason: TerminationReason; exit: ExitCode
   // resolveApiKey() emits `no_api_key` when no key is configured; semantically
   // an auth failure, so it must not fall through to `validation_error`.
   no_api_key: { reason: 'auth_required', exit: ExitCode.AUTH_REQUIRED },
+  // Workload identity federation (src/lib/wif.ts). Each means GitHub Actions
+  // could not get a usable WorkOS credential, so they exit like `no_api_key`.
+  // `wif_id_token_request_failed`, `wif_exchange_failed` (network, non-JSON,
+  // 5xx) and `wif_unsupported_command` keep the general-error default.
+  wif_id_token_unavailable: { reason: 'auth_required', exit: ExitCode.AUTH_REQUIRED },
+  wif_token_url_missing: { reason: 'auth_required', exit: ExitCode.AUTH_REQUIRED },
+  wif_token_url_invalid: { reason: 'auth_required', exit: ExitCode.AUTH_REQUIRED },
+  wif_invalid_grant: { reason: 'auth_required', exit: ExitCode.AUTH_REQUIRED },
+  wif_invalid_target: { reason: 'auth_required', exit: ExitCode.AUTH_REQUIRED },
+  wif_invalid_client: { reason: 'auth_required', exit: ExitCode.AUTH_REQUIRED },
+  wif_invalid_scope: { reason: 'auth_required', exit: ExitCode.AUTH_REQUIRED },
+  wif_invalid_request: { reason: 'auth_required', exit: ExitCode.AUTH_REQUIRED },
   cancelled: { reason: 'cancelled', exit: ExitCode.CANCELED },
 };
 

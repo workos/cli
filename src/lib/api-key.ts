@@ -1,15 +1,25 @@
 /**
- * API key resolution for management commands.
+ * Credential resolution for the REST commands (`workos api`, connection,
+ * directory, audit-log, vault, api-key, and the workflow/debug commands).
  *
- * Priority chain:
+ * Priority chain (resolveApiKey):
  * 1. --api-key flag
  * 2. WORKOS_API_KEY environment variable
- * 3. Active environment's stored API key
+ * 3. Workload identity federation in GitHub Actions (see wif.ts): a
+ *    short-lived WorkOS access token, primed by primeApiCredentials()
+ * 4. Active environment's stored API key
  */
 
 import { getActiveEnvironment } from './config-store.js';
 import { exitWithError } from '../utils/output.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
+import {
+  exitWithMissingIdTokenPermission,
+  exitWithWifUnsupported,
+  getWifAccessToken,
+  getWifState,
+  peekWifAccessToken,
+} from './wif.js';
 
 const DEFAULT_BASE_URL = 'https://api.workos.com';
 
@@ -17,9 +27,25 @@ export interface ApiKeyOptions {
   apiKey?: string;
 }
 
+/**
+ * Resolve the credential for a REST call. Synchronous, so when workload
+ * identity federation applies the token must already be primed (see
+ * primeApiCredentials); an unprimed call site exits rather than silently
+ * falling back to a stored key.
+ */
 export function resolveApiKey(options?: ApiKeyOptions): string {
-  const apiKey = resolveOptionalApiKey(options);
-  if (apiKey) return apiKey;
+  const explicit = resolveExplicitApiKey(options);
+  if (explicit) return explicit;
+
+  const wifState = getWifState();
+  if (wifState === 'ready') {
+    return peekWifAccessToken() ?? exitWithWifUnsupported();
+  }
+
+  const stored = getActiveEnvironment()?.apiKey;
+  if (stored) return stored;
+
+  if (wifState === 'missing_id_token_env') exitWithMissingIdTokenPermission();
 
   exitWithError({
     code: 'no_api_key',
@@ -27,14 +53,42 @@ export function resolveApiKey(options?: ApiKeyOptions): string {
   });
 }
 
+/**
+ * Async half of credential resolution. When WIF is the credential that
+ * resolveApiKey() will return, exchange (or refresh) the access token now.
+ * A no-op otherwise, so the API key and profile paths never touch the network.
+ */
+export async function primeApiCredentials(options?: ApiKeyOptions): Promise<void> {
+  if (resolveExplicitApiKey(options)) return;
+  if (getWifState() === 'ready') await getWifAccessToken();
+}
+
+/** resolveApiKey() for call sites that can await: primes WIF first. */
+export async function resolveApiKeyAsync(options?: ApiKeyOptions): Promise<string> {
+  await primeApiCredentials(options);
+  return resolveApiKey(options);
+}
+
+/**
+ * Flag → WORKOS_API_KEY → stored key, without WIF. Used by `workos
+ * migrations`, which hands the key to a runtime bundle that can't refresh a
+ * short-lived token.
+ */
 export function resolveOptionalApiKey(options?: ApiKeyOptions): string | undefined {
+  const explicit = resolveExplicitApiKey(options);
+  if (explicit) return explicit;
+
+  const activeEnv = getActiveEnvironment();
+  if (activeEnv?.apiKey) return activeEnv.apiKey;
+
+  return undefined;
+}
+
+function resolveExplicitApiKey(options?: ApiKeyOptions): string | undefined {
   if (options?.apiKey) return options.apiKey;
 
   const envVar = process.env.WORKOS_API_KEY;
   if (envVar) return envVar;
-
-  const activeEnv = getActiveEnvironment();
-  if (activeEnv?.apiKey) return activeEnv.apiKey;
 
   return undefined;
 }

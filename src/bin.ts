@@ -293,6 +293,22 @@ const installerOptions = {
 // Check for updates (blocks up to 500ms, skip in JSON/non-human modes to keep machine streams clean)
 if (!isJsonMode() && isPromptAllowed()) await checkForUpdates();
 
+/** Top-level tokens (as typed) whose handlers call resolveApiKey(); see the WIF middleware. */
+const WIF_PRIMED_COMMANDS = new Set([
+  'connection',
+  'connections',
+  'directory',
+  'audit-log',
+  'vault',
+  'api-key',
+  'seed',
+  'setup-org',
+  'onboard-user',
+  'verify-login',
+  'debug-sso',
+  'debug-sync',
+]);
+
 async function runCli(): Promise<void> {
   const startTime = Date.now();
   let commandName = 'root';
@@ -395,6 +411,18 @@ async function runCli(): Promise<void> {
         return;
       await applyInsecureStorage(argv.insecureStorage as boolean | undefined);
       await maybeWarnUnclaimed();
+    })
+    .middleware(async (argv) => {
+      // Workload identity federation (src/lib/wif.ts): these REST commands
+      // resolve their credential synchronously via resolveApiKey(), so when
+      // GitHub Actions WIF is the credential, exchange the OIDC token for a
+      // WorkOS access token before the handler runs. A no-op whenever
+      // --api-key / WORKOS_API_KEY is set or WIF doesn't apply. `workos api`
+      // and `vault run` prime themselves only when they actually call the API.
+      const [command, subcommand] = (argv._ ?? []).map(String);
+      if (!WIF_PRIMED_COMMANDS.has(command ?? '') || (command === 'vault' && subcommand === 'run')) return;
+      const { primeApiCredentials } = await import('./lib/api-key.js');
+      await primeApiCredentials({ apiKey: argv.apiKey as string | undefined });
     })
     .command('auth', 'Manage authentication (login, logout, status)', (yargs) => {
       yargs.options(insecureStorageOption);

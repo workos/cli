@@ -1,4 +1,5 @@
-import { resolveApiKey, resolveApiBaseUrl } from '../../lib/api-key.js';
+import { resolveApiKeyAsync, resolveApiBaseUrl } from '../../lib/api-key.js';
+import { wifAuthHeaders } from '../../lib/wif.js';
 
 export interface ApiRequestOptions {
   method: string;
@@ -16,7 +17,7 @@ export interface ApiResponse {
 }
 
 export async function apiRequest(options: ApiRequestOptions): Promise<ApiResponse> {
-  const apiKey = options.apiKey ?? resolveApiKey();
+  const apiKey = options.apiKey ?? (await resolveApiKeyAsync());
   const baseUrl = options.baseUrl ?? resolveApiBaseUrl();
 
   let path = options.path;
@@ -25,7 +26,9 @@ export async function apiRequest(options: ApiRequestOptions): Promise<ApiRespons
   const url = `${baseUrl}${path}`;
 
   const headers: Record<string, string> = {
-    Authorization: `Bearer ${apiKey}`,
+    // An API key passes through as `Bearer <key>`; a WIF token is refreshed
+    // if needed and carries x-url-environment-id when configured.
+    ...(await wifAuthHeaders(apiKey)),
     Accept: 'application/json',
   };
 

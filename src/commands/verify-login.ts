@@ -10,6 +10,7 @@
 
 import chalk from 'chalk';
 import { createWorkOSClient } from '../lib/workos-client.js';
+import { isWifAccessToken } from '../lib/wif.js';
 import { outputJson, isJsonMode, exitWithError } from '../utils/output.js';
 import { exitWithCode, ExitCode } from '../utils/exit-codes.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
@@ -117,6 +118,18 @@ function printHuman(result: VerifyLoginResult): void {
 export async function runVerifyLogin(options: VerifyLoginOptions): Promise<void> {
   const method: VerifyLoginMethod = options.method ?? 'password';
   const environment = options.envName ?? null;
+
+  // 0. A workload identity federation (WIF) access token has no sk_test_/
+  // sk_live_ prefix, so the target environment's type can't be confirmed:
+  // refuse rather than risk production.
+  if (isWifAccessToken(options.apiKey)) {
+    exitWithError({
+      code: 'wif_unsupported_command',
+      message:
+        'verify-login creates and deletes real users and cannot confirm that a workload identity federation (WIF) ' +
+        'token targets a non-production environment. Set WORKOS_API_KEY to a sandbox (sk_test_) key for this step.',
+    });
+  }
 
   // 1. Production refusal — before any SDK call. verify-login mutates real
   // users, so it must never touch production. Refuse on either the stored env

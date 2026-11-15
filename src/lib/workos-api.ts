@@ -3,6 +3,8 @@
  * Thin fetch wrapper with auth, error parsing, and query param support.
  */
 
+import { wifAuthHeaders } from './wif.js';
+
 const DEFAULT_BASE_URL = 'https://api.workos.com';
 
 export interface WorkOSRequestOptions {
@@ -49,9 +51,9 @@ export async function workosRequest<T>(options: WorkOSRequestOptions): Promise<T
     if (qs) url += `?${qs}`;
   }
 
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${apiKey}`,
-  };
+  // An API key passes through as `Bearer <key>`; a WIF token is refreshed if
+  // needed and carries x-url-environment-id when configured.
+  const headers: Record<string, string> = await wifAuthHeaders(apiKey);
 
   const fetchOptions: RequestInit = { method, headers };
 

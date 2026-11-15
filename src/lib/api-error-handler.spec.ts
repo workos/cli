@@ -166,6 +166,15 @@ describe('createApiErrorHandler', () => {
       invoke(handler, null);
       expect(parseError().error.code).toBe('unknown_error');
     });
+
+    it('re-throws a CliExit the SDK wrapped as "Unexpected error" without printing again', () => {
+      // e.g. a failed WIF token refresh inside the SDK's fetch, already reported.
+      const original = new CliExit(4, { reason: 'auth_required', errorCode: 'wif_invalid_grant' });
+      const handler = createApiErrorHandler('Thing');
+      expect(invoke(handler, new Error(`Unexpected error: ${original}`, { cause: original }))).toBe(original);
+      expect(invoke(handler, original)).toBe(original);
+      expect(stderrOutput).toEqual([]);
+    });
   });
 
   describe('telemetry apiContext', () => {

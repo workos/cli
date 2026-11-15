@@ -1,5 +1,6 @@
 import { WorkOSApiError } from './workos-api.js';
 import { exitWithError } from '../utils/output.js';
+import { CliExit } from '../utils/cli-exit.js';
 
 export function isSdkException(
   error: unknown,
@@ -55,6 +56,13 @@ function getApiErrorMessage(error: NormalizedApiError, label: string): string {
  */
 export function createApiErrorHandler(resourceName: string) {
   return (error: unknown, context?: string): never => {
+    // A CliExit raised mid-request (e.g. a failed WIF token refresh inside the
+    // SDK's fetch) has already printed its error, but the SDK wraps it as
+    // "Unexpected error". Re-throw the original so it exits as intended.
+    const exit =
+      error instanceof CliExit ? error : error instanceof Error && error.cause instanceof CliExit ? error.cause : null;
+    if (exit) throw exit;
+
     if (error instanceof TypeError && error.message.includes('errors is not iterable')) {
       exitWithError({
         code: 'unprocessable_entity',

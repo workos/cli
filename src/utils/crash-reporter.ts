@@ -1,6 +1,7 @@
 import { analytics } from './analytics.js';
 import { CliExit } from './cli-exit.js';
 import { homedir } from 'node:os';
+import { redactRegisteredSecrets } from './redact.js';
 
 // Hard ceiling the telemetry API enforces on every attribute value
 // (z.string().max(4096) in llm-gateway/types/telemetry-event.ts). The final
@@ -16,12 +17,13 @@ let isCrashing = false;
 
 /**
  * Redact known credential patterns (Bearer tokens, sk_test_/sk_live_ keys,
- * raw JWTs). Shared by sanitizeStack and sanitizeMessage because Node echoes
+ * raw JWTs) plus exact values registered via registerSecret() (e.g. WIF
+ * tokens). Shared by sanitizeStack and sanitizeMessage because Node echoes
  * `.message` into the leading `Error.stack` line, so secrets in messages also
  * surface in stacks.
  */
 function redactSecrets(s: string): string {
-  return s
+  return redactRegisteredSecrets(s)
     .replace(/Bearer\s+[A-Za-z0-9._-]+/g, 'Bearer <redacted>')
     .replace(/\bsk_(test|live)_[A-Za-z0-9]+/g, 'sk_<redacted>')
     .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '<jwt-redacted>');
