@@ -10,6 +10,7 @@
 import { getActiveEnvironment } from './config-store.js';
 import { exitWithError } from '../utils/output.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
+import { noApiKeyRecovery } from '../utils/recovery-hints.js';
 
 const DEFAULT_BASE_URL = 'https://api.workos.com';
 
@@ -23,7 +24,10 @@ export function resolveApiKey(options?: ApiKeyOptions): string {
 
   exitWithError({
     code: 'no_api_key',
-    message: `No API key configured. Run \`${formatWorkOSCommand('profile add')}\` to configure an environment, or set WORKOS_API_KEY.`,
+    message:
+      `No API key configured. Run \`${formatWorkOSCommand('env provision')}\` to create an environment without an account, ` +
+      `\`${formatWorkOSCommand('profile add')}\` to configure an existing one, or set WORKOS_API_KEY.`,
+    recovery: noApiKeyRecovery(),
   });
 }
 

@@ -25,6 +25,8 @@ import { getCliAuthClientId, getAuthkitDomain } from './settings.js';
 import { logInfo } from '../utils/debug.js';
 import { exitWithAuthRequired } from '../utils/exit-codes.js';
 import { formatWorkOSCommand } from '../utils/command-invocation.js';
+import { dashboardSessionRecovery } from '../utils/recovery-hints.js';
+import { getInteractionMode } from '../utils/interaction-mode.js';
 
 export interface UsableSession {
   accessToken: string;
@@ -168,15 +170,19 @@ export async function requireCommandToken(): Promise<string> {
 
   // Credentials surviving the refresh attempt means the failure was transient
   // (network/server); the user is NOT logged out and must not be told so.
+  // The default auth_required hints suggest WORKOS_API_KEY, which these commands reject.
+  const recovery = dashboardSessionRecovery({ mode: getInteractionMode().mode });
   if (hadSession && hasCredentials()) {
     exitWithAuthRequired(
       process.env.WORKOS_API_KEY
         ? DASHBOARD_ERROR_MESSAGES.refreshFailedApiKeySet
         : DASHBOARD_ERROR_MESSAGES.refreshFailed,
+      { recovery },
     );
   }
 
   exitWithAuthRequired(
     process.env.WORKOS_API_KEY ? DASHBOARD_ERROR_MESSAGES.authRequiredApiKeySet : DASHBOARD_ERROR_MESSAGES.authRequired,
+    { recovery },
   );
 }

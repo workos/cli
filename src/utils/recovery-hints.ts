@@ -79,6 +79,54 @@ export function authLoginRecovery(options: { mode: InteractionMode; env?: NodeJS
   };
 }
 
+/**
+ * Recovery hints for when no API key is configured anywhere. With no existing
+ * environment to preserve, provisioning an unclaimed one is the agent-safe
+ * first step; recovering access to an existing environment must not suggest it.
+ */
+export function noApiKeyRecovery(options: { env?: NodeJS.ProcessEnv } = {}): RecoveryHints {
+  const env = options.env ?? process.env;
+  return {
+    hints: [
+      {
+        description:
+          'No WorkOS account needed: provision an unclaimed environment (no login), then re-run. ' +
+          `It can be claimed later with \`${formatWorkOSCommand('profile claim', env)}\`.`,
+        command: formatWorkOSCommand('env provision', env),
+      },
+      {
+        description: 'Or set WORKOS_API_KEY, or add an existing environment.',
+        command: formatWorkOSCommand('profile add', env),
+      },
+    ],
+  };
+}
+
+/**
+ * Recovery hints for commands that act as the logged-in dashboard user and
+ * reject API keys, so WORKOS_API_KEY and unclaimed environments can't help.
+ */
+export function dashboardSessionRecovery(options: { mode: InteractionMode; env?: NodeJS.ProcessEnv }): RecoveryHints {
+  const env = options.env ?? process.env;
+  return {
+    hints: [
+      {
+        description:
+          options.mode === 'human'
+            ? 'Authenticate via browser-based device login.'
+            : "Authenticate on the user's host shell.",
+        command: formatWorkOSCommand('auth login', env),
+        ...(options.mode !== 'human' && { hostShellRequired: true }),
+      },
+      {
+        description:
+          'Or make the same request with an API key (WORKOS_API_KEY or an unclaimed environment) through the API command.',
+        command: formatWorkOSCommand('api ls', env),
+      },
+    ],
+  };
+}
+
 /** Build a `confirmation_required` recovery hint, attaching a command only when the exact rerun is known. */
 export function confirmationRecovery(command?: string): RecoveryHints {
   return {

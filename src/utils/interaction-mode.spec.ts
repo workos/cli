@@ -71,6 +71,25 @@ describe('interaction-mode', () => {
       });
     });
 
+    it.each([
+      { AI_AGENT: 'v0' },
+      { GEMINI_CLI: '1' },
+      { CODEX_THREAD_ID: 'abc' },
+      { OPENCODE: '1' },
+      { CURSOR_EXTENSION_HOST_ROLE: 'agent-exec' },
+    ])('detects detect-agent marker %o', (env) => {
+      expect(resolveInteractionMode({ env, stdoutIsTTY: true, stderrIsTTY: true })).toEqual({
+        mode: 'agent',
+        source: 'agent_env',
+      });
+    });
+
+    it('ignores empty AI_AGENT and markers also set in human sessions', () => {
+      for (const env of [{ AI_AGENT: ' ' }, { REPL_ID: 'x' }, { OPENCODE: '0' }]) {
+        expect(resolveInteractionMode({ env, stdoutIsTTY: true, stderrIsTTY: true }).mode).toBe('human');
+      }
+    });
+
     it('non-TTY maps to agent after env marker checks', () => {
       expect(resolveInteractionMode({ env: {}, stdoutIsTTY: false, stderrIsTTY: true })).toEqual({
         mode: 'agent',

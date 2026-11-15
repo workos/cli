@@ -304,6 +304,27 @@ describe('command-auth', () => {
       expect(mockRefreshAccessToken).not.toHaveBeenCalled();
     });
 
+    it('gives agents hints that work for dashboard commands, never "set WORKOS_API_KEY"', async () => {
+      vi.stubEnv('WORKOS_API_KEY', 'sk_test_x');
+      const { setOutputMode } = await import('../utils/output.js');
+      const { setInteractionMode } = await import('../utils/interaction-mode.js');
+      setOutputMode('json');
+      setInteractionMode({ mode: 'agent', source: 'env' });
+      try {
+        await expectAuthExit(requireCommandToken());
+      } finally {
+        setOutputMode('human');
+        setInteractionMode({ mode: 'human', source: 'default' });
+      }
+
+      const { error } = JSON.parse(consoleErrors.at(-1)!);
+      expect(error.recovery.hints.map((h: { command?: string }) => h.command)).toEqual([
+        formatWorkOSCommand('auth login'),
+        formatWorkOSCommand('api ls'),
+      ]);
+      expect(JSON.stringify(error.recovery)).not.toContain('Or set WORKOS_API_KEY');
+    });
+
     it('explains that API keys do not work here when WORKOS_API_KEY is set', async () => {
       vi.stubEnv('WORKOS_API_KEY', 'sk_test_x');
 

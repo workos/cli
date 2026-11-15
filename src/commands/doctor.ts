@@ -3,6 +3,7 @@ import { runDoctor, outputReport } from '../doctor/index.js';
 import ui from '../utils/ui.js';
 import { ExitCode, exitWithCode } from '../utils/exit-codes.js';
 import { CliExit } from '../utils/cli-exit.js';
+import { isJsonMode } from '../utils/output.js';
 
 interface DoctorArgs {
   verbose?: boolean;
@@ -20,7 +21,8 @@ export async function handleDoctor(argv: ArgumentsCamelCase<DoctorArgs>): Promis
     verbose: argv.verbose ?? false,
     skipApi: argv.skipApi ?? false,
     skipAi: argv.skipAi ?? false,
-    json: argv.json ?? false,
+    // Follow the global output mode so piped and agent runs get JSON without --json.
+    json: (argv.json ?? false) || isJsonMode(),
     copy: argv.copy ?? false,
     fix: argv.fix ?? false,
   };

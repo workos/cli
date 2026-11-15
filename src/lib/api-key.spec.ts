@@ -96,6 +96,13 @@ describe('api-key', () => {
       expect(mockExitWithError).toHaveBeenCalledWith(expect.objectContaining({ code: 'no_api_key' }));
     });
 
+    it('points to an unclaimed environment when no key exists anywhere', () => {
+      expect(() => resolveApiKey()).toThrow(ExitError);
+      const error = mockExitWithError.mock.calls.at(-1)![0];
+      expect(error.message).toContain('env provision');
+      expect(error.recovery.hints[0].command).toContain('env provision');
+    });
+
     it('exits with error when config exists but no active environment', () => {
       saveConfig({ environments: {} });
       expect(() => resolveApiKey()).toThrow(ExitError);

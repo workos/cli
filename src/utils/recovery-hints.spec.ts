@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { authLoginRecovery, confirmationRecovery, missingArgsRecovery } from './recovery-hints.js';
+import {
+  authLoginRecovery,
+  confirmationRecovery,
+  dashboardSessionRecovery,
+  missingArgsRecovery,
+  noApiKeyRecovery,
+} from './recovery-hints.js';
 
 describe('recovery-hints', () => {
   describe('authLoginRecovery', () => {
@@ -15,7 +21,7 @@ describe('recovery-hints', () => {
       });
     });
 
-    it('agent mode recommends host-shell login first and env var second', () => {
+    it('agent mode recommends host-shell login first and env var second, never a new environment', () => {
       const recovery = authLoginRecovery({ mode: 'agent', env: {} });
       expect(recovery.hints[0]).toMatchObject({
         command: 'workos auth login',
@@ -23,6 +29,8 @@ describe('recovery-hints', () => {
       });
       expect(recovery.hints[1].description).toMatch(/WORKOS_API_KEY/);
       expect(recovery.hints[1].command).toBeUndefined();
+      // Provisioning would switch the active profile away from the environment being recovered.
+      expect(recovery.hints.map((h) => h.command)).not.toContain('workos env provision');
     });
 
     it('human mode recommends device login without host-shell flag', () => {
@@ -39,6 +47,28 @@ describe('recovery-hints', () => {
         env: { npm_command: 'exec' },
       });
       expect(recovery.hints[0].command).toBe('workos auth login');
+    });
+  });
+
+  describe('noApiKeyRecovery', () => {
+    it('offers an unclaimed environment first, then an existing one', () => {
+      const recovery = noApiKeyRecovery({ env: {} });
+      expect(recovery.hints[0]).toMatchObject({ command: 'workos env provision' });
+      expect(recovery.hints[0].description).toContain('workos profile claim');
+      expect(recovery.hints[1]).toMatchObject({ command: 'workos profile add' });
+    });
+  });
+
+  describe('dashboardSessionRecovery', () => {
+    it('never suggests WORKOS_API_KEY alone, since dashboard commands reject API keys', () => {
+      for (const mode of ['human', 'agent', 'ci'] as const) {
+        const recovery = dashboardSessionRecovery({ mode, env: {} });
+        expect(recovery.hints[0].command).toBe('workos auth login');
+        expect(recovery.hints[1].command).toBe('workos api ls');
+        expect(recovery.hints.map((h) => h.description).join(' ')).not.toMatch(/^Or set WORKOS_API_KEY/);
+      }
+      expect(dashboardSessionRecovery({ mode: 'agent', env: {} }).hints[0].hostShellRequired).toBe(true);
+      expect(dashboardSessionRecovery({ mode: 'human', env: {} }).hints[0].hostShellRequired).toBeUndefined();
     });
   });
 
