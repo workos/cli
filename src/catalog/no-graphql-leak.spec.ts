@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { loadManagementCatalog } from './loader.js';
 import { getManifest } from './manifest.js';
 import { OVERRIDES, resolveCommandMeta, findLeaks, LEAK_PATTERN } from './curation.js';
-import { dashboardErrorMessage } from './operation.js';
+import { dashboardErrorMessage, getOperation, resolveExecutableDocument } from './operation.js';
 import { DASHBOARD_ERROR_MESSAGES } from '../lib/command-auth.js';
 import { DashboardGraphqlError, type DashboardGraphqlErrorCode } from '../lib/dashboard-graphql.js';
 import { buildCommandTree, type CommandSchema, type HelpOutput } from '../utils/help-json.js';
@@ -124,10 +124,37 @@ describe('no GraphQL/userland leak in dashboard-plane error copy', () => {
     }
   });
 
+  it('appends a clean server error code to graphql_error copy, never the server message', () => {
+    const msg = (serverCode?: string) =>
+      dashboardErrorMessage(new DashboardGraphqlError('private details', 'graphql_error', undefined, serverCode));
+    expect(msg('INTERNAL_SERVER_ERROR')).toBe(
+      'The WorkOS account plane could not complete this request (INTERNAL_SERVER_ERROR).',
+    );
+    expect(msg('GRAPHQL_VALIDATION_FAILED')).toContain('(VALIDATION_FAILED)');
+    expect(msg(undefined)).toBe('The WorkOS account plane could not complete this request.');
+    expect(msg('not a code; private')).toBe('The WorkOS account plane could not complete this request.');
+    expect(msg('USERLAND_THING')).toBe('The WorkOS account plane could not complete this request.');
+    expect(msg('INTERNAL_SERVER_ERROR')).not.toContain('private details');
+  });
+
   it('forbidden copy no longer claims the capability is staging-gated', () => {
     expect(DASHBOARD_ERROR_MESSAGES.forbidden).not.toMatch(/staging/i);
     expect(dashboardErrorMessage(new DashboardGraphqlError('x', 'forbidden', 403))).toBe(
       DASHBOARD_ERROR_MESSAGES.forbidden,
     );
+  });
+});
+
+describe('teamProjectsV2 wire document', () => {
+  // Every env-scoped command resolves its target through this query, so it must
+  // select only what the CLI reads: a failing resolver on an unread field
+  // (e.g. certificate expiry) must not take down every command for the team.
+  it('selects only the fields the CLI reads', () => {
+    const doc = resolveExecutableDocument(getOperation('teamProjectsV2'));
+    expect(doc).toContain('query teamProjectsV2');
+    for (const field of ['projectsV2', 'clientId', 'sandbox']) expect(doc).toContain(field);
+    for (const field of ['...Environment', 'expiredConnectionCertificates', 'customAuthDomain', 'resourceTypeCount']) {
+      expect(doc).not.toContain(field);
+    }
   });
 });
