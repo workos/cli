@@ -27,10 +27,10 @@
  */
 
 import chalk from 'chalk';
-import { requireCommandToken } from '../lib/command-auth.js';
-import { resolveEnvironmentTarget } from '../lib/environment-target.js';
 import { getOperation } from '../catalog/operation.js';
-import { executeDashboardOperation } from '../lib/dashboard-operation.js';
+import { executeDashboardOperation, resolveEnvScopedAuth } from '../lib/dashboard-operation.js';
+import { isApiKeyAuth } from '../lib/resource-auth.js';
+import { setHomepageUrl, withApiKey } from '../lib/api-key-operations/index.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
 import { rejectWildcardOrigins } from './authkit.js';
 
@@ -53,13 +53,12 @@ export interface ConfigRedirectAddOptions {
 }
 
 export async function runConfigRedirectAdd(uri: string, options: ConfigRedirectAddOptions = {}): Promise<void> {
-  const token = await requireCommandToken();
   const readOp = getOperation('redirectUris');
   const writeOp = getOperation('setRedirectUris');
 
   // The subcommand as a whole mutates: pre-validate the resolved target.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
     forMutation: writeOp.kind === 'mutation',
   });
 
@@ -130,13 +129,12 @@ export interface ConfigCorsAddOptions {
 
 export async function runConfigCorsAdd(origin: string, options: ConfigCorsAddOptions = {}): Promise<void> {
   rejectWildcardOrigins([origin]);
-  const token = await requireCommandToken();
   const readOp = getOperation('corsConfig');
   const writeOp = getOperation('updateCorsConfig');
 
   // The subcommand as a whole mutates: pre-validate the resolved target.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
     forMutation: writeOp.kind === 'mutation',
   });
 
@@ -185,15 +183,26 @@ export interface ConfigHomepageUrlSetOptions {
 }
 
 export async function runConfigHomepageUrlSet(url: string, options: ConfigHomepageUrlSetOptions = {}): Promise<void> {
-  const token = await requireCommandToken();
   const lookupOp = getOperation('defaultAuthkitApplication');
   const writeOp = getOperation('updateAuthkitApplication');
 
   // The subcommand as a whole mutates: pre-validate the resolved target.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
     forMutation: writeOp.kind === 'mutation',
   });
+
+  // API-key path: REST sets the key environment's AuthKit homepage directly
+  // and never exposes the application's ID, so `applicationId` is null.
+  if (isApiKeyAuth(token)) {
+    await withApiKey(token, (ctx) => setHomepageUrl(ctx, url));
+    if (isJsonMode()) {
+      outputJson({ homepageUrl: url, applicationId: null });
+      return;
+    }
+    outputSuccess(`Set homepage URL to ${chalk.bold(url)}`);
+    return;
+  }
 
   // Step 1: resolve the environment's AuthKit application — the update is
   // keyed by application ID, and this is the application the REST endpoint

@@ -24,10 +24,9 @@
  */
 
 import chalk from 'chalk';
-import { requireCommandToken } from '../lib/command-auth.js';
-import { resolveEnvironmentTarget } from '../lib/environment-target.js';
+import type { OperationAuth } from '../lib/resource-auth.js';
 import { getOperation } from '../catalog/operation.js';
-import { runEnvScopedOperation, executeDashboardOperation } from '../lib/dashboard-operation.js';
+import { runEnvScopedOperation, executeDashboardOperation, resolveEnvScopedAuth } from '../lib/dashboard-operation.js';
 import { confirmDestructive } from '../catalog/confirm.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
 import { enumOut } from '../utils/output-conventions.js';
@@ -90,7 +89,7 @@ interface InvitationPage {
 
 /** Fetch one page of env-wide invitations (also backs `invitation get`). */
 async function fetchEnvironmentInvitations(
-  token: string,
+  token: OperationAuth,
   environmentId: string,
   variables: { search?: string; limit?: number; before?: string; after?: string },
 ): Promise<InvitationPage> {
@@ -122,7 +121,11 @@ export interface InvitationListOptions {
 }
 
 export async function runInvitationList(options: InvitationListOptions = {}): Promise<void> {
-  const token = await requireCommandToken();
+  const op = getOperation(options.org ? 'userlandUserInvitesByOrg' : 'userlandUserInvites');
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
+    forMutation: op.kind === 'mutation',
+  });
   const pageVariables = {
     ...(options.email ? { search: options.email } : {}),
     ...(options.limit !== undefined ? { limit: options.limit } : {}),
@@ -132,12 +135,6 @@ export async function runInvitationList(options: InvitationListOptions = {}): Pr
 
   let page: InvitationPage;
   if (options.org) {
-    const op = getOperation('userlandUserInvitesByOrg');
-    const { environmentId } = await resolveEnvironmentTarget(token, {
-      flagValue: options.environmentId,
-      forMutation: op.kind === 'mutation',
-    });
-
     const data = await executeDashboardOperation<{
       organization: {
         userlandUserInvites: {
@@ -166,11 +163,6 @@ export async function runInvitationList(options: InvitationListOptions = {}): Pr
       },
     };
   } else {
-    const op = getOperation('userlandUserInvites');
-    const { environmentId } = await resolveEnvironmentTarget(token, {
-      flagValue: options.environmentId,
-      forMutation: op.kind === 'mutation',
-    });
     page = await fetchEnvironmentInvitations(token, environmentId, pageVariables);
   }
 
@@ -193,11 +185,10 @@ export interface InvitationGetOptions {
 }
 
 export async function runInvitationGet(id: string, options: InvitationGetOptions = {}): Promise<void> {
-  const token = await requireCommandToken();
   const op = getOperation('userlandUserInvites');
 
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
     forMutation: op.kind === 'mutation',
   });
 

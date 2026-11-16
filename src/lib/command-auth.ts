@@ -10,6 +10,13 @@
  *   login flow (or exit 4 when prompting isn't allowed).
  * - Resource commands (`requireCommandToken()` here) always exit 4 with a
  *   structured error — they never open a browser.
+ *
+ * Environment-scoped resource commands (`organization`, `user`, `role`, …)
+ * only reach `requireCommandToken()` when no API key applies: with
+ * `--api-key`, `WORKOS_API_KEY` or an unclaimed active profile they run on the
+ * REST API instead (see `resource-auth.ts`). So the `*ApiKeySet` copy below is
+ * in practice shown by the account-plane commands (`team`, `project`,
+ * `environment`, `whoami`), which have no API-key equivalent.
  */
 
 import {
@@ -53,14 +60,16 @@ export const DASHBOARD_ERROR_MESSAGES: Record<
     );
   },
   /**
-   * Same as `authRequired`, but WORKOS_API_KEY is set — the one failure mode
-   * that must be self-explanatory: these commands act as the logged-in
-   * dashboard user and do not accept API keys.
+   * Same as `authRequired`, but WORKOS_API_KEY is set. Resource commands use
+   * the key, so this is reached by the account-plane commands, which manage
+   * the dashboard account itself and need a login: say which is which.
    */
   get authRequiredApiKeySet() {
     return (
-      'Not logged in. WORKOS_API_KEY is set, but this command uses your WorkOS dashboard session ' +
-      `and does not accept API keys. Run \`${formatWorkOSCommand('auth login')}\` to authenticate, ` +
+      'Not logged in. WORKOS_API_KEY is set, but this command manages your WorkOS dashboard account ' +
+      '(team, projects, environments) and needs a dashboard login. ' +
+      `Resource commands such as \`${formatWorkOSCommand('organization')}\` and \`${formatWorkOSCommand('user')}\` run with the API key. ` +
+      `Run \`${formatWorkOSCommand('auth login')}\` to authenticate, ` +
       `or use \`${formatWorkOSCommand('api')}\` for API-key requests.`
     );
   },
@@ -72,11 +81,12 @@ export const DASHBOARD_ERROR_MESSAGES: Record<
       `or use \`${formatWorkOSCommand('api')}\` for API-key requests.`
     );
   },
-  /** Transient refresh failure while WORKOS_API_KEY is set: same, plus the API-key caveat. */
+  /** Transient refresh failure while WORKOS_API_KEY is set: same, plus which commands the key covers. */
   get refreshFailedApiKeySet() {
     return (
       'Could not refresh your session (network or server error). Your saved login was kept. ' +
-      'WORKOS_API_KEY is set, but this command uses your WorkOS dashboard session and does not accept API keys. ' +
+      'WORKOS_API_KEY is set, but this command manages your WorkOS dashboard account and needs a dashboard login. ' +
+      `Resource commands such as \`${formatWorkOSCommand('organization')}\` and \`${formatWorkOSCommand('user')}\` run with the API key. ` +
       `Try again, run \`${formatWorkOSCommand('auth login')}\` to re-authenticate, ` +
       `or use \`${formatWorkOSCommand('api')}\` for API-key requests.`
     );

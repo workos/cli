@@ -166,6 +166,10 @@ export async function runOrgDomainCreate(domain: string, options: OrgDomainCreat
   outputSuccess(
     `Added domain ${chalk.bold(domain)} to organization ${chalk.bold(options.org)} (state: ${added.state ?? 'unknown'})`,
   );
+  // Only an API-key add returns a challenge (the domain starts pending there).
+  if (added.verificationContent) {
+    console.log(chalk.dim(`Verification record: ${added.verificationContent}`));
+  }
 }
 
 export interface OrgDomainVerifyOptions {

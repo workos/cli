@@ -29,9 +29,8 @@
  */
 
 import chalk from 'chalk';
-import { requireCommandToken } from '../lib/command-auth.js';
-import { resolveEnvironmentTarget } from '../lib/environment-target.js';
-import { runEnvScopedOperation, executeDashboardOperation } from '../lib/dashboard-operation.js';
+import type { OperationAuth } from '../lib/resource-auth.js';
+import { runEnvScopedOperation, executeDashboardOperation, resolveEnvScopedAuth } from '../lib/dashboard-operation.js';
 import { getOperation } from '../catalog/operation.js';
 import { confirmDestructive, requireConfirmationFlag } from '../catalog/confirm.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
@@ -77,7 +76,7 @@ type ShapedRole = ReturnType<typeof shapeRole>;
  * includes environment roles the organization inherits — org-scoped mutations
  * must therefore check `type` before acting (see {@link requireOrgScopedRole}).
  */
-async function fetchRoles(token: string, environmentId: string, orgId: string | undefined): Promise<RoleNode[]> {
+async function fetchRoles(token: OperationAuth, environmentId: string, orgId: string | undefined): Promise<RoleNode[]> {
   if (orgId) {
     const op = getOperation('rolesForOrganization');
     const data = await executeDashboardOperation<{ rolesForOrganization: { roles: RoleNode[] } | null }>(op, {
@@ -99,7 +98,7 @@ async function fetchRoles(token: string, environmentId: string, orgId: string | 
 
 /** Resolve a slug within the scope's role list, or exit not_found. */
 async function requireRoleBySlug(
-  token: string,
+  token: OperationAuth,
   environmentId: string,
   orgId: string | undefined,
   slug: string,
@@ -170,12 +169,10 @@ export interface RoleScopeOptions {
 }
 
 export async function runRoleList(options: RoleScopeOptions = {}): Promise<void> {
-  const token = await requireCommandToken();
-
   // Environment-scoped read: both list ops take the resolved ID as a variable
   // and it rides as the environment header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
     forMutation: false,
   });
 
@@ -193,10 +190,8 @@ export async function runRoleList(options: RoleScopeOptions = {}): Promise<void>
 }
 
 export async function runRoleGet(slug: string, options: RoleScopeOptions = {}): Promise<void> {
-  const token = await requireCommandToken();
-
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
     forMutation: false,
   });
 
@@ -266,7 +261,7 @@ export async function runRoleCreate(options: RoleCreateOptions): Promise<void> {
  * mutation (the list that was sent, or the pre-mutation list when none was).
  */
 async function executeRoleUpdate(
-  token: string,
+  token: OperationAuth,
   environmentId: string,
   input: { roleId: string; name: string; description?: string; permissions?: string[] },
   slug: string,
@@ -321,11 +316,9 @@ export async function runRoleUpdate(slug: string, options: RoleUpdateOptions = {
   // require-flag: a privilege change; non-interactive callers must pass --yes.
   await requireConfirmationFlag(options, { action: `update role ${slug}` });
 
-  const token = await requireCommandToken();
-
   // Environment-scoped mutation: pre-validated resolved target as header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
     forMutation: true,
   });
 
@@ -364,12 +357,11 @@ export async function runRoleDelete(slug: string, options: RoleDeleteOptions): P
     action: `delete role ${slug} — this permanently removes the role and unassigns its members`,
   });
 
-  const token = await requireCommandToken();
   const op = getOperation('deleteRole');
 
   // Environment-scoped mutation: pre-validated resolved target as header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
     forMutation: op.kind === 'mutation',
   });
 
@@ -411,10 +403,8 @@ export async function runRoleSetPermissions(
   // require-flag: a privilege change; non-interactive callers must pass --yes.
   await requireConfirmationFlag(options, { action: `replace the permissions on role ${slug}` });
 
-  const token = await requireCommandToken();
-
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
     forMutation: true,
   });
 
@@ -448,10 +438,8 @@ export async function runRoleAddPermission(
   // require-flag: a privilege change; non-interactive callers must pass --yes.
   await requireConfirmationFlag(options, { action: `add permission ${permissionSlug} to role ${slug}` });
 
-  const token = await requireCommandToken();
-
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
     forMutation: true,
   });
 
@@ -493,10 +481,8 @@ export async function runRoleRemovePermission(
   // require-flag: a privilege change; non-interactive callers must pass --yes.
   await requireConfirmationFlag(options, { action: `remove permission ${permissionSlug} from role ${slug}` });
 
-  const token = await requireCommandToken();
-
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
     forMutation: true,
   });
 
