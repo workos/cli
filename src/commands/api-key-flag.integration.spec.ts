@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -55,6 +55,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // Drop any connection a stray child still holds, so close() can't hang.
+  server.closeAllConnections();
   await new Promise<void>((resolve) => server.close(() => resolve()));
 });
 
@@ -81,8 +83,17 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // A test that timed out can leave its CLI child running; never let it outlive the test.
+  for (const child of running) child.kill('SIGKILL');
+  running.clear();
   rmSync(home, { recursive: true, force: true });
 });
+
+/** CLI children still running; killed in afterEach. */
+const running = new Set<ChildProcess>();
+
+/** Kill a hung CLI well before the 30s test timeout, so the failure names the hang. */
+const CHILD_TIMEOUT_MS = 20_000;
 
 function runCli(
   args: string[],
@@ -108,11 +119,20 @@ function runCli(
         stdio: ['ignore', 'pipe', 'pipe'],
       },
     );
+    running.add(child);
     let stdout = '';
     let stderr = '';
+    const timer = setTimeout(() => {
+      stderr += `\nkilled after ${CHILD_TIMEOUT_MS / 1000}s`;
+      child.kill('SIGKILL');
+    }, CHILD_TIMEOUT_MS);
     child.stdout.on('data', (chunk) => (stdout += chunk));
     child.stderr.on('data', (chunk) => (stderr += chunk));
-    child.on('close', (code) => resolve({ code, stdout, stderr }));
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      running.delete(child);
+      resolve({ code, stdout, stderr });
+    });
   });
 }
 
