@@ -22,6 +22,16 @@ export interface AuditLogCreateEventFlags {
   file?: string;
 }
 
+// The SDK serializes occurredAt with toISOString(), so it must be a valid Date.
+function parseOccurredAt(value: unknown): Date {
+  if (value === undefined || value === null || value === '') return new Date();
+  const date = new Date(value as string | number | Date);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`Invalid occurredAt: ${JSON.stringify(value)} (expected an ISO 8601 timestamp)`);
+  }
+  return date;
+}
+
 export async function runAuditLogCreateEvent(
   orgId: string,
   flags: AuditLogCreateEventFlags,
@@ -35,14 +45,15 @@ export async function runAuditLogCreateEvent(
 
     if (flags.file) {
       const raw = await readFile(flags.file, 'utf-8');
-      event = JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      event = { ...parsed, occurredAt: parseOccurredAt(parsed.occurredAt) };
     } else {
       if (!flags.action || !flags.actorType || !flags.actorId) {
         throw new Error('--action, --actor-type, and --actor-id are required (or use --file)');
       }
       event = {
         action: flags.action,
-        occurredAt: flags.occurredAt ? new Date(flags.occurredAt) : new Date(),
+        occurredAt: parseOccurredAt(flags.occurredAt),
         actor: {
           id: flags.actorId,
           type: flags.actorType,
