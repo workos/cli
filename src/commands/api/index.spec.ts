@@ -58,6 +58,9 @@ vi.mock('./request.js', () => ({
   apiRequest: (...args: unknown[]) => mockApiRequest(...args),
 }));
 
+let wifAccessToken: string | undefined;
+vi.mock('../../lib/wif.js', () => ({ peekWifAccessToken: () => wifAccessToken }));
+
 vi.mock('../../lib/api-key.js', () => ({
   resolveApiKey: vi.fn(() => 'sk_test'),
   resolveApiBaseUrl: vi.fn(() => 'https://api.example.com'),
@@ -107,6 +110,7 @@ describe('runApiInteractive', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetInteractionModeForTests();
+    wifAccessToken = undefined;
     consoleOutput = [];
     stderrOutput = [];
     vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
@@ -272,6 +276,7 @@ describe('runApiRequest', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetInteractionModeForTests();
+    wifAccessToken = undefined;
     consoleOutput = [];
     stderrOutput = [];
     vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => {
@@ -377,6 +382,40 @@ describe('runApiRequest', () => {
   it('exits with code 1 when the response status is >= 400', async () => {
     mockApiRequest.mockResolvedValue(buildResponse({ status: 404, body: { error: 'not_found' } }));
     await expectExit(runApiRequest('/users', { yes: true }), 1);
+  });
+
+  describe('a 401 or 403', () => {
+    const errorOf = () =>
+      stderrOutput
+        .map((line) => {
+          try {
+            return (JSON.parse(line) as { error?: { message?: string; recovery?: unknown } }).error;
+          } catch {
+            return undefined;
+          }
+        })
+        .find((error) => error !== undefined);
+
+    it('with an API key suggests logging in again', async () => {
+      setOutputMode('json');
+      mockApiRequest.mockResolvedValue(buildResponse({ status: 403, body: { message: 'Forbidden' } }));
+
+      await expectExit(runApiRequest('/vault/v1/kv', { yes: true }), 1);
+
+      expect(errorOf()?.message).toBe('API request failed with status 403');
+      expect(errorOf()?.recovery).toBeDefined();
+    });
+
+    it('with a WIF token says the token was refused and does not suggest logging in', async () => {
+      setOutputMode('json');
+      wifAccessToken = 'wif-access-token';
+      mockApiRequest.mockResolvedValue(buildResponse({ status: 403, body: { message: 'Forbidden' } }));
+
+      await expectExit(runApiRequest('/vault/v1/kv', { yes: true }), 1);
+
+      expect(errorOf()?.message).toContain('refused the workload identity federation (WIF) access token (HTTP 403)');
+      expect(errorOf()?.recovery).toBeUndefined();
+    });
   });
 
   it('passes --include through to printResponse', async () => {

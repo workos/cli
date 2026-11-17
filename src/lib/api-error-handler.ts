@@ -1,6 +1,7 @@
 import { WorkOSApiError } from './workos-api.js';
 import { exitWithError } from '../utils/output.js';
 import { CliExit } from '../utils/cli-exit.js';
+import { peekWifAccessToken } from './wif.js';
 
 export function isSdkException(
   error: unknown,
@@ -39,7 +40,17 @@ function normalizeApiError(error: unknown): NormalizedApiError | null {
   return null;
 }
 
+/** What to say when the API refuses a workload identity federation (WIF) token. */
+export function wifRefusalMessage(status: number): string {
+  return (
+    `WorkOS refused the workload identity federation (WIF) access token (HTTP ${status}). ` +
+    "This route may not accept WIF tokens yet, or the M2M application doesn't hold the scope it needs. " +
+    'Set WORKOS_API_KEY for this step, or grant the application the scope.'
+  );
+}
+
 function getApiErrorMessage(error: NormalizedApiError, label: string): string {
+  if ((error.status === 401 || error.status === 403) && peekWifAccessToken()) return wifRefusalMessage(error.status);
   if (error.status === 401) return 'Invalid API key. Check your environment configuration.';
   if (error.status === 404) return `${label} not found.`;
   if (error.status === 422 && error.errors?.length) return error.errors.map((e) => e.message).join(', ');

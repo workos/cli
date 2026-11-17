@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
+let wifAccessToken: string | undefined;
+vi.mock('./wif.js', () => ({ peekWifAccessToken: () => wifAccessToken }));
+
 const { WorkOSApiError } = await import('./workos-api.js');
 const { createApiErrorHandler } = await import('./api-error-handler.js');
 const { setOutputMode } = await import('../utils/output.js');
@@ -10,6 +13,7 @@ describe('createApiErrorHandler', () => {
 
   beforeEach(() => {
     setOutputMode('json');
+    wifAccessToken = undefined;
     stderrOutput = [];
     vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
       stderrOutput.push(args.map(String).join(' '));
@@ -97,6 +101,25 @@ describe('createApiErrorHandler', () => {
       const handler = createApiErrorHandler('User');
       invoke(handler, new WorkOSApiError('Server error', 500));
       expect(parseError().error.code).toBe('http_500');
+    });
+  });
+
+  describe('with a workload identity federation (WIF) token as the credential', () => {
+    it.each([401, 403])('a %i says the WIF token was refused, not that an API key is invalid', (status) => {
+      wifAccessToken = 'wif-access-token';
+      const handler = createApiErrorHandler('Vault object');
+      invoke(handler, new WorkOSApiError('Refused', status));
+      const { message } = parseError().error;
+      expect(message).toContain(`refused the workload identity federation (WIF) access token (HTTP ${status})`);
+      expect(message).toContain('Set WORKOS_API_KEY for this step');
+      expect(message).not.toContain('Invalid API key');
+    });
+
+    it('a 404 keeps its usual message', () => {
+      wifAccessToken = 'wif-access-token';
+      const handler = createApiErrorHandler('Organization');
+      invoke(handler, new WorkOSApiError('Not found', 404));
+      expect(parseError().error.message).toBe('Organization not found.');
     });
   });
 

@@ -137,9 +137,21 @@ describe('api-key', () => {
         expect(resolveApiKey()).toBe('sk_env_var');
       });
 
+      it('with a stored key and no WORKOS_WIF_TOKEN_URL, keeps using the stored key', () => {
+        process.env.ACTIONS_ID_TOKEN_REQUEST_URL = 'https://token.example.com/idtoken?api-version=2.0';
+        process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN = 'request-token';
+        delete process.env.WORKOS_WIF_TOKEN_URL;
+        saveConfig({
+          activeEnvironment: 'prod',
+          environments: { prod: { name: 'prod', type: 'production', apiKey: 'sk_stored' } },
+        });
+        expect(resolveApiKey()).toBe('sk_stored');
+      });
+
       it('exits wif_unsupported_command when WIF applies but was not primed', () => {
         process.env.ACTIONS_ID_TOKEN_REQUEST_URL = 'https://token.example.com/idtoken?api-version=2.0';
         process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN = 'request-token';
+        process.env.WORKOS_WIF_TOKEN_URL = 'https://auth.example.com/oauth2/token';
         saveConfig({
           activeEnvironment: 'prod',
           environments: { prod: { name: 'prod', type: 'production', apiKey: 'sk_stored' } },

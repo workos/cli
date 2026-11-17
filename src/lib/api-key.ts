@@ -8,6 +8,10 @@
  * 3. Workload identity federation in GitHub Actions (see wif.ts): a
  *    short-lived WorkOS access token, primed by primeApiCredentials()
  * 4. Active environment's stored API key
+ *
+ * A job that has a stored key and no WORKOS_WIF_TOKEN_URL keeps using the
+ * stored key: WORKOS_CLIENT_ID and `id-token: write` are often set for other
+ * reasons, and without a token endpoint WIF could only fail.
  */
 
 import { getActiveEnvironment } from './config-store.js';
@@ -38,11 +42,11 @@ export function resolveApiKey(options?: ApiKeyOptions): string {
   if (explicit) return explicit;
 
   const wifState = getWifState();
-  if (wifState === 'ready') {
+  const stored = getActiveEnvironment()?.apiKey;
+  if (wifState === 'ready' && !(stored && wifIsUnconfigured())) {
     return peekWifAccessToken() ?? exitWithWifUnsupported();
   }
 
-  const stored = getActiveEnvironment()?.apiKey;
   if (stored) return stored;
 
   if (wifState === 'missing_id_token_env') exitWithMissingIdTokenPermission();
@@ -60,7 +64,14 @@ export function resolveApiKey(options?: ApiKeyOptions): string {
  */
 export async function primeApiCredentials(options?: ApiKeyOptions): Promise<void> {
   if (resolveExplicitApiKey(options)) return;
-  if (getWifState() === 'ready') await getWifAccessToken();
+  if (getWifState() !== 'ready') return;
+  if (wifIsUnconfigured() && getActiveEnvironment()?.apiKey) return;
+  await getWifAccessToken();
+}
+
+/** WIF has no token endpoint to exchange at. */
+function wifIsUnconfigured(): boolean {
+  return !process.env.WORKOS_WIF_TOKEN_URL;
 }
 
 /** resolveApiKey() for call sites that can await: primes WIF first. */

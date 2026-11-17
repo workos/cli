@@ -46,6 +46,8 @@ const DEFAULT_LIFETIME_SECONDS = 300;
 const MAX_EXCHANGE_ATTEMPTS = 3;
 /** Wait before the second attempt; doubles for each one after. */
 const DEFAULT_RETRY_BACKOFF_MS = 500;
+/** How long the GitHub token request and each exchange attempt may take before they count as failed. */
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 /** Cap on server-provided `error_description` text echoed into an error message. */
 const MAX_DESCRIPTION_LENGTH = 500;
 
@@ -65,14 +67,16 @@ const ID_TOKEN_PERMISSION_HINT =
 const OAUTH_ERROR_HINTS: Record<string, string> = {
   invalid_grant:
     "None of the M2M application's trust rules matched this workflow run, or the GitHub OIDC token expired or was already used. " +
-    "Check the trust rule's repository, ref and audience against this run, and that the trust rule is enabled, then re-run the job.",
-  invalid_target: `The resource or audience is wrong. Set the trust rule's audience and WORKOS_WIF_AUDIENCE to the same value (default ${WIF_DEFAULT_AUDIENCE}).`,
+    "Check the trust rule's repository and ref against this run, that the trust rule has not expired, " +
+    "and that WORKOS_WIF_AUDIENCE is the application's audience, then re-run the job.",
+  invalid_target: `The resource is not one this token endpoint issues tokens for. Check that WORKOS_WIF_TOKEN_URL is the endpoint for the WorkOS API (the CLI asks for ${WIF_RESOURCE}).`,
   invalid_client:
     'Set WORKOS_CLIENT_ID to the client ID of the M2M application that has the GitHub trust rule, ' +
-    'and check that WORKOS_WIF_TOKEN_URL belongs to the same WorkOS environment as that application.',
+    'and check that WORKOS_WIF_TOKEN_URL belongs to the same WorkOS environment as that application. ' +
+    "If the message asks for a client secret, the application's trust rules have all expired or been removed: no secret is needed, add a trust rule.",
   unauthorized_client:
     "This client isn't allowed to use workload identity federation. " +
-    'Check that WORKOS_CLIENT_ID is an M2M application with an enabled GitHub trust rule, ' +
+    'Check that WORKOS_CLIENT_ID is an M2M application with a GitHub trust rule that has not expired, ' +
     'that workload identity federation is turned on for your WorkOS team, ' +
     'and that the application targets a non-production environment.',
   invalid_scope:
@@ -226,6 +230,7 @@ export function createWifFetch(credential: string): typeof fetch {
 }
 
 let retryBackoffMs = DEFAULT_RETRY_BACKOFF_MS;
+let requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
 
 /** Test-only: forget cached and issued tokens. */
 export function resetWifCacheForTests(): void {
@@ -237,6 +242,11 @@ export function resetWifCacheForTests(): void {
 /** Test-only: shorten the wait between exchange attempts. */
 export function setWifRetryBackoffForTests(ms: number): void {
   retryBackoffMs = ms;
+}
+
+/** Test-only: shorten how long a WIF request may take. */
+export function setWifRequestTimeoutForTests(ms: number): void {
+  requestTimeoutMs = ms;
 }
 
 function resolveTokenUrl(): string {
@@ -321,6 +331,7 @@ async function requestGitHubIdToken(audience: string): Promise<string> {
     response = await fetch(url.toString(), {
       method: 'GET',
       headers: { Authorization: `Bearer ${requestToken}`, Accept: 'application/json' },
+      signal: AbortSignal.timeout(requestTimeoutMs),
     });
   } catch (error) {
     exitWithError({
@@ -405,6 +416,7 @@ async function attemptExchange(tokenUrl: string, assertion: string): Promise<Cac
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
       body: form.toString(),
+      signal: AbortSignal.timeout(requestTimeoutMs),
     });
     // A connection that drops while the body is read is a network failure too.
     text = await response.text();

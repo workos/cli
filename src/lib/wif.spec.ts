@@ -11,6 +11,7 @@ const {
   getWifState,
   isWifAccessToken,
   resetWifCacheForTests,
+  setWifRequestTimeoutForTests,
   setWifRetryBackoffForTests,
   WIF_GRANT_TYPE,
   ENVIRONMENT_ID_HEADER,
@@ -102,6 +103,7 @@ describe('workload identity federation (wif)', () => {
     activeEnv = undefined;
     resetWifCacheForTests();
     setWifRetryBackoffForTests(0);
+    setWifRequestTimeoutForTests(15_000);
     resetRegisteredSecretsForTests();
     setOutputMode('human');
 
@@ -448,9 +450,17 @@ describe('workload identity federation (wif)', () => {
       expect(stderr.join('\n')).toContain('had no token (HTTP 200)');
     });
 
-    it('missing WORKOS_WIF_TOKEN_URL: says it is required, why, and its shape, with no fallback', async () => {
+    it('missing WORKOS_WIF_TOKEN_URL with a stored key: uses the stored key and makes no request', async () => {
       delete process.env.WORKOS_WIF_TOKEN_URL;
       activeEnv = { name: 'ci', type: 'sandbox', apiKey: 'sk_test_stored' };
+
+      expect(await resolveApiKeyAsync()).toBe('sk_test_stored');
+      expect(calls).toHaveLength(0);
+      expect(stderr).toEqual([]);
+    });
+
+    it('missing WORKOS_WIF_TOKEN_URL and no stored key: says it is required, why, and its shape', async () => {
+      delete process.env.WORKOS_WIF_TOKEN_URL;
 
       const exit = await expectCliExit(resolveApiKeyAsync());
       expect(exit.context?.errorCode).toBe('wif_token_url_missing');
@@ -472,9 +482,13 @@ describe('workload identity federation (wif)', () => {
 
     it.each([
       ['invalid_grant', 'trust rules'],
-      ['invalid_target', 'audience'],
+      ['invalid_target', 'WORKOS_WIF_TOKEN_URL is the endpoint for the WorkOS API'],
       ['invalid_client', 'Set WORKOS_CLIENT_ID to the client ID'],
-      ['unauthorized_client', 'Check that WORKOS_CLIENT_ID is an M2M application with an enabled GitHub trust rule'],
+      ['invalid_client', 'no secret is needed, add a trust rule'],
+      [
+        'unauthorized_client',
+        'Check that WORKOS_CLIENT_ID is an M2M application with a GitHub trust rule that has not expired',
+      ],
       ['invalid_scope', 'Set WORKOS_WIF_SCOPE to scopes the application has, or unset it'],
       ['invalid_request', '/oauth2/token'],
     ])('%s: names the error, includes error_description and says what to fix', async (error, hint) => {
@@ -492,15 +506,14 @@ describe('workload identity federation (wif)', () => {
       expect(tokenCalls()).toHaveLength(1);
     });
 
-    it('invalid_grant and invalid_target say which settings to compare', async () => {
+    it('invalid_grant says which settings to compare, and names none the server does not have', async () => {
       tokenHandler = () => json({ error: 'invalid_grant' }, 400);
       await expectCliExit(resolveApiKeyAsync());
-      expect(stderr.join('\n')).toContain("Check the trust rule's repository, ref and audience against this run");
-
-      stderr.length = 0;
-      tokenHandler = () => json({ error: 'invalid_target' }, 400);
-      await expectCliExit(resolveApiKeyAsync());
-      expect(stderr.join('\n')).toContain("Set the trust rule's audience and WORKOS_WIF_AUDIENCE to the same value");
+      const message = stderr.join('\n');
+      expect(message).toContain("Check the trust rule's repository and ref against this run");
+      expect(message).toContain('that the trust rule has not expired');
+      expect(message).toContain("WORKOS_WIF_AUDIENCE is the application's audience");
+      expect(message).not.toContain('enabled');
     });
 
     it('unauthorized_client exits 4 and names every condition to check', async () => {
@@ -735,6 +748,36 @@ describe('workload identity federation (wif)', () => {
         expect(await getWifAccessToken()).toBe(ACCESS_TOKEN);
 
         expect(tokenCalls().map(assertionOf)).toEqual(['github-jwt-attempt-1', 'github-jwt-attempt-2']);
+      });
+
+      it('counts an exchange that does not answer in time as a failed attempt and retries', async () => {
+        setWifRequestTimeoutForTests(20);
+        let attempt = 0;
+        tokenHandler = (_url, init) => {
+          if (++attempt > 1) return json({ access_token: ACCESS_TOKEN, token_type: 'Bearer', expires_in: 300 });
+          // Never answers: settles only when the request's own timeout aborts it.
+          return new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+          });
+        };
+
+        expect(await getWifAccessToken()).toBe(ACCESS_TOKEN);
+
+        expect(tokenCalls()).toHaveLength(2);
+      });
+
+      it('exits when GitHub does not answer the OIDC token request in time', async () => {
+        setWifRequestTimeoutForTests(20);
+        githubHandler = (_url, init) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+          });
+
+        const exit = await expectCliExit(resolveApiKeyAsync());
+
+        expect(exit.context?.errorCode).toBe('wif_id_token_request_failed');
+        expect(stderr.join('\n')).toContain('Could not reach GitHub to request an OIDC token');
+        expect(tokenCalls()).toHaveLength(0);
       });
 
       it('retries when the connection drops while the response body is read', async () => {
