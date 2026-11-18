@@ -378,9 +378,9 @@ interface EnvVarInfo {
  * (env-var-catalog.spec.ts) scans the source for `process.env.WORKOS_*` reads
  * and fails if any are missing here, so this list can't silently drift.
  */
-export const ENV_VAR_CATALOG: { name: string; effect: string }[] = [
+export const ENV_VAR_CATALOG: { name: string; effect: string; secret?: boolean }[] = [
   // Credentials
-  { name: 'WORKOS_API_KEY', effect: 'Bypasses credential resolution — used directly for API calls' },
+  { name: 'WORKOS_API_KEY', effect: 'Bypasses credential resolution — used directly for API calls', secret: true },
   { name: 'WORKOS_CLIENT_ID', effect: 'WorkOS client ID used during credential resolution' },
   // Interaction & output
   { name: 'WORKOS_MODE', effect: 'Controls interaction behavior: human, agent, or CI' },
@@ -413,10 +413,10 @@ export const ENV_VAR_CATALOG: { name: string; effect: string }[] = [
   },
 ];
 
-export async function runDebugEnv(): Promise<void> {
-  const vars: EnvVarInfo[] = ENV_VAR_CATALOG.map(({ name, effect }) => ({
+export async function runDebugEnv({ showSecrets }: { showSecrets: boolean }): Promise<void> {
+  const vars: EnvVarInfo[] = ENV_VAR_CATALOG.map(({ name, effect, secret }) => ({
     name,
-    value: process.env[name],
+    value: secret && !showSecrets ? maskSecret(process.env[name]) : process.env[name],
     effect,
   }));
 
