@@ -489,7 +489,7 @@ describe('workload identity federation (wif)', () => {
         'unauthorized_client',
         'Check that WORKOS_CLIENT_ID is an M2M application with a GitHub trust rule that has not expired',
       ],
-      ['invalid_scope', 'Set WORKOS_WIF_SCOPE to scopes the application has, or unset it'],
+      ['invalid_scope', 'Unset WORKOS_WIF_SCOPE: every application gets the same access without it'],
       ['invalid_request', '/oauth2/token'],
     ])('%s: names the error, includes error_description and says what to fix', async (error, hint) => {
       tokenHandler = () => json({ error, error_description: `server says ${error} happened` }, 400);

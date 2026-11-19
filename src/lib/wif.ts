@@ -80,8 +80,8 @@ const OAUTH_ERROR_HINTS: Record<string, string> = {
     'that workload identity federation is turned on for your WorkOS team, ' +
     'and that the application targets a non-production environment.',
   invalid_scope:
-    'The requested scope is not one the M2M application may be granted. ' +
-    "Set WORKOS_WIF_SCOPE to scopes the application has, or unset it to get the application's default scopes.",
+    'The requested scope is not one a workload identity token can carry. ' +
+    'Unset WORKOS_WIF_SCOPE: every application gets the same access without it.',
   invalid_request:
     'The token request was malformed. Check that WORKOS_WIF_TOKEN_URL points at the /oauth2/token endpoint.',
 };
