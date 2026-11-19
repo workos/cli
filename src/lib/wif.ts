@@ -14,6 +14,11 @@
  * win; WIF applies only when getWifState() is 'ready'; otherwise the stored
  * profile key and today's errors apply unchanged.
  *
+ * Retries are bounded. An exchange that fails with a network error or a 5xx
+ * is retried with a fresh GitHub OIDC token each time, because WorkOS accepts
+ * each one once; a 4xx is never retried. An API call answered with 401 is
+ * re-sent once with a newly exchanged token (see sendWithWifAuth).
+ *
  * The access token is cached in memory only and never written to disk, a
  * profile or config. Neither the GitHub JWT nor the WorkOS access token may
  * appear in output, errors, logs or telemetry: both are registered with the
@@ -31,8 +36,18 @@ export const ENVIRONMENT_ID_HEADER = 'x-url-environment-id';
 /** Refresh once less than this much lifetime is left, or less than 20% of it, whichever is smaller. */
 const REFRESH_MARGIN_MAX_MS = 60_000;
 const REFRESH_MARGIN_FRACTION = 0.2;
-/** Lifetime to assume when the server omits `expires_in`: the documented minimum (5 min). */
+/**
+ * Lifetime to assume when the server omits `expires_in`. WorkOS access tokens last one hour and the
+ * server says so in `expires_in`; this fallback is deliberately shorter, so the CLI exchanges again
+ * early instead of sending a token that may have expired.
+ */
 const DEFAULT_LIFETIME_SECONDS = 300;
+/** Exchange attempts in total (the first try plus retries) when the token endpoint is unreachable or answers 5xx. */
+const MAX_EXCHANGE_ATTEMPTS = 3;
+/** Wait before the second attempt; doubles for each one after. */
+const DEFAULT_RETRY_BACKOFF_MS = 500;
+/** How long the GitHub token request and each exchange attempt may take before they count as failed. */
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 /** Cap on server-provided `error_description` text echoed into an error message. */
 const MAX_DESCRIPTION_LENGTH = 500;
 
@@ -51,11 +66,22 @@ const ID_TOKEN_PERMISSION_HINT =
 /** OAuth errors the token endpoint returns, with a one-line hint each. Exit code: `wif_<error>`. */
 const OAUTH_ERROR_HINTS: Record<string, string> = {
   invalid_grant:
-    "The M2M application's trust rules didn't match this repository or ref, or the GitHub OIDC token expired.",
-  invalid_target: `The resource or audience is wrong: the trust rule's audience must match WORKOS_WIF_AUDIENCE (default ${WIF_DEFAULT_AUDIENCE}).`,
-  invalid_client: 'Check that WORKOS_CLIENT_ID is the client ID of the M2M application that has the GitHub trust rule.',
+    "None of the M2M application's trust rules matched this workflow run, or the GitHub OIDC token expired or was already used. " +
+    "Check the trust rule's repository and ref against this run, that the trust rule has not expired, " +
+    "and that WORKOS_WIF_AUDIENCE is the application's audience, then re-run the job.",
+  invalid_target: `The resource is not one this token endpoint issues tokens for. Check that WORKOS_WIF_TOKEN_URL is the endpoint for the WorkOS API (the CLI asks for ${WIF_RESOURCE}).`,
+  invalid_client:
+    'Set WORKOS_CLIENT_ID to the client ID of the M2M application that has the GitHub trust rule, ' +
+    'and check that WORKOS_WIF_TOKEN_URL belongs to the same WorkOS environment as that application. ' +
+    "If the message asks for a client secret, the application's trust rules have all expired or been removed: no secret is needed, add a trust rule.",
+  unauthorized_client:
+    "This client isn't allowed to use workload identity federation. " +
+    'Check that WORKOS_CLIENT_ID is an M2M application with a GitHub trust rule that has not expired, ' +
+    'that workload identity federation is turned on for your WorkOS team, ' +
+    'and that the application targets a non-production environment.',
   invalid_scope:
-    'WORKOS_WIF_SCOPE asked for a scope the M2M application is not allowed. Fix or unset WORKOS_WIF_SCOPE.',
+    'The requested scope is not one a workload identity token can carry. ' +
+    'Unset WORKOS_WIF_SCOPE: every application gets the same access without it.',
   invalid_request:
     'The token request was malformed. Check that WORKOS_WIF_TOKEN_URL points at the /oauth2/token endpoint.',
 };
@@ -140,7 +166,8 @@ export function getWifAccessToken(): Promise<string> {
 /**
  * Request headers for a REST credential. An API key passes through exactly as
  * before; a WIF token is refreshed if needed and gets `x-url-environment-id`
- * when WORKOS_ENVIRONMENT_ID is set (machine tokens need it).
+ * when WORKOS_ENVIRONMENT_ID is set. The header is optional: the M2M
+ * application is bound to one environment, and a value that is sent must match it.
  */
 export async function wifAuthHeaders(credential: string): Promise<Record<string, string>> {
   if (!isWifAccessToken(credential)) return { Authorization: `Bearer ${credential}` };
@@ -152,20 +179,58 @@ export async function wifAuthHeaders(credential: string): Promise<Record<string,
   };
 }
 
+/** Drop `token` from the cache so the next getWifAccessToken() exchanges again. No-op if it was already replaced. */
+function discardWifAccessToken(token: string): void {
+  if (cached?.value === token) cached = undefined;
+}
+
+/**
+ * Send an API request with the headers for `credential`, via `send`.
+ *
+ * An API key is sent once, exactly as before. A WIF token is refreshed first
+ * if needed, and if the API answers 401 (the token expired or was rejected in
+ * flight) the token is dropped, exchanged again and the request re-sent once.
+ * A second 401 is returned to the caller. `send` must be safe to call twice;
+ * a 401 means the API did not act on the first call.
+ */
+export async function sendWithWifAuth(
+  credential: string,
+  send: (authHeaders: Record<string, string>) => Promise<Response>,
+): Promise<Response> {
+  const authHeaders = await wifAuthHeaders(credential);
+  const response = await send(authHeaders);
+  if (response.status !== 401 || !isWifAccessToken(credential)) return response;
+
+  discardWifAccessToken(authHeaders.Authorization.slice('Bearer '.length));
+  // Release the first response's connection before exchanging again, so a
+  // failed exchange does not leave it open. Its body is never read.
+  await response.body?.cancel().catch(() => undefined);
+  const retryHeaders = await wifAuthHeaders(credential);
+  return send(retryHeaders);
+}
+
 /**
  * fetch for the WorkOS SDK, which fixes its Authorization header at
  * construction: re-applies wifAuthHeaders() on every request so a long run
- * never sends an expired token.
+ * never sends an expired token, and re-sends once on a 401.
  */
 export function createWifFetch(credential: string): typeof fetch {
   return async (input, init) => {
-    const headers = new Headers(init?.headers);
-    for (const [name, value] of Object.entries(await wifAuthHeaders(credential))) {
-      headers.set(name, value);
-    }
-    return fetch(input, { ...init, headers });
+    // A Request or a stream body can be consumed only once, so those are not re-sent.
+    const replayable =
+      !(input instanceof Request) &&
+      (init?.body == null || typeof init.body === 'string' || init.body instanceof URLSearchParams);
+    const send = (authHeaders: Record<string, string>): Promise<Response> => {
+      const headers = new Headers(init?.headers);
+      for (const [name, value] of Object.entries(authHeaders)) headers.set(name, value);
+      return fetch(input, { ...init, headers });
+    };
+    return replayable ? sendWithWifAuth(credential, send) : send(await wifAuthHeaders(credential));
   };
 }
+
+let retryBackoffMs = DEFAULT_RETRY_BACKOFF_MS;
+let requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
 
 /** Test-only: forget cached and issued tokens. */
 export function resetWifCacheForTests(): void {
@@ -174,9 +239,19 @@ export function resetWifCacheForTests(): void {
   issuedTokens.clear();
 }
 
+/** Test-only: shorten the wait between exchange attempts. */
+export function setWifRetryBackoffForTests(ms: number): void {
+  retryBackoffMs = ms;
+}
+
+/** Test-only: shorten how long a WIF request may take. */
+export function setWifRequestTimeoutForTests(ms: number): void {
+  requestTimeoutMs = ms;
+}
+
 function resolveTokenUrl(): string {
   const raw = process.env.WORKOS_WIF_TOKEN_URL;
-  // No default yet: the WorkOS side of this grant (`management-api-oauth`) is
+  // No default yet: the WorkOS side of this grant (`workos-api-workload-identity`) is
   // still being built and has no production endpoint. The default will come
   // once the server ships.
   if (!raw) {
@@ -220,6 +295,10 @@ async function readJsonObject(response: Response): Promise<Record<string, unknow
   } catch {
     return undefined;
   }
+  return parseJsonObject(text);
+}
+
+function parseJsonObject(text: string): Record<string, unknown> | undefined {
   try {
     const parsed: unknown = JSON.parse(text);
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
@@ -252,6 +331,7 @@ async function requestGitHubIdToken(audience: string): Promise<string> {
     response = await fetch(url.toString(), {
       method: 'GET',
       headers: { Authorization: `Bearer ${requestToken}`, Accept: 'application/json' },
+      signal: AbortSignal.timeout(requestTimeoutMs),
     });
   } catch (error) {
     exitWithError({
@@ -288,12 +368,36 @@ async function requestGitHubIdToken(audience: string): Promise<string> {
   return value;
 }
 
+/** A failed attempt that is worth repeating: `fail` reports it if no attempt is left. */
+interface RetryableFailure {
+  fail: (attempts: number) => never;
+}
+
+function attemptsSuffix(attempts: number): string {
+  return attempts > 1 ? ` Gave up after ${attempts} attempts.` : '';
+}
+
+/**
+ * Exchange with bounded retries. Only a network error or a 5xx from the token
+ * endpoint is retried; every 4xx (and any GitHub-side failure) exits at once.
+ */
 async function exchangeForAccessToken(): Promise<CachedToken> {
   // Fail on configuration before any network call.
   const tokenUrl = resolveTokenUrl();
   const audience = process.env.WORKOS_WIF_AUDIENCE || WIF_DEFAULT_AUDIENCE;
-  const assertion = await requestGitHubIdToken(audience);
 
+  for (let attempt = 1; ; attempt++) {
+    // A fresh GitHub OIDC token for every attempt: WorkOS accepts each one
+    // once, and a failed attempt may already have consumed it.
+    const assertion = await requestGitHubIdToken(audience);
+    const result = await attemptExchange(tokenUrl, assertion);
+    if ('value' in result) return result;
+    if (attempt >= MAX_EXCHANGE_ATTEMPTS) result.fail(attempt);
+    await new Promise((resolve) => setTimeout(resolve, retryBackoffMs * 2 ** (attempt - 1)));
+  }
+}
+
+async function attemptExchange(tokenUrl: string, assertion: string): Promise<CachedToken | RetryableFailure> {
   const form = new URLSearchParams({
     grant_type: WIF_GRANT_TYPE,
     assertion,
@@ -306,31 +410,59 @@ async function exchangeForAccessToken(): Promise<CachedToken> {
   // Lifetime counts from before the request, so the cache errs early.
   const requestedAt = Date.now();
   let response: Response;
+  let text: string;
   try {
     response = await fetch(tokenUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
       body: form.toString(),
+      signal: AbortSignal.timeout(requestTimeoutMs),
     });
+    // A connection that drops while the body is read is a network failure too.
+    text = await response.text();
   } catch (error) {
-    exitWithError({
-      code: WIF_ERROR_CODES.exchangeFailed,
-      message: `Could not reach WORKOS_WIF_TOKEN_URL for the WIF token exchange: ${describeNetworkError(error)}`,
-    });
+    const detail = describeNetworkError(error);
+    return {
+      fail: (attempts) =>
+        exitWithError({
+          code: WIF_ERROR_CODES.exchangeFailed,
+          message:
+            `Could not reach WORKOS_WIF_TOKEN_URL for the WIF token exchange: ${detail}.${attemptsSuffix(attempts)} ` +
+            'Check that WORKOS_WIF_TOKEN_URL is right and reachable from this runner, then re-run the job.',
+        }),
+    };
   }
 
-  const body = await readJsonObject(response);
+  const body = parseJsonObject(text);
   const oauthError = typeof body?.error === 'string' ? body.error : undefined;
   const description =
     typeof body?.error_description === 'string' && body.error_description
       ? redactRegisteredSecrets(body.error_description).slice(0, MAX_DESCRIPTION_LENGTH)
       : undefined;
+  const status = response.status;
+
+  if (status >= 500) {
+    let reason: string;
+    if (!body) reason = 'the response was not JSON';
+    else if (oauthError) reason = `${oauthError}${description ? `: ${description}` : ''}`;
+    else reason = 'unexpected error response';
+    return {
+      fail: (attempts) =>
+        exitWithError({
+          code: WIF_ERROR_CODES.exchangeFailed,
+          message:
+            `WIF token exchange at WORKOS_WIF_TOKEN_URL failed (HTTP ${status}): ${reason}.${attemptsSuffix(attempts)} ` +
+            'This is a server-side failure; re-run the job, and check WORKOS_WIF_TOKEN_URL if it keeps happening.',
+          apiContext: { status },
+        }),
+    };
+  }
 
   if (oauthError && Object.hasOwn(OAUTH_ERROR_HINTS, oauthError)) {
     exitWithError({
       code: `wif_${oauthError}`,
       message: `WorkOS rejected the WIF token exchange with ${oauthError}${description ? `: ${description}` : ''}. ${OAUTH_ERROR_HINTS[oauthError]}`,
-      apiContext: { status: response.status, code: oauthError },
+      apiContext: { status, code: oauthError },
     });
   }
 
@@ -343,8 +475,8 @@ async function exchangeForAccessToken(): Promise<CachedToken> {
     else reason = 'the response had no access_token';
     exitWithError({
       code: WIF_ERROR_CODES.exchangeFailed,
-      message: `WIF token exchange at WORKOS_WIF_TOKEN_URL failed (HTTP ${response.status}): ${reason}.`,
-      apiContext: { status: response.status },
+      message: `WIF token exchange at WORKOS_WIF_TOKEN_URL failed (HTTP ${status}): ${reason}. Check that WORKOS_WIF_TOKEN_URL is the /oauth2/token endpoint of your WorkOS environment.`,
+      apiContext: { status },
     });
   }
   registerSecret(accessToken);

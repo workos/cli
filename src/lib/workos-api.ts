@@ -3,7 +3,8 @@
  * Thin fetch wrapper with auth, error parsing, and query param support.
  */
 
-import { wifAuthHeaders } from './wif.js';
+import { sendWithWifAuth } from './wif.js';
+import { CliExit } from '../utils/cli-exit.js';
 
 const DEFAULT_BASE_URL = 'https://api.workos.com';
 
@@ -51,11 +52,9 @@ export async function workosRequest<T>(options: WorkOSRequestOptions): Promise<T
     if (qs) url += `?${qs}`;
   }
 
-  // An API key passes through as `Bearer <key>`; a WIF token is refreshed if
-  // needed and carries x-url-environment-id when configured.
-  const headers: Record<string, string> = await wifAuthHeaders(apiKey);
+  const headers: Record<string, string> = {};
 
-  const fetchOptions: RequestInit = { method, headers };
+  const fetchOptions: RequestInit = { method };
 
   if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
     headers['Content-Type'] = 'application/json';
@@ -64,8 +63,15 @@ export async function workosRequest<T>(options: WorkOSRequestOptions): Promise<T
 
   let response: Response;
   try {
-    response = await fetch(url, fetchOptions);
-  } catch {
+    // An API key passes through as `Bearer <key>`; a WIF token is refreshed if
+    // needed, carries x-url-environment-id when configured, and is exchanged
+    // again once if the API answers 401.
+    response = await sendWithWifAuth(apiKey, (authHeaders) =>
+      fetch(url, { ...fetchOptions, headers: { ...authHeaders, ...headers } }),
+    );
+  } catch (error) {
+    // A failed WIF exchange has already reported its own error.
+    if (error instanceof CliExit) throw error;
     throw new WorkOSApiError('Failed to connect to WorkOS API. Check your internet connection.', 0);
   }
 

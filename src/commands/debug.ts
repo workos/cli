@@ -397,7 +397,8 @@ export const ENV_VAR_CATALOG: { name: string; effect: string }[] = [
   { name: 'WORKOS_WIF_SCOPE', effect: 'Optional scope sent with the WIF token exchange' },
   {
     name: 'WORKOS_ENVIRONMENT_ID',
-    effect: 'Environment ID sent as x-url-environment-id with WIF access tokens (machine tokens need it)',
+    effect:
+      'Optional environment ID sent as x-url-environment-id with WIF access tokens (must match the M2M application)',
   },
   // Interaction & output
   { name: 'WORKOS_MODE', effect: 'Controls interaction behavior: human, agent, or CI' },

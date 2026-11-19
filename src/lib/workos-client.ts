@@ -107,7 +107,7 @@ export function createWorkOSClient(apiKey?: string, baseUrl?: string): WorkOSCLI
     apiHostname: url.hostname,
     ...(url.port && { port: Number(url.port) }),
     ...(url.protocol === 'http:' && { https: false }),
-    // A WIF token is short-lived and needs x-url-environment-id: re-apply
+    // A WIF token is short-lived and may carry x-url-environment-id: re-apply
     // both on every SDK request instead of the headers fixed at construction.
     ...(isWifAccessToken(key) && { fetchFn: createWifFetch(key) }),
   });

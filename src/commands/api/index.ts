@@ -2,6 +2,8 @@ import chalk from 'chalk';
 import { loadCatalog, endpointsByTag } from './catalog.js';
 import { apiRequest } from './request.js';
 import { resolveApiBaseUrl } from '../../lib/api-key.js';
+import { wifRefusalMessage } from '../../lib/api-error-handler.js';
+import { peekWifAccessToken } from '../../lib/wif.js';
 import { exitWithError, isJsonMode, outputJson } from '../../utils/output.js';
 import { ExitCode, exitWithCode } from '../../utils/exit-codes.js';
 import { isCiMode, isPromptAllowed, getInteractionMode } from '../../utils/interaction-mode.js';
@@ -160,10 +162,15 @@ export async function runApiRequest(endpoint: string, options: ApiCommandOptions
   printResponse(response, { includeStatus: options.include });
 
   if (response.status >= 400) {
+    const isAuthFailure = response.status === 401 || response.status === 403;
+    // A refused WIF token is not fixed by logging in, so it gets its own
+    // message and no recovery step.
+    const refusedWifToken = isAuthFailure && peekWifAccessToken() !== undefined;
     // Give the caller a concrete next step keyed off the status: re-auth for
     // 401/403, discover endpoints for 404.
-    const recovery =
-      response.status === 401 || response.status === 403
+    const recovery = refusedWifToken
+      ? undefined
+      : isAuthFailure
         ? authLoginRecovery({ mode: getInteractionMode().mode })
         : response.status === 404
           ? missingArgsRecovery(
@@ -173,7 +180,9 @@ export async function runApiRequest(endpoint: string, options: ApiCommandOptions
           : undefined;
     exitWithError({
       code: `http_${response.status}`,
-      message: `API request failed with status ${response.status}`,
+      message: refusedWifToken
+        ? wifRefusalMessage(response.status)
+        : `API request failed with status ${response.status}`,
       apiContext: { status: response.status },
       ...(recovery && { recovery }),
     });

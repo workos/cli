@@ -304,7 +304,6 @@ const WIF_PRIMED_COMMANDS = new Set([
   'seed',
   'setup-org',
   'onboard-user',
-  'verify-login',
   'debug-sso',
   'debug-sync',
 ]);
