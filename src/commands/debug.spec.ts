@@ -620,6 +620,19 @@ describe('debug commands', () => {
       delete process.env.WORKOS_API_KEY;
     });
 
+    it('reports an empty WORKOS_API_KEY as set', async () => {
+      jsonMode = true;
+      process.env.WORKOS_API_KEY = '';
+
+      await runDebugEnv();
+
+      const parsed = JSON.parse(consoleOutput[0]);
+      expect(parsed.variables.WORKOS_API_KEY.value).toBe('');
+      expect(parsed.set).toContain('WORKOS_API_KEY');
+
+      delete process.env.WORKOS_API_KEY;
+    });
+
     it('shows WORKOS_API_KEY unmasked with --show-secrets', async () => {
       jsonMode = true;
       process.env.WORKOS_API_KEY = 'sk_test_abcdefghijklmnop';
