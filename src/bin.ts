@@ -3361,10 +3361,15 @@ async function runCli(): Promise<void> {
         yargs,
         'env',
         'Show WORKOS_* environment variables and their effects',
-        (y) => y,
-        async () => {
+        (y) =>
+          y.option('show-secrets', {
+            type: 'boolean',
+            default: false,
+            describe: 'Show unredacted API keys',
+          }),
+        async (argv) => {
           const { runDebugEnv } = await import('./commands/debug.js');
-          await runDebugEnv();
+          await runDebugEnv({ showSecrets: argv.showSecrets as boolean });
         },
       );
       registerSubcommand(

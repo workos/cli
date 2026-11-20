@@ -605,6 +605,45 @@ describe('debug commands', () => {
       delete process.env.WORKOS_DEBUG;
     });
 
+    it('masks WORKOS_API_KEY by default in human and JSON output', async () => {
+      process.env.WORKOS_API_KEY = 'sk_test_abcdefghijklmnop';
+
+      await runDebugEnv();
+      jsonMode = true;
+      await runDebugEnv();
+
+      const output = consoleOutput.join('\n');
+      expect(output).not.toContain('sk_test_abcdefghijklmnop');
+      expect(output).toContain('sk_t****mnop');
+      expect(JSON.parse(consoleOutput[consoleOutput.length - 1]).variables.WORKOS_API_KEY.value).toBe('sk_t****mnop');
+
+      delete process.env.WORKOS_API_KEY;
+    });
+
+    it('reports an empty WORKOS_API_KEY as set', async () => {
+      jsonMode = true;
+      process.env.WORKOS_API_KEY = '';
+
+      await runDebugEnv();
+
+      const parsed = JSON.parse(consoleOutput[0]);
+      expect(parsed.variables.WORKOS_API_KEY.value).toBe('');
+      expect(parsed.set).toContain('WORKOS_API_KEY');
+
+      delete process.env.WORKOS_API_KEY;
+    });
+
+    it('shows WORKOS_API_KEY unmasked with --show-secrets', async () => {
+      jsonMode = true;
+      process.env.WORKOS_API_KEY = 'sk_test_abcdefghijklmnop';
+
+      await runDebugEnv({ showSecrets: true });
+
+      expect(JSON.parse(consoleOutput[0]).variables.WORKOS_API_KEY.value).toBe('sk_test_abcdefghijklmnop');
+
+      delete process.env.WORKOS_API_KEY;
+    });
+
     it('lists all known env vars', async () => {
       jsonMode = true;
 
