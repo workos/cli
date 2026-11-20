@@ -572,7 +572,7 @@ describe('debug commands', () => {
     it('shows set env vars with values', async () => {
       process.env.WORKOS_FORCE_TTY = '1';
 
-      await runDebugEnv({ showSecrets: false });
+      await runDebugEnv();
 
       const output = consoleOutput.join('\n');
       expect(output).toContain('WORKOS_FORCE_TTY');
@@ -584,7 +584,7 @@ describe('debug commands', () => {
     it('shows unset env vars with descriptions', async () => {
       delete process.env.WORKOS_API_KEY;
 
-      await runDebugEnv({ showSecrets: false });
+      await runDebugEnv();
 
       const output = consoleOutput.join('\n');
       expect(output).toContain('WORKOS_API_KEY');
@@ -595,7 +595,7 @@ describe('debug commands', () => {
       jsonMode = true;
       process.env.WORKOS_DEBUG = '1';
 
-      await runDebugEnv({ showSecrets: false });
+      await runDebugEnv();
 
       const parsed = JSON.parse(consoleOutput[0]);
       expect(parsed.variables.WORKOS_DEBUG.value).toBe('1');
@@ -605,12 +605,12 @@ describe('debug commands', () => {
       delete process.env.WORKOS_DEBUG;
     });
 
-    it('masks WORKOS_API_KEY in human and JSON output', async () => {
+    it('masks WORKOS_API_KEY by default in human and JSON output', async () => {
       process.env.WORKOS_API_KEY = 'sk_test_abcdefghijklmnop';
 
-      await runDebugEnv({ showSecrets: false });
+      await runDebugEnv();
       jsonMode = true;
-      await runDebugEnv({ showSecrets: false });
+      await runDebugEnv();
 
       const output = consoleOutput.join('\n');
       expect(output).not.toContain('sk_test_abcdefghijklmnop');
@@ -634,7 +634,7 @@ describe('debug commands', () => {
     it('lists all known env vars', async () => {
       jsonMode = true;
 
-      await runDebugEnv({ showSecrets: false });
+      await runDebugEnv();
 
       const parsed = JSON.parse(consoleOutput[0]);
       expect(Object.keys(parsed.variables)).toContain('WORKOS_API_KEY');

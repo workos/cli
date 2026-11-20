@@ -413,7 +413,7 @@ export const ENV_VAR_CATALOG: { name: string; effect: string; secret?: boolean }
   },
 ];
 
-export async function runDebugEnv({ showSecrets }: { showSecrets: boolean }): Promise<void> {
+export async function runDebugEnv({ showSecrets = false }: { showSecrets?: boolean } = {}): Promise<void> {
   const vars: EnvVarInfo[] = ENV_VAR_CATALOG.map(({ name, effect, secret }) => ({
     name,
     value: secret && !showSecrets ? maskSecret(process.env[name]) : process.env[name],
