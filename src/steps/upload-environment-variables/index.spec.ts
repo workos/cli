@@ -129,7 +129,32 @@ describe('uploadEnvironmentVariablesStep', () => {
     },
   );
 
-  it('adds the cookie password and Next.js redirect URI from .env.local after consent', async () => {
+  it.each([
+    'http://localhost:3000/auth/callback',
+    'http://app.localhost.:3000/auth/callback',
+    'http://127.0.0.2:3000/auth/callback',
+    'http://[::1]:3000/auth/callback',
+    'http://[::ffff:127.0.0.1]:3000/auth/callback',
+    'http://0.0.0.0:3000/auth/callback',
+    'http://[::]:3000/auth/callback',
+    '/auth/callback',
+    'ftp://example.com/auth/callback',
+  ])('omits %s from the Vercel upload without dropping the cookie password', async (redirectUri) => {
+    setInteractionMode({ mode: 'human', source: 'default' });
+    vi.mocked(ui.select).mockResolvedValueOnce(true);
+    readFile.mockResolvedValue(
+      `WORKOS_COOKIE_PASSWORD=test-password\nNEXT_PUBLIC_WORKOS_REDIRECT_URI=${redirectUri}\n`,
+    );
+    uploadEnvVars.mockResolvedValue({ WORKOS_COOKIE_PASSWORD: true });
+
+    // Check both a value read from .env.local and a value supplied by the caller.
+    const result = await uploadEnvironmentVariablesStep({ WORKOS_REDIRECT_URI: redirectUri }, { integration, options });
+
+    expect(uploadEnvVars).toHaveBeenCalledWith({ WORKOS_COOKIE_PASSWORD: 'test-password' });
+    expect(result).toEqual(['WORKOS_COOKIE_PASSWORD']);
+  });
+
+  it('adds the cookie password and hosted Next.js redirect URI from .env.local after consent', async () => {
     setInteractionMode({ mode: 'human', source: 'default' });
     vi.mocked(ui.select).mockResolvedValueOnce(true);
     const redirectUri = 'https://example.com/auth/callback';

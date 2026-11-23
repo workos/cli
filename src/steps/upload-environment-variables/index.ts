@@ -11,6 +11,23 @@ import type { InstallerOptions } from '../../utils/types.js';
 import { EnvironmentProvider } from './EnvironmentProvider.js';
 import { VercelEnvironmentProvider } from './providers/vercel.js';
 
+function isHostedRedirectUri(value: string): boolean {
+  const url = URL.parse(value);
+  if (!url || (url.protocol !== 'https:' && url.protocol !== 'http:')) return false;
+
+  // URL normalizes IPv4 and IPv6 spellings before we check for local addresses.
+  const host = url.hostname.replace(/\.$/, '');
+  return !(
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    /^127(?:\.\d{1,3}){3}$/.test(host) ||
+    host === '0.0.0.0' ||
+    host === '[::]' ||
+    host === '[::1]' ||
+    /^\[::ffff:7f[0-9a-f]{2}:/.test(host)
+  );
+}
+
 export const uploadEnvironmentVariablesStep = async (
   envVars: Record<string, string>,
   {
@@ -97,9 +114,17 @@ export const uploadEnvironmentVariablesStep = async (
     const content = await readFile(join(options.installDir, '.env.local'), 'utf8').catch(() => '');
     const localVars = parseEnvFile(content);
     const uploadVars = { ...envVars };
-    for (const key of ['WORKOS_COOKIE_PASSWORD', 'NEXT_PUBLIC_WORKOS_REDIRECT_URI', 'WORKOS_REDIRECT_URI']) {
-      if (!uploadVars[key] && localVars[key]) {
-        uploadVars[key] = localVars[key];
+    if (!uploadVars.WORKOS_COOKIE_PASSWORD && localVars.WORKOS_COOKIE_PASSWORD) {
+      uploadVars.WORKOS_COOKIE_PASSWORD = localVars.WORKOS_COOKIE_PASSWORD;
+    }
+
+    // The provider uploads to every environment, so never send a local callback.
+    for (const key of ['NEXT_PUBLIC_WORKOS_REDIRECT_URI', 'WORKOS_REDIRECT_URI']) {
+      const redirectUri = uploadVars[key] || localVars[key];
+      if (redirectUri && isHostedRedirectUri(redirectUri)) {
+        uploadVars[key] = redirectUri;
+      } else {
+        delete uploadVars[key];
       }
     }
     return await provider.uploadEnvVars(uploadVars);
