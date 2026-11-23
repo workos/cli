@@ -1,5 +1,16 @@
 #!/usr/bin/env bun
 
+// Fast path for shell completion — exit before loading yargs, clack, etc.
+// so Tab presses are fast (~50ms vs ~200ms+). Bun preserves the Node-style
+// [runtime, entrypoint, ...args] argv shape in both source mode and
+// standalone executables.
+const rawArgs = process.argv.slice(2);
+if (rawArgs[0] === '--get-yargs-completions') {
+  const { completeHandler } = await import('./utils/completion.js');
+  completeHandler(rawArgs.slice(1));
+  process.exit(0);
+}
+
 // Load .env.local for local development when --local flag is used
 if (process.argv.includes('--local') || process.env.WORKOS_DEV) {
   const { config } = await import('dotenv');
@@ -94,9 +105,6 @@ const environmentIdOption = {
 } as const;
 
 // Resolve output mode early from raw argv (before yargs parses)
-// Bun preserves the Node-style [runtime, entrypoint, ...args] argv shape in
-// both source mode and standalone executables.
-const rawArgs = process.argv.slice(2);
 const hasJsonFlag = rawArgs.includes('--json');
 const baseOutputMode = resolveOutputMode(hasJsonFlag);
 setOutputMode(baseOutputMode);
@@ -368,8 +376,8 @@ async function runCli(): Promise<void> {
     .middleware(async (argv) => {
       // Warn about unclaimed environments before management commands.
       // Excluded: auth/claim/install/setup handle their own credential
-      // or onboarding flows; skills/doctor/profile/debug are utility commands
-      // where the warning is unnecessary. Both the canonical name and its
+      // or onboarding flows; skills/doctor/profile/debug/completion are utility
+      // commands where the warning is unnecessary. Both the canonical name and its
       // alias are listed — this matches argv._[0], the token as typed.
       const command = String(argv._?.[0] ?? '');
       if (
@@ -389,6 +397,7 @@ async function runCli(): Promise<void> {
           'emulate',
           'dev',
           'migrations',
+          'completion',
           '',
         ].includes(command)
       )
@@ -3414,6 +3423,26 @@ async function runCli(): Promise<void> {
         const passthrough = getMigrationsPassthroughArgs(rawArgs);
         const endpoint = getActiveEnvironment()?.endpoint;
         await runMigrations(passthrough, resolveOptionalApiKey({ apiKey: argv.apiKey }), endpoint);
+      },
+    )
+    .command(
+      'completion [shell]',
+      'Generate shell autocompletion script',
+      (yargs) =>
+        yargs.positional('shell', {
+          type: 'string',
+          describe: 'Shell type (bash, zsh, fish, powershell)',
+          choices: ['bash', 'zsh', 'fish', 'powershell'] as const,
+        }),
+      async (argv) => {
+        if (!argv.shell) {
+          exitWithError({
+            code: 'missing_args',
+            message: 'Usage: workos completion <shell>\nSupported shells: bash, zsh, fish, powershell',
+          });
+        }
+        const { generateShellScript } = await import('./utils/completion.js');
+        process.stdout.write(generateShellScript(argv.shell as string, 'workos'));
       },
     )
     .command(

@@ -1,11 +1,14 @@
+import { readFile } from 'node:fs/promises';
 import { describe, it, expect, vi } from 'vitest';
+import { parseAst } from 'vitest/node';
+import { COMMAND_ALIASES } from '../lib/command-aliases.js';
 
 vi.mock('../lib/settings.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/settings.js')>();
   return { ...actual, getVersion: vi.fn(() => '0.7.3') };
 });
 
-const { buildCommandTree, extractHelpJsonCommand } = await import('./help-json.js');
+const { buildCommandTree, commandRegistry, extractHelpJsonCommand } = await import('./help-json.js');
 
 describe('help-json', () => {
   describe('extractHelpJsonCommand()', () => {
@@ -226,5 +229,42 @@ describe('help-json', () => {
       expect(optNames).toEqual(expect.arrayContaining(['email', 'environment-id']));
       expect(optNames).not.toContain('organization');
     });
+  });
+
+  it('matches the public top-level commands registered in bin.ts', async () => {
+    // Inspect the parser chain without starting the CLI or descending into subcommand builders.
+    const source = await readFile(new URL('../bin.ts', import.meta.url), 'utf8');
+    const program = parseAst(source, { lang: 'ts' }, 'bin.ts');
+    const runCli = program.body.find((node) => node.type === 'FunctionDeclaration' && node.id?.name === 'runCli');
+    if (runCli?.type !== 'FunctionDeclaration') throw new Error('Could not find runCli in bin.ts');
+    const parser = runCli.body.body
+      .flatMap((node) => (node.type === 'VariableDeclaration' ? node.declarations : []))
+      .find(({ id }) => id.type === 'Identifier' && id.name === 'parser');
+    if (!parser?.init) throw new Error('Could not find the parser in runCli');
+
+    const cliNames = new Set<string>();
+    let call = parser.init;
+    while (call.type === 'CallExpression' && call.callee.type === 'MemberExpression') {
+      const { object, property } = call.callee;
+      if (property.type === 'Identifier' && property.name === 'command') {
+        const [signature, description] = call.arguments;
+        if (!(description?.type === 'Literal' && description.value === false)) {
+          const primary = signature?.type === 'ArrayExpression' ? signature.elements[0] : signature;
+          if (primary?.type !== 'Literal' || typeof primary.value !== 'string') {
+            throw new Error(`Expected a literal command signature in bin.ts: ${source.slice(call.start, call.end)}`);
+          }
+          const name = primary.value.split(/\s+/, 1)[0]!;
+          // Array aliases use the first name; separately registered aliases and $0 have no registry entry.
+          if (name !== '$0' && !Object.hasOwn(COMMAND_ALIASES, name)) cliNames.add(name);
+        }
+      }
+      call = object;
+    }
+
+    const registryNames = new Set(commandRegistry.map(({ name }) => name.split(' ', 1)[0]!));
+    expect({
+      missingFromRegistry: [...cliNames].filter((name) => !registryNames.has(name)).sort(),
+      missingFromCli: [...registryNames].filter((name) => !cliNames.has(name)).sort(),
+    }).toEqual({ missingFromRegistry: [], missingFromCli: [] });
   });
 });

@@ -1945,6 +1945,18 @@ const commands: CommandSchema[] = [
       },
     ],
   },
+  {
+    name: 'completion',
+    description: 'Generate shell autocompletion script',
+    positionals: [
+      {
+        name: 'shell',
+        type: 'string',
+        description: 'Shell type',
+        required: true,
+      },
+    ],
+  },
   // --- Emulator (hidden: unreleased beta feature) ---
   // --- Workflow Commands ---
   {
@@ -2246,6 +2258,8 @@ const globalOptions: OptionSchema[] = [
   { name: 'help', type: 'boolean', description: 'Show help', required: false, alias: 'h', hidden: false },
   { name: 'version', type: 'boolean', description: 'Show version number', required: false, alias: 'v', hidden: false },
 ];
+
+export { commands as commandRegistry, globalOptions as globalOptionRegistry };
 
 // ---------------------------------------------------------------------------
 // Public API
