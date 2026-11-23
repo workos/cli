@@ -157,4 +157,15 @@ describe('teamProjectsV2 wire document', () => {
       expect(doc).not.toContain(field);
     }
   });
+
+  // The override is a second copy of the selection that `catalog:vendor` never
+  // refreshes: every name it sends must still exist in the vendored document.
+  it('selects only fields the vendored catalog also selects', () => {
+    const op = getOperation('teamProjectsV2');
+    const catalog = loadManagementCatalog(undefined, { includeFeatureFlagged: true });
+    const vendored = [op.document, ...op.fragmentNames.map((name) => catalog.fragments[name])].join('\n');
+    const vendoredNames = new Set(vendored.match(/\w+/g));
+    const drift = (resolveExecutableDocument(op).match(/\w+/g) ?? []).filter((name) => !vendoredNames.has(name));
+    expect(drift).toEqual([]);
+  });
 });
