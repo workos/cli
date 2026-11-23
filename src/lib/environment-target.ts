@@ -165,9 +165,10 @@ export async function resolveEnvironmentTarget(
     }
     const cause =
       error instanceof DashboardGraphqlError ? `: ${dashboardErrorMessage(error)}` : ' (network or server error).';
+    const retry = cause.toLowerCase().endsWith('try again.') ? '' : ' Try again.';
     exitWithError({
       code: 'environment_unresolved',
-      message: `Could not resolve the target WorkOS environment${cause} Try again. ${remedies()}`,
+      message: `Could not resolve the target WorkOS environment${cause}${retry} ${remedies()}`,
     });
   }
 

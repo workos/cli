@@ -288,6 +288,26 @@ describe('resolveEnvironmentTarget', () => {
       expect(err).not.toMatch(/graphql/i);
     });
 
+    it('says try again once on a network error', async () => {
+      mockGraphqlRequest.mockRejectedValueOnce(new DashboardGraphqlError('connection failed', 'network_error'));
+      await expect(resolveEnvironmentTarget('tok', { forMutation: false })).rejects.toMatchObject({
+        name: 'CliExit',
+        context: { errorCode: 'environment_unresolved' },
+      });
+      const networkMessage = errorSpy.mock.lastCall?.map(String).join(' ');
+      expect(networkMessage?.match(/try again/gi)).toHaveLength(1);
+
+      mockGraphqlRequest.mockRejectedValueOnce(
+        new DashboardGraphqlError('private details', 'graphql_error', undefined, 'INTERNAL_SERVER_ERROR'),
+      );
+      await expect(resolveEnvironmentTarget('tok', { forMutation: false })).rejects.toMatchObject({
+        name: 'CliExit',
+        context: { errorCode: 'environment_unresolved' },
+      });
+      const serverMessage = errorSpy.mock.lastCall?.map(String).join(' ');
+      expect(serverMessage).toContain('Try again.');
+    });
+
     it('names the server failure instead of blaming the network when the account plane errors', async () => {
       seedProfile({ clientId: 'client_abc' });
       mockGraphqlRequest.mockRejectedValue(
