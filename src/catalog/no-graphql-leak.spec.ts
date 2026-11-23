@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { loadManagementCatalog } from './loader.js';
 import { getManifest } from './manifest.js';
 import { OVERRIDES, resolveCommandMeta, findLeaks, LEAK_PATTERN } from './curation.js';
-import { dashboardErrorMessage } from './operation.js';
+import { dashboardErrorMessage, getOperation, resolveExecutableDocument } from './operation.js';
 import { DASHBOARD_ERROR_MESSAGES } from '../lib/command-auth.js';
 import { DashboardGraphqlError, type DashboardGraphqlErrorCode } from '../lib/dashboard-graphql.js';
 import { buildCommandTree, type CommandSchema, type HelpOutput } from '../utils/help-json.js';
@@ -124,10 +124,117 @@ describe('no GraphQL/userland leak in dashboard-plane error copy', () => {
     }
   });
 
+  it('appends a clean server error code to graphql_error copy, never the server message', () => {
+    const msg = (serverCode?: string) =>
+      dashboardErrorMessage(new DashboardGraphqlError('private details', 'graphql_error', undefined, serverCode));
+    expect(msg('INTERNAL_SERVER_ERROR')).toBe(
+      'The WorkOS account plane could not complete this request (INTERNAL_SERVER_ERROR).',
+    );
+    expect(msg('GRAPHQL_VALIDATION_FAILED')).toContain('(VALIDATION_FAILED)');
+    expect(msg(undefined)).toBe('The WorkOS account plane could not complete this request.');
+    expect(msg('not a code; private')).toBe('The WorkOS account plane could not complete this request.');
+    expect(msg('USERLAND_THING')).toBe('The WorkOS account plane could not complete this request.');
+    expect(msg('INTERNAL_SERVER_ERROR')).not.toContain('private details');
+  });
+
   it('forbidden copy no longer claims the capability is staging-gated', () => {
     expect(DASHBOARD_ERROR_MESSAGES.forbidden).not.toMatch(/staging/i);
     expect(dashboardErrorMessage(new DashboardGraphqlError('x', 'forbidden', 403))).toBe(
       DASHBOARD_ERROR_MESSAGES.forbidden,
     );
+  });
+});
+
+// Only the selection syntax used by this query and its fragments is needed.
+// Reject arguments and directives rather than mistaking their names for fields.
+function selectedFieldPaths(document: string, fragments: Record<string, string> = {}): Set<string> {
+  const paths = new Set<string>();
+  const activeFragments = new Set<string>();
+
+  function visitDefinition(source: string, prefix: string) {
+    const tokens = source.replace(/#[^\r\n]*/g, '').match(/\.\.\.|[_A-Za-z][_0-9A-Za-z]*|[^\s,]/g) ?? [];
+    let index = 0;
+
+    function consume(expected: string) {
+      const token = tokens[index++];
+      if (token !== expected) throw new Error(`Expected "${expected}", got ${token ?? 'end of document'}`);
+    }
+
+    function readName(): string {
+      const token = tokens[index++];
+      if (!token || !/^[_A-Za-z]/.test(token)) throw new Error(`Expected a name, got ${token ?? 'end of document'}`);
+      return token;
+    }
+
+    function visitSelection(parent: string) {
+      consume('{');
+      while (tokens[index] !== '}') {
+        if (tokens[index] === '...') {
+          index++;
+          const name = readName();
+          if (name === 'on') {
+            readName(); // Inline fragment type condition, not a field.
+            visitSelection(parent);
+          } else {
+            const fragment = fragments[name];
+            if (typeof fragment !== 'string') throw new Error(`Missing fragment "${name}"`);
+            if (activeFragments.has(name)) throw new Error(`Cyclic fragment "${name}"`);
+            activeFragments.add(name);
+            visitDefinition(fragment, parent);
+            activeFragments.delete(name);
+          }
+          continue;
+        }
+        let field = readName();
+        if (tokens[index] === ':') {
+          index++;
+          field = readName(); // Use the schema field name, not the alias.
+        }
+        const path = parent ? `${parent}.${field}` : field;
+        paths.add(path);
+        if (tokens[index] === '{') visitSelection(path);
+      }
+      consume('}');
+    }
+
+    if (tokens[index] === 'fragment') {
+      consume('fragment');
+      readName();
+      consume('on');
+      readName();
+    } else {
+      consume('query');
+      readName();
+    }
+    visitSelection(prefix);
+    if (index !== tokens.length) throw new Error(`Unexpected token "${tokens[index]}" after selection set`);
+  }
+
+  visitDefinition(document, '');
+  return paths;
+}
+
+describe('teamProjectsV2 wire document', () => {
+  // Every env-scoped command resolves its target through this query, so it must
+  // select only what the CLI reads: a failing resolver on an unread field
+  // (e.g. certificate expiry) must not take down every command for the team.
+  it('selects only the fields the CLI reads', () => {
+    const doc = resolveExecutableDocument(getOperation('teamProjectsV2'));
+    expect(doc).toContain('query teamProjectsV2');
+    for (const field of ['projectsV2', 'clientId', 'sandbox']) expect(doc).toContain(field);
+    for (const field of ['...Environment', 'expiredConnectionCertificates', 'customAuthDomain', 'resourceTypeCount']) {
+      expect(doc).not.toContain(field);
+    }
+  });
+
+  // `catalog:vendor` never refreshes the override. Compare paths, not names:
+  // a project may still select `name` after the environment field is renamed.
+  it('selects only fields the vendored catalog also selects', () => {
+    const operation = getOperation('teamProjectsV2');
+    const fragments = Object.fromEntries(operation.fragmentNames.map((name) => [name, catalog.fragments[name]]));
+    const vendoredPaths = selectedFieldPaths(operation.document, fragments);
+    const overridePaths = selectedFieldPaths(resolveExecutableDocument(operation));
+    const drift = [...overridePaths].filter((path) => !vendoredPaths.has(path));
+    expect(drift).toEqual([]);
   });
 });
