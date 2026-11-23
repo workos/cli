@@ -145,6 +145,75 @@ describe('no GraphQL/userland leak in dashboard-plane error copy', () => {
   });
 });
 
+// Only the selection syntax used by this query and its fragments is needed.
+// Reject arguments and directives rather than mistaking their names for fields.
+function selectedFieldPaths(document: string, fragments: Record<string, string> = {}): Set<string> {
+  const paths = new Set<string>();
+  const activeFragments = new Set<string>();
+
+  function visitDefinition(source: string, prefix: string) {
+    const tokens = source.replace(/#[^\r\n]*/g, '').match(/\.\.\.|[_A-Za-z][_0-9A-Za-z]*|[^\s,]/g) ?? [];
+    let index = 0;
+
+    function consume(expected: string) {
+      const token = tokens[index++];
+      if (token !== expected) throw new Error(`Expected "${expected}", got ${token ?? 'end of document'}`);
+    }
+
+    function readName(): string {
+      const token = tokens[index++];
+      if (!token || !/^[_A-Za-z]/.test(token)) throw new Error(`Expected a name, got ${token ?? 'end of document'}`);
+      return token;
+    }
+
+    function visitSelection(parent: string) {
+      consume('{');
+      while (tokens[index] !== '}') {
+        if (tokens[index] === '...') {
+          index++;
+          const name = readName();
+          if (name === 'on') {
+            readName(); // Inline fragment type condition, not a field.
+            visitSelection(parent);
+          } else {
+            const fragment = fragments[name];
+            if (typeof fragment !== 'string') throw new Error(`Missing fragment "${name}"`);
+            if (activeFragments.has(name)) throw new Error(`Cyclic fragment "${name}"`);
+            activeFragments.add(name);
+            visitDefinition(fragment, parent);
+            activeFragments.delete(name);
+          }
+          continue;
+        }
+        let field = readName();
+        if (tokens[index] === ':') {
+          index++;
+          field = readName(); // Use the schema field name, not the alias.
+        }
+        const path = parent ? `${parent}.${field}` : field;
+        paths.add(path);
+        if (tokens[index] === '{') visitSelection(path);
+      }
+      consume('}');
+    }
+
+    if (tokens[index] === 'fragment') {
+      consume('fragment');
+      readName();
+      consume('on');
+      readName();
+    } else {
+      consume('query');
+      readName();
+    }
+    visitSelection(prefix);
+    if (index !== tokens.length) throw new Error(`Unexpected token "${tokens[index]}" after selection set`);
+  }
+
+  visitDefinition(document, '');
+  return paths;
+}
+
 describe('teamProjectsV2 wire document', () => {
   // Every env-scoped command resolves its target through this query, so it must
   // select only what the CLI reads: a failing resolver on an unread field
@@ -158,14 +227,14 @@ describe('teamProjectsV2 wire document', () => {
     }
   });
 
-  // The override is a second copy of the selection that `catalog:vendor` never
-  // refreshes: every name it sends must still exist in the vendored document.
+  // `catalog:vendor` never refreshes the override. Compare paths, not names:
+  // a project may still select `name` after the environment field is renamed.
   it('selects only fields the vendored catalog also selects', () => {
-    const op = getOperation('teamProjectsV2');
-    const catalog = loadManagementCatalog(undefined, { includeFeatureFlagged: true });
-    const vendored = [op.document, ...op.fragmentNames.map((name) => catalog.fragments[name])].join('\n');
-    const vendoredNames = new Set(vendored.match(/\w+/g));
-    const drift = (resolveExecutableDocument(op).match(/\w+/g) ?? []).filter((name) => !vendoredNames.has(name));
+    const operation = getOperation('teamProjectsV2');
+    const fragments = Object.fromEntries(operation.fragmentNames.map((name) => [name, catalog.fragments[name]]));
+    const vendoredPaths = selectedFieldPaths(operation.document, fragments);
+    const overridePaths = selectedFieldPaths(resolveExecutableDocument(operation));
+    const drift = [...overridePaths].filter((path) => !vendoredPaths.has(path));
     expect(drift).toEqual([]);
   });
 });
