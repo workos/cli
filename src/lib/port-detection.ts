@@ -270,15 +270,15 @@ function parseRubyPort(installDir: string): number | null {
 
 /**
  * Detect the dev server port for a framework.
- * Checks framework config first, then .env files, then the framework default.
+ * Checks framework config first, then .env files (except for Next.js), then the framework default.
  */
 export function detectPort(integration: Integration, installDir: string): number {
   let detectedPort: number | null = null;
 
   switch (integration) {
     case 'nextjs':
-      detectedPort = parseNextConfigPort(installDir);
-      break;
+      // Next.js chooses its listening port before it loads .env files.
+      return parseNextConfigPort(installDir) ?? getDefaultPort(integration);
 
     case 'tanstack-start':
       // Modern @tanstack/react-start is Vite-based (port in vite.config.ts);
