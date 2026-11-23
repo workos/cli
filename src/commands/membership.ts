@@ -24,10 +24,8 @@
  */
 
 import chalk from 'chalk';
-import { requireCommandToken } from '../lib/command-auth.js';
-import { resolveEnvironmentTarget } from '../lib/environment-target.js';
 import { getOperation } from '../catalog/operation.js';
-import { runEnvScopedOperation, executeDashboardOperation } from '../lib/dashboard-operation.js';
+import { runEnvScopedOperation, executeDashboardOperation, resolveEnvScopedAuth } from '../lib/dashboard-operation.js';
 import { confirmDestructive, requireConfirmationFlag } from '../catalog/confirm.js';
 import { isJsonMode, outputJson, outputSuccess, exitWithError } from '../utils/output.js';
 import { formatTable } from '../utils/table.js';
@@ -399,12 +397,11 @@ export async function runMembershipDelete(id: string, options: MembershipDeleteO
     action: `delete membership ${id} — this removes the user from the organization`,
   });
 
-  const token = await requireCommandToken();
   const removeOp = getOperation('removeMemberFromOrganization');
 
   // Environment-scoped mutation: pre-validated resolved target as header.
-  const { environmentId } = await resolveEnvironmentTarget(token, {
-    flagValue: options.environmentId,
+  const { token, environmentId } = await resolveEnvScopedAuth({
+    environmentId: options.environmentId,
     forMutation: removeOp.kind === 'mutation',
   });
 

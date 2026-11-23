@@ -146,7 +146,7 @@ Workflows:
   debug-sync             Diagnose directory sync issues
 ```
 
-All management commands support `--json` for structured output (auto-enabled in non-TTY). Still-REST commands (`connection`, `directory`, `audit-log`, `api-key`, `vault`, `workos api`, and the workflow/debug commands) also accept `--api-key` to override the active environment's key; the other resource commands authenticate with your `workos auth login` session (see [Resource Management](#resource-management)).
+All management commands support `--json` for structured output (auto-enabled in non-TTY). They also accept `--api-key`: the still-REST commands (`connection`, `directory`, `audit-log`, `api-key`, `vault`, `workos api`, and the workflow/debug commands) use it to override the active environment's key, and the other resource commands use it instead of your `workos auth login` session (see [Resource Management](#resource-management)).
 
 ### Unclaimed Environments
 
@@ -308,6 +308,8 @@ API keys are stored in the system keychain via `@napi-rs/keyring`, with a JSON f
 All resource commands follow the same pattern: `workos <resource> <action> [args] [--options]`.
 
 Most resource commands — organization, user, role, permission, membership, invitation, session, event, feature-flag, org-domain, portal, webhook, config, authkit, branding — authenticate with your WorkOS dashboard session from `workos auth login` and target the active environment (see `workos profile`). Pass `--environment-id <id>` on any of them to target a different environment for a single invocation. Access tokens refresh automatically while the session is valid, so a logged-in machine keeps working headlessly; a dead session exits with code 4.
+
+They can also run with an API key instead, against the WorkOS API. The first match wins: the `--api-key` flag, then `WORKOS_API_KEY`, then the active profile's key when that profile is an unclaimed environment (from `workos env provision` or the installer). Otherwise the dashboard session is used, so a signed-in user is unaffected unless they pass a key. With a key, the key decides the environment, so `--environment-id` is refused. AuthKit logout URIs (`authkit logout-uris`) and branding (`branding`) have no API equivalent and fail with `api_key_unsupported`. The account commands (`team`, `project`, `environment`, `whoami`) always need the dashboard session.
 
 The remaining commands (`connection`, `directory`, `audit-log`, `api-key`, `vault`) still use the REST plane, as does the raw escape hatch `workos api`. Those resolve an API key via: `--api-key` flag → `WORKOS_API_KEY` env var → active environment's stored key.
 
@@ -685,7 +687,7 @@ workos install --api-key sk_test_xxx --client-id client_xxx 2>/dev/null
 
 | Variable                 | Effect                                                                                                                                                                                           |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `WORKOS_API_KEY`         | API key for `workos api`, the still-REST commands (connection, directory, audit-log, api-key, vault), and workflow/debug commands. Resource commands use the `workos auth login` session instead |
+| `WORKOS_API_KEY`         | API key for `workos api`, the still-REST and workflow/debug commands, and the resource commands (instead of the `workos auth login` session; `team`/`project`/`environment`/`whoami` require it) |
 | `WORKOS_API_URL`         | Override the API base URL for all CLI commands (e.g. a local API)                                                                                                                                |
 | `WORKOS_API_BASE_URL`    | Accepted alias for `WORKOS_API_URL` (what `workos dev` sets)                                                                                                                                     |
 | `WORKOS_MODE`            | Interaction mode: `human`, `agent`, or `ci`                                                                                                                                                      |
