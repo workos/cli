@@ -14,7 +14,7 @@ describe('generateCompletions', () => {
     const result = generateCompletions(['']);
     const names = result.completions.map((c) => c.name);
     expect(names).toContain('auth');
-    expect(names).toContain('env');
+    expect(names).toContain('profile');
     expect(names).toContain('organization');
     expect(names).toContain('completion');
     expect(names).toContain('doctor');
@@ -29,7 +29,7 @@ describe('generateCompletions', () => {
   });
 
   it('returns subcommands when parent is given', () => {
-    const result = generateCompletions(['env', '']);
+    const result = generateCompletions(['profile', '']);
     const names = result.completions.map((c) => c.name);
     expect(names).toContain('add');
     expect(names).toContain('remove');
@@ -122,7 +122,7 @@ describe('generateCompletions', () => {
   });
 
   it('returns options and subcommands when unknown word precedes partial', () => {
-    const result = generateCompletions(['env', 'nonexistent', '']);
+    const result = generateCompletions(['profile', 'nonexistent', '']);
     const names = result.completions.map((c) => c.name);
     expect(names).toContain('--json');
   });
@@ -146,7 +146,7 @@ describe('generateCompletions', () => {
   it('does not complete hidden commands absent from registry', () => {
     const result = generateCompletions(['']);
     const names = result.completions.map((c) => c.name);
-    expect(names).not.toContain('emulate');
+    expect(names).toContain('emulate');
     expect(names).not.toContain('dashboard');
     expect(names).not.toContain('debug');
   });

@@ -237,7 +237,7 @@ describe('help-json', () => {
       'auth',
       'skills',
       'doctor',
-      'env',
+      'profile',
       'organization',
       'user',
       'role',
