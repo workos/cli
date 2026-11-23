@@ -1,4 +1,7 @@
+import { readFile } from 'node:fs/promises';
 import { describe, it, expect, vi } from 'vitest';
+import { parseAst } from 'vitest/node';
+import { COMMAND_ALIASES } from '../lib/command-aliases.js';
 
 vi.mock('../lib/settings.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../lib/settings.js')>();
@@ -228,55 +231,40 @@ describe('help-json', () => {
     });
   });
 
-  describe('registry parity with bin.ts', () => {
-    // Every public top-level command in bin.ts must have a matching entry in
-    // the help-json registry. If this test fails, you added a command to
-    // bin.ts but forgot to add it to help-json.ts (which also drives shell
-    // completion and --help --json).
-    const PUBLIC_COMMANDS = [
-      'auth',
-      'skills',
-      'doctor',
-      'profile',
-      'organization',
-      'user',
-      'role',
-      'permission',
-      'membership',
-      'invitation',
-      'session',
-      'connection',
-      'directory',
-      'event',
-      'audit-log',
-      'feature-flag',
-      'webhook',
-      'config',
-      'portal',
-      'vault',
-      'api-key',
-      'org-domain',
-      'seed',
-      'setup-org',
-      'onboard-user',
-      'debug-sso',
-      'debug-sync',
-      'install',
-      'completion',
-    ];
+  it('matches the public top-level commands registered in bin.ts', async () => {
+    // Inspect the parser chain without starting the CLI or descending into subcommand builders.
+    const source = await readFile(new URL('../bin.ts', import.meta.url), 'utf8');
+    const program = parseAst(source, { lang: 'ts' }, 'bin.ts');
+    const runCli = program.body.find((node) => node.type === 'FunctionDeclaration' && node.id?.name === 'runCli');
+    if (runCli?.type !== 'FunctionDeclaration') throw new Error('Could not find runCli in bin.ts');
+    const parser = runCli.body.body
+      .flatMap((node) => (node.type === 'VariableDeclaration' ? node.declarations : []))
+      .find(({ id }) => id.type === 'Identifier' && id.name === 'parser');
+    if (!parser?.init) throw new Error('Could not find the parser in runCli');
 
-    function collectTopLevelNames(commands: { name: string }[]): Set<string> {
-      const names = new Set<string>();
-      for (const cmd of commands) {
-        const top = cmd.name.split(' ')[0]!;
-        names.add(top);
+    const cliNames = new Set<string>();
+    let call = parser.init;
+    while (call.type === 'CallExpression' && call.callee.type === 'MemberExpression') {
+      const { object, property } = call.callee;
+      if (property.type === 'Identifier' && property.name === 'command') {
+        const [signature, description] = call.arguments;
+        if (!(description?.type === 'Literal' && description.value === false)) {
+          const primary = signature?.type === 'ArrayExpression' ? signature.elements[0] : signature;
+          if (primary?.type !== 'Literal' || typeof primary.value !== 'string') {
+            throw new Error(`Expected a literal command signature in bin.ts: ${source.slice(call.start, call.end)}`);
+          }
+          const name = primary.value.split(/\s+/, 1)[0]!;
+          // Array aliases use the first name; separately registered aliases and $0 have no registry entry.
+          if (name !== '$0' && !Object.hasOwn(COMMAND_ALIASES, name)) cliNames.add(name);
+        }
       }
-      return names;
+      call = object;
     }
 
-    it.each(PUBLIC_COMMANDS)('%s is in the registry', (command) => {
-      const registryNames = collectTopLevelNames(commandRegistry);
-      expect(registryNames).toContain(command);
-    });
+    const registryNames = new Set(commandRegistry.map(({ name }) => name.split(' ', 1)[0]!));
+    expect({
+      missingFromRegistry: [...cliNames].filter((name) => !registryNames.has(name)).sort(),
+      missingFromCli: [...registryNames].filter((name) => !cliNames.has(name)).sort(),
+    }).toEqual({ missingFromRegistry: [], missingFromCli: [] });
   });
 });

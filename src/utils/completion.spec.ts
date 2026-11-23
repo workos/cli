@@ -93,11 +93,13 @@ describe('generateCompletions', () => {
     expect(names).toContain('add');
   });
 
-  it('skips option values for non-boolean options', () => {
-    const result = generateCompletions(['doctor', '--install-dir', '/tmp/foo', '--']);
+  it('consumes a command-shaped option value without swallowing the following command', () => {
+    // Completion walks partial input before the CLI validates the --mode value.
+    const result = generateCompletions(['--mode', 'doctor', 'profile', '']);
     const names = result.completions.map((c) => c.name);
-    expect(names).toContain('--verbose');
-    expect(names).not.toContain('--install-dir');
+    expect(names).toContain('add');
+    expect(names).not.toContain('--verbose');
+    expect(names).not.toContain('--mode');
   });
 
   it('handles inline option values', () => {
@@ -108,10 +110,12 @@ describe('generateCompletions', () => {
     expect(names).toContain('--fix');
   });
 
-  it('does not skip next word after boolean options', () => {
-    const result = generateCompletions(['doctor', '--verbose', 'unknownword', '--']);
+  it('does not swallow the next flag after a boolean option', () => {
+    const result = generateCompletions(['doctor', '--verbose', '--fix', '--']);
     const names = result.completions.map((c) => c.name);
+    expect(names).toContain('--install-dir');
     expect(names).not.toContain('--verbose');
+    expect(names).not.toContain('--fix');
   });
 
   it('returns top-level commands for completely empty args', () => {
