@@ -2,9 +2,72 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { detectPort, getCallbackPath, getSignInPath } from './port-detection.js';
+import { detectPort, getCallbackPath, getSignInPath, resolveRedirectUri } from './port-detection.js';
 import { buildSignInSection } from './sign-in-route.js';
 import type { FrameworkConfig } from './framework-config.js';
+
+describe('port-detection — Next.js dev script and env', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'port-nextjs-'));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  async function writeDevScript(dev: string): Promise<void> {
+    await writeFile(join(dir, 'package.json'), JSON.stringify({ scripts: { dev } }));
+  }
+
+  it.each([
+    ['next dev -p 4000', 4000],
+    ['next dev --port 5000', 5000],
+    ['next dev --port=3123', 3123],
+    ['PORT=3123 next dev', 3123],
+    ['PORT=4000 next dev -p 5000', 5000],
+  ])('detects the port from %s', async (script, port) => {
+    await writeDevScript(script);
+    await writeFile(join(dir, '.env.local'), 'PORT=6000\n');
+    expect(detectPort('nextjs', dir)).toBe(port);
+  });
+
+  it.each(['.env.local', '.env.development', '.env'])('ignores PORT from %s for Next.js', async (file) => {
+    await writeDevScript('next dev');
+    await writeFile(join(dir, file), 'PORT=3123\nOTHER_VAR=foo\n');
+    expect(detectPort('nextjs', dir)).toBe(3000);
+    expect(resolveRedirectUri('nextjs', { installDir: dir })).toBe(`http://localhost:3000${getCallbackPath('nextjs')}`);
+  });
+
+  it('falls back to 3000 when no PORT setting is present', async () => {
+    await writeDevScript('APP_PORT=3123 next dev');
+    expect(detectPort('nextjs', dir)).toBe(3000);
+  });
+});
+
+describe('port-detection — dotenv fallback', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'port-dotenv-'));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it.each(['.env.local', '.env.development', '.env'])('falls back to PORT from %s', async (file) => {
+    await writeFile(join(dir, file), 'PORT=3123\nOTHER_VAR=foo\n');
+    expect(detectPort('node', dir)).toBe(3123);
+  });
+
+  it('prefers .env.local over .env', async () => {
+    await writeFile(join(dir, '.env.local'), 'PORT=3123\n');
+    await writeFile(join(dir, '.env'), 'PORT=4000\n');
+    expect(detectPort('node', dir)).toBe(3123);
+  });
+});
 
 describe('port-detection — python/Django defaults', () => {
   let dir: string;
